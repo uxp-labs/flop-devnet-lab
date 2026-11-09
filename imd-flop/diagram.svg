@@ -1,0 +1,89 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" font-family="ui-monospace,Menlo,monospace">
+<defs><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0L10,5L0,10z" fill="#8b93a3"/></marker></defs>
+<rect width="1200" height="630" fill="#0f1115"/>
+<text x="30" y="42" fill="#e6e8ec" font-size="22" font-weight="700">imd seat runs on FLOP, by choice</text>
+<text x="30" y="66" fill="#8b93a3" font-size="13">An imd seat can send its model calls to FLOP. Its own cap stops the spend. Every job shows its FLOP receipt.</text>
+<!-- payer tag -->
+<rect x="598" y="82" width="310" height="22" rx="11" fill="#171a21" stroke="#8b93a3" stroke-dasharray="3 3"/>
+<text x="753" y="97" text-anchor="middle" fill="#e6e8ec" font-size="11"><tspan font-weight="700" font-size="14" font-family="Arial,Helvetica,sans-serif">?</tspan> payer: holder for now (config switch)</text>
+<g fill="#e6e8ec" text-anchor="middle">
+<!-- 1 seat -->
+<rect x="30" y="112" width="225" height="218" rx="10" fill="#171a21" stroke="#2a2f3a"/>
+<text x="142.5" y="140" font-size="15" font-weight="700">imd seat #&lt;tokenId&gt;</text>
+<text x="142.5" y="160" font-size="12" fill="#8b93a3">ERC-8004 agent &lt;id&gt;</text>
+<rect x="102" y="184" width="81" height="54" rx="4" fill="none" stroke="#8b93a3" stroke-width="1.5"/>
+<rect x="109" y="191" width="67" height="40" rx="2" fill="#0f1115"/>
+<line x1="142.5" y1="238" x2="142.5" y2="250" stroke="#8b93a3" stroke-width="1.5"/>
+<line x1="122" y1="251" x2="163" y2="251" stroke="#8b93a3" stroke-width="1.5"/>
+<text x="142.5" y="282" font-size="12">1 seat = 1 device</text>
+<text x="142.5" y="356" font-size="11" fill="#8b93a3">imd-flop init</text>
+<!-- 2 link -->
+<rect x="335" y="112" width="225" height="218" rx="10" fill="#171a21" stroke="#2a2f3a"/>
+<text x="447.5" y="140" font-size="15" font-weight="700">Link</text>
+<rect x="350" y="156" width="195" height="68" rx="6" fill="#0f1115" stroke="#e6e8ec" stroke-dasharray="5 4"/>
+<text x="447.5" y="177" font-size="12">seat wallet (EIP-712)</text>
+<text x="447.5" y="196" font-size="10.5" fill="#8b93a3">signed by holder,</text>
+<text x="447.5" y="211" font-size="10.5" fill="#8b93a3">not by the tool</text>
+<rect x="350" y="234" width="195" height="40" rx="6" fill="#0f1115" stroke="#e6e8ec"/>
+<text x="447.5" y="258" font-size="12">FLOP key (Ed25519)</text>
+<text x="447.5" y="304" font-size="12" fill="#8b93a3">one seat, one FLOP identity</text>
+<text x="447.5" y="356" font-size="11" fill="#8b93a3">imd-flop link</text>
+<!-- 3 cap gate -->
+<rect x="640" y="112" width="225" height="218" rx="10" fill="#171a21" stroke="#d99a1e"/>
+<text x="752.5" y="140" font-size="15" font-weight="700">Cap gate</text>
+<rect x="714" y="154" width="8" height="48" fill="#8b93a3"/>
+<rect x="783" y="154" width="8" height="48" fill="#8b93a3"/>
+<rect x="722" y="166" width="61" height="7" fill="#d99a1e"/>
+<rect x="722" y="182" width="61" height="7" fill="#d99a1e"/>
+<text x="752.5" y="222" font-size="13">daily cap</text>
+<text x="752.5" y="242" font-size="11" fill="#8b93a3">no cap = FLOP off</text>
+<text x="752.5" y="258" font-size="11" fill="#8b93a3">cap hit = stop</text>
+<rect x="682" y="274" width="141" height="30" rx="4" fill="#0f1115" stroke="#d99a1e"/>
+<line x1="702" y1="274" x2="702" y2="304" stroke="#d99a1e" stroke-dasharray="2 3"/>
+<text x="762" y="293" font-size="11">single-use key</text>
+<text x="752.5" y="356" font-size="11" fill="#8b93a3">imd-flop cap</text>
+<!-- 4 gateway -->
+<rect x="945" y="112" width="225" height="218" rx="10" fill="#171a21" stroke="#2a2f3a"/>
+<text x="1057.5" y="140" font-size="15" font-weight="700">FLOP gateway · devnet</text>
+<text x="1057.5" y="200" font-size="12" fill="#8b93a3">runs the model call</text>
+<text x="1057.5" y="220" font-size="12" fill="#8b93a3">writes its own receipt</text>
+<text x="1057.5" y="356" font-size="11" fill="#8b93a3">imd-flop run</text>
+</g>
+<!-- arrows -->
+<g stroke="#8b93a3" stroke-width="1.5" marker-end="url(#a)" fill="none">
+<line x1="255" y1="221" x2="333" y2="221"/>
+<line x1="560" y1="221" x2="638" y2="221"/>
+<line x1="865" y1="196" x2="943" y2="196"/>
+<line x1="945" y1="252" x2="867" y2="252"/>
+</g>
+<g fill="#e6e8ec" font-size="11" text-anchor="middle">
+<text x="905" y="188">call</text>
+<text x="905" y="270">output</text>
+<text x="905" y="284">+ receipt</text>
+</g>
+<line x1="1100" y1="330" x2="1100" y2="410" stroke="#2a2f3a" stroke-width="1.5" stroke-dasharray="3 4"/>
+<!-- job card strip -->
+<rect x="30" y="410" width="1140" height="104" rx="10" fill="#171a21" stroke="#2a2f3a"/>
+<text x="55" y="436" font-size="11" fill="#8b93a3">job card</text>
+<text x="55" y="462" font-size="16" font-weight="700" fill="#e6e8ec">imd job &lt;jobId&gt;</text>
+<text x="55" y="494" font-size="11" fill="#8b93a3">imd-flop receipt</text>
+<text x="330" y="460" font-size="12" fill="#e6e8ec">spend</text>
+<rect x="378" y="443" width="96" height="24" rx="4" fill="none" stroke="#2a2f3a" stroke-dasharray="4 3"/>
+<text x="378" y="490" font-size="10.5" fill="#8b93a3">blank until known (est. only)</text>
+<rect x="590" y="441" width="70" height="28" rx="14" fill="#6b7280" fill-opacity="0.2" stroke="#6b7280"/>
+<text x="625" y="460" text-anchor="middle" font-size="12" fill="#e6e8ec">sent</text>
+<text x="770" y="434" text-anchor="middle" font-size="10" fill="#d99a1e">now</text>
+<rect x="690" y="441" width="160" height="28" rx="14" fill="#d99a1e" fill-opacity="0.2" stroke="#d99a1e" stroke-width="2"/>
+<text x="770" y="460" text-anchor="middle" font-size="12" fill="#e6e8ec">gateway observed</text>
+<rect x="880" y="441" width="120" height="28" rx="14" fill="none" stroke="#2f9e5b" stroke-dasharray="5 4"/>
+<text x="940" y="460" text-anchor="middle" font-size="12" fill="#8b93a3">chain final</text>
+<text x="940" y="490" text-anchor="middle" font-size="10.5" fill="#8b93a3">not checked yet</text>
+<g stroke="#8b93a3" stroke-width="1.5" marker-end="url(#a)"><line x1="660" y1="455" x2="688" y2="455"/><line x1="850" y1="455" x2="878" y2="455" stroke-dasharray="3 3"/></g>
+<!-- legend, note, footer -->
+<text x="30" y="556" font-size="12" fill="#8b93a3"><tspan fill="#6b7280">grey</tspan> sent · <tspan fill="#d99a1e">amber</tspan> gateway observed · <tspan fill="#2f9e5b">green</tspan> chain final · <tspan fill="#d0453a">red</tspan> unknown / stuck</text>
+<rect x="880" y="536" width="290" height="40" rx="6" fill="none" stroke="#2a2f3a" stroke-dasharray="4 3"/>
+<text x="1025" y="552" text-anchor="middle" font-size="11" fill="#8b93a3">demo runs on a mock provider:</text>
+<text x="1025" y="568" text-anchor="middle" font-size="11" fill="#8b93a3">no key, no spend</text>
+<line x1="30" y1="592" x2="1170" y2="592" stroke="#2a2f3a"/>
+<text x="30" y="612" font-size="11" fill="#8b93a3">Built by uxp-labs · Inky (visual) from FIXER brief · Nov 9, 2026 · X @ultrapara</text>
+</svg>

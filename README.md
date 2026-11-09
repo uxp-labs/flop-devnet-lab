@@ -26,3 +26,4 @@ Open tools from uxp-labs for builders on the FLOP devnet. We tested, we didn't f
 X: [@ultrapara](https://x.com/ultrapara)
 
 - `tclk-rehearsal/`: test-chain rehearsal of a FLOP/ETH hash-lock swap over tclk (sha256 HashLock contract, Foundry tests, swap test). No value at stake.
+- `imd-flop/`: reference CLI for the proposed FLOP-as-a-provider option in the IMD worker (section F of the [IMD proposal report](https://github.com/Identity-md/research/blob/main/jobs/4bb06f36-c8da-4925-8e4d-378ed76cff68/files/artifacts/report.md)). Mock provider by default; no faucet, no paid calls without explicit opt-in. Diagram: `imd-flop/diagram.svg`.

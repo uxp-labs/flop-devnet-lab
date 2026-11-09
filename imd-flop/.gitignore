@@ -1,0 +1,13 @@
+node_modules/
+dist/
+coverage/
+# never commit key material or local state
+*.key
+*.pem
+.imd-flop/
+.imd-flop-*/
+gateway.key
+flop.key
+*.secret
+.env
+.env.*

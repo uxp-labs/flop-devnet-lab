@@ -1,0 +1,32 @@
+{
+  "name": "imd-flop",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Reference companion CLI for the 'FLOP, by choice' IMD worker proposal (devnet rehearsal, mock provider by default)",
+  "type": "module",
+  "bin": {
+    "imd-flop": "./dist/bin.js"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "tsc -p tsconfig.json && vitest run",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "demo": "bash ./demo.sh"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "@flop-labs/client": "^0.2.2",
+    "@noble/curves": "^2.4.0",
+    "@noble/hashes": "^2.4.0",
+    "@scure/base": "^2.4.0",
+    "viem": "^2.57.17"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.6",
+    "typescript": "^7.0.2",
+    "vitest": "^5.1.0"
+  }
+}

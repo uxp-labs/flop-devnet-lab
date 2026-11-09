@@ -1,0 +1,81 @@
+# imd-flop
+
+A reference build of the companion CLI from the "FLOP, by choice" proposal (`report.md`, section F).
+It gives one imd seat one FLOP identity, links the two with signatures, caps daily spend, runs model
+calls for real imd jobs, and keeps a receipt next to each job. It does not change or wrap the imd worker.
+
+Status: devnet rehearsal. The default provider is a **mock**, so everything below runs with no key,
+no network and no spend.
+
+## Commands
+
+| Command | What it does |
+|---|---|
+| `init [--network devnet] [--seat <tokenId>] [--rotate] [--check-genesis]` | Makes one Ed25519 key for the seat (file mode 600, never printed). Prints the SS58 address (prefix 42, the devnet faucet's `ss58Format`) and the `did:key`. Refuses a second key for a seat unless `--rotate`, which writes a signed revocation record. `--check-genesis` compares the faucet's `/chain` genesis with the RPC's block 0. |
+| `link --token <id> [--agent <erc8004Id>]` | Builds `{tokenId, erc8004AgentId, flopDid, ss58, network, issuedAt}`, signs it with the FLOP key, and prints EIP-712 typed data for the seat holder to sign in their own wallet. |
+| `link verify <file> [--wallet-sig <sig> --wallet <addr>] [--save]` | Checks the Ed25519 signature, that the SS58 and the DID are the same key, that the EIP-712 data matches the statement, and the wallet signature if given. |
+| `cap set <FLOP/day> [--per-call <FLOP>]`, `cap show` | Required. No cap means `run` refuses. The day resets at 00:00 UTC. |
+| `config set payer <holder\|requester>`, `config show` | Who pays. Every ledger row records it. |
+| `run --job <id> --prompt <text> \| --prompt-file <path>` | Gets a quote, pads it, checks the caps, makes the call, and saves the response and receipt. Nothing is sent to imd. Options: `--max-tokens`, `--system`, `--provider mock\|flop`, `--live`, `--job-budget`, `--timeout-ms`, `--check-job`, `--no-link` (mock only), `--mock-scenario`. |
+| `status [--json]` | Network, seat, address, link state, payer, today's spend against the cap, and recent receipts with their `match` field. |
+| `receipt <request_id> [--refresh] [--json]` | Shows one receipt and its `match` field. |
+| `quote --prompt <text> [--provider flop]` | Free cost estimate. With `--provider flop`, it calls the gateway's free `/models/estimate`. |
+| `faucet [--dry-run]` | Refuses with exit code 9, because our team doesn't use faucets. `--dry-run` prints the request it would have made. |
+| `enroll [--dry-run \| --live]` | Dry run by default: prints the challenge and enroll calls it would make. `--live` does real devnet enrollment and is meant for a human on the holder's machine. |
+
+Data lives in `~/.imd-flop/`, or in `$IMD_FLOP_HOME` if that's set. Exit codes: 0 ok, 2 usage,
+3 refused by a cap, 4 link broken, 5 rule, 6 timeout (spend unknown), 7 estimate failed, 8 verify failed,
+9 faucet refused.
+
+## Mocked vs live
+
+- **Mocked (default):** `run`, receipts and `status` use a local stub shaped like OpenAI's API. It returns
+  fixed output, a fake `request_id` and a fake receipt. `--mock-scenario` can simulate a timeout,
+  a settled receipt, `key_expired`, or a failed estimate. Mock spend is tracked separately and never counts
+  against the real FLOP cap.
+- **Live, free, opt-in:** `quote --provider flop` (estimate), `init --check-genesis`, and `run --check-job` (public `GET api.imd.fun/jobs/:id`).
+- **Live, built but never run by us:** `run --provider flop --live` (spends devnet FLOP) and `enroll --live`.
+  The flop provider requires a gateway key from enrollment, a cap, and a link signed by both the FLOP key
+  and the seat wallet. Each call mints a single-use child key capped at the padded quote and also sends
+  `max_cost_flop`.
+- Every request uses the User-Agent `uxp-labs-imd-flop/0 (+https://github.com/uxp-labs)`.
+
+## Rules enforced in code (proposal section E)
+
+1. **Keys stay local.** The seat key file is mode 600 and is never printed. Before anything is written to the ledger, a receipt, a link, a response or the config, a scan rejects anything that looks like a key: loaded secrets in any encoding, bearer tokens, `flop_ek_…` tokens, PEM keys, any 64-hex value outside a short list of known public hash fields, and fields with secret names. Public keys are only written as SS58 or `did:key`.
+2. **One DID per seat.** `init` refuses a second key for a seat. Rotating writes a revocation signed by the old key and retires the old link. A receipt made under a revoked or rotated DID shows `match=mismatch`.
+3. **No faucet.** `faucet` refuses.
+4. **Real work only.** `run` requires `--job`. `--check-job` checks that the job exists on imd.
+5. **A broken link means no route.** `run` refuses unless the link verifies, the DID is the seat's current one and the DID hasn't been revoked. `--provider flop` also requires the wallet signature. `--no-link` works only with the mock and labels its output as bypassed.
+
+Spend-guard rules, ported from `spend-guard/`:
+- The quote comes first and is padded by 20 tokens for the Qwen chat template. If the estimate fails, nothing is sent.
+- A call is refused locally if it's over the per-call cap or what's left of the daily cap.
+- A timeout is never retried. Its spend is recorded as `null` with its `request_id`. For the cap, unknown spend counts as the padded quote.
+- Receipts are labeled `gateway observed` and `chain_final=false`, because nothing verifies chain settlement yet. A `null` settled spend shows blank, never 0. A 401 `api_key_expired` gets its own `key_expired` flag.
+- The `match` field says whether a receipt agrees with its records. It's `matches` only when the receipt's job, seat and DID all equal the ledger row and the seat's current link, and that link verifies. Otherwise it's `mismatch`, listing the fields that disagree, or `pending` if there's no receipt yet.
+
+## Payer assumption
+
+`holder` (the default): the seat's daily cap applies.
+`requester`: the daily cap doesn't count these calls, and each `run` needs `--job-budget <FLOP>`, which caps the
+total requester-paid spend on that job. **Assumption:** the FLOP still comes out of the seat's own gateway key,
+because the gateway has no way for a third party to pay today, so "requester" only means the call is billed
+to the job. The per-call cap still applies in both modes.
+
+## Run it
+
+```
+npm install
+npm test          # tsc + vitest: 37 tests, no network (fetch and WebSocket are disabled in tests)
+./demo.sh         # init, link, cap, run (mock), status, receipt in a temp IMD_FLOP_HOME
+```
+
+## Open questions
+
+- **Who pays** for FLOP calls on testnet and mainnet: imd requesters or seat holders? Until that's answered, this is a config switch.
+- **Testnet** has no date, and its identity requirements (did:key, SS58 sr25519/ed25519, or both) are unpublished. Only `devnet` is accepted.
+- **Explorer URL formats** for FLOP sessions and settlements aren't documented, so receipts don't link to the explorer yet.
+- **InferenceReceipt** (in the OpenAPI) hasn't been seen on a real response yet, so no receipt is ever marked chain-final.
+- The link statement format and its EIP-712 domain (`imd-flop seat link`, chainId 1, the seat collection) are ours until imd adopts one.
+- `link verify` checks who signed with the wallet, not who owns the NFT (that needs an on-chain read). It only supports normal (EOA) wallets, not smart wallets like a Safe (ERC-1271).
