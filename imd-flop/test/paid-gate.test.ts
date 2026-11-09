@@ -110,6 +110,21 @@ function scripted(opts: { chain?: ChainMode; faucet?: FaucetMode; owner?: string
   }) as typeof fetch;
 }
 
+async function signHolder(h: string, seat = "42"): Promise<string> {
+  const file = join(h, "seats", seat, "link.json");
+  const link = JSON.parse(readFileSync(file, "utf8")) as LinkFile;
+  const wallet = privateKeyToAccount(generatePrivateKey());
+  const td = link.eip712;
+  const sig = await wallet.signTypedData({
+    domain: td.domain,
+    types: td.types,
+    primaryType: td.primaryType,
+    message: { ...td.message, tokenId: BigInt(td.message.tokenId), issuedAt: BigInt(td.message.issuedAt) },
+  });
+  writeFileSync(file, JSON.stringify({ ...link, wallet: { address: wallet.address, signature: sig } }));
+  return wallet.address;
+}
+
 async function withWs<T>(mode: WsMode, fn: () => Promise<T>): Promise<T> {
   const real = globalThis.WebSocket;
   class FakeWS {
@@ -247,6 +262,38 @@ describe("paid run refuses before any paid call", () => {
     expect(seen.some((s) => (s.body as { method?: string })?.method === "eth_call")).toBe(false);
   });
 
+  it("refuses when the faucet hash is wrong and the RPC still has the pin", async () => {
+    const faucet = (async () => rpc({ genesisHash: WRONG })) as typeof fetch;
+    const g = await withWs("pin", () => checkGenesis(NETWORKS.devnet, faucet));
+    expect(g.ok).toBe(false);
+    expect(g.faucetGenesis).toBe(WRONG);
+    expect(g.rpcGenesis).toBe(PIN);
+    expect(g.error).toBe("genesis mismatch");
+    const { h, spy, seen, code, err } = await runPaid({ faucet: "wrong", ws: "pin" });
+    expect(code).toBe(5);
+    expect(err).toMatch(/genesis mismatch/);
+    expect(err).toContain(PIN);
+    expect(err).toContain(WRONG);
+    expect(err).not.toMatch(/agree on a different genesis/);
+    expectNothingPaid(h, spy, seen);
+  });
+
+  it("refuses when the faucet has the pin and the RPC hash is wrong", async () => {
+    const faucet = (async () => rpc({ genesisHash: PIN })) as typeof fetch;
+    const g = await withWs("wrong", () => checkGenesis(NETWORKS.devnet, faucet));
+    expect(g.ok).toBe(false);
+    expect(g.faucetGenesis).toBe(PIN);
+    expect(g.rpcGenesis).toBe(WRONG);
+    expect(g.error).toBe("genesis mismatch");
+    const { h, spy, seen, code, err } = await runPaid({ faucet: "pin", ws: "wrong" });
+    expect(code).toBe(5);
+    expect(err).toMatch(/genesis mismatch/);
+    expect(err).toContain(PIN);
+    expect(err).toContain(WRONG);
+    expect(err).not.toMatch(/agree on a different genesis/);
+    expectNothingPaid(h, spy, seen);
+  });
+
   it("refuses an unavailable or malformed chain id, including a result that also carries an error", async () => {
     for (const chain of ["down", "http", "malformed", "decimal", "empty", "rpc-error"] as const) {
       const { h, spy, seen, code, err } = await runPaid({ chain });
@@ -330,24 +377,13 @@ describe("paid run refuses before any paid call", () => {
   it("opens the gate for an offline spy when chain id and genesis match, and still contacts no gateway", async () => {
     const h = tmpHome();
     await readySeat(h);
-    const file = join(h, "seats", "42", "link.json");
-    const link = JSON.parse(readFileSync(file, "utf8")) as LinkFile;
-    const wallet = privateKeyToAccount(generatePrivateKey());
-    const td = link.eip712;
-    const sig = await wallet.signTypedData({
-      domain: td.domain,
-      types: td.types,
-      primaryType: td.primaryType,
-      message: { ...td.message, tokenId: BigInt(td.message.tokenId), issuedAt: BigInt(td.message.issuedAt) },
-    });
-    const signed = { ...link, wallet: { address: wallet.address, signature: sig } };
-    writeFileSync(file, JSON.stringify(signed));
+    const owner = await signHolder(h);
     const spy = new SpyFlop();
     const seen: Seen[] = [];
     const r = await withWs("pin", () =>
       cli(h, [...RUN, "--json"], {
         provider: spy,
-        fetch: scripted({ owner: wallet.address }, seen),
+        fetch: scripted({ owner }, seen),
         env: { IMD_FLOP_HOME: h, ETH_RPC_URL: ETH },
       }),
     );
@@ -383,6 +419,84 @@ describe("FlopProvider.complete refuses before the child-key mint", () => {
       } finally {
         clearSecretRegistry();
       }
+    }
+  });
+
+  it("a real paid run whose first gate passes still mints nothing when the pre-mint gate fails", async () => {
+    const h = tmpHome();
+    await readySeat(h);
+    const owner = await signHolder(h);
+    writeSecretFile(gatewayKeyFile(h, "42"), "test-gateway-bearer\n");
+    const seen: Seen[] = [];
+    let faucets = 0;
+    let sockets = 0;
+    const fetchImpl = (async (input: unknown, init?: RequestInit) => {
+      const url = String(input);
+      let body: unknown = null;
+      if (init?.body) {
+        try {
+          body = JSON.parse(String(init.body));
+        } catch {
+          body = String(init.body);
+        }
+      }
+      seen.push({ url, body });
+      if (url.includes("/keys/ephemeral") || url.includes("/chat/completions")) throw new Error(`paid call ${url}`);
+      const method = (body as { method?: string } | null)?.method;
+      if (method === "eth_chainId") return rpc({ jsonrpc: "2.0", id: 1, result: "0x1" });
+      if (method === "eth_call") return rpc({ jsonrpc: "2.0", id: 1, result: "0x" + "0".repeat(24) + owner.slice(2).toLowerCase() });
+      if (url.endsWith("/chain")) {
+        faucets++;
+        return rpc({ genesisHash: faucets === 1 ? PIN : WRONG });
+      }
+      if (url.endsWith("/models/estimate")) return rpc({ estimated_cost_flop: 0.012, estimated_input_tokens: 1, estimated_output_tokens: 1 });
+      throw new Error(`unexpected url ${url}`);
+    }) as typeof fetch;
+    const real = globalThis.WebSocket;
+    class SeqWS {
+      onopen?: () => void;
+      onmessage?: (ev: { data: string }) => void;
+      constructor() {
+        sockets++;
+        setTimeout(() => this.onopen?.(), 0);
+      }
+      send() {
+        setTimeout(() => this.onmessage?.({ data: JSON.stringify({ result: PIN }) }), 0);
+      }
+      close() {}
+    }
+    (globalThis as { WebSocket: unknown }).WebSocket = SeqWS;
+    try {
+      const r = await cli(h, RUN, { fetch: fetchImpl, env: { IMD_FLOP_HOME: h, ETH_RPC_URL: ETH } });
+      expect(r.code).toBe(1);
+      expect(r.err).toMatch(/nothing sent/);
+      expect(r.err).toMatch(/genesis mismatch/);
+      expect(r.err).toContain(PIN);
+      expect(r.err).toContain(WRONG);
+      expect(faucets).toBe(2);
+      expect(sockets).toBe(2);
+      const estimateAt = seen.findIndex((s) => s.url.endsWith("/models/estimate"));
+      const secondFaucetAt = seen.findIndex((s, i) => s.url.endsWith("/chain") && seen.slice(0, i).some((p) => p.url.endsWith("/chain")));
+      expect(estimateAt).toBeGreaterThan(-1);
+      expect(secondFaucetAt).toBeGreaterThan(estimateAt);
+      expect(seen.some((s) => s.url.includes("/keys/ephemeral") || s.url.includes("/chat/completions"))).toBe(false);
+      expect(existsSync(join(h, "responses"))).toBe(false);
+      const rows = readLines(join(h, "ledger.jsonl")) as { state?: string; cap_charge?: number; reason?: string | null; request_id?: string | null }[];
+      expect(rows[0]).toMatchObject({ state: "sent" });
+      expect(rows[0].cap_charge).toBeGreaterThan(0);
+      const latest = rows.at(-1)!;
+      expect(latest.state).toBe("refused_local");
+      expect(latest.cap_charge).toBe(0);
+      expect(latest.reason).toMatch(/nothing sent/);
+      expect(latest.reason).toContain("[hash]");
+      expect(latest.reason).not.toMatch(/0x[0-9a-f]{64}/);
+      expect(latest.request_id).toBe(rows[0].request_id);
+      const st = await cli(h, ["status", "--json"]);
+      expect(st.json().today_utc.flop).toBe(0);
+      expect(st.json().pending_receipts).toEqual([]);
+    } finally {
+      globalThis.WebSocket = real;
+      clearSecretRegistry();
     }
   });
 });

@@ -182,7 +182,7 @@ export async function runJob(h: string, provider: Provider, o: RunOpts, deps: { 
 
   const requestId = `${provider.name === "mock" ? "mock" : "imdflop"}-${seat}-${bytesToHex(randomBytes(8))}`;
   const sent: LedgerEntry = { ...base, request_id: requestId, quote_raw: q.raw, quote_padded: q.padded, spent_before: spentBefore, state: "sent", reason: null, spend: null, cost_reported: null, cap_charge: q.padded, http: null };
-  appendLedger(h, sent); // written before the call so a crash still leaves the attempt on the books
+  appendLedger(h, sent); // written before the call so a crash still leaves the attempt on the books. A later refused_local line wins if the provider refuses before mint.
 
   // A ref'd timer (AbortSignal.timeout is unref'd and would let the process exit mid-call).
   const ac = new AbortController();
@@ -195,7 +195,11 @@ export async function runJob(h: string, provider: Provider, o: RunOpts, deps: { 
     const http = e instanceof FlopHTTPError ? e.status : null;
     const preSend = e instanceof PreSendError;
     const timedOut = http === null && !preSend; // abort, timeout or dropped connection: the gateway may have done paid work
-    appendLedger(h, { ...sent, ts: new Date().toISOString(), state: timedOut ? "timeout_unknown" : "error", reason: timedOut ? `${err.name}: no answer; spend unknown, not retried` : preSend ? err.message : `HTTP ${http}`, spend: null, cap_charge: preSend ? 0 : sent.cap_charge, http });
+    // Pre-mint failure minted nothing. `error` would show in status as a pending paid attempt.
+    // `refused_local` with cap charge 0 is the latest line. Hashes are stripped so the secret scan
+    // can store that line; otherwise the pre-call `sent` charge would stay in effect.
+    const reason = timedOut ? `${err.name}: no answer; spend unknown, not retried` : preSend ? `nothing sent: ${err.message.replace(/0x[0-9a-fA-F]{64}/g, "[hash]")}` : `HTTP ${http}`;
+    appendLedger(h, { ...sent, ts: new Date().toISOString(), state: timedOut ? "timeout_unknown" : preSend ? "refused_local" : "error", reason, spend: null, cap_charge: preSend ? 0 : sent.cap_charge, http });
     if (timedOut) {
       throw new CliError(`no answer within ${o.timeoutMs} ms. Spend is UNKNOWN (recorded as null). Not retried. Check later with \`imd-flop receipt ${requestId}\`.`, EXIT.TIMEOUT_UNKNOWN);
     }

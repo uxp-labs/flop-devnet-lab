@@ -51,6 +51,7 @@ Data lives in `~/.imd-flop/`, or in `$IMD_FLOP_HOME` if that's set. Exit codes: 
 
 Spend-guard rules, ported from `spend-guard/`:
 - The quote is padded by 20 tokens for the Qwen chat template. On a paid flop run, the chain-id and genesis checks come before that quote. If the estimate fails, nothing is sent.
+- If the pre-mint chain-id or genesis recheck fails, the latest ledger line is `refused_local` with cap charge 0. Status does not list that attempt as pending. The earlier `sent` line is the crash marker written before the call; the latest line is the one the cap uses. A crash between those two lines can leave `sent` as the latest line.
 - A call is refused locally if it's over the per-call cap or what's left of the daily cap.
 - A timeout is never retried. Its spend is recorded as `null` with its `request_id`. For the cap, unknown spend counts as the padded quote.
 - Receipts are labeled `gateway observed` and `chain_final=false`, because nothing verifies chain settlement yet. A `null` settled spend shows blank, never 0. A 401 `api_key_expired` gets its own `key_expired` flag.
@@ -68,7 +69,7 @@ to the job. The per-call cap still applies in both modes.
 
 ```
 npm install
-npm test          # tsc + vitest: 58 tests, no network (fetch and WebSocket are disabled in tests)
+npm test          # tsc + vitest: 61 tests, no network (fetch and WebSocket are disabled in tests)
 ./demo.sh         # init, link, cap, run (mock), status, receipt in a temp IMD_FLOP_HOME
 ```
 

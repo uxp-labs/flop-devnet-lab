@@ -2,6 +2,7 @@
  * ledger.jsonl: one line per state change of an attempt (spend-guard rule 6). The latest line for a
  * request_id wins. Tokens, keys and prompts are never written; only a prompt hash.
  * States: refused_local, sent, timeout_unknown, error, reserved, estimated, settled, released.
+ * A pre-mint refusal appends refused_local (cap charge 0). That latest line supersedes the pre-call sent line.
  */
 import { ledgerFile } from "./paths.js";
 import { appendJsonlSafe, readJsonl } from "./store.js";
