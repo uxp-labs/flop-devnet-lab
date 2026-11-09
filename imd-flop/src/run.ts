@@ -43,7 +43,10 @@ export interface RunResult {
   cap_charge: number;
   receipt: Classified & { seat: string; did: string; match: MatchResult };
   response_file: string;
-  text: string;
+  /** Completion text that was stored. Null when the response-file secret scan withheld it. */
+  text: string | null;
+  /** Present only when `text` was withheld. Same string as the response file. */
+  withheld?: string;
   link_bypassed: boolean;
 }
 
@@ -211,10 +214,15 @@ export async function runJob(h: string, provider: Provider, o: RunOpts, deps: { 
 
   const responseFile = join(responsesDir(h), `${requestId}.json`);
   const responseRecord = { request_id: requestId, job, seat, provider: provider.name, model, usage: res.usage, output_sha256: bytesToHex(sha256(utf8ToBytes(res.text))), text: res.text, mock: provider.name === "mock", note: "not submitted to IMD; the holder decides what to use" };
+  // `run --json` prints this return value, so it has to be the text that was stored.
+  let text: string | null = res.text;
+  let withheld: string | undefined;
   try {
     writeJsonSafe(responseFile, responseRecord, "response");
   } catch (e) {
-    writeJsonSafe(responseFile, { ...responseRecord, text: null, withheld: (e as Error).message }, "response");
+    withheld = (e as Error).message;
+    text = null;
+    writeJsonSafe(responseFile, { ...responseRecord, text: null, withheld }, "response");
   }
 
   const rr = await provider.readReceipt(requestId);
@@ -228,5 +236,5 @@ export async function runJob(h: string, provider: Provider, o: RunOpts, deps: { 
 
   const match = await matchReceipt(h, receipt0, latestAttempts(h).find((e) => e.request_id === requestId) ?? null);
   const receipt = { ...receipt0, match };
-  return { request_id: requestId, job, provider: provider.name, payer: cfg.payer, quote_padded: q.padded, cap_charge: capCharge, receipt, response_file: responseFile, text: res.text, link_bypassed: linkBypassed };
+  return { request_id: requestId, job, provider: provider.name, payer: cfg.payer, quote_padded: q.padded, cap_charge: capCharge, receipt, response_file: responseFile, text, ...(withheld !== undefined ? { withheld } : {}), link_bypassed: linkBypassed };
 }
