@@ -7,7 +7,7 @@ Open tools from uxp-labs for builders on the FLOP devnet. We tested, we didn't f
 | `spend-guard/` | Checks the free estimate, issues a single-use capped key per call, refuses anything over the cap before sending, and never retries a timeout. Unknown spend stays unknown, never 0. |
 | `spend-guard/receipts.py` | Read-only receipt tracker that follows a charge to settled, released, or stuck. |
 | `cost-checker/` | Dependency-free cost check before you send (counts the chat-template tokens). |
-| `viewer/` | Settlement viewer that shows sent, gateway settled, and chain final as separate states. |
+| `viewer/` | Settlement viewer that shows sent, gateway observed, and chain final as separate states. |
 | `flop-bug-report-draft.md` | Bugs and doc gaps we hit on Nov 9, 2026, with repro steps. |
 | `CREDITS.md` | Dated work log: who did what. |
 

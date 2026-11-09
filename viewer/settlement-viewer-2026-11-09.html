@@ -51,32 +51,32 @@ h1{font-size:20px;margin:0 0 4px}h2{font-size:15px;margin:28px 0 10px;color:var(
 </div>
 
 <h2>Calls</h2>
-<div class="hdr"><div>Call</div><div>1 · Sent</div><div>2 · Gateway settled</div><div>3 · Chain final</div></div>
+<div class="hdr"><div>Call</div><div>1 · Sent</div><div>2 · Gateway observed</div><div>3 · Chain final</div></div>
 
 <div class="row">
  <div class="lbl">First paid completion<small>gen_e1bbc150…</small><small>wallet 5Cg5aZXd…cLY6</small><small>Nov 7, 11:40 AM ET</small></div>
  <div class="col"><span class="chip c-grey">sent</span><div><span class="k">model</span> <span class="mono">qwen2.5-0.5b</span></div><div><span class="k">key</span> sign-up key (before child-key rule)</div><div><span class="k">reported cost</span> <span class="mono">0.432</span></div><div class="flag">over the 0.25 per-request limit set later</div></div>
- <div class="col"><span class="chip c-red">unknown</span><div><span class="k">last seen</span> <span class="mono">pending</span> (Nov 7)</div><div><span class="k">now</span> unreadable: <span class="mono">401 api_key_expired</span></div><div><span class="k">settled spend</span> <span class="unk">unknown</span></div><div class="flag">stuck over 24h · key expired, can't re-check</div></div>
+ <div class="col"><span class="chip c-red">unknown</span><div><span class="k">last seen</span> <span class="mono">pending</span> (Nov 7)</div><div><span class="k">now</span> unreadable: <span class="mono">401 api_key_expired</span></div><div><span class="k">observed spend</span> <span class="unk">unknown</span></div><div class="flag">stuck over 24h · key expired, can't re-check</div></div>
  <div class="col"><span class="chip c-grey">none</span><div><span class="k">channel</span> <span class="mono">0x1c137bb4…7882</span></div><div><span class="k">explorer link</span> <span class="unk">none</span></div><div class="k">No chain record confirmed in saved notes.</div></div>
 </div>
 
 <div class="row">
  <div class="lbl">T1 refusal test<small>test wallet</small><small>Nov 9</small></div>
  <div class="col"><span class="chip c-grey">not sent</span><div><span class="k">request</span> <span class="mono">"Be brief." + "Hi", max_tokens 16</span></div><div><span class="k">estimate</span> <span class="mono">0.096</span> (worst case with template <span class="mono">≈0.234</span>)</div><div><span class="k">child key</span> <span class="mono">0.05 · 1 use</span> (not issued)</div><div class="flag">blocked: 503 wallet_enrollment_cap_reached</div></div>
- <div class="col"><span class="chip c-grey">none</span><div><span class="k">refused by</span> <span class="unk">untested</span></div><div><span class="k">settled spend</span> <span class="unk">null</span></div></div>
+ <div class="col"><span class="chip c-grey">none</span><div><span class="k">refused by</span> <span class="unk">untested</span></div><div><span class="k">observed spend</span> <span class="unk">null</span></div></div>
  <div class="col"><span class="chip c-grey">none</span><div><span class="k">explorer link</span> <span class="unk">none</span></div></div>
 </div>
 
 <div class="row">
  <div class="lbl">T2 normal request<small>test wallet</small><small>runs only if T1 is refused</small></div>
  <div class="col"><span class="chip c-grey">not sent</span><div><span class="k">request</span> <span class="mono">"Hi", max_tokens 18</span></div><div><span class="k">estimate</span> <span class="mono">≈0.234</span> with template, cap <span class="mono">0.25</span></div></div>
- <div class="col"><span class="chip c-grey">none</span><div><span class="k">settled spend</span> <span class="unk">null</span></div></div>
+ <div class="col"><span class="chip c-grey">none</span><div><span class="k">observed spend</span> <span class="unk">null</span></div></div>
  <div class="col"><span class="chip c-grey">none</span><div><span class="k">explorer link</span> <span class="unk">none</span></div></div>
 </div>
 
 <h2>Notes</h2>
 <ul class="notes">
- <li>"Gateway settled" is the gateway's own ledger. It isn't proof the chain finalized anything.</li>
+ <li>"Gateway observed" is the gateway's own ledger. It isn't proof the chain finalized anything.</li>
  <li>A timeout or 404 shows as unknown and gets flagged. Nothing gets retried automatically.</li>
  <li>Static draft. Not public and not posted.</li>
 </ul>

@@ -12,11 +12,12 @@ def estimate(model, prompt, max_tokens):
         return json.load(r)
 
 def classify_receipt(r):
-    """Report the receipt state as given. A null spend stays unknown."""
+    """Report the receipt state as given. A null spend stays null (blank), never 0."""
     s = r.get("settled_spend")
     return {"request_id": r.get("request_id"), "state": r.get("state"),
             "reserved": r.get("reserved_spend"),
-            "settled": "unknown" if s is None else s,
+            "settled": s,  # None stays None: blank, never 0
+            "stage": "gateway observed",
             "chain_final": False,  # terminal_event may be pooled; not proof of finality
             "terminal_event": r.get("terminal_event")}
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Read-only receipt tracker. Reads a gateway key from a file (never prints it),
-lists receipts, and reports each state as given. Null spend stays unknown."""
+lists receipts, and reports each state as given. Null spend stays null (blank), never 0."""
 import argparse, json, urllib.request, urllib.error
 from guard import BASE, classify_receipt
 
@@ -23,7 +23,7 @@ def main():
     path = f"/keys/me/receipts/{a.request_id}" if a.request_id else "/keys/me/receipts"
     code, body = get(path, key)
     if code != 200:
-        out = {"http": code, "error": body.get("error"), "state": "unknown"}
+        out = {"http": code, "error": body.get("error"), "state": None}
         if body.get("error") == "api_key_expired": out["flag"] = "key_expired"
         if a.last_known: out["last_known"] = json.load(open(a.last_known))
         print(json.dumps(out, indent=1)); return

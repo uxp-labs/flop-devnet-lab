@@ -7,7 +7,7 @@ Local only. No repo, no posts. This version makes no paid calls and does no sign
 2. **Refuse before sending.** If the padded quote is over the caller's cap, stop locally and send nothing.
 3. **Child key only.** Every paid call goes through `POST /v1/keys/ephemeral` with `uses=1`, `max_spend=<cap>`, one model, and the shortest expiry. The broad sign-up key (up to 20,000 FLOP) only mints child keys and never pays.
 4. **No timeout retries.** A timeout or dropped connection doesn't prove no paid work happened. The guard records `spend=unknown`, keeps the request_id, and stops. A resend needs a human or a receipt showing `released`.
-5. **Reconcile.** Poll `GET /v1/keys/me/receipts/{request_id}` and report the state as given. `settled_spend: null` stays null and never becomes 0. "Gateway settled" is not "chain final": `terminal_event` can be pooled across several requests and isn't a per-request tx hash.
+5. **Reconcile.** Poll `GET /v1/keys/me/receipts/{request_id}` and report the state as given. `settled_spend: null` stays null and never becomes 0. "Gateway observed" is not "chain final": `terminal_event` can be pooled across several requests and isn't a per-request tx hash.
 6. **Ledger.** Append one JSON line per attempt to `ledger.jsonl` with the quote, cap, child-key scope (never the token), request_id, state, and spend. Tokens are never written down.
 
 ## States
