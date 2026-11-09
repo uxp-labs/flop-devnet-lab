@@ -1,0 +1,38 @@
+# Offline CI for imd-flop.
+# The token is read-only. This workflow has no secrets, wallet keys, deploys, or publishing.
+# npm ci may use the registry. The test step must not call FLOP or IMD:
+# `npm test` runs vitest, which loads test/setup.ts and rejects fetch and WebSocket.
+
+name: imd-flop offline
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-test:
+    name: build and offline tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Use Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install dependencies
+        working-directory: imd-flop
+        run: npm ci --engine-strict
+
+      - name: Build
+        working-directory: imd-flop
+        run: npm run build
+
+      - name: Run offline tests
+        working-directory: imd-flop
+        run: npm test
