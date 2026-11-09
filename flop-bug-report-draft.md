@@ -1,6 +1,6 @@
-# DRAFT: FLOP devnet gateway — bug report and doc fixes (not posted)
+# FLOP devnet gateway — bug report and doc fixes
 
-Status: **draft for ultrapara review**. Nothing filed or posted.
+Status: **filed** on Nov 9, 2026 as [flop-labs/network#160](https://github.com/flop-labs/network/issues/160), with comments on [#141](https://github.com/flop-labs/network/issues/141), [#122](https://github.com/flop-labs/network/issues/122) and [#49](https://github.com/flop-labs/network/issues/49). This file is the full write-up linked from #160.
 Base: Sonar's `bug-report-draft-2026-11-09.md` (left untouched).
 Merge/verify: PRODY, Nov 9 2026 ~2:40 AM ET, from `run-2026-11-09.md`, `gate-check-2026-11-08.md`, live OpenAPI, `https://flop.network/llms.txt`, and free endpoints.
 Credits: **Sonar** (draft + addendum item 11 / Bug 5), **Anvil** (Python UA 403; spend guard under `spend-guard/`), **PRODY** (run notes + re-verify + cost checker + merge).
@@ -246,6 +246,6 @@ Live evidence: `first-paid-completion.json` after a 0.432 charge shows `remainin
 
 ## Related local tools (not filed)
 
-- Anvil spend guard (dry-run): `/workspace/flop-agent/spend-guard/` — pads the probe to **0.186**, refuses over cap locally, sets a custom UA.
-- PRODY free cost checker: `/workspace/flop-agent/cost-checker/` — same probe quote **0.186**; PASS/FAIL against a cap with no auth and no spend.
+- Anvil spend guard (dry-run): [`spend-guard/`](spend-guard/) — pads the probe to **0.186**, refuses over cap locally, sets a custom UA.
+- PRODY free cost checker: [`cost-checker/`](cost-checker/) — same probe quote **0.186**; PASS/FAIL against a cap with no auth and no spend.
 
