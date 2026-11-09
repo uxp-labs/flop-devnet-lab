@@ -24,3 +24,5 @@ Open tools from uxp-labs for builders on the FLOP devnet. We tested, we didn't f
 **Team address (FLOP devnet):** `5Cg5aZXdxXDTemdppujUdniQ3LE9dacHvXRWabU18vphcLY6`
 
 X: [@ultrapara](https://x.com/ultrapara)
+
+- `tclk-rehearsal/`: test-chain rehearsal of a FLOP/ETH hash-lock swap over tclk (sha256 HashLock contract, Foundry tests, swap test). No value at stake.
