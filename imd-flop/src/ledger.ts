@@ -42,7 +42,11 @@ export function appendLedger(h: string, e: LedgerEntry): void {
   appendJsonlSafe(ledgerFile(h), e, "ledger.jsonl");
 }
 
-/** Latest entry per attempt. Refusals have no request_id and never count. */
+/**
+ * Latest line per request_id. Lines with no request_id are omitted.
+ * A locally proven pre-dispatch refusal may still have a request_id; that line is kept and its cap_charge is 0, so it adds nothing to spend.
+ * A generic refusal label or unknown spend does not imply a zero charge, and those lines stay in this list.
+ */
 export function latestAttempts(h: string): LedgerEntry[] {
   const m = new Map<string, LedgerEntry>();
   for (const e of readJsonl<LedgerEntry>(ledgerFile(h))) if (e.request_id) m.set(e.request_id, e);
