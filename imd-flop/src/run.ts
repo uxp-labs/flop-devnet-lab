@@ -8,11 +8,11 @@ import { linkFile, receiptsDir, responsesDir } from "./paths.js";
 import { readJson, writeJsonSafe } from "./store.js";
 import { loadSigner, readIdentity, revokedDids } from "./keys.js";
 import { verifyLink, type LinkFile } from "./link.js";
-import { DEFAULT_MODEL, network } from "./networks.js";
+import { DEFAULT_MODEL, network, SEAT_COLLECTION } from "./networks.js";
 import { appendLedger, jobSpent, spentToday, utcDay, type LedgerEntry } from "./ledger.js";
 import { classifyReceipt, type Classified } from "./receipts.js";
 import type { Provider } from "./providers.js";
-import { checkImdJob, PreSendError, type Fetch } from "./gateway.js";
+import { checkImdJob, PreSendError, readSeatOwner, type Fetch } from "./gateway.js";
 import { FlopHTTPError } from "@flop-labs/client";
 import { matchReceipt } from "./match.js";
 import { latestAttempts } from "./ledger.js";
@@ -57,12 +57,24 @@ export function padQuote(est: { estimated_cost_flop?: number; estimated_input_to
 }
 
 /** Rule 5 (a broken link means no route) and rule 2 (one DID per seat, not revoked). */
-export async function checkLinkForRun(h: string, seat: string, requireWallet: boolean): Promise<{ ok: boolean; why: string[] }> {
+export async function checkLinkForRun(h: string, seat: string, requireWallet: boolean, deps: { fetch?: Fetch; ethRpc?: string } = {}): Promise<{ ok: boolean; why: string[] }> {
   const why: string[] = [];
   const lf = readJson<LinkFile>(linkFile(h, seat));
   const id = readIdentity(h, seat);
   if (!lf) return { ok: false, why: [`no link for seat ${seat}; run \`imd-flop link --token ${seat}\``] };
-  const v = await verifyLink(lf);
+  // Live runs must prove the signer still owns the seat (a sale kills the link). Fail closed without an RPC.
+  let currentOwner: string | null | undefined;
+  if (requireWallet) {
+    if (!deps.ethRpc) why.push("owner check needs ETH_RPC_URL (an Ethereum mainnet JSON-RPC URL) for --provider flop");
+    else {
+      try {
+        currentOwner = await readSeatOwner(deps.ethRpc, SEAT_COLLECTION, lf.statement.tokenId, deps.fetch);
+      } catch (e) {
+        why.push(`owner check failed: ${(e as Error).message}`);
+      }
+    }
+  }
+  const v = await verifyLink(lf, currentOwner === undefined ? {} : { currentOwner });
   if (!v.ok) why.push(...v.errors);
   if (!id || lf.statement.flopDid !== id.did) why.push("link names a different DID than this seat's key");
   if (lf.statement.tokenId !== seat) why.push(`link is for token ${lf.statement.tokenId}, not seat ${seat}`);
@@ -71,7 +83,7 @@ export async function checkLinkForRun(h: string, seat: string, requireWallet: bo
   return { ok: why.length === 0, why };
 }
 
-export async function runJob(h: string, provider: Provider, o: RunOpts, deps: { fetch?: Fetch } = {}): Promise<RunResult> {
+export async function runJob(h: string, provider: Provider, o: RunOpts, deps: { fetch?: Fetch; ethRpc?: string } = {}): Promise<RunResult> {
   const cfg = loadConfig(h);
   const net = network(cfg.network);
   const seat = o.seat ?? cfg.seat;
@@ -92,7 +104,7 @@ export async function runJob(h: string, provider: Provider, o: RunOpts, deps: { 
     if (provider.name !== "mock") throw new CliError("--no-link is only allowed with --provider mock", EXIT.REFUSED_LINK);
     linkBypassed = true;
   } else {
-    const lc = await checkLinkForRun(h, seat, provider.name === "flop");
+    const lc = await checkLinkForRun(h, seat, provider.name === "flop", { fetch: deps.fetch, ethRpc: deps.ethRpc });
     if (!lc.ok) throw new CliError(`link does not verify, refusing: ${lc.why.join("; ")}`, EXIT.REFUSED_LINK);
   }
   const signer = loadSigner(h, seat); // also proves the key file is 0600 and matches identity.json

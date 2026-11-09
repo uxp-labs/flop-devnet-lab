@@ -7,6 +7,8 @@ export interface NetworkInfo {
   rpc: string;
   explorer: string;
   ss58Prefix: number;
+  /** Block 0 hash. A link binds to this, not to the name "devnet", so a reset or fork kills it. */
+  genesisHash: string;
 }
 
 /** Only devnet is published. Sources: docs.flop.network official-links, network-devnet, and faucet /chain (ss58Format 42). */
@@ -18,6 +20,8 @@ export const NETWORKS: Record<string, NetworkInfo> = {
     rpc: "wss://rpc.devnet.flop.network",
     explorer: "https://explorer.devnet.flop.network",
     ss58Prefix: 42,
+    // faucet.flop.network/chain genesisHash, read 2026-11-09. `init --check-genesis` compares faucet vs RPC live.
+    genesisHash: "0x99c172c095340ace980631f9123544c6bebd4839f3437e463533422d8be2d631",
   },
 };
 

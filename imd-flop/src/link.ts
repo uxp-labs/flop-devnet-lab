@@ -1,7 +1,8 @@
 /**
- * Seat-to-DID link (proposal section A): {tokenId, erc8004AgentId, flopDid, ss58, network, issuedAt},
+ * Seat-to-DID link (proposal section A): {tokenId, erc8004AgentId, flopDid, ss58, network, genesisHash, issuedAt},
  * signed twice: Ed25519 by the FLOP key (here) and EIP-712 by the wallet holding the seat NFT
  * (elsewhere; we only emit typed data and never hold or ask for a wallet key or seed).
+ * v1 binds the link to FLOP's genesis hash, and verify can check the seat's current ownerOf so a sale kills the link.
  */
 import { existsSync } from "node:fs";
 import { ed25519 } from "@noble/curves/ed25519.js";
@@ -19,11 +20,12 @@ export interface LinkStatement {
   flopDid: string;
   ss58: string;
   network: string;
+  genesisHash: string; // 0x-prefixed block 0 hash of the FLOP chain
   issuedAt: number; // unix seconds
 }
 
-export const LINK_DOMAIN_TAG = "imd-flop/seat-link/v0\n";
-const FIELDS: (keyof LinkStatement)[] = ["tokenId", "erc8004AgentId", "flopDid", "ss58", "network", "issuedAt"];
+export const LINK_DOMAIN_TAG = "imd-flop/seat-link/v1\n";
+const FIELDS: (keyof LinkStatement)[] = ["tokenId", "erc8004AgentId", "flopDid", "ss58", "network", "genesisHash", "issuedAt"];
 
 /** Fixed field order, no whitespace. This exact string (with the tag) is what Ed25519 signs. */
 export function canonicalStatement(s: LinkStatement): string {
@@ -40,13 +42,14 @@ export const EIP712_TYPES = {
     { name: "flopDid", type: "string" },
     { name: "ss58", type: "string" },
     { name: "network", type: "string" },
+    { name: "genesisHash", type: "bytes32" },
     { name: "issuedAt", type: "uint64" },
     { name: "flopSignature", type: "bytes" },
   ],
 } as const;
 
 export function eip712Domain() {
-  return { name: "imd-flop seat link", version: "0", chainId: SEAT_CHAIN_ID, verifyingContract: SEAT_COLLECTION } as const;
+  return { name: "imd-flop seat link", version: "1", chainId: SEAT_CHAIN_ID, verifyingContract: SEAT_COLLECTION } as const;
 }
 
 /** JSON-safe typed data (numbers as decimal strings) for eth_signTypedData_v4 on the holder's own wallet. */
@@ -61,6 +64,7 @@ export function eip712TypedData(s: LinkStatement, flopSig: Hex) {
       flopDid: s.flopDid,
       ss58: s.ss58,
       network: s.network,
+      genesisHash: s.genesisHash,
       issuedAt: String(s.issuedAt),
       flopSignature: flopSig,
     },
@@ -68,7 +72,7 @@ export function eip712TypedData(s: LinkStatement, flopSig: Hex) {
 }
 
 export interface LinkFile {
-  v: 0;
+  v: 1;
   statement: LinkStatement;
   statement_sha256: string;
   flop: { alg: "Ed25519"; signer: string; sig: Hex };
@@ -87,12 +91,13 @@ export function buildLink(signer: Signer, opts: { tokenId: string; agentId?: str
     flopDid: id.did,
     ss58: id.ss58,
     network: id.network,
+    genesisHash: network(id.network).genesisHash,
     issuedAt: opts.issuedAt ?? Math.floor(Date.now() / 1000),
   };
   const msg = statementMessage(statement);
   const sig = ("0x" + bytesToHex(signer.sign(msg))) as Hex;
   return {
-    v: 0,
+    v: 1,
     statement,
     statement_sha256: bytesToHex(sha256(msg)),
     flop: { alg: "Ed25519", signer: id.did, sig },
@@ -108,11 +113,17 @@ export interface VerifyResult {
   didMatchesSs58: boolean;
   ss58PrefixOk: boolean;
   eip712MatchesStatement: boolean;
+  genesisOk: boolean;
+  owner: { checked: boolean; ok: boolean; current?: string | null };
   wallet: { checked: boolean; ok: boolean; recovered?: string; expected?: string };
   errors: string[];
 }
 
-export async function verifyLink(file: LinkFile, opts: { walletSig?: string; wallet?: string } = {}): Promise<VerifyResult> {
+/**
+ * opts.currentOwner: the seat's ownerOf(tokenId) as read by the caller (null = token does not exist).
+ * When given, the wallet that signed must still own the seat; a sale or transfer kills the link.
+ */
+export async function verifyLink(file: LinkFile, opts: { walletSig?: string; wallet?: string; currentOwner?: string | null } = {}): Promise<VerifyResult> {
   const errors: string[] = [];
   const r: VerifyResult = {
     ok: false,
@@ -120,6 +131,8 @@ export async function verifyLink(file: LinkFile, opts: { walletSig?: string; wal
     didMatchesSs58: false,
     ss58PrefixOk: false,
     eip712MatchesStatement: false,
+    genesisOk: false,
+    owner: { checked: false, ok: false },
     wallet: { checked: false, ok: false },
     errors,
   };
@@ -143,6 +156,12 @@ export async function verifyLink(file: LinkFile, opts: { walletSig?: string; wal
   } catch (e) {
     errors.push(`bad did/ss58: ${(e as Error).message}`);
   }
+  try {
+    r.genesisOk = typeof s.genesisHash === "string" && s.genesisHash.toLowerCase() === network(s.network).genesisHash.toLowerCase();
+  } catch {
+    r.genesisOk = false;
+  }
+  if (!r.genesisOk) errors.push(`genesisHash ${s.genesisHash} is not ${s.network}'s genesis (chain reset, fork, or wrong network)`);
   if (file.flop?.signer !== s.flopDid) errors.push("flop.signer is not statement.flopDid");
   if (pub) {
     try {
@@ -169,7 +188,7 @@ export async function verifyLink(file: LinkFile, opts: { walletSig?: string; wal
           domain: expected.domain,
           types: expected.types,
           primaryType: expected.primaryType,
-          message: { ...expected.message, tokenId: BigInt(s.tokenId), issuedAt: BigInt(s.issuedAt) },
+          message: { ...expected.message, genesisHash: s.genesisHash as Hex, tokenId: BigInt(s.tokenId), issuedAt: BigInt(s.issuedAt) },
           signature: walletSig as Hex,
         });
         r.wallet.recovered = recovered;
@@ -181,7 +200,16 @@ export async function verifyLink(file: LinkFile, opts: { walletSig?: string; wal
       }
     }
   }
-  r.ok = errors.length === 0 && r.flopSig && r.didMatchesSs58 && r.ss58PrefixOk && r.eip712MatchesStatement && (!r.wallet.checked || r.wallet.ok);
+  if (opts.currentOwner !== undefined) {
+    r.owner.checked = true;
+    r.owner.current = opts.currentOwner ? getAddress(opts.currentOwner) : null;
+    const signer = r.wallet.ok ? r.wallet.expected : undefined;
+    if (!r.owner.current) errors.push(`seat ${s.tokenId} has no owner (ownerOf reverted or burned)`);
+    else if (!signer) errors.push("owner check needs a verified wallet signature to compare against");
+    else if (r.owner.current !== signer) errors.push(`seat ${s.tokenId} is now owned by ${r.owner.current}, not the signer ${signer}: link is dead`);
+    r.owner.ok = !!signer && r.owner.current === signer;
+  }
+  r.ok = errors.length === 0 && r.flopSig && r.didMatchesSs58 && r.ss58PrefixOk && r.genesisOk && r.eip712MatchesStatement && (!r.wallet.checked || r.wallet.ok) && (!r.owner.checked || r.owner.ok);
   return r;
 }
 

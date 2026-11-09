@@ -1,3 +1,4 @@
+import { checkLinkForRun } from "../src/run.js";
 import { describe, expect, it } from "vitest";
 import { existsSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -218,5 +219,16 @@ describe("rules in run", () => {
     const r = await cli(h, [...RUN, "--provider", "flop", "--live"]);
     expect(r.code).not.toBe(0); // no gateway key, no wallet-signed link: refused before any network
     expect(existsSync(join(h, "responses"))).toBe(false);
+  });
+
+  it("the live-run link check fails closed without ETH_RPC_URL and after a sale", async () => {
+    const h = tmpHome();
+    await readySeat(h);
+    const noRpc = await checkLinkForRun(h, "42", true);
+    expect(noRpc.ok).toBe(false);
+    expect(noRpc.why.join()).toMatch(/ETH_RPC_URL/);
+    const down = await checkLinkForRun(h, "42", true, { ethRpc: "https://rpc.example", fetch: (async () => { throw new Error("offline"); }) as typeof fetch });
+    expect(down.ok).toBe(false);
+    expect(down.why.join()).toMatch(/owner check failed/);
   });
 });

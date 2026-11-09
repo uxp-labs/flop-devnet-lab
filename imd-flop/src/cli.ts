@@ -8,8 +8,8 @@ import { loadConfig, saveConfig, type Payer } from "./config.js";
 import { claimUnassigned, initSeat, loadSigner, readIdentity, UNASSIGNED, validateSeat } from "./keys.js";
 import { buildLink, verifyLink, type LinkFile } from "./link.js";
 import { readJson, writeJsonSafe, writeSecretFile } from "./store.js";
-import { network } from "./networks.js";
-import { checkGenesis, enrollChallengeUrl, getEnrollChallenge, postEnroll, type Fetch } from "./gateway.js";
+import { network, SEAT_COLLECTION } from "./networks.js";
+import { checkGenesis, readSeatOwner, enrollChallengeUrl, getEnrollChallenge, postEnroll, type Fetch } from "./gateway.js";
 import { FlopProvider, MOCK_SCENARIOS, MockProvider, type MockScenario, type Provider } from "./providers.js";
 import { checkLinkForRun, padQuote, runJob } from "./run.js";
 import { latestAttempts, spentToday } from "./ledger.js";
@@ -30,7 +30,7 @@ const HELP = `imd-flop: reference companion CLI for "FLOP, by choice" (devnet re
 
   init [--network devnet] [--seat <tokenId>] [--rotate] [--check-genesis]
   link --token <tokenId> [--agent <erc8004AgentId>]
-  link verify <file> [--wallet-sig <0x..> --wallet <0x..>] [--save]
+  link verify <file> [--wallet-sig <0x..> --wallet <0x..>] [--save] [--eth-rpc <url>]  (owner check; or ETH_RPC_URL)
   faucet [--dry-run]                      (refuses: team rule, no faucets)
   enroll [--dry-run | --live]             (dry run by default)
   cap set <FLOP/day> [--per-call <FLOP>] | cap show
@@ -111,7 +111,7 @@ export async function main(argv: string[], io: IO): Promise<number> {
           out.genesis = g;
           if (!g.ok) {
             values.json ? print(out) : io.out(`seat ${seat}\n  did   ${r.identity.did}\n  ss58  ${r.identity.ss58}`);
-            throw new CliError(`genesis check failed: faucet ${g.faucetGenesis ?? "?"} vs rpc ${g.rpcGenesis ?? "?"}${g.error ? ` (${g.error})` : ""}. Devnet may have reset.`, EXIT.ERROR);
+            throw new CliError(`genesis check failed: pinned ${g.pinnedGenesis} vs faucet ${g.faucetGenesis ?? "?"} vs rpc ${g.rpcGenesis ?? "?"}${g.error ? ` (${g.error})` : ""}. Devnet may have reset.`, EXIT.ERROR);
           }
         }
         if (values.json) print(out);
@@ -127,12 +127,21 @@ export async function main(argv: string[], io: IO): Promise<number> {
 
       case "link": {
         if (rest[0] === "verify") {
-          const { values, positionals } = parse(rest.slice(1), { "wallet-sig": { type: "string" }, wallet: { type: "string" }, save: { type: "boolean" } });
+          const { values, positionals } = parse(rest.slice(1), { "wallet-sig": { type: "string" }, wallet: { type: "string" }, save: { type: "boolean" }, "eth-rpc": { type: "string" } });
           const file = positionals[0];
           if (!file) throw new CliError("usage: link verify <file>", EXIT.USAGE);
           const lf = readJson<LinkFile>(resolve(file));
           if (!lf) throw new CliError(`no such file: ${file}`, EXIT.USAGE);
-          const v = await verifyLink(lf, { walletSig: values["wallet-sig"], wallet: values.wallet });
+          const ethRpc = values["eth-rpc"] ?? io.env.ETH_RPC_URL;
+          let currentOwner: string | null | undefined;
+          if (ethRpc) {
+            try {
+              currentOwner = await readSeatOwner(ethRpc, SEAT_COLLECTION, lf.statement?.tokenId ?? "0", io.fetch);
+            } catch (e) {
+              throw new CliError(`owner check failed (not treated as ok): ${(e as Error).message}`, EXIT.VERIFY_FAILED);
+            }
+          }
+          const v = await verifyLink(lf, { walletSig: values["wallet-sig"], wallet: values.wallet, ...(currentOwner === undefined ? {} : { currentOwner }) });
           if (v.ok && values.save && values["wallet-sig"] && values.wallet) {
             writeJsonSafe(resolve(file), { ...lf, wallet: { address: v.wallet.expected, signature: values["wallet-sig"] }, note: "signed by the FLOP key and the seat wallet" }, "link.json");
           }
@@ -142,8 +151,10 @@ export async function main(argv: string[], io: IO): Promise<number> {
             io.out(`  ed25519 signature      ${v.flopSig}`);
             io.out(`  ss58 == did:key        ${v.didMatchesSs58}`);
             io.out(`  ss58 prefix/network    ${v.ss58PrefixOk}`);
+            io.out(`  genesis hash           ${v.genesisOk}`);
             io.out(`  eip712 == statement    ${v.eip712MatchesStatement}`);
             io.out(`  wallet (EIP-712)       ${v.wallet.checked ? `${v.wallet.ok} ${v.wallet.recovered ?? ""}` : "not checked (no --wallet-sig)"}`);
+            io.out(`  seat owner (ownerOf)   ${v.owner.checked ? `${v.owner.ok} ${v.owner.current ?? "none"}` : "not checked (no --eth-rpc / ETH_RPC_URL)"}`);
             for (const e of v.errors) io.out(`  ! ${e}`);
           }
           return v.ok ? EXIT.OK : EXIT.VERIFY_FAILED;
@@ -309,7 +320,7 @@ export async function main(argv: string[], io: IO): Promise<number> {
             timeoutMs: Number(values["timeout-ms"] ?? 60000),
             checkJob: values["check-job"],
           },
-          { fetch: io.fetch },
+          { fetch: io.fetch, ethRpc: io.env.ETH_RPC_URL },
         );
         if (values.json) print(r);
         else {

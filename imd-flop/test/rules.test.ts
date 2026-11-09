@@ -77,4 +77,33 @@ describe("faucet and enrollment", () => {
     expect(r.code).toBe(1); // network disabled in tests -> check fails closed
     expect(r.err).toMatch(/genesis check failed/);
   });
+  it("checkGenesis passes only when pinned, faucet and RPC all agree", async () => {
+    const { checkGenesis } = await import("../src/gateway.js");
+    const { NETWORKS } = await import("../src/networks.js");
+    const pinned = NETWORKS.devnet.genesisHash;
+    const other = "0x" + "33".repeat(32);
+    const faucet = (g: string) => (async () => new Response(JSON.stringify({ genesisHash: g }))) as typeof fetch;
+    const realWS = globalThis.WebSocket;
+    const fakeWS = (g: string) =>
+      class {
+        onopen?: () => void;
+        onmessage?: (ev: { data: string }) => void;
+        onerror?: () => void;
+        constructor() { setTimeout(() => this.onopen?.(), 0); }
+        send() { setTimeout(() => this.onmessage?.({ data: JSON.stringify({ result: g }) }), 0); }
+        close() {}
+      };
+    try {
+      (globalThis as any).WebSocket = fakeWS(pinned);
+      expect((await checkGenesis(NETWORKS.devnet, faucet(pinned))).ok).toBe(true);
+      (globalThis as any).WebSocket = fakeWS(other); // RPC reset, faucet stale
+      expect((await checkGenesis(NETWORKS.devnet, faucet(pinned))).ok).toBe(false);
+      (globalThis as any).WebSocket = fakeWS(other); // devnet reset: faucet and RPC agree, pin does not
+      const reset = await checkGenesis(NETWORKS.devnet, faucet(other));
+      expect(reset.ok).toBe(false);
+      expect(reset.pinnedGenesis).toBe(pinned);
+    } finally {
+      (globalThis as any).WebSocket = realWS;
+    }
+  });
 });

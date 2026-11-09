@@ -12,8 +12,8 @@ no network and no spend.
 | Command | What it does |
 |---|---|
 | `init [--network devnet] [--seat <tokenId>] [--rotate] [--check-genesis]` | Makes one Ed25519 key for the seat (file mode 600, never printed). Prints the SS58 address (prefix 42, the devnet faucet's `ss58Format`) and the `did:key`. Refuses a second key for a seat unless `--rotate`, which writes a signed revocation record. `--check-genesis` compares the faucet's `/chain` genesis with the RPC's block 0. |
-| `link --token <id> [--agent <erc8004Id>]` | Builds `{tokenId, erc8004AgentId, flopDid, ss58, network, issuedAt}`, signs it with the FLOP key, and prints EIP-712 typed data for the seat holder to sign in their own wallet. |
-| `link verify <file> [--wallet-sig <sig> --wallet <addr>] [--save]` | Checks the Ed25519 signature, that the SS58 and the DID are the same key, that the EIP-712 data matches the statement, and the wallet signature if given. |
+| `link --token <id> [--agent <erc8004Id>]` | Builds the v1 statement `{tokenId, erc8004AgentId, flopDid, ss58, network, genesisHash, issuedAt}`, signs it with the FLOP key, and prints EIP-712 typed data for the seat holder to sign in their own wallet. |
+| `link verify <file> [--wallet-sig <sig> --wallet <addr>] [--save] [--eth-rpc <url>]` | Checks the Ed25519 signature, that the SS58 and the DID are the same key, that `genesisHash` is the FLOP network's genesis, that the EIP-712 data matches the statement, and the wallet signature if given. With `--eth-rpc` (or `ETH_RPC_URL`) it also reads `ownerOf(tokenId)` on the seat collection and fails unless the signer still owns the seat, so a sale kills the link. |
 | `cap set <FLOP/day> [--per-call <FLOP>]`, `cap show` | Required. No cap means `run` refuses. The day resets at 00:00 UTC. |
 | `config set payer <holder\|requester>`, `config show` | Who pays. Every ledger row records it. |
 | `run --job <id> --prompt <text> \| --prompt-file <path>` | Gets a quote, pads it, checks the caps, makes the call, and saves the response and receipt. Nothing is sent to imd. Options: `--max-tokens`, `--system`, `--provider mock\|flop`, `--live`, `--job-budget`, `--timeout-ms`, `--check-job`, `--no-link` (mock only), `--mock-scenario`. |
@@ -46,7 +46,7 @@ Data lives in `~/.imd-flop/`, or in `$IMD_FLOP_HOME` if that's set. Exit codes: 
 2. **One DID per seat.** `init` refuses a second key for a seat. Rotating writes a revocation signed by the old key and retires the old link. A receipt made under a revoked or rotated DID shows `match=mismatch`.
 3. **No faucet.** `faucet` refuses.
 4. **Real work only.** `run` requires `--job`. `--check-job` checks that the job exists on imd.
-5. **A broken link means no route.** `run` refuses unless the link verifies, the DID is the seat's current one and the DID hasn't been revoked. `--provider flop` also requires the wallet signature. `--no-link` works only with the mock and labels its output as bypassed.
+5. **A broken link means no route.** `run` refuses unless the link verifies, the DID is the seat's current one and the DID hasn't been revoked. `--provider flop` also requires the wallet signature and a passing `ownerOf` check through `ETH_RPC_URL`; without an RPC, or if the read fails, it refuses. `--no-link` works only with the mock and labels its output as bypassed.
 
 Spend-guard rules, ported from `spend-guard/`:
 - The quote comes first and is padded by 20 tokens for the Qwen chat template. If the estimate fails, nothing is sent.
@@ -78,4 +78,10 @@ npm test          # tsc + vitest: 37 tests, no network (fetch and WebSocket are 
 - **Explorer URL formats** for FLOP sessions and settlements aren't documented, so receipts don't link to the explorer yet.
 - **InferenceReceipt** (in the OpenAPI) hasn't been seen on a real response yet, so no receipt is ever marked chain-final.
 - The link statement format and its EIP-712 domain (`imd-flop seat link`, chainId 1, the seat collection) are ours until imd adopts one.
-- `link verify` checks who signed with the wallet, not who owns the NFT (that needs an on-chain read). It only supports normal (EOA) wallets, not smart wallets like a Safe (ERC-1271).
+- The owner check reads `ownerOf` at `latest` through an RPC you supply; it is skipped by plain `link verify` and required for live runs. It runs when a run starts, so after a sale the link dies at the next run, not the moment the seat changes hands. Only normal (EOA) wallets are supported, not smart wallets like a Safe (ERC-1271).
+- The link binds to the devnet genesis hash pinned in `src/networks.ts` (read from `faucet.flop.network/chain` on 2026-11-09). A devnet reset changes it and every old link stops verifying. `init --check-genesis` passes only when the pinned hash, the faucet's and the RPC's block 0 all agree.
+- Proposed for the version imd would ship (not built here): imd already binds an Ed25519 device key to each seat with the holder's EIP-712 signature (`GET https://api.imd.fun/pair/wallet/:address`). Having that device key sign the FLOP DID would mean holders sign nothing new, and re-pairing or selling the seat revokes the link. The FLOP key stays separate; the device key only vouches for it.
+
+## Source
+
+Built to section F of the [Identity-md research job report](https://github.com/Identity-md/research/blob/main/jobs/4bb06f36-c8da-4925-8e4d-378ed76cff68/files/artifacts/report.md) (the "FLOP as an opt-in provider in the IMD worker" proposal). Credit to its authors; it is linked, not copied.

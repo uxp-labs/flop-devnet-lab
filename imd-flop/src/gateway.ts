@@ -80,7 +80,8 @@ export async function postEnroll(net: NetworkInfo, body: { address: string; mess
 }
 
 /** Docs: "compare live RPC and faucet genesis before use" (devnet can reset). */
-export async function checkGenesis(net: NetworkInfo, f: Fetch = globalThis.fetch): Promise<{ ok: boolean; faucetGenesis: string | null; rpcGenesis: string | null; error?: string }> {
+export async function checkGenesis(net: NetworkInfo, f: Fetch = globalThis.fetch): Promise<{ ok: boolean; pinnedGenesis: string; faucetGenesis: string | null; rpcGenesis: string | null; error?: string }> {
+  const pinnedGenesis = net.genesisHash.toLowerCase();
   let faucetGenesis: string | null = null;
   let rpcGenesis: string | null = null;
   try {
@@ -88,9 +89,10 @@ export async function checkGenesis(net: NetworkInfo, f: Fetch = globalThis.fetch
     faucetGenesis = ((await res.json()) as { genesisHash?: string }).genesisHash?.toLowerCase() ?? null;
     rpcGenesis = (await rpcCall(net.rpc, "chain_getBlockHash", [0]))?.toLowerCase() ?? null;
   } catch (e) {
-    return { ok: false, faucetGenesis, rpcGenesis, error: (e as Error).message };
+    return { ok: false, pinnedGenesis, faucetGenesis, rpcGenesis, error: (e as Error).message };
   }
-  return { ok: !!faucetGenesis && faucetGenesis === rpcGenesis, faucetGenesis, rpcGenesis };
+  // All three must agree: the pinned hash links are bound to, the faucet's, and block 0 from the RPC.
+  return { ok: faucetGenesis === pinnedGenesis && rpcGenesis === pinnedGenesis, pinnedGenesis, faucetGenesis, rpcGenesis };
 }
 
 function rpcCall(url: string, method: string, params: unknown[], timeoutMs = 15000): Promise<string | null> {
@@ -121,4 +123,25 @@ function rpcCall(url: string, method: string, params: unknown[], timeoutMs = 150
 export async function checkImdJob(jobId: string, f: Fetch = globalThis.fetch): Promise<{ ok: boolean; status: number }> {
   const res = await uaFetch(f)(`${IMD_API}/jobs/${encodeURIComponent(jobId)}`, { headers: { Accept: "application/json" }, signal: AbortSignal.timeout(15000) });
   return { ok: res.ok, status: res.status };
+}
+
+/**
+ * ownerOf(tokenId) on the imd seat collection via a caller-supplied Ethereum JSON-RPC URL (read only, eth_call).
+ * Returns null when the call reverts (nonexistent or burned token). Throws on transport errors so the caller fails closed.
+ */
+export async function readSeatOwner(rpcUrl: string, collection: string, tokenId: string, f: Fetch = globalThis.fetch, timeoutMs = 15000): Promise<string | null> {
+  const data = "0x6352211e" + BigInt(tokenId).toString(16).padStart(64, "0");
+  const res = await uaFetch(f)(rpcUrl, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Accept: "application/json" },
+    body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "eth_call", params: [{ to: collection, data }, "latest"] }),
+    signal: AbortSignal.timeout(timeoutMs),
+  });
+  if (!res.ok) throw new Error(`eth_call HTTP ${res.status}`);
+  const j = (await res.json()) as { result?: string; error?: { message?: string } };
+  if (j.error) return null;
+  const r = j.result ?? "0x";
+  if (r.length < 66) return null;
+  const addr = "0x" + r.slice(-40);
+  return /^0x0{40}$/.test(addr) ? null : addr;
 }
