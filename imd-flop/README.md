@@ -1,6 +1,6 @@
 # imd-flop
 
-A reference build of the companion CLI from the "FLOP, by choice" proposal (`report.md`, section F).
+A reference build of the companion CLI from the "FLOP, by choice" proposal ([report, section F](https://github.com/Identity-md/research/blob/main/jobs/4bb06f36-c8da-4925-8e4d-378ed76cff68/files/artifacts/report.md#f-stopgap-imd-flop-companion-cli-spec)).
 It gives one imd seat one FLOP identity, links the two with signatures, caps daily spend, runs model
 calls for real imd jobs, and keeps a receipt next to each job. It does not change or wrap the imd worker.
 
