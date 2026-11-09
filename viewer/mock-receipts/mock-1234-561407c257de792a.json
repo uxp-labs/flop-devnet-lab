@@ -1,0 +1,23 @@
+{
+  "request_id": "mock-1234-561407c257de792a",
+  "correlation_id": "imd-job-demo-job-1",
+  "job": "demo-job-1",
+  "provider": "mock",
+  "state": "estimated",
+  "reserved": 0.198,
+  "settled": null,
+  "settled_raw": null,
+  "stage": "gateway observed",
+  "chain_final": false,
+  "terminal_event": null,
+  "flag": null,
+  "http": 200,
+  "error": null,
+  "observed_at": "2026-11-09T14:31:30.603Z",
+  "mock": true,
+  "seat": "1234",
+  "did": "did:key:z6MkfofaiaBRpcpFuKxTc9n2KFbUPZ54x55P57abkV4BwhzL",
+  "ss58": "5CX3KpYXToxXsEpDKhEuwisCSywybCXbjPrwijZcJrwkFf3G",
+  "network": "devnet",
+  "mock_scenario": "ok"
+}

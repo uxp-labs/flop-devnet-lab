@@ -24,6 +24,7 @@ h1{font-size:20px;margin:0 0 4px}h2{font-size:15px;margin:28px 0 10px;color:var(
 .tag{display:inline-block;font-size:11px;color:var(--dim);border:1px solid var(--line);border-radius:10px;padding:0 7px;margin-top:4px}
 .chip.c-empty{background:none;border:1px dashed var(--line);color:var(--dim)}
 .unk.blank{display:inline-block;min-width:56px;height:1.1em;vertical-align:middle}
+.lanesub{font-size:13px;color:var(--txt);margin:16px 0 8px;font-weight:600}
 .row.bad{border-color:var(--red)}
 </style></head><body>
 <h1>FLOP settlement viewer</h1>
@@ -80,53 +81,81 @@ h1{font-size:20px;margin:0 0 4px}h2{font-size:15px;margin:28px 0 10px;color:var(
  <div class="col"><span class="chip c-grey">none</span><div><span class="k">explorer link</span> <span class="unk">none</span></div></div>
 </div>
 
-<h2>imd handoff lane <span class="ex">example data</span></h2>
-<p class="sub">One row per imd job that used FLOP. Every row below is <b>example data</b> until <span class="mono">imd-flop</span> writes real receipts. Read from a local receipts file, never fetched live. Job outcome is shown as imd's public <span class="mono">GET /jobs/:id</span> reports it, grey until read, green only for accepted. Red mismatch means the receipt's job, seat or DID doesn't match the row; that row can never go green.</p>
+<!-- lane:start -->
+<h2>imd handoff lane</h2>
+<p class="sub">One row per imd job that used FLOP, rebuilt by <span class="mono">build-lane.py</span> from local files only, never fetched live. Job outcome is shown as imd's public <span class="mono">GET /jobs/:id</span> reports it, grey until read, green only for accepted. Red mismatch means the receipt's job, seat or DID doesn't match the row; that row can never go green. A blank slot is unknown spend, never 0.</p>
+<h3 class="lanesub">From <span class="mono">imd-flop</span> receipts <span class="ex">mock provider · nothing spent</span></h3>
 <div class="lane">
 <div class="hdr"><div>imd job</div><div>FLOP call</div><div>Spend (est. · caps)</div><div>Job outcome (imd)</div><div>Link check</div></div>
 <div class="row">
- <div class="lbl">Example happy path<small>job ex-happy-path… · page link once real</small><small>seat #ex-1 · node <span class="unk">unknown</span></small><span class="tag">payer: holder</span></div>
+ <div class="lbl">demo-job-1<small>req mock-1234-5614…</small><small>seat #1234 · node <span class="unk">unknown</span></small><small>mock · devnet · Nov 9, 9:31 AM ET</small><span class="tag">payer: holder</span></div>
+ <div class="col"><span class="chip c-grey">sent</span> <span class="chip c-amber">gateway observed</span><div><span class="k">chain final</span> <span class="unk">not checked yet</span></div><div><span class="k">match</span> matches</div><div><span class="k">observed spend</span> <span class="unk blank" title="unknown spend">&nbsp;</span></div></div>
+ <div class="col"><div><span class="k">est.</span> <span class="mono">0.198</span></div><div><span class="k">per-call cap</span> <span class="mono">0.25</span></div><div><span class="k">daily cap left</span> <span class="mono">0.302</span></div></div>
+ <div class="col"><span class="chip c-grey">not read</span><div class="k">mock job, no imd lookup</div></div>
+ <div class="col"><span class="chip c-green">linked</span></div>
+</div>
+<div class="row bad">
+ <div class="lbl">demo-job-2<small>req mock-1234-e617…</small><small>seat #1234 · node <span class="unk">unknown</span></small><small>mock · devnet · Nov 9, 9:31 AM ET</small><span class="tag">payer: holder</span></div>
+ <div class="col"><span class="chip c-grey">sent</span> <span class="chip c-red">unknown</span><div><span class="k">last seen</span> sent</div><div><span class="k">observed spend</span> <span class="unk blank" title="unknown spend">&nbsp;</span></div><div class="flag">timeout: spend unknown, not retried</div></div>
+ <div class="col"><div><span class="k">est.</span> <span class="mono">0.15</span></div><div><span class="k">per-call cap</span> <span class="mono">0.25</span></div><div><span class="k">daily cap left</span> <span class="mono">0.152</span></div></div>
+ <div class="col"><span class="chip c-grey">not read</span><div class="k">mock job, no imd lookup</div></div>
+ <div class="col"><span class="chip c-green">linked</span></div>
+</div>
+<div class="row bad">
+ <div class="lbl">demo-job-3<small>req none</small><small>seat #1234 · node <span class="unk">unknown</span></small><small>mock · devnet · Nov 9, 9:31 AM ET</small><span class="tag">payer: holder</span></div>
+ <div class="col"><span class="chip c-empty">empty</span><div class="k">refused before the call, no FLOP chips</div></div>
+ <div class="col"><div><span class="k">est.</span> <span class="mono">0.204</span></div><div><span class="k">per-call cap</span> <span class="mono">0.25</span></div><div><span class="k">daily cap left</span> <span class="mono">0.152</span></div><div class="flag">cap hit = stop</div><div class="flag">padded quote 0.204 FLOP is over the remaining daily cap 0.152</div></div>
+ <div class="col"><span class="chip c-grey">not read</span><div class="k">mock job, no imd lookup</div></div>
+ <div class="col"><span class="chip c-green">linked</span></div>
+</div>
+</div>
+<h3 class="lanesub">Reference rows <span class="ex">example data</span></h3>
+<div class="lane">
+<div class="hdr"><div>imd job</div><div>FLOP call</div><div>Spend (est. · caps)</div><div>Job outcome (imd)</div><div>Link check</div></div>
+<div class="row">
+ <div class="lbl">Example happy path<small>job ex-happy-path… · page link once real</small><small>seat #ex-1 · node unknown</small><span class="tag">payer: holder</span></div>
  <div class="col"><span class="chip c-grey">sent</span> <span class="chip c-amber">gateway observed</span><div><span class="k">chain final</span> <span class="unk">not checked yet</span></div><div><span class="k">match</span> matches</div></div>
  <div class="col"><div><span class="k">est.</span> <span class="mono">0.096</span></div><div><span class="k">per-call cap</span> <span class="mono">0.25</span></div><div><span class="k">daily cap left</span> <span class="mono">0.65</span></div></div>
  <div class="col"><span class="chip c-green">accepted</span><div class="k">as imd reports it</div></div>
  <div class="col"><span class="chip c-green">linked</span></div>
 </div>
 <div class="row bad">
- <div class="lbl">Example stuck<small>job ex-stuck… · page link once real</small><small>seat #ex-2 · node <span class="unk">unknown</span></small><span class="tag">payer: holder</span></div>
+ <div class="lbl">Example stuck<small>job ex-stuck… · page link once real</small><small>seat #ex-2 · node unknown</small><span class="tag">payer: holder</span></div>
  <div class="col"><span class="chip c-grey">sent</span> <span class="chip c-red">unknown</span><div><span class="k">last seen</span> reserved (example date)</div><div><span class="k">observed spend</span> <span class="unk blank" title="unknown spend">&nbsp;</span></div><div class="flag">stuck over 24h</div></div>
  <div class="col"><div><span class="k">est.</span> <span class="mono">0.096</span></div><div><span class="k">per-call cap</span> <span class="mono">0.25</span></div><div><span class="k">daily cap left</span> <span class="unk blank" title="unknown spend">&nbsp;</span></div></div>
  <div class="col"><span class="chip c-grey">submitted</span><div class="flag">no imd update over 24h</div></div>
  <div class="col"><span class="chip c-green">linked</span></div>
 </div>
 <div class="row bad">
- <div class="lbl">Example key expired<small>job ex-key-expire… · page link once real</small><small>seat #ex-3 · node <span class="unk">unknown</span></small><span class="tag">payer: holder</span></div>
+ <div class="lbl">Example key expired<small>job ex-key-expire… · page link once real</small><small>seat #ex-3 · node unknown</small><span class="tag">payer: holder</span></div>
  <div class="col"><span class="chip c-grey">sent</span> <span class="chip c-red">unknown</span><div><span class="k">last seen</span> gateway observed (example date)</div><div><span class="k">now</span> unreadable: <span class="mono">key_expired</span></div><div><span class="k">observed spend</span> <span class="unk blank" title="unknown spend">&nbsp;</span></div><div class="flag">key expired, can't re-check</div></div>
  <div class="col"><div><span class="k">est.</span> <span class="mono">0.096</span></div><div><span class="k">per-call cap</span> <span class="mono">0.25</span></div><div><span class="k">daily cap left</span> <span class="unk blank" title="unknown spend">&nbsp;</span></div></div>
  <div class="col"><span class="chip c-grey">claimed</span></div>
  <div class="col"><span class="chip c-green">linked</span></div>
 </div>
 <div class="row bad">
- <div class="lbl">Example no route<small>job ex-no-route… · page link once real</small><small>seat #ex-4 · node <span class="unk">unknown</span></small><span class="tag">payer: holder</span></div>
+ <div class="lbl">Example no route<small>job ex-no-route… · page link once real</small><small>seat #ex-4 · node unknown</small><span class="tag">payer: holder</span></div>
  <div class="col"><span class="chip c-empty">empty</span><div class="k">not called: link failed</div></div>
  <div class="col"><div><span class="k">est.</span> <span class="unk blank" title="unknown spend">&nbsp;</span></div><div><span class="k">per-call cap</span> <span class="mono">0.25</span></div><div><span class="k">daily cap left</span> <span class="mono">1.00</span></div></div>
  <div class="col"><span class="chip c-grey">not read</span></div>
  <div class="col"><span class="chip c-red">no route</span><div class="flag">link verify failed</div></div>
 </div>
 <div class="row bad">
- <div class="lbl">Example cap hit<small>job ex-cap-hit… · page link once real</small><small>seat #ex-5 · node <span class="unk">unknown</span></small><span class="tag">payer: holder</span></div>
+ <div class="lbl">Example cap hit<small>job ex-cap-hit… · page link once real</small><small>seat #ex-5 · node unknown</small><span class="tag">payer: holder</span></div>
  <div class="col"><span class="chip c-empty">empty</span><div class="k">refused before the call, no FLOP chips</div></div>
  <div class="col"><div><span class="k">est.</span> <span class="mono">0.234</span></div><div><span class="k">per-call cap</span> <span class="mono">0.25</span></div><div><span class="k">daily cap left</span> <span class="mono">0.10</span></div><div class="flag">cap hit = stop</div></div>
  <div class="col"><span class="chip c-grey">not read</span></div>
  <div class="col"><span class="chip c-green">linked</span></div>
 </div>
 <div class="row bad">
- <div class="lbl">Example mismatch<small>job ex-mismatch… · page link once real</small><small>seat #ex-6 · node <span class="unk">unknown</span></small><span class="tag">payer: holder</span></div>
+ <div class="lbl">Example mismatch<small>job ex-mismatch… · page link once real</small><small>seat #ex-6 · node unknown</small><span class="tag">payer: holder</span></div>
  <div class="col"><span class="chip c-grey">sent</span> <span class="chip c-red">mismatch</span><div><span class="k">receipt job</span> ex-other… (row says ex-mismatch…)</div><div><span class="k">observed spend</span> <span class="unk blank" title="unknown spend">&nbsp;</span></div><div class="flag">receipt doesn't match this row, never green</div></div>
  <div class="col"><div><span class="k">est.</span> <span class="mono">0.096</span></div><div><span class="k">per-call cap</span> <span class="mono">0.25</span></div><div><span class="k">daily cap left</span> <span class="unk blank" title="unknown spend">&nbsp;</span></div></div>
  <div class="col"><span class="chip c-grey">submitted</span></div>
  <div class="col"><span class="chip c-green">linked</span></div>
 </div>
 </div>
+<!-- lane:end -->
 
 <h2>Notes</h2>
 <ul class="notes">
