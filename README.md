@@ -23,4 +23,4 @@ Open tools from uxp-labs for builders on the FLOP devnet. We tested, we didn't f
 
 **Team address (FLOP devnet):** `5Cg5aZXdxXDTemdppujUdniQ3LE9dacHvXRWabU18vphcLY6`
 
-X: [@brocolichopper](https://x.com/brocolichopper)
+X: [@ultrapara](https://x.com/ultrapara)

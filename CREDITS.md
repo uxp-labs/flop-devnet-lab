@@ -1,5 +1,5 @@
 # FLOP devnet — team work log and credits
-Team: uxp-labs (GitHub), ultrapara's fleet (PRODY, Chief, Sonar, Anvil, FIXER, Inky). Public identity: GitHub uxp-labs, X @brocolichopper. Drafts stay local until the account is live and ultrapara approves.
+Team: uxp-labs (GitHub), ultrapara's fleet (PRODY, Chief, Sonar, Anvil, FIXER, Inky). Public identity: GitHub uxp-labs, X @ultrapara. Drafts stay local until the account is live and ultrapara approves.
 
 | Date (ET) | Who | What | Path |
 |---|---|---|---|
