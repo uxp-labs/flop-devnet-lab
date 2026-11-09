@@ -4,8 +4,8 @@ import { join } from "node:path";
 import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 import { cli, tmpHome } from "./helpers.js";
 import { verifyLink, type LinkFile } from "../src/link.js";
-import { NETWORKS, SEAT_COLLECTION } from "../src/networks.js";
-import { readSeatOwner } from "../src/gateway.js";
+import { NETWORKS, SEAT_CHAIN_ID, SEAT_COLLECTION } from "../src/networks.js";
+import { readSeatOwner, readVerifiedSeatOwner } from "../src/gateway.js";
 
 async function walletSigned() {
   const l = await linked();
@@ -20,11 +20,15 @@ async function walletSigned() {
   return { ...l, wallet, sig };
 }
 
-/** Fake Ethereum JSON-RPC that answers eth_call ownerOf with `owner` (null = revert). */
-function fakeRpc(owner: string | null, calls: unknown[] = []) {
+/** Fake Ethereum JSON-RPC. eth_chainId defaults to mainnet (0x1); eth_call answers ownerOf (null = revert). */
+function fakeRpc(owner: string | null, calls: unknown[] = [], chainId: string | null = "0x1") {
   return (async (_url: unknown, init?: RequestInit) => {
     const body = JSON.parse(String(init?.body));
     calls.push(body);
+    if (body.method === "eth_chainId") {
+      const out = chainId === null ? { jsonrpc: "2.0", id: 1, error: { code: -1, message: "no chain" } } : { jsonrpc: "2.0", id: 1, result: chainId };
+      return new Response(JSON.stringify(out), { status: 200, headers: { "content-type": "application/json" } });
+    }
     const out = owner ? { jsonrpc: "2.0", id: 1, result: "0x" + "0".repeat(24) + owner.slice(2).toLowerCase() } : { jsonrpc: "2.0", id: 1, error: { code: 3, message: "execution reverted" } };
     return new Response(JSON.stringify(out), { status: 200, headers: { "content-type": "application/json" } });
   }) as typeof fetch;
@@ -153,6 +157,16 @@ describe("seat-to-DID link", () => {
     expect(await readSeatOwner("https://rpc.example", SEAT_COLLECTION, "42", fakeRpc(null))).toBeNull();
   });
 
+  it("readVerifiedSeatOwner refuses a wrong chain id before ownerOf", async () => {
+    const calls: { method?: string }[] = [];
+    const owner = "0x" + "ab".repeat(20);
+    const wrong = "0xaa36a7";
+    await expect(readVerifiedSeatOwner("https://rpc.example", SEAT_COLLECTION, "42", fakeRpc(owner, calls, wrong))).rejects.toThrow(
+      new RegExp(`chain id ${BigInt(wrong)} is not ${SEAT_CHAIN_ID}`),
+    );
+    expect(calls.map((c) => c.method)).toEqual(["eth_chainId"]);
+  });
+
   it("CLI link verify --eth-rpc: exit 0 while the signer owns the seat, 8 after a sale", async () => {
     const { file, wallet, sig } = await walletSigned();
     const args = ["link", "verify", file, "--wallet-sig", sig, "--wallet", wallet.address, "--eth-rpc", "https://rpc.example"];
@@ -161,5 +175,11 @@ describe("seat-to-DID link", () => {
     expect(ok.out).toMatch(/seat owner \(ownerOf\)\s+true/);
     const sold = await cli(tmpHome(), args, { fetch: fakeRpc("0x" + "cd".repeat(20)) });
     expect(sold.code).toBe(8);
+    const calls: { method?: string }[] = [];
+    const wrongChain = await cli(tmpHome(), args, { fetch: fakeRpc(wallet.address, calls, "0x5") });
+    expect(wrongChain.code).toBe(8);
+    expect(wrongChain.err).toMatch(/chain id 5 is not 1/);
+    expect(wrongChain.err).toMatch(/not treated as ok/);
+    expect(calls.map((c) => c.method)).toEqual(["eth_chainId"]);
   });
 });

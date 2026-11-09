@@ -1,14 +1,15 @@
 /**
  * Providers. `mock` (default) is a local OpenAI-shaped stub: deterministic output, a fake
  * request_id and a fake receipt, no key, no network, no spend. `flop` is the real devnet
- * gateway via @flop-labs/client and is gated behind --live (never exercised by the tests).
+ * gateway via @flop-labs/client and is gated behind --live.
+ * complete() re-checks the Ethereum chain id and the pinned genesis before it mints a child key.
  */
 import { readFileSync, statSync } from "node:fs";
 import { sha256 } from "@noble/hashes/sha2.js";
 import { bytesToHex, utf8ToBytes } from "@noble/hashes/utils.js";
 import { FlopClient, FlopHTTPError } from "@flop-labs/client";
 import { CliError, EXIT } from "./errors.js";
-import { postEstimate, mintChildKey, uaFetch, type Estimate, type Fetch } from "./gateway.js";
+import { assertPaidNetwork, mintChildKey, postEstimate, PreSendError, uaFetch, type Estimate, type Fetch } from "./gateway.js";
 import type { NetworkInfo } from "./networks.js";
 import type { GatewayReceipt } from "./receipts.js";
 import { registerSecret } from "./secrets.js";
@@ -115,6 +116,7 @@ export class FlopProvider implements Provider {
     private net: NetworkInfo,
     gatewayKeyPath: string,
     private f: Fetch = globalThis.fetch,
+    private ethRpc?: string,
   ) {
     let raw: string;
     try {
@@ -134,6 +136,11 @@ export class FlopProvider implements Provider {
   }
 
   async complete(req: CompleteReq): Promise<CompleteRes> {
+    try {
+      await assertPaidNetwork(this.net, this.ethRpc, this.f);
+    } catch (e) {
+      throw new PreSendError((e as Error).message);
+    }
     this.calls++;
     // Spend-guard rule 3: the broad key only mints a single-use child capped at this call's quote.
     const child = await mintChildKey(this.net, this.parent, { model: req.model, maxSpend: req.maxCostFlop }, this.f);

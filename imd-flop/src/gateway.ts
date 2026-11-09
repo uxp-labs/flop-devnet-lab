@@ -1,10 +1,11 @@
 /**
  * Thin fetch client for the gateway calls @flop-labs/client does not cover
- * (estimate, ephemeral child keys, devnet enrollment), plus the public reads
- * behind opt-in flags (genesis check, imd job check). Every request carries our
- * User-Agent: the gateway 403s default library UAs. Nothing here retries.
+ * (estimate, ephemeral child keys, devnet enrollment), plus public reads
+ * (genesis, Ethereum chain id, seat ownerOf, imd job check). Every request
+ * carries our User-Agent: the gateway 403s default library UAs. Nothing here retries.
+ * A paid run fails closed when the chain id or the pinned genesis cannot be confirmed.
  */
-import { IMD_API, USER_AGENT, type NetworkInfo } from "./networks.js";
+import { IMD_API, SEAT_CHAIN_ID, SEAT_COLLECTION, USER_AGENT, type NetworkInfo } from "./networks.js";
 
 export type Fetch = typeof globalThis.fetch;
 
@@ -79,42 +80,102 @@ export async function postEnroll(net: NetworkInfo, body: { address: string; mess
   return { status: res.status, json };
 }
 
-/** Docs: "compare live RPC and faucet genesis before use" (devnet can reset). */
-export async function checkGenesis(net: NetworkInfo, f: Fetch = globalThis.fetch): Promise<{ ok: boolean; pinnedGenesis: string; faucetGenesis: string | null; rpcGenesis: string | null; error?: string }> {
-  const pinnedGenesis = net.genesisHash.toLowerCase();
-  let faucetGenesis: string | null = null;
-  let rpcGenesis: string | null = null;
-  try {
-    const res = await uaFetch(f)(`${net.faucet}/chain`, { headers: { Accept: "application/json" }, signal: AbortSignal.timeout(15000) });
-    faucetGenesis = ((await res.json()) as { genesisHash?: string }).genesisHash?.toLowerCase() ?? null;
-    rpcGenesis = (await rpcCall(net.rpc, "chain_getBlockHash", [0]))?.toLowerCase() ?? null;
-  } catch (e) {
-    return { ok: false, pinnedGenesis, faucetGenesis, rpcGenesis, error: (e as Error).message };
-  }
-  // All three must agree: the pinned hash links are bound to, the faucet's, and block 0 from the RPC.
-  return { ok: faucetGenesis === pinnedGenesis && rpcGenesis === pinnedGenesis, pinnedGenesis, faucetGenesis, rpcGenesis };
+const GENESIS_RE = /^0x[0-9a-f]{64}$/;
+
+/** Full 32-byte 0x-hash. A shorter prefix is not a genesis. */
+export function normalizeGenesis(v: unknown): string | null {
+  if (typeof v !== "string") return null;
+  const s = v.trim().toLowerCase();
+  return GENESIS_RE.test(s) ? s : null;
 }
 
-function rpcCall(url: string, method: string, params: unknown[], timeoutMs = 15000): Promise<string | null> {
+/**
+ * Docs: "compare live RPC and faucet genesis before use" (devnet can reset).
+ * ok is true only when the pinned hash, the faucet's /chain hash, and RPC block 0
+ * are the same full hash. Faucet and RPC agreeing on a different hash is a reset
+ * and is not ok. HTTP errors, malformed JSON, and missing hashes are not ok.
+ * There is no single-source fallback.
+ */
+export async function checkGenesis(net: NetworkInfo, f: Fetch = globalThis.fetch): Promise<{ ok: boolean; pinnedGenesis: string; faucetGenesis: string | null; rpcGenesis: string | null; error?: string }> {
+  const pinnedGenesis = net.genesisHash.trim().toLowerCase();
+  let faucetGenesis: string | null = null;
+  let rpcGenesis: string | null = null;
+  const errors: string[] = [];
+  if (!GENESIS_RE.test(pinnedGenesis)) errors.push("pinned genesis is malformed");
+
+  try {
+    const res = await uaFetch(f)(`${net.faucet}/chain`, { headers: { Accept: "application/json" }, signal: AbortSignal.timeout(15000) });
+    if (!res.ok) {
+      errors.push(`faucet HTTP ${res.status}`);
+    } else {
+      try {
+        const body = (await res.json()) as { genesisHash?: unknown };
+        faucetGenesis = body && typeof body === "object" ? normalizeGenesis(body.genesisHash) : null;
+        if (!faucetGenesis) errors.push("faucet genesis malformed");
+      } catch {
+        errors.push("faucet returned malformed JSON");
+      }
+    }
+  } catch (e) {
+    errors.push(`faucet unavailable: ${(e as Error).message}`);
+  }
+
+  try {
+    const raw = await rpcCall(net.rpc, "chain_getBlockHash", [0]);
+    rpcGenesis = normalizeGenesis(raw);
+    if (!rpcGenesis) errors.push("rpc genesis malformed");
+  } catch (e) {
+    errors.push(`rpc unavailable: ${(e as Error).message}`);
+  }
+
+  const ok = errors.length === 0 && faucetGenesis === pinnedGenesis && rpcGenesis === pinnedGenesis;
+  let error: string | undefined;
+  if (!ok) {
+    if (errors.length > 0) error = errors.join("; ");
+    else if (faucetGenesis && faucetGenesis === rpcGenesis) error = "faucet and rpc agree on a different genesis than the pinned hash";
+    else error = "genesis mismatch";
+  }
+  return { ok, pinnedGenesis, faucetGenesis, rpcGenesis, ...(error ? { error } : {}) };
+}
+
+function rpcCall(url: string, method: string, params: unknown[], timeoutMs = 15000): Promise<unknown> {
   return new Promise((resolve, reject) => {
     const ws = new WebSocket(url);
-    const t = setTimeout(() => {
-      ws.close();
-      reject(new Error("rpc timeout"));
-    }, timeoutMs);
+    let settled = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const finish = (err: Error | null, result?: unknown) => {
+      if (settled) return;
+      settled = true;
+      if (timer) clearTimeout(timer);
+      try {
+        ws.close();
+      } catch {
+        /* already closed */
+      }
+      if (err) reject(err);
+      else resolve(result);
+    };
+    timer = setTimeout(() => finish(new Error("rpc timeout")), timeoutMs);
     ws.onopen = () => ws.send(JSON.stringify({ id: 1, jsonrpc: "2.0", method, params }));
     ws.onmessage = (ev) => {
-      clearTimeout(t);
-      ws.close();
       try {
-        resolve((JSON.parse(String(ev.data)) as { result?: string }).result ?? null);
+        const msg = JSON.parse(String(ev.data)) as { result?: unknown; error?: { message?: string } };
+        if (!msg || typeof msg !== "object" || Array.isArray(msg)) {
+          finish(new Error("rpc returned malformed JSON"));
+          return;
+        }
+        // An error field is a failed read even when a result is also present.
+        if (msg.error) {
+          finish(new Error(`rpc error: ${msg.error.message ?? "rpc error"}`));
+          return;
+        }
+        finish(null, msg.result ?? null);
       } catch (e) {
-        reject(e as Error);
+        finish(e as Error);
       }
     };
     ws.onerror = () => {
-      clearTimeout(t);
-      reject(new Error("rpc websocket error"));
+      finish(new Error("rpc websocket error"));
     };
   });
 }
@@ -125,9 +186,78 @@ export async function checkImdJob(jobId: string, f: Fetch = globalThis.fetch): P
   return { ok: res.ok, status: res.status };
 }
 
+const CHAIN_ID_RE = /^0x[0-9a-f]+$/i;
+
+/**
+ * eth_chainId on a caller-supplied Ethereum JSON-RPC URL (read only).
+ * Throws when the endpoint is down or the payload is not a hex quantity.
+ */
+export async function readEthereumChainId(rpcUrl: string, f: Fetch = globalThis.fetch, timeoutMs = 15000): Promise<bigint> {
+  let res: Response;
+  try {
+    res = await uaFetch(f)(rpcUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "eth_chainId", params: [] }),
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+  } catch (e) {
+    throw new Error(`eth_chainId unavailable: ${(e as Error).message}`);
+  }
+  if (!res.ok) throw new Error(`eth_chainId HTTP ${res.status}`);
+  let j: { result?: unknown; error?: { message?: string } };
+  try {
+    j = (await res.json()) as { result?: unknown; error?: { message?: string } };
+  } catch {
+    throw new Error("eth_chainId returned malformed JSON");
+  }
+  if (!j || typeof j !== "object" || Array.isArray(j)) throw new Error("eth_chainId returned malformed JSON");
+  if (j.error) throw new Error(`eth_chainId error: ${j.error.message ?? "rpc error"}`);
+  if (typeof j.result !== "string" || !CHAIN_ID_RE.test(j.result.trim())) throw new Error("eth_chainId returned a malformed result");
+  try {
+    return BigInt(j.result.trim());
+  } catch {
+    throw new Error("eth_chainId returned a malformed result");
+  }
+}
+
+/**
+ * Chain id, then ownerOf. ownerOf is not called unless eth_chainId is SEAT_CHAIN_ID.
+ * Throws on the wrong chain and on unavailable or malformed chain-id responses.
+ */
+export async function readVerifiedSeatOwner(rpcUrl: string, collection: string, tokenId: string, f: Fetch = globalThis.fetch, timeoutMs = 15000): Promise<string | null> {
+  const chainId = await readEthereumChainId(rpcUrl, f, timeoutMs);
+  if (chainId !== BigInt(SEAT_CHAIN_ID)) {
+    throw new Error(`Ethereum chain id ${chainId} is not ${SEAT_CHAIN_ID} (seat collection ${collection} is on chain ${SEAT_CHAIN_ID})`);
+  }
+  return readSeatOwner(rpcUrl, collection, tokenId, f, timeoutMs);
+}
+
+/**
+ * Preconditions for a paid FLOP call: Ethereum chain id of the seat collection,
+ * and live faucet + RPC genesis both equal to the pinned devnet hash.
+ * Throws on a wrong chain, a reset, or any unavailable or malformed response.
+ */
+export async function assertPaidNetwork(net: NetworkInfo, ethRpc: string | undefined, f: Fetch = globalThis.fetch): Promise<void> {
+  if (!ethRpc || ethRpc.trim() === "") {
+    throw new Error(`paid FLOP calls need ETH_RPC_URL (an Ethereum JSON-RPC URL whose eth_chainId is ${SEAT_CHAIN_ID})`);
+  }
+  const chainId = await readEthereumChainId(ethRpc, f);
+  if (chainId !== BigInt(SEAT_CHAIN_ID)) {
+    throw new Error(`Ethereum chain id ${chainId} is not ${SEAT_CHAIN_ID} (seat collection ${SEAT_COLLECTION} is on chain ${SEAT_CHAIN_ID})`);
+  }
+  const g = await checkGenesis(net, f);
+  if (!g.ok) {
+    throw new Error(
+      `FLOP genesis check failed: pinned ${g.pinnedGenesis} vs faucet ${g.faucetGenesis ?? "?"} vs rpc ${g.rpcGenesis ?? "?"}${g.error ? ` (${g.error})` : ""}. Devnet may have reset.`,
+    );
+  }
+}
+
 /**
  * ownerOf(tokenId) on the imd seat collection via a caller-supplied Ethereum JSON-RPC URL (read only, eth_call).
  * Returns null when the call reverts (nonexistent or burned token). Throws on transport errors so the caller fails closed.
+ * Callers that trust the result use readVerifiedSeatOwner, which requires eth_chainId first.
  */
 export async function readSeatOwner(rpcUrl: string, collection: string, tokenId: string, f: Fetch = globalThis.fetch, timeoutMs = 15000): Promise<string | null> {
   const data = "0x6352211e" + BigInt(tokenId).toString(16).padStart(64, "0");

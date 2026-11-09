@@ -12,7 +12,7 @@ import { DEFAULT_MODEL, network, SEAT_COLLECTION } from "./networks.js";
 import { appendLedger, jobSpent, spentToday, utcDay, type LedgerEntry } from "./ledger.js";
 import { classifyReceipt, type Classified } from "./receipts.js";
 import type { Provider } from "./providers.js";
-import { checkImdJob, PreSendError, readSeatOwner, type Fetch } from "./gateway.js";
+import { assertPaidNetwork, checkImdJob, PreSendError, readVerifiedSeatOwner, type Fetch } from "./gateway.js";
 import { FlopHTTPError } from "@flop-labs/client";
 import { matchReceipt } from "./match.js";
 import { latestAttempts } from "./ledger.js";
@@ -68,7 +68,7 @@ export async function checkLinkForRun(h: string, seat: string, requireWallet: bo
     if (!deps.ethRpc) why.push("owner check needs ETH_RPC_URL (an Ethereum mainnet JSON-RPC URL) for --provider flop");
     else {
       try {
-        currentOwner = await readSeatOwner(deps.ethRpc, SEAT_COLLECTION, lf.statement.tokenId, deps.fetch);
+        currentOwner = await readVerifiedSeatOwner(deps.ethRpc, SEAT_COLLECTION, lf.statement.tokenId, deps.fetch);
       } catch (e) {
         why.push(`owner check failed: ${(e as Error).message}`);
       }
@@ -103,7 +103,20 @@ export async function runJob(h: string, provider: Provider, o: RunOpts, deps: { 
   if (o.noLink) {
     if (provider.name !== "mock") throw new CliError("--no-link is only allowed with --provider mock", EXIT.REFUSED_LINK);
     linkBypassed = true;
-  } else {
+  }
+
+  // Paid calls only. The mock provider never reaches this, so offline demo runs stay local.
+  // Wrong chain, reset genesis (including faucet and RPC agreeing on another hash), and
+  // unavailable or malformed responses throw here, before estimate and before complete.
+  if (provider.name === "flop") {
+    try {
+      await assertPaidNetwork(net, deps.ethRpc, deps.fetch);
+    } catch (e) {
+      throw new CliError(`refused locally, nothing sent: ${(e as Error).message}`, EXIT.REFUSED_RULE);
+    }
+  }
+
+  if (!linkBypassed) {
     const lc = await checkLinkForRun(h, seat, provider.name === "flop", { fetch: deps.fetch, ethRpc: deps.ethRpc });
     if (!lc.ok) throw new CliError(`link does not verify, refusing: ${lc.why.join("; ")}`, EXIT.REFUSED_LINK);
   }

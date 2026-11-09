@@ -9,7 +9,7 @@ import { claimUnassigned, initSeat, loadSigner, readIdentity, UNASSIGNED, valida
 import { buildLink, verifyLink, type LinkFile } from "./link.js";
 import { readJson, writeJsonSafe, writeSecretFile } from "./store.js";
 import { network, SEAT_COLLECTION } from "./networks.js";
-import { checkGenesis, readSeatOwner, enrollChallengeUrl, getEnrollChallenge, postEnroll, type Fetch } from "./gateway.js";
+import { checkGenesis, readVerifiedSeatOwner, enrollChallengeUrl, getEnrollChallenge, postEnroll, type Fetch } from "./gateway.js";
 import { FlopProvider, MOCK_SCENARIOS, MockProvider, type MockScenario, type Provider } from "./providers.js";
 import { checkLinkForRun, padQuote, runJob } from "./run.js";
 import { latestAttempts, spentToday } from "./ledger.js";
@@ -30,7 +30,7 @@ const HELP = `imd-flop: reference companion CLI for "FLOP, by choice" (devnet re
 
   init [--network devnet] [--seat <tokenId>] [--rotate] [--check-genesis]
   link --token <tokenId> [--agent <erc8004AgentId>]
-  link verify <file> [--wallet-sig <0x..> --wallet <0x..>] [--save] [--eth-rpc <url>]  (owner check; or ETH_RPC_URL)
+  link verify <file> [--wallet-sig <0x..> --wallet <0x..>] [--save] [--eth-rpc <url>]  (eth_chainId must be 1, then ownerOf; or ETH_RPC_URL)
   faucet [--dry-run]                      (refuses: team rule, no faucets)
   enroll [--dry-run | --live]             (dry run by default)
   cap set <FLOP/day> [--per-call <FLOP>] | cap show
@@ -43,6 +43,8 @@ const HELP = `imd-flop: reference companion CLI for "FLOP, by choice" (devnet re
   receipt <request_id> [--refresh] [--json]
 
 Global: --seat <tokenId>, --json. Data: $IMD_FLOP_HOME or ~/.imd-flop. Provider defaults to mock.
+Paid run --provider flop needs ETH_RPC_URL reporting chain id 1 and a live devnet genesis equal to the pinned hash.
+It refuses on a wrong chain, a reset, or an unreadable response, before any paid call. The mock provider stays offline.
 `;
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -77,7 +79,7 @@ function makeProvider(io: IO, name: string, h: string, seat: string, opts: { liv
   }
   if (name === "flop") {
     if (!opts.live) throw new CliError("--provider flop spends real devnet FLOP: it needs --live, a cap, a fully signed link and an enrolled gateway key", EXIT.REFUSED_RULE);
-    return new FlopProvider(network(loadConfig(h).network), gatewayKeyFile(h, seat), io.fetch);
+    return new FlopProvider(network(loadConfig(h).network), gatewayKeyFile(h, seat), io.fetch, io.env.ETH_RPC_URL);
   }
   throw new CliError("--provider must be mock or flop", EXIT.USAGE);
 }
@@ -120,7 +122,7 @@ export async function main(argv: string[], io: IO): Promise<number> {
           io.out(`  did   ${r.identity.did}`);
           io.out(`  ss58  ${r.identity.ss58}  (prefix ${r.identity.ss58Prefix}, the devnet faucet's ss58Format)`);
           io.out(`  key   ${String(out.keyFile)}`);
-          if (out.genesis) io.out(`  genesis ok (faucet == rpc)`);
+          if (out.genesis) io.out(`  genesis ok (pinned == faucet == rpc)`);
         }
         return EXIT.OK;
       }
@@ -136,7 +138,7 @@ export async function main(argv: string[], io: IO): Promise<number> {
           let currentOwner: string | null | undefined;
           if (ethRpc) {
             try {
-              currentOwner = await readSeatOwner(ethRpc, SEAT_COLLECTION, lf.statement?.tokenId ?? "0", io.fetch);
+              currentOwner = await readVerifiedSeatOwner(ethRpc, SEAT_COLLECTION, lf.statement?.tokenId ?? "0", io.fetch);
             } catch (e) {
               throw new CliError(`owner check failed (not treated as ok): ${(e as Error).message}`, EXIT.VERIFY_FAILED);
             }
