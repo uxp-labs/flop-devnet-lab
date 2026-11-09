@@ -3,7 +3,7 @@
 Status: **draft for ultrapara review**. Nothing filed or posted.
 Base: Sonar's `bug-report-draft-2026-11-09.md` (left untouched).
 Merge/verify: PRODY, Nov 9 2026 ~2:40 AM ET, from `run-2026-11-09.md`, `gate-check-2026-11-08.md`, live OpenAPI, `https://flop.network/llms.txt`, and free endpoints.
-Credits: **Sonar** (draft), **Anvil** (Python UA 403; spend guard under `spend-guard/`), **PRODY** (run notes + re-verify + cost checker).
+Credits: **Sonar** (draft + addendum item 11 / Bug 5), **Anvil** (Python UA 403; spend guard under `spend-guard/`), **PRODY** (run notes + re-verify + cost checker + merge).
 
 Environment: `https://api.flop.network`, gateway image `0.1.305`, API `2.0.0`, OpenAPI 3.1.0 "FLOP Public Inference Data Plane".
 
@@ -116,6 +116,32 @@ Same 403/1010 on `GET /v1/models` with the default UA. Anvil's spend guard sets 
 
 ---
 
+### 5. `POST /v1/models/estimate` ignores chat `messages` (counts 0 input tokens)
+
+**Status:** **verified** (Sonar addendum Nov 9 2:45 AM ET; free estimate, no auth).
+
+**Repro:**
+```bash
+curl -sS -X POST https://api.flop.network/v1/models/estimate \
+  -H 'content-type: application/json' \
+  -d '{
+    "model":"qwen/qwen2.5-0.5b-instruct",
+    "messages":[
+      {"role":"system","content":"Be brief."},
+      {"role":"user","content":"Hi"}
+    ],
+    "max_tokens":8
+  }'
+```
+
+**Observed:** `estimated_input_tokens: 0`, `estimated_cost_flop: 0.048` (output-only: 8 × 0.006). The same shape with a `prompt` string is counted; with `messages` only, input (and chat-template tokens) are ignored.
+
+**Impact:** a chat request's estimate undercounts the prompt and template overhead. If `max_cost_flop` (or a local guard) is checked against this estimate, a chat call can pass the cap check and then cost more than planned.
+
+**Expected / ask:** count `messages` plus the chat template in the estimate, **or** document that `/models/estimate` covers only the `prompt` field.
+
+**Related:** Doc mismatch C (template adds ~20–30 tokens when the wrap is supplied as `prompt`). This item is the gap when callers send OpenAI-style `messages` instead.
+
 ## Doc mismatches
 
 ### A. Enrollment quota: 20,000 vs 25
@@ -168,7 +194,7 @@ Live evidence: `first-paid-completion.json` after a 0.432 charge shows `remainin
 
 ---
 
-### E. `/v1/health` is 404; working path is `/health`
+### E. `/v1/health` and `/v1/openapi.json` are 404; working paths are `/health` and `/openapi.json`
 
 **Status:** **verified** this turn.
 
@@ -178,10 +204,12 @@ Live evidence: `first-paid-completion.json` after a 0.432 charge shows `remainin
 | `GET /v1/health` | **404** `not_found` |
 | `GET /api/v1/health` | **404** |
 | `GET /healthz`, `/ready`, `/status` | **404** |
+| `GET /openapi.json` | **200** (live OpenAPI) |
+| `GET /v1/openapi.json` | **404** `not_found` |
 
 `https://flop.network/llms.txt` correctly lists `https://api.flop.network/health`. OpenAPI has a **Health** tag but **no health path** in `paths`.
 
-**Suggested fix:** document `/health` in OpenAPI (or add `/v1/health` as an alias).
+**Suggested fix:** document `/health` and `/openapi.json` in OpenAPI (or add `/v1/health` and `/v1/openapi.json` as aliases).
 
 ---
 
@@ -212,6 +240,7 @@ Live evidence: `first-paid-completion.json` after a 0.432 charge shows `remainin
 3. One table: how `max_cost_flop`, child `max_spend`/`uses`, and parent quota interact, and which error fires for each — including refuse-before-work.
 4. Allow or document non-browser User-Agents (Python urllib).
 5. Cost samples that fit a 0.25 cap, with chat-template overhead called out.
+6. `/models/estimate` counts `messages` (plus template), or docs say it is `prompt`-only.
 
 ---
 

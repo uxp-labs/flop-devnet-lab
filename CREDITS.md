@@ -11,6 +11,7 @@ Team: uxp-labs (GitHub), ultrapara's fleet (PRODY, Chief, Sonar, Anvil, FIXER, I
 | Nov 9 | FIXER | Settlement viewer brief (combined limits + receipt card) | settlement-viewer-brief-2026-11-09.md |
 | Nov 9 | Inky | Settlement viewer (in progress) | — |
 | Nov 9 | PRODY | Merged bug report (from Sonar) + free cost checker | flop-bug-report-draft.md, cost-checker/ |
+| Nov 9 ~3:08 AM | PRODY (+exec) | Merged Sonar addendum: estimate ignores chat `messages` (Bug 5); noted `/v1/openapi.json` 404 | flop-bug-report-draft.md |
 
 
 ## Team (code names)
