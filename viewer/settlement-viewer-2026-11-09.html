@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<title>FLOP settlement viewer (devnet draft, 2026-11-09)</title>
+<style>
+:root{--bg:#0f1115;--card:#171a21;--line:#2a2f3a;--txt:#e6e8ec;--dim:#8b93a3;--grey:#6b7280;--amber:#d99a1e;--green:#2f9e5b;--red:#d0453a}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--txt);font:14px/1.45 system-ui,sans-serif;padding:28px;max-width:1180px}
+h1{font-size:20px;margin:0 0 4px}h2{font-size:15px;margin:28px 0 10px;color:var(--dim);font-weight:600;text-transform:uppercase;letter-spacing:.06em}
+.sub{color:var(--dim);margin:0 0 18px}.mono,td.num{font-family:ui-monospace,Menlo,monospace}
+.limits{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+.lim{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:14px}
+.lim h3{margin:0 0 6px;font-size:14px}.lim .big{font-family:ui-monospace,monospace;font-size:22px}
+.lim p{margin:6px 0 0;color:var(--dim);font-size:13px}
+.flow{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:10px}
+.row{display:grid;grid-template-columns:170px 1fr 1fr 1fr;gap:10px;background:var(--card);border:1px solid var(--line);border-radius:8px;padding:12px;margin-bottom:10px}
+.row .lbl{font-weight:600}.row .lbl small{display:block;color:var(--dim);font-weight:400;font-family:ui-monospace,monospace;font-size:12px}
+.col{border-left:1px solid var(--line);padding-left:10px;font-size:13px}.col div{margin:2px 0}
+.k{color:var(--dim)}.chip{display:inline-block;padding:1px 8px;border-radius:10px;font-size:12px;font-weight:600;color:#fff;margin-bottom:4px}
+.c-grey{background:var(--grey)}.c-amber{background:var(--amber)}.c-green{background:var(--green)}.c-red{background:var(--red)}
+.unk{font-family:ui-monospace,monospace;color:var(--dim);border:1px dashed var(--line);padding:0 6px;border-radius:4px}
+.flag{color:var(--red);font-size:12px;margin-top:4px}.hdr{display:grid;grid-template-columns:170px 1fr 1fr 1fr;gap:10px;padding:0 12px 6px;color:var(--dim);font-size:12px;text-transform:uppercase;letter-spacing:.05em}
+.notes{color:var(--dim);font-size:13px}.notes li{margin:4px 0}
+</style></head><body>
+<h1>FLOP settlement viewer</h1>
+<p class="sub">Devnet draft built from saved receipts and run notes only (run-2026-11-09.md, first-paid-completion.json, team-manifest.json). Nothing here was fetched live, and no keys appear. A blank <span class="unk">unknown</span> means unknown spend, never zero.</p>
+
+<h2>Limits, side by side</h2>
+<div class="limits">
+ <div class="lim"><h3>Wallet guardrail (on chain)</h3><div class="big">0.25 / tx</div>
+  <p>Test wallet (per-agent, unnamed). The registered daily cap is <span class="mono">1 FLOP</span>. The team rule allows 1 paid request per wallet. This guardrail bounds wallet transfers, not the gateway key.</p></div>
+ <div class="lim"><h3>Single-use child key</h3><div class="big">0.05 · 1 use</div>
+  <p>The only key allowed for paid calls. It's made fresh per call with <span class="mono">max_spend</span> and <span class="mono">max_uses 1</span>, plus <span class="mono">max_cost_flop</span> on the request. Refusal before any work is done is <b>not yet proven live</b>.</p></div>
+ <div class="lim"><h3>Sign-up key (enrollment)</h3><div class="big">20,000 / 24h</div>
+  <p>Never used for paid calls. The OpenAPI spec says 25, which conflicts with this. The wallet cap does <b>not</b> bound this key.</p></div>
+</div>
+
+<h2>Where a request stops or is charged</h2>
+<div class="flow">
+<svg viewBox="0 0 1100 175" width="100%" role="img" aria-label="Request flow: free estimate, child key cap, gateway work, gateway receipt, chain record">
+ <defs><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0L10,5L0,10z" fill="#8b93a3"/></marker></defs>
+ <g font-family="ui-monospace,monospace" font-size="13" fill="#e6e8ec">
+  <rect x="10" y="40" width="170" height="56" rx="8" fill="#171a21" stroke="#2a2f3a"/><text x="95" y="64" text-anchor="middle">Free estimate</text><text x="95" y="83" text-anchor="middle" fill="#8b93a3" font-size="11">ignores chat messages</text>
+  <rect x="230" y="40" width="190" height="56" rx="8" fill="#171a21" stroke="#d99a1e"/><text x="325" y="64" text-anchor="middle">Child key cap check</text><text x="325" y="83" text-anchor="middle" fill="#8b93a3" font-size="11">max_spend · max_cost_flop</text>
+  <rect x="470" y="40" width="170" height="56" rx="8" fill="#171a21" stroke="#2a2f3a"/><text x="555" y="64" text-anchor="middle">Model runs</text><text x="555" y="83" text-anchor="middle" fill="#8b93a3" font-size="11">paid work happens</text>
+  <rect x="690" y="40" width="180" height="56" rx="8" fill="#171a21" stroke="#d99a1e"/><text x="780" y="64" text-anchor="middle">Gateway receipt</text><text x="780" y="83" text-anchor="middle" fill="#8b93a3" font-size="11">reserved→settled/released</text>
+  <rect x="920" y="40" width="170" height="56" rx="8" fill="#171a21" stroke="#2f9e5b"/><text x="1005" y="64" text-anchor="middle">Chain final</text><text x="1005" y="83" text-anchor="middle" fill="#8b93a3" font-size="11">explorer record</text>
+  <g stroke="#8b93a3" stroke-width="1.5" marker-end="url(#a)"><line x1="180" y1="68" x2="228" y2="68"/><line x1="420" y1="68" x2="468" y2="68"/><line x1="640" y1="68" x2="688" y2="68"/><line x1="870" y1="68" x2="918" y2="68"/><line x1="325" y1="96" x2="325" y2="132"/><line x1="555" y1="96" x2="555" y2="132"/></g>
+  <text x="325" y="148" text-anchor="middle" fill="#d0453a" font-size="12">refused here</text><text x="325" y="164" text-anchor="middle" fill="#8b93a3" font-size="11">0 charged (unproven)</text>
+  <text x="555" y="148" text-anchor="middle" fill="#d0453a" font-size="12">timeout here</text><text x="555" y="164" text-anchor="middle" fill="#8b93a3" font-size="11">spend unknown, no resend</text>
+  <text x="550" y="22" text-anchor="middle" fill="#8b93a3" font-size="12">grey sent · amber gateway's own record · green on chain · red unknown or stuck</text>
+ </g></svg>
+</div>
+
+<h2>Calls</h2>
+<div class="hdr"><div>Call</div><div>1 · Sent</div><div>2 · Gateway settled</div><div>3 · Chain final</div></div>
+
+<div class="row">
+ <div class="lbl">First paid completion<small>gen_e1bbc150…</small><small>wallet 5Cg5aZXd…cLY6</small><small>Nov 7, 11:40 AM ET</small></div>
+ <div class="col"><span class="chip c-grey">sent</span><div><span class="k">model</span> <span class="mono">qwen2.5-0.5b</span></div><div><span class="k">key</span> sign-up key (before child-key rule)</div><div><span class="k">reported cost</span> <span class="mono">0.432</span></div><div class="flag">over the 0.25 per-request limit set later</div></div>
+ <div class="col"><span class="chip c-red">unknown</span><div><span class="k">last seen</span> <span class="mono">pending</span> (Nov 7)</div><div><span class="k">now</span> unreadable: <span class="mono">401 api_key_expired</span></div><div><span class="k">settled spend</span> <span class="unk">unknown</span></div><div class="flag">stuck over 24h · key expired, can't re-check</div></div>
+ <div class="col"><span class="chip c-grey">none</span><div><span class="k">channel</span> <span class="mono">0x1c137bb4…7882</span></div><div><span class="k">explorer link</span> <span class="unk">none</span></div><div class="k">No chain record confirmed in saved notes.</div></div>
+</div>
+
+<div class="row">
+ <div class="lbl">T1 refusal test<small>test wallet</small><small>Nov 9</small></div>
+ <div class="col"><span class="chip c-grey">not sent</span><div><span class="k">request</span> <span class="mono">"Be brief." + "Hi", max_tokens 16</span></div><div><span class="k">estimate</span> <span class="mono">0.096</span> (worst case with template <span class="mono">≈0.234</span>)</div><div><span class="k">child key</span> <span class="mono">0.05 · 1 use</span> (not issued)</div><div class="flag">blocked: 503 wallet_enrollment_cap_reached</div></div>
+ <div class="col"><span class="chip c-grey">none</span><div><span class="k">refused by</span> <span class="unk">untested</span></div><div><span class="k">settled spend</span> <span class="unk">null</span></div></div>
+ <div class="col"><span class="chip c-grey">none</span><div><span class="k">explorer link</span> <span class="unk">none</span></div></div>
+</div>
+
+<div class="row">
+ <div class="lbl">T2 normal request<small>test wallet</small><small>runs only if T1 is refused</small></div>
+ <div class="col"><span class="chip c-grey">not sent</span><div><span class="k">request</span> <span class="mono">"Hi", max_tokens 18</span></div><div><span class="k">estimate</span> <span class="mono">≈0.234</span> with template, cap <span class="mono">0.25</span></div></div>
+ <div class="col"><span class="chip c-grey">none</span><div><span class="k">settled spend</span> <span class="unk">null</span></div></div>
+ <div class="col"><span class="chip c-grey">none</span><div><span class="k">explorer link</span> <span class="unk">none</span></div></div>
+</div>
+
+<h2>Notes</h2>
+<ul class="notes">
+ <li>"Gateway settled" is the gateway's own ledger. It isn't proof the chain finalized anything.</li>
+ <li>A timeout or 404 shows as unknown and gets flagged. Nothing gets retried automatically.</li>
+ <li>Static draft. Not public and not posted.</li>
+</ul>
+<p class="notes mono" style="margin-top:24px;border-top:1px solid #2a2f3a;padding-top:10px">Built by uxp-labs · Inky (visual) from FIXER brief · Nov 9, 2026 · run 2026-11-09</p>
+</body></html>
