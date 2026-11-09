@@ -13,6 +13,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "test": "tsc -p tsconfig.json && vitest run",
+    "check": "bash ./scripts/offline-check.sh",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "demo": "bash ./demo.sh"
   },

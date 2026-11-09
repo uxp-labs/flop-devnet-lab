@@ -1,7 +1,11 @@
 # Offline CI for imd-flop.
-# The token is read-only. This workflow has no secrets, wallet keys, deploys, or publishing.
-# npm ci may use the registry. The test step must not call FLOP or IMD:
-# `npm test` runs vitest, which loads test/setup.ts and rejects fetch and WebSocket.
+# Repository contents stay read-only. actions: write is only for uploading
+# the check-evidence artifact (upload-artifact needs it). No secrets, wallet
+# keys, deploys, or publishing.
+# Local and this workflow both run `npm run check` in imd-flop.
+# That command is a clean install, a clean build, and `npm test`.
+# `npm test` loads test/setup.ts, which rejects fetch and WebSocket.
+# SHA256SUMS binds the evidence files. It does not prove the tests ran truthfully.
 
 name: imd-flop offline
 
@@ -11,6 +15,7 @@ on:
 
 permissions:
   contents: read
+  actions: write
 
 jobs:
   build-and-test:
@@ -19,20 +24,23 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
 
       - name: Use Node.js 22
         uses: actions/setup-node@v4
         with:
           node-version: 22
 
-      - name: Install dependencies
+      - name: Offline check
         working-directory: imd-flop
-        run: npm ci --engine-strict
+        run: npm run check
 
-      - name: Build
-        working-directory: imd-flop
-        run: npm run build
-
-      - name: Run offline tests
-        working-directory: imd-flop
-        run: npm test
+      - name: Upload check evidence
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: imd-flop-check-${{ github.run_id }}-${{ github.run_attempt }}
+          path: imd-flop/check-runs
+          retention-days: 14
+          if-no-files-found: error

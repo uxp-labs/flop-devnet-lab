@@ -1,6 +1,7 @@
 node_modules/
 dist/
 coverage/
+check-runs/
 # never commit key material or local state
 *.key
 *.pem
