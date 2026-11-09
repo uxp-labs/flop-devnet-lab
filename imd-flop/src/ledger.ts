@@ -30,8 +30,8 @@ export interface LedgerEntry {
   state: string;
   reason: string | null;
   spend: number | null; // settled spend from the receipt; null = unknown (never 0 by default)
-  cost_reported: number | null; // usage.cost_flop from the completion, if any. 0 is recorded and is not itself a settlement.
-  cap_charge: number; // known spend, including explicit 0; else a non-zero reported cost; else the padded quote
+  cost_reported: number | null; // usage.cost_flop from the completion, if any. Recorded as reported; not a settlement.
+  cap_charge: number; // known spend, including explicit 0; while spend is unknown, the padded quote, raised if reported cost is higher
   http: number | null;
   mock: boolean;
 }

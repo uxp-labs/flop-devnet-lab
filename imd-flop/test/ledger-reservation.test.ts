@@ -1,9 +1,8 @@
 /**
- * Unresolved spend stays reserved. A completion may report usage.cost_flop 0 while the
- * receipt spend is still null. That 0 is not a settlement: the pre-call reservation
- * remains the cap charge. Withholding the response text does not prove nothing was charged.
- * Positive and omitted reported costs, and an explicit settled spend (including 0),
- * keep their existing charges. The 64-hex marker is synthetic and is not a key.
+ * While spend is unresolved, reported usage must not lower the pre-call reservation.
+ * A higher report raises exposure. An explicit settled amount, including settled 0,
+ * is the charge. Withholding the response text does not prove nothing was charged.
+ * The 64-hex marker is synthetic and is not a key.
  */
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -16,6 +15,7 @@ const MARKER_HEX = "ee".repeat(32);
 const MARKER_TEXT = `SYNTHETIC-NOT-A-KEY ${MARKER_HEX}`;
 const SEAT = "9001";
 const RESERVATION = 0.18;
+const HIGHER = 0.25;
 
 type CostMode = number | "omit";
 
@@ -72,6 +72,8 @@ type Printed = {
   receipt: { reserved: number | null; settled: number | null; state: string | null };
 };
 
+type RunOut = { code: number; out: string };
+
 function rowsFor(home: string, requestId: string): LedgerRow[] {
   return (readLines(join(home, "ledger.jsonl")) as LedgerRow[]).filter((row) => row.request_id === requestId);
 }
@@ -96,110 +98,73 @@ function expectWithheld(stdout: string, printed: Printed) {
   expect(file.withheld).toBe(printed.withheld);
 }
 
-describe("unresolved zero reported cost", () => {
+async function expectExposure(
+  home: string,
+  result: RunOut,
+  printed: Printed,
+  latest: { state: string; spend: number | null; cost_reported: number | null; cap_charge: number },
+) {
+  expect(result.code).toBe(0);
+  expect(printed.quote_padded).toBe(RESERVATION);
+  expect(printed.receipt.reserved).toBe(RESERVATION);
+  expect(printed.receipt.settled).toBe(latest.spend);
+  expect(printed.receipt.state).toBe(latest.state);
+  expectWithheld(result.out, printed);
+  const rows = rowsFor(home, printed.request_id);
+  expect(rows).toHaveLength(2);
+  expect(rows[0]).toMatchObject({ state: "sent", spend: null, cost_reported: null, cap_charge: RESERVATION, quote_padded: RESERVATION });
+  expect(rows[1]).toMatchObject(latest);
+  expect(printed.cap_charge).toBe(latest.cap_charge);
+  const status = await cli(home, ["status", "--seat", SEAT, "--json"]);
+  const today = status.json().today_utc as { mock: number; flop: number };
+  expect(today.mock).toBe(latest.cap_charge);
+  expect(today.flop).toBe(0);
+  expect(readFileSync(join(home, "ledger.jsonl"), "utf8").includes(MARKER_HEX)).toBe(false);
+}
+
+describe("unresolved reported usage does not lower the reservation", () => {
   it("keeps the pre-call reservation when a withheld completion reports cost_flop 0 and spend is null", async () => {
     const { home, provider, result, printed } = await runWithheld("zero-withheld", 0, null);
-    expect(result.code).toBe(0);
     expect(provider.calls).toBe(1);
-    expect(printed.quote_padded).toBe(RESERVATION);
-    expect(printed.receipt.reserved).toBe(RESERVATION);
-    expect(printed.receipt.settled).toBeNull();
-    expect(printed.receipt.state).toBe("estimated");
-    expectWithheld(result.out, printed);
-
-    const rows = rowsFor(home, printed.request_id);
-    expect(rows).toHaveLength(2);
-    expect(rows[0]).toMatchObject({ state: "sent", spend: null, cost_reported: null, cap_charge: RESERVATION, quote_padded: RESERVATION });
-    expect(rows[1]).toMatchObject({ state: "estimated", spend: null, cost_reported: 0, cap_charge: RESERVATION });
-    expect(printed.cap_charge).toBe(RESERVATION);
-
-    const status = await cli(home, ["status", "--seat", SEAT, "--json"]);
-    expect(status.json().today_utc.mock).toBe(RESERVATION);
-    expect(readFileSync(join(home, "ledger.jsonl"), "utf8").includes(MARKER_HEX)).toBe(false);
+    await expectExposure(home, result, printed, { state: "estimated", spend: null, cost_reported: 0, cap_charge: RESERVATION });
   });
-});
 
-describe("reported-cost controls", () => {
-  it("positive cost_flop 0.18 on a withheld completion still charges 0.18", async () => {
-    const { home, result, printed } = await runWithheld("positive-withheld", RESERVATION, null);
-    expect(result.code).toBe(0);
-    expect(printed.quote_padded).toBe(RESERVATION);
-    expect(printed.receipt.reserved).toBe(RESERVATION);
-    expect(printed.receipt.settled).toBeNull();
-    expectWithheld(result.out, printed);
-    expect(rowsFor(home, printed.request_id).at(-1)).toMatchObject({
-      state: "estimated",
-      spend: null,
-      cost_reported: RESERVATION,
-      cap_charge: RESERVATION,
-    });
-    expect(printed.cap_charge).toBe(RESERVATION);
+  it("keeps the 0.18 reservation when unresolved usage reports 0.01", async () => {
+    const { home, provider, result, printed } = await runWithheld("small-001", 0.01, null);
+    expect(provider.calls).toBe(1);
+    await expectExposure(home, result, printed, { state: "estimated", spend: null, cost_reported: 0.01, cap_charge: RESERVATION });
+  });
+
+  it("keeps the 0.18 reservation when unresolved usage reports 0.05", async () => {
+    const { home, provider, result, printed } = await runWithheld("small-005", 0.05, null);
+    expect(provider.calls).toBe(1);
+    await expectExposure(home, result, printed, { state: "estimated", spend: null, cost_reported: 0.05, cap_charge: RESERVATION });
+  });
+
+  it("an equal cost_flop 0.18 on a withheld completion still charges 0.18", async () => {
+    const { home, result, printed } = await runWithheld("equal-withheld", RESERVATION, null);
+    await expectExposure(home, result, printed, { state: "estimated", spend: null, cost_reported: RESERVATION, cap_charge: RESERVATION });
   });
 
   it("omitted cost_flop on a withheld completion still charges the 0.18 reservation", async () => {
     const { home, result, printed } = await runWithheld("omitted-withheld", "omit", null);
-    expect(result.code).toBe(0);
-    expect(printed.quote_padded).toBe(RESERVATION);
-    expect(printed.receipt.reserved).toBe(RESERVATION);
-    expect(printed.receipt.settled).toBeNull();
-    expectWithheld(result.out, printed);
-    expect(rowsFor(home, printed.request_id).at(-1)).toMatchObject({
-      state: "estimated",
-      spend: null,
-      cost_reported: null,
-      cap_charge: RESERVATION,
-    });
-    expect(printed.cap_charge).toBe(RESERVATION);
+    await expectExposure(home, result, printed, { state: "estimated", spend: null, cost_reported: null, cap_charge: RESERVATION });
   });
 
-  it("a positive cost_flop below the reservation still charges that reported cost", async () => {
-    const { home, result, printed } = await runWithheld("positive-below", 0.05, null);
-    expect(result.code).toBe(0);
-    expect(printed.quote_padded).toBe(RESERVATION);
-    expect(printed.receipt.reserved).toBe(RESERVATION);
-    expect(printed.receipt.settled).toBeNull();
-    expect(rowsFor(home, printed.request_id).at(-1)).toMatchObject({
-      state: "estimated",
-      spend: null,
-      cost_reported: 0.05,
-      cap_charge: 0.05,
-    });
-    expect(printed.cap_charge).toBe(0.05);
+  it("a higher unresolved cost_flop 0.25 raises exposure above the 0.18 reservation", async () => {
+    const { home, result, printed } = await runWithheld("higher-withheld", HIGHER, null);
+    await expectExposure(home, result, printed, { state: "estimated", spend: null, cost_reported: HIGHER, cap_charge: HIGHER });
   });
 });
 
 describe("known settlement", () => {
-  it("an explicit settled spend wins over a zero usage report", async () => {
-    const { home, result, printed } = await runWithheld("settled-positive", 0, 0.05);
-    expect(result.code).toBe(0);
-    expect(printed.quote_padded).toBe(RESERVATION);
-    expect(printed.receipt.reserved).toBe(RESERVATION);
-    expect(printed.receipt.settled).toBe(0.05);
-    expect(printed.receipt.state).toBe("settled");
-    expect(rowsFor(home, printed.request_id).at(-1)).toMatchObject({
-      state: "settled",
-      spend: 0.05,
-      cost_reported: 0,
-      cap_charge: 0.05,
-    });
-    expect(printed.cap_charge).toBe(0.05);
+  it("an explicit settled spend of 0.05 wins over unresolved-looking usage of 0.01", async () => {
+    const { home, result, printed } = await runWithheld("settled-positive", 0.01, 0.05);
+    await expectExposure(home, result, printed, { state: "settled", spend: 0.05, cost_reported: 0.01, cap_charge: 0.05 });
   });
 
-  it("an explicit settled zero still charges zero over a positive usage report", async () => {
-    const { home, result, printed } = await runWithheld("settled-zero", RESERVATION, 0);
-    expect(result.code).toBe(0);
-    expect(printed.quote_padded).toBe(RESERVATION);
-    expect(printed.receipt.reserved).toBe(RESERVATION);
-    expect(printed.receipt.settled).toBe(0);
-    expect(printed.receipt.state).toBe("settled");
-    expect(rowsFor(home, printed.request_id).at(-1)).toMatchObject({
-      state: "settled",
-      spend: 0,
-      cost_reported: RESERVATION,
-      cap_charge: 0,
-    });
-    expect(printed.cap_charge).toBe(0);
-    const status = await cli(home, ["status", "--seat", SEAT, "--json"]);
-    expect(status.json().today_utc.mock).toBe(0);
+  it("an explicit settled zero still charges zero over a higher usage report", async () => {
+    const { home, result, printed } = await runWithheld("settled-zero", HIGHER, 0);
+    await expectExposure(home, result, printed, { state: "settled", spend: 0, cost_reported: HIGHER, cap_charge: 0 });
   });
 });

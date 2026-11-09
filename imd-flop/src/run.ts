@@ -231,11 +231,11 @@ export async function runJob(h: string, provider: Provider, o: RunOpts, deps: { 
   writeJsonSafe(join(receiptsDir(h), `${requestId}.json`), { ...classified, seat, did: signer.identity.did, ss58: signer.identity.ss58, network: net.name, ...(provider.name === "mock" ? { mock_scenario: (provider as { scenario?: string }).scenario ?? "ok" } : {}) }, "receipt");
 
   const costReported = typeof res.usage.cost_flop === "number" ? res.usage.cost_flop : null;
-  // Unknown spend is null, not zero. usage.cost_flop 0 does not settle the attempt:
-  // withholding or a zero report leaves the pre-call reservation in force. An explicit
-  // settled 0 still wins, because ?? keeps a numeric 0.
-  const reportedCharge = costReported === 0 ? null : costReported;
-  const capCharge = classified.settled ?? reportedCharge ?? q.padded;
+  // Unresolved spend is null, not a smaller usage report. Reported cost may raise
+  // the pre-call reservation and must not lower it. An explicit settled amount,
+  // including settled 0, is the charge because ?? keeps a numeric 0.
+  const unresolvedCharge = costReported !== null && Number.isFinite(costReported) ? Math.max(q.padded, costReported) : q.padded;
+  const capCharge = classified.settled ?? unresolvedCharge;
   appendLedger(h, { ...sent, ts: new Date().toISOString(), state: classified.state ?? "sent", reason: classified.flag, spend: classified.settled, cost_reported: costReported, cap_charge: capCharge, http: rr.http });
 
   const match = await matchReceipt(h, receipt0, latestAttempts(h).find((e) => e.request_id === requestId) ?? null);
