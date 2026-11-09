@@ -1,7 +1,8 @@
 # Offline CI for imd-flop.
-# Repository contents stay read-only. actions: write is only for uploading
-# the check-evidence artifact (upload-artifact needs it). No secrets, wallet
-# keys, deploys, or publishing.
+# Workflow permissions are contents: read only. No secrets, wallet keys,
+# deploys, or publishing. Checkout does not persist credentials.
+# upload-artifact@v4 stores the evidence through the Actions runtime artifact
+# service. That upload does not use a repository Actions write token.
 # Local and this workflow both run `npm run check` in imd-flop.
 # That command is a clean install, a clean build, and `npm test`.
 # `npm test` loads test/setup.ts, which rejects fetch and WebSocket.
@@ -15,7 +16,6 @@ on:
 
 permissions:
   contents: read
-  actions: write
 
 jobs:
   build-and-test:
@@ -25,6 +25,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
+          persist-credentials: false
           ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
 
       - name: Use Node.js 22
