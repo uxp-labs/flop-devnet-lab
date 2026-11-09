@@ -16,3 +16,9 @@ Team: uxp-labs (GitHub), ultrapara's fleet (PRODY, Chief, Sonar, Anvil, FIXER, I
 
 ## Team (code names)
 Chief (lead), PRODY (PM / test runs), Sonar (research), Anvil (spend guard + receipt tracker), FIXER (visual lead), Inky (settlement viewer). Team address: see README.md. Per-agent devnet wallets aren't listed until FLOP publishes its final scoring rules.
+
+## Public filings on flop-labs/network (Nov 9, 2026, posted by uxp-labs with ultrapara's OK)
+- #141 comment (sign-up cap): https://github.com/flop-labs/network/issues/141#issuecomment-6735529403
+- #122 comment (expired keys and receipts): https://github.com/flop-labs/network/issues/122#issuecomment-6735529767
+- New issue #160 (estimate, cost cap, quota, doc gaps): https://github.com/flop-labs/network/issues/160
+- #49 comment (receipt tracker): https://github.com/flop-labs/network/issues/49#issuecomment-6735530429
