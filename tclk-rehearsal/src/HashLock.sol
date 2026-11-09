@@ -5,6 +5,7 @@ pragma solidity ^0.8.24;
 /// Uses sha256 to match tclk's hash locks.
 contract HashLock {
     struct Lock { address payer; address payee; uint256 amount; uint64 refundAfter; bool done; }
+    uint64 public constant MIN_LOCK = 10 minutes; // claim window floor, like tclk validateDeadlines
     mapping(bytes32 => Lock) public locks; // key = sha256(preimage)
 
     event Locked(bytes32 indexed hash, address payer, address payee, uint256 amount, uint64 refundAfter);
@@ -14,7 +15,7 @@ contract HashLock {
     function lock(bytes32 hash, address payee, uint64 refundAfter) external payable {
         require(msg.value > 0, "no value");
         require(locks[hash].payer == address(0), "hash used");
-        require(refundAfter > block.timestamp, "refund in past");
+        require(refundAfter >= block.timestamp + MIN_LOCK, "lock too short");
         locks[hash] = Lock(msg.sender, payee, msg.value, refundAfter, false);
         emit Locked(hash, msg.sender, payee, msg.value, refundAfter);
     }

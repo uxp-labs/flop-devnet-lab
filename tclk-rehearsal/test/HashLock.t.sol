@@ -16,5 +16,9 @@ contract HashLockTest is Test {
         vm.warp(block.timestamp + 1 hours); vm.expectRevert("expired"); h.claim(pre);
         h.refund(hash); assertEq(alice.balance, 1 ether);
     }
+    function testLockTooShortReverts() public {
+        vm.prank(alice); vm.expectRevert("lock too short");
+        h.lock{value: 0.1 ether}(hash, bob, uint64(block.timestamp + 9 minutes));
+    }
     function testNoRefundAfterClaim() public { _lock(); h.claim(pre); vm.warp(block.timestamp + 2 hours); vm.expectRevert("no open lock"); h.refund(hash); }
 }
