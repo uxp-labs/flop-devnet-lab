@@ -49,16 +49,10 @@
     }
    },
    "snapshot": "snapshots/c7-matrix/01-F1.html",
-   "status": "known_defect",
-   "defects": [
+   "fixed": [
     "KD-5"
    ],
-   "target": {
-    "viewer": {
-     "reservation_line": "reservation held 0.05"
-    }
-   },
-   "note": "KNOWN DEFECT KD-5: the snapshot pins today's wording 'reservation <amount>'; FIXER's target is 'reservation held <amount>', not asserted."
+   "note": "[fix: KD-5] the held reservation line carries the trailing '(held)' note."
   },
   {
    "id": "02-F2",
@@ -78,16 +72,10 @@
     }
    },
    "snapshot": "snapshots/c7-matrix/02-F2.html",
-   "status": "known_defect",
-   "defects": [
+   "fixed": [
     "KD-5"
    ],
-   "target": {
-    "viewer": {
-     "reservation_line": "reservation held 0.198"
-    }
-   },
-   "note": "KNOWN DEFECT KD-5: the snapshot pins today's wording 'reservation <amount>'; FIXER's target is 'reservation held <amount>', not asserted."
+   "note": "[fix: KD-5] the held reservation line carries the trailing '(held)' note."
   },
   {
    "id": "03-F3",
@@ -100,16 +88,10 @@
     }
    },
    "snapshot": "snapshots/c7-matrix/03-F3.html",
-   "status": "known_defect",
-   "defects": [
+   "fixed": [
     "KD-5"
    ],
-   "target": {
-    "viewer": {
-     "reservation_line": "reservation held 0.186"
-    }
-   },
-   "note": "KNOWN DEFECT KD-5: the snapshot pins today's wording 'reservation <amount>'; FIXER's target is 'reservation held <amount>', not asserted."
+   "note": "[fix: KD-5] the held reservation line carries the trailing '(held)' note."
   },
   {
    "id": "04-F4",
@@ -125,16 +107,10 @@
     }
    },
    "snapshot": "snapshots/c7-matrix/04-F4.html",
-   "status": "known_defect",
-   "defects": [
+   "fixed": [
     "KD-5"
    ],
-   "target": {
-    "viewer": {
-     "reservation_line": "reservation held 0.186"
-    }
-   },
-   "note": "KNOWN DEFECT KD-5: the snapshot pins today's wording 'reservation <amount>'; FIXER's target is 'reservation held <amount>', not asserted."
+   "note": "[fix: KD-5] the held reservation line carries the trailing '(held)' note."
   },
   {
    "id": "05-F5",
@@ -149,16 +125,10 @@
     }
    },
    "snapshot": "snapshots/c7-matrix/05-F5.html",
-   "status": "known_defect",
-   "defects": [
+   "fixed": [
     "KD-5"
    ],
-   "target": {
-    "viewer": {
-     "reservation_line": "reservation held 0.186"
-    }
-   },
-   "note": "KNOWN DEFECT KD-5: the snapshot pins today's wording 'reservation <amount>'; FIXER's target is 'reservation held <amount>', not asserted."
+   "note": "[fix: KD-5] the held reservation line carries the trailing '(held)' note."
   },
   {
    "id": "06-F6",
@@ -171,16 +141,10 @@
     }
    },
    "snapshot": "snapshots/c7-matrix/06-F6.html",
-   "status": "known_defect",
-   "defects": [
+   "fixed": [
     "KD-5"
    ],
-   "target": {
-    "viewer": {
-     "reservation_line": "reservation held 0.186"
-    }
-   },
-   "note": "KNOWN DEFECT KD-5: the snapshot pins today's wording 'reservation <amount>'; FIXER's target is 'reservation held <amount>', not asserted."
+   "note": "[fix: KD-5] the held reservation line carries the trailing '(held)' note."
   },
   {
    "id": "07-F7",
@@ -193,16 +157,10 @@
     }
    },
    "snapshot": "snapshots/c7-matrix/07-F7.html",
-   "status": "known_defect",
-   "defects": [
+   "fixed": [
     "KD-5"
    ],
-   "target": {
-    "viewer": {
-     "reservation_line": "reservation held 0.186"
-    }
-   },
-   "note": "KNOWN DEFECT KD-5: the snapshot pins today's wording 'reservation <amount>'; FIXER's target is 'reservation held <amount>', not asserted."
+   "note": "[fix: KD-5] the held reservation line carries the trailing '(held)' note."
   },
   {
    "id": "08-F8",
@@ -214,16 +172,10 @@
     }
    },
    "snapshot": "snapshots/c7-matrix/08-F8.html",
-   "status": "known_defect",
-   "defects": [
+   "fixed": [
     "KD-5"
    ],
-   "target": {
-    "viewer": {
-     "reservation_line": "reservation held 0.186"
-    }
-   },
-   "note": "KNOWN DEFECT KD-5: the snapshot pins today's wording 'reservation <amount>'; FIXER's target is 'reservation held <amount>', not asserted."
+   "note": "[fix: KD-5] the held reservation line carries the trailing '(held)' note."
   },
   {
    "id": "09-F9",
@@ -239,16 +191,10 @@
     }
    },
    "snapshot": "snapshots/c7-matrix/09-F9.html",
-   "status": "known_defect",
-   "defects": [
+   "fixed": [
     "KD-5"
    ],
-   "target": {
-    "viewer": {
-     "reservation_line": "reservation held 0.3"
-    }
-   },
-   "note": "KNOWN DEFECT KD-5: the snapshot pins today's wording 'reservation <amount>'; FIXER's target is 'reservation held <amount>', not asserted."
+   "note": "[fix: KD-5] the held reservation line carries the trailing '(held)' note."
   },
   {
    "id": "10-F10",
@@ -265,16 +211,10 @@
    "quirks": [
     "R-c"
    ],
-   "status": "known_defect",
-   "defects": [
+   "fixed": [
     "KD-5"
    ],
-   "target": {
-    "viewer": {
-     "reservation_line": "reservation held 0.186"
-    }
-   },
-   "note": "KNOWN DEFECT KD-5: the snapshot pins today's wording 'reservation <amount>'; FIXER's target is 'reservation held <amount>', not asserted."
+   "note": "[fix: KD-5] the held reservation line carries the trailing '(held)' note."
   },
   {
    "id": "11-B1",
@@ -284,16 +224,10 @@
     "raw": "{not json"
    },
    "snapshot": "snapshots/c7-matrix/11-B1.html",
-   "status": "known_defect",
-   "defects": [
+   "fixed": [
     "KD-5"
    ],
-   "target": {
-    "viewer": {
-     "reservation_line": "reservation held 0.186"
-    }
-   },
-   "note": "KNOWN DEFECT KD-5: the snapshot pins today's wording 'reservation <amount>'; FIXER's target is 'reservation held <amount>', not asserted."
+   "note": "[fix: KD-5] the held reservation line carries the trailing '(held)' note."
   },
   {
    "id": "12-B2",
@@ -303,16 +237,10 @@
     "raw": "[1, 2]"
    },
    "snapshot": "snapshots/c7-matrix/12-B2.html",
-   "status": "known_defect",
-   "defects": [
+   "fixed": [
     "KD-5"
    ],
-   "target": {
-    "viewer": {
-     "reservation_line": "reservation held 0.186"
-    }
-   },
-   "note": "KNOWN DEFECT KD-5: the snapshot pins today's wording 'reservation <amount>'; FIXER's target is 'reservation held <amount>', not asserted."
+   "note": "[fix: KD-5] the held reservation line carries the trailing '(held)' note."
   },
   {
    "id": "13-B3",
@@ -326,16 +254,10 @@
     "raw": "{not json"
    },
    "snapshot": "snapshots/c7-matrix/13-B3.html",
-   "status": "known_defect",
-   "defects": [
+   "fixed": [
     "KD-5"
    ],
-   "target": {
-    "viewer": {
-     "reservation_line": "reservation held 0.198"
-    }
-   },
-   "note": "KNOWN DEFECT KD-5: the snapshot pins today's wording 'reservation <amount>'; FIXER's target is 'reservation held <amount>', not asserted."
+   "note": "[fix: KD-5] the held reservation line carries the trailing '(held)' note."
   },
   {
    "id": "14-G1",
@@ -370,16 +292,10 @@
     }
    },
    "snapshot": "snapshots/c7-matrix/15-G2.html",
-   "status": "known_defect",
-   "defects": [
+   "fixed": [
     "KD-5"
    ],
-   "target": {
-    "viewer": {
-     "reservation_line": "reservation held 0.05"
-    }
-   },
-   "note": "KNOWN DEFECT KD-5: the snapshot pins today's wording 'reservation <amount>'; FIXER's target is 'reservation held <amount>', not asserted."
+   "note": "[fix: KD-5] the held reservation line carries the trailing '(held)' note."
   },
   {
    "id": "16-G3",
@@ -391,16 +307,10 @@
     }
    },
    "snapshot": "snapshots/c7-matrix/16-G3.html",
-   "status": "known_defect",
-   "defects": [
+   "fixed": [
     "KD-5"
    ],
-   "target": {
-    "viewer": {
-     "reservation_line": "reservation held 0.186"
-    }
-   },
-   "note": "KNOWN DEFECT KD-5: the snapshot pins today's wording 'reservation <amount>'; FIXER's target is 'reservation held <amount>', not asserted."
+   "note": "[fix: KD-5] the held reservation line carries the trailing '(held)' note."
   },
   {
    "id": "17-G4",
@@ -419,16 +329,10 @@
     }
    },
    "snapshot": "snapshots/c7-matrix/17-G4.html",
-   "status": "known_defect",
-   "defects": [
+   "fixed": [
     "KD-5"
    ],
-   "target": {
-    "viewer": {
-     "reservation_line": "reservation held 0.05"
-    }
-   },
-   "note": "KNOWN DEFECT KD-5: the snapshot pins today's wording 'reservation <amount>'; FIXER's target is 'reservation held <amount>', not asserted."
+   "note": "[fix: KD-5] the held reservation line carries the trailing '(held)' note."
   },
   {
    "id": "18-G5",
@@ -439,7 +343,11 @@
      "stage": "gateway observed"
     }
    },
-   "snapshot": "snapshots/c7-matrix/18-G5.html"
+   "snapshot": "snapshots/c7-matrix/18-G5.html",
+   "fixed": [
+    "KD-5"
+   ],
+   "note": "[fix: KD-5] a pending matched row holds its reservation: line 'reservation 0.186 (held)' added."
   },
   {
    "id": "19-G6",
@@ -453,19 +361,11 @@
     }
    },
    "snapshot": "snapshots/c7-matrix/19-G6.html",
-   "status": "known_defect",
-   "defects": [
+   "fixed": [
+    "KD-1",
     "KD-5"
    ],
-   "fixed": [
-    "KD-1"
-   ],
-   "target": {
-    "viewer": {
-     "reservation_line": "reservation held 0.186"
-    }
-   },
-   "note": "KNOWN DEFECT KD-5: the snapshot pins today's wording 'reservation 0.186'; FIXER's target is 'reservation held 0.186', not asserted. [fix: KD-1] the key-expired row is a failed read (red unknown, reservation line, no 'matches')."
+   "note": "[fix: KD-5] the held reservation line carries the trailing '(held)' note. Earlier fixes: [fix: KD-1] the key-expired row is a failed read (red unknown, reservation line, no 'matches')."
   },
   {
    "id": "20-G7",
@@ -477,16 +377,10 @@
     "merge": {}
    },
    "snapshot": "snapshots/c7-matrix/20-G7.html",
-   "status": "known_defect",
-   "defects": [
+   "fixed": [
     "KD-5"
    ],
-   "target": {
-    "viewer": {
-     "reservation_line": "reservation held 0.186"
-    }
-   },
-   "note": "KNOWN DEFECT KD-5: the snapshot pins today's wording 'reservation <amount>'; FIXER's target is 'reservation held <amount>', not asserted. [fix: one-chip] shows one status chip [grey sent, red unknown]; the disagree text stays as a flag."
+   "note": "[fix: KD-5] the held reservation line carries the trailing '(held)' note. Earlier fixes: [fix: one-chip] shows one status chip [grey sent, red unknown]; the disagree text stays as a flag."
   },
   {
    "id": "21-G8",
@@ -497,16 +391,10 @@
    "quirks": [
     "R-d"
    ],
-   "status": "known_defect",
-   "defects": [
+   "fixed": [
     "KD-5"
    ],
-   "target": {
-    "viewer": {
-     "reservation_line": "reservation held 0.186"
-    }
-   },
-   "note": "KNOWN DEFECT KD-5: the snapshot pins today's wording 'reservation <amount>'; FIXER's target is 'reservation held <amount>', not asserted. [fix: residual-d] added the reservation line (was none)."
+   "note": "[fix: KD-5] the held reservation line carries the trailing '(held)' note. Earlier fixes: [fix: residual-d] added the reservation line (was none)."
   },
   {
    "id": "22-G9",
@@ -530,16 +418,10 @@
     }
    },
    "snapshot": "snapshots/c7-matrix/23-G10.html",
-   "status": "known_defect",
-   "defects": [
+   "fixed": [
     "KD-5"
    ],
-   "target": {
-    "viewer": {
-     "reservation_line": "reservation held 0.186"
-    }
-   },
-   "note": "KNOWN DEFECT KD-5: the snapshot pins today's wording 'reservation <amount>'; FIXER's target is 'reservation held <amount>', not asserted."
+   "note": "[fix: KD-5] the held reservation line carries the trailing '(held)' note."
   },
   {
    "id": "24-G11",
@@ -551,16 +433,10 @@
     }
    },
    "snapshot": "snapshots/c7-matrix/24-G11.html",
-   "status": "known_defect",
-   "defects": [
+   "fixed": [
     "KD-5"
    ],
-   "target": {
-    "viewer": {
-     "reservation_line": "reservation held 0.186"
-    }
-   },
-   "note": "KNOWN DEFECT KD-5: the snapshot pins today's wording 'reservation <amount>'; FIXER's target is 'reservation held <amount>', not asserted."
+   "note": "[fix: KD-5] the held reservation line carries the trailing '(held)' note."
   }
  ]
 }

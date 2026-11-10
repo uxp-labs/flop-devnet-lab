@@ -326,7 +326,9 @@
       "today": "a held-reservation row reads 'reservation <amount>' (a row with no receipt file too, since [fix: residual-d])",
       "target": "every held-reservation row reads 'reservation held <amount>'",
       "conflicts_with": "viewer/test_audit_v8.py lines 90-91 and 110-111 assert the exact pair ['reservation', amount] and the markup <span class=\"k\">reservation</span> <span class=\"mono\">amount</span>; the fix needs FIXER/Chief to approve a labelled edit of those lines or another wording",
-      "fix_step": "step 3"
+      "fix_step": "step 3",
+      "status": "fixed: [fix: KD-5]",
+      "fixed_behavior": "FIXER's form (no test edits): the key and amount spans stay exactly as they were and one trailing <span class=\"note\">(held)</span> follows, so the line reads 'reservation <amount> (held)'; rows[].flop keeps ['reservation', amount]; a pending matched row (G5) shows the line until it settles or is released"
     }
   ]
 }

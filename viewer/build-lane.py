@@ -187,6 +187,8 @@ def row_matches(row, e, r, reservation):
     if chain_final and not row["bad"]: chips.append(["green", "chain final"])
     row["chips"] = chips
     if not chain_final: row["flop"].append(["chain final", '<span class="unk">not checked yet</span>'])
+    # A pending match still holds its reservation until it settles or is released.
+    if e.get("state") not in SETTLES: row["flop"].append(["reservation", reservation])
     row["flop"].append(["match", "matches"])
     row["flop"].append(["observed spend", amount(r.get("settled"))])
 
@@ -211,6 +213,7 @@ def build_row(e, r):
     ROW_KINDS[classify(e, r)](row, e, r, reservation)
     return row
 BLANK_NODE = '<span class="unk">unknown</span>'
+HELD_NOTE = '<span class="note">(held)</span>'
 
 def render(row):
     lbl = f'{row["label"]}' + "".join(f"<small>{s}</small>" for s in row["sub"]) + f'<span class="tag">payer: {row["payer"]}</span>'
@@ -218,6 +221,8 @@ def render(row):
     else: flop = " ".join(f'<span class="chip c-{c}">{t}</span>' for c, t in row["chips"])
     for k, v in row["flop"]:
         v = num(v) if (v is None or isinstance(v, (int, float))) else v
+        # The lane shows a reservation line only while the reservation is held, so it always carries the note.
+        if k == "reservation": v += f" {HELD_NOTE}"
         flop += f'<div><span class="k">{k}</span> {v}</div>' if k else f'<div class="k">{v}</div>'
     flop += "".join(f'<div class="flag">{f}</div>' for f in row["flags"])
     spend = (f'<div><span class="k">est.</span> {num(row["est"])}</div><div><span class="k">per-call cap</span> {num(row["per_call"])}</div>'
