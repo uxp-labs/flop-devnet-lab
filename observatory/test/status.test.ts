@@ -324,7 +324,8 @@ describe("the faucet genesis comes only from a usable /chain reading (RULES 1.1)
   });
 
   it.each([
-    ["an HTTP 500 reading", { http: 500, error: "server error" }],
+    ["an HTTP 500 reading with a body and no error", { http: 500 }],
+    ["an HTTP 503 reading with an error", { http: 503, error: "service unavailable" }],
     ["a reading with an error but a body", { error: "timeout" }],
     ["no response", { http: null, error: "timeout", fetched_at: null }],
     ["a reading 39 days old", { fetched_at: "2026-10-01T00:00:00Z" }],
