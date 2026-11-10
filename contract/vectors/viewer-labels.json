@@ -1018,38 +1018,11 @@
     "viewer": {
      "chips": [
       [
-       "grey",
-       "sent"
-      ],
-      [
-       "green",
-       "chain final"
-      ]
-     ],
-     "reservation": "absent",
-     "matches_shown": true,
-     "greens": [
-      "chain final"
-     ],
-     "link": [
-      "grey",
-      "not checked",
-      null
-     ]
-    }
-   },
-   "note": "KNOWN DEFECT KD-2: expect is today's output (asserted); target is FIXER's label (not asserted until the fix step)",
-   "status": "known_defect",
-   "defect": "KD-2",
-   "target": {
-    "viewer": {
-     "chips": [
-      [
        "amber",
        "DISAGREE"
       ]
      ],
-     "reservation": 0.186,
+     "reservation": 0.2,
      "matches_shown": false,
      "greens": [],
      "link": [
@@ -1059,6 +1032,9 @@
      ]
     }
    },
+   "note": "[fix: KD-2] a settlement above the reservation (quote_padded) or the per-call cap is amber DISAGREE, chain-final green blocked, never 'matches'; was (known_defect) grey sent + green chain final, matches. Reservation line shows the ledger's cap_charge 0.2 (the lane's one reservation rule: cap_charge, else quote_padded); the step 1b target said quote_padded 0.186 - open question for FIXER.",
+   "status": "fixed",
+   "defect": "KD-2",
    "label_rules": [
     "V-PRECEDENCE"
    ]
@@ -1106,38 +1082,11 @@
     "viewer": {
      "chips": [
       [
-       "grey",
-       "sent"
-      ],
-      [
-       "green",
-       "chain final"
-      ]
-     ],
-     "reservation": "absent",
-     "matches_shown": true,
-     "greens": [
-      "chain final"
-     ],
-     "link": [
-      "grey",
-      "not checked",
-      null
-     ]
-    }
-   },
-   "note": "KNOWN DEFECT KD-2: expect is today's output (asserted); target is FIXER's label (not asserted until the fix step)",
-   "status": "known_defect",
-   "defect": "KD-2",
-   "target": {
-    "viewer": {
-     "chips": [
-      [
        "amber",
        "DISAGREE"
       ]
      ],
-     "reservation": 0.186,
+     "reservation": 1.5,
      "matches_shown": false,
      "greens": [],
      "link": [
@@ -1147,6 +1096,9 @@
      ]
     }
    },
+   "note": "[fix: KD-2] a settlement above the reservation (quote_padded) or the per-call cap is amber DISAGREE, chain-final green blocked, never 'matches'; was (known_defect) grey sent + green chain final, matches. Reservation line shows the ledger's cap_charge 1.5 (the lane's one reservation rule: cap_charge, else quote_padded); the step 1b target said quote_padded 0.186 - open question for FIXER.",
+   "status": "fixed",
+   "defect": "KD-2",
    "label_rules": [
     "V-PRECEDENCE"
    ]

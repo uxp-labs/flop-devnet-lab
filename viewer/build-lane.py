@@ -95,12 +95,17 @@ def from_files():
 
 def unresolved(e): return e.get("state") in ("timeout_unknown", "error")
 
+def over_limit(e, settled):
+    """A settlement above the row's reservation (quote_padded) or its per-call cap can't be green (KD-2)."""
+    return any(lim is not None and settled > lim for lim in (amount(e.get("quote_padded")), amount(e.get("per_call_cap"))))
+
 def disagrees(e, r):
     """Receipt and ledger can't both be right. Only asked once the receipt was read and its identity matches."""
     st, receipt_state, settled = e.get("state"), r.get("state"), amount(r.get("settled"))
     if receipt_state in SETTLES:
-        # Green needs the ledger settled too, with a numeric settlement equal to the receipt's.
-        d = st not in SETTLES or settled is None or amount(e.get("spend")) != settled
+        # Green needs the ledger settled too, with a numeric settlement equal to the receipt's and within the
+        # reservation and the per-call cap.
+        d = st not in SETTLES or settled is None or amount(e.get("spend")) != settled or over_limit(e, settled)
     else:
         # Pending receipt: the ledger must not claim a settlement, and nothing is chain-final yet.
         d = st in SETTLES or r.get("chain_final") is True
@@ -201,6 +206,7 @@ def build_row(e, r):
     spent_before, cap_charge, daily = amount(e.get("spent_before")), amount(e.get("cap_charge")), amount(e.get("daily_cap"))
     if e.get("daily_cap") is not None and daily is None: raise ValueError("daily_cap is not a number")
     row["daily_left"] = r6(daily - spent_before - cap_charge) if None not in (daily, spent_before, cap_charge) else None
+    if row["daily_left"] is not None and row["daily_left"] < 0: row["spend_flags"].append("over the daily cap")
     reservation = cap_charge if cap_charge is not None else amount(e.get("quote_padded"))
     ROW_KINDS[classify(e, r)](row, e, r, reservation)
     return row

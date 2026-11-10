@@ -284,7 +284,9 @@
       ],
       "where": "build-lane.py:139-141 (settled compare ignores the reservation and per-call cap)",
       "today": "a settlement above its reservation (quote_padded) or above the per-call cap renders green 'chain final' and 'matches'",
-      "target": "amber 'disagree', reservation held (reservation line shown), chain-final green blocked"
+      "target": "amber 'disagree', reservation held (reservation line shown), chain-final green blocked",
+      "status": "fixed: [fix: KD-2]",
+      "open_question": "the reservation line shows cap_charge (the lane's one rule, cap_charge else quote_padded), which on these rows is the settled amount; FIXER to confirm or rule quote_padded"
     },
     {
       "id": "KD-3",
