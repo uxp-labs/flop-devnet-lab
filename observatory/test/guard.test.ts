@@ -98,6 +98,7 @@ describe("every network and process path is blocked at runtime (RULES section 4)
     // Third IMD audit J2: the constructor opens the socket's native handle, so it is refused itself.
     ["a dgram.Socket made directly", () => new dgram.Socket({ type: "udp4" }), "network", "dgram.Socket"],
     ["a dgram.Socket made directly from its type", () => new (dgram.Socket as unknown as new (t: string) => unknown)("udp4"), "network", "dgram.Socket"],
+    ["a dgram.Socket made from the real prototype's constructor", () => new (dgram.Socket.prototype.constructor as unknown as new (t: string) => unknown)("udp4"), "network", "dgram.Socket"],
     // The real prototype's methods stay blocked too, for a socket the constructor did not make.
     ["a dgram.Socket send on the real prototype", () => dgram.Socket.prototype.send.call(Object.create(dgram.Socket.prototype), "x", 9, "canary.invalid"), "network", "dgram.Socket.send"],
     ["a dgram.Socket bind on the real prototype", () => dgram.Socket.prototype.bind.call(Object.create(dgram.Socket.prototype), 0), "network", "dgram.Socket.bind"],

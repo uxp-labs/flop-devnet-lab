@@ -214,6 +214,8 @@ describe("injected failures", () => {
     });
     expect(s.rpc.health).toBe("unknown");
     expect(s.rpc.detail).toMatch(/whether the height is stuck is unknown/);
+    // Stale is not known to be false either (tenth rerun U2), so a gate on stale false waits.
+    expect(s.rpc.stale).toBeNull();
   });
 
   it("malformed responses become unknown or null, never ok", async () => {
@@ -831,10 +833,10 @@ describe("third IMD audit: a head with keys left out, a /chain status that is no
     // A finalized height stays final however long it holds: the head still bounds escrows.
     expect(stuck.rpcUsable).toBe(true);
     const unsure = await assess({}, earlierAt("2026-11-09T23:47:40"));
-    expect([unsure.status.rpc.health, unsure.status.reset_detected, unsure.rpcUsable]).toEqual(["unknown", null, true]);
-    // Not stuck: the earlier snapshot at this height is recent, so the answer is given.
-    const moving = await assess({}, earlierAt("2026-11-09T23:46:53Z"));
-    expect([moving.status.rpc.stale, moving.status.reset_detected]).toEqual([false, false]);
+    expect([unsure.status.rpc.health, unsure.status.rpc.stale, unsure.status.reset_detected, unsure.rpcUsable]).toEqual(["unknown", null, null, true]);
+    // Not stuck: the earlier snapshot at this height was read less than the stale limit ago.
+    const held = await assess({}, earlierAt("2026-11-09T23:46:53Z"));
+    expect([held.status.rpc.stale, held.status.reset_detected]).toEqual([false, false]);
   });
 
   it("J11: a stuck head on another genesis still shows the reset", async () => {

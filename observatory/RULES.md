@@ -44,22 +44,21 @@ check below to run and pass.
   go on, and the faucet's detail says that too. A `/chain` reading time later than the snapshot
   time is also a conflict.
 - The RPC genesis counts toward `reset_detected` only from a usable head: no read error, an
-  `observed_at` that parses, is at most the stale limit old and is not later than the snapshot
-  time, a valid finalized head and a valid best height (so every check against them can run),
-  and nothing below found the head contradicting itself or an earlier snapshot: no rollback, no
-  changed finalized hash, a best height not below the finalized height nor below the highest
-  finalized height an earlier snapshot saw on this genesis nor more than the lag limit below the
-  highest best height an earlier snapshot saw on this genesis, and no earlier snapshot taken, or
-  its head read, later than this snapshot time. A head that fails any of these is not usable,
-  however fresh: a chain restarted from the same spec keeps its genesis, and its first heads
-  report a low best height and no finalized head yet. `genesis.rpc` still shows what the head
-  said. A usable head counts toward `reset_detected` false only once its finalized height is known
-  not to be stuck: the stuck check below ran and found it moving, or new to the log. A height stuck
-  past the stale limit, or one whose stuck check cannot run, leaves `reset_detected` null unless a
-  reading names another genesis, which counts either way. The same usable head is the only one
-  whose finalized height may bound escrow evidence (section 2), stuck or not: a finalized height
-  stays final however long it holds, and a bound below the chain's only keeps more evidence
-  waiting.
+  `observed_at` that parses, is at most the stale limit old and is not later than the snapshot time,
+  a valid finalized head and a valid best height (so every check against them can run), and nothing
+  below found the head contradicting itself or an earlier snapshot: no rollback, no changed
+  finalized hash, a best height not below the finalized height nor below the highest finalized
+  height an earlier snapshot saw on this genesis nor more than the lag limit below the highest best
+  height an earlier snapshot saw on this genesis, and no earlier snapshot taken, or its head read,
+  later than this snapshot time. A head that fails any of these is not usable, however fresh: a
+  chain restarted from the same spec keeps its genesis, and its first heads report a low best height
+  and no finalized head yet. `genesis.rpc` still shows what the head said. A usable head counts
+  toward `reset_detected` false only once its finalized height is known not to be stuck: the stuck
+  check below ran and found it held for no longer than the stale limit, or new to the log. A height
+  stuck past the stale limit, or one whose stuck check cannot run, leaves `reset_detected` null
+  unless a reading names another genesis, which counts either way. The same usable head is the only
+  one whose finalized height may bound escrow evidence (section 2), stuck or not: a finalized height
+  stays final however long it holds, and a bound below the chain's only keeps more evidence waiting.
 - Heights and the runtime version are safe integers (census clause 14). A finalized or best
   height past 2^53 - 1 was already rounded by the JSON parser, so it is not a valid one.
 - A reading time later than the snapshot time is a conflict, noted in `conflicts`, whatever that
@@ -143,7 +142,8 @@ check below to run and pass.
   health `degraded`.
 - `rpc.stale` is `true` when the head is older than the stale limit or the finalized height is
   stuck, `false` only when the age was computed and is within the limit and nothing is stuck, and
-  `null` otherwise, including for a head time later than the snapshot time.
+  `null` otherwise, including for a head time later than the snapshot time and for a fresh head
+  whose stuck check cannot run.
 
 ## 2. Evidence boundaries for escrows
 
@@ -365,22 +365,23 @@ check below to run and pass.
     but for one case: Node decodes the command's arguments before the command reads them, so a
     scenario folder name that is not UTF-8 reaches it with U+FFFD in place of each bad byte, and the
     command can neither name nor open such a folder as the recount can. Such a folder is outside
-    what the two sides compare. Near the system's path limit the two agree: a
-    scenario path whose `event-pages` is past the limit while its `meta.json` is not is a page file
-    problem on both sides, naming `event-pages`, and the cross-check makes one at run time; a folder
-    path past the limit itself is an input problem on both. An `event-pages` folder they may not
-    read or list is a page file problem on both sides too; the cross-check cannot make one when it
-    runs as root, where every folder opens, so each side's own tests make the call fail instead. The
-    TypeScript command also reads the folder's `meta.json` and refuses as an input problem when it
-    cannot, a scenario folder it may not search and one whose `meta.json` path alone is past the
-    limit included. The recount does not read `meta.json`, so that one input problem is the
-    command's alone; the recount names `event-pages` as a page file problem there, since it cannot
-    read that either. So is a `meta.json` whose `now` is missing or no time when no `--now` is given
-    (section 1.1): the recount reads no clock. Last, Node takes `.` and `..` segments and doubled
-    slashes out of a path before the system sees it, while the recount hands the path to the system
-    as given, so a path padded with them past the limit is counted by the command and refused by the
-    recount as an input problem, and a `..` after a link names another folder on each side. Such a
-    path is outside what the two sides compare.
+    what the two sides compare. Near the system's path limit the two agree: a scenario path whose
+    `event-pages` is past the limit while its `meta.json` is not is a page file problem on both
+    sides, naming `event-pages`, and the cross-check makes one at run time; a folder path past the
+    limit itself is an input problem on both. An `event-pages` folder they may not read or list is a
+    page file problem on both sides too; the cross-check cannot make one when it runs as root, where
+    every folder opens, so each side's own tests make the call fail instead. The TypeScript command
+    also reads the folder's `meta.json` and refuses as an input problem when it cannot, a scenario
+    folder it may not search and one whose `meta.json` path alone is past the limit included. The
+    recount does not read `meta.json`, so that one input problem is the command's alone; the recount
+    names `event-pages` as a page file problem there, since it cannot read that either. So is a
+    `meta.json` whose `now` is missing or no time when no `--now` is given (section 1.1): the
+    recount reads no clock. Last, Node takes `.` and `..` segments and doubled slashes out of a path
+    before the system sees it, while the recount hands the path to the system as given. So the
+    command counts the folder a padded path names whenever that folder can be read, while the
+    recount refuses a padded path past the limit, as a page file problem when only its `event-pages`
+    is past it and as an input problem when the folder path is; and a `..` after a link names
+    another folder on each side. Such a path is outside what the two sides compare.
 
 ## 4. Read only
 
@@ -395,10 +396,10 @@ Tests fail if any attempt is left in the log.
   and `module.registerHooks`), and every `node:child_process` call (spawn, exec, execFile, fork and
   their sync forms). Named imports see the block too. So do the lower layers: `net.Server`'s
   `_listen2`, which makes the handle under `listen`, the `dgram.Socket` constructor, which opens its
-  native handle at once, and `dgram.Socket` send, bind and connect, `dns.Resolver` queries,
-  `ChildProcess.prototype.spawn`, `process.binding`, `process.dlopen` and `inspector.open`. The
-  block covers the ways out named here and is tried against each of them; it is no proof that
-  Node has no other.
+  native handle at once, by its name and by the real prototype's `constructor` property, and
+  `dgram.Socket` send, bind and connect, `dns.Resolver` queries, `ChildProcess.prototype.spawn`,
+  `process.binding`, `process.dlopen` and `inspector.open`. The block covers the ways out named
+  here and is tried against each of them; it is no proof that Node has no other.
 - A source scan fails any `src` module, other than `guard.ts`, that imports one of those modules or
   calls fetch, WebSocket, a signing API or a key API. It also fails the indirect forms:
   `process.getBuiltinModule`, `createRequire`, an `import()` or `require()` whose argument is not
@@ -479,10 +480,11 @@ Tests fail if any attempt is left in the log.
   importing it under a query string): a copy's attempts would reach neither the log nor the
   journal. A test reads every test file for those forms.
 - The harness canary proves that a test leaving any of these in the log fails: a fetch, an
-  `node:https` request, a `node:net` connection, a child process, a refused RPC write, a refused
-  signature and a refused spend. It proves the same for a blocked call fired from a timer after
-  the file's final check, with and without a reset there, and that the timer case passes once
-  the journal check is taken out, so that check is what catches it.
+  `node:https` request, a `node:net` connection, a child process, module hooks, a listening handle
+  made under `listen`, a `dgram.Socket` made directly, a refused RPC write, a refused signature and
+  a refused spend. It proves the same for a blocked call fired from a timer after the file's final
+  check, with and without a reset there, and that the timer case passes once the journal check is
+  taken out, so that check is what catches it.
 
 ## 5. Outputs agree
 

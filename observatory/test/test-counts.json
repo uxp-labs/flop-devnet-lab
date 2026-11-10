@@ -20,8 +20,8 @@
     "names": "bd439ca49837d3e62977352e9315883dd115a9abd92613ad412e6457ee0f7bc5"
   },
   "guard.test.ts": {
-    "tests": 63,
-    "names": "6123e52cdf5103b12efe44c2c3597ac6982ac7882fe4f070adc6b0fe88ab68aa"
+    "tests": 64,
+    "names": "f9bbc307371e1af586aff3796eb96210c0a396fb29331eb3c7ab939dc72bcd81"
   },
   "mcp.test.ts": {
     "tests": 13,
@@ -32,8 +32,8 @@
     "names": "c1629a5c9e7fa1134a7e062494c93ae5e762fbe1cc26328108e74d808eb49693"
   },
   "snapshot-check.test.ts": {
-    "tests": 164,
-    "names": "b76a0b3306b88126730760d60c426b02c77464bc38a7e885c1d8e8780b5c16e7"
+    "tests": 180,
+    "names": "bc2262876c2b7dfa09509a813c59412952be5f189d54e47e01222e12c2e94896"
   },
   "snapshot.test.ts": {
     "tests": 22,

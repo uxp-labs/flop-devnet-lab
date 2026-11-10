@@ -116,6 +116,9 @@ dgram.Socket = function Socket(...args: unknown[]) {
   blocked("network", "dgram.Socket")(...args);
 };
 dgram.Socket.prototype = dgramSocket;
+// The real prototype's constructor property would still hand out the real function (tenth rerun),
+// so it names the stand in too.
+dgramSocket.constructor = dgram.Socket;
 for (const [proto, prefix] of [
   [dns.Resolver.prototype, "dns.Resolver"],
   [dns.promises.Resolver.prototype, "dns.promises.Resolver"],

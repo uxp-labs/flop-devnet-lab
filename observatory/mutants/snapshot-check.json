@@ -1142,5 +1142,133 @@
     "replace": "[s.status, ...s.escrows, s.census]",
     "test": "test/snapshot-check.test.ts",
     "why": "a fixture drift report makes the snapshot a fixture (case: a trusted snapshot whose only fixture part is the drift report)"
+  },
+  {
+    "id": "snapshot-check-bound-at-or-above-the-status-height",
+    "file": "src/snapshot-check.ts",
+    "find": "e.finalized_height === null || e.finalized_height === s.status.finalized_height)",
+    "replace": "e.finalized_height === null || e.finalized_height >= (s.status.finalized_height ?? 0))",
+    "test": "test/snapshot-check.test.ts",
+    "why": "tenth rerun W1: an escrow bound equals the status height, not only reaches it (case: a bound above the status's height)"
+  },
+  {
+    "id": "snapshot-check-pin-height-at-or-above-the-status-height",
+    "file": "src/snapshot-check.ts",
+    "find": "(s) => s.pin.finalized_height === s.status.finalized_height]",
+    "replace": "(s) => (s.pin.finalized_height ?? -1) >= (s.status.finalized_height ?? -1)]",
+    "test": "test/snapshot-check.test.ts",
+    "why": "tenth rerun W2: the pin height equals the status height (case: a pin height above the status's)"
+  },
+  {
+    "id": "snapshot-check-pin-genesis-of-none-passes",
+    "file": "src/snapshot-check.ts",
+    "find": "(s) => s.pin.genesis === s.status.genesis.rpc]",
+    "replace": "(s) => s.pin.genesis === null || s.pin.genesis === s.status.genesis.rpc]",
+    "test": "test/snapshot-check.test.ts",
+    "why": "tenth rerun W3: a pin with no genesis disagrees with a status that read one (case: a pin naming no genesis though the status read one)"
+  },
+  {
+    "id": "snapshot-check-pin-hash-of-none-passes",
+    "file": "src/snapshot-check.ts",
+    "find": "(s) => s.pin.finalized_hash === s.status.finalized_hash]",
+    "replace": "(s) => s.pin.finalized_hash === null || s.pin.finalized_hash === s.status.finalized_hash]",
+    "test": "test/snapshot-check.test.ts",
+    "why": "tenth rerun W4: a pin with no finalized hash disagrees with a status that read one (case: a pin naming no hash though the status read one)"
+  },
+  {
+    "id": "snapshot-check-sha256-unanchored-at-the-start",
+    "file": "src/snapshot-check.ts",
+    "find": "/^[0-9a-f]{64}$/",
+    "replace": "/[0-9a-f]{64}$/",
+    "test": "test/snapshot-check.test.ts",
+    "why": "tenth rerun W5: a sha256 is the whole value, not its tail (case: a hash with junk before it)"
+  },
+  {
+    "id": "snapshot-check-hash-unanchored-at-the-start",
+    "file": "src/snapshot-check.ts",
+    "find": "/^0x[0-9a-f]{64}$/",
+    "replace": "/0x[0-9a-f]{64}$/",
+    "test": "test/snapshot-check.test.ts",
+    "why": "tenth rerun W6: a 0x hash is the whole value, not its tail (case: a block hash with junk before it)"
+  },
+  {
+    "id": "snapshot-check-texts-with-one-text",
+    "file": "src/snapshot-check.ts",
+    "find": "const texts: Check = (v) => Array.isArray(v) && v.every(text);",
+    "replace": "const texts: Check = (v) => Array.isArray(v) && (v.length === 0 || v.some(text));",
+    "test": "test/snapshot-check.test.ts",
+    "why": "tenth rerun W7: every item of a text list is text (case: conflicts holding text and a number)"
+  },
+  {
+    "id": "snapshot-check-unverified-on-opens-alone",
+    "file": "src/snapshot-check.ts",
+    "find": "ofState(s, \"unverified\").every((e) => e.evidence.length === 0)",
+    "replace": "ofState(s, \"unverified\").every((e) => e.evidence.every((x) => x.event === OPENED))",
+    "test": "test/snapshot-check.test.ts",
+    "why": "tenth rerun W8: an unverified escrow holds no evidence at all, an open included (case: an unverified escrow holding an open of its own)"
+  },
+  {
+    "id": "snapshot-check-runtime-version-required",
+    "file": "src/snapshot-check.ts",
+    "find": "  [\"runtime_version\", orNone(count)],",
+    "replace": "  [\"runtime_version\", count],",
+    "test": "test/snapshot-check.test.ts",
+    "why": "tenth rerun S1: the command writes a runtime version of none when it reads none (case: a runtime version of none)"
+  },
+  {
+    "id": "snapshot-check-service-time-required",
+    "file": "src/snapshot-check.ts",
+    "find": "  [\"observed_at\", orNone(text)],",
+    "replace": "  [\"observed_at\", text],",
+    "test": "test/snapshot-check.test.ts",
+    "why": "tenth rerun S2: the command writes a service time of none when the service gave none (case: a service time of none)"
+  },
+  {
+    "id": "snapshot-check-rpc-stale-required",
+    "file": "src/snapshot-check.ts",
+    "find": "[\"stale\", orNone(flag)]",
+    "replace": "[\"stale\", flag]",
+    "test": "test/snapshot-check.test.ts",
+    "why": "tenth rerun S3: the command writes rpc stale of none when it cannot tell (case: an rpc stale of none)"
+  },
+  {
+    "id": "snapshot-check-faucet-ready-required",
+    "file": "src/snapshot-check.ts",
+    "find": "[\"ready\", orNone(flag)]",
+    "replace": "[\"ready\", flag]",
+    "test": "test/snapshot-check.test.ts",
+    "why": "tenth rerun S4: the command writes faucet ready of none when it cannot tell (case: a faucet ready of none)"
+  },
+  {
+    "id": "snapshot-check-faucet-limits-required",
+    "file": "src/snapshot-check.ts",
+    "find": "[\"limits\", orNone(limits)]",
+    "replace": "[\"limits\", limits]",
+    "test": "test/snapshot-check.test.ts",
+    "why": "tenth rerun S5: the command writes faucet limits of none when it read none (case: faucet limits of none)"
+  },
+  {
+    "id": "snapshot-check-source-sha-required",
+    "file": "src/snapshot-check.ts",
+    "find": "  [\"source_sha\", orNone(text)],",
+    "replace": "  [\"source_sha\", text],",
+    "test": "test/snapshot-check.test.ts",
+    "why": "tenth rerun S6: the command writes no source sha when given no --source-sha (case: a pin source sha of none)"
+  },
+  {
+    "id": "snapshot-check-times-in-z-only",
+    "file": "src/snapshot-check.ts",
+    "find": "const time: Check = (v) => parseZoned(v) !== null;",
+    "replace": "const time: Check = (v) => typeof v === \"string\" && v.endsWith(\"Z\") && parseZoned(v) !== null;",
+    "test": "test/snapshot-check.test.ts",
+    "why": "tenth rerun S7: a time with an offset is a zoned time, and the command writes one from --now (case: a time with an offset)"
+  },
+  {
+    "id": "snapshot-check-lag-only-with-best-above",
+    "file": "src/snapshot-check.ts",
+    "find": "best !== null && best >= finalized ? best - finalized : null",
+    "replace": "best !== null && best > finalized ? best - finalized : null",
+    "test": "test/snapshot-check.test.ts",
+    "why": "tenth rerun S8: equal heights have a lag of 0, as the command writes (case: a best height equal to the finalized one, with a lag of 0)"
   }
 ]

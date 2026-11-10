@@ -2,6 +2,10 @@
 // section 5). Each case edits an honest snapshot and names every check the edit must break, so a
 // case passes only when its edit breaks exactly those checks: a check that stopped firing, or one
 // that started to fire on something else, fails it. A last test shows every check has a case.
+// Firing alone is not being exact, so comparisons have refused cases on both sides and the fields
+// the command may write as none, or write at an edge, have served cases (tenth rerun U1). The
+// weakened and stricter forms tried are hand mutants in mutants/snapshot-check.json; the table is
+// no proof that every other form fails.
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { CHECKS, checkSnapshot } from "../src/snapshot-check.js";
@@ -34,7 +38,7 @@ const CASES: readonly (readonly [string, (s: Json) => void, readonly string[]])[
   ["a short source sha", (s) => (s.pin.source_sha = "979298d"), []],
   ["a gateway http status of -1", (s) => (s.status.gateway.http = -1), []],
   ["a faucet http status of -1", (s) => (s.status.faucet.http = -1), []],
-  // Snapshots the settlement rules allow, so a rule made stricter than RULES.md fails too.
+  // Snapshots the settlement rules allow, so a rule made stricter than RULES.md on these fields fails.
   ["reset_detected true with the faucet on another genesis", (s) => ((s.status.genesis.faucet = OTHER), (s.status.reset_detected = true)), []],
   [
     "reset_detected true with the rpc on another genesis and no bound",
@@ -65,6 +69,16 @@ const CASES: readonly (readonly [string, (s: Json) => void, readonly string[]])[
     [],
   ],
   ["evidence at its bound itself", (s) => (s.escrows[0].evidence[0].block_number = s.status.finalized_height), []],
+  // Tenth rerun U1: each field the command may write as none, a time with an offset, and a head
+  // whose best height is its finalized one, which the command writes with a lag of 0.
+  ["a runtime version of none", (s) => (s.status.runtime_version = null), []],
+  ["a service time of none", (s) => (s.status.gateway.observed_at = null), []],
+  ["an rpc stale of none", (s) => (s.status.rpc.stale = null), []],
+  ["a faucet ready of none", (s) => (s.status.faucet.ready = null), []],
+  ["faucet limits of none", (s) => (s.status.faucet.limits = null), []],
+  ["a pin source sha of none", (s) => (s.pin.source_sha = null), []],
+  ["a time with an offset", (s) => (s.observed_at = "2026-11-10T00:47:53+01:00"), []],
+  ["a best height equal to the finalized one, with a lag of 0", (s) => ((s.status.best_height = s.status.finalized_height), (s.status.finality_lag = 0)), []],
   [
     "a trusted snapshot whose parts are all trusted",
     (s) => {
@@ -85,6 +99,7 @@ const CASES: readonly (readonly [string, (s: Json) => void, readonly string[]])[
   ["a prev_hash that is no hash", (s) => (s.prev_hash = "x"), ["snapshot.prev_hash"]],
   ["a hash of 63 hex", (s) => (s.hash = "a".repeat(63)), ["snapshot.hash"]],
   ["a hash in upper case", (s) => (s.hash = "AB".repeat(32)), ["snapshot.hash"]],
+  ["a hash with junk before it", (s) => (s.hash = "x" + "ab".repeat(32)), ["snapshot.hash"]],
   ["an observed_at of yesterday", (s) => (s.observed_at = "yesterday"), ["snapshot.observed_at"]],
   ["an observed_at with no zone", (s) => (s.observed_at = "2026-11-09T23:47:53"), ["snapshot.observed_at"]],
   ["an observed_at on a day that does not exist", (s) => (s.observed_at = "2026-02-30T00:00:00Z"), ["snapshot.observed_at"]],
@@ -116,6 +131,7 @@ const CASES: readonly (readonly [string, (s: Json) => void, readonly string[]])[
   ["a genesis that is no object", (s) => (s.status.genesis = 5), ["status.genesis"]],
   ["a reset_detected of no", (s) => (s.status.reset_detected = "no"), ["status.reset_detected"]],
   ["conflicts that are not text", (s) => (s.status.conflicts = [1, null]), ["status.conflicts"]],
+  ["conflicts holding text and a number", (s) => (s.status.conflicts = ["a conflict", 1]), ["status.conflicts"]],
   ["a finalized height as text", (s) => (s.status.finalized_height = "3341575"), ["status.finalized_height"]],
   ["a finalized hash that is no hash", (s) => (s.status.finalized_hash = "x"), ["status.finalized_hash"]],
   ["a best height as text", (s) => (s.status.best_height = "3341577"), ["status.best_height"]],
@@ -177,6 +193,7 @@ const CASES: readonly (readonly [string, (s: Json) => void, readonly string[]])[
   ["a block hash of 63 hex", (s) => (s.escrows[0].evidence[0].block_hash = hex(63)), ["evidence.block_hash"]],
   ["a block hash of 65 hex", (s) => (s.escrows[0].evidence[0].block_hash = hex(65)), ["evidence.block_hash"]],
   ["a block hash with no 0x", (s) => (s.escrows[0].evidence[0].block_hash = "ab".repeat(32)), ["evidence.block_hash"]],
+  ["a block hash with junk before it", (s) => (s.escrows[0].evidence[0].block_hash = "junk0x" + "ab".repeat(32)), ["evidence.block_hash"]],
   ["a block number as text", (s) => (s.escrows[0].evidence[0].block_number = "5"), ["evidence.block_number"]],
   ["an event index as text", (s) => (s.escrows[0].evidence[0].event_index = "0"), ["evidence.event_index"]],
   ["an event index of 1.5", (s) => (s.escrows[0].evidence[0].event_index = 1.5), ["evidence.event_index"]],
@@ -250,6 +267,14 @@ const CASES: readonly (readonly [string, (s: Json) => void, readonly string[]])[
     (s) => {
       const u = s.escrows.find((e: Json) => e.state === "unverified");
       u.evidence = [{ ...s.escrows[0].evidence[0], event_index: s.escrows[0].evidence[0].event_index + 7 }];
+    },
+    ["escrow.unverified-holds-no-evidence"],
+  ],
+  [
+    "an unverified escrow holding an open of its own",
+    (s) => {
+      const u = s.escrows.find((e: Json) => e.state === "unverified");
+      u.evidence = [{ ...s.escrows[0].evidence[0], event: "hasStation.EscrowOpened", event_index: s.escrows[0].evidence[0].event_index + 7 }];
     },
     ["escrow.unverified-holds-no-evidence"],
   ],
@@ -354,6 +379,7 @@ const CASES: readonly (readonly [string, (s: Json) => void, readonly string[]])[
   ],
   ["one event as both open and release", (s) => s.escrows[0].evidence.unshift({ ...s.escrows[0].evidence[0], event: "hasStation.EscrowOpened" }), ["evidence.used-once"]],
   ["a bound other than the status's height", (s) => (s.escrows[0].finalized_height = 5), ["escrow.bound-is-the-status-height"]],
+  ["a bound above the status's height", (s) => (s.escrows[0].finalized_height = s.status.finalized_height + 1), ["escrow.bound-is-the-status-height"]],
   [
     "a bound from a head on another genesis",
     (s) => {
@@ -374,8 +400,11 @@ const CASES: readonly (readonly [string, (s: Json) => void, readonly string[]])[
   ],
   ["evidence above its bound", (s) => (s.escrows[0].evidence[0].block_number = s.status.finalized_height + 1), ["escrow.no-evidence-above-the-bound"]],
   ["a pin naming another genesis", (s) => (s.pin.genesis = "0x" + "cd".repeat(32)), ["pin.genesis-is-the-status-rpc-genesis"]],
+  ["a pin naming no genesis though the status read one", (s) => (s.pin.genesis = null), ["pin.genesis-is-the-status-rpc-genesis"]],
   ["a pin naming another height", (s) => (s.pin.finalized_height = 7), ["pin.height-is-the-status-height"]],
+  ["a pin height above the status's", (s) => (s.pin.finalized_height = s.status.finalized_height + 1), ["pin.height-is-the-status-height"]],
   ["a pin naming another hash", (s) => (s.pin.finalized_hash = "0x" + "ef".repeat(32)), ["pin.hash-is-the-status-hash"]],
+  ["a pin naming no hash though the status read one", (s) => (s.pin.finalized_hash = null), ["pin.hash-is-the-status-hash"]],
   ["a snapshot trusted though its parts are fixtures", (s) => (s.trust = "trusted RPC"), ["snapshot.fixture-when-a-part-is"]],
   ...(
     [

@@ -598,5 +598,13 @@
     "replace": "",
     "test": "test/status.test.ts",
     "why": "third IMD audit J11: a finalized height stuck past the stale limit is flagged, so it cannot count toward reset_detected false"
+  },
+  {
+    "id": "status-stale-false-when-stuck-unknown",
+    "file": "src/status.ts",
+    "find": "      if (stale === false) stale = null;\n",
+    "replace": "",
+    "test": "test/status.test.ts",
+    "why": "tenth rerun U2: when the stuck check cannot run, a fresh head is no longer known not to be stale, so rpc.stale is null (RULES 1.1)"
   }
 ]

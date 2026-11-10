@@ -355,6 +355,9 @@ export function classifyRpc(
       flags.contradicted = true;
     } else if (sinceUnknown) {
       flags.stuck = null;
+      // Whether the height is stuck is unknown, so a fresh head is no longer known not to be stale
+      // (RULES.md 1.1, tenth rerun U2): a gate that waits for stale false waits here too.
+      if (stale === false) stale = null;
       cannotRun.push("an earlier snapshot at this finalized height has a head time that does not parse, so whether the height is stuck is unknown");
     } else if (since !== null && since > o.staleAfterSeconds) {
       stale = true;

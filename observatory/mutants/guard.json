@@ -526,5 +526,13 @@
     "replace": "",
     "test": "test/guard.test.ts",
     "why": "third IMD audit J2: a dgram.Socket made directly holds a native handle that binds without the prototype's bind, so the constructor is refused and recorded"
+  },
+  {
+    "id": "setup-dgram-prototype-constructor-real",
+    "file": "test/setup.ts",
+    "find": "dgramSocket.constructor = dgram.Socket;\n",
+    "replace": "",
+    "test": "test/guard.test.ts",
+    "why": "tenth rerun note: the real prototype's constructor property names the refused stand in, so a socket made from it is refused and recorded"
   }
 ]
