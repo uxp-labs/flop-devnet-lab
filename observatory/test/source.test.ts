@@ -58,6 +58,13 @@ describe("a saved reading that is not a regular file counts as nothing read, wit
     expect(s.faucet.detail).toBe("faucet-health.json: not a regular file");
   });
 
+  it("a saved reading the system will not open is named by its error code, never by a path that may hold a line break", async () => {
+    const d = copyOf("status-healthy");
+    const src = failing("openSync", "faucet-health.json", "EACCES", () => FixtureSource.fromDir(d));
+    const s = await networkStatus(src, { pinnedGenesis: DEVNET_GENESIS, now: "2026-11-09T23:47:53Z" });
+    expect([s.faucet.health, s.faucet.detail]).toEqual(["unknown", "faucet-health.json: cannot be read (EACCES)"]);
+  });
+
   it("a meta.json that is a folder refuses the scenario", () => {
     const d = copyOf("status-healthy");
     rmSync(join(d, "meta.json"));
@@ -71,7 +78,7 @@ describe("a saved reading that is not a regular file counts as nothing read, wit
  * folder the reader may not open does for a user without the right (root opens any folder, so a
  * real permission cannot be shown here). The real function is put back afterwards.
  */
-function failing<T>(name: "lstatSync" | "readdirSync", suffix: string, code: string, read: () => T): T {
+function failing<T>(name: "lstatSync" | "readdirSync" | "openSync", suffix: string, code: string, read: () => T): T {
   const fs = createRequire(import.meta.url)("node:fs") as Record<string, (...a: unknown[]) => unknown>;
   const real = fs[name] as (...a: unknown[]) => unknown;
   fs[name] = (...args: unknown[]) => {

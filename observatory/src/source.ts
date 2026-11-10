@@ -181,14 +181,18 @@ export class FixtureSource implements Source {
         return value;
       } catch (e) {
         // The parser's own wording changes between Node versions, so outputs say only this.
+        // A file the system will not open says so by its error code alone: Node's own message
+        // holds the path as given, a line break and all (ninth rerun Source-only 3).
         const reason =
           e instanceof TooDeep
             ? `nested deeper than ${MAX_NESTING} levels`
             : e instanceof DuplicateKey
-            ? `the key ${JSON.stringify(e.key)} appears twice in one object`
-            : e instanceof SyntaxError || e instanceof TypeError
-              ? "not valid JSON"
-              : (e as Error).message;
+              ? `the key ${JSON.stringify(e.key)} appears twice in one object`
+              : e instanceof SyntaxError || e instanceof TypeError
+                ? "not valid JSON"
+                : errorCode(e) !== null
+                  ? `cannot be read (${errorCode(e)})`
+                  : (e as Error).message;
         for (const list of errors) list.push(`${shownText(name)}: ${reason}`);
         unreadable.set(name, `${shownText(name)}: ${reason}`);
         return undefined;

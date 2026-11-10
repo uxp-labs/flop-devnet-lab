@@ -46,5 +46,13 @@
     "replace": "      if (false) {",
     "test": "test/source.test.ts",
     "why": "third IMD audit J8: an event-pages folder that is there but cannot be read is a page file problem; only one that is not there means no pages"
+  },
+  {
+    "id": "source-open-error-shows-the-path",
+    "file": "src/source.ts",
+    "find": ": errorCode(e) !== null\n                  ? `cannot be read (${errorCode(e)})`",
+    "replace": ": false\n                  ? `cannot be read (${errorCode(e)})`",
+    "test": "test/source.test.ts",
+    "why": "ninth rerun Source-only 3: a saved reading the system will not open is named by its error code, not by Node's message, which holds the path as given"
   }
 ]

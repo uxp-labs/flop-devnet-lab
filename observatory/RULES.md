@@ -365,16 +365,22 @@ check below to run and pass.
     but for one case: Node decodes the command's arguments before the command reads them, so a
     scenario folder name that is not UTF-8 reaches it with U+FFFD in place of each bad byte, and the
     command can neither name nor open such a folder as the recount can. Such a folder is outside
-    what the two sides compare. A scenario path so long that `event-pages` cannot be read at all
-    (past the system's path limit) is a page file problem on both sides, naming `event-pages`, and
-    the cross-check makes one at run time; so is an `event-pages` folder they may not read or list,
-    which the cross-check cannot make when it runs as root, where every folder opens, so each side's
-    own tests make the call fail instead. The TypeScript command also reads the folder's `meta.json`
-    and refuses as an input problem when it cannot, a scenario folder it may not search included;
-    the recount does not read `meta.json`, so that one input problem is the command's alone, and
-    the recount, which cannot search such a folder either, names `event-pages` as a page file
-    problem there. So is a `meta.json` whose `now` is missing or no time when no `--now` is given
-    (section 1.1): the recount reads no clock.
+    what the two sides compare. Near the system's path limit the two agree: a
+    scenario path whose `event-pages` is past the limit while its `meta.json` is not is a page file
+    problem on both sides, naming `event-pages`, and the cross-check makes one at run time; a folder
+    path past the limit itself is an input problem on both. An `event-pages` folder they may not
+    read or list is a page file problem on both sides too; the cross-check cannot make one when it
+    runs as root, where every folder opens, so each side's own tests make the call fail instead. The
+    TypeScript command also reads the folder's `meta.json` and refuses as an input problem when it
+    cannot, a scenario folder it may not search and one whose `meta.json` path alone is past the
+    limit included. The recount does not read `meta.json`, so that one input problem is the
+    command's alone; the recount names `event-pages` as a page file problem there, since it cannot
+    read that either. So is a `meta.json` whose `now` is missing or no time when no `--now` is given
+    (section 1.1): the recount reads no clock. Last, Node takes `.` and `..` segments and doubled
+    slashes out of a path before the system sees it, while the recount hands the path to the system
+    as given, so a path padded with them past the limit is counted by the command and refused by the
+    recount as an input problem, and a `..` after a link names another folder on each side. Such a
+    path is outside what the two sides compare.
 
 ## 4. Read only
 
@@ -512,20 +518,20 @@ blank on the page and `null` in JSON and MCP.
 - The MCP binary serves only an observatory snapshot whose hash verifies, read as strict UTF-8 with
   a byte order mark refused, nesting checked before parsing, one value per key, and the text byte
   for byte in the feed format, so an integer past 2^53 - 1 that the parser would round is refused
-  too. What it serves must also pass every check in `src/snapshot-check.ts`, where each check has
-  a name: `<object>.fields` and `<object>.<field>` for a shape, and one name for each agreement. A
+  too. What it serves must also pass every check in `src/snapshot-check.ts`, where each check has a
+  name: `<object>.fields` and `<object>.<field>` for a shape, and one name for each agreement. A
   refusal names the checks the file breaks (the first five, and how many more). Every object in it
   but the census and the drift report holds exactly its schema's fields with its schema's types: the
   snapshot (`seq` a safe integer from 0, `prev_hash` none on the first line and 64 lower case hex on
   every other, its hash 64 lower case hex, `observed_at` a time with a zone, the trust one of the
   two labels), its pin (`source_sha` text or none, as the command was given it), the status
-  (`observed_at` a time with a zone, its genesis exactly its three hashes, each service's health one
-  of the four words, its http status a safe integer or none and its other fields of their types, its
-  conflicts text), every escrow (its id `0x` plus 64 lower case hex and listed once, `observed_at` a
-  time with a zone, its notes text) and every evidence item (one of the three escrow events, its
-  block hash and genesis hashes); the census and the drift report are checked for their schema only.
-  An object whose set of fields is wrong is named once, as `<object>.fields`, and its values and
-  parts are not read.
+  (`observed_at` a time with a zone, its genesis exactly its three fields, the pinned hash and the
+  faucet's and the RPC's hash or none, each service's health one of the four words, its http status
+  a safe integer or none and its other fields of their types, its conflicts text), every escrow (its
+  id `0x` plus 64 lower case hex and listed once, `observed_at` a time with a zone, its notes text)
+  and every evidence item (one of the three escrow events, its block hash and genesis hashes); the
+  census and the drift report are checked for their schema only. An object whose set of fields is
+  wrong is named once, as `<object>.fields`, and its values and parts are not read.
   Once every shape holds, the values the settlement rules tie together agree: `reset_detected` false
   only with both genesis readings on the pinned genesis and both heights read, and true only with a
   reading on another genesis; the finality lag the best height less the finalized one, and none when

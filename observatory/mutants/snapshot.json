@@ -18,8 +18,8 @@
   {
     "id": "source-parser-wording-leaks",
     "file": "src/source.ts",
-    "find": "            : e instanceof SyntaxError || e instanceof TypeError\n              ? \"not valid JSON\"\n              : (e as Error).message;",
-    "replace": "            : (e as Error).message;",
+    "find": "              : e instanceof SyntaxError || e instanceof TypeError\n                ? \"not valid JSON\"\n                : errorCode(e) !== null",
+    "replace": "              : errorCode(e) !== null",
     "test": "test/snapshot.test.ts",
     "why": "outputs must not carry the parser's wording, which changes between Node versions"
   },

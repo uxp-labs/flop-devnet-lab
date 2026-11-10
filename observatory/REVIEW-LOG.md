@@ -6,6 +6,8 @@ What each outside review and independent rerun of FLOP Observatory M0 found, and
 
 Four IMD agents audited 97821ac, each in one area, and a judge reproduced, merged and ranked what they found (job 9d67f583): 1 medium, 7 low and 3 info. Every specialist found all 15 findings of the audit c0ebfa5e fixed. None of the new ones can give a wrong escrow state or a partial count shown as complete, and none is a src path to the network, a process, a signature or a spend; the medium is a hole in the test harness. Three specialists could not finish the mutants step inside their sandbox's time limit, and two saw two command line checks fail on a warning Node printed for their environment; the last row answers both.
 
+The ninth independent rerun reproduced 97821ac byte for byte and left 1 low and 1 info item open, with two notes found by reading; the rows marked N answer them.
+
 The round first moves the MCP binary's snapshot checks out of one long expression into a module of named rules, as its own commit (d0cb325), proven to change no serve or refuse decision and no output. Each finding is then fixed in the module it belongs to. For J1 the guard case calls `register` with an empty hook module, which shows the call is refused and recorded; the judge's own probe, whose hook connects and starts a process, was not run again here, since a probe that tries the network or a process needs the owner's decision.
 
 | # | Finding | Fix | Proof |
@@ -22,6 +24,10 @@ The round first moves the MCP binary's snapshot checks out of one long expressio
 | J9 info | a `/chain` http status of `"200"` read "does not count: http 200" | it says the status is not a whole number; the faucet, the gateway and `/chain` share the one wording | 1 status test; 1 mutant |
 | J10 info | `get_escrow_state` echoed an unseen escrow id in the caller's case | it answers in lower case, as every escrow id is shown | 1 MCP test; 1 mutant |
 | J11 info | `reset_detected` stayed false with the finalized height stuck, or with a stuck check that could not run | false also needs the finalized height known not to be stuck; another genesis counts either way, and the head still bounds escrow evidence, since a finalized height stays final however long it holds | 2 status tests; 4 mutants |
+| N1 low | at the grain of single conditions, 8 more the binary checks had no case that only they break: funded with a release or with a refund, refunded with a release or with two opens, a height from 0 and whole, an http status whole and a hash of exactly 64 hex; and two mutants' why lines said more than their kill showed | the refactor's table has a case for each, with a mutant of each condition alone, and every mutant's why names only cases the run shows killing it | table cases; 143 mutants |
+| N2 info | clause 16 missed two path edges: a folder path itself past the system's limit, and a path padded with `/.` or `//`, which Node folds, so the command counts the real folder where the recount refuses | clause 16 says what each side does at each edge near the limit, and that a padded path is outside what the two sides compare | the cross-check's path limit scenario (J8); read |
+| N3 | found by reading: a reading the system will not open was named by Node's own message, which holds the path as given, a line break and all | it is named by its error code | 1 reader test; 1 mutant |
+| N4 | found by reading: RULES.md 5 said the status genesis holds three hashes, where two of them may be none | it says so | read |
 | warning | two command line checks read a refusal whole, so a warning Node printed for its environment (`NODE_USE_ENV_PROXY`) failed a correct build | every node the checks start runs with its warnings off and a time limit; README.md shows how to run the mutants one file at a time inside a short time limit | 43 of 43 checks pass with `NODE_USE_ENV_PROXY=1` set, where 38 of 40 passed before |
 
 ## Round 13: the eighth independent rerun, of e91e10c, and the fix for each
