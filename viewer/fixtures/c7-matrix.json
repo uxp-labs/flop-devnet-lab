@@ -1,0 +1,355 @@
+{
+ "source": "Sonar's 24-case viewer matrix, pr6-1cbdbfc-v8-independent/probes/viewer_c7_probe.py (case table copied verbatim)",
+ "status": "current behavior at 3ae1cdf: each snapshot is today's rendered row, byte for byte. Cases with status known_defect render today's output, which is NOT the agreed label; see contract/rules.json known_defects.",
+ "base_ledger": {
+  "ts": "2026-11-10T15:00:00Z",
+  "request_id": "req-1",
+  "job": "j1",
+  "seat": "9001",
+  "did": "did:key:zSONAR",
+  "provider": "mock",
+  "network": "devnet",
+  "payer": "holder",
+  "state": "sent",
+  "spend": null,
+  "cap_charge": 0.186,
+  "quote_padded": 0.186,
+  "per_call_cap": 1,
+  "daily_cap": 5,
+  "spent_before": 0
+ },
+ "base_receipt": {
+  "request_id": "req-1",
+  "job": "j1",
+  "seat": "9001",
+  "did": "did:key:zSONAR",
+  "state": "estimated",
+  "settled": null,
+  "chain_final": false,
+  "http": 200,
+  "error": null
+ },
+ "how": "ledger row = base_ledger updated with ledger; receipt file req-1.json = json.dumps(base_receipt updated with merge), or raw text as is, or no file when null",
+ "cases": [
+  {
+   "id": "01-F1",
+   "name": "F1 settled 0.05 + failed read HTTP 503",
+   "ledger": {
+    "state": "settled",
+    "spend": 0.05,
+    "cap_charge": 0.05
+   },
+   "receipt_file": {
+    "merge": {
+     "state": "settled",
+     "settled": 0.05,
+     "chain_final": true,
+     "http": 503,
+     "error": "HTTP 503"
+    }
+   },
+   "snapshot": "snapshots/c7-matrix/01-F1.html"
+  },
+  {
+   "id": "02-F2",
+   "name": "F2 settled 0.198 + failed read HTTP 503",
+   "ledger": {
+    "state": "settled",
+    "spend": 0.198,
+    "cap_charge": 0.198
+   },
+   "receipt_file": {
+    "merge": {
+     "state": "settled",
+     "settled": 0.198,
+     "chain_final": true,
+     "http": 503,
+     "error": "HTTP 503"
+    }
+   },
+   "snapshot": "snapshots/c7-matrix/02-F2.html"
+  },
+  {
+   "id": "03-F3",
+   "name": "F3 sent 0.186 + http 0 fetch failed",
+   "ledger": {},
+   "receipt_file": {
+    "merge": {
+     "http": 0,
+     "error": "fetch failed"
+    }
+   },
+   "snapshot": "snapshots/c7-matrix/03-F3.html"
+  },
+  {
+   "id": "04-F4",
+   "name": "F4 timeout_unknown + HTTP 500",
+   "ledger": {
+    "state": "timeout_unknown"
+   },
+   "receipt_file": {
+    "merge": {
+     "state": null,
+     "http": 500,
+     "error": "HTTP 500"
+    }
+   },
+   "snapshot": "snapshots/c7-matrix/04-F4.html"
+  },
+  {
+   "id": "05-F5",
+   "name": "F5 first-run failed read (request_id '')",
+   "ledger": {},
+   "receipt_file": {
+    "merge": {
+     "request_id": "",
+     "state": null,
+     "http": 500,
+     "error": "HTTP 500"
+    }
+   },
+   "snapshot": "snapshots/c7-matrix/05-F5.html"
+  },
+  {
+   "id": "06-F6",
+   "name": "F6 failed read, error text has <script>",
+   "ledger": {},
+   "receipt_file": {
+    "merge": {
+     "http": 502,
+     "error": "<script>alert(1)</script>"
+    }
+   },
+   "snapshot": "snapshots/c7-matrix/06-F6.html"
+  },
+  {
+   "id": "07-F7",
+   "name": "F7 http None + error 'boom'",
+   "ledger": {},
+   "receipt_file": {
+    "merge": {
+     "http": null,
+     "error": "boom"
+    }
+   },
+   "snapshot": "snapshots/c7-matrix/07-F7.html"
+  },
+  {
+   "id": "08-F8",
+   "name": "F8 http '200' (string), no error",
+   "ledger": {},
+   "receipt_file": {
+    "merge": {
+     "http": "200"
+    }
+   },
+   "snapshot": "snapshots/c7-matrix/08-F8.html"
+  },
+  {
+   "id": "09-F9",
+   "name": "F9 failed read, cap_charge None, quote_padded 0.3",
+   "ledger": {
+    "cap_charge": null,
+    "quote_padded": 0.3
+   },
+   "receipt_file": {
+    "merge": {
+     "http": 503,
+     "error": "HTTP 503"
+    }
+   },
+   "snapshot": "snapshots/c7-matrix/09-F9.html"
+  },
+  {
+   "id": "10-F10",
+   "name": "F10 failed read + receipt seat differs",
+   "ledger": {},
+   "receipt_file": {
+    "merge": {
+     "seat": "9999",
+     "http": 503,
+     "error": "HTTP 503"
+    }
+   },
+   "snapshot": "snapshots/c7-matrix/10-F10.html",
+   "quirks": [
+    "R-c"
+   ]
+  },
+  {
+   "id": "11-B1",
+   "name": "B1 broken JSON file",
+   "ledger": {},
+   "receipt_file": {
+    "raw": "{not json"
+   },
+   "snapshot": "snapshots/c7-matrix/11-B1.html"
+  },
+  {
+   "id": "12-B2",
+   "name": "B2 receipt is a list",
+   "ledger": {},
+   "receipt_file": {
+    "raw": "[1, 2]"
+   },
+   "snapshot": "snapshots/c7-matrix/12-B2.html"
+  },
+  {
+   "id": "13-B3",
+   "name": "B3 broken JSON beside settled 0.198",
+   "ledger": {
+    "state": "settled",
+    "spend": 0.198,
+    "cap_charge": 0.198
+   },
+   "receipt_file": {
+    "raw": "{not json"
+   },
+   "snapshot": "snapshots/c7-matrix/13-B3.html"
+  },
+  {
+   "id": "14-G1",
+   "name": "G1 fresh settled match chain-final",
+   "ledger": {
+    "state": "settled",
+    "spend": 0.05,
+    "cap_charge": 0.05
+   },
+   "receipt_file": {
+    "merge": {
+     "state": "settled",
+     "settled": 0.05,
+     "chain_final": true
+    }
+   },
+   "snapshot": "snapshots/c7-matrix/14-G1.html"
+  },
+  {
+   "id": "15-G2",
+   "name": "G2 fresh settled, ledger spend differs (disagree)",
+   "ledger": {
+    "state": "settled",
+    "spend": 0.05,
+    "cap_charge": 0.05
+   },
+   "receipt_file": {
+    "merge": {
+     "state": "settled",
+     "settled": 0.07,
+     "chain_final": true
+    }
+   },
+   "snapshot": "snapshots/c7-matrix/15-G2.html"
+  },
+  {
+   "id": "16-G3",
+   "name": "G3 fresh, receipt seat differs (identity)",
+   "ledger": {},
+   "receipt_file": {
+    "merge": {
+     "seat": "9999"
+    }
+   },
+   "snapshot": "snapshots/c7-matrix/16-G3.html"
+  },
+  {
+   "id": "17-G4",
+   "name": "G4 fresh, receipt did differs (identity)",
+   "ledger": {
+    "state": "settled",
+    "spend": 0.05,
+    "cap_charge": 0.05
+   },
+   "receipt_file": {
+    "merge": {
+     "did": "did:key:zOTHER",
+     "state": "settled",
+     "settled": 0.05,
+     "chain_final": true
+    }
+   },
+   "snapshot": "snapshots/c7-matrix/17-G4.html"
+  },
+  {
+   "id": "18-G5",
+   "name": "G5 fresh pending, gateway observed",
+   "ledger": {},
+   "receipt_file": {
+    "merge": {
+     "stage": "gateway observed"
+    }
+   },
+   "snapshot": "snapshots/c7-matrix/18-G5.html"
+  },
+  {
+   "id": "19-G6",
+   "name": "G6 key expired (401)",
+   "ledger": {},
+   "receipt_file": {
+    "merge": {
+     "http": 401,
+     "error": "api_key_expired",
+     "flag": "key_expired"
+    }
+   },
+   "snapshot": "snapshots/c7-matrix/19-G6.html",
+   "status": "known_defect",
+   "defect": "KD-1"
+  },
+  {
+   "id": "20-G7",
+   "name": "G7 timeout_unknown + fresh pending",
+   "ledger": {
+    "state": "timeout_unknown"
+   },
+   "receipt_file": {
+    "merge": {}
+   },
+   "snapshot": "snapshots/c7-matrix/20-G7.html"
+  },
+  {
+   "id": "21-G8",
+   "name": "G8 no receipt file",
+   "ledger": {},
+   "receipt_file": null,
+   "snapshot": "snapshots/c7-matrix/21-G8.html",
+   "quirks": [
+    "R-d"
+   ]
+  },
+  {
+   "id": "22-G9",
+   "name": "G9 refused_local",
+   "ledger": {
+    "state": "refused_local",
+    "cap_charge": 0,
+    "reason": "cap hit"
+   },
+   "receipt_file": null,
+   "snapshot": "snapshots/c7-matrix/22-G9.html"
+  },
+  {
+   "id": "23-G10",
+   "name": "G10 fresh settled, ledger still sent (disagree)",
+   "ledger": {},
+   "receipt_file": {
+    "merge": {
+     "state": "settled",
+     "settled": 0.05
+    }
+   },
+   "snapshot": "snapshots/c7-matrix/23-G10.html"
+  },
+  {
+   "id": "24-G11",
+   "name": "G11 fresh pending but chain_final true (disagree)",
+   "ledger": {},
+   "receipt_file": {
+    "merge": {
+     "chain_final": true
+    }
+   },
+   "snapshot": "snapshots/c7-matrix/24-G11.html"
+  }
+ ]
+}
