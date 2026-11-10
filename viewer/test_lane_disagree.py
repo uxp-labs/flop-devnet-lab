@@ -72,8 +72,9 @@ class DisagreeTests(unittest.TestCase):
             self.assertIn('<div class="flag">' + IDENTITY + '</div>', html)
             self.assertNotIn(DISAGREE, html)
             self.assertNotIn('class="chip c-green">chain final', html)
-            self.assertEqual(html.count('class="chip c-green"'), 1)
-            self.assertIn('class="chip c-green">linked', html)
+            # IMD 114b644c finding 2: no green chip at all on a mismatch row (the link chip used to be green).
+            self.assertEqual(html.count('class="chip c-green"'), 0)
+            self.assertNotIn('class="chip c-green">linked', html)
             self.assertIn('<span class="k">match</span> mismatch', html)
             self.assertNotIn("0.05", html)
             self.assertIn("0.186", html)
@@ -108,8 +109,9 @@ class DisagreeTests(unittest.TestCase):
         self.assertIn('class="chip c-red">mismatch</span>', html)
         self.assertIn('<div class="flag">' + IDENTITY + '</div>', html)
         self.assertNotIn(DISAGREE, html)
-        self.assertEqual(html.count('class="chip c-green"'), 1)
-        self.assertIn('class="chip c-green">linked', html)
+        # IMD 114b644c finding 2: no green chip at all on a mismatch row (the link chip used to be green).
+        self.assertEqual(html.count('class="chip c-green"'), 0)
+        self.assertNotIn('class="chip c-green">linked', html)
         self.assertIn("0.186", html)
         self.assertNotIn("0.05", html)
 

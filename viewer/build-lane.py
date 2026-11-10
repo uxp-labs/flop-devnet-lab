@@ -17,78 +17,140 @@ ET = ZoneInfo("America/New_York")
 
 def num(v): return BLANK if v is None else f'<span class="mono">{v}</span>'
 def r6(x): return float(f"{x:.6f}")
-def short(s, n=10): return s if len(s) <= n + 2 else s[:n] + "…"
+def esc(v): return html.escape("" if v is None else str(v), quote=True)
+def amount(v):
+    """A file value used as an amount: a finite int/float (not a bool), else None (blank, never 0)."""
+    if isinstance(v, bool) or not isinstance(v, (int, float)) or v != v or v in (float("inf"), float("-inf")): return None
+    return v
+def short(s, n=10):
+    """Head and tail of an id, so distinct random tails stay distinct. The full id goes in a title attribute."""
+    return s if len(s) <= n + 2 else s[:6] + "…" + s[-(n - 6):]
+def present(v): return isinstance(v, str) and v != ""
 def identity_ok(r, e):
-    rid = r.get("request_id")
-    return (isinstance(rid, str) and rid != "" and rid == e.get("request_id")
-            and r.get("job") == e["job"] and str(r.get("seat")) == str(e["seat"]) and r.get("did") == e["did"])
+    """Exact, uncoerced match on request_id, job, seat and DID, each a non-empty string on both sides (as match.ts)."""
+    return all(present(r.get(k)) and present(e.get(k)) and r.get(k) == e.get(k) for k in ("request_id", "job", "seat", "did"))
+def identity_diff(r, e): return [k for k in ("request_id", "job", "seat", "did") if not (present(r.get(k)) and present(e.get(k)) and r.get(k) == e.get(k))]
 def when(ts): return datetime.fromisoformat(ts.replace("Z", "+00:00")).astimezone(ET).strftime("%b %-d, %-I:%M %p ET")
+SETTLES = ("settled", "released")
+
+def unreadable(what, why):
+    """A red row for an item that could not be read, instead of aborting the whole rebuild."""
+    return dict(label=esc(what), sub=[esc(why)], payer="unknown", flags=["unreadable: not shown as OK"], spend_flags=[], flop=[["observed spend", None]],
+                est=None, per_call=None, daily_left=None, chips=[["red", "unreadable"]], outcome=["grey", "not read", None],
+                link=["grey", "not checked", None], bad=True)
+
+def read_ledger(led):
+    """One entry per attempt: the latest line per request_id wins (as imd-flop's ledger). Lines without a
+    request_id (local refusals) are each their own entry. Unreadable lines become unreadable rows."""
+    order, latest, bad = [], {}, []
+    with open(led) as fh:
+        for n, line in enumerate(fh, 1):
+            if not line.strip(): continue
+            try:
+                e = json.loads(line)
+                if not isinstance(e, dict): raise ValueError("not an object")
+            except ValueError as ex:
+                bad.append(unreadable(f"ledger line {n}", f"ledger.jsonl line {n}: {type(ex).__name__}")); continue
+            rid = e.get("request_id")
+            key = ("req", rid) if present(rid) else ("line", n)
+            if key not in latest: order.append(key)
+            latest[key] = e
+    return [latest[k] for k in order], bad
+
+def read_receipts():
+    receipts = {}
+    for f in glob.glob(os.path.join(RDIR, "*.json")):
+        try:
+            with open(f) as fh: r = json.load(fh)
+        except ValueError:
+            r = None
+        receipts[os.path.splitext(os.path.basename(f))[0]] = r if isinstance(r, dict) else {"_unreadable": True}
+    return receipts  # file name is the ledger's request_id; contents are checked by identity_ok
 
 def from_files():
     led = os.path.join(RDIR, "ledger.jsonl")
     if not os.path.exists(led): return []
-    last = {}
-    for line in open(led):
-        if line.strip():
-            e = json.loads(line); last[e["job"]] = e
-    receipts = {}
-    for f in glob.glob(os.path.join(RDIR, "*.json")):
-        r = json.load(open(f))
-        receipts[os.path.splitext(os.path.basename(f))[0]] = r  # file name is the ledger's request_id; contents are checked by identity_ok
-    rows = []
-    for job, e in last.items():
-        r = receipts.get(e.get("request_id"))
-        sub = [f"req {short(e['request_id'] or 'none', 14)}", f"seat #{e['seat']} · node {BLANK_NODE}",
-               f"{e['provider']} · {e['network']} · {when(e['ts'])}"]
-        row = dict(label=html.escape(job), sub=sub, payer=e.get("payer") or "holder", flags=[], spend_flags=[], flop=[],
-                   est=e.get("quote_padded"), per_call=e.get("per_call_cap"),
-                   outcome=["grey", "not read", "mock job, no imd lookup"], link=["green", "linked", None], bad=False)
-        if e.get("link_bypassed"): row["link"] = ["grey", "bypassed (mock)", None]
-        spent = (e.get("spent_before") or 0) + (e.get("cap_charge") or 0)
-        row["daily_left"] = r6(e["daily_cap"] - spent) if e.get("daily_cap") is not None else None
-        st = e["state"]
-        if st == "refused_local":
-            row.update(chips=None, bad=True); row["flop"] = [["", "refused before the call, no FLOP chips"]]
-            row["spend_flags"] = ["cap hit = stop", html.escape(e.get("reason") or "")]
-        elif r is None:
-            row["chips"] = [["grey", "sent"], ["red", "unknown"]]; row["bad"] = True
-            row["flop"] = [["last seen", "sent"], ["observed spend", None]]
-            row["flags"] = ["timeout: spend unknown, not retried" if st == "timeout_unknown" else html.escape(e.get("reason") or st)]
-        else:
-            chips = [["grey", "sent"]]
-            ok = identity_ok(r, e)
-            if not ok:
-                chips.append(["red", "mismatch"]); row["bad"] = True
-                row["flags"].append(IDENTITY)  # visible row text, not hover-only
-                row["flags"].append("receipt's request_id, job, seat or DID doesn't match this row")
-                row["flop"].append(["reservation", e.get("cap_charge") if e.get("cap_charge") is not None else e.get("quote_padded")])
-                row["flop"].append(["match", "mismatch"])
-                row["flop"].append(["observed spend", None])
-                row["chips"] = chips
-                rows.append(row)
-                continue
-            receipt_state = r.get("state")
-            disagree = receipt_state in ("settled", "released") and (st == "sent" or e.get("spend") != r.get("settled"))
-            if disagree:
-                chips = [["amber", DISAGREE]]
-                row["bad"] = True
-                row["flags"].append(DISAGREE)
-                row["flop"].append(["reservation", e.get("cap_charge") if e.get("cap_charge") is not None else e.get("quote_padded")])
-                row["flop"].append(["observed spend", None])
-                row["chips"] = chips
-                rows.append(row)
-                continue
-            if r.get("flag") == "key_expired":
-                chips.append(["red", "unknown"]); row["bad"] = True; row["flags"].append("key expired, can't re-check")
-            elif r.get("stage") == "gateway observed":
-                chips.append(["amber", "gateway observed"])
-            if ok and r.get("chain_final") and not row["bad"]: chips.append(["green", "chain final"])
-            row["chips"] = chips
-            if not r.get("chain_final"): row["flop"].append(["chain final", '<span class="unk">not checked yet</span>'])
-            row["flop"].append(["match", "matches" if ok else "mismatch"])
-            row["flop"].append(["observed spend", r.get("settled")])
-        rows.append(row)
+    entries, rows = read_ledger(led)
+    receipts = read_receipts()
+    for e in entries:
+        try:
+            rows.append(build_row(e, receipts.get(e.get("request_id")) if present(e.get("request_id")) else None))
+        except Exception as ex:  # one bad entry never aborts the lane
+            rows.append(unreadable(f"job {e.get('job')}", f"ledger entry for {e.get('request_id') or 'none'}: {type(ex).__name__}"))
     return rows
+
+def build_row(e, r):
+    rid = e.get("request_id")
+    rid_label = f'<span title="{esc(rid)}">{esc(short(rid, 14))}</span>' if present(rid) else "none"
+    sub = [f"req {rid_label}", f"seat #{esc(e.get('seat'))} · node {BLANK_NODE}",
+           f"{esc(e.get('provider'))} · {esc(e.get('network'))} · {esc(when(e['ts']))}"]
+    # Link column: no link evidence is recorded in the ledger, so it is never shown green here.
+    row = dict(label=esc(e.get("job")), sub=sub, payer=esc(e.get("payer") or "holder"), flags=[], spend_flags=[], flop=[],
+               est=amount(e.get("quote_padded")), per_call=amount(e.get("per_call_cap")),
+               outcome=["grey", "not read", "mock job, no imd lookup"], link=["grey", "not checked", None], bad=False)
+    if e.get("link_bypassed") is True: row["link"] = ["grey", "bypassed (mock)", None]
+    spent_before, cap_charge, daily = amount(e.get("spent_before")), amount(e.get("cap_charge")), amount(e.get("daily_cap"))
+    if e.get("daily_cap") is not None and daily is None: raise ValueError("daily_cap is not a number")
+    row["daily_left"] = r6(daily - spent_before - cap_charge) if None not in (daily, spent_before, cap_charge) else None
+    reservation = cap_charge if cap_charge is not None else amount(e.get("quote_padded"))
+    st = e.get("state")
+    unresolved = st in ("timeout_unknown", "error")
+    unresolved_flag = "timeout: spend unknown, not retried" if st == "timeout_unknown" else esc(e.get("reason") or st)
+    if st == "refused_local":
+        row.update(chips=None, bad=True); row["flop"] = [["", "refused before the call, no FLOP chips"]]
+        row["spend_flags"] = ["cap hit = stop", esc(e.get("reason") or "")]
+        return row
+    if r is None:
+        row["chips"] = [["grey", "sent"], ["red", "unknown"]]; row["bad"] = True
+        row["flop"] = [["last seen", "sent"], ["observed spend", None]]
+        row["flags"] = [unresolved_flag]
+        return row
+    if r.get("_unreadable"):
+        row["chips"] = [["grey", "sent"], ["red", "unreadable"]]; row["bad"] = True
+        row["flags"] = ["receipt file unreadable: not shown as OK"]
+        row["flop"] = [["reservation", reservation], ["observed spend", None]]
+        return row
+    chips = [["grey", "sent"]]
+    if not identity_ok(r, e):
+        chips.append(["red", "mismatch"]); row["bad"] = True
+        row["flags"].append(IDENTITY)  # visible row text, not hover-only
+        row["flags"].append("receipt's request_id, job, seat or DID doesn't match this row")
+        for k in identity_diff(r, e):
+            row["flop"].append([f"receipt {k}", f"{esc(r.get(k))} (row says {esc(e.get(k))})"])
+        row["flop"].append(["reservation", reservation])
+        row["flop"].append(["match", "mismatch"])
+        row["flop"].append(["observed spend", None])
+        if unresolved: chips.append(["red", "unknown"]); row["flags"].append(unresolved_flag)
+        row["chips"] = chips
+        return row
+    receipt_state, settled = r.get("state"), amount(r.get("settled"))
+    chain_final = r.get("chain_final") is True
+    if receipt_state in SETTLES:
+        # Green needs the ledger settled too, with a numeric settlement equal to the receipt's.
+        disagree = st not in SETTLES or settled is None or amount(e.get("spend")) != settled
+    else:
+        # Pending receipt: the ledger must not claim a settlement, and nothing is chain-final yet.
+        disagree = st in SETTLES or chain_final
+    disagree = disagree or unresolved
+    if disagree:
+        chips = [["amber", DISAGREE]] + ([["red", "unknown"]] if unresolved else [])
+        row["bad"] = True
+        row["flags"].append(DISAGREE)
+        if unresolved: row["flags"].append(unresolved_flag)
+        row["flop"].append(["reservation", reservation])
+        row["flop"].append(["observed spend", None])
+        row["chips"] = chips
+        return row
+    if r.get("flag") == "key_expired":
+        chips.append(["red", "unknown"]); row["bad"] = True; row["flags"].append("key expired, can't re-check")
+    elif r.get("stage") == "gateway observed":
+        chips.append(["amber", "gateway observed"])
+    if chain_final and not row["bad"]: chips.append(["green", "chain final"])
+    row["chips"] = chips
+    if not chain_final: row["flop"].append(["chain final", '<span class="unk">not checked yet</span>'])
+    row["flop"].append(["match", "matches"])
+    row["flop"].append(["observed spend", settled])
+    return row
 BLANK_NODE = '<span class="unk">unknown</span>'
 
 def render(row):

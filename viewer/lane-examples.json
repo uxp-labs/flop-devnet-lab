@@ -16,6 +16,6 @@
    "chips":null,"flop":[["","refused before the call, no FLOP chips"]],"flags":[],
    "est":"0.234","per_call":"0.25","daily_left":"0.10","spend_flags":["cap hit = stop"],"outcome":["grey","not read",null],"link":["green","linked",null],"bad":true},
   {"label":"Example mismatch","sub":["job ex-mismatch… · page link once real","seat #ex-6 · node unknown"],"payer":"holder",
-   "chips":[["grey","sent"],["red","mismatch"]],"flop":[["receipt job","ex-other… (row says ex-mismatch…)"],["observed spend",null]],"flags":["receipt doesn't match this row, never green"],
-   "est":"0.096","per_call":"0.25","daily_left":null,"spend_flags":[],"outcome":["grey","submitted",null],"link":["green","linked",null],"bad":true}
+   "chips":[["grey","sent"],["red","mismatch"]],"flop":[["receipt job","ex-other… (row says ex-mismatch…)"],["observed spend",null]],"flags":["receipt identity mismatch; chain-final green blocked","receipt's request_id, job, seat or DID doesn't match this row"],
+   "est":"0.096","per_call":"0.25","daily_left":null,"spend_flags":[],"outcome":["grey","submitted",null],"link":["grey","not checked",null],"bad":true}
  ]}
