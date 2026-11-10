@@ -285,8 +285,9 @@
       "where": "build-lane.py:139-141 (settled compare ignores the reservation and per-call cap)",
       "today": "a settlement above its reservation (quote_padded) or above the per-call cap renders green 'chain final' and 'matches'",
       "target": "amber 'disagree', reservation held (reservation line shown), chain-final green blocked",
-      "status": "fixed: [fix: KD-2]",
-      "open_question": "the reservation line shows cap_charge (the lane's one rule, cap_charge else quote_padded), which on these rows is the settled amount; FIXER to confirm or rule quote_padded"
+      "status": "fixed: [fix: KD-2], [fix: KD-2 follow-up]",
+      "fixed_behavior": "FIXER's form: own row kind over_limit after disagree; amber 'over the per-call cap' (settled > per_call_cap) else 'over the daily cap' (settled > quote_padded); reservation line 'reservation <cap_charge, else quote_padded> (held)' then a separate 'settled <amount>' line; never 'matches', no green",
+      "open_question": "FIXER's ruling cites 0.186 for the fixture, but the fixture's cap_charge is 0.2 / 1.5 (imd-flop books cap_charge = settled on a settled row), so the stated rule shows 0.2 / 1.5; the chip mapping for 'above the reservation' -> 'over the daily cap' is Anvil's reading. FIXER to confirm both"
     },
     {
       "id": "KD-3",

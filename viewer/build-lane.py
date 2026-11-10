@@ -95,17 +95,22 @@ def from_files():
 
 def unresolved(e): return e.get("state") in ("timeout_unknown", "error")
 
-def over_limit(e, settled):
-    """A settlement above the row's reservation (quote_padded) or its per-call cap can't be green (KD-2)."""
-    return any(lim is not None and settled > lim for lim in (amount(e.get("quote_padded")), amount(e.get("per_call_cap"))))
+def over_limit(e, r):
+    """Which limit a settlement breaks, or None (KD-2). Above the per-call cap first; above the reservation
+    (quote_padded, the amount the daily cap was charged) reads as over the daily cap."""
+    settled = amount(r.get("settled"))
+    if settled is None or r.get("state") not in SETTLES: return None
+    per_call, quote = amount(e.get("per_call_cap")), amount(e.get("quote_padded"))
+    if per_call is not None and settled > per_call: return "over the per-call cap"
+    if quote is not None and settled > quote: return "over the daily cap"
+    return None
 
 def disagrees(e, r):
     """Receipt and ledger can't both be right. Only asked once the receipt was read and its identity matches."""
     st, receipt_state, settled = e.get("state"), r.get("state"), amount(r.get("settled"))
     if receipt_state in SETTLES:
-        # Green needs the ledger settled too, with a numeric settlement equal to the receipt's and within the
-        # reservation and the per-call cap.
-        d = st not in SETTLES or settled is None or amount(e.get("spend")) != settled or over_limit(e, settled)
+        # Green needs the ledger settled too, with a numeric settlement equal to the receipt's.
+        d = st not in SETTLES or settled is None or amount(e.get("spend")) != settled
     else:
         # Pending receipt: the ledger must not claim a settlement, and nothing is chain-final yet.
         d = st in SETTLES or r.get("chain_final") is True
@@ -114,7 +119,7 @@ def disagrees(e, r):
 def classify(e, r):
     """The one ordered decision for a ledger row e and its receipt file r (None if there is no file).
     First match wins: refused, no receipt, unreadable file, key expired, failed read, identity mismatch,
-    disagree, matches. Rendering per kind is in ROW_KINDS."""
+    disagree, over limit, matches. Rendering per kind is in ROW_KINDS."""
     if e.get("state") == "refused_local": return "refused"
     if r is None: return "no_receipt"
     if r.get("_unreadable"): return "unreadable"
@@ -125,6 +130,7 @@ def classify(e, r):
     if r.get("http") not in (None, 200) or present(r.get("error")): return "read_failed"
     if not identity_ok(r, e): return "mismatch"
     if disagrees(e, r): return "disagree"
+    if over_limit(e, r): return "over_limit"
     return "matches"
 
 def unresolved_flag(e):
@@ -179,6 +185,11 @@ def row_disagree(row, e, r, reservation):
     row["flop"].append(["reservation", reservation])
     row["flop"].append(["observed spend", None])
 
+def row_over_limit(row, e, r, reservation):
+    # Receipt and ledger agree, but the settlement breaks a limit: amber, the hold stays, never green (KD-2).
+    row["chips"] = [["amber", over_limit(e, r)]]; row["bad"] = True
+    row["flop"] += [["reservation", reservation], ["settled", amount(r.get("settled"))]]
+
 def row_matches(row, e, r, reservation):
     chain_final = r.get("chain_final") is True
     chips = [["grey", "sent"]]
@@ -193,7 +204,7 @@ def row_matches(row, e, r, reservation):
     row["flop"].append(["observed spend", amount(r.get("settled"))])
 
 ROW_KINDS = {"refused": row_refused, "no_receipt": row_no_receipt, "unreadable": row_unreadable, "read_failed": row_read_failed,
-             "mismatch": row_mismatch, "disagree": row_disagree, "matches": row_matches,
+             "mismatch": row_mismatch, "disagree": row_disagree, "over_limit": row_over_limit, "matches": row_matches,
              "key_expired": lambda row, e, r, reservation: row_read_failed(row, e, r, reservation, flag="key expired, can't re-check")}
 
 def build_row(e, r):

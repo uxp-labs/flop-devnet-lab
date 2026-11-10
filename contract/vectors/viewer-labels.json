@@ -1019,7 +1019,7 @@
      "chips": [
       [
        "amber",
-       "DISAGREE"
+       "over the daily cap"
       ]
      ],
      "reservation": 0.2,
@@ -1032,7 +1032,7 @@
      ]
     }
    },
-   "note": "[fix: KD-2] a settlement above the reservation (quote_padded) or the per-call cap is amber DISAGREE, chain-final green blocked, never 'matches'; was (known_defect) grey sent + green chain final, matches. Reservation line shows the ledger's cap_charge 0.2 (the lane's one reservation rule: cap_charge, else quote_padded); the step 1b target said quote_padded 0.186 - open question for FIXER.",
+   "note": "[fix: KD-2] + [fix: KD-2 follow-up] FIXER's form: amber 'over the daily cap', reservation line 'reservation <cap_charge> (held)' then a separate 'settled <amount>' line, chain-final green blocked, never 'matches'. was (known_defect) grey sent + green chain final, matches. FIXER's ruling says 0.186 for this fixture; its cap_charge is 0.2, so the stated rule (cap_charge, else quote_padded) gives that - open question.",
    "status": "fixed",
    "defect": "KD-2",
    "label_rules": [
@@ -1083,7 +1083,7 @@
      "chips": [
       [
        "amber",
-       "DISAGREE"
+       "over the per-call cap"
       ]
      ],
      "reservation": 1.5,
@@ -1096,7 +1096,7 @@
      ]
     }
    },
-   "note": "[fix: KD-2] a settlement above the reservation (quote_padded) or the per-call cap is amber DISAGREE, chain-final green blocked, never 'matches'; was (known_defect) grey sent + green chain final, matches. Reservation line shows the ledger's cap_charge 1.5 (the lane's one reservation rule: cap_charge, else quote_padded); the step 1b target said quote_padded 0.186 - open question for FIXER.",
+   "note": "[fix: KD-2] + [fix: KD-2 follow-up] FIXER's form: amber 'over the per-call cap', reservation line 'reservation <cap_charge> (held)' then a separate 'settled <amount>' line, chain-final green blocked, never 'matches'. was (known_defect) grey sent + green chain final, matches. FIXER's ruling says 0.186 for this fixture; its cap_charge is 1.5, so the stated rule (cap_charge, else quote_padded) gives that - open question.",
    "status": "fixed",
    "defect": "KD-2",
    "label_rules": [
