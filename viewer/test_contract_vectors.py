@@ -62,6 +62,9 @@ class ContractVectors(unittest.TestCase):
         cv.vectors()
         self.assertEqual(cv.unreferenced_quirks(), [])
 
+    def test_every_fixer_label_rule_is_referenced_by_a_vector(self):
+        self.assertEqual(cv.unreferenced_label_rules(), [])
+
     def test_vectors(self):
         applicable, skipped = cv.for_part(PART)
         self.assertGreater(len(applicable), 0)

@@ -1,6 +1,6 @@
 {
  "file": "viewer-labels.json",
- "description": "Viewer lane labels for one ledger row and its receipt file (FIXER rules V-PRECEDENCE, V-FAILED-READ, V-UNKNOWN-SETTLED, V-LINK-GREY, plus known defects KD-1/KD-2). receipt: an object, a raw string (written as is) or null (no file). Chip text \"DISAGREE\" stands for rules.constants.DISAGREE. reservation: the value on the row's 'reservation' line, or \"absent\". greens: every c-green chip in the row. Vectors with status known_defect assert today's output in expect; target is not asserted.",
+ "description": "Viewer lane labels for one ledger row and its receipt file (FIXER rules V-PRECEDENCE, V-FAILED-READ, V-UNKNOWN-SETTLED, V-LINK-GREY, plus known defects KD-1/KD-2). receipt: an object, a raw string (written as is) or null (no file). Chip text \"DISAGREE\" stands for rules.constants.DISAGREE. reservation: the value on the row's 'reservation' line, or \"absent\". greens: every c-green chip in the row. label_rules names the FIXER rules (rules.json viewer_label_rules) a vector pins; on a known_defect vector they are the rules its target follows and today's output breaks. Vectors with status known_defect assert today's output in expect; target is not asserted.",
  "status": "current behavior at 3ae1cdf",
  "vectors": [
   {
@@ -54,7 +54,9 @@
      ]
     }
    },
-   "note": "FIXER rules: V-PRECEDENCE"
+   "label_rules": [
+    "V-PRECEDENCE"
+   ]
   },
   {
    "id": "label-failed-read",
@@ -117,7 +119,10 @@
      ]
     }
    },
-   "note": "FIXER rules: V-PRECEDENCE, V-FAILED-READ"
+   "label_rules": [
+    "V-PRECEDENCE",
+    "V-FAILED-READ"
+   ]
   },
   {
    "id": "label-failed-read-before-identity",
@@ -183,7 +188,9 @@
    "quirks": [
     "R-c"
    ],
-   "note": "FIXER rules: V-PRECEDENCE"
+   "label_rules": [
+    "V-PRECEDENCE"
+   ]
   },
   {
    "id": "label-identity-before-disagree",
@@ -246,7 +253,9 @@
      ]
     }
    },
-   "note": "FIXER rules: V-PRECEDENCE"
+   "label_rules": [
+    "V-PRECEDENCE"
+   ]
   },
   {
    "id": "label-disagree",
@@ -305,7 +314,9 @@
      ]
     }
    },
-   "note": "FIXER rules: V-PRECEDENCE"
+   "label_rules": [
+    "V-PRECEDENCE"
+   ]
   },
   {
    "id": "label-identity-with-timeout-adds-unknown",
@@ -375,7 +386,9 @@
    "quirks": [
     "Q-SECONDARY-UNKNOWN"
    ],
-   "note": "FIXER rules: V-PRECEDENCE"
+   "label_rules": [
+    "V-PRECEDENCE"
+   ]
   },
   {
    "id": "label-failed-read-beside-ledger-settled",
@@ -438,7 +451,10 @@
      ]
     }
    },
-   "note": "FIXER rules: V-FAILED-READ, V-UNKNOWN-SETTLED"
+   "label_rules": [
+    "V-FAILED-READ",
+    "V-UNKNOWN-SETTLED"
+   ]
   },
   {
    "id": "label-judge-case2-settled-503-chain-final",
@@ -501,7 +517,10 @@
      ]
     }
    },
-   "note": "FIXER rules: V-FAILED-READ, V-UNKNOWN-SETTLED"
+   "label_rules": [
+    "V-FAILED-READ",
+    "V-UNKNOWN-SETTLED"
+   ]
   },
   {
    "id": "label-failed-read-cap-charge-null-uses-quote",
@@ -564,7 +583,9 @@
      ]
     }
    },
-   "note": "FIXER rules: V-FAILED-READ"
+   "label_rules": [
+    "V-FAILED-READ"
+   ]
   },
   {
    "id": "label-no-receipt-file",
@@ -620,7 +641,9 @@
    "quirks": [
     "R-d"
    ],
-   "note": "FIXER rules: V-PRECEDENCE"
+   "label_rules": [
+    "V-PRECEDENCE"
+   ]
   },
   {
    "id": "label-green-row-link-still-grey",
@@ -685,7 +708,9 @@
      ]
     }
    },
-   "note": "FIXER rules: V-LINK-GREY"
+   "label_rules": [
+    "V-LINK-GREY"
+   ]
   },
   {
    "id": "label-ledger-link-bypassed",
@@ -754,7 +779,9 @@
    "quirks": [
     "Q-LINK-BYPASS-TEXT"
    ],
-   "note": "FIXER rules: V-LINK-GREY"
+   "label_rules": [
+    "V-LINK-GREY"
+   ]
   },
   {
    "id": "label-kd1-key-expired-shows-matches",
@@ -842,7 +869,10 @@
       null
      ]
     }
-   }
+   },
+   "label_rules": [
+    "V-FAILED-READ"
+   ]
   },
   {
    "id": "label-kd1-key-expired-beside-ledger-settled",
@@ -930,7 +960,11 @@
       null
      ]
     }
-   }
+   },
+   "label_rules": [
+    "V-FAILED-READ",
+    "V-UNKNOWN-SETTLED"
+   ]
   },
   {
    "id": "label-kd2-settled-above-reservation",
@@ -1015,7 +1049,10 @@
       null
      ]
     }
-   }
+   },
+   "label_rules": [
+    "V-PRECEDENCE"
+   ]
   },
   {
    "id": "label-kd2-settled-above-per-call-cap",
@@ -1100,7 +1137,10 @@
       null
      ]
     }
-   }
+   },
+   "label_rules": [
+    "V-PRECEDENCE"
+   ]
   }
  ]
 }

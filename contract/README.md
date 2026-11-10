@@ -26,6 +26,8 @@ This folder holds data and its format only; the loaders are test code outside it
 - `rule` selects the adapter in each part's test (one adapter per rule per part).
 - `{"$float": "nan" | "inf" | "-inf"}` stands for a non-finite float.
 - `quirks` link to `rules.json` quirks. Every quirk there must be pinned by at least one vector.
+- `label_rules` (optional) lists FIXER viewer rule ids from `rules.json` `viewer_label_rules`. Every rule
+  id must be named by at least one vector; on a known_defect vector they are the rules its target follows.
 - `status: "known_defect"` (with `defect` and `target`): `expect` is today's exact output and is
   asserted; `target` is the agreed label and is **not** asserted. The step that fixes the defect moves
   `target` into `expect` and removes the status. See `rules.json` `vector_status` and `known_defects`.

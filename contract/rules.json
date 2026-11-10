@@ -268,7 +268,8 @@
         "id": "V-LINK-GREY",
         "text": "The link column stays grey 'not checked' and never turns green from ledger data alone."
       }
-    ]
+    ],
+    "referenced_by": "Vectors name these ids in label_rules. Every id must be referenced by at least one vector; both loaders reject an unknown id."
   },
   "vector_status": {
     "default": "A vector without a status pins current behavior: each part asserts `expect`.",

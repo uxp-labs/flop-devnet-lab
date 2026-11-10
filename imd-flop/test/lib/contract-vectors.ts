@@ -8,7 +8,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 export type Json = any; // eslint-disable-line @typescript-eslint/no-explicit-any
-export interface Vector { id: string; rule: string; input: Json; expect: Record<string, Json>; status?: string; defect?: string; target?: Record<string, Json>; quirks?: string[]; file: string }
+export interface Vector { id: string; rule: string; input: Json; expect: Record<string, Json>; status?: string; defect?: string; target?: Record<string, Json>; quirks?: string[]; label_rules?: string[]; file: string }
 
 export const PARTS = ["imd-flop", "spend-guard", "viewer"] as const;
 export const CONTRACT = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..", "contract");
@@ -33,6 +33,7 @@ export const rules: Json = JSON.parse(readFileSync(join(CONTRACT, "rules.json"),
 function load(): Vector[] {
   const quirkIds = new Set((rules.quirks as Json[]).map((q) => q.id));
   const defectIds = new Set((rules.known_defects as Json[]).map((d) => d.id));
+  const labelRuleIds = new Set((rules.viewer_label_rules.rules as Json[]).map((r) => r.id));
   const seen = new Set<string>();
   const out: Vector[] = [];
   for (const f of readdirSync(join(CONTRACT, "vectors")).filter((n) => n.endsWith(".json")).sort()) {
@@ -50,6 +51,8 @@ function load(): Vector[] {
       if ("status" in v && (v.status !== "known_defect" || !defectIds.has(v.defect) || !isObject(v.target) || Object.keys(v.target!).length === 0))
         throw new Error(`${where}: status must be known_defect with a known defect id and a target`);
       for (const q of v.quirks ?? []) if (!quirkIds.has(q)) throw new Error(`${where}: unknown quirk ${q}`);
+      const lr = v.label_rules ?? [];
+      if (!Array.isArray(lr) || lr.some((x) => !labelRuleIds.has(x))) throw new Error(`${where}: label_rules must list ids from rules.json viewer_label_rules`);
       out.push({ ...v, file: f });
     }
   }
@@ -63,6 +66,12 @@ export const vectors: Vector[] = load();
 export const unreferencedQuirks = (): string[] => {
   const used = new Set(vectors.flatMap((v) => v.quirks ?? []));
   return (rules.quirks as Json[]).map((q) => q.id as string).filter((q) => !used.has(q)).sort();
+};
+
+/** FIXER viewer label rule ids in rules.json that no vector names in label_rules. */
+export const unreferencedLabelRules = (): string[] => {
+  const used = new Set(vectors.flatMap((v) => v.label_rules ?? []));
+  return (rules.viewer_label_rules.rules as Json[]).map((r) => r.id as string).filter((r) => !used.has(r)).sort();
 };
 
 /** Vectors with an expectation for `part` (the rest carry a not_applicable reason, checked at load). */

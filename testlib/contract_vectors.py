@@ -37,6 +37,7 @@ def vectors():
     """All vectors, schema-checked. Raises ValueError on a malformed file."""
     quirk_ids = {q["id"] for q in rules()["quirks"]}
     defect_ids = {d["id"] for d in rules()["known_defects"]}
+    label_rule_ids = {r["id"] for r in rules()["viewer_label_rules"]["rules"]}
     out, seen = [], set()
     for f in vector_files():
         doc = json.loads(f.read_text())
@@ -61,6 +62,9 @@ def vectors():
             for q in v.get("quirks", []):
                 if q not in quirk_ids:
                     raise ValueError(f"{f.name}:{vid}: unknown quirk {q}")
+            lr = v.get("label_rules", [])
+            if not isinstance(lr, list) or any(x not in label_rule_ids for x in lr):
+                raise ValueError(f"{f.name}:{vid}: label_rules must list ids from rules.json viewer_label_rules")
             out.append(dict(v, file=f.name))
     return out
 
@@ -69,6 +73,12 @@ def unreferenced_quirks():
     """Quirk ids in rules.json that no vector pins."""
     used = {q for v in vectors() for q in v.get("quirks", [])}
     return sorted({q["id"] for q in rules()["quirks"]} - used)
+
+
+def unreferenced_label_rules():
+    """FIXER viewer label rule ids in rules.json that no vector names in label_rules."""
+    used = {r for v in vectors() for r in v.get("label_rules", [])}
+    return sorted({r["id"] for r in rules()["viewer_label_rules"]["rules"]} - used)
 
 
 def for_part(part):

@@ -17,7 +17,7 @@ import type { CompleteReq, CompleteRes, Provider } from "../src/providers.js";
 import { classifyReceipt, knownSettledSpend, RECEIPT_STATES, STAGE_GATEWAY, type GatewayReceipt } from "../src/receipts.js";
 import { padQuote, TEMPLATE_PAD } from "../src/run.js";
 import { cli, readLines, readySeat, tmpHome } from "./helpers.js";
-import { decode, forPart, rules, unreferencedQuirks, vectors, type Json } from "./lib/contract-vectors.js";
+import { decode, forPart, rules, unreferencedLabelRules, unreferencedQuirks, vectors, type Json } from "./lib/contract-vectors.js";
 
 const PART = "imd-flop";
 const applicable = forPart(PART);
@@ -144,6 +144,9 @@ describe("contract files", () => {
     // lib/contract-vectors.ts throws on load for any malformed vector; here every quirk must also be pinned.
     expect(vectors.length).toBeGreaterThan(0);
     expect(unreferencedQuirks()).toEqual([]);
+  });
+  it("every FIXER viewer label rule id is referenced by a vector's label_rules", () => {
+    expect(unreferencedLabelRules()).toEqual([]);
   });
   it("constants match imd-flop's source", () => {
     const c = rules.constants;
