@@ -112,9 +112,9 @@ class GuardEntrypointTests(unittest.TestCase):
         else:
             self.assertEqual(counts.get("urls", []), [])
 
-    def run_case(self, body, cap="1", extra_args=None):
+    def run_case(self, body, cap="1", extra_args=None, urlopen=1):
         proc, ledger_text, counts = run_guard(body, cap, extra_args)
-        self.tally(counts, 1)
+        self.tally(counts, urlopen)
         self.assertEqual(proc.returncode, 0, proc.stderr)
         stdout = strict_load(proc.stdout)
         self.assertTrue(ledger_text.endswith("\n") and ledger_text.count("\n") == 1)
@@ -220,17 +220,19 @@ class GuardEntrypointTests(unittest.TestCase):
         rec = self.run_case([{"estimated_cost_flop": 0.066}])
         self.assert_refused(rec, None, None, 1.0)
 
+    # IMD 355a3703 info #11: a cap or max-tokens that can never send is refused before the estimate,
+    # so these four cases now expect no estimate request and no quote in the row.
     def test_nan_cap_refuses_strict_json(self):
-        rec = self.run_case({"estimated_cost_flop": 0.066, "estimated_input_tokens": 3, "estimated_output_tokens": 8}, "nan")
-        self.assert_refused(rec, 0.066, 0.186, None)
+        rec = self.run_case({"estimated_cost_flop": 0.066, "estimated_input_tokens": 3, "estimated_output_tokens": 8}, "nan", urlopen=0)
+        self.assert_refused(rec, None, None, None)
 
     def test_inf_cap_refuses_strict_json(self):
-        rec = self.run_case({"estimated_cost_flop": 0.066, "estimated_input_tokens": 3, "estimated_output_tokens": 8}, "inf")
-        self.assert_refused(rec, 0.066, 0.186, None)
+        rec = self.run_case({"estimated_cost_flop": 0.066, "estimated_input_tokens": 3, "estimated_output_tokens": 8}, "inf", urlopen=0)
+        self.assert_refused(rec, None, None, None)
 
     def test_negative_cap_refuses(self):
-        rec = self.run_case({"estimated_cost_flop": 0.066, "estimated_input_tokens": 3, "estimated_output_tokens": 8}, "-1")
-        self.assert_refused(rec, 0.066, 0.186, -1.0)
+        rec = self.run_case({"estimated_cost_flop": 0.066, "estimated_input_tokens": 3, "estimated_output_tokens": 8}, "-1", urlopen=0)
+        self.assert_refused(rec, None, None, -1.0)
 
     def test_empty_string_cost_refuses(self):
         rec = self.run_case({"estimated_cost_flop": "", "estimated_input_tokens": 3, "estimated_output_tokens": 8})
@@ -240,9 +242,10 @@ class GuardEntrypointTests(unittest.TestCase):
         rec = self.run_case(
             {"estimated_cost_flop": 0.066, "estimated_input_tokens": 3, "estimated_output_tokens": 8},
             extra_args=["--user", "Hi", "--max-tokens", "-1", "--cap", "1"],
+            urlopen=0,
         )
         self.assertEqual(rec["max_tokens"], -1)
-        self.assert_refused(rec, 0.066, 0.186, 1.0)
+        self.assert_refused(rec, None, None, 1.0)
 
     def test_cli_max_tokens_zero_follows_the_quote(self):
         # Zero is not given a separate refusal. A valid quote can still would_send.

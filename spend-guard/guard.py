@@ -84,10 +84,16 @@ def main():
     ap.add_argument("--cap", type=cap_arg, required=True)
     a = ap.parse_args()
     prompt = (a.system + "\n" if a.system else "") + a.user
-    try:
-        e = estimate(a.model, prompt, a.max_tokens)
-    except Exception as ex:  # fail closed: no quote, no send
-        e = {"error": str(ex)}
+    cap = json_number(a.cap)
+    # A negative max-tokens or a cap that is not a finite amount above 0 can never send, whatever the
+    # quote says. Refuse before the estimate so the prompt does not leave the machine for nothing.
+    if a.max_tokens < 0 or cap is None or cap <= 0:
+        e = None
+    else:
+        try:
+            e = estimate(a.model, prompt, a.max_tokens)
+        except Exception as ex:  # fail closed: no quote, no send
+            e = {"error": str(ex)}
     if not isinstance(e, dict):
         e = {}
     raw = json_number(e.get("estimated_cost_flop"))
@@ -120,7 +126,6 @@ def main():
     except (OverflowError, ValueError, ArithmeticError):
         padded = None
         unrounded = None
-    cap = json_number(a.cap)
     # Exact check too: float(raw) can round an integer quote above 2**53 down to the cap.
     try:
         raw_within_cap = raw is not None and cap is not None and Fraction(raw) <= Fraction(cap)
