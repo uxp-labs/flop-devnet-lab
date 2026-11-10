@@ -5,12 +5,12 @@ import { sha256 } from "@noble/hashes/sha2.js";
 import { CliError, EXIT } from "./errors.js";
 import { loadConfig } from "./config.js";
 import { linkFile, receiptsDir, responsesDir } from "./paths.js";
-import { redactFlagged } from "./secrets.js";
+import { redactFlagged, scanForSecrets } from "./secrets.js";
 import { readJson, writeJsonSafe } from "./store.js";
 import { loadSigner, readIdentity, revokedDids } from "./keys.js";
 import { verifyLink, type LinkFile } from "./link.js";
 import { DEFAULT_MODEL, network, SEAT_COLLECTION } from "./networks.js";
-import { appendLedger, jobSpent, spentToday, UnusableLedgerCharge, utcDay, withLedgerLock, type LedgerEntry } from "./ledger.js";
+import { appendLedger, jobSpent, LedgerLockError, spentToday, UnusableLedgerCharge, utcDay, withLedgerLock, type LedgerEntry } from "./ledger.js";
 import { classifyReceipt, knownSettledSpend, type Classified } from "./receipts.js";
 import type { Provider } from "./providers.js";
 import { assertPaidNetwork, checkImdJob, PreSendError, readVerifiedSeatOwner, type Fetch } from "./gateway.js";
@@ -46,7 +46,7 @@ export interface RunResult {
   response_file: string;
   /** Completion text that was stored. Null when the response-file secret scan withheld it. */
   text: string | null;
-  /** Present only when `text` was withheld. Same string as the response file. */
+  /** Present only when a field of the response record was withheld by the secret scan. Same string as the response file. */
   withheld?: string;
   link_bypassed: boolean;
 }
@@ -117,6 +117,8 @@ export async function runJob(h: string, provider: Provider, o: RunOpts, deps: { 
   const job = (o.job ?? "").trim();
   if (!job) throw new CliError("--job <imd job id> is required: FLOP calls only serve real IMD jobs (rule 4)", EXIT.REFUSED_RULE);
   if (!/^[\x21-\x7e]{1,120}$/.test(job)) throw new CliError("--job must be 1-120 printable characters", EXIT.USAGE);
+  // Every ledger row carries the job id, so a key-shaped id could never be recorded. Refuse it up front.
+  if (scanForSecrets({ job }).length > 0) throw new CliError("--job looks key-shaped (for example 64+ hex characters) and cannot be written to the ledger; use a different job id", EXIT.USAGE);
 
   const prompt = o.promptFile ? readFileSync(o.promptFile, "utf8") : o.prompt;
   if (!prompt || prompt.trim().length === 0) throw new CliError("--prompt or --prompt-file is required", EXIT.USAGE);
@@ -146,9 +148,13 @@ export async function runJob(h: string, provider: Provider, o: RunOpts, deps: { 
   }
   const signer = loadSigner(h, seat); // also proves the key file is 0600 and matches identity.json
 
-  // Required cap.
+  // Required cap. A cap object without finite positive numbers (perCall <= daily) is no cap: fail closed.
   const cap = cfg.caps[seat];
   if (!cap) throw new CliError(`no daily cap for seat ${seat}: FLOP stays off. Set one with \`imd-flop cap set <FLOP/day>\``, EXIT.REFUSED_CAP);
+  const posFinite = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v) && v > 0;
+  if (!posFinite(cap.daily) || !posFinite(cap.perCall) || cap.perCall > cap.daily) {
+    throw new CliError(`cap for seat ${seat} is malformed (daily and perCall must be positive numbers, perCall <= daily): FLOP stays off. Set it again with \`imd-flop cap set <FLOP/day>\``, EXIT.REFUSED_CAP);
+  }
 
   if (cfg.payer === "requester" && !(typeof o.jobBudget === "number" && o.jobBudget > 0)) {
     throw new CliError("payer is requester: pass --job-budget <FLOP> (the requester's budget for this job)", EXIT.REFUSED_CAP);
@@ -194,10 +200,12 @@ export async function runJob(h: string, provider: Provider, o: RunOpts, deps: { 
   if (!q) return refuse("estimate returned no usable cost", EXIT.ESTIMATE_FAILED, { raw: null, padded: null }, null);
 
   const requestId = `${provider.name === "mock" ? "mock" : "imdflop"}-${seat}-${bytesToHex(randomBytes(8))}`;
-  const sent: LedgerEntry = withLedgerLock(h, () => {
+  const lockedCheck = (): LedgerEntry => {
+    // The UTC day is read once, inside the lock, and used for both the cap check and the rows.
+    const day = utcDay();
     let spentBefore: number;
     try {
-      spentBefore = cfg.payer === "holder" ? spentToday(h, seat, provider.name) : jobSpent(h, job, provider.name);
+      spentBefore = cfg.payer === "holder" ? spentToday(h, seat, provider.name, day) : jobSpent(h, job, provider.name);
     } catch (e) {
       if (e instanceof UnusableLedgerCharge) refuse(e.message, EXIT.REFUSED_CAP, q, null);
       throw e;
@@ -211,10 +219,18 @@ export async function runJob(h: string, provider: Provider, o: RunOpts, deps: { 
       const left = Math.round((o.jobBudget! - spentBefore) * 1e6) / 1e6;
       if (q.padded > left) refuse(`padded quote ${q.padded} FLOP is over this job's remaining requester budget ${left}`, EXIT.REFUSED_CAP, q, spentBefore);
     }
-    const row: LedgerEntry = { ...base, request_id: requestId, quote_raw: q.raw, quote_padded: q.padded, spent_before: spentBefore, state: "sent", reason: null, spend: null, cost_reported: null, cap_charge: q.padded, http: null };
+    const row: LedgerEntry = { ...base, day, request_id: requestId, quote_raw: q.raw, quote_padded: q.padded, spent_before: spentBefore, state: "sent", reason: null, spend: null, cost_reported: null, cap_charge: q.padded, http: null };
     appendLedger(h, row); // written before the call so a crash still leaves the attempt on the books. A later refused_local line wins if the provider refuses before mint.
     return row;
-  });
+  };
+  let sent: LedgerEntry;
+  try {
+    sent = withLedgerLock(h, lockedCheck);
+  } catch (e) {
+    // The lock was never taken, so no cap check ran and nothing was sent.
+    if (e instanceof LedgerLockError) throw new CliError(`refused locally, nothing sent: ${e.message}`, EXIT.REFUSED_CAP);
+    throw e;
+  }
 
   // A ref'd timer (AbortSignal.timeout is unref'd and would let the process exit mid-call).
   const ac = new AbortController();
@@ -250,11 +266,22 @@ export async function runJob(h: string, provider: Provider, o: RunOpts, deps: { 
   try {
     writeJsonSafe(responseFile, storedResponse, "response");
   } catch (e) {
+    // Null only the flagged fields. The text is withheld only when the text itself was flagged.
     withheld = (e as Error).message;
-    text = null;
-    const redacted = redactFlagged({ ...responseRecord, text: null, withheld });
-    storedResponse = redacted.copy;
-    writeJsonSafe(responseFile, storedResponse, "response");
+    const redacted = redactFlagged(responseRecord);
+    const copy = redacted.copy as typeof responseRecord & { text: string | null };
+    if (copy.text === null) text = null;
+    storedResponse = { ...copy, withheld };
+    try {
+      if (redacted.residual.length > 0) throw new Error("redaction left a finding");
+      writeJsonSafe(responseFile, storedResponse, "response");
+    } catch {
+      // Fail safe: never lose the attempt. Keep the record, drop the gateway-supplied parts.
+      text = null;
+      withheld = "secret scan blocked writing response; text and usage withheld";
+      storedResponse = { ...responseRecord, usage: null, text: null, withheld };
+      writeJsonSafe(responseFile, storedResponse, "response");
+    }
   }
 
   const rr = await provider.readReceipt(requestId);
@@ -276,9 +303,10 @@ export async function runJob(h: string, provider: Provider, o: RunOpts, deps: { 
     const redacted = redactFlagged(receiptBody);
     receiptBody = redacted.copy;
     writeJsonSafe(join(receiptsDir(h), `${requestId}.json`), receiptBody, "receipt");
-    const cleaned = receiptBody as { error?: string | null; settled_raw?: string | null };
-    receipt0.error = cleaned.error ?? null;
-    receipt0.settled_raw = cleaned.settled_raw ?? null;
+    // stdout shows what was stored: every redacted field, not only error and settled_raw.
+    const cleaned = receiptBody as Record<string, unknown>;
+    const r0 = receipt0 as unknown as Record<string, unknown>;
+    for (const k of Object.keys(r0)) if (k in cleaned) r0[k] = cleaned[k] ?? null;
   }
 
   const usage = res.usage;

@@ -46,6 +46,10 @@ export function knownSettledSpend(value: unknown): number | null {
   return typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : null;
 }
 
+/** Receipt states the gateway documents. Anything else (including a key-shaped string) is unknown: null. */
+export const RECEIPT_STATES = new Set(["reserved", "estimated", "settled", "released"]);
+const knownState = (v: unknown): string | null => (typeof v === "string" && RECEIPT_STATES.has(v) ? v : null);
+
 export function classifyReceipt(
   r: GatewayReceipt | null,
   ctx: { job: string | null; provider: string; http?: number; error?: string | null; requestId?: string; chainVerified?: boolean; mock?: boolean },
@@ -56,7 +60,7 @@ export function classifyReceipt(
     correlation_id: r?.correlation_id ?? null,
     job: ctx.job,
     provider: ctx.provider,
-    state: r?.state ?? null,
+    state: knownState(r?.state),
     reserved: typeof r?.reserved_spend === "number" ? r.reserved_spend : null,
     settled: knownSettledSpend(r?.settled_spend),
     settled_raw: r?.settled_spend_raw ?? null,

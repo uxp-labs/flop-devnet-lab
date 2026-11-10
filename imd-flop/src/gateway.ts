@@ -42,15 +42,27 @@ export async function postEstimate(net: NetworkInfo, body: { model: string; prom
 
 /** POST /keys/ephemeral: single-use child key capped at maxSpend. The token is returned to memory only. */
 export async function mintChildKey(net: NetworkInfo, parentBearer: string, opts: { model: string; maxSpend: number }, f: Fetch): Promise<{ token: string; expires_at: number }> {
-  const res = await uaFetch(f)(`${net.gateway}/keys/ephemeral`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${parentBearer}` },
-    body: JSON.stringify({ scope: { models: [opts.model], max_spend: opts.maxSpend }, uses: 1, new_session_expire_time: 60, expire_time: 300 }),
-    signal: AbortSignal.timeout(15000),
-  });
+  // No inference is sent until a child key exists, so every failure here (transport, timeout,
+  // unparsable body) is pre-send: it must not be booked as a paid attempt with unknown spend.
+  let res: Response;
+  try {
+    res = await uaFetch(f)(`${net.gateway}/keys/ephemeral`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${parentBearer}` },
+      body: JSON.stringify({ scope: { models: [opts.model], max_spend: opts.maxSpend }, uses: 1, new_session_expire_time: 60, expire_time: 300 }),
+      signal: AbortSignal.timeout(15000),
+    });
+  } catch (e) {
+    throw new PreSendError(`child key mint failed (${(e as Error).name}: ${(e as Error).message})`);
+  }
   if (res.status !== 201) throw new PreSendError(`child key mint HTTP ${res.status}`);
-  const j = (await res.json()) as { token: string; expires_at: number };
-  if (!/^flop_ek_/.test(j.token)) throw new PreSendError("child key mint returned an unexpected token shape");
+  let j: { token: string; expires_at: number };
+  try {
+    j = (await res.json()) as { token: string; expires_at: number };
+  } catch {
+    throw new PreSendError("child key mint returned an unparsable body");
+  }
+  if (typeof j?.token !== "string" || !/^flop_ek_/.test(j.token)) throw new PreSendError("child key mint returned an unexpected token shape");
   return j;
 }
 

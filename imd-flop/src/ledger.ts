@@ -78,6 +78,9 @@ export function jobSpent(h: string, job: string, provider: string): number {
   return sumCharges(latestAttempts(h).filter((e) => e.job === job && e.provider === provider && e.payer === "requester"));
 }
 
+/** The ledger lock could not be taken. Thrown before the guarded work runs, so nothing in it happened. */
+export class LedgerLockError extends Error {}
+
 const lockDepth = new Map<string, number>();
 
 interface LockOwner { pid: number; host: string; token: string }
@@ -107,7 +110,7 @@ function reclaimIfDead(path: string): boolean {
   const aside = `${path}.stale.${process.pid}.${randomBytes(4).toString("hex")}`;
   try { renameSync(path, aside); } catch { return false; } // someone else moved or released it
   if (provablyDead(readOwner(aside))) { try { unlinkSync(aside); } catch { /* gone */ } return true; }
-  try { linkSync(aside, path); unlinkSync(aside); } catch { throw new Error("ledger lock contested"); }
+  try { linkSync(aside, path); unlinkSync(aside); } catch { throw new LedgerLockError("ledger lock contested"); }
   return false;
 }
 
@@ -124,7 +127,7 @@ function takeLock(path: string): { fd: number; token: string } {
       let old = false;
       try { old = Date.now() - statSync(path).mtimeMs > 30_000; } catch { continue; } // the holder removed it
       if (old && reclaimIfDead(path)) continue;
-      if (Date.now() - start > 5_000) throw new Error("ledger lock timeout");
+      if (Date.now() - start > 5_000) throw new LedgerLockError("ledger lock timeout");
       Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 25);
     }
   }

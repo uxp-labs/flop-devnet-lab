@@ -12,10 +12,10 @@ import { network, SEAT_COLLECTION } from "./networks.js";
 import { checkGenesis, readVerifiedSeatOwner, enrollChallengeUrl, getEnrollChallenge, postEnroll, type Fetch } from "./gateway.js";
 import { FlopProvider, MOCK_SCENARIOS, MockProvider, type MockScenario, type Provider } from "./providers.js";
 import { checkLinkForRun, padQuote, runJob } from "./run.js";
-import { appendLedger, latestAttempts, spentToday } from "./ledger.js";
+import { appendLedger, latestAttempts, spentToday, usableCapCharge } from "./ledger.js";
 import { knownSettledSpend } from "./receipts.js";
 import { blank, classifyReceipt, receiptLine, type Classified } from "./receipts.js";
-import { registerSecret } from "./secrets.js";
+import { redactFlagged, registerSecret } from "./secrets.js";
 import { matchReceipt } from "./match.js";
 
 export interface IO {
@@ -401,7 +401,7 @@ export async function main(argv: string[], io: IO): Promise<number> {
         const path = join(receiptsDir(h), `${rid}.json`);
         let saved = readJson<Classified & { seat: string; mock_scenario?: string }>(path);
         // Timeouts have a ledger row but no receipt file yet.
-        const ledgerRow = latestAttempts(h).find((e) => e.request_id === rid);
+        let ledgerRow = latestAttempts(h).find((e) => e.request_id === rid);
         if (!saved && !ledgerRow) throw new CliError(`no receipt or ledger entry for ${rid}`, EXIT.USAGE);
         if (values.refresh) {
           const seat = saved?.seat ?? ledgerRow!.seat;
@@ -409,24 +409,49 @@ export async function main(argv: string[], io: IO): Promise<number> {
           const p = makeProvider(io, pname, h, seat, { live: values.live, scenario: saved?.mock_scenario });
           const rr = await p.readReceipt(rid);
           const c = classifyReceipt(rr.receipt, { job: saved?.job ?? ledgerRow?.job ?? null, provider: pname, http: rr.http, error: rr.error, requestId: rid, mock: pname === "mock" });
-          const merged = rr.http === 200 ? { ...saved, ...c } : { ...saved, ...c, state: saved?.state ?? null, reserved: saved?.reserved ?? null, settled: saved?.settled ?? null, last_known_at: saved?.observed_at ?? null };
-          writeJsonSafe(path, merged, "receipt");
-          saved = merged as typeof saved;
+          // Identity is decided on the raw gateway receipt, exactly as run does. classifyReceipt's
+          // requestId fallback never decides identity, settlement or the stored request_id.
+          const fresh = rr.http === 200 && rr.receipt !== null && typeof rr.receipt === "object";
+          const rawId = fresh ? (rr.receipt as { request_id?: unknown }).request_id : undefined;
+          const identityOk = typeof rawId === "string" && rawId.length > 0 && rawId === rid;
+          let merged: Record<string, unknown> = fresh
+            ? { ...saved, ...c, request_id: typeof rawId === "string" ? rawId : "", ...(identityOk ? {} : { settled: null, chain_final: false }) }
+            // No fresh receipt: keep what was stored, including its request_id (a recorded mismatch stays one).
+            : { ...saved, ...c, request_id: saved?.request_id ?? "", state: saved?.state ?? null, reserved: saved?.reserved ?? null, settled: saved?.settled ?? null, chain_final: saved?.chain_final ?? false, last_known_at: saved?.observed_at ?? null };
+          try {
+            writeJsonSafe(path, merged, "receipt");
+          } catch {
+            // Same fallback as run: null only the flagged fields, then still reach the ledger logic.
+            const redacted = redactFlagged(merged);
+            if (redacted.residual.length > 0) throw new CliError("secret scan blocked writing receipt and redaction could not clear it", EXIT.REFUSED_RULE);
+            merged = redacted.copy as Record<string, unknown>;
+            writeJsonSafe(path, merged, "receipt");
+          }
+          saved = merged as unknown as typeof saved;
           const prev = latestAttempts(h).find((e) => e.request_id === rid);
-          if (prev && (saved?.state ?? null) !== prev.state) {
-            const rawId = (saved as { request_id?: unknown } | null)?.request_id;
-            const identityOk = typeof rawId === "string" && rawId.length > 0 && rawId === prev.request_id;
-            const stateSettles = saved?.state === "settled" || saved?.state === "released";
-            const settledKnown = identityOk && stateSettles ? knownSettledSpend(saved?.settled) : null;
-            const reservation = typeof prev.cap_charge === "number" && Number.isFinite(prev.cap_charge) ? prev.cap_charge : 0;
-            const capCharge = settledKnown ?? reservation;
+          if (prev) {
+            const state = saved?.state ?? null;
+            const stateSettles = state === "settled" || state === "released";
+            const settledKnown = fresh && identityOk && stateSettles ? knownSettledSpend(saved?.settled) : null;
             const disagree = "receipt and ledger disagree; reservation held, chain-final green blocked";
-            try {
-              appendLedger(h, { ...prev, ts: new Date().toISOString(), state: saved?.state ?? prev.state, reason: saved?.flag ?? null, spend: settledKnown, cap_charge: Number.isFinite(capCharge) ? capCharge : reservation });
-            } catch {
+            if (settledKnown === null && !usableCapCharge(prev.cap_charge)) {
+              // Unknown charge and no exact-identity settlement: never substitute 0. Leave the row (and the refusal) alone.
               io.err(disagree);
               saved = { ...saved, status: disagree } as typeof saved;
+            } else {
+              const capCharge = settledKnown ?? prev.cap_charge;
+              const nextState = state ?? prev.state;
+              // Append when anything the ledger derives changes, not only the state string.
+              if (nextState !== prev.state || settledKnown !== prev.spend || capCharge !== prev.cap_charge) {
+                try {
+                  appendLedger(h, { ...prev, ts: new Date().toISOString(), state: nextState, reason: saved?.flag ?? null, spend: settledKnown, cap_charge: capCharge });
+                } catch {
+                  io.err(disagree);
+                  saved = { ...saved, status: disagree } as typeof saved;
+                }
+              }
             }
+            ledgerRow = latestAttempts(h).find((e) => e.request_id === rid);
           }
         }
         const match = await matchReceipt(h, saved ?? null, ledgerRow ?? null);
