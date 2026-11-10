@@ -79,6 +79,97 @@ def from_files():
             rows.append(unreadable(f"job {e.get('job')}", f"ledger entry for {e.get('request_id') or 'none'}: {type(ex).__name__}"))
     return rows
 
+def unresolved(e): return e.get("state") in ("timeout_unknown", "error")
+
+def disagrees(e, r):
+    """Receipt and ledger can't both be right. Only asked once the receipt was read and its identity matches."""
+    st, receipt_state, settled = e.get("state"), r.get("state"), amount(r.get("settled"))
+    if receipt_state in SETTLES:
+        # Green needs the ledger settled too, with a numeric settlement equal to the receipt's.
+        d = st not in SETTLES or settled is None or amount(e.get("spend")) != settled
+    else:
+        # Pending receipt: the ledger must not claim a settlement, and nothing is chain-final yet.
+        d = st in SETTLES or r.get("chain_final") is True
+    return d or unresolved(e)
+
+def classify(e, r):
+    """The one ordered decision for a ledger row e and its receipt file r (None if there is no file).
+    First match wins: refused, no receipt, unreadable file, failed read, identity mismatch, disagree,
+    key expired, matches. Rendering per kind is in ROW_KINDS."""
+    if e.get("state") == "refused_local": return "refused"
+    if r is None: return "no_receipt"
+    if r.get("_unreadable"): return "unreadable"
+    # The last receipt read failed (HTTP error, or http 0 for a dropped connection). The file holds the last
+    # known state, not a fresh read, so it can't be compared: runs before the identity and disagree checks.
+    if r.get("flag") != "key_expired" and (r.get("http") not in (None, 200) or present(r.get("error"))): return "read_failed"
+    if not identity_ok(r, e): return "mismatch"
+    if disagrees(e, r): return "disagree"
+    if r.get("flag") == "key_expired": return "key_expired"
+    return "matches"
+
+def unresolved_flag(e):
+    return "timeout: spend unknown, not retried" if e.get("state") == "timeout_unknown" else esc(e.get("reason") or e.get("state"))
+
+def row_refused(row, e, r, reservation):
+    row.update(chips=None, bad=True); row["flop"] = [["", "refused before the call, no FLOP chips"]]
+    row["spend_flags"] = ["cap hit = stop", esc(e.get("reason") or "")]
+
+def row_no_receipt(row, e, r, reservation):
+    row["chips"] = [["grey", "sent"], ["red", "unknown"]]; row["bad"] = True
+    row["flop"] = [["last seen", "sent"], ["observed spend", None]]
+    row["flags"] = [unresolved_flag(e)]
+
+def row_unreadable(row, e, r, reservation):
+    row["chips"] = [["grey", "sent"], ["red", "unreadable"]]; row["bad"] = True
+    row["flags"] = ["receipt file unreadable: not shown as OK"]
+    row["flop"] = [["reservation", reservation], ["observed spend", None]]
+
+def row_read_failed(row, e, r, reservation):
+    # Same labels and markup as the key-expired row; the link column stays grey "not checked".
+    err = r.get("error") if present(r.get("error")) else ""
+    why = esc(err) if err.startswith("HTTP ") else esc(f"HTTP {r.get('http')} {err}".strip())
+    row["chips"] = [["grey", "sent"], ["red", "unknown"]]; row["bad"] = True
+    # Keep the reservation label, as the unreadable-file branch does: a failed read must not drop it.
+    row["flop"] = [["last seen", esc(r.get("state") or "unknown")], ["now", f'unreadable: <span class="mono">{why}</span>'], ["reservation", reservation], ["observed spend", None]]
+    row["flags"] = ["receipt read failed, can't re-check"] + ([unresolved_flag(e)] if unresolved(e) else [])
+
+def row_mismatch(row, e, r, reservation):
+    chips = [["grey", "sent"], ["red", "mismatch"]]; row["bad"] = True
+    row["flags"].append(IDENTITY)  # visible row text, not hover-only
+    row["flags"].append("receipt's request_id, job, seat or DID doesn't match this row")
+    for k in identity_diff(r, e):
+        row["flop"].append([f"receipt {k}", f"{esc(r.get(k))} (row says {esc(e.get(k))})"])
+    row["flop"].append(["reservation", reservation])
+    row["flop"].append(["match", "mismatch"])
+    row["flop"].append(["observed spend", None])
+    if unresolved(e): chips.append(["red", "unknown"]); row["flags"].append(unresolved_flag(e))
+    row["chips"] = chips
+
+def row_disagree(row, e, r, reservation):
+    row["chips"] = [["amber", DISAGREE]] + ([["red", "unknown"]] if unresolved(e) else [])
+    row["bad"] = True
+    row["flags"].append(DISAGREE)
+    if unresolved(e): row["flags"].append(unresolved_flag(e))
+    row["flop"].append(["reservation", reservation])
+    row["flop"].append(["observed spend", None])
+
+def row_matches(row, e, r, reservation, key_expired=False):
+    chain_final = r.get("chain_final") is True
+    chips = [["grey", "sent"]]
+    if key_expired:
+        chips.append(["red", "unknown"]); row["bad"] = True; row["flags"].append("key expired, can't re-check")
+    elif r.get("stage") == "gateway observed":
+        chips.append(["amber", "gateway observed"])
+    if chain_final and not row["bad"]: chips.append(["green", "chain final"])
+    row["chips"] = chips
+    if not chain_final: row["flop"].append(["chain final", '<span class="unk">not checked yet</span>'])
+    row["flop"].append(["match", "matches"])
+    row["flop"].append(["observed spend", amount(r.get("settled"))])
+
+ROW_KINDS = {"refused": row_refused, "no_receipt": row_no_receipt, "unreadable": row_unreadable, "read_failed": row_read_failed,
+             "mismatch": row_mismatch, "disagree": row_disagree, "matches": row_matches,
+             "key_expired": lambda row, e, r, reservation: row_matches(row, e, r, reservation, key_expired=True)}
+
 def build_row(e, r):
     rid = e.get("request_id")
     rid_label = f'<span title="{esc(rid)}">{esc(short(rid, 14))}</span>' if present(rid) else "none"
@@ -93,74 +184,7 @@ def build_row(e, r):
     if e.get("daily_cap") is not None and daily is None: raise ValueError("daily_cap is not a number")
     row["daily_left"] = r6(daily - spent_before - cap_charge) if None not in (daily, spent_before, cap_charge) else None
     reservation = cap_charge if cap_charge is not None else amount(e.get("quote_padded"))
-    st = e.get("state")
-    unresolved = st in ("timeout_unknown", "error")
-    unresolved_flag = "timeout: spend unknown, not retried" if st == "timeout_unknown" else esc(e.get("reason") or st)
-    if st == "refused_local":
-        row.update(chips=None, bad=True); row["flop"] = [["", "refused before the call, no FLOP chips"]]
-        row["spend_flags"] = ["cap hit = stop", esc(e.get("reason") or "")]
-        return row
-    if r is None:
-        row["chips"] = [["grey", "sent"], ["red", "unknown"]]; row["bad"] = True
-        row["flop"] = [["last seen", "sent"], ["observed spend", None]]
-        row["flags"] = [unresolved_flag]
-        return row
-    if r.get("_unreadable"):
-        row["chips"] = [["grey", "sent"], ["red", "unreadable"]]; row["bad"] = True
-        row["flags"] = ["receipt file unreadable: not shown as OK"]
-        row["flop"] = [["reservation", reservation], ["observed spend", None]]
-        return row
-    if r.get("flag") != "key_expired" and (r.get("http") not in (None, 200) or present(r.get("error"))):
-        # The last receipt read failed (HTTP error, or http 0 for a dropped connection). The file holds the last
-        # known state, not a fresh read, so it can't be compared: runs before the identity and disagree checks.
-        # Same labels and markup as the key-expired row; the link column stays grey "not checked".
-        err = r.get("error") if present(r.get("error")) else ""
-        why = esc(err) if err.startswith("HTTP ") else esc(f"HTTP {r.get('http')} {err}".strip())
-        row["chips"] = [["grey", "sent"], ["red", "unknown"]]; row["bad"] = True
-        # Keep the reservation label, as the unreadable-file branch does: a failed read must not drop it.
-        row["flop"] = [["last seen", esc(r.get("state") or "unknown")], ["now", f'unreadable: <span class="mono">{why}</span>'], ["reservation", reservation], ["observed spend", None]]
-        row["flags"] = ["receipt read failed, can't re-check"] + ([unresolved_flag] if unresolved else [])
-        return row
-    chips = [["grey", "sent"]]
-    if not identity_ok(r, e):
-        chips.append(["red", "mismatch"]); row["bad"] = True
-        row["flags"].append(IDENTITY)  # visible row text, not hover-only
-        row["flags"].append("receipt's request_id, job, seat or DID doesn't match this row")
-        for k in identity_diff(r, e):
-            row["flop"].append([f"receipt {k}", f"{esc(r.get(k))} (row says {esc(e.get(k))})"])
-        row["flop"].append(["reservation", reservation])
-        row["flop"].append(["match", "mismatch"])
-        row["flop"].append(["observed spend", None])
-        if unresolved: chips.append(["red", "unknown"]); row["flags"].append(unresolved_flag)
-        row["chips"] = chips
-        return row
-    receipt_state, settled = r.get("state"), amount(r.get("settled"))
-    chain_final = r.get("chain_final") is True
-    if receipt_state in SETTLES:
-        # Green needs the ledger settled too, with a numeric settlement equal to the receipt's.
-        disagree = st not in SETTLES or settled is None or amount(e.get("spend")) != settled
-    else:
-        # Pending receipt: the ledger must not claim a settlement, and nothing is chain-final yet.
-        disagree = st in SETTLES or chain_final
-    disagree = disagree or unresolved
-    if disagree:
-        chips = [["amber", DISAGREE]] + ([["red", "unknown"]] if unresolved else [])
-        row["bad"] = True
-        row["flags"].append(DISAGREE)
-        if unresolved: row["flags"].append(unresolved_flag)
-        row["flop"].append(["reservation", reservation])
-        row["flop"].append(["observed spend", None])
-        row["chips"] = chips
-        return row
-    if r.get("flag") == "key_expired":
-        chips.append(["red", "unknown"]); row["bad"] = True; row["flags"].append("key expired, can't re-check")
-    elif r.get("stage") == "gateway observed":
-        chips.append(["amber", "gateway observed"])
-    if chain_final and not row["bad"]: chips.append(["green", "chain final"])
-    row["chips"] = chips
-    if not chain_final: row["flop"].append(["chain final", '<span class="unk">not checked yet</span>'])
-    row["flop"].append(["match", "matches"])
-    row["flop"].append(["observed spend", settled])
+    ROW_KINDS[classify(e, r)](row, e, r, reservation)
     return row
 BLANK_NODE = '<span class="unk">unknown</span>'
 
