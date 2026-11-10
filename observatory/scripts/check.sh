@@ -99,11 +99,15 @@ finalize() {
     echo
     echo "checksum_note: SHA256SUMS hashes every other file in this directory. A match shows the bytes were not changed after the sums were written. It does not prove the commands ran, that the logs are complete, or that an exit of 0 means the tests passed truthfully. Rerun on the same revision in a fresh clone and compare outputs/."
   } >"$evidence/report.txt"
+  # Sums are written outside the directory first, so the sums file never lists itself.
+  local sums
+  sums="$(mktemp)"
   (
     cd "$evidence" || exit 1
     find . -type f ! -name SHA256SUMS -print0 | LC_ALL=C sort -z | xargs -0 -r sha256sum
-  ) >"$evidence/SHA256SUMS.tmp"
-  mv "$evidence/SHA256SUMS.tmp" "$evidence/SHA256SUMS"
+  ) >"$sums"
+  mv "$sums" "$evidence/SHA256SUMS"
+  chmod 644 "$evidence/SHA256SUMS"
   echo "evidence: check-runs/$source_sha/$run_id (overall exit $overall)"
 }
 trap finalize EXIT
