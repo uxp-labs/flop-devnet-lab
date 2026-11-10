@@ -156,6 +156,11 @@ export async function runJob(h: string, provider: Provider, o: RunOpts, deps: { 
     throw new CliError(`cap for seat ${seat} is malformed (daily and perCall must be positive numbers, perCall <= daily): FLOP stays off. Set it again with \`imd-flop cap set <FLOP/day>\``, EXIT.REFUSED_CAP);
   }
 
+  // Only "holder" (daily cap) and "requester" (job budget) have a spend limit. Anything else in
+  // config.json (a hand edit, another writer) would skip both checks: fail closed, nothing sent.
+  if (cfg.payer !== "holder" && cfg.payer !== "requester") {
+    throw new CliError(`payer ${JSON.stringify(cfg.payer)} in config.json is not "holder" or "requester": no cap or budget applies, FLOP stays off. Set it with \`imd-flop config set payer holder|requester\``, EXIT.REFUSED_CAP);
+  }
   if (cfg.payer === "requester" && !(typeof o.jobBudget === "number" && o.jobBudget > 0)) {
     throw new CliError("payer is requester: pass --job-budget <FLOP> (the requester's budget for this job)", EXIT.REFUSED_CAP);
   }
@@ -216,7 +221,9 @@ export async function runJob(h: string, provider: Provider, o: RunOpts, deps: { 
       if (left <= 0) refuse(`daily cap reached (${spentBefore}/${cap.daily} FLOP today, UTC)`, EXIT.REFUSED_CAP, q, spentBefore);
       if (q.padded > left) refuse(`padded quote ${q.padded} FLOP is over the remaining daily cap ${left}`, EXIT.REFUSED_CAP, q, spentBefore);
     } else {
+      // Only "requester" reaches here (checked above). A non-finite budget left would skip the cap, so refuse it.
       const left = Math.round((o.jobBudget! - spentBefore) * 1e6) / 1e6;
+      if (cfg.payer !== "requester" || !Number.isFinite(left)) refuse(`no usable requester budget for payer ${JSON.stringify(cfg.payer)}`, EXIT.REFUSED_CAP, q, spentBefore);
       if (q.padded > left) refuse(`padded quote ${q.padded} FLOP is over this job's remaining requester budget ${left}`, EXIT.REFUSED_CAP, q, spentBefore);
     }
     const row: LedgerEntry = { ...base, day, request_id: requestId, quote_raw: q.raw, quote_padded: q.padded, spent_before: spentBefore, state: "sent", reason: null, spend: null, cost_reported: null, cap_charge: q.padded, http: null };
