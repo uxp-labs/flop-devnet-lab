@@ -11,7 +11,8 @@ import { readJson, writeJsonSafe, writeSecretFile } from "./store.js";
 import { network, SEAT_COLLECTION } from "./networks.js";
 import { checkGenesis, readVerifiedSeatOwner, enrollChallengeUrl, getEnrollChallenge, postEnroll, type Fetch } from "./gateway.js";
 import { FlopProvider, MOCK_SCENARIOS, MockProvider, type MockScenario, type Provider } from "./providers.js";
-import { checkLinkForRun, padQuote, runJob } from "./run.js";
+import { checkLinkForRun, runJob } from "./run.js";
+import { padQuote, parseAmount } from "./policy.js";
 import { appendLedger, latestAttempts, spentToday, usableCapCharge } from "./ledger.js";
 import { knownSettledSpend } from "./receipts.js";
 import { blank, classifyReceipt, receiptLine, type Classified } from "./receipts.js";
@@ -65,13 +66,6 @@ function timeoutMs(raw: string | undefined): number {
   if (!Number.isInteger(n) || n < 1 || n > 2147483647) throw new CliError("--timeout-ms must be an integer from 1 to 2147483647", EXIT.USAGE);
   return n;
 }
-
-const num = (v: string | undefined, name: string): number | undefined => {
-  if (v === undefined) return undefined;
-  const n = Number(v);
-  if (!Number.isFinite(n) || n <= 0) throw new CliError(`${name} must be a positive number`, EXIT.USAGE);
-  return n;
-};
 
 function activeSeat(h: string, explicit?: string): string {
   const s = explicit ?? loadConfig(h).seat;
@@ -252,9 +246,9 @@ export async function main(argv: string[], io: IO): Promise<number> {
         const cfg = loadConfig(h);
         const seat = activeSeat(h, values.seat);
         if (sub === "set") {
-          const daily = num(positionals[0], "cap");
+          const daily = parseAmount(positionals[0], "cap");
           if (daily === undefined) throw new CliError("usage: cap set <FLOP/day> [--per-call <FLOP>]", EXIT.USAGE);
-          const perCall = num(values["per-call"], "--per-call") ?? daily;
+          const perCall = parseAmount(values["per-call"], "--per-call") ?? daily;
           if (perCall > daily) throw new CliError("--per-call cannot exceed the daily cap", EXIT.USAGE);
           cfg.caps[seat] = { daily, perCall };
           saveConfig(h, cfg);
@@ -327,7 +321,7 @@ export async function main(argv: string[], io: IO): Promise<number> {
             maxTokens: Number(values["max-tokens"] ?? 16),
             seat,
             noLink: values["no-link"],
-            jobBudget: num(values["job-budget"], "--job-budget"),
+            jobBudget: parseAmount(values["job-budget"], "--job-budget"),
             timeoutMs: timeoutMs(values["timeout-ms"]),
             checkJob: values["check-job"],
           },

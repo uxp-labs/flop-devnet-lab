@@ -10,6 +10,7 @@ import { readJson, writeJsonSafe } from "./store.js";
 import { loadSigner, readIdentity, revokedDids } from "./keys.js";
 import { verifyLink, type LinkFile } from "./link.js";
 import { DEFAULT_MODEL, network, SEAT_COLLECTION } from "./networks.js";
+import { checkBudget, padQuote, requireCap, validateJob, validatePayer, validateRunMaxTokens } from "./policy.js";
 import { appendLedger, jobSpent, LedgerLockError, spentToday, UnusableLedgerCharge, utcDay, withLedgerLock, type LedgerEntry } from "./ledger.js";
 import { classifyReceipt, knownSettledSpend, type Classified } from "./receipts.js";
 import type { Provider } from "./providers.js";
@@ -19,7 +20,7 @@ import { matchReceipt } from "./match.js";
 import { latestAttempts } from "./ledger.js";
 import type { MatchResult } from "./receipts.js";
 
-export const TEMPLATE_PAD = 20; // measured: Qwen chat wrap 23 tokens vs 3 raw for "Be brief.\nHi"
+export { padQuote, TEMPLATE_PAD } from "./policy.js";
 
 export interface RunOpts {
   job?: string;
@@ -49,35 +50,6 @@ export interface RunResult {
   /** Present only when a field of the response record was withheld by the secret scan. Same string as the response file. */
   withheld?: string;
   link_bypassed: boolean;
-}
-
-function finiteTokenCount(value: unknown): number | null {
-  if (typeof value !== "number" || !Number.isFinite(value)) return null;
-  return value;
-}
-
-/** Round up to 6 decimals. A value already on a 1e-6 boundary stays put. */
-function ceil6(n: number): number {
-  const scaled = n * 1e6;
-  const nearest = Math.round(scaled);
-  if (Math.abs(scaled - nearest) <= 1e-6) return nearest / 1e6;
-  return Math.ceil(scaled) / 1e6;
-}
-
-export function padQuote(est: { estimated_cost_flop?: number; estimated_input_tokens?: number; estimated_output_tokens?: number }): { raw: number; padded: number } | null {
-  const raw = est.estimated_cost_flop;
-  if (typeof raw !== "number" || !Number.isFinite(raw) || !(raw > 0)) return null;
-  const tinIn = (est as { estimated_input_tokens?: unknown }).estimated_input_tokens;
-  const toutIn = (est as { estimated_output_tokens?: unknown }).estimated_output_tokens;
-  const tin = tinIn === undefined ? 0 : finiteTokenCount(tinIn);
-  const tout = toutIn === undefined ? 0 : finiteTokenCount(toutIn);
-  if (tin === null || tout === null || tin + tout <= 0) return null;
-  const perTok = raw / (tin + tout);
-  const unrounded = raw + TEMPLATE_PAD * perTok;
-  if (!Number.isFinite(unrounded) || !(unrounded > 0)) return null;
-  const padded = ceil6(Math.max(unrounded, raw));
-  if (!Number.isFinite(padded) || !(padded > 0) || padded < raw) return null;
-  return { raw, padded };
 }
 
 /** Rule 5 (a broken link means no route) and rule 2 (one DID per seat, not revoked). */
@@ -113,16 +85,11 @@ export async function runJob(h: string, provider: Provider, o: RunOpts, deps: { 
   const seat = o.seat ?? cfg.seat;
   if (!seat) throw new CliError("no seat: run `imd-flop init --seat <tokenId>` or pass --seat", EXIT.USAGE);
 
-  // Rule 4: real work only.
-  const job = (o.job ?? "").trim();
-  if (!job) throw new CliError("--job <imd job id> is required: FLOP calls only serve real IMD jobs (rule 4)", EXIT.REFUSED_RULE);
-  if (!/^[\x21-\x7e]{1,120}$/.test(job)) throw new CliError("--job must be 1-120 printable characters", EXIT.USAGE);
-  // Every ledger row carries the job id, so a key-shaped id could never be recorded. Refuse it up front.
-  if (scanForSecrets({ job }).length > 0) throw new CliError("--job looks key-shaped (for example 64+ hex characters) and cannot be written to the ledger; use a different job id", EXIT.USAGE);
+  const job = validateJob(o.job);
 
   const prompt = o.promptFile ? readFileSync(o.promptFile, "utf8") : o.prompt;
   if (!prompt || prompt.trim().length === 0) throw new CliError("--prompt or --prompt-file is required", EXIT.USAGE);
-  if (!Number.isInteger(o.maxTokens) || o.maxTokens < 1 || o.maxTokens > 8192) throw new CliError("--max-tokens must be 1..8192", EXIT.USAGE);
+  validateRunMaxTokens(o.maxTokens);
 
   // Rule 5: link must verify. Only the mock may bypass it, and the output says so.
   let linkBypassed = false;
@@ -148,22 +115,8 @@ export async function runJob(h: string, provider: Provider, o: RunOpts, deps: { 
   }
   const signer = loadSigner(h, seat); // also proves the key file is 0600 and matches identity.json
 
-  // Required cap. A cap object without finite positive numbers (perCall <= daily) is no cap: fail closed.
-  const cap = cfg.caps[seat];
-  if (!cap) throw new CliError(`no daily cap for seat ${seat}: FLOP stays off. Set one with \`imd-flop cap set <FLOP/day>\``, EXIT.REFUSED_CAP);
-  const posFinite = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v) && v > 0;
-  if (!posFinite(cap.daily) || !posFinite(cap.perCall) || cap.perCall > cap.daily) {
-    throw new CliError(`cap for seat ${seat} is malformed (daily and perCall must be positive numbers, perCall <= daily): FLOP stays off. Set it again with \`imd-flop cap set <FLOP/day>\``, EXIT.REFUSED_CAP);
-  }
-
-  // Only "holder" (daily cap) and "requester" (job budget) have a spend limit. Anything else in
-  // config.json (a hand edit, another writer) would skip both checks: fail closed, nothing sent.
-  if (cfg.payer !== "holder" && cfg.payer !== "requester") {
-    throw new CliError(`payer ${JSON.stringify(cfg.payer)} in config.json is not "holder" or "requester": no cap or budget applies, FLOP stays off. Set it with \`imd-flop config set payer holder|requester\``, EXIT.REFUSED_CAP);
-  }
-  if (cfg.payer === "requester" && !(typeof o.jobBudget === "number" && o.jobBudget > 0)) {
-    throw new CliError("payer is requester: pass --job-budget <FLOP> (the requester's budget for this job)", EXIT.REFUSED_CAP);
-  }
+  const cap = requireCap(cfg.caps, seat);
+  const payer = validatePayer(cfg.payer, o.jobBudget);
 
   if (o.checkJob) {
     const r = await checkImdJob(job, deps.fetch);
@@ -181,13 +134,13 @@ export async function runJob(h: string, provider: Provider, o: RunOpts, deps: { 
     job,
     provider: provider.name,
     network: net.name,
-    payer: cfg.payer,
+    payer,
     model,
     max_tokens: o.maxTokens,
     prompt_sha256: bytesToHex(sha256(utf8ToBytes(estPrompt))),
     per_call_cap: cap.perCall,
     daily_cap: cap.daily,
-    job_budget: cfg.payer === "requester" ? o.jobBudget! : null,
+    job_budget: payer === "requester" ? o.jobBudget! : null,
     mock: provider.name === "mock",
   };
   const refuse = (reason: string, code: number, q: { raw: number | null; padded: number | null }, spentBefore: number | null): never => {
@@ -210,22 +163,13 @@ export async function runJob(h: string, provider: Provider, o: RunOpts, deps: { 
     const day = utcDay();
     let spentBefore: number;
     try {
-      spentBefore = cfg.payer === "holder" ? spentToday(h, seat, provider.name, day) : jobSpent(h, job, provider.name);
+      spentBefore = payer === "holder" ? spentToday(h, seat, provider.name, day) : jobSpent(h, job, provider.name);
     } catch (e) {
       if (e instanceof UnusableLedgerCharge) refuse(e.message, EXIT.REFUSED_CAP, q, null);
       throw e;
     }
-    if (q.padded > cap.perCall) refuse(`padded quote ${q.padded} FLOP is over the per-call cap ${cap.perCall}`, EXIT.REFUSED_CAP, q, spentBefore);
-    if (cfg.payer === "holder") {
-      const left = Math.round((cap.daily - spentBefore) * 1e6) / 1e6;
-      if (left <= 0) refuse(`daily cap reached (${spentBefore}/${cap.daily} FLOP today, UTC)`, EXIT.REFUSED_CAP, q, spentBefore);
-      if (q.padded > left) refuse(`padded quote ${q.padded} FLOP is over the remaining daily cap ${left}`, EXIT.REFUSED_CAP, q, spentBefore);
-    } else {
-      // Only "requester" reaches here (checked above). A non-finite budget left would skip the cap, so refuse it.
-      const left = Math.round((o.jobBudget! - spentBefore) * 1e6) / 1e6;
-      if (cfg.payer !== "requester" || !Number.isFinite(left)) refuse(`no usable requester budget for payer ${JSON.stringify(cfg.payer)}`, EXIT.REFUSED_CAP, q, spentBefore);
-      if (q.padded > left) refuse(`padded quote ${q.padded} FLOP is over this job's remaining requester budget ${left}`, EXIT.REFUSED_CAP, q, spentBefore);
-    }
+    const refusal = checkBudget({ padded: q.padded, cap, payer, spentBefore, jobBudget: o.jobBudget });
+    if (refusal) refuse(refusal.reason, refusal.code, q, spentBefore);
     const row: LedgerEntry = { ...base, day, request_id: requestId, quote_raw: q.raw, quote_padded: q.padded, spent_before: spentBefore, state: "sent", reason: null, spend: null, cost_reported: null, cap_charge: q.padded, http: null };
     appendLedger(h, row); // written before the call so a crash still leaves the attempt on the books. A later refused_local line wins if the provider refuses before mint.
     return row;
@@ -334,5 +278,5 @@ export async function runJob(h: string, provider: Provider, o: RunOpts, deps: { 
 
   const match = await matchReceipt(h, receipt0, latestAttempts(h).find((e) => e.request_id === requestId) ?? null);
   const receipt = { ...receipt0, match };
-  return { request_id: requestId, job, provider: provider.name, payer: cfg.payer, quote_padded: q.padded, cap_charge: capCharge, receipt, response_file: responseFile, text, ...(withheld !== undefined ? { withheld } : {}), link_bypassed: linkBypassed };
+  return { request_id: requestId, job, provider: provider.name, payer, quote_padded: q.padded, cap_charge: capCharge, receipt, response_file: responseFile, text, ...(withheld !== undefined ? { withheld } : {}), link_bypassed: linkBypassed };
 }
