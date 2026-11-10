@@ -1,0 +1,236 @@
+{
+ "file": "amount-json.json",
+ "description": "Amounts read from JSON (receipts, ledger rows). imd-flop: knownSettledSpend(v) and usableCapCharge(v). spend-guard: spend_amount(v) and json_number(v). viewer: amount(v). {\"$float\": \"nan\"|\"inf\"|\"-inf\"} encodes non-finite floats.",
+ "status": "current behavior at 3ae1cdf",
+ "vectors": [
+  {
+   "id": "amount-json-positive",
+   "rule": "amount.json",
+   "input": {
+    "value": 0.05
+   },
+   "expect": {
+    "imd-flop": {
+     "known_settled": 0.05,
+     "usable_cap_charge": true
+    },
+    "spend-guard": {
+     "spend_amount": 0.05,
+     "json_number": 0.05
+    },
+    "viewer": {
+     "amount": 0.05
+    }
+   }
+  },
+  {
+   "id": "amount-json-zero",
+   "rule": "amount.json",
+   "input": {
+    "value": 0
+   },
+   "expect": {
+    "imd-flop": {
+     "known_settled": 0,
+     "usable_cap_charge": true
+    },
+    "spend-guard": {
+     "spend_amount": 0,
+     "json_number": 0
+    },
+    "viewer": {
+     "amount": 0
+    }
+   }
+  },
+  {
+   "id": "amount-json-integer",
+   "rule": "amount.json",
+   "input": {
+    "value": 7
+   },
+   "expect": {
+    "imd-flop": {
+     "known_settled": 7,
+     "usable_cap_charge": true
+    },
+    "spend-guard": {
+     "spend_amount": 7,
+     "json_number": 7
+    },
+    "viewer": {
+     "amount": 7
+    }
+   }
+  },
+  {
+   "id": "amount-json-negative",
+   "rule": "amount.json",
+   "input": {
+    "value": -0.5
+   },
+   "expect": {
+    "imd-flop": {
+     "known_settled": null,
+     "usable_cap_charge": false
+    },
+    "spend-guard": {
+     "spend_amount": null,
+     "json_number": -0.5
+    },
+    "viewer": {
+     "amount": -0.5
+    }
+   },
+   "quirks": [
+    "Q-AMOUNT-JSON"
+   ]
+  },
+  {
+   "id": "amount-json-null",
+   "rule": "amount.json",
+   "input": {
+    "value": null
+   },
+   "expect": {
+    "imd-flop": {
+     "known_settled": null,
+     "usable_cap_charge": false
+    },
+    "spend-guard": {
+     "spend_amount": null,
+     "json_number": null
+    },
+    "viewer": {
+     "amount": null
+    }
+   }
+  },
+  {
+   "id": "amount-json-bool-true",
+   "rule": "amount.json",
+   "input": {
+    "value": true
+   },
+   "expect": {
+    "imd-flop": {
+     "known_settled": null,
+     "usable_cap_charge": false
+    },
+    "spend-guard": {
+     "spend_amount": null,
+     "json_number": null
+    },
+    "viewer": {
+     "amount": null
+    }
+   }
+  },
+  {
+   "id": "amount-json-string-number",
+   "rule": "amount.json",
+   "input": {
+    "value": "0.05"
+   },
+   "expect": {
+    "imd-flop": {
+     "known_settled": null,
+     "usable_cap_charge": false
+    },
+    "spend-guard": {
+     "spend_amount": null,
+     "json_number": null
+    },
+    "viewer": {
+     "amount": null
+    }
+   }
+  },
+  {
+   "id": "amount-json-nan",
+   "rule": "amount.json",
+   "input": {
+    "value": {
+     "$float": "nan"
+    }
+   },
+   "expect": {
+    "imd-flop": {
+     "known_settled": null,
+     "usable_cap_charge": false
+    },
+    "spend-guard": {
+     "spend_amount": null,
+     "json_number": null
+    },
+    "viewer": {
+     "amount": null
+    }
+   }
+  },
+  {
+   "id": "amount-json-inf",
+   "rule": "amount.json",
+   "input": {
+    "value": {
+     "$float": "inf"
+    }
+   },
+   "expect": {
+    "imd-flop": {
+     "known_settled": null,
+     "usable_cap_charge": false
+    },
+    "spend-guard": {
+     "spend_amount": null,
+     "json_number": null
+    },
+    "viewer": {
+     "amount": null
+    }
+   }
+  },
+  {
+   "id": "amount-json-neg-inf",
+   "rule": "amount.json",
+   "input": {
+    "value": {
+     "$float": "-inf"
+    }
+   },
+   "expect": {
+    "imd-flop": {
+     "known_settled": null,
+     "usable_cap_charge": false
+    },
+    "spend-guard": {
+     "spend_amount": null,
+     "json_number": null
+    },
+    "viewer": {
+     "amount": null
+    }
+   }
+  },
+  {
+   "id": "amount-json-huge-finite",
+   "rule": "amount.json",
+   "input": {
+    "value": 1e+308
+   },
+   "expect": {
+    "imd-flop": {
+     "known_settled": 1e+308,
+     "usable_cap_charge": true
+    },
+    "spend-guard": {
+     "spend_amount": 1e+308,
+     "json_number": 1e+308
+    },
+    "viewer": {
+     "amount": 1e+308
+    }
+   }
+  }
+ ]
+}

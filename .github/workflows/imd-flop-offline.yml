@@ -1,0 +1,47 @@
+# Offline CI for imd-flop.
+# Workflow permissions are contents: read only. No secrets, wallet keys,
+# deploys, or publishing. Checkout does not persist credentials.
+# upload-artifact@v4 stores the evidence through the Actions runtime artifact
+# service. That upload does not use a repository Actions write token.
+# Local and this workflow both run `npm run check` in imd-flop.
+# That command is a clean install, a clean build, and `npm test`.
+# `npm test` loads test/setup.ts, which rejects fetch and WebSocket.
+# SHA256SUMS binds the evidence files. It does not prove the tests ran truthfully.
+
+name: imd-flop offline
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-test:
+    name: build and offline tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+
+      - name: Use Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Offline check
+        working-directory: imd-flop
+        run: npm run check
+
+      - name: Upload check evidence
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: imd-flop-check-${{ github.run_id }}-${{ github.run_attempt }}
+          path: imd-flop/check-runs
+          retention-days: 14
+          if-no-files-found: error

@@ -1,0 +1,304 @@
+{
+ "file": "identity.json",
+ "description": "Receipt-vs-ledger identity. imd-flop: matchReceipt(...) fields, keeping only identity fields (link fields dropped; \"IDENTITY\" stands for rules.constants.IDENTITY). viewer: identity_diff(receipt, ledger).",
+ "status": "current behavior at 3ae1cdf",
+ "vectors": [
+  {
+   "id": "identity-all-equal",
+   "rule": "identity",
+   "input": {
+    "receipt": {
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zA"
+    },
+    "ledger": {
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zA"
+    }
+   },
+   "expect": {
+    "imd-flop": {
+     "fields": []
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard has no identity check: guard.py is a dry run and receipts.py reports receipts as given"
+    },
+    "viewer": {
+     "diff": []
+    }
+   }
+  },
+  {
+   "id": "identity-request-id-differs",
+   "rule": "identity",
+   "input": {
+    "receipt": {
+     "request_id": "req-2",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zA"
+    },
+    "ledger": {
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zA"
+    }
+   },
+   "expect": {
+    "imd-flop": {
+     "fields": [
+      "IDENTITY"
+     ]
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard has no identity check: guard.py is a dry run and receipts.py reports receipts as given"
+    },
+    "viewer": {
+     "diff": [
+      "request_id"
+     ]
+    }
+   }
+  },
+  {
+   "id": "identity-seat-differs",
+   "rule": "identity",
+   "input": {
+    "receipt": {
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9999",
+     "did": "did:key:zA"
+    },
+    "ledger": {
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zA"
+    }
+   },
+   "expect": {
+    "imd-flop": {
+     "fields": [
+      "seat"
+     ]
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard has no identity check: guard.py is a dry run and receipts.py reports receipts as given"
+    },
+    "viewer": {
+     "diff": [
+      "seat"
+     ]
+    }
+   }
+  },
+  {
+   "id": "identity-did-differs",
+   "rule": "identity",
+   "input": {
+    "receipt": {
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zB"
+    },
+    "ledger": {
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zA"
+    }
+   },
+   "expect": {
+    "imd-flop": {
+     "fields": [
+      "did"
+     ]
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard has no identity check: guard.py is a dry run and receipts.py reports receipts as given"
+    },
+    "viewer": {
+     "diff": [
+      "did"
+     ]
+    }
+   }
+  },
+  {
+   "id": "identity-did-empty-both",
+   "rule": "identity",
+   "input": {
+    "receipt": {
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": ""
+    },
+    "ledger": {
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": ""
+    }
+   },
+   "expect": {
+    "imd-flop": {
+     "fields": [
+      "did"
+     ]
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard has no identity check: guard.py is a dry run and receipts.py reports receipts as given"
+    },
+    "viewer": {
+     "diff": [
+      "did"
+     ]
+    }
+   }
+  },
+  {
+   "id": "identity-job-null-both",
+   "rule": "identity",
+   "input": {
+    "receipt": {
+     "request_id": "req-1",
+     "job": null,
+     "seat": "9001",
+     "did": "did:key:zA"
+    },
+    "ledger": {
+     "request_id": "req-1",
+     "job": null,
+     "seat": "9001",
+     "did": "did:key:zA"
+    }
+   },
+   "expect": {
+    "imd-flop": {
+     "fields": []
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard has no identity check: guard.py is a dry run and receipts.py reports receipts as given"
+    },
+    "viewer": {
+     "diff": [
+      "job"
+     ]
+    }
+   },
+   "quirks": [
+    "Q-IDENTITY-FIELDS"
+   ]
+  },
+  {
+   "id": "identity-seat-number-vs-string",
+   "rule": "identity",
+   "input": {
+    "receipt": {
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": 9001,
+     "did": "did:key:zA"
+    },
+    "ledger": {
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zA"
+    }
+   },
+   "expect": {
+    "imd-flop": {
+     "throws": "TypeError"
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard has no identity check: guard.py is a dry run and receipts.py reports receipts as given"
+    },
+    "viewer": {
+     "diff": [
+      "seat"
+     ]
+    }
+   },
+   "quirks": [
+    "Q-IDENTITY-FIELDS"
+   ]
+  },
+  {
+   "id": "identity-request-id-empty-both",
+   "rule": "identity",
+   "input": {
+    "receipt": {
+     "request_id": "",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zA"
+    },
+    "ledger": {
+     "request_id": "",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zA"
+    }
+   },
+   "expect": {
+    "imd-flop": {
+     "fields": [
+      "IDENTITY"
+     ]
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard has no identity check: guard.py is a dry run and receipts.py reports receipts as given"
+    },
+    "viewer": {
+     "diff": [
+      "request_id"
+     ]
+    }
+   }
+  },
+  {
+   "id": "identity-correlation-id-other-job",
+   "rule": "identity",
+   "input": {
+    "receipt": {
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zA",
+     "correlation_id": "imd-job-j2"
+    },
+    "ledger": {
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zA"
+    }
+   },
+   "expect": {
+    "imd-flop": {
+     "fields": [
+      "job(correlation_id)"
+     ]
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard has no identity check: guard.py is a dry run and receipts.py reports receipts as given"
+    },
+    "viewer": {
+     "diff": []
+    }
+   },
+   "quirks": [
+    "Q-IDENTITY-FIELDS"
+   ]
+  }
+ ]
+}

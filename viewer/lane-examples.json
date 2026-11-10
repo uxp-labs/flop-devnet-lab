@@ -2,20 +2,20 @@
  "rows": [
   {"label":"Example happy path","sub":["job ex-happy-path… · page link once real","seat #ex-1 · node unknown"],"payer":"holder",
    "chips":[["grey","sent"],["amber","gateway observed"]],"flop":[["chain final","<span class=\"unk\">not checked yet</span>"],["match","matches"]],"flags":[],
-   "est":"0.096","per_call":"0.25","daily_left":"0.65","spend_flags":[],"outcome":["green","accepted","as imd reports it"],"link":["green","linked",null],"bad":false},
+   "est":"0.096","per_call":"0.25","daily_left":"0.65","spend_flags":[],"outcome":["green","accepted","as imd reports it"],"link":["grey","not checked",null],"bad":false},
   {"label":"Example stuck","sub":["job ex-stuck… · page link once real","seat #ex-2 · node unknown"],"payer":"holder",
    "chips":[["grey","sent"],["red","unknown"]],"flop":[["last seen","reserved (example date)"],["observed spend",null]],"flags":["stuck over 24h"],
-   "est":"0.096","per_call":"0.25","daily_left":null,"spend_flags":[],"outcome":["grey","submitted",null],"outcome_flag":"no imd update over 24h","link":["green","linked",null],"bad":true},
+   "est":"0.096","per_call":"0.25","daily_left":null,"spend_flags":[],"outcome":["grey","submitted",null],"outcome_flag":"no imd update over 24h","link":["grey","not checked",null],"bad":true},
   {"label":"Example key expired","sub":["job ex-key-expire… · page link once real","seat #ex-3 · node unknown"],"payer":"holder",
    "chips":[["grey","sent"],["red","unknown"]],"flop":[["last seen","gateway observed (example date)"],["now","unreadable: <span class=\"mono\">key_expired</span>"],["observed spend",null]],"flags":["key expired, can't re-check"],
-   "est":"0.096","per_call":"0.25","daily_left":null,"spend_flags":[],"outcome":["grey","claimed",null],"link":["green","linked",null],"bad":true},
+   "est":"0.096","per_call":"0.25","daily_left":null,"spend_flags":[],"outcome":["grey","claimed",null],"link":["grey","not checked",null],"bad":true},
   {"label":"Example no route","sub":["job ex-no-route… · page link once real","seat #ex-4 · node unknown"],"payer":"holder",
    "chips":null,"flop":[["","not called: link failed"]],"flags":[],
    "est":null,"per_call":"0.25","daily_left":"1.00","spend_flags":[],"outcome":["grey","not read",null],"link":["red","no route","link verify failed"],"bad":true},
   {"label":"Example cap hit","sub":["job ex-cap-hit… · page link once real","seat #ex-5 · node unknown"],"payer":"holder",
    "chips":null,"flop":[["","refused before the call, no FLOP chips"]],"flags":[],
-   "est":"0.234","per_call":"0.25","daily_left":"0.10","spend_flags":["cap hit = stop"],"outcome":["grey","not read",null],"link":["green","linked",null],"bad":true},
+   "est":"0.234","per_call":"0.25","daily_left":"0.10","spend_flags":["cap hit = stop"],"outcome":["grey","not read",null],"link":["grey","not checked",null],"bad":true},
   {"label":"Example mismatch","sub":["job ex-mismatch… · page link once real","seat #ex-6 · node unknown"],"payer":"holder",
-   "chips":[["grey","sent"],["red","mismatch"]],"flop":[["receipt job","ex-other… (row says ex-mismatch…)"],["observed spend",null]],"flags":["receipt doesn't match this row, never green"],
-   "est":"0.096","per_call":"0.25","daily_left":null,"spend_flags":[],"outcome":["grey","submitted",null],"link":["green","linked",null],"bad":true}
+   "chips":[["grey","sent"],["red","mismatch"]],"flop":[["receipt job","ex-other… (row says ex-mismatch…)"],["observed spend",null]],"flags":["receipt identity mismatch; chain-final green blocked","receipt's request_id, job, seat or DID doesn't match this row"],
+   "est":"0.096","per_call":"0.25","daily_left":null,"spend_flags":[],"outcome":["grey","submitted",null],"link":["grey","not checked",null],"bad":true}
  ]}

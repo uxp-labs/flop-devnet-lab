@@ -1,0 +1,440 @@
+{
+ "file": "viewer-reservation-line.json",
+ "description": "The visible text of a held-reservation row's reservation line in the viewer lane (one ledger row and its receipt file; receipt: an object, a raw string written as is, or null for no file). line: the reservation line's visible text, or \"absent\". KD-5 is fixed: a held line reads 'reservation <amount> (held)' (key and amount spans unchanged, one trailing note span); a settled matched row has no line.",
+ "status": "current behavior at 3ae1cdf",
+ "vectors": [
+  {
+   "id": "reservation-line-failed-read",
+   "rule": "viewer.reservation_line",
+   "input": {
+    "ledger": {
+     "ts": "2026-11-10T15:00:00Z",
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zSONAR",
+     "provider": "mock",
+     "network": "devnet",
+     "payer": "holder",
+     "state": "sent",
+     "spend": null,
+     "cap_charge": 0.186,
+     "quote_padded": 0.186,
+     "per_call_cap": 1,
+     "daily_cap": 5,
+     "spent_before": 0
+    },
+    "receipt": {
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zSONAR",
+     "state": "estimated",
+     "settled": null,
+     "chain_final": false,
+     "http": 503,
+     "error": "HTTP 503"
+    }
+   },
+   "expect": {
+    "imd-flop": {
+     "not_applicable": "imd-flop does not render the viewer lane"
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard does not render the viewer lane"
+    },
+    "viewer": {
+     "line": "reservation 0.186 (held)"
+    }
+   },
+   "status": "fixed",
+   "defect": "KD-5",
+   "note": "[fix: KD-5] FIXER's form: key and amount spans unchanged plus a trailing '(held)' note; was (known_defect) 'reservation 0.186'",
+   "label_rules": [
+    "V-FAILED-READ"
+   ]
+  },
+  {
+   "id": "reservation-line-failed-read-beside-ledger-settled",
+   "rule": "viewer.reservation_line",
+   "input": {
+    "ledger": {
+     "ts": "2026-11-10T15:00:00Z",
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zSONAR",
+     "provider": "mock",
+     "network": "devnet",
+     "payer": "holder",
+     "state": "settled",
+     "spend": 0.05,
+     "cap_charge": 0.05,
+     "quote_padded": 0.186,
+     "per_call_cap": 1,
+     "daily_cap": 5,
+     "spent_before": 0
+    },
+    "receipt": {
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zSONAR",
+     "state": "settled",
+     "settled": 0.05,
+     "chain_final": false,
+     "http": 503,
+     "error": "HTTP 503"
+    }
+   },
+   "expect": {
+    "imd-flop": {
+     "not_applicable": "imd-flop does not render the viewer lane"
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard does not render the viewer lane"
+    },
+    "viewer": {
+     "line": "reservation 0.05 (held)"
+    }
+   },
+   "status": "fixed",
+   "defect": "KD-5",
+   "note": "[fix: KD-5] FIXER's form: key and amount spans unchanged plus a trailing '(held)' note; was (known_defect) 'reservation 0.05'",
+   "label_rules": [
+    "V-FAILED-READ",
+    "V-UNKNOWN-SETTLED"
+   ]
+  },
+  {
+   "id": "reservation-line-unreadable-file",
+   "rule": "viewer.reservation_line",
+   "input": {
+    "ledger": {
+     "ts": "2026-11-10T15:00:00Z",
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zSONAR",
+     "provider": "mock",
+     "network": "devnet",
+     "payer": "holder",
+     "state": "sent",
+     "spend": null,
+     "cap_charge": 0.186,
+     "quote_padded": 0.186,
+     "per_call_cap": 1,
+     "daily_cap": 5,
+     "spent_before": 0
+    },
+    "receipt": "{not json"
+   },
+   "expect": {
+    "imd-flop": {
+     "not_applicable": "imd-flop does not render the viewer lane"
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard does not render the viewer lane"
+    },
+    "viewer": {
+     "line": "reservation 0.186 (held)"
+    }
+   },
+   "status": "fixed",
+   "defect": "KD-5",
+   "note": "[fix: KD-5] FIXER's form: key and amount spans unchanged plus a trailing '(held)' note; was (known_defect) 'reservation 0.186'",
+   "label_rules": [
+    "V-PRECEDENCE"
+   ]
+  },
+  {
+   "id": "reservation-line-identity-mismatch",
+   "rule": "viewer.reservation_line",
+   "input": {
+    "ledger": {
+     "ts": "2026-11-10T15:00:00Z",
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zSONAR",
+     "provider": "mock",
+     "network": "devnet",
+     "payer": "holder",
+     "state": "sent",
+     "spend": null,
+     "cap_charge": 0.186,
+     "quote_padded": 0.186,
+     "per_call_cap": 1,
+     "daily_cap": 5,
+     "spent_before": 0
+    },
+    "receipt": {
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "1111",
+     "did": "did:key:zSONAR",
+     "state": "estimated",
+     "settled": null,
+     "chain_final": false,
+     "http": 200,
+     "error": null
+    }
+   },
+   "expect": {
+    "imd-flop": {
+     "not_applicable": "imd-flop does not render the viewer lane"
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard does not render the viewer lane"
+    },
+    "viewer": {
+     "line": "reservation 0.186 (held)"
+    }
+   },
+   "status": "fixed",
+   "defect": "KD-5",
+   "note": "[fix: KD-5] FIXER's form: key and amount spans unchanged plus a trailing '(held)' note; was (known_defect) 'reservation 0.186'",
+   "label_rules": [
+    "V-PRECEDENCE"
+   ]
+  },
+  {
+   "id": "reservation-line-disagree",
+   "rule": "viewer.reservation_line",
+   "input": {
+    "ledger": {
+     "ts": "2026-11-10T15:00:00Z",
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zSONAR",
+     "provider": "mock",
+     "network": "devnet",
+     "payer": "holder",
+     "state": "sent",
+     "spend": null,
+     "cap_charge": 0.186,
+     "quote_padded": 0.186,
+     "per_call_cap": 1,
+     "daily_cap": 5,
+     "spent_before": 0
+    },
+    "receipt": {
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zSONAR",
+     "state": "settled",
+     "settled": 0.05,
+     "chain_final": true,
+     "http": 200,
+     "error": null
+    }
+   },
+   "expect": {
+    "imd-flop": {
+     "not_applicable": "imd-flop does not render the viewer lane"
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard does not render the viewer lane"
+    },
+    "viewer": {
+     "line": "reservation 0.186 (held)"
+    }
+   },
+   "status": "fixed",
+   "defect": "KD-5",
+   "note": "[fix: KD-5] FIXER's form: key and amount spans unchanged plus a trailing '(held)' note; was (known_defect) 'reservation 0.186'",
+   "label_rules": [
+    "V-PRECEDENCE"
+   ]
+  },
+  {
+   "id": "reservation-line-timeout-unknown",
+   "rule": "viewer.reservation_line",
+   "input": {
+    "ledger": {
+     "ts": "2026-11-10T15:00:00Z",
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zSONAR",
+     "provider": "mock",
+     "network": "devnet",
+     "payer": "holder",
+     "state": "timeout_unknown",
+     "spend": null,
+     "cap_charge": 0.186,
+     "quote_padded": 0.186,
+     "per_call_cap": 1,
+     "daily_cap": 5,
+     "spent_before": 0
+    },
+    "receipt": {
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zSONAR",
+     "state": "estimated",
+     "settled": null,
+     "chain_final": false,
+     "http": 200,
+     "error": null
+    }
+   },
+   "expect": {
+    "imd-flop": {
+     "not_applicable": "imd-flop does not render the viewer lane"
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard does not render the viewer lane"
+    },
+    "viewer": {
+     "line": "reservation 0.186 (held)"
+    }
+   },
+   "status": "fixed",
+   "defect": "KD-5",
+   "note": "[fix: KD-5] FIXER's form: key and amount spans unchanged plus a trailing '(held)' note; was (known_defect) 'reservation 0.186'",
+   "label_rules": [
+    "V-UNKNOWN-SETTLED"
+   ]
+  },
+  {
+   "id": "reservation-line-no-receipt-file",
+   "rule": "viewer.reservation_line",
+   "input": {
+    "ledger": {
+     "ts": "2026-11-10T15:00:00Z",
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zSONAR",
+     "provider": "mock",
+     "network": "devnet",
+     "payer": "holder",
+     "state": "timeout_unknown",
+     "spend": null,
+     "cap_charge": 0.186,
+     "quote_padded": 0.186,
+     "per_call_cap": 1,
+     "daily_cap": 5,
+     "spent_before": 0
+    },
+    "receipt": null
+   },
+   "expect": {
+    "imd-flop": {
+     "not_applicable": "imd-flop does not render the viewer lane"
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard does not render the viewer lane"
+    },
+    "viewer": {
+     "line": "reservation 0.186 (held)"
+    }
+   },
+   "quirks": [
+    "R-d"
+   ],
+   "status": "fixed",
+   "defect": "KD-5",
+   "note": "[fix: KD-5] FIXER's form: key and amount spans unchanged plus a trailing '(held)' note; was (known_defect) 'reservation 0.186'",
+   "label_rules": [
+    "V-UNKNOWN-SETTLED"
+   ]
+  },
+  {
+   "id": "reservation-line-pending-matched",
+   "rule": "viewer.reservation_line",
+   "input": {
+    "ledger": {
+     "ts": "2026-11-10T15:00:00Z",
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zSONAR",
+     "provider": "mock",
+     "network": "devnet",
+     "payer": "holder",
+     "state": "sent",
+     "spend": null,
+     "cap_charge": 0.186,
+     "quote_padded": 0.186,
+     "per_call_cap": 1,
+     "daily_cap": 5,
+     "spent_before": 0
+    },
+    "receipt": {
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zSONAR",
+     "state": "estimated",
+     "settled": null,
+     "chain_final": false,
+     "http": 200,
+     "error": null
+    }
+   },
+   "expect": {
+    "imd-flop": {
+     "not_applicable": "imd-flop does not render the viewer lane"
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard does not render the viewer lane"
+    },
+    "viewer": {
+     "line": "reservation 0.186 (held)"
+    }
+   },
+   "note": "[fix: KD-5] a pending matched row (G5) is held until it settles or is released"
+  },
+  {
+   "id": "reservation-line-settled-matched",
+   "rule": "viewer.reservation_line",
+   "input": {
+    "ledger": {
+     "ts": "2026-11-10T15:00:00Z",
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zSONAR",
+     "provider": "mock",
+     "network": "devnet",
+     "payer": "holder",
+     "state": "settled",
+     "spend": 0.05,
+     "cap_charge": 0.05,
+     "quote_padded": 0.186,
+     "per_call_cap": 1,
+     "daily_cap": 5,
+     "spent_before": 0
+    },
+    "receipt": {
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zSONAR",
+     "state": "settled",
+     "settled": 0.05,
+     "chain_final": true,
+     "http": 200,
+     "error": null
+    }
+   },
+   "expect": {
+    "imd-flop": {
+     "not_applicable": "imd-flop does not render the viewer lane"
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard does not render the viewer lane"
+    },
+    "viewer": {
+     "line": "absent"
+    }
+   },
+   "note": "[fix: KD-5] control: a settled matched row holds nothing, so it shows no reservation line"
+  }
+ ]
+}

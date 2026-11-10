@@ -1,0 +1,1107 @@
+{
+ "file": "viewer-labels.json",
+ "description": "Viewer lane labels for one ledger row and its receipt file (FIXER rules V-PRECEDENCE, V-FAILED-READ, V-UNKNOWN-SETTLED, V-LINK-GREY, plus known defects KD-1/KD-2). receipt: an object, a raw string (written as is) or null (no file). Chip text \"DISAGREE\" stands for rules.constants.DISAGREE. reservation: the value on the row's 'reservation' line, or \"absent\". greens: every c-green chip in the row. label_rules names the FIXER rules (rules.json viewer_label_rules) a vector pins; on a known_defect vector they are the rules its target follows and today's output breaks. Vectors with status known_defect assert today's output in expect; target is not asserted.",
+ "status": "current behavior at 3ae1cdf",
+ "vectors": [
+  {
+   "id": "label-unreadable-file",
+   "rule": "viewer.label",
+   "input": {
+    "ledger": {
+     "ts": "2026-11-10T15:00:00Z",
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zSONAR",
+     "provider": "mock",
+     "network": "devnet",
+     "payer": "holder",
+     "state": "sent",
+     "spend": null,
+     "cap_charge": 0.186,
+     "quote_padded": 0.186,
+     "per_call_cap": 1,
+     "daily_cap": 5,
+     "spent_before": 0
+    },
+    "receipt": "{not json"
+   },
+   "expect": {
+    "imd-flop": {
+     "not_applicable": "imd-flop does not render the viewer lane"
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard does not render the viewer lane"
+    },
+    "viewer": {
+     "chips": [
+      [
+       "grey",
+       "sent"
+      ],
+      [
+       "red",
+       "unreadable"
+      ]
+     ],
+     "reservation": 0.186,
+     "matches_shown": false,
+     "greens": [],
+     "link": [
+      "grey",
+      "not checked",
+      null
+     ]
+    }
+   },
+   "label_rules": [
+    "V-PRECEDENCE"
+   ]
+  },
+  {
+   "id": "label-unreadable-beats-unknown",
+   "rule": "viewer.label",
+   "input": {
+    "ledger": {
+     "ts": "2026-11-10T15:00:00Z",
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zSONAR",
+     "provider": "mock",
+     "network": "devnet",
+     "payer": "holder",
+     "state": "timeout_unknown",
+     "spend": null,
+     "cap_charge": 0.186,
+     "quote_padded": 0.186,
+     "per_call_cap": 1,
+     "daily_cap": 5,
+     "spent_before": 0
+    },
+    "receipt": "{not json"
+   },
+   "expect": {
+    "imd-flop": {
+     "not_applicable": "imd-flop does not render the viewer lane"
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard does not render the viewer lane"
+    },
+    "viewer": {
+     "chips": [
+      [
+       "grey",
+       "sent"
+      ],
+      [
+       "red",
+       "unreadable"
+      ]
+     ],
+     "reservation": 0.186,
+     "matches_shown": false,
+     "greens": [],
+     "link": [
+      "grey",
+      "not checked",
+      null
+     ]
+    }
+   },
+   "note": "Unreadable and unknown on one row: a timeout_unknown ledger row whose receipt file is broken JSON. Only the red 'unreadable' chip shows (no red 'unknown'); reservation kept, no matches, no greens.",
+   "label_rules": [
+    "V-PRECEDENCE"
+   ]
+  },
+  {
+   "id": "label-failed-read",
+   "rule": "viewer.label",
+   "input": {
+    "ledger": {
+     "ts": "2026-11-10T15:00:00Z",
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zSONAR",
+     "provider": "mock",
+     "network": "devnet",
+     "payer": "holder",
+     "state": "sent",
+     "spend": null,
+     "cap_charge": 0.186,
+     "quote_padded": 0.186,
+     "per_call_cap": 1,
+     "daily_cap": 5,
+     "spent_before": 0
+    },
+    "receipt": {
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zSONAR",
+     "state": "estimated",
+     "settled": null,
+     "chain_final": false,
+     "http": 503,
+     "error": "HTTP 503"
+    }
+   },
+   "expect": {
+    "imd-flop": {
+     "not_applicable": "imd-flop does not render the viewer lane"
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard does not render the viewer lane"
+    },
+    "viewer": {
+     "chips": [
+      [
+       "grey",
+       "sent"
+      ],
+      [
+       "red",
+       "unknown"
+      ]
+     ],
+     "reservation": 0.186,
+     "matches_shown": false,
+     "greens": [],
+     "link": [
+      "grey",
+      "not checked",
+      null
+     ]
+    }
+   },
+   "label_rules": [
+    "V-PRECEDENCE",
+    "V-FAILED-READ"
+   ]
+  },
+  {
+   "id": "label-failed-read-before-identity",
+   "rule": "viewer.label",
+   "input": {
+    "ledger": {
+     "ts": "2026-11-10T15:00:00Z",
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zSONAR",
+     "provider": "mock",
+     "network": "devnet",
+     "payer": "holder",
+     "state": "sent",
+     "spend": null,
+     "cap_charge": 0.186,
+     "quote_padded": 0.186,
+     "per_call_cap": 1,
+     "daily_cap": 5,
+     "spent_before": 0
+    },
+    "receipt": {
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9999",
+     "did": "did:key:zSONAR",
+     "state": "estimated",
+     "settled": null,
+     "chain_final": false,
+     "http": 503,
+     "error": "HTTP 503"
+    }
+   },
+   "expect": {
+    "imd-flop": {
+     "not_applicable": "imd-flop does not render the viewer lane"
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard does not render the viewer lane"
+    },
+    "viewer": {
+     "chips": [
+      [
+       "grey",
+       "sent"
+      ],
+      [
+       "red",
+       "unknown"
+      ]
+     ],
+     "reservation": 0.186,
+     "matches_shown": false,
+     "greens": [],
+     "link": [
+      "grey",
+      "not checked",
+      null
+     ]
+    }
+   },
+   "quirks": [
+    "R-c"
+   ],
+   "label_rules": [
+    "V-PRECEDENCE"
+   ]
+  },
+  {
+   "id": "label-identity-before-disagree",
+   "rule": "viewer.label",
+   "input": {
+    "ledger": {
+     "ts": "2026-11-10T15:00:00Z",
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zSONAR",
+     "provider": "mock",
+     "network": "devnet",
+     "payer": "holder",
+     "state": "sent",
+     "spend": null,
+     "cap_charge": 0.186,
+     "quote_padded": 0.186,
+     "per_call_cap": 1,
+     "daily_cap": 5,
+     "spent_before": 0
+    },
+    "receipt": {
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9999",
+     "did": "did:key:zSONAR",
+     "state": "settled",
+     "settled": 0.05,
+     "chain_final": false,
+     "http": 200,
+     "error": null
+    }
+   },
+   "expect": {
+    "imd-flop": {
+     "not_applicable": "imd-flop does not render the viewer lane"
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard does not render the viewer lane"
+    },
+    "viewer": {
+     "chips": [
+      [
+       "grey",
+       "sent"
+      ],
+      [
+       "red",
+       "mismatch"
+      ]
+     ],
+     "reservation": 0.186,
+     "matches_shown": false,
+     "greens": [],
+     "link": [
+      "grey",
+      "not checked",
+      null
+     ]
+    }
+   },
+   "label_rules": [
+    "V-PRECEDENCE"
+   ]
+  },
+  {
+   "id": "label-disagree",
+   "rule": "viewer.label",
+   "input": {
+    "ledger": {
+     "ts": "2026-11-10T15:00:00Z",
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zSONAR",
+     "provider": "mock",
+     "network": "devnet",
+     "payer": "holder",
+     "state": "sent",
+     "spend": null,
+     "cap_charge": 0.186,
+     "quote_padded": 0.186,
+     "per_call_cap": 1,
+     "daily_cap": 5,
+     "spent_before": 0
+    },
+    "receipt": {
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zSONAR",
+     "state": "settled",
+     "settled": 0.05,
+     "chain_final": false,
+     "http": 200,
+     "error": null
+    }
+   },
+   "expect": {
+    "imd-flop": {
+     "not_applicable": "imd-flop does not render the viewer lane"
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard does not render the viewer lane"
+    },
+    "viewer": {
+     "chips": [
+      [
+       "amber",
+       "DISAGREE"
+      ]
+     ],
+     "reservation": 0.186,
+     "matches_shown": false,
+     "greens": [],
+     "link": [
+      "grey",
+      "not checked",
+      null
+     ]
+    }
+   },
+   "label_rules": [
+    "V-PRECEDENCE"
+   ]
+  },
+  {
+   "id": "label-identity-with-timeout-shows-one-unknown",
+   "rule": "viewer.label",
+   "input": {
+    "ledger": {
+     "ts": "2026-11-10T15:00:00Z",
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zSONAR",
+     "provider": "mock",
+     "network": "devnet",
+     "payer": "holder",
+     "state": "timeout_unknown",
+     "spend": null,
+     "cap_charge": 0.186,
+     "quote_padded": 0.186,
+     "per_call_cap": 1,
+     "daily_cap": 5,
+     "spent_before": 0
+    },
+    "receipt": {
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9999",
+     "did": "did:key:zSONAR",
+     "state": "estimated",
+     "settled": null,
+     "chain_final": false,
+     "http": 200,
+     "error": null
+    }
+   },
+   "expect": {
+    "imd-flop": {
+     "not_applicable": "imd-flop does not render the viewer lane"
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard does not render the viewer lane"
+    },
+    "viewer": {
+     "chips": [
+      [
+       "grey",
+       "sent"
+      ],
+      [
+       "red",
+       "unknown"
+      ]
+     ],
+     "reservation": 0.186,
+     "matches_shown": false,
+     "greens": [],
+     "link": [
+      "grey",
+      "not checked",
+      null
+     ]
+    }
+   },
+   "quirks": [
+    "Q-SECONDARY-UNKNOWN"
+   ],
+   "label_rules": [
+    "V-PRECEDENCE"
+   ]
+  },
+  {
+   "id": "label-failed-read-beside-ledger-settled",
+   "rule": "viewer.label",
+   "input": {
+    "ledger": {
+     "ts": "2026-11-10T15:00:00Z",
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zSONAR",
+     "provider": "mock",
+     "network": "devnet",
+     "payer": "holder",
+     "state": "settled",
+     "spend": 0.05,
+     "cap_charge": 0.05,
+     "quote_padded": 0.186,
+     "per_call_cap": 1,
+     "daily_cap": 5,
+     "spent_before": 0
+    },
+    "receipt": {
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zSONAR",
+     "state": "estimated",
+     "settled": null,
+     "chain_final": false,
+     "http": 503,
+     "error": "HTTP 503"
+    }
+   },
+   "expect": {
+    "imd-flop": {
+     "not_applicable": "imd-flop does not render the viewer lane"
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard does not render the viewer lane"
+    },
+    "viewer": {
+     "chips": [
+      [
+       "grey",
+       "sent"
+      ],
+      [
+       "red",
+       "unknown"
+      ]
+     ],
+     "reservation": 0.05,
+     "matches_shown": false,
+     "greens": [],
+     "link": [
+      "grey",
+      "not checked",
+      null
+     ]
+    }
+   },
+   "label_rules": [
+    "V-FAILED-READ",
+    "V-UNKNOWN-SETTLED"
+   ]
+  },
+  {
+   "id": "label-judge-case2-settled-503-chain-final",
+   "rule": "viewer.label",
+   "input": {
+    "ledger": {
+     "ts": "2026-11-10T15:00:00Z",
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zSONAR",
+     "provider": "mock",
+     "network": "devnet",
+     "payer": "holder",
+     "state": "settled",
+     "spend": 0.198,
+     "cap_charge": 0.198,
+     "quote_padded": 0.186,
+     "per_call_cap": 1,
+     "daily_cap": 5,
+     "spent_before": 0
+    },
+    "receipt": {
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zSONAR",
+     "state": "settled",
+     "settled": 0.198,
+     "chain_final": true,
+     "http": 503,
+     "error": "HTTP 503"
+    }
+   },
+   "expect": {
+    "imd-flop": {
+     "not_applicable": "imd-flop does not render the viewer lane"
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard does not render the viewer lane"
+    },
+    "viewer": {
+     "chips": [
+      [
+       "grey",
+       "sent"
+      ],
+      [
+       "red",
+       "unknown"
+      ]
+     ],
+     "reservation": 0.198,
+     "matches_shown": false,
+     "greens": [],
+     "link": [
+      "grey",
+      "not checked",
+      null
+     ]
+    }
+   },
+   "label_rules": [
+    "V-FAILED-READ",
+    "V-UNKNOWN-SETTLED"
+   ]
+  },
+  {
+   "id": "label-failed-read-cap-charge-null-uses-quote",
+   "rule": "viewer.label",
+   "input": {
+    "ledger": {
+     "ts": "2026-11-10T15:00:00Z",
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zSONAR",
+     "provider": "mock",
+     "network": "devnet",
+     "payer": "holder",
+     "state": "sent",
+     "spend": null,
+     "cap_charge": null,
+     "quote_padded": 0.3,
+     "per_call_cap": 1,
+     "daily_cap": 5,
+     "spent_before": 0
+    },
+    "receipt": {
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zSONAR",
+     "state": "estimated",
+     "settled": null,
+     "chain_final": false,
+     "http": 503,
+     "error": "HTTP 503"
+    }
+   },
+   "expect": {
+    "imd-flop": {
+     "not_applicable": "imd-flop does not render the viewer lane"
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard does not render the viewer lane"
+    },
+    "viewer": {
+     "chips": [
+      [
+       "grey",
+       "sent"
+      ],
+      [
+       "red",
+       "unknown"
+      ]
+     ],
+     "reservation": 0.3,
+     "matches_shown": false,
+     "greens": [],
+     "link": [
+      "grey",
+      "not checked",
+      null
+     ]
+    }
+   },
+   "label_rules": [
+    "V-FAILED-READ"
+   ]
+  },
+  {
+   "id": "label-no-receipt-file",
+   "rule": "viewer.label",
+   "input": {
+    "ledger": {
+     "ts": "2026-11-10T15:00:00Z",
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zSONAR",
+     "provider": "mock",
+     "network": "devnet",
+     "payer": "holder",
+     "state": "timeout_unknown",
+     "spend": null,
+     "cap_charge": 0.186,
+     "quote_padded": 0.186,
+     "per_call_cap": 1,
+     "daily_cap": 5,
+     "spent_before": 0
+    },
+    "receipt": null
+   },
+   "expect": {
+    "imd-flop": {
+     "not_applicable": "imd-flop does not render the viewer lane"
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard does not render the viewer lane"
+    },
+    "viewer": {
+     "chips": [
+      [
+       "grey",
+       "sent"
+      ],
+      [
+       "red",
+       "unknown"
+      ]
+     ],
+     "reservation": 0.186,
+     "matches_shown": false,
+     "greens": [],
+     "link": [
+      "grey",
+      "not checked",
+      null
+     ]
+    }
+   },
+   "quirks": [
+    "R-d"
+   ],
+   "label_rules": [
+    "V-PRECEDENCE"
+   ],
+   "note": "[fix: residual-d] the no-file row now shows its reservation line; was reservation \"absent\""
+  },
+  {
+   "id": "label-green-row-link-still-grey",
+   "rule": "viewer.label",
+   "input": {
+    "ledger": {
+     "ts": "2026-11-10T15:00:00Z",
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zSONAR",
+     "provider": "mock",
+     "network": "devnet",
+     "payer": "holder",
+     "state": "settled",
+     "spend": 0.05,
+     "cap_charge": 0.05,
+     "quote_padded": 0.186,
+     "per_call_cap": 1,
+     "daily_cap": 5,
+     "spent_before": 0
+    },
+    "receipt": {
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zSONAR",
+     "state": "settled",
+     "settled": 0.05,
+     "chain_final": true,
+     "http": 200,
+     "error": null
+    }
+   },
+   "expect": {
+    "imd-flop": {
+     "not_applicable": "imd-flop does not render the viewer lane"
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard does not render the viewer lane"
+    },
+    "viewer": {
+     "chips": [
+      [
+       "grey",
+       "sent"
+      ],
+      [
+       "green",
+       "chain final"
+      ]
+     ],
+     "reservation": "absent",
+     "matches_shown": true,
+     "greens": [
+      "chain final"
+     ],
+     "link": [
+      "grey",
+      "not checked",
+      null
+     ]
+    }
+   },
+   "label_rules": [
+    "V-LINK-GREY"
+   ]
+  },
+  {
+   "id": "label-ledger-link-bypassed",
+   "rule": "viewer.label",
+   "input": {
+    "ledger": {
+     "ts": "2026-11-10T15:00:00Z",
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zSONAR",
+     "provider": "mock",
+     "network": "devnet",
+     "payer": "holder",
+     "state": "settled",
+     "spend": 0.05,
+     "cap_charge": 0.05,
+     "quote_padded": 0.186,
+     "per_call_cap": 1,
+     "daily_cap": 5,
+     "spent_before": 0,
+     "link_bypassed": true
+    },
+    "receipt": {
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zSONAR",
+     "state": "settled",
+     "settled": 0.05,
+     "chain_final": true,
+     "http": 200,
+     "error": null
+    }
+   },
+   "expect": {
+    "imd-flop": {
+     "not_applicable": "imd-flop does not render the viewer lane"
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard does not render the viewer lane"
+    },
+    "viewer": {
+     "chips": [
+      [
+       "grey",
+       "sent"
+      ],
+      [
+       "green",
+       "chain final"
+      ]
+     ],
+     "reservation": "absent",
+     "matches_shown": true,
+     "greens": [
+      "chain final"
+     ],
+     "link": [
+      "grey",
+      "not checked",
+      null
+     ]
+    }
+   },
+   "status": "fixed",
+   "defect": "KD-4",
+   "note": "[fix: link-not-checked] the link column is grey 'not checked' even with link_bypassed: true; was (known_defect) grey 'bypassed (mock)'",
+   "label_rules": [
+    "V-LINK-GREY"
+   ]
+  },
+  {
+   "id": "label-kd1-key-expired-is-a-failed-read",
+   "rule": "viewer.label",
+   "input": {
+    "ledger": {
+     "ts": "2026-11-10T15:00:00Z",
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zSONAR",
+     "provider": "mock",
+     "network": "devnet",
+     "payer": "holder",
+     "state": "sent",
+     "spend": null,
+     "cap_charge": 0.186,
+     "quote_padded": 0.186,
+     "per_call_cap": 1,
+     "daily_cap": 5,
+     "spent_before": 0
+    },
+    "receipt": {
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zSONAR",
+     "state": "estimated",
+     "settled": null,
+     "chain_final": false,
+     "http": 401,
+     "error": "api_key_expired",
+     "flag": "key_expired"
+    }
+   },
+   "expect": {
+    "imd-flop": {
+     "not_applicable": "imd-flop does not render the viewer lane"
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard does not render the viewer lane"
+    },
+    "viewer": {
+     "chips": [
+      [
+       "grey",
+       "sent"
+      ],
+      [
+       "red",
+       "unknown"
+      ]
+     ],
+     "reservation": 0.186,
+     "matches_shown": false,
+     "greens": [],
+     "link": [
+      "grey",
+      "not checked",
+      null
+     ]
+    }
+   },
+   "note": "[fix: KD-1] a key-expired read is a failed read: red unknown, reservation line kept, never 'matches'; was (known_defect) reservation absent, matches_shown true",
+   "status": "fixed",
+   "defect": "KD-1",
+   "label_rules": [
+    "V-FAILED-READ"
+   ]
+  },
+  {
+   "id": "label-kd1-key-expired-beside-ledger-settled",
+   "rule": "viewer.label",
+   "input": {
+    "ledger": {
+     "ts": "2026-11-10T15:00:00Z",
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zSONAR",
+     "provider": "mock",
+     "network": "devnet",
+     "payer": "holder",
+     "state": "settled",
+     "spend": 0.05,
+     "cap_charge": 0.05,
+     "quote_padded": 0.186,
+     "per_call_cap": 1,
+     "daily_cap": 5,
+     "spent_before": 0
+    },
+    "receipt": {
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zSONAR",
+     "state": "settled",
+     "settled": 0.05,
+     "chain_final": true,
+     "http": 401,
+     "error": "api_key_expired",
+     "flag": "key_expired"
+    }
+   },
+   "expect": {
+    "imd-flop": {
+     "not_applicable": "imd-flop does not render the viewer lane"
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard does not render the viewer lane"
+    },
+    "viewer": {
+     "chips": [
+      [
+       "grey",
+       "sent"
+      ],
+      [
+       "red",
+       "unknown"
+      ]
+     ],
+     "reservation": 0.05,
+     "matches_shown": false,
+     "greens": [],
+     "link": [
+      "grey",
+      "not checked",
+      null
+     ]
+    }
+   },
+   "note": "[fix: KD-1] a key-expired read is a failed read: red unknown, reservation line kept, never 'matches'; was (known_defect) reservation absent, matches_shown true",
+   "status": "fixed",
+   "defect": "KD-1",
+   "label_rules": [
+    "V-FAILED-READ",
+    "V-UNKNOWN-SETTLED"
+   ]
+  },
+  {
+   "id": "label-kd2-settled-above-reservation",
+   "rule": "viewer.label",
+   "input": {
+    "ledger": {
+     "ts": "2026-11-10T15:00:00Z",
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zSONAR",
+     "provider": "mock",
+     "network": "devnet",
+     "payer": "holder",
+     "state": "settled",
+     "spend": 0.2,
+     "cap_charge": 0.2,
+     "quote_padded": 0.186,
+     "per_call_cap": 1,
+     "daily_cap": 5,
+     "spent_before": 0
+    },
+    "receipt": {
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zSONAR",
+     "state": "settled",
+     "settled": 0.2,
+     "chain_final": true,
+     "http": 200,
+     "error": null
+    }
+   },
+   "expect": {
+    "imd-flop": {
+     "not_applicable": "imd-flop does not render the viewer lane"
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard does not render the viewer lane"
+    },
+    "viewer": {
+     "chips": [
+      [
+       "amber",
+       "over the reservation"
+      ]
+     ],
+     "reservation": 0.186,
+     "matches_shown": false,
+     "greens": [],
+     "link": [
+      "grey",
+      "not checked",
+      null
+     ]
+    }
+   },
+   "note": "[fix: KD-2] + [fix: FIXER-viewer-rulings]: amber 'over the reservation' (first of per-call cap, daily cap, reservation), reservation line 'reservation <quote_padded, else cap_charge> (held)' = 0.186, then a separate 'settled <amount>' line; chain-final green blocked, never 'matches'. was (known_defect) grey sent + green chain final, matches",
+   "status": "fixed",
+   "defect": "KD-2",
+   "label_rules": [
+    "V-PRECEDENCE"
+   ]
+  },
+  {
+   "id": "label-kd2-settled-above-per-call-cap",
+   "rule": "viewer.label",
+   "input": {
+    "ledger": {
+     "ts": "2026-11-10T15:00:00Z",
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zSONAR",
+     "provider": "mock",
+     "network": "devnet",
+     "payer": "holder",
+     "state": "settled",
+     "spend": 1.5,
+     "cap_charge": 1.5,
+     "quote_padded": 0.186,
+     "per_call_cap": 1,
+     "daily_cap": 5,
+     "spent_before": 0
+    },
+    "receipt": {
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zSONAR",
+     "state": "settled",
+     "settled": 1.5,
+     "chain_final": true,
+     "http": 200,
+     "error": null
+    }
+   },
+   "expect": {
+    "imd-flop": {
+     "not_applicable": "imd-flop does not render the viewer lane"
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard does not render the viewer lane"
+    },
+    "viewer": {
+     "chips": [
+      [
+       "amber",
+       "over the per-call cap"
+      ]
+     ],
+     "reservation": 0.186,
+     "matches_shown": false,
+     "greens": [],
+     "link": [
+      "grey",
+      "not checked",
+      null
+     ]
+    }
+   },
+   "note": "[fix: KD-2] + [fix: FIXER-viewer-rulings]: amber 'over the per-call cap' (first of per-call cap, daily cap, reservation), reservation line 'reservation <quote_padded, else cap_charge> (held)' = 0.186, then a separate 'settled <amount>' line; chain-final green blocked, never 'matches'. was (known_defect) grey sent + green chain final, matches",
+   "status": "fixed",
+   "defect": "KD-2",
+   "label_rules": [
+    "V-PRECEDENCE"
+   ]
+  }
+ ]
+}

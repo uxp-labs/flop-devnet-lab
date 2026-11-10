@@ -11,11 +11,14 @@ import { revokedDids } from "./keys.js";
 import type { LedgerEntry } from "./ledger.js";
 import type { MatchResult } from "./receipts.js";
 
+export const RECEIPT_IDENTITY_STATUS = "receipt identity mismatch; chain-final green blocked";
+
 export interface ReceiptIds {
   job: string | null;
   seat?: string | null;
   did?: string | null;
   correlation_id?: string | null;
+  request_id?: string | null;
 }
 
 export async function matchReceipt(h: string, receipt: ReceiptIds | null, row: LedgerEntry | null): Promise<MatchResult> {
@@ -26,6 +29,8 @@ export async function matchReceipt(h: string, receipt: ReceiptIds | null, row: L
     if (receipt.job !== row.job) fields.push("job");
     if (receipt.seat !== row.seat) fields.push("seat");
     if (!receipt.did || receipt.did !== row.did) fields.push("did");
+    const sameId = typeof receipt.request_id === "string" && receipt.request_id.length > 0 && receipt.request_id === row.request_id;
+    if (!sameId) fields.push(RECEIPT_IDENTITY_STATUS);
   }
   // The gateway echoes our X-Correlation-ID; it must name the same job.
   if (receipt.job && receipt.correlation_id && receipt.correlation_id !== `imd-job-${receipt.job}`) fields.push("job(correlation_id)");

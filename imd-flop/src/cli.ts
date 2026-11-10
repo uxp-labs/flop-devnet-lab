@@ -9,10 +9,12 @@ import { claimUnassigned, initSeat, loadSigner, readIdentity, UNASSIGNED, valida
 import { buildLink, verifyLink, type LinkFile } from "./link.js";
 import { readJson, writeJsonSafe, writeSecretFile } from "./store.js";
 import { network, SEAT_COLLECTION } from "./networks.js";
-import { checkGenesis, readSeatOwner, enrollChallengeUrl, getEnrollChallenge, postEnroll, type Fetch } from "./gateway.js";
+import { checkGenesis, readVerifiedSeatOwner, enrollChallengeUrl, getEnrollChallenge, postEnroll, type Fetch } from "./gateway.js";
 import { FlopProvider, MOCK_SCENARIOS, MockProvider, type MockScenario, type Provider } from "./providers.js";
-import { checkLinkForRun, padQuote, runJob } from "./run.js";
-import { latestAttempts, spentToday } from "./ledger.js";
+import { checkLinkForRun, runJob } from "./run.js";
+import { padQuote, parseAmount } from "./policy.js";
+import { appendLedger, latestAttempts, spentToday } from "./ledger.js";
+import { readSavedReceipt, refreshReceipt, type SavedReceipt } from "./receipt-store.js";
 import { blank, classifyReceipt, receiptLine, type Classified } from "./receipts.js";
 import { registerSecret } from "./secrets.js";
 import { matchReceipt } from "./match.js";
@@ -30,7 +32,7 @@ const HELP = `imd-flop: reference companion CLI for "FLOP, by choice" (devnet re
 
   init [--network devnet] [--seat <tokenId>] [--rotate] [--check-genesis]
   link --token <tokenId> [--agent <erc8004AgentId>]
-  link verify <file> [--wallet-sig <0x..> --wallet <0x..>] [--save] [--eth-rpc <url>]  (owner check; or ETH_RPC_URL)
+  link verify <file> [--wallet-sig <0x..> --wallet <0x..>] [--save] [--eth-rpc <url>]  (eth_chainId must be 1, then ownerOf; or ETH_RPC_URL)
   faucet [--dry-run]                      (refuses: team rule, no faucets)
   enroll [--dry-run | --live]             (dry run by default)
   cap set <FLOP/day> [--per-call <FLOP>] | cap show
@@ -43,6 +45,8 @@ const HELP = `imd-flop: reference companion CLI for "FLOP, by choice" (devnet re
   receipt <request_id> [--refresh] [--json]
 
 Global: --seat <tokenId>, --json. Data: $IMD_FLOP_HOME or ~/.imd-flop. Provider defaults to mock.
+Paid run --provider flop needs ETH_RPC_URL reporting chain id 1 and a live devnet genesis equal to the pinned hash.
+It refuses on a wrong chain, a reset, or an unreadable response, before any paid call. The mock provider stays offline.
 `;
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -55,12 +59,13 @@ function parse(args: string[], options: ParseArgsConfig["options"]): { values: V
   }
 }
 
-const num = (v: string | undefined, name: string): number | undefined => {
-  if (v === undefined) return undefined;
-  const n = Number(v);
-  if (!Number.isFinite(n) || n <= 0) throw new CliError(`${name} must be a positive number`, EXIT.USAGE);
+function timeoutMs(raw: string | undefined): number {
+  if (raw === undefined) return 60000;
+  if (!/^\d+$/.test(raw)) throw new CliError("--timeout-ms must be an integer from 1 to 2147483647", EXIT.USAGE);
+  const n = Number(raw);
+  if (!Number.isInteger(n) || n < 1 || n > 2147483647) throw new CliError("--timeout-ms must be an integer from 1 to 2147483647", EXIT.USAGE);
   return n;
-};
+}
 
 function activeSeat(h: string, explicit?: string): string {
   const s = explicit ?? loadConfig(h).seat;
@@ -77,7 +82,7 @@ function makeProvider(io: IO, name: string, h: string, seat: string, opts: { liv
   }
   if (name === "flop") {
     if (!opts.live) throw new CliError("--provider flop spends real devnet FLOP: it needs --live, a cap, a fully signed link and an enrolled gateway key", EXIT.REFUSED_RULE);
-    return new FlopProvider(network(loadConfig(h).network), gatewayKeyFile(h, seat), io.fetch);
+    return new FlopProvider(network(loadConfig(h).network), gatewayKeyFile(h, seat), io.fetch, io.env.ETH_RPC_URL);
   }
   throw new CliError("--provider must be mock or flop", EXIT.USAGE);
 }
@@ -120,7 +125,7 @@ export async function main(argv: string[], io: IO): Promise<number> {
           io.out(`  did   ${r.identity.did}`);
           io.out(`  ss58  ${r.identity.ss58}  (prefix ${r.identity.ss58Prefix}, the devnet faucet's ss58Format)`);
           io.out(`  key   ${String(out.keyFile)}`);
-          if (out.genesis) io.out(`  genesis ok (faucet == rpc)`);
+          if (out.genesis) io.out(`  genesis ok (pinned == faucet == rpc)`);
         }
         return EXIT.OK;
       }
@@ -136,7 +141,7 @@ export async function main(argv: string[], io: IO): Promise<number> {
           let currentOwner: string | null | undefined;
           if (ethRpc) {
             try {
-              currentOwner = await readSeatOwner(ethRpc, SEAT_COLLECTION, lf.statement?.tokenId ?? "0", io.fetch);
+              currentOwner = await readVerifiedSeatOwner(ethRpc, SEAT_COLLECTION, lf.statement?.tokenId ?? "0", io.fetch);
             } catch (e) {
               throw new CliError(`owner check failed (not treated as ok): ${(e as Error).message}`, EXIT.VERIFY_FAILED);
             }
@@ -241,9 +246,9 @@ export async function main(argv: string[], io: IO): Promise<number> {
         const cfg = loadConfig(h);
         const seat = activeSeat(h, values.seat);
         if (sub === "set") {
-          const daily = num(positionals[0], "cap");
+          const daily = parseAmount(positionals[0], "cap");
           if (daily === undefined) throw new CliError("usage: cap set <FLOP/day> [--per-call <FLOP>]", EXIT.USAGE);
-          const perCall = num(values["per-call"], "--per-call") ?? daily;
+          const perCall = parseAmount(values["per-call"], "--per-call") ?? daily;
           if (perCall > daily) throw new CliError("--per-call cannot exceed the daily cap", EXIT.USAGE);
           cfg.caps[seat] = { daily, perCall };
           saveConfig(h, cfg);
@@ -316,8 +321,8 @@ export async function main(argv: string[], io: IO): Promise<number> {
             maxTokens: Number(values["max-tokens"] ?? 16),
             seat,
             noLink: values["no-link"],
-            jobBudget: num(values["job-budget"], "--job-budget"),
-            timeoutMs: Number(values["timeout-ms"] ?? 60000),
+            jobBudget: parseAmount(values["job-budget"], "--job-budget"),
+            timeoutMs: timeoutMs(values["timeout-ms"]),
             checkJob: values["check-job"],
           },
           { fetch: io.fetch, ethRpc: io.env.ETH_RPC_URL },
@@ -387,20 +392,13 @@ export async function main(argv: string[], io: IO): Promise<number> {
         const { values, positionals } = parse(rest, { refresh: { type: "boolean" }, live: { type: "boolean" } });
         const rid = positionals[0];
         if (!rid || !/^[\x21-\x7e]{1,128}$/.test(rid) || rid.includes("/")) throw new CliError("usage: receipt <request_id>", EXIT.USAGE);
-        const path = join(receiptsDir(h), `${rid}.json`);
-        let saved = readJson<Classified & { seat: string; mock_scenario?: string }>(path);
+        let saved: SavedReceipt | null = readSavedReceipt(h, rid);
         // Timeouts have a ledger row but no receipt file yet.
-        const ledgerRow = latestAttempts(h).find((e) => e.request_id === rid);
+        let ledgerRow = latestAttempts(h).find((e) => e.request_id === rid);
         if (!saved && !ledgerRow) throw new CliError(`no receipt or ledger entry for ${rid}`, EXIT.USAGE);
         if (values.refresh) {
-          const seat = saved?.seat ?? ledgerRow!.seat;
-          const pname = saved?.provider ?? ledgerRow!.provider;
-          const p = makeProvider(io, pname, h, seat, { live: values.live, scenario: saved?.mock_scenario });
-          const rr = await p.readReceipt(rid);
-          const c = classifyReceipt(rr.receipt, { job: saved?.job ?? ledgerRow?.job ?? null, provider: pname, http: rr.http, error: rr.error, requestId: rid, mock: pname === "mock" });
-          const merged = rr.http === 200 ? { ...saved, ...c } : { ...saved, ...c, state: saved?.state ?? null, reserved: saved?.reserved ?? null, settled: saved?.settled ?? null, last_known_at: saved?.observed_at ?? null };
-          writeJsonSafe(path, merged, "receipt");
-          saved = merged as typeof saved;
+          const p = makeProvider(io, saved?.provider ?? ledgerRow!.provider, h, saved?.seat ?? ledgerRow!.seat, { live: values.live, scenario: saved?.mock_scenario });
+          ({ saved, ledgerRow } = await refreshReceipt(h, rid, p, { saved, ledgerRow }, io.err));
         }
         const match = await matchReceipt(h, saved ?? null, ledgerRow ?? null);
         const show = { ...(saved ?? { ...classifyReceipt(null, { job: ledgerRow!.job, provider: ledgerRow!.provider, requestId: rid, mock: ledgerRow!.mock }), seat: ledgerRow!.seat, did: ledgerRow!.did }), match };
