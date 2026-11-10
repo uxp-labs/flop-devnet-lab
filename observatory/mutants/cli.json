@@ -69,7 +69,7 @@
     "find": "  if (twice !== null) throw new Error(`it holds the key ${JSON.stringify(twice)} twice in one object`);",
     "replace": "",
     "test": "scripts/cli-checks.mjs",
-    "why": "the MCP binary must refuse a snapshot with a key twice, which two readers can resolve differently"
+    "why": "a snapshot with a key twice is refused, and the refusal names the repeated key. The written form check refuses such a file too, so this kill shows the reason given, not that the refusal stands on this check (round 9 review I6)"
   },
   {
     "id": "mcp-bin-lossy-utf8",
@@ -149,7 +149,7 @@
     "find": "  if (nestingDepth(text) > MAX_NESTING) throw new Error(`it nests deeper than ${MAX_NESTING} levels`);",
     "replace": "",
     "test": "scripts/cli-checks.mjs",
-    "why": "round 7 review I2: deep nesting is refused before parsing, with the binary's own refusal"
+    "why": "deep nesting is refused before parsing, with the binary's own words. Without the check the parser's stack overflow still refuses the file, so this kill shows the reason given, not that the refusal stands on it (round 9 review I6)"
   },
   {
     "id": "mcp-bin-parts-unchecked",
@@ -162,7 +162,7 @@
   {
     "id": "cli-earlier-best-not-read",
     "file": "src/cli.ts",
-    "find": "        if (st.genesis.rpc !== null && st.best_height !== null) earlierBest.push({ genesis: st.genesis.rpc, best_height: st.best_height });\n",
+    "find": "        if (st.genesis.rpc !== null && st.best_height !== null) earlierBest.push({ genesis: st.genesis.rpc, best_height: st.best_height, finalized_height: st.finalized_height });\n",
     "replace": "",
     "test": "scripts/cli-checks.mjs",
     "why": "round 8 review L1: every earlier snapshot's best height reaches the floor, with or without a finalized head"
@@ -230,5 +230,69 @@
     "replace": "  true &&",
     "test": "scripts/cli-checks.mjs",
     "why": "round 8 review I1: an escrow state is one of the four the schema names"
+  },
+  {
+    "id": "mcp-bin-escrow-id-any-text",
+    "file": "src/mcp-bin.ts",
+    "find": "  hash(e.escrow_id) &&",
+    "replace": "  typeof e.escrow_id === \"string\" &&",
+    "test": "scripts/cli-checks.mjs",
+    "why": "round 9 review L6: a served escrow id is 0x plus 64 hex, the form get_escrow_state answers for"
+  },
+  {
+    "id": "mcp-bin-duplicate-escrows-served",
+    "file": "src/mcp-bin.ts",
+    "find": "  new Set(snapshot.escrows.map((e) => e.escrow_id)).size === snapshot.escrows.length &&",
+    "replace": "  true &&",
+    "test": "scripts/cli-checks.mjs",
+    "why": "round 9 review L6: each escrow once, so the list and get_escrow_state cannot disagree on its state"
+  },
+  {
+    "id": "mcp-bin-genesis-extra-field-served",
+    "file": "src/mcp-bin.ts",
+    "find": "  exactly(st.genesis, [\"pinned\", \"faucet\", \"rpc\"]) &&",
+    "replace": "  true &&",
+    "test": "scripts/cli-checks.mjs",
+    "why": "round 9 review L6: the status genesis holds exactly pinned, faucet and rpc"
+  },
+  {
+    "id": "mcp-bin-service-any-health",
+    "file": "src/mcp-bin.ts",
+    "find": "const service = (v: unknown): boolean => isObject(v) && HEALTHS.includes(v.health as string);",
+    "replace": "const service = (v: unknown): boolean => isObject(v);",
+    "test": "scripts/cli-checks.mjs",
+    "why": "round 9 review L6: a served service health is one of the four words"
+  },
+  {
+    "id": "cli-empty-value-read",
+    "file": "src/cli.ts",
+    "find": "    if (v === undefined || v === \"\" || v.startsWith(\"--\")) refuse(`${a} needs a value`);",
+    "replace": "    if (v === undefined || v.startsWith(\"--\")) refuse(`${a} needs a value`);",
+    "test": "scripts/cli-checks.mjs",
+    "why": "round 9 review L3: an empty value, as an unset shell variable gives, would read as the flag left out"
+  },
+  {
+    "id": "cli-now-any-text",
+    "file": "src/cli.ts",
+    "find": "    if (a === \"--now\" && parseZoned(v) === null) refuse(`--now must be an ISO 8601 time with a zone, such as 2026-11-09T23:47:41Z`);\n",
+    "replace": "",
+    "test": "scripts/cli-checks.mjs",
+    "why": "round 9 review I1: --now must be a time with a zone, or every result is stamped with it unread"
+  },
+  {
+    "id": "cli-census-missing-folder-unlabeled",
+    "file": "src/cli.ts",
+    "find": "    const dir = one(a, \"--fixtures\") ?? fail(\"census refused (request): missing --fixtures\");",
+    "replace": "    const dir = need(a, \"--fixtures\");",
+    "test": "scripts/cli-checks.mjs",
+    "why": "round 9 review I1: census without its folder flag is a request refusal, as the recount's missing --dir is"
+  },
+  {
+    "id": "cli-earlier-best-finalized-dropped",
+    "file": "src/cli.ts",
+    "find": "best_height: st.best_height, finalized_height: st.finalized_height });",
+    "replace": "best_height: st.best_height, finalized_height: null });",
+    "test": "scripts/cli-checks.mjs",
+    "why": "round 9 review L5: an earlier head that read a finalized head sets the finalized floor, not a best height floor"
   }
 ]

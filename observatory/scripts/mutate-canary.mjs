@@ -222,4 +222,6 @@ const ok =
   throughLink.outcome === "mapped-right" &&
   noMutants.outcome === "failed-right";
 console.log(JSON.stringify({ results, runner_exit: runnerExit, ...controls, copy, setup_failure: setupFailure, through_link: throughLink, no_mutants: noMutants }, null, 2));
-process.exit(ok ? 0 : 1);
+// exitCode, not exit(): a caller may read this report through a pipe, where a write is
+// asynchronous and exit() could cut it short (round 9 review L7).
+process.exitCode = ok ? 0 : 1;

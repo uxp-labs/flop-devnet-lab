@@ -859,6 +859,85 @@ const tampers = [
     applies: (d) => typeof snap(d).status.reset_detected === "boolean",
     run: (d) => editCell(d, "status.reset_detected", (a, t) => [a.replace(/ data-v="[^"]*"/, ""), t]),
   },
+  // Round 9 review L4: a value cut out of its row, so it sits in its table with no label.
+  {
+    name: "reset-row-cut-to-its-bare-cell",
+    expect: /page status\.reset_detected sits in a labeled row/,
+    applies: (d) => snap(d).status.reset_detected === true,
+    run: (d) =>
+      editHtml(d, (h) => {
+        const row = rowOf(h, "status.reset_detected");
+        return h.replace(row, /<td\b[\s\S]*<\/td>/.exec(row)[0]);
+      }),
+  },
+  {
+    name: "two-heights-cut-to-bare-cells",
+    expect: /page status\.(finalized|best)_height sits in a labeled row/,
+    applies: (d) => typeof snap(d).status.finalized_height === "number",
+    run: (d) =>
+      editHtml(d, (h) => {
+        let out = h;
+        for (const k of ["status.finalized_height", "status.best_height"]) {
+          const row = rowOf(out, k);
+          out = out.replace(row, /<td\b[\s\S]*<\/td>/.exec(row)[0]);
+        }
+        return out;
+      }),
+  },
+  // Round 9 review B2, B4, B7 and B8: a label or a value set apart, and a blank cell that says null.
+  {
+    name: "row-label-wrapped-in-h1",
+    expect: /row label for status\.trust is plain text with scope="row"/,
+    applies: () => true,
+    run: (d) => editHtml(d, (h) => h.replace('<th scope="row" data-for="status.trust">trust</th>', '<th scope="row" data-for="status.trust"><h1>trust</h1></th>')),
+  },
+  {
+    name: "row-label-loses-its-scope",
+    expect: /row label for status\.trust is plain text with scope="row"/,
+    applies: () => true,
+    run: (d) => editHtml(d, (h) => h.replace('<th scope="row" data-for="status.trust">', '<th data-for="status.trust">')),
+  },
+  {
+    name: "reset-value-wrapped-in-code",
+    expect: /page status\.reset_detected holds no markup but a bare code element/,
+    applies: (d) => typeof snap(d).status.reset_detected === "boolean",
+    run: (d) => editCell(d, "status.reset_detected", (a, t) => [a, `<code>${t}</code>`]),
+  },
+  {
+    name: "blank-cell-says-data-v-null",
+    expect: /page status\.finalized_height is blank for null, with no data-v/,
+    applies: (d) => snap(d).status.finalized_height === null,
+    run: (d) => editHtml(d, (h) => h.replace('<td data-k="status.finalized_height" class="unk">', '<td data-k="status.finalized_height" data-v="null" class="unk">')),
+  },
+  // Round 9 review I4: JSON of the wrong shape ends the check with a failure and a report.
+  {
+    name: "snapshot-json-null",
+    expect: /snapshot\.json is an observatory snapshot/,
+    applies: () => true,
+    run: (d) => writeFileSync(join(d, "snapshot.json"), "null\n"),
+  },
+  {
+    name: "snapshot-json-escrows-not-a-list",
+    expect: /snapshot\.json is an observatory snapshot/,
+    applies: () => true,
+    run: (d) => {
+      const s = snap(d);
+      s.escrows = 7;
+      writeFileSync(join(d, "snapshot.json"), feedText(s));
+    },
+  },
+  {
+    name: "status-json-null",
+    expect: /status\.json holds exactly schema/,
+    applies: () => true,
+    run: (d) => writeFileSync(join(d, "status.json"), "null\n"),
+  },
+  {
+    name: "transcript-line-null",
+    expect: /the outputs have the shape the check reads/,
+    applies: () => true,
+    run: (d) => writeFileSync(join(d, "mcp-transcript.jsonl"), "null\n" + readFileSync(join(d, "mcp-transcript.jsonl"), "utf8")),
+  },
   // Changes nothing sections 1 to 9 model: only section 10's byte comparison can see it.
   {
     name: "the-page-gains-one-line-break-and-nothing-else",
@@ -950,4 +1029,6 @@ for (const t of tampers) {
   results.push({ tamper: t.name, outputs: basename(src), outcome, exits, caught_by: failures });
 }
 console.log(JSON.stringify(results, null, 2));
-process.exit(bad ? 1 : 0);
+// exitCode, not exit(): a caller may read this report through a pipe, where a write is
+// asynchronous and exit() could cut it short (round 9 review L7).
+process.exitCode = bad ? 1 : 0;

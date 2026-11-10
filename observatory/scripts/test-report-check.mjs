@@ -6,13 +6,16 @@
 // Usage: node scripts/test-report-check.mjs <vitest.json> --expect-files N
 // One test may skip by design: the page file whose name is not valid UTF-8 needs a filesystem
 // that accepts such a name, which stock macOS does not. On Linux, which accepts any name, it must
-// run, so there no skip at all is allowed. Each file must run exactly the number of tests
-// test/test-counts.json pins, so a test removed shows (round 8 review I5); adding a test means
-// raising its file's count there. A status cannot show a test written to pass when its body fails
-// (it.fails) or a table with no rows (it.each([])), so the test sources are read for both. The
-// rules are then run on doctored copies of the report (one test skipped, one left as a todo, one
-// file missing, one test removed), each of which must fail.
+// run, so there no skip at all is allowed. Each file must run exactly the tests
+// test/test-counts.json pins, by number and by a digest of their names, so a test removed or
+// renamed shows (round 8 review I5, round 9 review I5); adding or renaming a test means updating
+// its file's entry there. A status cannot show a test written to pass when its body fails
+// (it.fails) or a table with no rows (it.each([]), it.for([])), so the test sources are read for
+// those. A table held in a variable, and a test that returns before its assertion, are not seen.
+// The rules are then run on doctored copies of the report (one test skipped, one left as a todo,
+// one file missing, one test removed, one renamed), each of which must fail.
 // Prints a JSON array of {check, outcome}; exit 1 unless every check passes.
+import { createHash } from "node:crypto";
 import { readdirSync, readFileSync } from "node:fs";
 import { dirname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -25,6 +28,12 @@ const PLATFORM_SKIPS = [/a page file whose name is not valid UTF-8 is a page err
 const pkg = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const testDir = join(pkg, "test");
 const canon = (o) => JSON.stringify(Object.keys(o).sort().map((k) => [k, o[k]]));
+/** One file's pinned entry: its number of tests and a digest of their full names, sorted. */
+function entryOf(f) {
+  const tests = Array.isArray(f.assertionResults) ? f.assertionResults : [];
+  const names = tests.map((t) => String(t.fullName ?? t.title ?? "")).sort();
+  return { tests: tests.length, names: createHash("sha256").update(names.join("\n")).digest("hex") };
+}
 let pinned = null;
 try {
   pinned = JSON.parse(readFileSync(join(testDir, "test-counts.json"), "utf8"));
@@ -38,8 +47,9 @@ function evaluate(r) {
   const tests = files.flatMap((f) => (Array.isArray(f.assertionResults) ? f.assertionResults : []));
   const notPassed = tests.filter((t) => t.status !== "passed");
   const allowed = (t) => process.platform !== "linux" && t.status === "skipped" && PLATFORM_SKIPS.some((re) => re.test(String(t.fullName ?? t.title ?? "")));
-  const counts = Object.fromEntries(files.map((f) => [relative(testDir, String(f.name ?? "")).split(sep).join("/"), Array.isArray(f.assertionResults) ? f.assertionResults.length : 0]));
-  const differ = pinned === null ? ["test/test-counts.json cannot be read"] : [...new Set([...Object.keys(counts), ...Object.keys(pinned)])].filter((k) => counts[k] !== pinned[k]).map((k) => `${k}: ran ${counts[k] ?? "none"}, pinned ${pinned[k] ?? "none"}`);
+  const counts = Object.fromEntries(files.map((f) => [relative(testDir, String(f.name ?? "")).split(sep).join("/"), entryOf(f)]));
+  const same = (a, b) => a !== undefined && b !== undefined && a.tests === b.tests && a.names === b.names;
+  const differ = pinned === null ? ["test/test-counts.json cannot be read"] : [...new Set([...Object.keys(counts), ...Object.keys(pinned)])].filter((k) => !same(counts[k], pinned[k])).map((k) => `${k}: ran ${JSON.stringify(counts[k] ?? null)}, pinned ${JSON.stringify(pinned[k] ?? null)}`);
   return [
     [`every test file ran (${expectFiles})`, Number.isInteger(expectFiles) && files.length === expectFiles, `${files.length} files in the report`],
     ["each test file ran exactly the tests test/test-counts.json pins", pinned !== null && canon(counts) === canon(pinned), differ.slice(0, 5).join("; ")],
@@ -85,6 +95,11 @@ if (report) {
       r.numTotalTests -= 1;
       r.numPassedTests -= 1;
     },
+    "one test renamed": (r) => {
+      const t = r.testResults[0].assertionResults[0];
+      t.fullName = `${t.fullName ?? t.title} (renamed)`;
+      t.title = `${t.title} (renamed)`;
+    },
   };
   for (const [name, edit] of Object.entries(doctored)) {
     const copy = JSON.parse(JSON.stringify(report));
@@ -99,14 +114,16 @@ if (report) {
 // The test sources: no test passes on a failure, and no table of cases is empty.
 {
   const RISKY = [
-    [/\.\s*fails\b/, "a test written to pass when its body fails (.fails)"],
-    [/\.each\s*\(\s*\[\s*\]\s*\)/, "a table of cases with no rows (.each([]))"],
+    [/\.\s*fails\b|\[\s*["'`]fails["'`]\s*\]/, "a test written to pass when its body fails (.fails)"],
+    [/\.\s*(?:each|for)\s*\(\s*\[\s*\]\s*\)/, "a table of cases with no rows (.each([]) or .for([]))"],
   ];
   const sources = readdirSync(testDir, { recursive: true }).map(String).filter((f) => f.endsWith(".ts")).sort();
   const found = sources.flatMap((f) => RISKY.filter(([re]) => re.test(readFileSync(join(testDir, f), "utf8"))).map(([, what]) => `${f}: ${what}`));
   record("no test source holds a test that passes on failure or a table with no rows", sources.length > 0 && found.length === 0, found.join("; ") || "no test sources found");
-  const bites = ["it.fails('x', () => {});", "it.each([])('x', () => {});", "describe.each( [ ] )('x', () => {});"].every((t) => RISKY.some(([re]) => re.test(t)));
-  record("the source rule catches .fails and an empty .each table", bites, "a sample passed the source rule");
+  const bites = ["it.fails('x', () => {});", "it.each([])('x', () => {});", "describe.each( [ ] )('x', () => {});", "it.for([])('x', () => {});", 't["fails"]("x", () => {});'].every((t) => RISKY.some(([re]) => re.test(t)));
+  record("the source rule catches .fails, a fails key and an empty .each or .for table", bites, "a sample passed the source rule");
 }
 console.log(JSON.stringify(results, null, 2));
-process.exit(results.every((x) => x.outcome === "pass") ? 0 : 1);
+// exitCode, not exit(): a caller may read this report through a pipe, where a write is
+// asynchronous and exit() could cut it short (round 9 review L7).
+process.exitCode = results.every((x) => x.outcome === "pass") ? 0 : 1;

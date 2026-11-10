@@ -64,6 +64,13 @@ def _shown(raw):
     return "".join(chr(b) if 0x20 <= b < 0x7F and b != 0x25 else "%%%02X" % b for b in raw)
 
 
+def _text(name):
+    # A file name that is UTF-8, as itself but for % and the control characters, which are %XX, as
+    # the TypeScript loader shows it: no line break inside a refusal's line, and no name that is
+    # UTF-8 shown as one that is not (Fable review r9 I2).
+    return "".join("%%%02X" % ord(c) if c == "%" or ord(c) < 0x20 or ord(c) == 0x7F else c for c in name)
+
+
 def _nesting(text):
     # How deep the arrays and objects nest, reading strings so a bracket inside one does not count.
     # Checked before parsing (clause 12), so Python's own recursion limit never decides.
@@ -148,7 +155,7 @@ def load_pages(scenario_dir):
             raise Unreadable("page-file", "event-pages/%s: not a page file (its name is not valid UTF-8)" % _shown(raw))
         # Every entry must be a page file: regular, ends in .json, no leading dot.
         if entry.startswith(".") or not entry.endswith(".json") or not is_regular_file(path):
-            raise Unreadable("page-file", "event-pages/%s: not a page file" % entry)
+            raise Unreadable("page-file", "event-pages/%s: not a page file" % _text(entry))
         try:
             with open(path, "r", encoding="utf-8") as fh:
                 text = fh.read()
@@ -157,7 +164,7 @@ def load_pages(scenario_dir):
             page = json.loads(text, parse_constant=_reject_constant, parse_int=_parse_int,
                               object_pairs_hook=_one_value_per_key)
         except (OSError, ValueError, RecursionError) as exc:
-            raise Unreadable("page-file", "event-pages/%s: cannot read: %s" % (entry, exc))
+            raise Unreadable("page-file", "event-pages/%s: cannot read: %s" % (_text(entry), exc))
         loaded.append((entry, page))
     for name, page in loaded:
         if not isinstance(page, dict):
@@ -356,8 +363,10 @@ def read_args(argv):
     """The flags, read by the TypeScript command's rules (RULES.md 3.1 clause 16): each is --name
     followed by its value as the next argument, so --name=value, a name not on the list, a flag
     given twice, a flag with no value and an argument that is no flag's value are each a request
-    problem, and so is a flag left out. argparse would take --name=value and any abbreviation of a
-    name, and refuse a value that starts with a dash, none of which the other side does."""
+    problem, and so is a flag left out. A flag with no value is one with nothing after it, an empty
+    value (an unset shell variable gives one) or another flag after it. argparse would take
+    --name=value and any abbreviation of a name, and refuse a value that starts with a dash, none
+    of which the other side does."""
     rest = list(argv)
     values = {}
     while rest:
@@ -370,7 +379,7 @@ def read_args(argv):
             raise Unreadable("request", "%s is not a flag the recount reads" % json.dumps(a))
         if a in values:
             raise Unreadable("request", "%s is given twice" % a)
-        if not rest or rest[0].startswith("--"):
+        if not rest or rest[0] == "" or rest[0].startswith("--"):
             raise Unreadable("request", "%s needs a value" % a)
         values[a] = rest.pop(0)
     for flag in FLAGS:

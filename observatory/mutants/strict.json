@@ -133,6 +133,6 @@
     "find": "      if (j >= text.length) return null;\n",
     "replace": "",
     "test": "test/strict.test.ts",
-    "why": "round 8 review L3: a string that never closes ends the repeated key reader instead of reading past the end"
+    "why": "round 8 review L3: a string that never closes returns null instead of handing JSON.parse a slice past the end, which throws. The loop's own bound (j < text.length) has no mutant: without it the loop never ends, and the runner counts a time out as no kill (round 9 review I6)"
   }
 ]

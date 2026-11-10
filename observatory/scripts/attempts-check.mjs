@@ -94,5 +94,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   const out = opt("--unexpected");
   if (out && result.problems.length > 0) writeFileSync(out, result.problems.map((p) => JSON.stringify(p)).join("\n") + "\n");
   console.log(JSON.stringify({ journal_present: existsSync(journal), ...result }, null, 2));
-  process.exit(result.problems.length > 0 ? 1 : 0);
+  // exitCode, not exit(): a caller may read this report through a pipe, where a write is
+  // asynchronous and exit() could cut it short (round 9 review L7).
+  process.exitCode = result.problems.length > 0 ? 1 : 0;
 }

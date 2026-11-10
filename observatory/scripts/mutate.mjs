@@ -275,4 +275,6 @@ const summary = {
 };
 const copyReport = setupFailure === null ? { outcome: "setup-pass", ...copied } : { outcome: "setup-failed", detail: clean(setupFailure) };
 console.log(JSON.stringify({ copy: copyReport, control_before: before, control_after: after, summary, results }, null, 2));
-process.exit(bad ? 1 : 0);
+// exitCode, not exit(): a caller may read this report through a pipe, where a write is
+// asynchronous and exit() could cut it short (round 9 review L7).
+process.exitCode = bad ? 1 : 0;

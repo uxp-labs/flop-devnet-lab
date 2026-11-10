@@ -52,7 +52,12 @@ const STATUS_KEYS = ["schema", "observed_at", "trust", "genesis", "reset_detecte
 const ESCROW_KEYS = ["schema", "escrow_id", "state", "evidence", "notes", "finalized_height", "observed_at", "trust", "scope"];
 const STATES = ["unverified", "funded", "claimed", "refunded"];
 const TRUSTS = ["trusted RPC", "fixture"];
+const HEALTHS = ["ok", "degraded", "down", "unknown"];
+const HASH = /^0x[0-9a-f]{64}$/;
+const hash = (v: unknown): boolean => typeof v === "string" && HASH.test(v);
 const heightOrNull = (v: unknown): boolean => v === null || (typeof v === "number" && Number.isSafeInteger(v) && v >= 0);
+// A service holds its health as one of the four words (round 9 review L6).
+const service = (v: unknown): boolean => isObject(v) && HEALTHS.includes(v.health as string);
 const statusShaped = (st: unknown): boolean =>
   isObject(st) &&
   st.schema === "flop-observatory/network-status@0" &&
@@ -64,14 +69,19 @@ const statusShaped = (st: unknown): boolean =>
   heightOrNull(st.finalized_height) &&
   heightOrNull(st.best_height) &&
   isObject(st.genesis) &&
-  isObject(st.rpc) &&
-  isObject(st.gateway) &&
-  isObject(st.faucet);
+  exactly(st.genesis, ["pinned", "faucet", "rpc"]) &&
+  hash(st.genesis.pinned) &&
+  (st.genesis.faucet === null || hash(st.genesis.faucet)) &&
+  (st.genesis.rpc === null || hash(st.genesis.rpc)) &&
+  service(st.rpc) &&
+  service(st.gateway) &&
+  service(st.faucet);
 const escrowShaped = (e: unknown): boolean =>
   isObject(e) &&
   e.schema === "flop-observatory/escrow-state@0" &&
   exactly(e, ESCROW_KEYS) &&
-  typeof e.escrow_id === "string" &&
+  // The one form the snapshot command takes and get_escrow_state answers for (round 9 review L6).
+  hash(e.escrow_id) &&
   STATES.includes(e.state as string) &&
   Array.isArray(e.evidence) &&
   Array.isArray(e.notes) &&
@@ -88,6 +98,8 @@ const shaped =
   statusShaped(snapshot.status) &&
   Array.isArray(snapshot.escrows) &&
   snapshot.escrows.every(escrowShaped) &&
+  // Each escrow once, so get_escrow_state has one answer for each id the list shows.
+  new Set(snapshot.escrows.map((e) => e.escrow_id)).size === snapshot.escrows.length &&
   (snapshot.census === null || part(snapshot.census, "flop-observatory/census@0")) &&
   (snapshot.drift === null || part(snapshot.drift, "flop-observatory/drift@0"));
 if (!shaped) {

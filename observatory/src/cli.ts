@@ -21,6 +21,7 @@ import { buildSnapshot } from "./snapshot.js";
 import { FixtureSource } from "./source.js";
 import { DEVNET_GENESIS, type EarlierBest, networkStatus, type PreviousHead } from "./status.js";
 import { appendSnapshot, hashSnapshot, readSnapshots, verifyChain } from "./store.js";
+import { parseZoned } from "./strict.js";
 import type { Snapshot } from "./types.js";
 
 const PKG = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -38,9 +39,11 @@ type Args = { cmd: string; flags: Map<string, string[]> };
 
 /**
  * The command and its flags. Every flag is --name followed by its value as the next argument, so
- * --name=value, a name the command does not read, a flag given twice, a flag with no value and an
- * argument that is no flag's value are each refused, for census as a refusal of the request.
- * tools/recount.py reads its flags by the same rules (RULES.md 3.1 clause 16).
+ * --name=value, a name the command does not read, a flag given twice, a flag with no value (none
+ * given, an empty one, or another flag) and an argument that is no flag's value are each refused,
+ * for census as a refusal of the request. An empty value is refused because an unset shell
+ * variable gives one, and it would read as the flag left out (round 9 review L3). --now must be a
+ * time with a zone. tools/recount.py reads its flags by the same rules (RULES.md 3.1 clause 16).
  */
 function parse(argv: readonly string[]): Args {
   const rest = [...argv];
@@ -56,7 +59,8 @@ function parse(argv: readonly string[]): Args {
     if (!known.one.includes(a) && !known.many.includes(a)) refuse(`${a} is not a flag ${cmd} reads`);
     if (flags.has(a) && !known.many.includes(a)) refuse(`${a} is given twice`);
     const v = rest.shift();
-    if (v === undefined || v.startsWith("--")) refuse(`${a} needs a value`);
+    if (v === undefined || v === "" || v.startsWith("--")) refuse(`${a} needs a value`);
+    if (a === "--now" && parseZoned(v) === null) refuse(`--now must be an ISO 8601 time with a zone, such as 2026-11-09T23:47:41Z`);
     flags.set(a, [...(flags.get(a) ?? []), v as string]);
   }
   return { cmd, flags };
@@ -135,7 +139,8 @@ async function main(): Promise<void> {
         throw e;
       }
     }
-    const dir = need(a, "--fixtures");
+    // The folder flag left out is a request problem, as the recount's missing --dir is (clause 16).
+    const dir = one(a, "--fixtures") ?? fail("census refused (request): missing --fixtures");
     let src: FixtureSource;
     try {
       src = FixtureSource.fromDir(dir);
@@ -218,7 +223,7 @@ async function main(): Promise<void> {
         // Every earlier snapshot's own time, whatever it read, so a log that runs backwards shows.
         earlierTimes.push(typeof taken === "string" ? taken : null);
         // Every best height on a genesis counts, with or without a finalized head (round 8 review L1).
-        if (st.genesis.rpc !== null && st.best_height !== null) earlierBest.push({ genesis: st.genesis.rpc, best_height: st.best_height });
+        if (st.genesis.rpc !== null && st.best_height !== null) earlierBest.push({ genesis: st.genesis.rpc, best_height: st.best_height, finalized_height: st.finalized_height });
         // A head time is needed only for the stuck check, so a snapshot without one still counts.
         if (st.genesis.rpc !== null && st.finalized_height !== null && st.finalized_hash !== null) {
           previous.push({

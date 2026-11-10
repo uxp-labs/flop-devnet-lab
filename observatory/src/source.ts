@@ -100,6 +100,15 @@ function shownName(raw: Uint8Array): string {
   return [...raw].map((b) => (b >= 0x20 && b < 0x7f && b !== 0x25 ? String.fromCharCode(b) : `%${b.toString(16).toUpperCase().padStart(2, "0")}`)).join("");
 }
 
+/**
+ * A file name that is UTF-8, shown as itself but for % and the control characters, which are
+ * %XX as in shownName. So no name holds a line break that would end a refusal's line, and no name
+ * that is UTF-8 can be shown as one that is not (round 9 review I2). The recount does the same.
+ */
+function shownText(name: string): string {
+  return name.replace(/[%\u0000-\u001f\u007f]/g, (c) => `%${c.charCodeAt(0).toString(16).toUpperCase().padStart(2, "0")}`);
+}
+
 /** A JSON file whose arrays and objects nest deeper than MAX_NESTING. */
 class TooDeep extends Error {}
 
@@ -134,7 +143,7 @@ export class FixtureSource implements Source {
       const path = join(dir, name);
       if (!existsSync(path)) {
         // An entry the folder listing produced is never dropped without a word.
-        if (listed) for (const list of errors) list.push(`${name}: listed in the folder but cannot be opened`);
+        if (listed) for (const list of errors) list.push(`${shownText(name)}: listed in the folder but cannot be opened`);
         return undefined;
       }
       try {
@@ -158,8 +167,8 @@ export class FixtureSource implements Source {
             : e instanceof SyntaxError || e instanceof TypeError
               ? "not valid JSON"
               : (e as Error).message;
-        for (const list of errors) list.push(`${name}: ${reason}`);
-        unreadable.set(name, `${name}: ${reason}`);
+        for (const list of errors) list.push(`${shownText(name)}: ${reason}`);
+        unreadable.set(name, `${shownText(name)}: ${reason}`);
         return undefined;
       }
     };
@@ -206,7 +215,7 @@ export class FixtureSource implements Source {
         // RULES.md 3.1 clause 15: anything else in event-pages may be a page meant to count, so it
         // is reported, never skipped.
         if (!entry.isFile() || name.startsWith(".") || !name.endsWith(".json")) {
-          const why = `event-pages/${name}: not a page file (a regular file named *.json, not starting with a dot)`;
+          const why = `event-pages/${shownText(name)}: not a page file (a regular file named *.json, not starting with a dot)`;
           loadErrors.push(why);
           pageErrors.push(why);
           continue;

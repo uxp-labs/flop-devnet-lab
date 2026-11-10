@@ -72,6 +72,12 @@ function report() {
   }
   process.exit(failures.length ? 1 : 0);
 }
+// JSON of an unexpected shape (null where an object belongs, say) could make a check below throw.
+// That still ends with a report and a failure, never a bare stack (round 9 review I4).
+process.on("uncaughtException", (e) => {
+  failures.push({ what: "the outputs have the shape the check reads", detail: String(e?.message ?? e) });
+  report();
+});
 const utf8 = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true });
 /** A file's text, read as strict UTF-8; a file that cannot be read so ends the check. */
 const read = (f) => {
@@ -129,6 +135,17 @@ expectSame("the outputs folder holds exactly the nine files the commands write",
 // 1. Snapshot integrity.
 const snapshotText = read("snapshot.json");
 const snapshot = strictJson("snapshot.json", snapshotText);
+{
+  const isObject = (v) => v !== null && typeof v === "object" && !Array.isArray(v);
+  const shaped =
+    isObject(snapshot) && snapshot.schema === "flop-observatory/snapshot@0" && isObject(snapshot.status) && Array.isArray(snapshot.escrows) &&
+    snapshot.escrows.every(isObject) && (snapshot.census === null || isObject(snapshot.census)) && (snapshot.drift === null || isObject(snapshot.drift));
+  if (!shaped) {
+    checks++;
+    failures.push({ what: "snapshot.json is an observatory snapshot (its schema, a status, a list of escrows, a census and a drift report or null)", detail: snapshotText.slice(0, 120) });
+    report();
+  }
+}
 {
   const { hash, ...rest } = snapshot;
   expectEq("snapshot.json hash verifies", hashSnapshot(rest), hash);
@@ -328,7 +345,9 @@ for (const m of html.matchAll(/<([a-z][a-z0-9]*)\b([^>]*\bdata-k="[^"]*"[^>]*)>/
   // A marked cell holds its value as text, and the renderer nests one thing only: a bare <code>
   // around an escrow id. Any other tag inside, a span with a class say, could paint the value as
   // something else while its words stay right (round 7 review L8).
-  const nested = [...inner.matchAll(/<[^>]*>/g)].map((t) => t[0]).filter((t) => t !== "<code>" && t !== "</code>");
+  // Only the escrow id cell holds it (round 9 review B4).
+  const idCell = /^escrow\..+\.escrow_id$/.test(attr(m[2], "data-k") ?? "");
+  const nested = [...inner.matchAll(/<[^>]*>/g)].map((t) => t[0]).filter((t) => !(idCell && (t === "<code>" || t === "</code>")));
   checks++;
   if (nested.length > 0) failures.push({ what: `page ${k} holds no markup but a bare code element`, detail: nested.slice(0, 3).join(" ") });
   cells.set(k, {
@@ -394,6 +413,7 @@ expectSame("the page shows exactly the renderer's keys, in its order", [...cells
     return partialCensus && key.startsWith("census.totals.") ? `partial ${label}` : label;
   };
   const inRow = new Set();
+  const labeled = new Set();
   for (const row of html.matchAll(/<tr\b([^>]*)>([\s\S]*?)<\/tr>/g)) {
     const body = row[2];
     const dataRow = attr(row[1], "data-row");
@@ -424,8 +444,19 @@ expectSame("the page shows exactly the renderer's keys, in its order", [...cells
     }
     const tdKey = attr(tds[0][1], "data-k");
     labelsRead++;
+    if (tdKey !== null) labeled.add(tdKey);
     expectEq(`row label for ${tdKey} names its cell (data-for)`, attr(ths[0][1], "data-for"), tdKey);
     if (tdKey !== null) expectEq(`row label for ${tdKey} reads its field`, unescape(ths[0][2].replace(/<[^>]*>/g, "")), labelFor(tdKey));
+    // A label is plain text in a row header (round 9 review B2 and B8): no element inside it to
+    // set it apart, and scope="row", which the stylesheet greys.
+    expectSame(`row label for ${tdKey} is plain text with scope="row"`, [/</.test(ths[0][2]), attr(ths[0][1], "scope")], [false, "row"]);
+  }
+  // Every marked td in a section table sits in a labeled row or in a drift item row, so no value
+  // loses its label (round 9 review L4).
+  for (const [k, c] of cells) {
+    if (c.tag !== "td") continue;
+    checks++;
+    if (!labeled.has(k) && !inRow.has(k)) failures.push({ what: `page ${k} sits in a labeled row or a drift item row`, detail: "a td with no row label" });
   }
   for (const k of cells.keys()) {
     if (/^drift\.\d+\./.test(k)) {
@@ -503,7 +534,7 @@ function checkCell(key, cell, value) {
   expectEq(`page ${key} class`, cell.cls, classFor(key, value));
   // aria-label replaces a cell's words for a screen reader, so it may only say unknown, on a
   // blank unknown cell.
-  if (cell.aria !== null) expectEq(`page ${key} aria-label only on a blank unknown cell`, `${cell.aria}|${cell.v}|${cell.text}`, "unknown|unknown|");
+  if (cell.aria !== null) expectSame(`page ${key} aria-label only on a blank unknown cell`, [cell.aria, cell.v, cell.text], ["unknown", "unknown", ""]);
   if (key === "census.status") {
     // A banner, not a cell: its value is in data-v and its words are one of two fixed sentences,
     // read whole, so no words after the first can say the opposite.
@@ -518,17 +549,18 @@ function checkCell(key, cell, value) {
   }
   const unk = /\bunk\b/.test(cell.cls);
   if (isUnknownWord(key) && value === "unknown") {
-    expectEq(`page ${key} unknown is blank with data-v unknown`, `${cell.v}|${cell.text}|${unk}`, "unknown||true");
+    expectSame(`page ${key} unknown is blank with data-v unknown`, [cell.v, cell.n, cell.text, unk], ["unknown", null, "", true]);
     return;
   }
   if (value === null || value === undefined) {
-    expectEq(`page ${key} is blank for null`, `${cell.v}|${cell.n}|${cell.text}|${unk}`, "null|null||true");
+    // Compared as values, so data-v="null" is never read as no data-v (round 9 review B7).
+    expectSame(`page ${key} is blank for null, with no data-v`, [cell.v, cell.n, cell.text, unk], [null, null, "", true]);
     return;
   }
   if (Array.isArray(value)) {
     expectEq(`page ${key} data-n`, cell.n, String(value.length));
     if (value.length === 0) {
-      expectEq(`page ${key} empty list shows none`, `${cell.v}|${cell.text}`, "null|none");
+      expectSame(`page ${key} empty list shows none, with no data-v`, [cell.v, cell.text], [null, "none"]);
       return;
     }
     const joined = joinList(value);
@@ -546,7 +578,7 @@ function checkCell(key, cell, value) {
   else if (isRange(value)) want = `${value.from_block} to ${value.to_block}`;
   else want = JSON.stringify(value);
   if (want === "") {
-    expectEq(`page ${key} empty string`, `${cell.v}|${cell.text}`, "|(empty)");
+    expectSame(`page ${key} empty string`, [cell.v, cell.text], ["", "(empty)"]);
     return;
   }
   // Every value shows as itself, in its text and in data-v, which the renderer writes on every cell
@@ -717,8 +749,11 @@ for (const k of required) {
     if (t) {
       expectEq("the drift item table is in the drift section", attr(t[1], "data-section"), "drift");
       const header = /<tr\b[^>]*>([\s\S]*?)<\/tr>/.exec(t[2]);
-      const cols = [...(header?.[1] ?? "").matchAll(/<th\b([^>]*)>([\s\S]*?)<\/th>/g)].map((m) => ({ col: attr(m[1], "data-col"), text: unescape(m[2].replace(/<[^>]*>/g, "")) }));
-      for (const c of cols) expectEq(`drift column ${c.col} reads its field`, c.text, String(c.col).replace(/_/g, " "));
+      const cols = [...(header?.[1] ?? "").matchAll(/<th\b([^>]*)>([\s\S]*?)<\/th>/g)].map((m) => ({ col: attr(m[1], "data-col"), text: unescape(m[2].replace(/<[^>]*>/g, "")), markup: /</.test(m[2]), scope: attr(m[1], "scope") }));
+      for (const c of cols) {
+        expectEq(`drift column ${c.col} reads its field`, c.text, String(c.col).replace(/_/g, " "));
+        expectSame(`drift column ${c.col} is plain text with no scope`, [c.markup, c.scope], [false, null]);
+      }
       columnsRead = cols.length;
       const names = cols.map((c) => c.col);
       expectEq("each drift column is named once", new Set(names).size, names.length);

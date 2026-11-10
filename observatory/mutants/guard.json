@@ -272,14 +272,6 @@
     "why": "process is used only through its allowed members, never env, binding or a computed key"
   },
   {
-    "id": "scan-tree-dynamic-import-any-argument",
-    "file": "scripts/source-scan.mjs",
-    "find": "        if (n.source?.type !== \"Literal\" || typeof n.source.value !== \"string\") out.push(\"a dynamic import names its module as something other than one plain string\");\n        else {",
-    "replace": "        if (n.source?.type !== \"Literal\" || typeof n.source.value !== \"string\") {} else {",
-    "test": "scripts/source-scan.mjs",
-    "why": "a dynamic import whose module is built at run time cannot be checked, so it fails"
-  },
-  {
     "id": "scan-tree-class-constructor-exemption-everywhere",
     "file": "scripts/source-scan.mjs",
     "find": "const ownConstructor = key === \"key\" && parent?.type === \"MethodDefinition\" && parent.kind === \"constructor\";",
@@ -362,8 +354,8 @@
   {
     "id": "scan-tree-stdin-any-use",
     "file": "scripts/source-scan.mjs",
-    "find": "            allowed = prop?.key === \"value\" &&",
-    "replace": "            allowed = true || prop?.key === \"value\" &&",
+    "find": "              prop?.key === \"value\" && prop.parent?.type === \"Property\"",
+    "replace": "              true || prop?.key === \"value\" && prop.parent?.type === \"Property\"",
     "test": "scripts/source-scan.mjs",
     "why": "round 8 review M1: process.stdin only as the input of a reader"
   },
@@ -390,5 +382,45 @@
     "replace": "",
     "test": "scripts/source-scan.mjs",
     "why": "round 8 review M1: process.stdout is a socket under a pipe, and connect opens a new connection on it"
+  },
+  {
+    "id": "scan-tree-dynamic-import-allowed",
+    "file": "scripts/source-scan.mjs",
+    "find": "        out.push(\"uses a dynamic import(); src imports every module statically, by name\");\n",
+    "replace": "",
+    "test": "scripts/source-scan.mjs",
+    "why": "round 9 review M1: a dynamic import hands back a module object, node:crypto's included, whose exports Object.entries lists"
+  },
+  {
+    "id": "scan-tree-module-object-import-allowed",
+    "file": "scripts/source-scan.mjs",
+    "find": "        if (n.type === \"ImportDeclaration\" && n.specifiers.some((s) => s.type !== \"ImportSpecifier\")) out.push(",
+    "replace": "        if (false) out.push(",
+    "test": "scripts/source-scan.mjs",
+    "why": "round 9 review M1: a default or namespace import hands over a whole module object"
+  },
+  {
+    "id": "scan-tree-export-all-allowed",
+    "file": "scripts/source-scan.mjs",
+    "find": "        if (n.type === \"ExportAllDeclaration\") out.push(`re-exports the whole of ${JSON.stringify(name)} (export *)`);\n",
+    "replace": "",
+    "test": "scripts/source-scan.mjs",
+    "why": "round 9 review M1: export * puts a whole module's exports in another module's namespace"
+  },
+  {
+    "id": "scan-tree-stdin-any-call",
+    "file": "scripts/source-scan.mjs",
+    "find": "call.parent.callee?.type === \"Identifier\" && call.parent.callee.name === \"createInterface\"",
+    "replace": "true",
+    "test": "scripts/source-scan.mjs",
+    "why": "round 9 review I7: stdin goes only into createInterface, never into an object it can be read back from"
+  },
+  {
+    "id": "scan-tree-web-crypto-classes-allowed",
+    "file": "scripts/source-scan.mjs",
+    "find": "  \"SubtleCrypto\",\n",
+    "replace": "",
+    "test": "scripts/source-scan.mjs",
+    "why": "round 9 review M1: the SubtleCrypto prototype lists the key and signing methods"
   }
 ]

@@ -117,6 +117,28 @@ cpSync(join(pkg, fx("status-healthy")), restartLow, { recursive: true });
   edit(restartLow, "meta.json", (o) => (o.now = "2026-11-09T23:48:41Z"));
   for (const f of ["faucet-health.json", "faucet-chain.json", "gateway-models.json"]) edit(restartLow, f, (o) => (o.fetched_at = "2026-11-09T23:48:40Z"));
 }
+// The round 9 review's case L5: finality stalls with the best block 100 ahead, then the long fork
+// that was never final falls away. The finalized floor holds, so this is no conflict.
+const stalled = join(work, "stalled-finality");
+const reorged = join(work, "after-reorg");
+cpSync(join(pkg, fx("status-healthy")), stalled, { recursive: true });
+cpSync(join(pkg, fx("status-healthy")), reorged, { recursive: true });
+{
+  const edit = (dir, file, fn) => {
+    const p = join(dir, file);
+    const o = JSON.parse(readFileSync(p, "utf8"));
+    fn(o);
+    writeFileSync(p, JSON.stringify(o, null, 2));
+  };
+  edit(stalled, "rpc-head.json", (o) => (o.best_number = 3341675));
+  edit(reorged, "rpc-head.json", (o) => {
+    o.finalized = { number: 3341580, hash: "0x" + "58".repeat(32) };
+    o.best_number = 3341600;
+    o.observed_at = "2026-11-09T23:48:40Z";
+  });
+  edit(reorged, "meta.json", (o) => (o.now = "2026-11-09T23:48:41Z"));
+  for (const f of ["faucet-health.json", "faucet-chain.json", "gateway-models.json"]) edit(reorged, f, (o) => (o.fetched_at = "2026-11-09T23:48:40Z"));
+}
 // The round 8 review's case L2: a usable /chain reading whose body names no genesis.
 const chainEmpty = join(work, "chain-body-empty");
 cpSync(join(pkg, fx("status-healthy")), chainEmpty, { recursive: true });
@@ -404,11 +426,16 @@ const cases = [
         variant("escrow-extra-field", (s) => (s.escrows[0].approved = true)),
         variant("status-reset-a-word", (s) => (s.status.reset_detected = "no")),
         variant("escrow-state-invented", (s) => (s.escrows[0].state = "settled")),
+        // Round 9 review L6: ids get_escrow_state cannot answer for, and a status that says nothing.
+        variant("escrow-id-not-hex", (s) => (s.escrows[0].escrow_id = "x")),
+        variant("escrow-listed-twice", (s) => (s.escrows[1] = { ...s.escrows[0], state: "refunded" })),
+        variant("genesis-extra-field", (s) => (s.status.genesis.approved = s.status.genesis.pinned)),
+        variant("rpc-health-a-word", (s) => (s.status.rpc.health = "great")),
       ];
       return { exit: runs.map((x) => x.exit).join(","), stderr: runs.map((x) => x.stderr).join(" | "), runs };
     },
     ok: (r) =>
-      r.runs.length === 5 &&
+      r.runs.length === 9 &&
       r.runs[0].exit === 0 &&
       r.runs.slice(1).every((x) => x.exit === 2 && x.stdout === "" && /is not an observatory snapshot; refusing to serve it/.test(x.stderr)),
   },
@@ -515,6 +542,40 @@ const cases = [
       /--status is given twice/.test(r.runs[1].stderr) &&
       /give a flag's value as the next argument, not after =/.test(r.runs[2].stderr) &&
       /is no flag's value/.test(r.runs[3].stderr),
+  },
+  {
+    name: "a command refuses an empty flag value, as an unset shell variable gives, and a --now that is no time",
+    run: () => {
+      const runs = [
+        cli("snapshot", "--status", restartLow, "--log", "", "--out", join(work, "empty-log-o")),
+        cli("snapshot", "--status", fx("status-healthy"), "--census", "", "--out", join(work, "empty-census-o")),
+        cli("census", "--fixtures", fx("census-complete"), "--now", "yesterday"),
+        cli("status", "--fixtures", fx("status-healthy"), "--now", ""),
+      ];
+      return { exit: runs.map((x) => x.exit).join(","), stderr: runs.map((x) => x.stderr).join(" | "), runs };
+    },
+    ok: (r) =>
+      r.runs.every((x) => x.exit === 2 && x.json === null) &&
+      /--log needs a value/.test(r.runs[0].stderr) &&
+      /--census needs a value/.test(r.runs[1].stderr) &&
+      /census refused \(request\): --now must be an ISO 8601 time with a zone/.test(r.runs[2].stderr) &&
+      /--now needs a value/.test(r.runs[3].stderr),
+  },
+  {
+    name: "census without its folder flag is a refusal of the request, as the recount's missing --dir is",
+    run: () => cli("census", "--genesis", "0x" + "99".repeat(32), "--from", "0", "--to", "10"),
+    ok: (r) => r.exit === 2 && /census refused \(request\): missing --fixtures/.test(r.stderr),
+  },
+  {
+    name: "a finality stall then a reorganisation that drops the long fork is no conflict: the finalized floor holds",
+    run: () => {
+      const first = cli("snapshot", "--status", stalled, "--out", join(work, "stall-o1"), "--log", join(work, "stall.jsonl"));
+      if (first.exit !== 0) return first;
+      const second = cli("snapshot", "--status", reorged, "--out", join(work, "stall-o2"), "--log", join(work, "stall.jsonl"));
+      if (second.exit !== 0) return second;
+      return { ...second, json: JSON.parse(readFileSync(join(work, "stall-o2", "status.json"), "utf8")).status };
+    },
+    ok: (r) => r.exit === 0 && r.json.reset_detected === false && r.json.rpc.health === "ok" && r.json.conflicts.length === 0,
   },
 ];
 

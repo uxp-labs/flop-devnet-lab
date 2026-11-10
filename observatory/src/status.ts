@@ -37,17 +37,18 @@ export interface StatusOptions {
    */
   earlierTimes?: readonly (string | null)[] | null;
   /**
-   * The best height every earlier snapshot in the log read, with its RPC genesis, oldest first,
-   * whether or not it also read a finalized head (RULES.md 1.1: a best height that falls further
-   * than the lag limit on the same genesis).
+   * The best height every earlier snapshot in the log read, with its RPC genesis and the finalized
+   * height it read beside it (null when none), oldest first (RULES.md 1.1: a best height that falls
+   * further than the lag limit below one that came with no finalized head).
    */
   earlierBest?: readonly EarlierBest[] | null;
 }
 
-/** One earlier snapshot's best height and the RPC genesis it read it on. */
+/** One earlier snapshot's best height, the RPC genesis it read it on, and its finalized height. */
 export interface EarlierBest {
   genesis: string;
   best_height: number;
+  finalized_height: number | null;
 }
 
 /** One earlier snapshot's finalized head, as its status recorded it. Its time may be null. */
@@ -276,11 +277,13 @@ export function classifyRpc(
     problems.push("best height is below an earlier finalized height");
     flags.contradicted = true;
   }
-  // An earlier best height is a floor too, less the lag limit (round 8 review L1): a reorganisation
-  // undoes only blocks that are not final, and a head within the lag limit has at most that many,
-  // so a best height that falls further on the same genesis is a restart, a node still syncing or a
-  // rollback. This holds whether or not either snapshot read a finalized head.
-  const bestSeen = genesis === null ? [] : (earlierBest ?? []).filter((p) => p.genesis === genesis).map((p) => p.best_height);
+  // An earlier best height that came with no finalized head is a floor too, less the lag limit
+  // (round 8 review L1): a reorganisation undoes only blocks that are not final, and a healthy head
+  // has at most the lag limit of them, so a best height that falls further on the same genesis is a
+  // restart, a node still syncing or a rollback. An earlier head that did read a finalized head sets
+  // the finalized floor instead, which no reorganisation can pass, so a long fork that finality
+  // never reached may fall away without a conflict (round 9 review L5).
+  const bestSeen = genesis === null ? [] : (earlierBest ?? []).filter((p) => p.genesis === genesis && p.finalized_height === null).map((p) => p.best_height);
   const highestBest = bestSeen.length > 0 ? Math.max(...bestSeen) : null;
   if (highestBest !== null && best !== null && best < highestBest - o.maxFinalityLag) {
     conflicts.push(`best block ${best} is more than ${o.maxFinalityLag} blocks below the best block ${highestBest} an earlier snapshot saw on this genesis`);

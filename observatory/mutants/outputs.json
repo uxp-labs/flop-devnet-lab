@@ -301,7 +301,7 @@
     "find": "  if (twice !== null) return `holds the key ${JSON.stringify(twice)} twice in one object`;",
     "replace": "",
     "test": "test/store.test.ts",
-    "why": "a log line with a key twice can read as two different snapshots, so it breaks the chain"
+    "why": "a log line with a key twice breaks the chain, and the reason names the key. The canonical form check refuses such a line too, so this kill shows the reason given, not that the refusal stands on this check (round 9 review I6)"
   },
   {
     "id": "store-lossy-utf8",

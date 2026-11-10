@@ -48,7 +48,7 @@ ALLOWED_CHAINS = {
 ALLOWED_BUILTINS = {
     "Exception", "FileNotFoundError", "OSError", "RecursionError", "UnicodeDecodeError", "ValueError",
     "__name__", "all", "any", "bool", "chr", "dict", "float", "int", "isinstance", "len", "list", "max",
-    "min", "open", "print", "set", "sorted", "str", "sum", "super",
+    "min", "open", "ord", "print", "set", "sorted", "str", "sum", "super",
 }
 BUILTIN_NAMES = set(dir(builtins))
 BANNED_NAMES = {"eval", "exec", "compile", "__import__", "__builtins__", "builtins", "getattr", "setattr",
@@ -58,6 +58,9 @@ BANNED_NAMES = {"eval", "exec", "compile", "__import__", "__builtins__", "builti
 FRAME_ATTR = re.compile(r"(?:gi|cr|ag|f|tb|co)_")
 # open takes a file and a mode, by position or as mode=, and only these words besides.
 OPEN_KEYWORDS = {"mode", "encoding", "errors", "newline"}
+# A class's method resolution order hands over object, which every value is an instance of
+# (round 9 review L1).
+BANNED_ATTRS = {"mro"}
 
 
 def _dotted(node):
@@ -107,8 +110,14 @@ def scan_problems(code):
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
             found += ["import " + a.name for a in node.names if a.name.split(".")[0] not in ALLOWED_IMPORTS]
+            # An alias is a module under a name the dotted name rule never reads (round 9 review M2).
+            found += ["imports %s as %s" % (a.name, a.asname) for a in node.names if a.asname is not None]
         elif isinstance(node, ast.ImportFrom):
             found.append("from %s import" % node.module)
+        elif isinstance(node, ast.Match):
+            # A class pattern reads any attribute by its keyword, out of reach of the attribute
+            # rules below (round 9 review L1); recount.py has no use for match.
+            found.append("a match statement")
         elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef, ast.arg)):
             name = node.arg if isinstance(node, ast.arg) else node.name
             if name in BUILTIN_NAMES and name not in ALLOWED_BUILTINS:
@@ -121,6 +130,8 @@ def scan_problems(code):
                     found.append("reaches ." + node.attr)
             elif FRAME_ATTR.match(node.attr):
                 found.append("reaches the frame, code or traceback field ." + node.attr)
+            elif node.attr in BANNED_ATTRS:
+                found.append("reaches ." + node.attr)
         if not isinstance(node, ast.Name):
             continue
         if node.id in ALLOWED_IMPORTS:
@@ -307,7 +318,9 @@ class RecountTests(unittest.TestCase):
             code, out, err = run(os.path.join(DATA, "complete"), text, 10)
             self.assertEqual(code, 2, repr(text))
             self.assertEqual(out, "", repr(text))
-            self.assertIn("census refused (request): --from must be a non-negative integer", err, repr(text))
+            # An empty value is a flag with no value (Fable review r9 L3), a request problem too.
+            why = "--from needs a value" if text == "" else "--from must be a non-negative integer"
+            self.assertIn("census refused (request): " + why, err, repr(text))
         code, _, err = run(os.path.join(DATA, "complete"), 1, "1_0")
         self.assertEqual(code, 2)
         self.assertIn("census refused (request): --to must be a non-negative integer", err)
@@ -318,10 +331,12 @@ class RecountTests(unittest.TestCase):
         self.assertIn("census refused (request): --to is too large to be a safe integer", err)
         self.assertEqual(run(os.path.join(DATA, "complete"), "0" * 30 + "1", "10")[0], 0)
 
-    def test_an_empty_genesis_is_an_input_problem(self):
+    def test_an_empty_genesis_is_a_flag_with_no_value(self):
+        # Fable review r9 L3: an empty value (an unset shell variable) is a flag with no value,
+        # a request problem on both sides, never the flag left out.
         code, out, err = run(os.path.join(DATA, "complete"), 1, 10, genesis="")
         self.assertEqual((code, out), (2, ""))
-        self.assertIn("census refused (input): no pinned genesis", err)
+        self.assertIn("census refused (request): --genesis needs a value", err)
 
     def test_block_number_key_missing_is_malformed_but_null_is_kept(self):
         r = census("bnmissing", 1, 10)
@@ -581,7 +596,7 @@ class RecountTests(unittest.TestCase):
             self.assertFalse(json.loads(out)["complete"])
 
     def test_recount_reads_files_only(self):
-        """recount.py, read as a syntax tree: it imports exactly the six modules it needs and makes
+        """recount.py, read as a syntax tree: it imports exactly the five modules it needs and makes
         no call that could start a process, open a socket, run code from a string or write a file."""
         with open(RECOUNT, encoding="utf-8") as fh:
             code = fh.read()
@@ -609,7 +624,17 @@ class RecountTests(unittest.TestCase):
                'tb = None\ntb.tb_frame.f_back', 'open("x", **{"mode": "w"})', 'open(*["x", "w"])',
                'open("x", "r", opener=os.open)', 'open("x", "r", 1)', 'e = sys.stderr\ntype(e.buffer.raw)("x", "w")',
                'help("os")', 'type = 1', 'def f(t=type):\n    return t', 'def f(type):\n    return 1',
-               'x = memoryview(b"")', 'import argparse', 'argparse.FileType("w")', 'x = y')
+               'x = memoryview(b"")', 'import argparse', 'argparse.FileType("w")', 'x = y',
+               # Fable review r9 M2 and L1: a module under an alias, and a match class pattern
+               # that reads attributes by keyword.
+               'import os as o\no.system("id")', 'import json, os as o\no.popen("id")',
+               'import os.path as p\nx = p.os\nx.system("id")', 'import sys as s\ns.modules',
+               'import re as r, stat as st\nr.compile("x")',
+               'O = Exception.mro()[2]\nmatch os.path.join:\n    case O(__globals__=gl):\n        gl["os"].system("id")',
+               'O = str.mro()[1]\nmatch os.listdir:\n    case O(__self__=m):\n        m.system("id")',
+               'def g():\n    yield\nmatch g():\n    case object(gi_frame=fr):\n        pass',
+               'match sys.stderr:\n    case Exception(__traceback__=tb):\n        pass',
+               'x = Exception.mro()')
         for code in bad:
             self.assertNotEqual(scan_problems(code), [], code)
         good = ("import os", 'os.path.join("a", "b")', 'open("x", "r", encoding="utf-8")', 'os.lstat("x")',
@@ -630,6 +655,7 @@ class RecountTests(unittest.TestCase):
             "negative number": ["--dir", d, "--genesis", G, "--from", "-5", "--to", "30"],
             "flag with no value at the end": ["--dir", d, "--genesis", G, "--from", "1", "--to"],
             "flag whose value is a flag": ["--dir", d, "--genesis", G, "--from", "--to", "30"],
+            "flag with an empty value": ["--dir", "", "--genesis", G, "--from", "1", "--to", "30"],
             "flag given twice": ["--dir", d, "--genesis", G, "--from", "1", "--from", "2", "--to", "30"],
             "argument that is no flag's value": ["--dir", d, "--genesis", G, "--from", "1", "--to", "30", "extra"],
             "flag left out": ["--dir", d, "--from", "1", "--to", "30"],

@@ -126,4 +126,6 @@ for (const [label, body] of Object.entries(canaries)) {
   results.push({ canary: name, exit: r.status, outcome: caught ? "harness-caught-it" : "harness-missed-it" });
 }
 console.log(JSON.stringify(results, null, 2));
-process.exit(bad ? 1 : 0);
+// exitCode, not exit(): a caller may read this report through a pipe, where a write is
+// asynchronous and exit() could cut it short (round 9 review L7).
+process.exitCode = bad ? 1 : 0;

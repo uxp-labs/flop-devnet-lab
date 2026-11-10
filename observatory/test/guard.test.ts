@@ -320,5 +320,10 @@ describe("source scan", () => {
     expect(text).not.toMatch(/\.(?:gi|cr|ag|tb|f|co)_\w/);
     expect(text).not.toMatch(/\b(?:type|help|vars|dir|memoryview|object)\s*\(/);
     expect(text).not.toMatch(/\bopen\s*\([^)\n]*(?:\*|\bopener\b)/);
+    // A module under an alias, a match class pattern that reads attributes by keyword, and a
+    // method resolution order that hands over object (round 9 review M2 and L1).
+    expect(text).not.toMatch(/^[ \t]*import[ \t][^\n#]*\bas\b/m);
+    expect(text).not.toMatch(/^[ \t]*(?:match|case)[ \t][^\n]*:[ \t]*(?:#.*)?$/m);
+    expect(text).not.toMatch(/\.mro\b/);
   });
 });

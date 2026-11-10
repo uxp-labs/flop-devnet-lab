@@ -55,10 +55,13 @@ function run(cmd, args) {
   return { exit: r.status, json, stderr: (r.stderr ?? "").trim() };
 }
 
-/** A file name as both sides show it: as itself when it is UTF-8, else byte for byte with %XX. */
+/**
+ * A file name as both sides show it: when it is UTF-8 as itself but for % and the control
+ * characters, else byte for byte, each as %XX (round 9 review I2).
+ */
 function shownName(raw) {
   try {
-    return new TextDecoder("utf-8", { fatal: true }).decode(raw);
+    return new TextDecoder("utf-8", { fatal: true }).decode(raw).replace(/[%\u0000-\u001f\u007f]/g, (c) => `%${c.charCodeAt(0).toString(16).toUpperCase().padStart(2, "0")}`);
   } catch {
     return [...raw].map((b) => (b >= 0x20 && b < 0x7f && b !== 0x25 ? String.fromCharCode(b) : `%${b.toString(16).toUpperCase().padStart(2, "0")}`)).join("");
   }
@@ -125,6 +128,22 @@ const generated = [];
     generated.push({ skipped: "generated-page-name-with-a-colon", why: `this filesystem refuses the name: ${e.code ?? e.message}` });
   }
 }
+{
+  // Two bad page files whose names differ only after a line break, and one that holds %FF as
+  // text, so each side must show % and a line break as %XX to name the file whole (round 9 review
+  // I2).
+  const dir = join(generatedRoot, "generated-page-names-with-a-line-break");
+  mkdirSync(join(dir, "event-pages"), { recursive: true });
+  writeFileSync(join(dir, "meta.json"), JSON.stringify({ scenario: "generated-page-names-with-a-line-break", description: "made at run time", now: "2026-11-10T00:00:00.000Z", synthetic: true, census_request: { from_block: 0, to_block: 99 }, pinned_genesis: DEVNET }));
+  try {
+    writeFileSync(join(dir, "event-pages", "01\na.json"), "{ not json");
+    writeFileSync(join(dir, "event-pages", "01\nb.json"), "{ not json either");
+    writeFileSync(join(dir, "event-pages", "02%FF.json"), "{ not json");
+    generated.push(dir);
+  } catch (e) {
+    generated.push({ skipped: "generated-page-names-with-a-line-break", why: `this filesystem refuses the name: ${e.code ?? e.message}` });
+  }
+}
 
 const results = [];
 let bad = 0;
@@ -180,6 +199,9 @@ for (const { name: d, dir } of scenarios) {
     ["flag-given-twice", complete, [...req("0", "199"), "--from", "5"], true],
     ["argument-that-is-no-flag-value", complete, [...req("0", "199"), "extra"], true],
     ["flag-unknown-and-no-folder", missing, [...req("0", "199"), "--form", "100"], true],
+    // An empty value, as an unset shell variable gives, is a flag with no value (round 9 review L3).
+    ["flag-value-empty", complete, ["--genesis", DEVNET, "--from", "", "--to", "199"], true],
+    ["folder-flag-value-empty", "", req("0", "199"), true],
     // The same flags in another order count the same.
     ["flags-in-another-order", complete, ["--to", "199", "--genesis", DEVNET, "--from", "0"], false],
   ];
@@ -187,6 +209,13 @@ for (const { name: d, dir } of scenarios) {
     const ts = run("node", ["dist/cli.js", "census", "--fixtures", dir, ...args]);
     const py = run("python3", ["-I", "tools/recount.py", "--dir", dir, ...args]);
     compare(`command-line:${name}`, ts, py, mustRefuse, namesIn(dir));
+  }
+  // The folder flag left out (round 9 review I1): a request problem on both sides. The command's
+  // own --now has no counterpart in the recount, so no case passes it.
+  {
+    const ts = run("node", ["dist/cli.js", "census", ...req("0", "199")]);
+    const py = run("python3", ["-I", "tools/recount.py", ...req("0", "199")]);
+    compare("command-line:folder-flag-left-out", ts, py, true, namesIn(complete));
   }
 }
 
@@ -252,4 +281,6 @@ if (perturb) {
   }
 }
 console.log(JSON.stringify(results, null, 2));
-process.exit(bad ? 1 : 0);
+// exitCode, not exit(): a caller may read this report through a pipe, where a write is
+// asynchronous and exit() could cut it short (round 9 review L7).
+process.exitCode = bad ? 1 : 0;

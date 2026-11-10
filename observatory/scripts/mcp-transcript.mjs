@@ -57,5 +57,7 @@ child.on("close", (code) => {
     process.stdout.write(JSON.stringify({ request: req, expect_error: expectError, response: res, response_line: got?.line ?? null }) + "\n");
   }
   if (responses.has(undefined)) bad++;
-  process.exit(bad ? 1 : 0);
+  // exitCode, not exit(): a caller may read this report through a pipe, where a write is
+  // asynchronous and exit() could cut it short (round 9 review L7).
+  process.exitCode = bad ? 1 : 0;
 });

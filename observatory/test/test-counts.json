@@ -1,15 +1,54 @@
 {
-  "attempts-check.test.ts": 11,
-  "census.test.ts": 176,
-  "consistency.test.ts": 14,
-  "drift.test.ts": 40,
-  "escrow.test.ts": 179,
-  "guard.test.ts": 56,
-  "mcp.test.ts": 12,
-  "page.test.ts": 40,
-  "snapshot.test.ts": 21,
-  "status-schema.test.ts": 15,
-  "status.test.ts": 112,
-  "store.test.ts": 16,
-  "strict.test.ts": 66
+  "attempts-check.test.ts": {
+    "tests": 11,
+    "names": "70b7ee7a877c589ab36ce2d02099632e2b6033710b3932e8a2d17c3bfa2d7b14"
+  },
+  "census.test.ts": {
+    "tests": 176,
+    "names": "d9afe2001476910cef3f769c639d7c927e2fdb2c0f676eb54ed24e38992e0256"
+  },
+  "consistency.test.ts": {
+    "tests": 14,
+    "names": "90ea9def3323494bd18752ea330ef81261af030f4d72860da34590a370c271bd"
+  },
+  "drift.test.ts": {
+    "tests": 40,
+    "names": "c78ae0d951ed062702115198f59b01902fc80e8a835fba2f05c924dc3767ba20"
+  },
+  "escrow.test.ts": {
+    "tests": 179,
+    "names": "3f7e7b5fb7c5d00c35f7362fa3f0a8d404c34cdca1f0470bdfe9d23eea0f3aff"
+  },
+  "guard.test.ts": {
+    "tests": 56,
+    "names": "21df9f2e95ed51c467e8ac74658312fb1538669d62b9c25569251871f3eab8da"
+  },
+  "mcp.test.ts": {
+    "tests": 12,
+    "names": "2656310968ebff00c827edd6f3f8bcfcafd9f79d73725f28b93d70c04f4204b1"
+  },
+  "page.test.ts": {
+    "tests": 40,
+    "names": "991782c67690a024ae91440671a397c3cc23bee79caf6a00dc85e10d799b8875"
+  },
+  "snapshot.test.ts": {
+    "tests": 21,
+    "names": "16bff9b93b68b606c10adfc13560e24fed7cbd8e9d3a8537b5ab7edb5b92c96e"
+  },
+  "status-schema.test.ts": {
+    "tests": 15,
+    "names": "de59fc974e7a9ef6ac6ebea8086881c36f93b210d7ada69de6aceadcd5650d81"
+  },
+  "status.test.ts": {
+    "tests": 113,
+    "names": "a1480bbbc5fe7572c83c309fe1b2a4cfcb772bb0abfff5dff4d7c6cbc70ac1e4"
+  },
+  "store.test.ts": {
+    "tests": 16,
+    "names": "d95ae80f0e207f22b426d55eb646b9060667b1f20810c5181b668f947d5df798"
+  },
+  "strict.test.ts": {
+    "tests": 66,
+    "names": "25e6a39f799d99d602f523f384b2ac3cad8dd6634b7e89246b56d7add4c8de3f"
+  }
 }

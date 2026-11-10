@@ -11,17 +11,20 @@
 //
 // Rules, for every .ts module under src (subfolders included) but guard.ts, which names what it
 // blocks:
-// - Imports, dynamic imports and re-exports name their module as one plain string, and that module
-//   is relative or on the allow-list: node:fs, node:path, node:readline, node:url, node:crypto and
-//   yaml. An allow-list, so a module nobody thought to ban (the legacy _http_client, a third party
-//   client) fails too. From node:crypto only createHash may be imported.
+// - Imports and re-exports name their module as one plain string, and that module is relative or
+//   on the allow-list: node:fs, node:path, node:readline, node:url, node:crypto and yaml. An
+//   allow-list, so a module nobody thought to ban (the legacy _http_client, a third party client)
+//   fails too. From node:crypto only createHash may be imported. Every import names what it takes:
+//   no default or namespace import, no export *, and no dynamic import() (round 9 review M1), so src
+//   never holds a module object whose exports Object.entries could list by names the scan cannot
+//   read.
 // - No identifier, property or literal computed key from the banned list: transports reached as
 //   globals, the global object by any name, code from strings, Reflect, constructor (a class's own
 //   constructor method is fine), module loading outside import statements, and signing, key and
 //   spending names.
 // - process only as process.version, argv, exit, process.stdout.write(...),
-//   process.stderr.write(...) and { input: process.stdin }, so no stream src holds can be asked to
-//   connect or be read for its handle.
+//   process.stderr.write(...) and createInterface({ input: process.stdin }), so no stream src holds
+//   can be asked to connect, handed on or read for its handle.
 // - No string, template or regular expression names an RPC method that writes or signs.
 // - No computed key that is not a string or number literal, in a member access (o[k], o?.[k],
 //   super[k]), an object, a pattern or a class (round 8 review M1). A name only known at run time,
@@ -139,6 +142,11 @@ const BANNED = new Set([
   "listen",
   "bind",
   "bind6",
+  // Round 9 review M1: the Web Crypto classes, globals whose prototypes list the key and signing
+  // methods.
+  "SubtleCrypto",
+  "CryptoKey",
+  "Crypto",
 ]);
 // An underscore name is an internal (a stream's _handle, console._stdout, __proto__): src has no
 // use for one.
@@ -203,6 +211,10 @@ function problems(code, file = "sample.ts", scanned = SCANNED) {
         const name = n.source.value;
         const p = moduleProblem(name, file, scanned);
         if (p) out.push(p);
+        // Every import names what it takes (round 9 review M1): a default or namespace import, or
+        // export *, hands over a whole module object.
+        if (n.type === "ExportAllDeclaration") out.push(`re-exports the whole of ${JSON.stringify(name)} (export *)`);
+        if (n.type === "ImportDeclaration" && n.specifiers.some((s) => s.type !== "ImportSpecifier")) out.push(`imports ${JSON.stringify(name)} as a module object (a default or namespace import)`);
         if (name === "node:crypto") {
           const only =
             n.type === "ImportDeclaration" &&
@@ -213,11 +225,10 @@ function problems(code, file = "sample.ts", scanned = SCANNED) {
         break;
       }
       case "ImportExpression": {
-        if (n.source?.type !== "Literal" || typeof n.source.value !== "string") out.push("a dynamic import names its module as something other than one plain string");
-        else {
-          const p = moduleProblem(n.source.value, file, scanned);
-          if (p) out.push(p);
-        }
+        // A dynamic import hands back a module object, whose exports Object.entries lists by names
+        // the scan cannot read, and the createHash rule has no specifier list to hold it to (round 9
+        // review M1). src loads every module by a static named import.
+        out.push("uses a dynamic import(); src imports every module statically, by name");
         break;
       }
       case "TSImportEqualsDeclaration": {
@@ -239,11 +250,17 @@ function problems(code, file = "sample.ts", scanned = SCANNED) {
             const call = write ? up.get(write.parent) : undefined;
             allowed = write?.key === "object" && write.parent?.type === "MemberExpression" && !write.parent.computed && write.parent.property?.name === "write" && call?.key === "callee" && call.parent?.type === "CallExpression";
           } else if (member === "stdin") {
-            // Only as the input of a reader: { input: process.stdin }.
+            // Only as the input of a reader: createInterface({ input: process.stdin }), the object
+            // being the call's argument, so stdin cannot be read back under another name (round 9
+            // review I7).
             const prop = up.get(parent);
-            allowed = prop?.key === "value" && prop.parent?.type === "Property" && !prop.parent.computed && prop.parent.key?.type === "Identifier" && prop.parent.key.name === "input" && up.get(prop.parent)?.parent?.type === "ObjectExpression";
+            const literal = prop?.parent ? up.get(prop.parent) : undefined;
+            const call = literal?.parent ? up.get(literal.parent) : undefined;
+            allowed =
+              prop?.key === "value" && prop.parent?.type === "Property" && !prop.parent.computed && prop.parent.key?.type === "Identifier" && prop.parent.key.name === "input" &&
+              literal?.parent?.type === "ObjectExpression" && call?.key === "arguments" && call.parent?.type === "CallExpression" && call.parent.callee?.type === "Identifier" && call.parent.callee.name === "createInterface";
           }
-          if (!allowed) out.push("uses process other than process.version, argv, exit, stdout.write(...), stderr.write(...) or { input: process.stdin }");
+          if (!allowed) out.push("uses process other than process.version, argv, exit, stdout.write(...), stderr.write(...) or createInterface({ input: process.stdin })");
         }
         break;
       }
@@ -375,6 +392,19 @@ const BAD = [
   "const k = /constructor/.source; const C = ((() => 0) as any)[k];",
   // A banned name in a template that is no key: the template rule alone reads it.
   "const k2 = `constructor`;",
+  // Round 9 review M1: a module object, by a dynamic import, a default or namespace import or
+  // export *, whose exports Object.entries lists; the Web Crypto classes; stdin read back.
+  'const c = await import("node:crypto"); for (const [k, v] of Object.entries(c)) use(k, v);',
+  'const t = await import("./types.js");',
+  'import * as fs from "node:fs"; const all = Object.entries(fs);',
+  'import fs2 from "node:fs";',
+  'import YAML from "yaml";',
+  'export * from "./strict.js";',
+  'export * as st from "./strict.js";',
+  "const methods = Object.entries(SubtleCrypto.prototype);",
+  "const k3 = CryptoKey;",
+  "const s5 = { input: process.stdin }.input;",
+  "const s6 = make({ input: process.stdin });",
   "class A { constructor() {} } const k = Object.getOwnPropertyNames(A.prototype)[0] as string; const C = ((() => 0) as any)[k];",
   'const k = atob("Y29uc3RydWN0b3I="); const C = ((() => 0) as any)[k];',
   String.raw`const k = JSON.parse('"\u0063onstructor"') as string; const C = ((() => 0) as any)[k];`,
@@ -413,9 +443,8 @@ const GOOD = [
   'import { readFileSync } from "node:fs";',
   'import { createHash } from "node:crypto";',
   'import type { Snapshot } from "./types.js";',
-  'import YAML from "yaml";',
+  'import { parse } from "yaml";',
   'export { parseZoned } from "./strict.js";',
-  'const t = await import("./types.js");',
   "process.stdout.write(out);",
   "const v = process.version;",
   "const a = process.argv.slice(2);",

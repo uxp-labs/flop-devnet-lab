@@ -66,8 +66,8 @@
   {
     "id": "source-other-files-skipped",
     "file": "src/source.ts",
-    "find": "          const why = `event-pages/${name}: not a page file (a regular file named *.json, not starting with a dot)`;\n          loadErrors.push(why);\n          pageErrors.push(why);\n          continue;",
-    "replace": "          const why = `event-pages/${name}: not a page file (a regular file named *.json, not starting with a dot)`;\n          continue;",
+    "find": "          const why = `event-pages/${shownText(name)}: not a page file (a regular file named *.json, not starting with a dot)`;\n          loadErrors.push(why);\n          pageErrors.push(why);\n          continue;",
+    "replace": "          const why = `event-pages/${shownText(name)}: not a page file (a regular file named *.json, not starting with a dot)`;\n          continue;",
     "test": "test/snapshot.test.ts",
     "why": "an entry that is not a page file must be reported, never skipped silently"
   },

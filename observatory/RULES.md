@@ -45,8 +45,8 @@ check below to run and pass.
   and nothing below found the head contradicting itself or an earlier snapshot: no rollback, no
   changed finalized hash, a best height not below the finalized height nor below the highest
   finalized height an earlier snapshot saw on this genesis nor more than the lag limit below the
-  highest best height an earlier snapshot saw on this genesis, and no earlier snapshot taken, or
-  its head read, later than this snapshot time. A head that fails any of these is not usable,
+  highest best height an earlier snapshot saw on this genesis with no finalized head, and no
+  earlier snapshot taken, or its head read, later than this snapshot time. A head that fails any of these is not usable,
   however fresh: a chain restarted from the same spec keeps its genesis, and its first heads
   report a low best height and no finalized head yet. `genesis.rpc` still shows what the head
   said. The same usable head is the only one whose finalized height may bound escrow evidence
@@ -103,11 +103,19 @@ check below to run and pass.
     or its head read, later than this snapshot time is a conflict, and this head is not usable.
     The floor is only as durable as the log: an absent log means no earlier snapshot, and a log
     cut short or removed cannot be detected from the log itself.
-  - every earlier snapshot's best height on the same genesis is a floor too, less the lag limit,
-    whether or not either snapshot read a finalized head: a best height more than the lag limit
-    below the highest of them is a conflict, and this head is not usable. A reorganisation undoes
-    only blocks that are not final, and a head within the lag limit has at most that many, so a
-    fall further than that is a restart, a node still syncing or a rollback.
+  - every earlier snapshot's best height on the same genesis that came with no valid finalized head
+    is a floor too, less the lag limit, whether or not this head has one: a best height more than
+    the lag limit below the highest of them is a conflict, and this head is not usable. A
+    reorganisation undoes only blocks that are not final, and a healthy head has at most the lag
+    limit of them, so a fall further than that is a restart, a node still syncing or a rollback. An
+    earlier head that read a finalized head sets the finalized floor instead, which no
+    reorganisation can pass, so after a finality stall the long fork that was never final may fall
+    away without a conflict. Like the finalized floor, this one counts a head that came with a read
+    error, and fails closed: a reading that later proves wrong keeps the head unusable until the
+    operator starts a new log.
+  - Two restarts the history cannot see: one whose earlier heads read no valid genesis, which are
+    on no genesis and set no floor, and one within the lag limit of where the chain was, which no
+    reorganisation rule can tell from a reorganisation.
   - The `status` command reads no log, so none of the checks against earlier snapshots runs there:
     its `reset_detected` speaks for that one reading only. The snapshot command's does not.
 - Any failed check makes RPC health `degraded`. A missing or invalid genesis hash, finalized head
@@ -313,14 +321,20 @@ check below to run and pass.
     command line both sides read the same arguments by the same rules: every flag is `--name`
     followed by its value as the next argument, so `--name=value`, a name the command does not
     read (an abbreviation such as `--gen` included), a flag given twice, a flag with no value (the
-    next argument missing or itself a flag), and an argument that is no flag's value are each a
-    request problem, while a value that starts with one dash (`-5`, `-a`) is a value, judged as
-    one. A request number that is not plain digits, or has more than 16 significant digits (so it
-    is past 2^53 - 1), is a request problem, a range given there is checked before the folder is
-    read, and an empty pinned genesis or a scenario folder that does not exist is an input
-    problem. The recount needs all four of its flags, and one left out is a request problem; the
-    TypeScript command reads a missing `--genesis`, `--from` or `--to` from the scenario's
-    `meta.json`, so a flag left out is compared only through `meta.json`, as every scenario is. The TypeScript command also reads the folder's
+    next argument missing, empty, as an unset shell variable gives, or itself a flag), and an
+    argument that is no flag's value are each a request problem, while a value that starts with
+    one dash (`-5`, `-a`) is a value, judged as one. A request number that is not plain digits,
+    or has more than 16 significant digits (so it is past 2^53 - 1), is a request problem, a range
+    given there is checked before the folder is read, and a scenario folder that does not exist,
+    or an empty pinned genesis in `meta.json`, is an input problem. The folder flag left out is a
+    request problem on both sides. The recount needs all four of its flags, and one left out is a
+    request problem; the TypeScript command reads a missing `--genesis`, `--from` or `--to` from
+    the scenario's `meta.json`, so a flag left out is compared only through `meta.json`, as every
+    scenario is. The command's `--now` (a time with a zone, checked as one) has no counterpart in
+    the recount, which reads no clock, so the cross-check never passes it. A file name a refusal
+    names is shown as itself when it is UTF-8, but for `%` and the control characters, which are
+    `%XX`, and byte for byte with every other byte as `%XX` when it is not, so a name holds no
+    line break and no two names are shown alike. The TypeScript command also reads the folder's
     `meta.json` and refuses as an input problem when it cannot; the recount does not read
     `meta.json`, so that one input problem is the command's alone.
 
@@ -351,39 +365,47 @@ Tests fail if any attempt is left in the log.
   `node:fs`, `node:path`, `node:readline`, `node:url`, `node:crypto` (`createHash` only) and
   `yaml`. A module nobody thought to ban, a legacy one such as `_http_client` or a third party
   client, fails. A relative module must land on a scanned `.ts` module inside `src`, so a path out
-  of `src` or to a `.mjs` file fails, and an import-equals (`import x = require(...)`) fails. It
+  of `src` or to a `.mjs` file fails, and an import-equals (`import x = require(...)`) fails. Every
+  import names what it takes: no default or namespace import, no `export *`, and no dynamic
+  `import()`, so `src` never holds a module object whose exports `Object.entries` could list by
+  names the scan cannot read, and nothing but `createHash` can come from `node:crypto`. It
   also fails the banned names as identifiers, properties, string keys, template keys, regular
   expression patterns or any other string (transports, the global object, the Web Crypto global,
   `eval`, `Function`, `Reflect`, `constructor` but a class's own method, the APIs that define
   getters on a prototype, rewire one or list its names, `atob`, `Object.assign`, the stack trace
-  hook `prepareStackTrace`, `WebAssembly`, the socket calls `connect`, `listen` and `bind`,
-  module loading, signing, key and cipher APIs), any name that starts with an underscore (an
-  internal such as a stream's `_handle` or `__proto__`), `process` other than `process.version`,
-  `process.argv`, `process.exit`, `process.stdout.write(...)`, `process.stderr.write(...)` and
-  `{ input: process.stdin }` (so a stream `src` holds is never handed on, listed or asked to
-  connect: under a pipe `process.stdout` is a socket), and any string naming an RPC method that
-  writes or signs. It also fails every computed key that is not a string or number literal, in a
-  member access (`o[k]`, `o?.[k]`, `super[k]`), an object, a pattern or a class: every property
-  `src` reads or writes is named in its code, where the rules above read it, so a name only known
-  at run time (read back from a regular expression, decoded, trimmed, listed or parsed) can never
-  reach anything. `src` reads a data record by a run time key through `own()` in `src/own.ts`,
-  which walks the record's own entries, never reaches an inherited member and never hands back a
-  function. A name list refuses some plain words too (`sign`, `self`, `window`, `binding`,
+  hook `prepareStackTrace`, `WebAssembly`, the socket calls `connect`, `listen` and `bind`, the
+  Web Crypto classes `Crypto`, `CryptoKey` and `SubtleCrypto`, module loading, signing, key and
+  cipher APIs), any name that starts with an underscore (an internal such as a stream's
+  `_handle` or `__proto__`), `process` other than `process.version`, `process.argv`,
+  `process.exit`, `process.stdout.write(...)`, `process.stderr.write(...)` and
+  `createInterface({ input: process.stdin })` (so a stream `src` holds is never handed on, read
+  back, listed or asked to connect: under a pipe `process.stdout` is a socket), and any string
+  naming an RPC method that writes or signs. It also fails every computed key that is not a
+  string or number literal, in a member access (`o[k]`, `o?.[k]`, `super[k]`), an object, a
+  pattern or a class: every property `src` reads or writes by name is named in its code, where
+  the rules above read it, so a name only known at run time (read back from a regular
+  expression, decoded, trimmed, listed or parsed) can never be used to reach anything. What
+  `Object.entries` and `Object.values` list without a name is what an object `src` holds holds
+  itself: data, the functions of `src`'s own modules, and an allowed module's functions only by
+  the names `src` imports; `src` holds no module object, no global object and no `process`. `src`
+  reads a data record by a run time key through `own()` in `src/own.ts`, which walks the
+  record's own entries, never reaches an inherited member and never hands back a function. A name list refuses some plain words too (`sign`, `self`, `window`, `binding`,
   `encrypt` and the others, as identifiers or whole strings); `src` uses none of them. `src` must
   hold nothing but regular `.ts` files, so every file tsc compiles is read; both scans check that.
   It proves itself on known bad and good samples, and its file list on a throwaway folder, before
   it scans. What it cannot see is what an allowed module does with the arguments `src` passes it;
   the runtime block in the tests covers that.
 - `tools/recount.py` is read the same two ways: its own tests walk its syntax tree (exactly five
-  plain imports, no from-import, every use of a module one of a fixed list of full dotted names,
-  so no alias of a module or of part of one; every other name one the file binds or a builtin on a
-  fixed list of the ones it uses, so `type`, `help`, `vars` and every other builtin fail wherever
-  they appear, as a name of the file's own too; no attribute that starts with an underscore but
-  `super().__init__`, and none that names a frame, code or traceback field (`gi_frame`,
-  `f_globals`, `tb_frame` and the rest), so a generator's frame cannot hand over the module's
-  globals; nothing that runs code from a string; and `open` only called directly for reading, with
-  a file and a mode and no unpacked argument or opener), and the guard test reads every name on
-  every import line and the same bans as text.
+  plain imports, none under an alias, no from-import, every use of a module one of a fixed list of
+  full dotted names, so no alias of a module or of part of one; no `match` statement, whose class
+  patterns read attributes by keyword, and no `.mro`; every other name one the file binds or a
+  builtin on a fixed list of the ones it uses, so `type`, `help`, `vars` and every other builtin
+  fail wherever they appear, as a name of the file's own too; no attribute that starts with an
+  underscore but `super().__init__`, and none that names a frame, code or traceback field
+  (`gi_frame`, `f_globals`, `tb_frame` and the rest), so a generator's frame cannot hand over the
+  module's globals; nothing that runs code from a string; and `open` only called directly for
+  reading, with a file and a mode and no unpacked argument or opener), and the guard test reads
+  every name on every import line and the same bans as text.
 - Every attempt, every reset of the log and every test file's final check is written to a
   journal the moment it happens. Once every test file has ended, and again after the test run
   exits, the journal is checked:
@@ -411,8 +433,9 @@ blank on the page and `null` in JSON and MCP.
   snapshot exactly, every field included. MCP tool text equals the feed file byte for byte.
   `snapshot.json` equals the last line of the snapshot log, and its hash verifies.
 - Every output is read as strict UTF-8, and every JSON output strictly: it is parsed first, and
-  one that is not JSON ends the check with that failure, never a hang; then no key twice in one
-  object, and each is in its written format (keys sorted, two-space indent, one trailing newline;
+  one that is not JSON ends the check with that failure, never a hang, as does `snapshot.json`
+  when it is not an observatory snapshot and any output of a shape the check cannot read; then no
+  key twice in one object, and each is in its written format (keys sorted, two-space indent, one trailing newline;
   `pin.json` two-space indent). A
   feed holds exactly `schema` (`flop-observatory/feed-<part>@0`), `snapshot_hash`,
   `observed_at`, `trust` and its part. The log's last line is `snapshot.json` in canonical form,
@@ -437,8 +460,9 @@ blank on the page and `null` in JSON and MCP.
   each part with its own schema, and the status and every escrow, which `get_status` and
   `get_escrow_state` answer field by field, holding exactly their schema's fields, with
   `reset_detected`, the state, the trust label, the heights, the lists and the scope of their
-  schema's types; the census and the drift report are checked for their schema only) whose hash
-  verifies, read as strict UTF-8 with a byte order mark
+  schema's types, the genesis exactly its three hashes, each service's health one of the four
+  words, and each escrow id `0x` plus 64 lower case hex and listed once; the census and the drift
+  report are checked for their schema only) whose hash verifies, read as strict UTF-8 with a byte order mark
   refused, nesting checked before parsing, one value per key, and the text byte for byte in the
   feed format, so an integer past 2^53 - 1 that the parser would round is refused too; anything
   else is refused and nothing is served. A call it cannot answer gets a JSON-RPC error, never a
@@ -475,6 +499,11 @@ blank on the page and `null` in JSON and MCP.
   page's fixed words, in order, with the intro's `seq` equal to the snapshot's. `aria-label`
   appears only as `unknown` on a blank unknown cell, and each cell's `class` is the one its value
   calls for (`unk` for unknown, `h-<health>`, `s-<state>`, none otherwise).
+- Every value sits in a labeled row or a drift item row: a marked `td` in a table outside both
+  fails, so no value loses its label. A row label is plain text, with no element inside it and
+  `scope="row"`, and a drift column header is plain text with no `scope`. A bare `<code>` is
+  nested only in an escrow id's cell. `data-v` is compared as a value, so `data-v="null"` on a
+  blank cell is not the same as no `data-v`.
 - Every element's `class` is the one the renderer writes for it, so nothing paints a cell from
   outside it: a marked cell's by its value, as above; the fixed paragraphs `note` and `banner`,
   in their order; `card` on every `div`; and none on any other element, so a class on a row, a
