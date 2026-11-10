@@ -83,7 +83,7 @@ h1{font-size:20px;margin:0 0 4px}h2{font-size:15px;margin:28px 0 10px;color:var(
 
 <!-- lane:start -->
 <h2>imd handoff lane</h2>
-<p class="sub">One row per imd job that used FLOP, rebuilt by <span class="mono">build-lane.py</span> from local files only, never fetched live. Job outcome is shown as imd's public <span class="mono">GET /jobs/:id</span> reports it, grey until read, green only for accepted. Red mismatch means the receipt's job, seat or DID doesn't match the row; that row can never go green. A blank slot is unknown spend, never 0.</p>
+<p class="sub">One row per imd job that used FLOP, rebuilt by <span class="mono">build-lane.py</span> from local files only, never fetched live. Job outcome is shown as imd's public <span class="mono">GET /jobs/:id</span> reports it, grey until read, green only for accepted. A red <span class="mono">mismatch</span> chip with the row note <span class="mono">receipt identity mismatch; chain-final green blocked</span> means the receipt's request_id, job, seat or DID doesn't match the row; that row can never go green. A blank slot is unknown spend, never 0.</p>
 <h3 class="lanesub">From <span class="mono">imd-flop</span> receipts <span class="ex">mock provider · nothing spent</span></h3>
 <div class="lane">
 <div class="hdr"><div>imd job</div><div>FLOP call</div><div>Spend (est. · caps)</div><div>Job outcome (imd)</div><div>Link check</div></div>

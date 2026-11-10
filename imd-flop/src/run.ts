@@ -5,11 +5,12 @@ import { sha256 } from "@noble/hashes/sha2.js";
 import { CliError, EXIT } from "./errors.js";
 import { loadConfig } from "./config.js";
 import { linkFile, receiptsDir, responsesDir } from "./paths.js";
+import { redactFlagged } from "./secrets.js";
 import { readJson, writeJsonSafe } from "./store.js";
 import { loadSigner, readIdentity, revokedDids } from "./keys.js";
 import { verifyLink, type LinkFile } from "./link.js";
 import { DEFAULT_MODEL, network, SEAT_COLLECTION } from "./networks.js";
-import { appendLedger, jobSpent, spentToday, utcDay, type LedgerEntry } from "./ledger.js";
+import { appendLedger, jobSpent, spentToday, UnusableLedgerCharge, utcDay, withLedgerLock, type LedgerEntry } from "./ledger.js";
 import { classifyReceipt, knownSettledSpend, type Classified } from "./receipts.js";
 import type { Provider } from "./providers.js";
 import { assertPaidNetwork, checkImdJob, PreSendError, readVerifiedSeatOwner, type Fetch } from "./gateway.js";
@@ -50,13 +51,33 @@ export interface RunResult {
   link_bypassed: boolean;
 }
 
+function finiteTokenCount(value: unknown): number | null {
+  if (typeof value !== "number" || !Number.isFinite(value)) return null;
+  return value;
+}
+
+/** Round up to 6 decimals. A value already on a 1e-6 boundary stays put. */
+function ceil6(n: number): number {
+  const scaled = n * 1e6;
+  const nearest = Math.round(scaled);
+  if (Math.abs(scaled - nearest) <= 1e-6) return nearest / 1e6;
+  return Math.ceil(scaled) / 1e6;
+}
+
 export function padQuote(est: { estimated_cost_flop?: number; estimated_input_tokens?: number; estimated_output_tokens?: number }): { raw: number; padded: number } | null {
   const raw = est.estimated_cost_flop;
-  const tin = est.estimated_input_tokens ?? 0;
-  const tout = est.estimated_output_tokens ?? 0;
-  if (typeof raw !== "number" || !(raw > 0) || tin + tout <= 0) return null;
+  if (typeof raw !== "number" || !Number.isFinite(raw) || !(raw > 0)) return null;
+  const tinIn = (est as { estimated_input_tokens?: unknown }).estimated_input_tokens;
+  const toutIn = (est as { estimated_output_tokens?: unknown }).estimated_output_tokens;
+  const tin = tinIn === undefined ? 0 : finiteTokenCount(tinIn);
+  const tout = toutIn === undefined ? 0 : finiteTokenCount(toutIn);
+  if (tin === null || tout === null || tin + tout <= 0) return null;
   const perTok = raw / (tin + tout);
-  return { raw, padded: Math.round((raw + TEMPLATE_PAD * perTok) * 1e6) / 1e6 };
+  const unrounded = raw + TEMPLATE_PAD * perTok;
+  if (!Number.isFinite(unrounded) || !(unrounded > 0)) return null;
+  const padded = ceil6(Math.max(unrounded, raw));
+  if (!Number.isFinite(padded) || !(padded > 0) || padded < raw) return null;
+  return { raw, padded };
 }
 
 /** Rule 5 (a broken link means no route) and rule 2 (one DID per seat, not revoked). */
@@ -172,20 +193,28 @@ export async function runJob(h: string, provider: Provider, o: RunOpts, deps: { 
   }
   if (!q) return refuse("estimate returned no usable cost", EXIT.ESTIMATE_FAILED, { raw: null, padded: null }, null);
 
-  const spentBefore = cfg.payer === "holder" ? spentToday(h, seat, provider.name) : jobSpent(h, job, provider.name);
-  if (q.padded > cap.perCall) refuse(`padded quote ${q.padded} FLOP is over the per-call cap ${cap.perCall}`, EXIT.REFUSED_CAP, q, spentBefore);
-  if (cfg.payer === "holder") {
-    const left = Math.round((cap.daily - spentBefore) * 1e6) / 1e6;
-    if (left <= 0) refuse(`daily cap reached (${spentBefore}/${cap.daily} FLOP today, UTC)`, EXIT.REFUSED_CAP, q, spentBefore);
-    if (q.padded > left) refuse(`padded quote ${q.padded} FLOP is over the remaining daily cap ${left}`, EXIT.REFUSED_CAP, q, spentBefore);
-  } else {
-    const left = Math.round((o.jobBudget! - spentBefore) * 1e6) / 1e6;
-    if (q.padded > left) refuse(`padded quote ${q.padded} FLOP is over this job's remaining requester budget ${left}`, EXIT.REFUSED_CAP, q, spentBefore);
-  }
-
   const requestId = `${provider.name === "mock" ? "mock" : "imdflop"}-${seat}-${bytesToHex(randomBytes(8))}`;
-  const sent: LedgerEntry = { ...base, request_id: requestId, quote_raw: q.raw, quote_padded: q.padded, spent_before: spentBefore, state: "sent", reason: null, spend: null, cost_reported: null, cap_charge: q.padded, http: null };
-  appendLedger(h, sent); // written before the call so a crash still leaves the attempt on the books. A later refused_local line wins if the provider refuses before mint.
+  const sent: LedgerEntry = withLedgerLock(h, () => {
+    let spentBefore: number;
+    try {
+      spentBefore = cfg.payer === "holder" ? spentToday(h, seat, provider.name) : jobSpent(h, job, provider.name);
+    } catch (e) {
+      if (e instanceof UnusableLedgerCharge) refuse(e.message, EXIT.REFUSED_CAP, q, null);
+      throw e;
+    }
+    if (q.padded > cap.perCall) refuse(`padded quote ${q.padded} FLOP is over the per-call cap ${cap.perCall}`, EXIT.REFUSED_CAP, q, spentBefore);
+    if (cfg.payer === "holder") {
+      const left = Math.round((cap.daily - spentBefore) * 1e6) / 1e6;
+      if (left <= 0) refuse(`daily cap reached (${spentBefore}/${cap.daily} FLOP today, UTC)`, EXIT.REFUSED_CAP, q, spentBefore);
+      if (q.padded > left) refuse(`padded quote ${q.padded} FLOP is over the remaining daily cap ${left}`, EXIT.REFUSED_CAP, q, spentBefore);
+    } else {
+      const left = Math.round((o.jobBudget! - spentBefore) * 1e6) / 1e6;
+      if (q.padded > left) refuse(`padded quote ${q.padded} FLOP is over this job's remaining requester budget ${left}`, EXIT.REFUSED_CAP, q, spentBefore);
+    }
+    const row: LedgerEntry = { ...base, request_id: requestId, quote_raw: q.raw, quote_padded: q.padded, spent_before: spentBefore, state: "sent", reason: null, spend: null, cost_reported: null, cap_charge: q.padded, http: null };
+    appendLedger(h, row); // written before the call so a crash still leaves the attempt on the books. A later refused_local line wins if the provider refuses before mint.
+    return row;
+  });
 
   // A ref'd timer (AbortSignal.timeout is unref'd and would let the process exit mid-call).
   const ac = new AbortController();
@@ -213,30 +242,55 @@ export async function runJob(h: string, provider: Provider, o: RunOpts, deps: { 
   }
 
   const responseFile = join(responsesDir(h), `${requestId}.json`);
-  const responseRecord = { request_id: requestId, job, seat, provider: provider.name, model, usage: res.usage, output_sha256: bytesToHex(sha256(utf8ToBytes(res.text))), text: res.text, mock: provider.name === "mock", note: "not submitted to IMD; the holder decides what to use" };
+  const responseRecord = { request_id: requestId, job, seat, provider: provider.name, model, usage: res.usage ?? null, output_sha256: bytesToHex(sha256(utf8ToBytes(res.text))), text: res.text, mock: provider.name === "mock", note: "not submitted to IMD; the holder decides what to use" };
   // `run --json` prints this return value, so it has to be the text that was stored.
   let text: string | null = res.text;
   let withheld: string | undefined;
+  let storedResponse: unknown = responseRecord;
   try {
-    writeJsonSafe(responseFile, responseRecord, "response");
+    writeJsonSafe(responseFile, storedResponse, "response");
   } catch (e) {
     withheld = (e as Error).message;
     text = null;
-    writeJsonSafe(responseFile, { ...responseRecord, text: null, withheld }, "response");
+    const redacted = redactFlagged({ ...responseRecord, text: null, withheld });
+    storedResponse = redacted.copy;
+    writeJsonSafe(responseFile, storedResponse, "response");
   }
 
   const rr = await provider.readReceipt(requestId);
   const classified = classifyReceipt(rr.receipt, { job, provider: provider.name, http: rr.http, error: rr.error, requestId, mock: provider.name === "mock" });
+  const rawId = rr.receipt ? (rr.receipt as { request_id?: unknown }).request_id : undefined;
+  const identityOk = typeof rawId === "string" && rawId.length > 0 && rawId === requestId;
+  if (!identityOk) {
+    classified.settled = null;
+    classified.chain_final = false;
+    classified.request_id = typeof rawId === "string" ? rawId : "";
+  }
   const receipt0 = { ...classified, seat, did: signer.identity.did };
-  writeJsonSafe(join(receiptsDir(h), `${requestId}.json`), { ...classified, seat, did: signer.identity.did, ss58: signer.identity.ss58, network: net.name, ...(provider.name === "mock" ? { mock_scenario: (provider as { scenario?: string }).scenario ?? "ok" } : {}) }, "receipt");
+  let receiptBody: unknown = { ...classified, seat, did: signer.identity.did, ss58: signer.identity.ss58, network: net.name, ...(provider.name === "mock" ? { mock_scenario: (provider as { scenario?: string }).scenario ?? "ok" } : {}) };
+  let receiptRedacted = false;
+  try {
+    writeJsonSafe(join(receiptsDir(h), `${requestId}.json`), receiptBody, "receipt");
+  } catch {
+    receiptRedacted = true;
+    const redacted = redactFlagged(receiptBody);
+    receiptBody = redacted.copy;
+    writeJsonSafe(join(receiptsDir(h), `${requestId}.json`), receiptBody, "receipt");
+    const cleaned = receiptBody as { error?: string | null; settled_raw?: string | null };
+    receipt0.error = cleaned.error ?? null;
+    receipt0.settled_raw = cleaned.settled_raw ?? null;
+  }
 
-  const costReported = typeof res.usage.cost_flop === "number" ? res.usage.cost_flop : null;
-  // Known settlement is finite and >= 0, including explicit 0. Negative and
-  // non-finite settled values are unknown. Reported usage may raise the
-  // pre-call reservation and must not lower it.
-  const unresolvedCharge = costReported !== null && Number.isFinite(costReported) ? Math.max(q.padded, costReported) : q.padded;
-  const settledKnown = knownSettledSpend(classified.settled);
-  const capCharge = settledKnown ?? unresolvedCharge;
+  const usage = res.usage;
+  const costReported = typeof usage?.cost_flop === "number" && Number.isFinite(usage.cost_flop) ? usage.cost_flop : null;
+  // A known settlement is a finite amount >= 0, including explicit 0, and only
+  // once the receipt state is settled or released. Otherwise the pre-call
+  // reservation stays. Reported usage may raise that reservation, not lower it.
+  const unresolvedCharge = costReported !== null ? Math.max(q.padded, costReported) : q.padded;
+  const stateSettles = classified.state === "settled" || classified.state === "released";
+  const settledKnown = !receiptRedacted && identityOk && stateSettles ? knownSettledSpend(classified.settled) : null;
+  const chosen = settledKnown ?? unresolvedCharge;
+  const capCharge = Number.isFinite(chosen) ? chosen : q.padded;
   appendLedger(h, { ...sent, ts: new Date().toISOString(), state: classified.state ?? "sent", reason: classified.flag, spend: settledKnown, cost_reported: costReported, cap_charge: capCharge, http: rr.http });
 
   const match = await matchReceipt(h, receipt0, latestAttempts(h).find((e) => e.request_id === requestId) ?? null);

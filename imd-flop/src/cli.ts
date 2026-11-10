@@ -12,7 +12,8 @@ import { network, SEAT_COLLECTION } from "./networks.js";
 import { checkGenesis, readVerifiedSeatOwner, enrollChallengeUrl, getEnrollChallenge, postEnroll, type Fetch } from "./gateway.js";
 import { FlopProvider, MOCK_SCENARIOS, MockProvider, type MockScenario, type Provider } from "./providers.js";
 import { checkLinkForRun, padQuote, runJob } from "./run.js";
-import { latestAttempts, spentToday } from "./ledger.js";
+import { appendLedger, latestAttempts, spentToday } from "./ledger.js";
+import { knownSettledSpend } from "./receipts.js";
 import { blank, classifyReceipt, receiptLine, type Classified } from "./receipts.js";
 import { registerSecret } from "./secrets.js";
 import { matchReceipt } from "./match.js";
@@ -55,6 +56,14 @@ function parse(args: string[], options: ParseArgsConfig["options"]): { values: V
   } catch (e) {
     throw new CliError((e as Error).message, EXIT.USAGE);
   }
+}
+
+function timeoutMs(raw: string | undefined): number {
+  if (raw === undefined) return 60000;
+  if (!/^\d+$/.test(raw)) throw new CliError("--timeout-ms must be an integer from 1 to 2147483647", EXIT.USAGE);
+  const n = Number(raw);
+  if (!Number.isInteger(n) || n < 1 || n > 2147483647) throw new CliError("--timeout-ms must be an integer from 1 to 2147483647", EXIT.USAGE);
+  return n;
 }
 
 const num = (v: string | undefined, name: string): number | undefined => {
@@ -319,7 +328,7 @@ export async function main(argv: string[], io: IO): Promise<number> {
             seat,
             noLink: values["no-link"],
             jobBudget: num(values["job-budget"], "--job-budget"),
-            timeoutMs: Number(values["timeout-ms"] ?? 60000),
+            timeoutMs: timeoutMs(values["timeout-ms"]),
             checkJob: values["check-job"],
           },
           { fetch: io.fetch, ethRpc: io.env.ETH_RPC_URL },
@@ -403,6 +412,22 @@ export async function main(argv: string[], io: IO): Promise<number> {
           const merged = rr.http === 200 ? { ...saved, ...c } : { ...saved, ...c, state: saved?.state ?? null, reserved: saved?.reserved ?? null, settled: saved?.settled ?? null, last_known_at: saved?.observed_at ?? null };
           writeJsonSafe(path, merged, "receipt");
           saved = merged as typeof saved;
+          const prev = latestAttempts(h).find((e) => e.request_id === rid);
+          if (prev && (saved?.state ?? null) !== prev.state) {
+            const rawId = (saved as { request_id?: unknown } | null)?.request_id;
+            const identityOk = typeof rawId === "string" && rawId.length > 0 && rawId === prev.request_id;
+            const stateSettles = saved?.state === "settled" || saved?.state === "released";
+            const settledKnown = identityOk && stateSettles ? knownSettledSpend(saved?.settled) : null;
+            const reservation = typeof prev.cap_charge === "number" && Number.isFinite(prev.cap_charge) ? prev.cap_charge : 0;
+            const capCharge = settledKnown ?? reservation;
+            const disagree = "receipt and ledger disagree; reservation held, chain-final green blocked";
+            try {
+              appendLedger(h, { ...prev, ts: new Date().toISOString(), state: saved?.state ?? prev.state, reason: saved?.flag ?? null, spend: settledKnown, cap_charge: Number.isFinite(capCharge) ? capCharge : reservation });
+            } catch {
+              io.err(disagree);
+              saved = { ...saved, status: disagree } as typeof saved;
+            }
+          }
         }
         const match = await matchReceipt(h, saved ?? null, ledgerRow ?? null);
         const show = { ...(saved ?? { ...classifyReceipt(null, { job: ledgerRow!.job, provider: ledgerRow!.provider, requestId: rid, mock: ledgerRow!.mock }), seat: ledgerRow!.seat, did: ledgerRow!.did }), match };

@@ -12,10 +12,18 @@ def estimate(model, prompt, max_tokens):
         return json.load(r)
 
 def json_number(value):
-    """Finite int or float. Booleans and other types are not amounts."""
+    """Finite int or float. Booleans, non-numbers, and values too large for a float are not amounts."""
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         return None
-    if isinstance(value, float) and not math.isfinite(value):
+    if isinstance(value, int):
+        try:
+            as_float = float(value)
+        except OverflowError:
+            return None
+        if not math.isfinite(as_float):
+            return None
+        return value
+    if not math.isfinite(value):
         return None
     return value
 
@@ -55,18 +63,31 @@ def main():
     raw = json_number(e.get("estimated_cost_flop"))
     tin, tout = e.get("estimated_input_tokens"), e.get("estimated_output_tokens")
     padded = None
+    unrounded = None
     # A usable quote is a finite cost above zero and two nonnegative integer counts.
-    if raw is not None and raw > 0 and nonnegative_count(tin) and nonnegative_count(tout):
-        total = int(tin) + int(tout)
-        if total > 0:
-            per_tok = raw / total
-            candidate = round(raw + TEMPLATE_PAD * per_tok, 6)
-            if json_number(candidate) is not None and candidate > 0:
-                padded = candidate
+    # The cap is compared to the unrounded pad so rounding cannot sneak a quote through.
+    # Overflow or a non-finite result is a malformed quote: refuse and still write the ledger.
+    try:
+        if raw is not None and raw > 0 and nonnegative_count(tin) and nonnegative_count(tout):
+            total = int(tin) + int(tout)
+            if total > 0:
+                per_tok = raw / total
+                unrounded = float(raw) + TEMPLATE_PAD * float(per_tok)
+                if math.isfinite(unrounded) and unrounded > 0:
+                    candidate = round(unrounded, 6)
+                    if json_number(candidate) is not None and candidate > 0:
+                        padded = candidate
+                    else:
+                        unrounded = None
+                else:
+                    unrounded = None
+    except (OverflowError, ValueError, ArithmeticError):
+        padded = None
+        unrounded = None
     cap = json_number(a.cap)
     # A negative CLI max-tokens is not a send. Zero is not a separate refusal:
     # a valid padded quote can still would_send when max-tokens is 0.
-    decision = "would_send" if a.max_tokens >= 0 and cap is not None and cap > 0 and padded is not None and padded <= cap else "refused_local"
+    decision = "would_send" if a.max_tokens >= 0 and cap is not None and cap > 0 and padded is not None and unrounded is not None and unrounded <= cap else "refused_local"
     rec = {"ts": int(time.time()), "model": a.model, "max_tokens": a.max_tokens,
            "quote_raw": raw, "quote_padded": padded, "cap": cap,
            "decision": decision, "mode": "dry_run", "spend": 0 if decision == "refused_local" else "not_sent"}
