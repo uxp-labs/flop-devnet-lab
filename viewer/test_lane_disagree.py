@@ -4,14 +4,9 @@ import json, os, sys, tempfile, unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
+sys.path.insert(0, str(ROOT))
+from lane_harness import load_lane  # noqa: E402
 DISAGREE = "receipt and ledger disagree; reservation held, chain-final green blocked"
-
-def load_lane():
-    src = (ROOT / "build-lane.py").read_text()
-    src = src.replace("\nmain()\n", "\n")
-    ns = {"__name__": "lane_under_test", "__file__": str(ROOT / "build-lane.py")}
-    exec(compile(src, str(ROOT / "build-lane.py"), "exec"), ns)
-    return ns
 
 IDENTITY = load_lane()["IDENTITY"]  # one Python copy lives in build-lane.py; checked against match.ts below
 

@@ -6,10 +6,10 @@ A receipt whose last read failed (HTTP 500/503, or http 0 "fetch failed") render
 and markup as the key-expired example row: chips grey "sent" + red "unknown", the read error visible as
 row text ("now  unreadable: <error>"), observed spend blank, the link column grey "not checked", and never
 "matches" or green. The check runs before the identity-mismatch and disagree checks, because an unread
-receipt can't be compared. Offline: build-lane.py is exec'd on temp dirs (as test_audit_v7.lane does).
+receipt can't be compared. Offline: build-lane.py is exec'd on temp dirs (as lane_harness.lane does).
 """
 import unittest
-from test_audit_v7 import LED, REC, lane, visible, greens
+from lane_harness import LED, REC, lane, visible, greens
 
 UNKNOWN_CHIPS = '<span class="chip c-grey">sent</span> <span class="chip c-red">unknown</span>'
 LINK_GREY = '<span class="chip c-grey">not checked</span>'

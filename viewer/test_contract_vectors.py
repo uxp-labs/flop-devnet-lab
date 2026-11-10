@@ -11,8 +11,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parent / "contract"))
 import contract_vectors as cv  # noqa: E402
-from test_audit_v7 import LED, REC, greens, lane, visible  # noqa: E402
-from test_lane_disagree import load_lane  # noqa: E402
+from lane_harness import LED, REC, greens, lane, load_lane, visible  # noqa: E402
 
 PART = "viewer"
 NS = load_lane()

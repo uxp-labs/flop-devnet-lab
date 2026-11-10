@@ -3,7 +3,7 @@
 
 Each snapshot is the HTML build-lane.py renders today (3ae1cdf) for one ledger row and its receipt file.
 Current behavior, not intent: cases marked known_defect are pinned as they render today (see
-contract/rules.json known_defects). Offline: build-lane.py is exec'd on temp dirs via test_audit_v7.lane."""
+contract/rules.json known_defects). Offline: build-lane.py is exec'd on temp dirs via lane_harness.lane."""
 import json
 import sys
 import unittest
@@ -11,7 +11,7 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
-from test_audit_v7 import lane  # noqa: E402
+from lane_harness import lane  # noqa: E402
 
 FIXTURE = HERE / "fixtures" / "c7-matrix.json"
 SNAPDIR = HERE / "snapshots" / "c7-matrix"

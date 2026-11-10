@@ -3,58 +3,17 @@
 
 Each test asserts the SAFE outcome, so it fails on 288a03e and passes after fix-v7.
 Names start with the judge's finding number (V_M1..V_M5 medium, V_L6..V_L9 low, V_I10/I11/I13 info).
-Offline: build-lane.py is exec'd into a namespace (as test_lane_disagree.load_lane does) on temp dirs.
+Offline: build-lane.py is exec'd into a namespace (lane_harness.load_lane) on temp dirs.
 """
-import json, re, shutil, sys, tempfile, unittest
-from html.parser import HTMLParser
+import json, shutil, sys, tempfile, unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(ROOT))
-from test_lane_disagree import load_lane  # noqa: E402
+from lane_harness import LED, REC, greens, lane, load_lane, visible  # noqa: E402
 
 NS = load_lane()
 IDENTITY, DISAGREE = NS["IDENTITY"], NS["DISAGREE"]
-LED = {"job": "j", "request_id": "req-1", "seat": "1234", "did": "did:key:z", "provider": "mock", "network": "devnet",
-       "ts": "2026-11-10T00:00:00.000Z", "payer": "holder", "quote_padded": 0.198, "cap_charge": 0.198, "per_call_cap": 0.25,
-       "daily_cap": 0.5, "spent_before": 0, "state": "sent", "spend": None, "reason": None}
-REC = {"request_id": "req-1", "job": "j", "seat": "1234", "did": "did:key:z", "state": "estimated", "settled": None,
-       "stage": "gateway observed", "chain_final": False, "flag": None}
-
-
-def lane(ledger_rows, receipts):
-    """ledger_rows: list of dicts (or raw strings); receipts: {request_id: obj}. Returns (rows, html)."""
-    with tempfile.TemporaryDirectory() as tmp:
-        Path(tmp, "ledger.jsonl").write_text("".join((l if isinstance(l, str) else json.dumps(l)) + "\n" for l in ledger_rows))
-        for rid, r in receipts.items():
-            Path(tmp, f"{rid}.json").write_text(r if isinstance(r, str) else json.dumps(r))
-        old = sys.argv
-        sys.argv = ["build-lane.py", tmp]
-        try:
-            ns = load_lane()
-            rows = ns["from_files"]()
-            return rows, "".join(ns["render"](r) for r in rows)
-        finally:
-            sys.argv = old
-
-
-class Visible(HTMLParser):
-    """Visible text only: comments and <style>/<script> bodies are dropped."""
-    def __init__(self):
-        super().__init__(); self.out = []; self.skip = 0
-    def handle_starttag(self, tag, attrs):
-        if tag in ("style", "script"): self.skip += 1
-    def handle_endtag(self, tag):
-        if tag in ("style", "script") and self.skip: self.skip -= 1
-    def handle_data(self, d):
-        if not self.skip: self.out.append(d)
-
-
-def visible(html):
-    p = Visible(); p.feed(html); p.close(); return "".join(p.out)
-
-
-def greens(html): return re.findall(r'c-green">([^<]+)', html)
 
 
 class ViewerAuditV7(unittest.TestCase):
