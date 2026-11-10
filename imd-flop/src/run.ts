@@ -13,7 +13,7 @@ import { DEFAULT_MODEL, network, SEAT_COLLECTION } from "./networks.js";
 import { checkBudget, padQuote, requireCap, validateJob, validatePayer, validateRunMaxTokens } from "./policy.js";
 import { appendLedger, jobSpent, LedgerLockError, spentToday, UnusableLedgerCharge, utcDay, withLedgerLock, type LedgerEntry } from "./ledger.js";
 import { classifyReceipt, type Classified } from "./receipts.js";
-import { holdCharge, nextBooking, receiptIdentity } from "./settlement.js";
+import { holdCharge, isFreshRead, nextBooking, receiptIdentity } from "./settlement.js";
 import { receiptPath, writeReceipt } from "./receipt-store.js";
 import type { Provider } from "./providers.js";
 import { assertPaidNetwork, checkImdJob, PreSendError, readVerifiedSeatOwner, type Fetch } from "./gateway.js";
@@ -261,9 +261,9 @@ export async function runJob(h: string, provider: Provider, o: RunOpts, deps: { 
 
   const usage = res.usage;
   const costReported = typeof usage?.cost_flop === "number" && Number.isFinite(usage.cost_flop) ? usage.cost_flop : null;
-  // run treats its own post-call read as fresh whatever the HTTP status (known defect KD-3, fixed in step 3), and a
-  // receipt body that had to be redacted never proves a settlement.
-  const outcome = { fresh: true, identityOk: identityOk && !receiptRedacted, state: classified.state, settled: classified.settled };
+  // Same freshness rule as receipt --refresh: a failed read (not HTTP 200 with a receipt object) proves nothing
+  // and never releases the reservation. A receipt body that had to be redacted never proves a settlement.
+  const outcome = { fresh: isFreshRead(rr), identityOk: identityOk && !receiptRedacted, state: classified.state, settled: classified.settled };
   const booking = nextBooking({ state: sent.state, spend: sent.spend }, outcome, holdCharge(q.padded, costReported));
   appendLedger(h, { ...sent, ts: new Date().toISOString(), ...booking, reason: classified.flag, cost_reported: costReported, http: rr.http });
 

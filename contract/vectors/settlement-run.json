@@ -411,12 +411,12 @@
      "exit": 0,
      "states": [
       "sent",
-      "settled"
+      "sent"
      ],
      "last": {
-      "state": "settled",
-      "spend": 0.05,
-      "cap_charge": 0.05
+      "state": "sent",
+      "spend": null,
+      "cap_charge": 0.186
      }
     },
     "spend-guard": {
@@ -426,23 +426,9 @@
      "not_applicable": "viewer renders ledger rows; it never writes them"
     }
    },
-   "status": "known_defect",
+   "status": "fixed",
    "defect": "KD-3",
-   "target": {
-    "imd-flop": {
-     "exit": 0,
-     "states": [
-      "sent",
-      "sent"
-     ],
-     "last": {
-      "state": "sent",
-      "spend": null,
-      "cap_charge": 0.186
-     }
-    }
-   },
-   "note": "KNOWN DEFECT KD-3 (was quirk Q-RUN-FRESH): expect is today's output (asserted); target is FIXER's rule, a failed read never releases (not asserted until step 3)",
+   "note": "[fix: KD-3] run's own failed read (HTTP 503 with a settled body) no longer releases; was (known_defect) states [sent, settled], last {settled, 0.05, 0.05}",
    "label_rules": [
     "V-FAILED-READ"
    ]

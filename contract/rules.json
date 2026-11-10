@@ -293,7 +293,8 @@
       "target": "a failed read never releases: the ledger keeps the reservation (state sent, spend null, cap_charge 0.186)",
       "replaces_quirk": "Q-RUN-FRESH",
       "replaced_quirk_summary": "runJob decides identity and settlement from the receipt body without checking http === 200 (run.ts:301); receipt --refresh requires http === 200 (cli.ts:414).",
-      "fix_step": "step 3"
+      "fix_step": "step 3",
+      "status": "fixed: [fix: KD-3]"
     },
     {
       "id": "KD-4",
