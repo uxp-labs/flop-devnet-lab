@@ -553,12 +553,42 @@ const cases = [
           s.escrows[1].state = "claimed";
           s.escrows[1].evidence = [structuredClone(s.escrows[0].evidence[0])];
         }),
+        // Eighth rerun U1: each condition with a snapshot that only it refuses.
+        variant("one-event-as-open-and-release", (s) => s.escrows[0].evidence.unshift({ ...s.escrows[0].evidence[0], event: "hasStation.EscrowOpened" })),
+        variant("bound-with-no-rpc-genesis", (s) => {
+          s.status.genesis.rpc = null;
+          s.pin.genesis = null;
+          s.status.reset_detected = null;
+        }),
+        variant("seq-negative", (s) => {
+          s.seq = -1;
+          s.prev_hash = "ab".repeat(32);
+        }),
+        variant("later-line-names-no-line-before", (s) => (s.seq = 1)),
+        variant("funded-on-no-evidence", (s) => {
+          s.escrows[0].state = "funded";
+          s.escrows[0].evidence = [];
+        }),
+        variant("refunded-on-no-evidence", (s) => (s.escrows[1].evidence = [])),
+        variant("claimed-with-two-opens", (s) => {
+          const r = s.escrows[0].evidence[0];
+          s.escrows[0].evidence = [{ ...r, event: "hasStation.EscrowOpened", event_index: r.event_index + 1 }, { ...r, event: "hasStation.EscrowOpened", event_index: r.event_index + 2 }, r];
+        }),
+        variant("claimed-with-a-refund-too", (s) => {
+          const r = s.escrows[0].evidence[0];
+          s.escrows[0].evidence = [r, { ...r, event: "hasStation.EscrowRefunded", event_index: r.event_index + 1 }];
+        }),
+        variant("gateway-detail-a-number", (s) => (s.status.gateway.detail = 5)),
+        variant("gateway-time-a-number", (s) => (s.status.gateway.observed_at = 5)),
+        variant("faucet-limits-value-a-word", (s) => (s.status.faucet.limits = { a: "x" })),
+        variant("evidence-index-a-fraction", (s) => (s.escrows[0].evidence[0].event_index = 1.5)),
+        variant("evidence-index-negative", (s) => (s.escrows[0].evidence[0].event_index = -1)),
       ];
       // Each snapshot by name with its exit, so a failure says which one was served.
       return { exit: runs.map((x) => x.exit).join(","), stderr: runs.map((x) => `${x.name}: exit ${x.exit}`).join("; "), runs };
     },
     ok: (r) =>
-      r.runs.length === 66 &&
+      r.runs.length === 79 &&
       r.runs.every((x) =>
         x.name === "honest" || x.name.startsWith("served:")
           ? x.exit === 0

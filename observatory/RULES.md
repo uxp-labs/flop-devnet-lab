@@ -348,9 +348,12 @@ check below to run and pass.
     but for one case: Node decodes the command's arguments before the command reads them, so a
     scenario folder name that is not UTF-8 reaches it with U+FFFD in place of each bad byte, and the
     command can neither name nor open such a folder as the recount can. Such a folder is outside
-    what the two sides compare. The TypeScript command also reads the folder's `meta.json` and
-    refuses as an input problem when it cannot; the recount does not read `meta.json`, so that one
-    input problem is the command's alone.
+    what the two sides compare, and so is a scenario path so long that `event-pages` cannot be read
+    at all (past the system's path limit): the command reads it as a partial census with no pages,
+    never a complete one, while the recount refuses it and names the system's error, path quoted.
+    The TypeScript command also reads the folder's `meta.json` and refuses as an input problem when
+    it cannot; the recount does not read `meta.json`, so that one input problem is the command's
+    alone.
 
 ## 4. Read only
 

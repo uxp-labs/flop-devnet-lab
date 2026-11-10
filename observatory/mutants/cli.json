@@ -734,5 +734,109 @@
     "replace": "  true &&",
     "test": "scripts/cli-checks.mjs",
     "why": "seventh rerun U7: one finalized event is evidence once, for one escrow"
+  },
+  {
+    "id": "mcp-bin-service-detail-any",
+    "file": "src/mcp-bin.ts",
+    "find": "statusCodeOrNull(v.http) && textOrNull(v.detail) && textOrNull(v.observed_at);",
+    "replace": "statusCodeOrNull(v.http) && textOrNull(v.observed_at);",
+    "test": "scripts/cli-checks.mjs",
+    "why": "eighth rerun U1: a service's detail is text or none (variant gateway-detail-a-number)"
+  },
+  {
+    "id": "mcp-bin-service-time-any",
+    "file": "src/mcp-bin.ts",
+    "find": "statusCodeOrNull(v.http) && textOrNull(v.detail) && textOrNull(v.observed_at);",
+    "replace": "statusCodeOrNull(v.http) && textOrNull(v.detail);",
+    "test": "scripts/cli-checks.mjs",
+    "why": "eighth rerun U1: a service's observed_at is text or none (variant gateway-time-a-number)"
+  },
+  {
+    "id": "mcp-bin-seq-negative",
+    "file": "src/mcp-bin.ts",
+    "find": "  snapshot.seq >= 0 &&",
+    "replace": "  true &&",
+    "test": "scripts/cli-checks.mjs",
+    "why": "eighth rerun U1: seq starts at 0 (variant seq-negative)"
+  },
+  {
+    "id": "mcp-bin-prev-hash-later-any",
+    "file": "src/mcp-bin.ts",
+    "find": "(snapshot.seq === 0 ? snapshot.prev_hash === null : typeof snapshot.prev_hash === \"string\" && /^[0-9a-f]{64}$/.test(snapshot.prev_hash))",
+    "replace": "(snapshot.seq === 0 ? snapshot.prev_hash === null : true)",
+    "test": "scripts/cli-checks.mjs",
+    "why": "eighth rerun U1: every line after the first names the line before (variant later-line-names-no-line-before)"
+  },
+  {
+    "id": "mcp-bin-limits-values-any",
+    "file": "src/mcp-bin.ts",
+    "find": "const limits = (v: unknown): boolean => v === null || (isObject(v) && Object.values(v).every((x) => typeof x === \"boolean\" || (typeof x === \"number\" && Number.isFinite(x))));",
+    "replace": "const limits = (v: unknown): boolean => v === null || isObject(v);",
+    "test": "scripts/cli-checks.mjs",
+    "why": "eighth rerun U1: every faucet limit is a finite number or a flag (variant faucet-limits-value-a-word)"
+  },
+  {
+    "id": "mcp-bin-funded-any-events",
+    "file": "src/mcp-bin.ts",
+    "find": "  if (e.state === \"funded\") return opens === 1 && releases === 0 && refunds === 0;",
+    "replace": "  if (e.state === \"funded\") return true;",
+    "test": "scripts/cli-checks.mjs",
+    "why": "eighth rerun U1: funded rests on one open and nothing else (variant funded-on-no-evidence)"
+  },
+  {
+    "id": "mcp-bin-refunded-any-events",
+    "file": "src/mcp-bin.ts",
+    "find": "  if (e.state === \"refunded\") return refunds === 1 && releases === 0 && opens <= 1;",
+    "replace": "  if (e.state === \"refunded\") return true;",
+    "test": "scripts/cli-checks.mjs",
+    "why": "eighth rerun U1: refunded rests on one refund, no release and at most one open (variant refunded-on-no-evidence)"
+  },
+  {
+    "id": "mcp-bin-claimed-any-opens",
+    "file": "src/mcp-bin.ts",
+    "find": "  if (e.state === \"claimed\") return releases === 1 && refunds === 0 && opens <= 1;",
+    "replace": "  if (e.state === \"claimed\") return releases === 1 && refunds === 0;",
+    "test": "scripts/cli-checks.mjs",
+    "why": "eighth rerun U1: claimed rests on at most one open (variant claimed-with-two-opens)"
+  },
+  {
+    "id": "mcp-bin-claimed-with-a-refund",
+    "file": "src/mcp-bin.ts",
+    "find": "  if (e.state === \"claimed\") return releases === 1 && refunds === 0 && opens <= 1;",
+    "replace": "  if (e.state === \"claimed\") return releases === 1 && opens <= 1;",
+    "test": "scripts/cli-checks.mjs",
+    "why": "eighth rerun U1: claimed rests on no refund (variant claimed-with-a-refund-too)"
+  },
+  {
+    "id": "mcp-bin-evidence-twice-in-one-escrow",
+    "file": "src/mcp-bin.ts",
+    "find": "  new Set(snapshot.escrows.flatMap((e) => e.evidence.map((x) => `${x.block_hash} ${x.event_index}`))).size ===\n    snapshot.escrows.reduce((n, e) => n + e.evidence.length, 0) &&",
+    "replace": "  new Set(snapshot.escrows.flatMap((e) => [...new Set(e.evidence.map((x) => `${x.block_hash} ${x.event_index}`))])).size ===\n    snapshot.escrows.reduce((n, e) => n + new Set(e.evidence.map((x) => `${x.block_hash} ${x.event_index}`)).size, 0) &&",
+    "test": "scripts/cli-checks.mjs",
+    "why": "eighth rerun U1: one event is not evidence twice within one escrow (variant one-event-as-open-and-release)"
+  },
+  {
+    "id": "mcp-bin-bound-with-no-rpc-genesis",
+    "file": "src/mcp-bin.ts",
+    "find": "      (e.finalized_height === null || snapshot.status?.genesis?.rpc === snapshot.status?.genesis?.pinned) &&",
+    "replace": "      (e.finalized_height === null || snapshot.status?.genesis?.rpc === null || snapshot.status?.genesis?.rpc === snapshot.status?.genesis?.pinned) &&",
+    "test": "scripts/cli-checks.mjs",
+    "why": "eighth rerun U1: no bound when no RPC genesis was read at all (variant bound-with-no-rpc-genesis)"
+  },
+  {
+    "id": "mcp-bin-index-any-number",
+    "file": "src/mcp-bin.ts",
+    "find": "  Number.isSafeInteger(v.event_index) &&\n  v.event_index >= 0 &&",
+    "replace": "  v.event_index >= 0 &&",
+    "test": "scripts/cli-checks.mjs",
+    "why": "eighth rerun U1: an evidence index is a whole number (variant evidence-index-a-fraction)"
+  },
+  {
+    "id": "mcp-bin-index-negative",
+    "file": "src/mcp-bin.ts",
+    "find": "  Number.isSafeInteger(v.event_index) &&\n  v.event_index >= 0 &&",
+    "replace": "  Number.isSafeInteger(v.event_index) &&",
+    "test": "scripts/cli-checks.mjs",
+    "why": "eighth rerun U1: an evidence index starts at 0 (variant evidence-index-negative)"
   }
 ]
