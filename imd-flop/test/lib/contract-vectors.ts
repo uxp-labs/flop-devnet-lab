@@ -48,8 +48,13 @@ function load(): Vector[] {
         if (!isObject(e) || Object.keys(e).length === 0) throw new Error(`${where}: ${p} expectation must be a non-empty object`);
         if (isNotApplicable(e) && !(Object.keys(e).length === 1 && typeof e.not_applicable === "string" && e.not_applicable.length > 0)) throw new Error(`${where}: ${p} not_applicable must be the only key and give a reason`);
       }
-      if ("status" in v && (v.status !== "known_defect" || !defectIds.has(v.defect) || !isObject(v.target) || Object.keys(v.target!).length === 0))
-        throw new Error(`${where}: status must be known_defect with a known defect id and a target`);
+      if ("status" in v) {
+        if (v.status === "known_defect") {
+          if (!defectIds.has(v.defect) || !isObject(v.target) || Object.keys(v.target!).length === 0) throw new Error(`${where}: status known_defect needs a known defect id and a target`);
+        } else if (v.status === "fixed") {
+          if (!defectIds.has(v.defect) || "target" in v) throw new Error(`${where}: status fixed needs a known defect id and no target (the target is now expect)`);
+        } else throw new Error(`${where}: status must be known_defect or fixed`);
+      }
       for (const q of v.quirks ?? []) if (!quirkIds.has(q)) throw new Error(`${where}: unknown quirk ${q}`);
       const lr = v.label_rules ?? [];
       if (!Array.isArray(lr) || lr.some((x) => !labelRuleIds.has(x))) throw new Error(`${where}: label_rules must list ids from rules.json viewer_label_rules`);

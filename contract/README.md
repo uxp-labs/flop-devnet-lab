@@ -29,8 +29,8 @@ This folder holds data and its format only; the loaders are test code outside it
 - `label_rules` (optional) lists FIXER viewer rule ids from `rules.json` `viewer_label_rules`. Every rule
   id must be named by at least one vector; on a known_defect vector they are the rules its target follows.
 - `status: "known_defect"` (with `defect` and `target`): `expect` is today's exact output and is
-  asserted; `target` is the agreed label and is **not** asserted. The step that fixes the defect moves
-  `target` into `expect` and removes the status. See `rules.json` `vector_status` and `known_defects`.
+  asserted; `target` is the agreed label and is **not** asserted. The commit that fixes the defect moves
+  `target` into `expect` and sets `status: "fixed"` (keeping `defect`, dropping `target`). See `rules.json` `vector_status` and `known_defects`.
 
 The viewer's 24-case row matrix lives next to the viewer (`viewer/fixtures/c7-matrix.json`,
 `viewer/snapshots/c7-matrix/`, `viewer/test_c7_matrix_snapshot.py`) because only the viewer renders rows.

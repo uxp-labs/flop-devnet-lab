@@ -5,7 +5,8 @@ Not imported by any tool. The file format is specified in contract/README.md.
 Every vector names all three parts under "expect". A part either has an expectation or
 {"not_applicable": "<why>"}; nothing is skipped silently. {"$float": "nan"|"inf"|"-inf"} encodes
 non-finite floats, which JSON cannot hold. A vector with status "known_defect" asserts `expect` (today's
-output); its `target` is recorded for the fix step and not asserted."""
+output); its `target` is recorded for the fix step and not asserted. A vector with status "fixed" names the
+defect its fix commit closed; that commit moved the target into `expect`, which is asserted."""
 import json
 import math
 from pathlib import Path
@@ -57,8 +58,15 @@ def vectors():
                 if "not_applicable" in e and (set(e) != {"not_applicable"} or not isinstance(e["not_applicable"], str) or not e["not_applicable"]):
                     raise ValueError(f"{f.name}:{vid}: {part} not_applicable must be the only key and give a reason")
             if "status" in v:
-                if v["status"] != "known_defect" or v.get("defect") not in defect_ids or not isinstance(v.get("target"), dict) or not v["target"]:
-                    raise ValueError(f"{f.name}:{vid}: status must be known_defect with a known defect id and a target")
+                st = v["status"]
+                if st == "known_defect":
+                    if v.get("defect") not in defect_ids or not isinstance(v.get("target"), dict) or not v["target"]:
+                        raise ValueError(f"{f.name}:{vid}: status known_defect needs a known defect id and a target")
+                elif st == "fixed":
+                    if v.get("defect") not in defect_ids or "target" in v:
+                        raise ValueError(f"{f.name}:{vid}: status fixed needs a known defect id and no target (the target is now expect)")
+                else:
+                    raise ValueError(f"{f.name}:{vid}: status must be known_defect or fixed")
             for q in v.get("quirks", []):
                 if q not in quirk_ids:
                     raise ValueError(f"{f.name}:{vid}: unknown quirk {q}")

@@ -257,7 +257,8 @@
   },
   "vector_status": {
     "default": "A vector without a status pins current behavior: each part asserts `expect`.",
-    "known_defect": "A vector with status \"known_defect\" names a defect id from known_defects. `expect` is today's exact output and IS asserted, so the suite stays green and documents the defect. `target` holds the agreed label per affected part and is NOT asserted yet; the step that fixes the defect moves `target` into `expect` and drops the status."
+    "known_defect": "A vector with status \"known_defect\" names a defect id from known_defects. `expect` is today's exact output and IS asserted, so the suite stays green and documents the defect. `target` holds the agreed label per affected part and is NOT asserted yet; the step that fixes the defect moves `target` into `expect` and drops the status.",
+    "fixed": "A vector with status \"fixed\" names the defect (known_defects id) that a step 3 [fix: ...] commit closed. That commit moved the old target into expect, which IS asserted, and dropped target. A c7 snapshot case lists closed defects in fixed."
   },
   "known_defects": [
     {

@@ -169,7 +169,7 @@ describe("contract files", () => {
 
 describe("contract vectors (imd-flop)", () => {
   for (const v of applicable) {
-    it(`${v.file} ${v.id}${v.status === "known_defect" ? " [known defect: asserts today's output]" : ""}`, async () => {
+    it(`${v.file} ${v.id}${v.status === "known_defect" ? " [known defect: asserts today's output]" : v.status === "fixed" ? ` [fixed ${v.defect}]` : ""}`, async () => {
       const want = decode(v.expect[PART]);
       const got = await adapters[v.rule](decode(v.input), want);
       expect(got, `${v.file}:${v.id}`).toEqual(want);

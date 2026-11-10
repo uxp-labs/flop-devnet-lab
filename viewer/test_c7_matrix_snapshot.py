@@ -53,6 +53,7 @@ class C7MatrixSnapshot(unittest.TestCase):
                     self.assertIn("KD-1", case.get("defects", []), f"{case['id']} pins KD-1's output but is not labelled")
                 if '<span class="k">reservation</span>' in (HERE / case["snapshot"]).read_text():
                     self.assertIn("KD-5", case.get("defects", []), f"{case['id']} pins KD-5's wording but is not labelled")
+                self.assertTrue(set(case.get("fixed", [])) <= defect_ids, case.get("fixed"))  # defects a fix commit closed
                 if "status" not in case:
                     self.assertNotIn("defects", case)
                     continue
