@@ -112,3 +112,36 @@ describe("v8 item 2 (TS-b, run.ts:250): a pre-send refusal releases its reservat
     });
   }
 });
+
+const hang = (req: CompleteReq) => new Promise<CompleteRes>((_, rej) => req.signal?.addEventListener("abort", () => rej(req.signal!.reason)));
+const settledReceipt = (spend: number) => (id: string): Receipt => ({ http: 200, error: null, receipt: { request_id: id, correlation_id: "imd-job-j1", model: "m", reserved_spend: 0.186, settled_spend: spend, state: "settled" } });
+async function timedOutRun(h: string): Promise<string> {
+  const r = await cli(h, runArgs("j1", ["--timeout-ms", "50"]), { provider: new P({ complete: hang }) });
+  expect(r.code).toBe(6);
+  const rid = ledger(h).find((x) => x.request_id)!.request_id!;
+  expect(existsSync(join(h, "receipts", `${rid}.json`))).toBe(false);
+  return rid;
+}
+
+describe("v8 item 3 (TS-c, cli.ts:418): receipt --refresh after a timeout keeps the seat identity", () => {
+  it("TS-c refresh after a timeout writes seat/did/ss58/network and matches, on every refresh", async () => {
+    const h = await ready("5");
+    const rid = await timedOutRun(h);
+    const ident = JSON.parse(readFileSync(join(h, "seats", SEAT, "identity.json"), "utf8"));
+    const pr = new P({ receipt: settledReceipt(0.05) });
+    for (let i = 0; i < 2; i++) {
+      const r = await cli(h, ["receipt", rid, "--refresh", "--json"], { provider: pr });
+      expect(r.code).toBe(0);
+      expect(r.json().match).toEqual({ match: "matches", fields: [] });
+      const file = JSON.parse(readFileSync(join(h, "receipts", `${rid}.json`), "utf8"));
+      expect(file.seat).toBe(SEAT);
+      expect(file.did).toBe(ident.did);
+      expect(file.ss58).toBe(ident.ss58);
+      expect(file.network).toBe("devnet");
+    }
+    const st = await cli(h, ["status", "--seat", SEAT, "--json"]);
+    expect(st.out).not.toMatch(/mismatch/);
+    const latest = ledger(h).filter((x) => x.request_id === rid).at(-1)!;
+    expect([latest.state, latest.spend, latest.cap_charge]).toEqual(["settled", 0.05, 0.05]);
+  });
+});

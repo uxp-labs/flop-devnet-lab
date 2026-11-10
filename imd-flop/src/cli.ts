@@ -414,10 +414,16 @@ export async function main(argv: string[], io: IO): Promise<number> {
           const fresh = rr.http === 200 && rr.receipt !== null && typeof rr.receipt === "object";
           const rawId = fresh ? (rr.receipt as { request_id?: unknown }).request_id : undefined;
           const identityOk = typeof rawId === "string" && rawId.length > 0 && rawId === rid;
+          // A timeout leaves a ledger row but no receipt file. Take the seat identity from that row (what run
+          // recorded at call time), never from the gateway, so the first receipt file is not a permanent mismatch.
+          const ident = saved ? {} : (() => {
+            const id = readIdentity(h, ledgerRow!.seat);
+            return { seat: ledgerRow!.seat, did: ledgerRow!.did, ss58: id && id.did === ledgerRow!.did ? id.ss58 : null, network: ledgerRow!.network };
+          })();
           let merged: Record<string, unknown> = fresh
-            ? { ...saved, ...c, request_id: typeof rawId === "string" ? rawId : "", ...(identityOk ? {} : { settled: null, chain_final: false }) }
+            ? { ...ident, ...saved, ...c, request_id: typeof rawId === "string" ? rawId : "", ...(identityOk ? {} : { settled: null, chain_final: false }) }
             // No fresh receipt: keep what was stored, including its request_id (a recorded mismatch stays one).
-            : { ...saved, ...c, request_id: saved?.request_id ?? "", state: saved?.state ?? null, reserved: saved?.reserved ?? null, settled: saved?.settled ?? null, chain_final: saved?.chain_final ?? false, last_known_at: saved?.observed_at ?? null };
+            : { ...ident, ...saved, ...c, request_id: saved?.request_id ?? "", state: saved?.state ?? null, reserved: saved?.reserved ?? null, settled: saved?.settled ?? null, chain_final: saved?.chain_final ?? false, last_known_at: saved?.observed_at ?? null };
           try {
             writeJsonSafe(path, merged, "receipt");
           } catch {
