@@ -134,5 +134,29 @@
     "replace": "          name = entry.name.toString(\"utf8\");",
     "test": "test/snapshot.test.ts",
     "why": "a name that is not UTF-8 must be named as it is, never decoded around"
+  },
+  {
+    "id": "source-shown-text-keeps-paragraph-separator",
+    "file": "src/source.ts",
+    "find": "\\u2028\\u2029]/g",
+    "replace": "\\u2028]/g",
+    "test": "test/snapshot.test.ts",
+    "why": "sixth rerun U3: a page file name's paragraph separator is shown as %E2%80%A9, not as itself"
+  },
+  {
+    "id": "source-shown-text-keeps-del",
+    "file": "src/source.ts",
+    "find": "\\u007f-\\u009f\\u2028",
+    "replace": "\\u0080-\\u009f\\u2028",
+    "test": "test/snapshot.test.ts",
+    "why": "sixth rerun U3: a page file name's DEL is shown as %7F, not as itself"
+  },
+  {
+    "id": "source-shown-text-keeps-unit-separator",
+    "file": "src/source.ts",
+    "find": "[%\\u0000-\\u001f\\u007f",
+    "replace": "[%\\u0000-\\u001e\\u007f",
+    "test": "test/snapshot.test.ts",
+    "why": "sixth rerun U3: the last C0 control, U+001F, is shown as %1F, not as itself"
   }
 ]

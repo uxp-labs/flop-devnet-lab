@@ -693,7 +693,9 @@ class RecountTests(unittest.TestCase):
         TypeScript loader shows it."""
         for name, shown in (("01%FF.json", "01%25FF.json"), ("02\na.json", "02%0Aa.json"),
                             ("03\u0085b.json", "03%C2%85b.json"), ("04\u2028c.json", "04%E2%80%A8c.json"),
-                            ("05\u00e9d.json", "05\u00e9d.json")):
+                            ("05\u00e9d.json", "05\u00e9d.json"), ("06\u001fe.json", "06%1Fe.json"),
+                            ("07\u007ff.json", "07%7Ff.json"), ("08\u2029g.json", "08%E2%80%A9g.json"),
+                            ("09\u009fh.json", "09%C2%9Fh.json")):
             with tempfile.TemporaryDirectory() as d:
                 os.mkdir(os.path.join(d, "event-pages"))
                 with open(os.path.join(d, "event-pages", name), "w", encoding="utf-8") as fh:
@@ -702,6 +704,35 @@ class RecountTests(unittest.TestCase):
                 self.assertEqual((code, out), (2, ""), name)
                 self.assertTrue(err.startswith("census refused (page-file): event-pages/%s: cannot read" % shown), (name, err))
                 self.assertEqual(len(err.rstrip("\n").split("\n")), 1, name)
+
+    def test_page_structure_names_show_specials_as_bytes(self):
+        """Sixth rerun U3: each of the six page structure refusals names its file the same way as
+        the page file refusals above."""
+        g = '"genesis": "x"'
+        cases = (
+            ("01%x.json", "01%25x.json", "[]", "page is not an object"),
+            ("02\na.json", "02%0Aa.json", "{}", "genesis missing or not a string"),
+            ("03\u007fb.json", "03%7Fb.json", "{%s}" % g, "from_block missing or not an integer"),
+            ("04\u2029c.json", "04%E2%80%A9c.json", '{%s, "from_block": 5, "to_block": 1, "page": 0}' % g, "bad page number or block range"),
+            ("05\u0085d.json", "05%C2%85d.json", '{%s, "from_block": 0, "to_block": 1, "page": 0}' % g, "next_page missing or not an integer or null"),
+            ("06\u001fe.json", "06%1Fe.json", '{%s, "from_block": 0, "to_block": 1, "page": 0, "next_page": null}' % g, "events missing or not a list"),
+        )
+        for name, shown, body, reason in cases:
+            with tempfile.TemporaryDirectory() as d:
+                os.mkdir(os.path.join(d, "event-pages"))
+                with open(os.path.join(d, "event-pages", name), "w", encoding="utf-8") as fh:
+                    fh.write(body)
+                code, out, err = run(d, 0, 10)
+                self.assertEqual((code, out), (2, ""), name)
+                self.assertEqual(err, "census refused (page-structure): %s: %s\n" % (shown, reason), name)
+
+    def test_missing_folder_is_named_in_one_line(self):
+        """Sixth rerun U8: a scenario folder that does not exist is named as a page file is, so a
+        line break in its name is shown as %0A."""
+        with tempfile.TemporaryDirectory() as d:
+            code, out, err = run(os.path.join(d, "no\nsuch-folder"), 0, 10)
+            self.assertEqual((code, out), (2, ""))
+            self.assertEqual(err, "census refused (input): scenario dir not found: %s\n" % os.path.join(d, "no%0Asuch-folder"))
 
     def test_output_is_deterministic(self):
         a = run(os.path.join(DATA, "gap"), 1, 30)[1]

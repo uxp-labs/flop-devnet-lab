@@ -125,7 +125,7 @@ def is_regular_file(path):
 
 def load_pages(scenario_dir):
     if not os.path.isdir(scenario_dir):
-        raise Unreadable("input", "scenario dir not found: %s" % scenario_dir)
+        raise Unreadable("input", "scenario dir not found: %s" % _text(scenario_dir))
     pages = []
     pages_dir = os.path.join(scenario_dir, "event-pages")
     names = []

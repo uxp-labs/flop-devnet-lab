@@ -680,8 +680,13 @@ for (const k of required) {
       continue;
     }
     opened.push({ tag, attrs: m[3], text: m[0] });
+    // A browser keeps the first of two attributes with one name, and another reader may keep the
+    // last, so an element names each attribute once (sixth rerun U5).
+    const named = new Set();
     const rest = m[3].replace(/\s+([a-z][a-z-]*)="[^"]*"/g, (_all, name) => {
       if (!ATTRS.has(name)) failures.push({ what: "the body uses only the attributes the renderer writes", detail: `${name} on <${tag}>` });
+      if (named.has(name)) failures.push({ what: "no element names an attribute twice", detail: `${name} on <${tag}>` });
+      named.add(name);
       return "";
     });
     if (rest.trim() !== "") failures.push({ what: "the body uses only the attributes the renderer writes", detail: `<${tag}> ${rest.trim().slice(0, 80)}` });

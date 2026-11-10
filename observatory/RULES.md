@@ -113,9 +113,13 @@ check below to run and pass.
     of the highest one seen, and then counts again. Like the finalized floor, this one counts a
     head that came with a read error: a reading that later proves wrong keeps the head unusable
     until the operator starts a new log.
-  - Two restarts the history cannot see: one whose earlier heads read no valid genesis, which are
-    on no genesis and set no floor, and one within the lag limit of where the chain was, which no
-    reorganisation rule can tell from a reorganisation.
+  - Three restarts the history cannot see: one whose earlier heads read no valid genesis, which are
+    on no genesis and set no floor; one within the lag limit of where the chain was, which no
+    reorganisation rule can tell from a reorganisation; and one whose new chain is already past
+    every height the log holds by the next snapshot, which heads alone cannot tell from progress.
+    The last is seen only when the new finalized head lands on a height the log recorded, as a
+    changed hash there. On devnet, at over three million blocks, the new chain would need months
+    to get past the log, so it matters most for a young chain or a log with long gaps.
   - The `status` command reads no log, so none of the checks against earlier snapshots runs there:
     its `reset_detected` speaks for that one reading only. The snapshot command's does not.
 - Any failed check makes RPC health `degraded`. A missing or invalid genesis hash, finalized head
@@ -320,28 +324,30 @@ check below to run and pass.
     A request problem is named before any page problem, and a page file problem before any page
     structure problem, so both implementations name the same reason for the same input. On the
     command line both sides read the same arguments by the same rules: every flag is `--name`
-    followed by its value as the next argument, so `--name=value`, a name the command does not
-    read (an abbreviation such as `--gen` included), a flag given twice, a flag with no value (the
-    next argument missing, empty, as an unset shell variable gives, or itself a flag), and an
-    argument that is no flag's value are each a request problem, while a value that starts with
-    one dash (`-5`, `-a`) is a value, judged as one. A request number that is not plain digits,
-    or has more than 16 significant digits (so it is past 2^53 - 1), is a request problem, a range
-    given there is checked before the folder is read, and a scenario folder that does not exist,
-    or an empty pinned genesis in `meta.json`, is an input problem; the recount reads its genesis
-    only from its flag, where an empty value is a request problem, so the `meta.json` case is the
-    command's alone and the cross-check compares it through no case. The folder flag left out is a
-    request problem on both sides. The recount needs all four of its flags, and one left out is a
-    request problem; the TypeScript command reads a missing `--genesis`, `--from` or `--to` from
-    the scenario's `meta.json`, so a flag left out is compared only through `meta.json`, as every
-    scenario is. The command's `--now` (a time with a zone, checked as one) has no counterpart in
-    the recount, which reads no clock, so the cross-check never passes it. A file name a refusal
-    names is shown as itself when it is UTF-8, but for `%`, the control characters (C0, DEL and
-    C1) and the line and paragraph separators, each as the `%XX` of its UTF-8 bytes, and byte for
-    byte with every other byte as `%XX` when it is not, so a name holds no line break of any kind
-    and no two names are shown alike. Every refusal that names a file shows it so, page structure
-    refusals included. The TypeScript command also reads the folder's
-    `meta.json` and refuses as an input problem when it cannot; the recount does not read
-    `meta.json`, so that one input problem is the command's alone.
+    followed by its value as the next argument, so `--name=value`, a name the command does not read
+    (an abbreviation such as `--gen` included), a flag given twice, a flag with no value (the next
+    argument missing, empty, as an unset shell variable gives, or itself a flag), and an argument
+    that is no flag's value are each a request problem, while a value that starts with one dash
+    (`-5`, `-a`) is a value, judged as one. A request number that is not plain digits, or has more
+    than 16 significant digits (so it is past 2^53 - 1), is a request problem, a range given there
+    is checked before the folder is read, and a scenario folder that does not exist, or a pinned
+    genesis in `meta.json` that is empty or not text, is an input problem; the recount reads its
+    genesis only from its flag, where an empty value is a request problem, so the `meta.json` case
+    is the command's alone and the cross-check compares it through no case. The folder flag left out
+    is a request problem on both sides, and so is a scenario the command reads with no `--from` or
+    `--to` and no `census_request` in its `meta.json`. The recount needs all four of its flags, and
+    one left out is a request problem; the TypeScript command reads a missing `--genesis`, `--from`
+    or `--to` from the scenario's `meta.json`, so a flag left out is compared only through
+    `meta.json`, as every scenario is. The command's `--now` (a time with a zone, checked as one)
+    has no counterpart in the recount, which reads no clock, so the cross-check never passes it. A
+    file name a refusal names is shown as itself when it is UTF-8, but for `%`, the control
+    characters (C0, DEL and C1) and the line and paragraph separators, each as the `%XX` of its
+    UTF-8 bytes, and byte for byte with every other byte as `%XX` when it is not, so a name holds no
+    line break of any kind and no two names are shown alike. Every refusal that names a file or a
+    folder shows it so, page structure refusals and a scenario folder that does not exist included.
+    The TypeScript command also reads the folder's `meta.json` and refuses as an input problem when
+    it cannot; the recount does not read `meta.json`, so that one input problem is the command's
+    alone.
 
 ## 4. Read only
 
@@ -430,7 +436,8 @@ Tests fail if any attempt is left in the log.
     which no test hook can see;
   - a reset or a final check whose count disagrees with the attempts journaled before it fails,
     because it means the journal lost an attempt;
-  - every test file must reach its final check.
+  - every test file must reach its final check, each file counted once: one run of the tests runs
+    each file once, so a file that reached its final check in two runs is itself a failure.
 - No test may load a second copy of `src/guard.ts` (by reloading or mocking modules, or by
   importing it under a query string): a copy's attempts would reach neither the log nor the
   journal. A test reads every test file for those forms.
@@ -471,23 +478,32 @@ blank on the page and `null` in JSON and MCP.
   own line.
 - The snapshot command takes an escrow id only as `0x` plus 64 hex, the one form
   `get_escrow_state` answers for, so the page, the feeds and the MCP server hold the same ids.
-- The MCP binary serves only an observatory snapshot (`schema` `flop-observatory/snapshot@0`, each
-  part with its own schema, and the status and every escrow, which `get_status` and
-  `get_escrow_state` answer field by field, holding exactly their schema's fields, with
-  `reset_detected`, the state, the trust label, the heights, the lists and the scope of their
-  schema's types, the genesis exactly its three hashes, each service's health one of the four words,
-  each escrow id `0x` plus 64 lower case hex and listed once, the snapshot's trust one of the two
-  labels, and the values that follow from each other agreeing: `reset_detected` false only with both
-  genesis readings on the pinned genesis and true only with one on another, and an escrow funded,
-  claimed or refunded only with evidence and unverified only with none; the census and the drift
-  report are checked for their schema only) whose hash verifies, read as strict UTF-8 with a byte
-  order mark refused, nesting checked before parsing, one value per key, and the text byte for byte
-  in the feed format, so an integer past 2^53 - 1 that the parser would round is refused too;
-  anything else is refused and nothing is served. A call it cannot answer gets a JSON-RPC error,
-  never a dead server. The hash is no signature: whoever writes the file can write a hash that
-  verifies, so these checks catch a file that is broken or contradicts itself, not one written to
-  deceive, which serves what it holds. The snapshot command and its log are where the rules are
-  applied.
+- The MCP binary serves only an observatory snapshot whose hash verifies, read as strict UTF-8 with
+  a byte order mark refused, nesting checked before parsing, one value per key, and the text byte
+  for byte in the feed format, so an integer past 2^53 - 1 that the parser would round is refused
+  too. Every object in it but the census and the drift report holds exactly its schema's fields with
+  its schema's types: the snapshot (`seq` a safe integer from 0, `prev_hash` none on the first line
+  and 64 lower case hex on every other, `observed_at` a time with a zone, the trust one of the two
+  labels), its pin, the status (its genesis exactly its three hashes, each service's health one of
+  the four words and its other fields of their types, its conflicts text), every escrow (its id `0x`
+  plus 64 lower case hex and listed once, its notes text) and every evidence item (one of the three
+  escrow events, its block hash and genesis hashes); the census and the drift report are checked for
+  their schema only. The values the settlement rules tie together agree: `reset_detected` false only
+  with both genesis readings on the pinned genesis and both heights read, and true only with a
+  reading on another genesis; the finality lag the best height less the finalized one, and none when
+  either is missing or the finalized one is higher; an escrow unverified with no evidence, funded on
+  one open and nothing else, claimed on one release and refunded on one refund, each with at most
+  one open and no event of the other kind, every item on the pinned genesis; an escrow's finalized
+  height none or the status's, with no evidence above it; the pin's genesis, finalized height and
+  hash the status's RPC genesis, finalized height and hash; and the snapshot a fixture when any part
+  is. Anything else is refused and nothing is served. A call it cannot answer gets a JSON-RPC error,
+  never a dead server. These are all the binary checks: times are not compared with each other, nor
+  the parts' trust labels beyond the fixture rule. The hash is no signature: whoever writes the file
+  can write a hash that verifies, so these checks catch a file that is broken or contradicts itself
+  in one of the ways above, not one written to deceive, which serves what it holds. The output check
+  (`scripts/consistency.mjs`) does not apply these rules: outputs written from a snapshot the binary
+  refuses can still agree with each other, and in the check the step that drives the binary fails
+  first. The snapshot command and its log are where the rules are applied.
 - The snapshot log is read the same way: every line strict UTF-8, ending in a newline, with no
   blank line and nothing after the last newline, and in canonical form byte for byte. A line that
   is padded, ends in a carriage return or spells a number another way breaks the chain, and the
@@ -501,7 +517,8 @@ blank on the page and `null` in JSON and MCP.
     as `<tr>`), every `<` opens a tag, and a closing tag holds only its name;
   - no HTML comment and no other `<!` markup but the doctype;
   - only the elements and attributes the renderer writes, so no `hidden` or `style` attribute
-    and no `script`, `details` or `template` element;
+    and no `script`, `details` or `template` element, and each attribute once on its element: a
+    browser keeps the first of two with one name and another reader may keep the last;
   - only the renderer's own stylesheet, which sets no property that can hide a value, shrink it
     to nothing or paint it invisible (`test/page.test.ts` reviews each property it sets).
 - Every table carries `data-section` (`status`, `escrow`, `census` or `drift`), holds only keys

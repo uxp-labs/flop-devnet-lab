@@ -182,7 +182,8 @@ export class FixtureSource implements Source {
       return r ?? (unreadable.has(name) ? { ...unknownHead(), unreadable: unreadable.get(name)! } : undefined);
     };
     const meta = read<FixtureMeta>("meta.json");
-    if (!meta) throw new Error(`fixture ${dir} has no readable meta.json`);
+    // The folder is named as a page file is, so a line break in it cannot break the line (sixth rerun U8).
+    if (!meta) throw new Error(`fixture ${shownText(dir)} has no readable meta.json`);
     const pagesDir = join(dir, "event-pages");
     let eventPages: EventPage[] | undefined;
     let pagesStat: ReturnType<typeof lstatSync> | null = null;

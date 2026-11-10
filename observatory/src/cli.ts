@@ -150,7 +150,8 @@ async function main(): Promise<void> {
     const meta = src.data.meta;
     const from = fromFlag ?? meta.census_request?.from_block;
     const to = toFlag ?? meta.census_request?.to_block;
-    if (from === undefined || to === undefined) fail("no --from/--to and no census_request in meta.json");
+    // No range at all is a request problem, named as one (clause 16, sixth rerun U8).
+    if (from === undefined || to === undefined) fail("census refused (request): no --from/--to and no census_request in meta.json");
     print(
       runCensus(await src.eventPages(), {
         pinnedGenesis: one(a, "--genesis") ?? meta.pinned_genesis ?? DEVNET_GENESIS,

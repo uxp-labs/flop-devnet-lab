@@ -167,8 +167,8 @@ describe("fixture source: unreadable event pages are reported, never dropped", (
     }
   });
 
-  it("a page file name that is UTF-8 is shown as itself but for %, control characters and line separators, each as %XX of its bytes (Fable review r9 I2, r10 I2)", async () => {
-    const names = ["01%FF.json", "02\na.json", "03\u0085b.json", "04\u2028c.json", "05\u00e9d.json"];
+  it("a page file name that is UTF-8 is shown as itself but for %, control characters and line separators, each as %XX of its bytes (Fable review r9 I2, r10 I2, sixth rerun U3)", async () => {
+    const names = ["01%FF.json", "02\na.json", "03\u0085b.json", "04\u2028c.json", "05\u00e9d.json", "06\u001fe.json", "07\u007ff.json", "08\u2029g.json", "09\u009fh.json"];
     const dir = scenario((d) => {
       mkdirSync(join(d, "event-pages"));
       for (const n of names) writeFileSync(join(d, "event-pages", n), "{ not json");
@@ -181,6 +181,10 @@ describe("fixture source: unreadable event pages are reported, never dropped", (
         "event-pages/03%C2%85b.json: not valid JSON",
         "event-pages/04%E2%80%A8c.json: not valid JSON",
         "event-pages/05\u00e9d.json: not valid JSON",
+        "event-pages/06%1Fe.json: not valid JSON",
+        "event-pages/07%7Ff.json: not valid JSON",
+        "event-pages/08%E2%80%A9g.json: not valid JSON",
+        "event-pages/09%C2%9Fh.json: not valid JSON",
       ]);
     } finally {
       rmSync(dir, { recursive: true, force: true });

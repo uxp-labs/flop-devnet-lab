@@ -1,7 +1,7 @@
 {
   "attempts-check.test.ts": {
-    "tests": 11,
-    "names": "80d9f1009f4679d981d51a2e2ac1922be3aba9866b9c455642ba9abbfcee069c"
+    "tests": 12,
+    "names": "5271db22d00de405d8b47cd068f20f211490fce67f0f95b7279fbb39431afdb2"
   },
   "census.test.ts": {
     "tests": 176,
@@ -33,7 +33,7 @@
   },
   "snapshot.test.ts": {
     "tests": 22,
-    "names": "8d3a5c8e99e3dd19c991db40dec6c056942248c132e468c63449bc319c58f038"
+    "names": "739678e02983ce83080baf6b87548d1360a11c48255953fae444eb98e44dcbb1"
   },
   "status-schema.test.ts": {
     "tests": 15,

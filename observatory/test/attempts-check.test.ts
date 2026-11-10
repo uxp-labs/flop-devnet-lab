@@ -115,4 +115,16 @@ describe("checkJournal", () => {
     expect(check([], 1).problems).toMatchObject([{ problem: "0 test files reached their final check, expected 1" }]);
     expect(check([a.checked(0)], 1).problems).toEqual([]);
   });
+
+  it("counts a file once, and fails one that reached its final check in two runs, so another file's missing check shows (sixth rerun U7)", () => {
+    const a1 = at("r1", "test/a.test.ts");
+    const a2 = at("r2", "test/a.test.ts");
+    const r = check([a1.checked(0), a2.checked(0), at("r3", "test/b.test.ts").attempt], 2);
+    expect(r.files_checked).toBe(1);
+    expect(r.problems).toMatchObject([
+      { file: "test/b.test.ts", problem: "attempt in a file that never reached its final check" },
+      { file: "test/a.test.ts", problem: "the file reached its final check in 2 runs" },
+      { problem: "1 test files reached their final check, expected 2" },
+    ]);
+  });
 });

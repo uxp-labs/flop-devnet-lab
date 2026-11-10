@@ -325,7 +325,7 @@
     "find": "  if (line.text === \"\") return \"is blank\";",
     "replace": "",
     "test": "test/store.test.ts",
-    "why": "round 7 review L6: the log the code writes has no blank line"
+    "why": "round 7 review L6: the log the code writes has no blank line, and a blank one is refused in those words. Without this check the line is still refused as not JSON, so this kill shows the reason given, not that the refusal stands on this check (sixth rerun U6)"
   },
   {
     "id": "store-cut-line-accepted",

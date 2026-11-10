@@ -430,6 +430,25 @@ const tampers = [
     applies: (d) => snap(d).status.reset_detected === true,
     run: (d) => editCell(d, "status.reset_detected", (a, t) => [`${a} aria-label="false"`, t]),
   },
+  // Sixth rerun U5: an attribute named twice, which a browser and another reader can read apart.
+  {
+    name: "the-reset-cell-names-data-v-twice",
+    expect: /no element names an attribute twice/,
+    applies: () => true,
+    run: (d) => editCell(d, "status.reset_detected", (a, t) => [`${a} data-v="true"`, t]),
+  },
+  {
+    name: "the-rpc-health-cell-names-class-twice",
+    expect: /no element names an attribute twice/,
+    applies: () => true,
+    run: (d) => editCell(d, "status.rpc.health", (a, t) => [`${a} class="h-down"`, t]),
+  },
+  {
+    name: "the-reset-cell-names-data-k-twice",
+    expect: /no element names an attribute twice/,
+    applies: () => true,
+    run: (d) => editCell(d, "status.reset_detected", (a, t) => [`${a} data-k="status.best_height"`, t]),
+  },
   {
     name: "a-true-reset-cell-painted-unknown-grey",
     expect: /status\.reset_detected class/,

@@ -407,7 +407,8 @@ const cases = [
     name: "the MCP binary refuses a hashed snapshot whose parts are empty shells",
     run: () => {
       // Only the status is an empty shell, so the status check alone has to refuse it.
-      const s = { schema: "flop-observatory/snapshot@0", observed_at: "2026-11-10T00:00:00Z", trust: "fixture", pin: {}, status: {}, escrows: [], census: null, drift: null, seq: 0, prev_hash: null };
+      const pin = { source_sha: null, source: "fixture:none", genesis: null, finalized_height: null, finalized_hash: null, node: "v22.23.4" };
+      const s = { schema: "flop-observatory/snapshot@0", observed_at: "2026-11-10T00:00:00Z", trust: "fixture", pin, status: {}, escrows: [], census: null, drift: null, seq: 0, prev_hash: null };
       const bad = join(work, "mcp-empty-parts.json");
       writeFileSync(bad, feedText({ ...s, hash: hashSnapshot(s) }));
       return mcp(bad);
@@ -415,7 +416,7 @@ const cases = [
     ok: (r) => r.exit === 2 && r.stdout === "" && /is not an observatory snapshot; refusing to serve it/.test(r.stderr),
   },
   {
-    name: "the MCP binary refuses a hashed snapshot whose status or escrow lacks a field, holds one its schema does not, or holds one of the wrong type",
+    name: "the MCP binary refuses a hashed snapshot that lacks a field, holds one its schema does not or one of the wrong type, at any level, or whose settlement values do not agree",
     run: () => {
       const out = join(work, "mcp-snap-escrows");
       const made = cli("snapshot", "--status", fx("status-healthy"), "--escrows", fx("escrows-verification"), "--out", out);
@@ -439,7 +440,8 @@ const cases = [
         variant("escrow-state-invented", (s) => (s.escrows[0].state = "settled")),
         // Round 9 review L6: ids get_escrow_state cannot answer for, and a status that says nothing.
         variant("escrow-id-not-hex", (s) => (s.escrows[0].escrow_id = "x")),
-        variant("escrow-listed-twice", (s) => (s.escrows[1] = { ...s.escrows[0], state: "refunded" })),
+        // The refunded escrow under the claimed one's id: one id with two states, each on its own events.
+        variant("escrow-listed-twice", (s) => (s.escrows[1].escrow_id = s.escrows[0].escrow_id)),
         variant("genesis-extra-field", (s) => (s.status.genesis.approved = s.status.genesis.pinned)),
         variant("rpc-health-a-word", (s) => (s.status.rpc.health = "great")),
         // Round 10 review I3: values their own fields contradict.
@@ -447,14 +449,62 @@ const cases = [
           s.escrows[0].state = "claimed";
           s.escrows[0].evidence = [];
         }),
-        variant("reset-false-with-no-rpc-genesis", (s) => (s.status.genesis.rpc = null)),
-        variant("snapshot-trust-a-word", (s) => (s.trust = "certified")),
+        variant("reset-false-with-no-rpc-genesis", (s) => {
+          s.status.genesis.rpc = null;
+          s.pin.genesis = null;
+        }),
+        variant("snapshot-trust-a-word", (s) => {
+          s.status.trust = "trusted RPC";
+          for (const e of s.escrows) e.trust = "trusted RPC";
+          s.trust = "certified";
+        }),
+        // Round 10 review I3, the two rules its proof left out (sixth rerun U2).
+        variant("reset-true-on-the-pinned-genesis", (s) => (s.status.reset_detected = true)),
+        variant("unverified-with-evidence", (s) => {
+          const u = s.escrows.find((e) => e.state === "unverified");
+          if (!u) throw new Error("no unverified escrow to give evidence to");
+          u.evidence = [structuredClone(s.escrows[0].evidence[0])];
+        }),
+        // Sixth rerun U1: every field of every object has its type, and the settlement values agree.
+        // Each edit breaks one rule and leaves every other one met.
+        variant("gateway-extra-field", (s) => (s.status.gateway.approved = true)),
+        variant("gateway-http-a-word", (s) => (s.status.gateway.http = "200")),
+        variant("rpc-stale-a-word", (s) => (s.status.rpc.stale = "no")),
+        variant("faucet-ready-a-word", (s) => (s.status.faucet.ready = "yes")),
+        variant("faucet-limits-a-word", (s) => (s.status.faucet.limits = "none")),
+        variant("pin-node-a-number", (s) => (s.pin.node = 22)),
+        variant("evidence-extra-field", (s) => (s.escrows[0].evidence[0].approved = true)),
+        variant("pin-extra-field", (s) => (s.pin.approved = true)),
+        variant("seq-a-string", (s) => {
+          s.seq = "1";
+          s.prev_hash = "ab".repeat(32);
+        }),
+        variant("first-line-names-a-line-before", (s) => (s.prev_hash = "ab".repeat(32))),
+        variant("observed-at-a-word", (s) => (s.observed_at = "yesterday")),
+        variant("conflicts-not-text", (s) => (s.status.conflicts = [1, null])),
+        variant("reset-false-with-no-heights", (s) => {
+          Object.assign(s.status, { finalized_height: null, finalized_hash: null, best_height: null, finality_lag: null });
+          Object.assign(s.pin, { finalized_height: null, finalized_hash: null });
+          for (const e of s.escrows) e.finalized_height = null;
+        }),
+        variant("lag-that-does-not-add-up", (s) => (s.status.finality_lag = 99)),
+        variant("claimed-on-an-open-only", (s) => {
+          if (s.escrows[0].state !== "claimed" || s.escrows[0].evidence.length !== 1) throw new Error("escrow 0 is not claimed on one event");
+          s.escrows[0].evidence[0].event = "hasStation.EscrowOpened";
+        }),
+        variant("evidence-from-another-genesis", (s) => (s.escrows[0].evidence[0].genesis = "0x" + "ab".repeat(32))),
+        variant("bound-other-than-the-status-height", (s) => (s.escrows[0].finalized_height = 5)),
+        variant("evidence-above-the-bound", (s) => (s.escrows[0].evidence[0].block_number = s.status.finalized_height + 1)),
+        variant("pin-genesis-other", (s) => (s.pin.genesis = "0x" + "cd".repeat(32))),
+        variant("pin-height-other", (s) => (s.pin.finalized_height = 7)),
+        variant("pin-hash-other", (s) => (s.pin.finalized_hash = "0x" + "ef".repeat(32))),
+        variant("trusted-with-fixture-parts", (s) => (s.trust = "trusted RPC")),
       ];
       // Each snapshot by name with its exit, so a failure says which one was served.
       return { exit: runs.map((x) => x.exit).join(","), stderr: runs.map((x) => `${x.name}: exit ${x.exit}`).join("; "), runs };
     },
     ok: (r) =>
-      r.runs.length === 12 &&
+      r.runs.length === 36 &&
       r.runs[0].exit === 0 &&
       r.runs.slice(1).every((x) => x.exit === 2 && x.stdout === "" && /is not an observatory snapshot; refusing to serve it/.test(x.stderr)),
   },
@@ -584,6 +634,17 @@ const cases = [
     name: "census without its folder flag is a refusal of the request, as the recount's missing --dir is",
     run: () => cli("census", "--genesis", "0x" + "99".repeat(32), "--from", "0", "--to", "10"),
     ok: (r) => r.exit === 2 && /census refused \(request\): missing --fixtures/.test(r.stderr),
+  },
+  {
+    name: "census of a scenario with no range given and none in its meta.json is a refusal of the request, named as one (sixth rerun U8)",
+    run: () => cli("census", "--fixtures", fx("status-healthy")),
+    ok: (r) => r.exit === 2 && r.stderr === "flop-observatory: census refused (request): no --from/--to and no census_request in meta.json",
+  },
+  {
+    name: "census of a scenario folder that does not exist names it in one line, a line break in its name shown as %0A (sixth rerun U8)",
+    run: () => cli("census", "--fixtures", join(work, "no\nsuch-folder"), "--genesis", "0x" + "99".repeat(32), "--from", "0", "--to", "10"),
+    // The output is read trimmed, so one line is no line break at all.
+    ok: (r) => r.exit === 2 && !/[\n\r]/.test(r.stderr) && r.stderr.includes("census refused (input): fixture ") && r.stderr.endsWith("no%0Asuch-folder has no readable meta.json"),
   },
   {
     name: "after a finality stall, a best height that falls further than the lag limit is a conflict (a restart looks the same), and once it is back within the limit the head counts again",

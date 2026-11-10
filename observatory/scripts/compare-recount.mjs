@@ -45,14 +45,16 @@ function canon(v) {
 }
 
 function run(cmd, args) {
-  const r = spawnSync(cmd, args, { cwd: pkg, encoding: "utf8", maxBuffer: 1 << 28 });
+  // Each side has two minutes (sixth rerun U10): one that waits on a file forever is stopped, and
+  // a side that is stopped has no exit code, so it is never read as a refusal or a census.
+  const r = spawnSync(cmd, args, { cwd: pkg, encoding: "utf8", maxBuffer: 1 << 28, timeout: 120000 });
   let json = null;
   try {
     json = JSON.parse(r.stdout);
   } catch {
     json = null;
   }
-  return { exit: r.status, json, stderr: (r.stderr ?? "").trim() };
+  return { exit: r.status, json, stderr: `${r.stderr ?? ""}${r.error?.code === "ETIMEDOUT" ? "\n(stopped after two minutes)" : ""}`.trim() };
 }
 
 /**

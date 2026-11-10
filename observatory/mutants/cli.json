@@ -258,8 +258,8 @@
   {
     "id": "mcp-bin-service-any-health",
     "file": "src/mcp-bin.ts",
-    "find": "const service = (v: unknown): boolean => isObject(v) && HEALTHS.includes(v.health as string);",
-    "replace": "const service = (v: unknown): boolean => isObject(v);",
+    "find": "exactly(v, [...SERVICE_KEYS, ...extra]) && HEALTHS.includes(v.health as string) && heightOrNull(v.http)",
+    "replace": "exactly(v, [...SERVICE_KEYS, ...extra]) && heightOrNull(v.http)",
     "test": "scripts/cli-checks.mjs",
     "why": "round 9 review L6: a served service health is one of the four words"
   },
@@ -290,10 +290,10 @@
   {
     "id": "mcp-bin-evidence-unchecked",
     "file": "src/mcp-bin.ts",
-    "find": "  (e.state === \"unverified\" ? (e.evidence as unknown[]).length === 0 : (e.evidence as unknown[]).length > 0) &&",
-    "replace": "  true &&",
+    "find": "      restsOnItsEvents(e) &&",
+    "replace": "      true &&",
     "test": "scripts/cli-checks.mjs",
-    "why": "round 10 review I3: a served escrow that is funded, claimed or refunded rests on evidence"
+    "why": "round 10 review I3 and the sixth rerun: a served state rests on its own events (claimed on a release, not on no event or an open alone)"
   },
   {
     "id": "mcp-bin-reset-false-unchecked",
@@ -310,5 +310,205 @@
     "replace": "  typeof snapshot.trust === \"string\" &&",
     "test": "scripts/cli-checks.mjs",
     "why": "round 10 review I3: the snapshot's trust label is one of the two the schema names"
+  },
+  {
+    "id": "mcp-bin-service-fields-unchecked",
+    "file": "src/mcp-bin.ts",
+    "find": "isObject(v) && exactly(v, [...SERVICE_KEYS, ...extra]) && HEALTHS",
+    "replace": "isObject(v) && HEALTHS",
+    "test": "scripts/cli-checks.mjs",
+    "why": "sixth rerun U1: a served service holds every field of its schema, not a health word alone"
+  },
+  {
+    "id": "mcp-bin-evidence-items-unchecked",
+    "file": "src/mcp-bin.ts",
+    "find": "  e.evidence.every(evidenceShaped) &&",
+    "replace": "  true &&",
+    "test": "scripts/cli-checks.mjs",
+    "why": "sixth rerun U1: each evidence item holds exactly the fields of an evidence event"
+  },
+  {
+    "id": "mcp-bin-pin-fields-unchecked",
+    "file": "src/mcp-bin.ts",
+    "find": "  exactly(snapshot.pin as unknown as Record<string, unknown>, PIN_KEYS) &&",
+    "replace": "  true &&",
+    "test": "scripts/cli-checks.mjs",
+    "why": "sixth rerun U1: the pin holds exactly its schema's fields"
+  },
+  {
+    "id": "mcp-bin-seq-any-value",
+    "file": "src/mcp-bin.ts",
+    "find": "  Number.isSafeInteger(snapshot.seq) &&\n  snapshot.seq >= 0 &&",
+    "replace": "  true &&",
+    "test": "scripts/cli-checks.mjs",
+    "why": "sixth rerun U1: seq is a safe integer from 0, not a word"
+  },
+  {
+    "id": "mcp-bin-prev-hash-any-value",
+    "file": "src/mcp-bin.ts",
+    "find": "  (snapshot.seq === 0 ? snapshot.prev_hash === null : typeof snapshot.prev_hash === \"string\" && /^[0-9a-f]{64}$/.test(snapshot.prev_hash)) &&",
+    "replace": "  true &&",
+    "test": "scripts/cli-checks.mjs",
+    "why": "sixth rerun U1: the first line of a log names no line before it, and every other line names one"
+  },
+  {
+    "id": "mcp-bin-times-unchecked",
+    "file": "src/mcp-bin.ts",
+    "find": "const time = (v: unknown): boolean => parseZoned(v) !== null;",
+    "replace": "const time = (v: unknown): boolean => typeof v === \"string\";",
+    "test": "scripts/cli-checks.mjs",
+    "why": "sixth rerun U1: observed_at is a time with a zone, not any word"
+  },
+  {
+    "id": "mcp-bin-lists-of-any-items",
+    "file": "src/mcp-bin.ts",
+    "find": "const texts = (v: unknown): boolean => Array.isArray(v) && v.every((x) => typeof x === \"string\");",
+    "replace": "const texts = (v: unknown): boolean => Array.isArray(v);",
+    "test": "scripts/cli-checks.mjs",
+    "why": "sixth rerun U1: conflicts and notes are lists of text"
+  },
+  {
+    "id": "mcp-bin-reset-false-without-heights",
+    "file": "src/mcp-bin.ts",
+    "find": "  (st.reset_detected !== false || (st.finalized_height !== null && st.best_height !== null)) &&",
+    "replace": "  true &&",
+    "test": "scripts/cli-checks.mjs",
+    "why": "sixth rerun U1: reset_detected false only from a usable RPC head, which read both heights"
+  },
+  {
+    "id": "mcp-bin-lag-unchecked",
+    "file": "src/mcp-bin.ts",
+    "find": "  st.finality_lag === lagOf(st.finalized_height, st.best_height);",
+    "replace": "  true;",
+    "test": "scripts/cli-checks.mjs",
+    "why": "sixth rerun U1: the finality lag is the best height less the finalized one"
+  },
+  {
+    "id": "mcp-bin-unverified-evidence-served",
+    "file": "src/mcp-bin.ts",
+    "find": "  if (e.state === \"unverified\") return e.evidence.length === 0;",
+    "replace": "  if (e.state === \"unverified\") return true;",
+    "test": "scripts/cli-checks.mjs",
+    "why": "round 10 review I3, the half its proof left out (sixth rerun U2): an unverified escrow holds no evidence"
+  },
+  {
+    "id": "mcp-bin-evidence-any-genesis",
+    "file": "src/mcp-bin.ts",
+    "find": "      e.evidence.every((x) => x.genesis === snapshot.status?.genesis?.pinned) &&",
+    "replace": "      true &&",
+    "test": "scripts/cli-checks.mjs",
+    "why": "sixth rerun U1: evidence counts only on the pinned genesis"
+  },
+  {
+    "id": "mcp-bin-bound-any-height",
+    "file": "src/mcp-bin.ts",
+    "find": "      (e.finalized_height === null || e.finalized_height === snapshot.status?.finalized_height) &&",
+    "replace": "      true &&",
+    "test": "scripts/cli-checks.mjs",
+    "why": "sixth rerun U1: an escrow's bound is the status's finalized height or none"
+  },
+  {
+    "id": "mcp-bin-evidence-above-bound",
+    "file": "src/mcp-bin.ts",
+    "find": "      e.evidence.every((x) => e.finalized_height === null || x.block_number === null || x.block_number <= (e.finalized_height as number)),",
+    "replace": "      true,",
+    "test": "scripts/cli-checks.mjs",
+    "why": "sixth rerun U1: no evidence lies above the finalized height that bounds it"
+  },
+  {
+    "id": "mcp-bin-reset-true-unchecked",
+    "file": "src/mcp-bin.ts",
+    "find": "  (st.reset_detected !== true || (st.genesis.faucet !== null && st.genesis.faucet !== st.genesis.pinned) || (st.genesis.rpc !== null && st.genesis.rpc !== st.genesis.pinned)) &&",
+    "replace": "  true &&",
+    "test": "scripts/cli-checks.mjs",
+    "why": "round 10 review I3, the rule its proof left out (sixth rerun U2): reset_detected true only with a reading on another genesis"
+  },
+  {
+    "id": "mcp-bin-pin-genesis-unchecked",
+    "file": "src/mcp-bin.ts",
+    "find": "  snapshot.pin.genesis === snapshot.status?.genesis?.rpc &&",
+    "replace": "  true &&",
+    "test": "scripts/cli-checks.mjs",
+    "why": "sixth rerun U1: the pin names the genesis the status read from the RPC"
+  },
+  {
+    "id": "mcp-bin-pin-height-unchecked",
+    "file": "src/mcp-bin.ts",
+    "find": "  snapshot.pin.finalized_height === snapshot.status?.finalized_height &&",
+    "replace": "  true &&",
+    "test": "scripts/cli-checks.mjs",
+    "why": "sixth rerun U1: the pin names the finalized height the status read"
+  },
+  {
+    "id": "mcp-bin-pin-hash-unchecked",
+    "file": "src/mcp-bin.ts",
+    "find": "  snapshot.pin.finalized_hash === snapshot.status?.finalized_hash &&",
+    "replace": "  true &&",
+    "test": "scripts/cli-checks.mjs",
+    "why": "sixth rerun U1: the pin names the finalized hash the status read"
+  },
+  {
+    "id": "mcp-bin-trust-not-weakest",
+    "file": "src/mcp-bin.ts",
+    "find": "  (![snapshot.status, ...snapshot.escrows, snapshot.census, snapshot.drift].some((x) => isObject(x) && x.trust === \"fixture\") || snapshot.trust === \"fixture\");",
+    "replace": "  true;",
+    "test": "scripts/cli-checks.mjs",
+    "why": "sixth rerun U1: one fixture part makes the whole snapshot a fixture"
+  },
+  {
+    "id": "mcp-bin-service-types-unchecked",
+    "file": "src/mcp-bin.ts",
+    "find": "HEALTHS.includes(v.health as string) && heightOrNull(v.http) && textOrNull(v.detail) && textOrNull(v.observed_at);",
+    "replace": "HEALTHS.includes(v.health as string);",
+    "test": "scripts/cli-checks.mjs",
+    "why": "sixth rerun U1: a service's http status, detail and time have their types"
+  },
+  {
+    "id": "mcp-bin-rpc-stale-any-value",
+    "file": "src/mcp-bin.ts",
+    "find": "  flagOrNull(st.rpc.stale) &&",
+    "replace": "  true &&",
+    "test": "scripts/cli-checks.mjs",
+    "why": "sixth rerun U1: the RPC's stale flag is true, false or null"
+  },
+  {
+    "id": "mcp-bin-faucet-ready-any-value",
+    "file": "src/mcp-bin.ts",
+    "find": "  flagOrNull(st.faucet.ready) &&",
+    "replace": "  true &&",
+    "test": "scripts/cli-checks.mjs",
+    "why": "sixth rerun U1: the faucet's ready flag is true, false or null"
+  },
+  {
+    "id": "mcp-bin-faucet-limits-any-value",
+    "file": "src/mcp-bin.ts",
+    "find": "  limits(st.faucet.limits) &&",
+    "replace": "  true &&",
+    "test": "scripts/cli-checks.mjs",
+    "why": "sixth rerun U1: the faucet's limits are numbers and flags, or null"
+  },
+  {
+    "id": "mcp-bin-pin-types-unchecked",
+    "file": "src/mcp-bin.ts",
+    "find": "  typeof snapshot.pin.node === \"string\" &&",
+    "replace": "  true &&",
+    "test": "scripts/cli-checks.mjs",
+    "why": "sixth rerun U1: the pin's fields have their types (the Node version as text)"
+  },
+  {
+    "id": "cli-census-no-range-kindless",
+    "file": "src/cli.ts",
+    "find": "fail(\"census refused (request): no --from/--to and no census_request in meta.json\")",
+    "replace": "fail(\"no --from/--to and no census_request in meta.json\")",
+    "test": "scripts/cli-checks.mjs",
+    "why": "sixth rerun U8: a census with no range given and none in meta.json is refused as a request problem, named as one"
+  },
+  {
+    "id": "source-folder-name-shown-raw",
+    "file": "src/source.ts",
+    "find": "`fixture ${shownText(dir)} has no readable meta.json`",
+    "replace": "`fixture ${dir} has no readable meta.json`",
+    "test": "scripts/cli-checks.mjs",
+    "why": "sixth rerun U8: a scenario folder is named as a page file is, so a line break in its name cannot break the refusal's line"
   }
 ]

@@ -9,8 +9,9 @@
 //   - a reset or a final check whose count disagrees with the attempts journaled before it,
 //     which would mean the journal lost an attempt
 //   - an attempt in a file that never reached its final check
+//   - a file that reached its final check in more than one run
 //   - a line that is not a journal event
-// With --expect-files N, exactly N test files must have reached their final check.
+// With --expect-files N, exactly N distinct test files must have reached their final check.
 //
 // Usage: node scripts/attempts-check.mjs <journal> [--unexpected <file>] [--expect-files N]
 // Prints a JSON summary. Writes the problems to --unexpected only when there are any.
@@ -69,7 +70,15 @@ export function checkJournal(text, expectFiles = null) {
   for (const r of runs.values()) {
     if (!r.checked) for (const a of r.pending) problems.push({ file: r.file, problem: "attempt in a file that never reached its final check", attempt: a });
   }
-  const filesChecked = [...runs.values()].filter((r) => r.checked).length;
+  // A file counts once, however many runs name it: one run of the tests runs each file once, so a
+  // file that reached its final check in two runs is a journal no single run wrote (sixth rerun U7).
+  const checkedRuns = [...runs.values()].filter((r) => r.checked);
+  const files = new Set(checkedRuns.map((r) => r.file));
+  for (const f of files) {
+    const n = checkedRuns.filter((r) => r.file === f).length;
+    if (n > 1) problems.push({ file: f, problem: `the file reached its final check in ${n} runs` });
+  }
+  const filesChecked = files.size;
   if (expectFiles !== null && filesChecked !== expectFiles) {
     problems.push({ problem: `${filesChecked} test files reached their final check, expected ${expectFiles}` });
   }
