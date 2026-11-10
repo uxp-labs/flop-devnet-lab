@@ -1,0 +1,42 @@
+{
+  "genesis": "0x99c172c095340ace980631f9123544c6bebd4839f3437e463533422d8be2d631",
+  "from_block": 100,
+  "to_block": 199,
+  "page": 0,
+  "next_page": null,
+  "events": [
+    {
+      "block_number": 110,
+      "block_hash": "0x0101010101010101010101010101010101010101010101010101010101010101",
+      "finalized": true,
+      "index": 0,
+      "section": "hasStation",
+      "method": "EscrowOpened",
+      "data": {
+        "0": "0xa1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1"
+      }
+    },
+    {
+      "block_number": 500,
+      "block_hash": "0x0202020202020202020202020202020202020202020202020202020202020202",
+      "finalized": true,
+      "index": 0,
+      "section": "hasStation",
+      "method": "EscrowReleased",
+      "data": {
+        "0": "0xa1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1"
+      }
+    },
+    {
+      "block_number": 500,
+      "block_hash": "0x0303030303030303030303030303030303030303030303030303030303030303",
+      "finalized": true,
+      "index": 0,
+      "section": "hasStation",
+      "method": "EscrowReleased",
+      "data": {
+        "0": "0xb2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2"
+      }
+    }
+  ]
+}

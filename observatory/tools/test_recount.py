@@ -215,7 +215,7 @@ class RecountTests(unittest.TestCase):
                 self.assertEqual(run(d, 1, 5)[0], 2, value)
 
     def test_non_standard_json_constants_refuse(self):
-        event = ('{"block_number": 1, "block_hash": "0x01", "finalized": true, "index": %s,'
+        event = ('{"block_number": 1, "block_hash": "0xcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd", "finalized": true, "index": %s,'
                  ' "section": "hasStation", "method": "EscrowOpened", "data": {}}')
         texts = {
             "nan-index": '{"genesis": "%s", "from_block": 1, "to_block": 5, "page": 0, "next_page": null,'
@@ -234,6 +234,75 @@ class RecountTests(unittest.TestCase):
                 self.assertEqual(code, 2, name)
                 self.assertEqual(out, "", name)
                 self.assertIn("x.json", err, name)
+
+    def _page_dir(self, d, name="x.json", text=None, **over):
+        os.makedirs(os.path.join(d, "event-pages"), exist_ok=True)
+        page = {"genesis": G, "from_block": 1, "to_block": 5, "page": 0, "next_page": None, "events": []}
+        page.update(over)
+        with open(os.path.join(d, "event-pages", name), "w") as f:
+            f.write(text if text is not None else json.dumps(page))
+
+    def test_unsafe_integers(self):
+        big = 2 ** 53
+        for over in ({"to_block": big}, {"from_block": -big}, {"page": big}, {"next_page": big},
+                     {"to_block": 1e20}):
+            with tempfile.TemporaryDirectory() as d:
+                self._page_dir(d, **over)
+                self.assertEqual(run(d, 1, 5)[0], 2, over)
+        # The largest safe value is still an integer.
+        with tempfile.TemporaryDirectory() as d:
+            self._page_dir(d, to_block=2 ** 53 - 1)
+            code, out, _ = run(d, 1, 5)
+            self.assertEqual(code, 0)
+            self.assertTrue(json.loads(out)["complete"])
+        with tempfile.TemporaryDirectory() as d:
+            self._page_dir(d, to_block=2 ** 53 - 1)
+            self.assertEqual(run(d, 1, 2 ** 53)[0], 2)
+            self.assertEqual(run(d, 2 ** 53, 2 ** 53 + 1)[0], 2)
+
+    def test_unsafe_event_integers_are_malformed(self):
+        base = {"block_number": 2, "block_hash": "0x" + "01" * 32, "finalized": True, "index": 0,
+                "section": "hasStation", "method": "EscrowOpened", "data": {"who": "a"}}
+        evs = [dict(base, index=2 ** 53), dict(base, block_number=2 ** 53), dict(base, block_number=-2 ** 53),
+               dict(base, index=2 ** 53 - 1, block_hash="0x" + "02" * 32, block_number=3)]
+        with tempfile.TemporaryDirectory() as d:
+            self._page_dir(d, events=evs)
+            code, out, _ = run(d, 1, 5)
+            r = json.loads(out)
+            self.assertEqual(r["malformed_dropped"], 3)
+            self.assertEqual(r["totals"]["escrows_opened"], 1)
+
+    def test_non_page_entries_refuse(self):
+        for name in (".01.json", "01.txt", "01.json.bak", ".json", "README"):
+            with tempfile.TemporaryDirectory() as d:
+                self._page_dir(d, name=name)
+                code, out, err = run(d, 1, 5)
+                self.assertEqual(code, 2, name)
+                self.assertIn(name, err)
+        with tempfile.TemporaryDirectory() as d:  # folder, including one named like a page
+            self._page_dir(d)
+            os.makedirs(os.path.join(d, "event-pages", "sub.json"))
+            self.assertEqual(run(d, 1, 5)[0], 2)
+        with tempfile.TemporaryDirectory() as d:
+            self._page_dir(d)
+            os.makedirs(os.path.join(d, "event-pages", "sub"))
+            self.assertEqual(run(d, 1, 5)[0], 2)
+
+    def test_block_hash_must_be_lower_case_64_hex(self):
+        base = {"block_number": 2, "finalized": True, "index": 0,
+                "section": "hasStation", "method": "EscrowOpened", "data": {"who": "a"}}
+        good = "0x" + "ab" * 32
+        evs = [dict(base, block_hash=good),
+               dict(base, block_hash="0x" + "AB" * 32, index=1),
+               dict(base, block_hash="0x" + "ab" * 31, index=2),
+               dict(base, block_hash="0x" + "ab" * 33, index=3),
+               dict(base, block_hash="ab" * 32, index=4),
+               dict(base, block_hash=good + "\n", index=5)]
+        with tempfile.TemporaryDirectory() as d:
+            self._page_dir(d, events=evs)
+            r = json.loads(run(d, 1, 5)[1])
+            self.assertEqual(r["malformed_dropped"], 5)
+            self.assertEqual(r["totals"]["escrows_opened"], 1)
 
     def test_output_is_deterministic(self):
         a = run(os.path.join(DATA, "gap"), 1, 30)[1]

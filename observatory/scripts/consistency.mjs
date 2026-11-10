@@ -12,8 +12,9 @@
 // 3. MCP tool text equals the feed files byte for byte; get_escrow_state equals each escrow;
 //    get_snapshot_meta matches the snapshot. Every tool and every escrow was called.
 // 4. Every data-k cell on the page resolves to a path in the snapshot and renders that value by
-//    the rules in RULES.md section 5. A key that does not resolve fails, and so does a missing
-//    required key, so a field cannot drop out of the comparison silently.
+//    the rules in RULES.md section 5, in data-v and in its whole visible text, nested tags
+//    included. A key that does not resolve fails, a missing required key fails, and a td or span
+//    without data-k outside a marked element fails, so a value cannot escape the comparison.
 // 5. The census is internally consistent: complete only with no gaps, and totals labeled the same.
 // Prints {"dir", "checks", "keys", "failures"}; exit 1 on any failure.
 import { readFileSync } from "node:fs";
@@ -105,15 +106,39 @@ const attr = (attrs, name) => {
   return m ? unescape(m[1]) : null;
 };
 const cells = new Map();
-for (const m of html.matchAll(/<([a-z][a-z0-9]*)\b([^>]*\bdata-k="[^"]*"[^>]*)>([^<]*)(<code>([^<]*)<\/code>)?/g)) {
+const marked = [];
+// Each marked element's visible text runs to its closing tag, nested tags included, so a value
+// hidden inside a nested span cannot escape the comparison.
+for (const m of html.matchAll(/<([a-z][a-z0-9]*)\b([^>]*\bdata-k="[^"]*"[^>]*)>/g)) {
+  const tag = m[1];
+  const start = m.index + m[0].length;
+  const end = html.indexOf(`</${tag}>`, start);
+  const inner = end === -1 ? "" : html.slice(start, end);
+  marked.push([start, end === -1 ? start : end]);
   const k = attr(m[2], "data-k");
   if (cells.has(k)) fail(`page key ${k} appears once`, "duplicate data-k");
   cells.set(k, {
     v: attr(m[2], "data-v"),
     n: attr(m[2], "data-n"),
     cls: attr(m[2], "class") ?? "",
-    text: unescape(m[3] || m[5] || ""),
+    text: unescape(inner.replace(/<[^>]*>/g, "")),
   });
+}
+// Every td and span carries data-k, unless it sits inside a marked element, whose whole text is
+// already compared. A value shown anywhere else would escape the check.
+{
+  let masked = "";
+  let at = 0;
+  for (const [s0, e0] of marked.sort((x, y) => x[0] - y[0])) {
+    if (s0 < at) continue;
+    masked += html.slice(at, s0);
+    at = e0;
+  }
+  masked += html.slice(at);
+  for (const m of masked.matchAll(/<(td|span)\b([^>]*)>/g)) {
+    checks++;
+    if (!/\bdata-k="/.test(m[2])) failures.push({ what: `every ${m[1]} carries data-k`, detail: m[0].slice(0, 120) });
+  }
 }
 
 const MISSING = Symbol("missing");
@@ -156,30 +181,33 @@ function joinList(list) {
 const isUnknownWord = (key) => /^status\.(rpc|gateway|faucet)\.health$/.test(key) || /^drift\.\d+\.status$/.test(key);
 
 function checkCell(key, cell, value) {
-  const rendered = cell.v !== null ? cell.v : cell.text !== "" ? cell.text : null;
   if (key === "census.status") {
     // A banner, not a cell: its value is in data-v and its words must say partial or complete.
     expectEq(`page ${key}`, cell.v, value);
     expectEq(`page ${key} banner says ${value}`, /^PARTIAL\b/.test(cell.text) ? "partial" : /^Complete\b/.test(cell.text) ? "complete" : "neither", value);
     return;
   }
+  const unk = /\bunk\b/.test(cell.cls);
   if (isUnknownWord(key) && value === "unknown") {
-    expectEq(`page ${key} unknown is blank with data-v unknown`, `${cell.v}|${cell.text}|${/\bunk\b/.test(cell.cls)}`, "unknown||true");
+    expectEq(`page ${key} unknown is blank with data-v unknown`, `${cell.v}|${cell.text}|${unk}`, "unknown||true");
     return;
   }
   if (value === null || value === undefined) {
-    expectEq(`page ${key} is blank for null`, `${rendered}|${cell.n}|${/\bunk\b/.test(cell.cls)}`, "null|null|true");
+    expectEq(`page ${key} is blank for null`, `${cell.v}|${cell.n}|${cell.text}|${unk}`, "null|null||true");
     return;
   }
   if (Array.isArray(value)) {
     expectEq(`page ${key} data-n`, cell.n, String(value.length));
     if (value.length === 0) {
-      expectEq(`page ${key} empty list shows none`, rendered, "none");
+      expectEq(`page ${key} empty list shows none`, `${cell.v}|${cell.text}`, "null|none");
       return;
     }
     const joined = joinList(value);
     if (joined === null) fail(`page ${key} list format`, "the checker does not know this list shape");
-    else expectEq(`page ${key}`, rendered, joined);
+    else {
+      expectEq(`page ${key} data-v`, cell.v, joined);
+      expectEq(`page ${key} visible text`, cell.text, joined);
+    }
     return;
   }
   if (cell.n !== null) fail(`page ${key} data-n only on lists`, `data-n ${cell.n} on a non-list value`);
@@ -192,8 +220,9 @@ function checkCell(key, cell, value) {
     expectEq(`page ${key} empty string`, `${cell.v}|${cell.text}`, "|(empty)");
     return;
   }
-  expectEq(`page ${key}`, rendered, want);
-  if (cell.v !== null && cell.text !== "") expectEq(`page ${key} shows its data-v`, cell.text, cell.v);
+  // Every value shows as itself: in data-v when the element has one, and always in its text.
+  if (cell.v !== null) expectEq(`page ${key} data-v`, cell.v, want);
+  expectEq(`page ${key} visible text`, cell.text, want);
 }
 
 for (const [key, cell] of cells) {
@@ -218,16 +247,29 @@ const required = [
   "status.finalized_height",
   "status.finalized_hash",
   "status.rpc.stale",
+  "status.best_height",
+  "status.finality_lag",
   "status.rpc.health",
   "status.gateway.health",
   "status.faucet.health",
 ];
 for (const e of snapshot.escrows) {
-  for (const f of ["escrow_id", "state", "evidence", "notes", "observed_at", "trust", "scope"]) required.push(`escrow.${e.escrow_id}.${f}`);
+  for (const f of ["escrow_id", "state", "evidence", "notes", "observed_at", "trust", "scope", "finalized_height"]) required.push(`escrow.${e.escrow_id}.${f}`);
 }
 if (snapshot.census === null) required.push("census");
 else {
-  required.push("census.status", "census.observed_at", "census.trust", "census.covered", "census.gaps", "census.reset_detected");
+  required.push(
+    "census.status",
+    "census.observed_at",
+    "census.trust",
+    "census.covered",
+    "census.gaps",
+    "census.reset_detected",
+    "census.pending_unfinalized",
+    "census.duplicates_dropped",
+    "census.excluded_other_genesis",
+    "census.malformed_dropped",
+  );
   for (const k of Object.keys(snapshot.census.totals)) required.push(`census.totals.${k}`);
 }
 if (snapshot.drift === null) required.push("drift");

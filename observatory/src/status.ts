@@ -99,6 +99,31 @@ export function classifyGateway(r: HttpResult<unknown>): ServiceStatus {
   return { health, http: r.http, detail, observed_at: r.fetched_at };
 }
 
+/**
+ * RULES.md 1.1, faucet and gateway freshness: an ok reading stays ok only when its time parses,
+ * is not later than the snapshot time, and is at most the stale limit old.
+ */
+export function applyFreshness<T extends ServiceStatus>(
+  svc: T,
+  name: string,
+  o: { now: string; staleAfterSeconds: number },
+  conflicts: string[],
+): T {
+  if (svc.health !== "ok") return svc;
+  const age = typeof svc.observed_at === "string" ? secondsBetween(svc.observed_at, o.now) : null;
+  if (age === null) {
+    return { ...svc, health: "unknown", detail: `no parsable reading time, so the ${name} reading's age is unknown` };
+  }
+  if (age < 0) {
+    conflicts.push(`${name} reading time ${String(svc.observed_at)} is later than the snapshot time ${o.now}`);
+    return { ...svc, health: "degraded", detail: `${name} reading time is later than the snapshot time` };
+  }
+  if (age > o.staleAfterSeconds) {
+    return { ...svc, health: "degraded", detail: `${name} reading is ${Math.round(age)}s old` };
+  }
+  return svc;
+}
+
 export function classifyRpc(
   head: RpcHead,
   o: Required<Pick<StatusOptions, "now" | "staleAfterSeconds" | "maxFinalityLag">>,
@@ -237,7 +262,7 @@ export async function networkStatus(source: Source, opts: StatusOptions): Promis
     finality_lag: lag,
     runtime_version: nonNegativeInt(head.runtime_spec_version),
     rpc,
-    gateway: classifyGateway(gateway),
-    faucet: classifyFaucet(health),
+    gateway: applyFreshness(classifyGateway(gateway), "gateway", o, conflicts),
+    faucet: applyFreshness(classifyFaucet(health), "faucet", o, conflicts),
   };
 }

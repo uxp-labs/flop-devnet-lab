@@ -126,5 +126,77 @@
     "replace": "stale = age >= o.staleAfterSeconds;",
     "test": "test/status.test.ts",
     "why": "a head exactly at the stale limit is still fresh"
+  },
+  {
+    "id": "v-faucet-any-2xx-ok",
+    "file": "src/status.ts",
+    "find": "    if (r.http === 200) {",
+    "replace": "    if (r.http >= 200 && r.http < 300) {",
+    "test": "test/status.test.ts",
+    "why": "a faucet ok body on 204 is ok (verifier probe, round 2)"
+  },
+  {
+    "id": "v-gateway-any-2xx-ok",
+    "file": "src/status.ts",
+    "find": "  } else if (r.http === 200) {",
+    "replace": "  } else if (r.http >= 200 && r.http < 300) {",
+    "test": "test/status.test.ts",
+    "why": "a gateway 204 is ok (verifier probe, round 2)"
+  },
+  {
+    "id": "v-lag-limit-plus-one",
+    "file": "src/status.ts",
+    "find": "} else if (best - finalized.number > o.maxFinalityLag) {",
+    "replace": "} else if (best - finalized.number > o.maxFinalityLag + 1) {",
+    "test": "test/status.test.ts",
+    "why": "a lag of 31 blocks is ok (verifier probe, round 2)"
+  },
+  {
+    "id": "v-stale-limit-plus-one",
+    "file": "src/status.ts",
+    "find": "stale = age > o.staleAfterSeconds;",
+    "replace": "stale = age > o.staleAfterSeconds + 1;",
+    "test": "test/status.test.ts",
+    "why": "a head 121 s old is fresh (verifier probe, round 2)"
+  },
+  {
+    "id": "v-future-head-60s-tolerated",
+    "file": "src/status.ts",
+    "find": "} else if (age < 0) {",
+    "replace": "} else if (age < -60) {",
+    "test": "test/status.test.ts",
+    "why": "a head up to 60 s in the future is fresh (verifier probe, round 2)"
+  },
+  {
+    "id": "status-faucet-freshness-ignored",
+    "file": "src/status.ts",
+    "find": "    faucet: applyFreshness(classifyFaucet(health), \"faucet\", o, conflicts),",
+    "replace": "    faucet: classifyFaucet(health),",
+    "test": "test/status.test.ts",
+    "why": "an eight day old faucet reading must not be ok"
+  },
+  {
+    "id": "status-gateway-freshness-ignored",
+    "file": "src/status.ts",
+    "find": "    gateway: applyFreshness(classifyGateway(gateway), \"gateway\", o, conflicts),",
+    "replace": "    gateway: classifyGateway(gateway),",
+    "test": "test/status.test.ts",
+    "why": "an eight day old gateway reading must not be ok"
+  },
+  {
+    "id": "status-freshness-missing-time-ok",
+    "file": "src/status.ts",
+    "find": "  if (age === null) {\n    return { ...svc, health: \"unknown\",",
+    "replace": "  if (false) {\n    return { ...svc, health: \"unknown\",",
+    "test": "test/status.test.ts",
+    "why": "an ok reading with no time cannot be ok"
+  },
+  {
+    "id": "status-freshness-future-ok",
+    "file": "src/status.ts",
+    "find": "  if (age < 0) {\n    conflicts.push(`${name} reading time",
+    "replace": "  if (false) {\n    conflicts.push(`${name} reading time",
+    "test": "test/status.test.ts",
+    "why": "a reading time later than the snapshot time is a conflict"
   }
 ]

@@ -185,14 +185,27 @@ const EXPECTED: Record<string, Expected & { reset_detected: boolean }> = {
     ...quiet,
     reset_detected: false,
   },
+  "census-block-hash-form": {
+    complete: true,
+    status: "complete",
+    covered: [r(0, 99)],
+    gaps: [],
+    totals: counts({ escrows_opened: 1, escrows_released: 1 }),
+    by_account: { [alice]: { escrows_opened: 1, escrows_released: 1 } },
+    ...quiet,
+    malformed_dropped: 2,
+    reset_detected: false,
+  },
 };
 
 /** Fixtures the census must refuse, with what the refusal must name. */
 const REFUSING: Record<string, RegExp> = {
   "census-invalid-page": /next_page is missing/,
   "census-negative-page": /page -1 is negative/,
-  "census-unreadable-page": /unreadable event page file\(s\): event-pages\/01-unreadable\.json: /,
-  "census-nonstandard-json": /unreadable event page file\(s\): event-pages\/01-nan-index\.json: /,
+  "census-unreadable-page": /unusable event page file\(s\): event-pages\/01-unreadable\.json: /,
+  "census-nonstandard-json": /unusable event page file\(s\): event-pages\/01-nan-index\.json: /,
+  "census-dotfile-page": /unusable event page file\(s\): event-pages\/\.01\.json: not a page file/,
+  "census-unsafe-integer": /event page 0: to_block is missing or not a safe integer/,
 };
 
 /** The raw text of one fixture page file, exactly as written by hand. */
@@ -288,6 +301,15 @@ describe("census fixtures", () => {
     expect(blind.totals.escrows_released).toBe(1);
   });
 
+  it("census-dotfile-page refuses only because of its dotfile", async () => {
+    const { pages, opts } = await load("census-dotfile-page");
+    expect(opts.unreadablePages).toEqual([expect.stringMatching(/^event-pages\/\.01\.json: not a page file/)]);
+    const blind = census(pages, { ...opts, unreadablePages: [] });
+    expect(blind.complete).toBe(true);
+    expect(blind.totals.escrows_opened).toBe(1);
+    expect(blind.duplicates_dropped).toBe(0);
+  });
+
   it("census-nonstandard-json refuses only because of its file with NaN in it", async () => {
     const { pages, opts } = await load("census-nonstandard-json");
     expect(opts.unreadablePages).toHaveLength(1);
@@ -350,6 +372,30 @@ describe("hand written fixtures keep their literal JSON text", () => {
     const page = JSON.parse(rawPage("census-block-number-missing", "00-page-0.json")) as { events: Record<string, unknown>[] };
     expect(page.events.filter((e) => !Object.hasOwn(e, "block_number"))).toHaveLength(2);
     expect(page.events.filter((e) => Object.hasOwn(e, "block_number") && e.block_number === null)).toHaveLength(1);
+  });
+
+  it("census-unsafe-integer still holds 9007199254740993, which JSON.parse cannot read exactly", () => {
+    const text = rawPage("census-unsafe-integer", "00.json");
+    expect(text).toMatch(/"to_block":\s*9007199254740993\s*,/);
+    expect(text).toMatch(/"block_number":\s*9007199254740993\s*,/);
+    const parsed = JSON.parse(text) as { to_block: number };
+    expect(parsed.to_block).toBe(2 ** 53);
+    expect(Number.isSafeInteger(parsed.to_block)).toBe(false);
+  });
+
+  it("census-block-hash-form still holds an upper case hash and a short hash beside valid ones", () => {
+    const page = JSON.parse(rawPage("census-block-hash-form", "00-page-0.json")) as { events: { block_hash: string }[] };
+    const hashes = page.events.map((e) => e.block_hash);
+    expect(hashes.filter((h) => /^0x[0-9a-f]{64}$/.test(h))).toHaveLength(2);
+    expect(hashes).toContain("0xabc");
+    expect(hashes.filter((h) => /^0x[0-9A-F]{64}$/.test(h) && /[A-F]/.test(h))).toHaveLength(1);
+    expect(hashes[1]!.toLowerCase()).toBe(hashes[0]);
+  });
+
+  it("census-dotfile-page still holds a page file whose name starts with a dot, beside a normal one", () => {
+    expect(readdirSync(join(FIXTURES, "census-dotfile-page", "event-pages")).sort()).toEqual([".01.json", "00.json"]);
+    const dot = JSON.parse(rawPage("census-dotfile-page", ".01.json")) as { page: number; events: unknown[] };
+    expect([dot.page, dot.events.length]).toEqual([0, 2]);
   });
 });
 
@@ -572,9 +618,22 @@ describe("3.1 clause 4: events outside the request or their page are skipped, no
     expect(rep.notes).toContain("1 event(s) outside the request or their page's range were skipped");
   });
 
-  it("skips an integer block_number outside its page's range, even inside the request", () => {
+  it("skips an integer block_number above its page's range, even inside the request", () => {
     const rep = census([pg(0, 9, 0, null, [ev(5, 0), ev(15, 0)]), pg(10, 19, 0, null, [])], opts(0, 19));
     expect(rep.totals.escrows_opened).toBe(1);
+  });
+
+  it("skips an integer block_number below its page's range, even inside the request", () => {
+    const rep = census([pg(0, 9, 0, null, []), pg(10, 19, 0, null, [ev(5, 0), ev(15, 0)])], opts(0, 19));
+    expect(rep.complete).toBe(true);
+    expect(rep.totals.escrows_opened).toBe(1);
+    expect(rep.malformed_dropped).toBe(0);
+    expect(rep.notes).toContain("1 event(s) outside the request or their page's range were skipped");
+  });
+
+  it("keeps events on the edges of the page's range", () => {
+    const rep = census([pg(10, 19, 0, null, [ev(10, 0), ev(19, 0)])], opts(0, 19));
+    expect(rep.totals.escrows_opened).toBe(2);
   });
 
   it("keeps a null block_number on a chain that intersects the request", () => {
@@ -651,10 +710,24 @@ describe("3.1 clause 7: malformed events", () => {
     expect(rep.by_account).toEqual({});
   });
 
-  it("a short block_hash is not malformed: the rule asks only for a string that is not empty", () => {
-    const rep = census([pg(0, 9, 0, null, [ev(1, 0, "EscrowOpened", { block_hash: "0xabc" })])], opts(0, 9));
-    expect(rep.malformed_dropped).toBe(0);
-    expect(rep.totals.escrows_opened).toBe(1);
+  it("a block_hash must be 0x and 64 lower case hex digits, as the escrow rules read it", () => {
+    const good = hash(1);
+    const forms: [string, string][] = [
+      ["upper case", good.toUpperCase().replace("0X", "0x")],
+      ["0X prefix", good.replace("0x", "0X")],
+      ["short", "0xabc"],
+      ["no prefix", good.slice(2)],
+      ["65 digits", good + "0"],
+      ["63 digits", good.slice(0, -1)],
+      ["not hex", good.slice(0, -1) + "g"],
+    ];
+    for (const [what, block_hash] of forms) {
+      const rep = census([pg(0, 9, 0, null, [ev(1, 0, "EscrowOpened", { block_hash })])], opts(0, 9));
+      expect(rep.malformed_dropped, what).toBe(1);
+      expect(rep.totals.escrows_opened, what).toBe(0);
+    }
+    const ok = census([pg(0, 9, 0, null, [ev(1, 0, "EscrowOpened", { block_hash: good })])], opts(0, 9));
+    expect([ok.malformed_dropped, ok.totals.escrows_opened]).toEqual([0, 1]);
   });
 });
 
@@ -874,7 +947,7 @@ describe("3.1 clause 12: an unreadable event page file refuses the whole census"
         unreadablePages: ["event-pages/02.json: Unexpected end of JSON input", "event-pages/05.json: Unexpected token"],
       });
     expect(go).toThrow(CensusRefused);
-    expect(go).toThrow("unreadable event page file(s): event-pages/02.json: Unexpected end of JSON input; event-pages/05.json: Unexpected token");
+    expect(go).toThrow("unusable event page file(s): event-pages/02.json: Unexpected end of JSON input; event-pages/05.json: Unexpected token");
   });
 
   it("refuses even when no page could be read at all", () => {
@@ -946,5 +1019,36 @@ describe("3.1 clause 14: integers are judged by value", () => {
     expect(() => census([half], opts(0, 9))).toThrow(CensusRefused);
     expect(census([pg(0, 9, 0, null, [ev(1, 0, "EscrowOpened", { index: true })])], opts(0, 9)).malformed_dropped).toBe(1);
     expect(census([pg(0, 9, 0, null, [ev(1, 0, "EscrowOpened", { block_number: false })])], opts(0, 9)).malformed_dropped).toBe(1);
+  });
+
+  // 2^53 is the smallest positive integer that is not safe; Number.MAX_SAFE_INTEGER is 2^53 less 1.
+  const BIG = 2 ** 53;
+  const MAX = Number.MAX_SAFE_INTEGER;
+
+  it("a page field past the safe range refuses the census", () => {
+    for (const field of ["from_block", "to_block", "page", "next_page"]) {
+      const bad = { ...pg(0, 9, 0, null, []), [field]: field === "from_block" ? -BIG : BIG };
+      expect(() => census([bad], opts(0, 9)), field).toThrow(new RegExp(`${field} is missing or (not|neither) a safe integer`));
+    }
+  });
+
+  it("an event field past the safe range makes the event malformed, never skipped", () => {
+    const rep = census([pg(0, 9, 0, null, [ev(1, BIG), ev(BIG, 0), ev(1, 1)])], opts(0, 9));
+    expect(rep.malformed_dropped).toBe(2);
+    expect(rep.totals.escrows_opened).toBe(1);
+    expect(rep.notes.some((n) => n.includes("skipped"))).toBe(false);
+  });
+
+  it("the largest safe values count, and coverage stays exact", () => {
+    const rep = census([pg(0, MAX, 0, null, [ev(MAX, MAX)])], opts(0, MAX));
+    expect(rep.complete).toBe(true);
+    expect(rep.covered).toEqual([r(0, MAX)]);
+    expect(rep.requested_blocks).toBe(BIG);
+    expect(rep.covered_blocks).toBe(BIG);
+    expect(rep.totals.escrows_opened).toBe(1);
+  });
+
+  it("a request past the safe range is refused, as in the verifier's input with to_block 2^53", () => {
+    expect(() => census([], opts(0, BIG))).toThrow(/needs safe integer from_block and to_block/);
   });
 });

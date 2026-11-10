@@ -1,0 +1,11 @@
+{
+  "scenario": "census-dotfile-page",
+  "description": "Synthetic, made up for a test. Request 0 to 99. The pinned genesis is the FLOP devnet genesis (DEVNET_GENESIS in src/status.ts); every event and block hash is made up. Clause numbers refer to RULES.md section 3.1. The page files are written by hand. event-pages holds 00.json, a complete page 0 for blocks 0 to 99 with one open, and .01.json, a second copy of page 0 with one more open, saved under a name that starts with a dot. Every entry in event-pages must be a page file, a regular file named *.json that does not start with a dot (clause 15), so the dotfile refuses the whole census: it may be a page that was meant to count. Read as a page, it would have added an open and a duplicate. Expected: the census refuses; no totals.",
+  "now": "2026-11-10T00:00:00.000Z",
+  "synthetic": true,
+  "census_request": {
+    "from_block": 0,
+    "to_block": 99
+  },
+  "pinned_genesis": "0x99c172c095340ace980631f9123544c6bebd4839f3437e463533422d8be2d631"
+}

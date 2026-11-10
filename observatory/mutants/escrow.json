@@ -66,7 +66,7 @@
   {
     "id": "escrow-other-genesis-counts",
     "file": "src/escrow.ts",
-    "find": "const onPinned = (p[\"genesis\"] as string).toLowerCase() === pinned;",
+    "find": "const onPinned = p[\"genesis\"] === pinned;",
     "replace": "const onPinned = true;",
     "test": "test/escrow.test.ts",
     "why": "Events from another genesis must be excluded."
@@ -74,8 +74,8 @@
   {
     "id": "escrow-no-dedupe",
     "file": "src/escrow.ts",
-    "find": "const key = `${pinned}|${ev.block_hash.toLowerCase()}|${ev.index}`;",
-    "replace": "const key = `${pinned}|${ev.block_hash.toLowerCase()}|${ev.index}|${groups.size}`;",
+    "find": "const key = `${pinned}|${ev.block_hash}|${ev.index}`;",
+    "replace": "const key = `${pinned}|${ev.block_hash}|${ev.index}|${groups.size}`;",
     "test": "test/escrow.test.ts",
     "why": "The same event seen twice must count once."
   },
@@ -122,7 +122,7 @@
   {
     "id": "escrow-malformed-terminal-no-conflict",
     "file": "src/escrow.ts",
-    "find": "if (method !== OPENED && copies.some((c) => c.finalized)) suspectTerminals.add(method);",
+    "find": "if (m !== OPENED && copies.some((x) => x.finalized)) suspectTerminals.add(m);",
     "replace": "",
     "test": "test/escrow.test.ts",
     "why": "A finalized terminal event whose id does not parse is conflicting evidence."
@@ -142,5 +142,93 @@
     "replace": "c.block_number > height && false)) {",
     "test": "test/escrow.test.ts",
     "why": "An event above the finalized height is not finalized evidence."
+  },
+  {
+    "id": "escrow-unparsable-copy-hidden-by-disagreement",
+    "file": "src/escrow.ts",
+    "find": "    for (const c of copies) {\n      if (!c.escrowEvent || c.id.ok) continue;",
+    "replace": "    for (const c of signatures.size > 1 ? [] : copies) {\n      if (!c.escrowEvent || c.id.ok) continue;",
+    "test": "test/escrow.test.ts",
+    "why": "An unparsable finalized terminal copy counts whatever the other copies say (U-new-1)."
+  },
+  {
+    "id": "escrow-two-refunds-no-conflict",
+    "file": "src/escrow.ts",
+    "find": "if (refunded.length > 1) conflicts.push(",
+    "replace": "if (refunded.length > 2) conflicts.push(",
+    "test": "test/escrow.test.ts",
+    "why": "Two distinct finalized refunds are conflicting evidence (U-new-2)."
+  },
+  {
+    "id": "escrow-two-releases-no-conflict",
+    "file": "src/escrow.ts",
+    "find": "if (released.length > 1) conflicts.push(",
+    "replace": "if (released.length > 2) conflicts.push(",
+    "test": "test/escrow.test.ts",
+    "why": "Two distinct finalized releases are conflicting evidence."
+  },
+  {
+    "id": "escrow-two-opens-no-conflict",
+    "file": "src/escrow.ts",
+    "find": "} else if (opened.length > 1) {",
+    "replace": "} else if (false) {",
+    "test": "test/escrow.test.ts",
+    "why": "Two distinct finalized opens are conflicting evidence and the note must say so (U-new-2)."
+  },
+  {
+    "id": "escrow-refund-ignores-malformed-release",
+    "file": "src/escrow.ts",
+    "find": "if (suspectTerminals.has(RELEASED)) {",
+    "replace": "if (false) {",
+    "test": "test/escrow.test.ts",
+    "why": "A malformed finalized release contradicts refunded (U-new-2)."
+  },
+  {
+    "id": "escrow-claim-ignores-malformed-refund",
+    "file": "src/escrow.ts",
+    "find": "if (suspectTerminals.has(REFUNDED)) {",
+    "replace": "if (false) {",
+    "test": "test/escrow.test.ts",
+    "why": "A malformed finalized refund contradicts claimed."
+  },
+  {
+    "id": "escrow-outside-page-range-counts",
+    "file": "src/escrow.ts",
+    "find": "(ev.block_number < fromBlock || ev.block_number > toBlock)) {",
+    "replace": "(false)) {",
+    "test": "test/escrow.test.ts",
+    "why": "An event outside its page's block range is not evidence (U-new-4)."
+  },
+  {
+    "id": "escrow-below-page-range-counts",
+    "file": "src/escrow.ts",
+    "find": "(ev.block_number < fromBlock || ev.block_number > toBlock)) {",
+    "replace": "(ev.block_number > toBlock)) {",
+    "test": "test/escrow.test.ts",
+    "why": "The page range bounds evidence from below as well as above."
+  },
+  {
+    "id": "escrow-genesis-case-folded",
+    "file": "src/escrow.ts",
+    "find": "const onPinned = p[\"genesis\"] === pinned;",
+    "replace": "const onPinned = (p[\"genesis\"] as string).toLowerCase() === pinned;",
+    "test": "test/escrow.test.ts",
+    "why": "Genesis values are compared exactly as written (U-new-4)."
+  },
+  {
+    "id": "escrow-block-hash-case-accepted",
+    "file": "src/escrow.ts",
+    "find": "const LOWER_HASH_RE = /^0x[0-9a-f]{64}$/;",
+    "replace": "const LOWER_HASH_RE = /^0x[0-9a-fA-F]{64}$/;",
+    "test": "test/escrow.test.ts",
+    "why": "Block hashes and the pinned genesis have one accepted spelling, lower case hex."
+  },
+  {
+    "id": "escrow-unbounded-note-dropped",
+    "file": "src/escrow.ts",
+    "find": "if (height === null && evidence.length > 0) {",
+    "replace": "if (false) {",
+    "test": "test/escrow.test.ts",
+    "why": "Evidence with no finalized height must say it is not bounded (U-new-3)."
   }
 ]

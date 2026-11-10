@@ -124,7 +124,17 @@ export class FixtureSource implements Source {
     let eventPages: EventPage[] | undefined;
     if (existsSync(pagesDir)) {
       eventPages = [];
-      for (const name of readdirSync(pagesDir).filter((n) => n.endsWith(".json")).sort()) {
+      const entries = readdirSync(pagesDir, { withFileTypes: true }).sort((x, y) => (x.name < y.name ? -1 : x.name > y.name ? 1 : 0));
+      for (const entry of entries) {
+        const name = entry.name;
+        // RULES.md 3.1 clause 15: anything else in event-pages may be a page meant to count, so it
+        // is reported, never skipped.
+        if (!entry.isFile() || name.startsWith(".") || !name.endsWith(".json")) {
+          const why = `event-pages/${name}: not a page file (a regular file named *.json, not starting with a dot)`;
+          loadErrors.push(why);
+          pageErrors.push(why);
+          continue;
+        }
         const page = read<EventPage>(join("event-pages", name), [loadErrors, pageErrors]);
         if (page !== undefined) eventPages.push(page);
       }

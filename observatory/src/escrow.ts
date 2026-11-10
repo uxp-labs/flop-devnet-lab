@@ -22,6 +22,13 @@
 // 3. If any copy in a group is not finalized, the event is pending, never proof (census
 //    clause 9). A missing or non boolean finalized flag means not finalized (census clause 8).
 //
+// 4. Genesis and block hashes are compared exactly as written and must be lower case hex.
+//    A page genesis in another spelling is another genesis. A block hash in another spelling
+//    is a malformed event. Escrow ids are matched without regard to case.
+// 5. An event whose block_number is outside its page's block range is not evidence.
+// 6. A null finalizedHeight means the evidence is not bounded by a finalized height, and
+//    a result with evidence says so in its notes.
+//
 // How the two "malformed" rules are read together
 // - A malformed event is never evidence. It cannot make an escrow funded, claimed or refunded.
 // - A malformed finalized terminal event on the pinned genesis that could be about this
@@ -48,10 +55,17 @@ const REFUNDED = "EscrowRefunded";
 const METHODS: readonly string[] = [OPENED, RELEASED, REFUNDED];
 
 const HASH_RE = /^0x[0-9a-fA-F]{64}$/;
+// Genesis and block hashes are compared exactly as written (census clause 5), so they have
+// one accepted spelling: lower case. Escrow ids are still matched without regard to case.
+const LOWER_HASH_RE = /^0x[0-9a-f]{64}$/;
 
 /** True for 0x plus 64 hex characters. */
 export function isHash32(value: unknown): value is string {
   return typeof value === "string" && HASH_RE.test(value);
+}
+
+function isLowerHash32(value: unknown): value is string {
+  return typeof value === "string" && LOWER_HASH_RE.test(value);
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -77,7 +91,7 @@ function readEscrowId(data: unknown): IdRead {
 
 /** Structural problems that leave an event without an identity. Null when it has one. */
 function structureProblem(ev: Record<string, unknown>): string | null {
-  if (!isHash32(ev["block_hash"])) return "block_hash is not 0x plus 64 hex";
+  if (!isLowerHash32(ev["block_hash"])) return "block_hash is not 0x plus 64 lower case hex";
   const index = ev["index"];
   if (typeof index !== "number" || !Number.isInteger(index) || index < 0) return "index is not a whole number";
   const n = ev["block_number"];
@@ -163,10 +177,10 @@ export function escrowState(
     return unverified(shownId, ["escrow id is not 0x plus 64 hex; nothing was looked up"], opts);
   }
   const id = escrowId.toLowerCase();
-  if (!isHash32(opts.pinnedGenesis)) {
-    return unverified(id, ["pinned genesis is not 0x plus 64 hex; no event can count"], opts);
+  if (!isLowerHash32(opts.pinnedGenesis)) {
+    return unverified(id, ["pinned genesis is not 0x plus 64 lower case hex; no event can count"], opts);
   }
-  const pinned = opts.pinnedGenesis.toLowerCase();
+  const pinned = opts.pinnedGenesis;
   const height = typeof opts.finalizedHeight === "number" ? opts.finalizedHeight : null;
   const pageList: readonly unknown[] = Array.isArray(pages) ? pages : [];
 
@@ -196,6 +210,7 @@ export function escrowState(
   const notes: string[] = [];
   const groups = new Map<string, Copy[]>();
   let otherGenesis = 0;
+  let outsideRange = 0;
   const malformedNotes: string[] = [];
   // Malformed finalized terminal events on the pinned genesis that could be about this escrow.
   const suspectTerminals = new Set<string>();
@@ -203,7 +218,10 @@ export function escrowState(
   for (const page of pageList) {
     if (pageProblem(page) !== null) continue;
     const p = page as Record<string, unknown>;
-    const onPinned = (p["genesis"] as string).toLowerCase() === pinned;
+    // Exact comparison, as written. A genesis in another spelling is another genesis.
+    const onPinned = p["genesis"] === pinned;
+    const fromBlock = p["from_block"] as number;
+    const toBlock = p["to_block"] as number;
     for (const raw of p["events"] as unknown[]) {
       if (!isRecord(raw)) {
         if (onPinned) malformedNotes.push("an event that is not an object");
@@ -227,14 +245,19 @@ export function escrowState(
         continue;
       }
       const ev = raw as unknown as RawEvent;
-      const key = `${pinned}|${ev.block_hash.toLowerCase()}|${ev.index}`;
+      // An event outside its page's block range is not evidence (census clause 4).
+      if (typeof ev.block_number === "number" && (ev.block_number < fromBlock || ev.block_number > toBlock)) {
+        if (escrowEvent && !(idRead.ok && idRead.id !== id)) outsideRange++;
+        continue;
+      }
+      const key = `${pinned}|${ev.block_hash}|${ev.index}`;
       const copy: Copy = {
         section: raw["section"],
         method,
         escrowEvent,
         id: idRead,
         finalized: raw["finalized"] === true,
-        block_hash: ev.block_hash.toLowerCase(),
+        block_hash: ev.block_hash,
         block_number: typeof ev.block_number === "number" ? ev.block_number : null,
         index: ev.index,
       };
@@ -261,6 +284,16 @@ export function escrowState(
       // A block hash fixes the block number, so copies must agree on it. Null against a number disagrees.
       signatures.add(`${String(c.section)}|${String(c.method)}|${idPart}|${String(c.block_number)}`);
     }
+    // A finalized terminal copy whose escrow id does not parse could contradict any escrow.
+    // This holds for every such copy, whatever the other copies of the event say.
+    const unparsable = new Set<string>();
+    for (const c of copies) {
+      if (!c.escrowEvent || c.id.ok) continue;
+      const m = c.method as string;
+      unparsable.add(`${SECTION}.${m} (${c.id.why})`);
+      if (m !== OPENED && copies.some((x) => x.finalized)) suspectTerminals.add(m);
+    }
+    for (const u of unparsable) malformedNotes.push(u);
     if (signatures.size > 1) {
       // Copies of one event disagree. Every escrow any copy names is unverified.
       if (named.has(id)) {
@@ -271,11 +304,7 @@ export function escrowState(
     if (!first.escrowEvent) continue;
     const method = first.method as string;
     const name = `${SECTION}.${method}`;
-    if (!first.id.ok) {
-      malformedNotes.push(`${name} (${first.id.why})`);
-      if (method !== OPENED && copies.some((c) => c.finalized)) suspectTerminals.add(method);
-      continue;
-    }
+    if (!first.id.ok) continue; // noted above, never evidence
     if (first.id.id !== id) continue; // about another escrow
     duplicates += copies.length - 1;
     if (copies.some((c) => c.finalized !== true)) {
@@ -304,6 +333,9 @@ export function escrowState(
   if (pending > 0) notes.push(`${plural(pending, "event")} for this escrow not finalized: pending, not proof`);
   if (aboveHeight > 0) {
     notes.push(`${plural(aboveHeight, "event")} above the finalized height ignored`);
+  }
+  if (outsideRange > 0) {
+    notes.push(`${plural(outsideRange, "event")} outside its page's block range ignored`);
   }
   if (duplicates > 0) notes.push(`${plural(duplicates, "duplicate event")} counted once`);
   for (const m of malformedNotes) notes.push(`malformed event ignored: ${m}`);
@@ -352,6 +384,9 @@ export function escrowState(
   }
 
   for (const c of conflicts) notes.push(`conflicting evidence: ${c}`);
+  if (height === null && evidence.length > 0) {
+    notes.push("evidence is not bounded by a finalized height: no finalized height from an RPC head on the pinned genesis");
+  }
 
   return {
     schema: ESCROW_SCHEMA,

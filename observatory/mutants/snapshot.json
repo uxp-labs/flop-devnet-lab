@@ -34,10 +34,10 @@
   {
     "id": "snapshot-escrows-ignore-finalized-height",
     "file": "src/snapshot.ts",
-    "find": "      finalizedHeight: status.finalized_height,\n",
-    "replace": "      finalizedHeight: null,\n",
+    "find": "      finalizedHeight: status.genesis.rpc !== null && status.genesis.rpc === status.genesis.pinned ? status.finalized_height : null,",
+    "replace": "      finalizedHeight: null,",
     "test": "test/snapshot.test.ts",
-    "why": "escrow evidence is bounded by the finalized height the status read"
+    "why": "escrow evidence is bounded by the finalized height the status read on the pinned genesis"
   },
   {
     "id": "snapshot-pin-mixes-sources",
@@ -46,5 +46,29 @@
     "replace": "    genesis: status.genesis.rpc ?? status.genesis.faucet,\n",
     "test": "test/snapshot.test.ts",
     "why": "the pin's genesis must come from the same source as its finalized head"
+  },
+  {
+    "id": "snapshot-other-chain-height",
+    "file": "src/snapshot.ts",
+    "find": "      finalizedHeight: status.genesis.rpc !== null && status.genesis.rpc === status.genesis.pinned ? status.finalized_height : null,",
+    "replace": "      finalizedHeight: status.finalized_height,",
+    "test": "test/snapshot.test.ts",
+    "why": "another chain's finalized height must never bound pinned genesis escrows"
+  },
+  {
+    "id": "source-dotfile-page-read",
+    "file": "src/source.ts",
+    "find": "if (!entry.isFile() || name.startsWith(\".\") || !name.endsWith(\".json\")) {",
+    "replace": "if (!entry.isFile() || !name.endsWith(\".json\")) {",
+    "test": "test/snapshot.test.ts",
+    "why": "a dotfile in event-pages must be reported, not read or skipped"
+  },
+  {
+    "id": "source-other-files-skipped",
+    "file": "src/source.ts",
+    "find": "          loadErrors.push(why);\n          pageErrors.push(why);\n          continue;",
+    "replace": "          continue;",
+    "test": "test/snapshot.test.ts",
+    "why": "an entry that is not a page file must be reported, never skipped silently"
   }
 ]

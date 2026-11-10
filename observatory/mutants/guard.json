@@ -70,5 +70,61 @@
     "replace": "",
     "test": "test/guard.test.ts",
     "why": "the source scan must catch a static import of a network module"
+  },
+  {
+    "id": "setup-dgram-socket-unblocked",
+    "file": "test/setup.ts",
+    "find": "for (const name of [\"send\", \"bind\", \"connect\"]) dgramSocket[name] = blocked(\"network\", `dgram.Socket.${name}`);\n",
+    "replace": "",
+    "test": "test/guard.test.ts",
+    "why": "a dgram socket made directly must still be refused"
+  },
+  {
+    "id": "setup-dns-resolver-unblocked",
+    "file": "test/setup.ts",
+    "find": "    (proto as Record<string, unknown>)[name] = blocked(\"network\", `${prefix}.${name}`);\n",
+    "replace": "",
+    "test": "test/guard.test.ts",
+    "why": "a dns.Resolver query must be refused"
+  },
+  {
+    "id": "setup-childprocess-prototype-unblocked",
+    "file": "test/setup.ts",
+    "find": "require(\"node:child_process\").ChildProcess.prototype.spawn = blocked(\"process\", \"child_process.ChildProcess.spawn\");\n",
+    "replace": "",
+    "test": "test/guard.test.ts",
+    "why": "ChildProcess.prototype.spawn must be refused"
+  },
+  {
+    "id": "setup-binding-unblocked",
+    "file": "test/setup.ts",
+    "find": "  NATIVE.has(name) ? blocked(\"process\", \"process.binding\")(name) : realBinding(name);",
+    "replace": "  realBinding(name);",
+    "test": "test/guard.test.ts",
+    "why": "process.binding must not reach the native spawn layer"
+  },
+  {
+    "id": "setup-inspector-unblocked",
+    "file": "test/setup.ts",
+    "find": "block(require(\"node:inspector\"), [\"open\"], \"network\", \"inspector\");\n",
+    "replace": "",
+    "test": "test/guard.test.ts",
+    "why": "inspector.open opens a listener and must be refused"
+  },
+  {
+    "id": "scan-misses-computed-import",
+    "file": "test/guard.test.ts",
+    "find": "    /\\bimport\\s*\\((?!\\s*([\"'])[^\"'`]*\\1\\s*\\))/,\n",
+    "replace": "",
+    "test": "test/guard.test.ts",
+    "why": "the scan must catch an import() with a computed argument"
+  },
+  {
+    "id": "scan-misses-getbuiltinmodule",
+    "file": "test/guard.test.ts",
+    "find": "    /\\bgetBuiltinModule\\b/,\n",
+    "replace": "",
+    "test": "test/guard.test.ts",
+    "why": "the scan must catch process.getBuiltinModule"
   }
 ]

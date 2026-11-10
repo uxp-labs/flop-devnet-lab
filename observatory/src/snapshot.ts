@@ -40,7 +40,9 @@ export async function buildSnapshot(parts: SnapshotParts, o: SnapshotOptions): P
     const pages = await parts.escrows.source.eventPages();
     escrows = escrowStates(parts.escrows.ids, pages, {
       pinnedGenesis: o.pinnedGenesis,
-      finalizedHeight: status.finalized_height,
+      // RULES.md section 2: a finalized height bounds the evidence only when it comes from an RPC
+      // head on the pinned genesis. Another chain's height is never applied to these escrows.
+      finalizedHeight: status.genesis.rpc !== null && status.genesis.rpc === status.genesis.pinned ? status.finalized_height : null,
       observedAt: o.now,
       trust: parts.escrows.source.trust,
       // An unreadable page could hold a conflicting event, so it is never dropped silently.

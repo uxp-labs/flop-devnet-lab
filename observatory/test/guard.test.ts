@@ -5,6 +5,7 @@ import * as dns from "node:dns";
 import { readdirSync, readFileSync } from "node:fs";
 import * as http from "node:http";
 import * as http2 from "node:http2";
+import * as inspector from "node:inspector";
 import * as https from "node:https";
 import { request as httpsRequest } from "node:https";
 import * as net from "node:net";
@@ -91,6 +92,28 @@ describe("every network and process path is blocked at runtime (RULES section 4)
     ["child_process.fork", () => childProcess.fork("x.js"), "process", "child_process.fork"],
     ["a worker thread", () => new Worker("x.js"), "process", "worker_threads.Worker"],
     ["an https binding imported before the block was set", () => earlyBindings.httpsRequest()("https://canary.invalid/"), "network", "https.request"],
+    ["a dgram.Socket made directly, with its own lookup", () => {
+      const sock = new dgram.Socket({ type: "udp4", lookup: (_h: string, _o: unknown, cb: (e: null, a: string, f: number) => void) => cb(null, "127.0.0.1", 4) });
+      try {
+        return sock.send("x", 9, "canary.invalid");
+      } finally {
+        sock.close();
+      }
+    }, "network", "dgram.Socket.send"],
+    ["a dgram.Socket bind", () => {
+      const sock = new dgram.Socket({ type: "udp4" });
+      try {
+        return sock.bind(0);
+      } finally {
+        sock.close();
+      }
+    }, "network", "dgram.Socket.bind"],
+    ["a dns.Resolver query", () => new dns.Resolver().resolve4("canary.invalid", () => undefined), "network", "dns.Resolver.resolve4"],
+    ["a dns.promises.Resolver query", () => new dns.promises.Resolver().resolve4("canary.invalid"), "network", "dns.promises.Resolver.resolve4"],
+    ["ChildProcess.prototype.spawn", () => new childProcess.ChildProcess().spawn({ file: "true", args: ["true"], stdio: "ignore" } as never), "process", "child_process.ChildProcess.spawn"],
+    ["process.binding spawn_sync", () => (process as unknown as { binding: (n: string) => unknown }).binding("spawn_sync"), "process", "process.binding"],
+    ["process.dlopen", () => process.dlopen({ exports: {} } as never, "/nonexistent/canary.node"), "process", "process.dlopen"],
+    ["inspector.open", () => inspector.open(0, "127.0.0.1"), "network", "inspector.open"],
   ];
   // The label proves the block sits where it claims to, not only at some deeper layer.
   it.each(cases)("%s throws and is recorded", (_name, call, kind, label) => {
@@ -103,15 +126,22 @@ describe("every network and process path is blocked at runtime (RULES section 4)
 
 describe("source scan", () => {
   // M0 has no transport at all. This keeps it that way until M1 adds one behind the guard.
-  const NET = "(?:http|https|http2|net|tls|dgram|dns|dns/promises|child_process|worker_threads|cluster|undici|ws|axios|node-fetch)";
+  const NET = "(?:http|https|http2|net|tls|dgram|dns|dns/promises|child_process|worker_threads|cluster|inspector|vm|module|undici|ws|axios|node-fetch)";
   const forbidden = [
     /\bfetch\s*\(/,
     /new\s+WebSocket\b/,
     new RegExp(`from\\s*["'](?:node:)?${NET}["']`),
     new RegExp(`import\\s*\\(?\\s*["'](?:node:)?${NET}["']`),
     new RegExp(`require\\s*\\(\\s*["'](?:node:)?${NET}["']`),
-    /\bprocess\.binding\b/,
+    /\bprocess\.(?:binding|_linkedBinding|dlopen)\b/,
     /internalBinding/,
+    /\bgetBuiltinModule\b/,
+    /\bcreateRequire\b/,
+    // import() or require() whose argument is anything but one plain string literal
+    /\bimport\s*\((?!\s*(["'])[^"'`]*\1\s*\))/,
+    /\brequire\s*\((?!\s*(["'])[^"'`]*\1\s*\))/,
+    /\beval\s*\(/,
+    /\bnew\s+Function\s*\(/,
     /signAndSend/,
     /\bsignRaw\b/,
     /\bsignPayload\b/,
@@ -137,6 +167,10 @@ describe("source scan", () => {
     for (const re of forbidden) expect(text, `${file} matches ${re}`).not.toMatch(re);
   });
 
+  it("allows a plain dynamic import of a local module", () => {
+    expect(forbidden.some((re) => re.test('const t = await import("./types.js");'))).toBe(false);
+  });
+
   it("catches each kind of forbidden line it claims to", () => {
     const samples = [
       'import { request } from "node:https";',
@@ -146,6 +180,14 @@ describe("source scan", () => {
       "await api.tx.balances.transferKeepAlive(to, 1).signAndSend(pair);",
       "const sig = pair.sign(message);",
       "const keyring = new Keyring();",
+      'const https = process.getBuiltinModule("node:https");',
+      'const cp = createRequire(import.meta.url)("node:child_process");',
+      'const m = await import("node:" + "https");',
+      "const m = await import(`node:${name}`);",
+      "const m = require(name);",
+      'const r = eval("fetch(1)");',
+      'const f = new Function("return 1");',
+      'const s = process.binding("spawn_sync");',
     ];
     for (const line of samples) expect(forbidden.some((re) => re.test(line)), line).toBe(true);
   });
@@ -155,7 +197,7 @@ describe("source scan", () => {
   it("tools/recount.py imports nothing that reaches the network or starts a process", () => {
     const text = readFileSync(new URL("../tools/recount.py", import.meta.url), "utf8");
     const imports = [...text.matchAll(/^\s*(?:import|from)\s+([\w.]+)/gm)].map((m) => m[1]);
-    expect(imports.sort()).toEqual(["argparse", "glob", "json", "os", "sys"]);
+    expect(imports.sort()).toEqual(["argparse", "json", "os", "re", "sys"]);
     expect(text).not.toMatch(/\bos\.(?:system|popen|exec|spawn|fork)/);
     expect(text).not.toMatch(/__import__|importlib/);
   });

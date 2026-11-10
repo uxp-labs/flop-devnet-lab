@@ -21,6 +21,10 @@ check below to run and pass.
   is `unknown`; an unreadable body on a 5xx status is `down`.
 - Gateway: `ok` needs HTTP 200. 429 and 503 are `degraded`, any other 5xx is `down`, any other
   status is `degraded`, and no response is `unknown`.
+- Faucet and gateway freshness: `ok` also needs a reading time (`fetched_at`) that parses, is not
+  later than the snapshot time, and is at most the stale limit old. A reading older than that is
+  `degraded`. A reading time later than the snapshot time is a conflict and `degraded`. A reading
+  with no parsable time is `unknown`. Only HTTP 200 counts: 204 or any other 2xx is not `ok`.
 - RPC: when nothing was read it is `unknown`, or `down` when the read was tried and failed.
   Otherwise these checks apply:
   - the read had no error
@@ -59,7 +63,15 @@ check below to run and pass.
   note. One chain event is never evidence for two escrows.
 - A finalized `hasStation.EscrowReleased` or `hasStation.EscrowRefunded` on the pinned genesis
   whose escrow id does not parse cannot be tied to one escrow, so it could contradict any of them:
-  every escrow in the result that it could contradict is `unverified` with a note.
+  every escrow in the result that it could contradict is `unverified` with a note. This holds for
+  every such copy, whether the other copies of that event agree with it, disagree with it, or are
+  well formed. More conflicting evidence never gives a more confident answer.
+- An event whose integer `block_number` is outside its page's block range is not evidence. It is
+  ignored with a note, as census clause 4 skips it.
+- Genesis values and block hashes are compared exactly as written, as in census clause 5.
+- A finalized height bounds the evidence only when it comes from an RPC head on the pinned
+  genesis. Otherwise (the RPC was not read, or reports another genesis) `finalized_height` is
+  `null`, and a result with evidence notes that its evidence is not bounded by a finalized height.
 - If any copy of an event is not finalized, the event is pending, never proof. This is the same
   rule as census clause 9.
 - If any event page in the input could not be read or parsed, or is structurally invalid (census
@@ -118,10 +130,11 @@ check below to run and pass.
 5. Genesis values are compared exactly as written. Fixtures use lower case.
 6. `excluded_other_genesis` is the number of events on all pages of any other genesis, whatever
    their chain or finality. Those pages never add coverage.
-7. An event is malformed when it is not an object; when `section`, `method` or `block_hash` is
-   missing, not a string or empty; when `index` is missing, not an integer (a boolean is not an
-   integer) or negative; or when `block_number` is missing, or present but neither null nor an
-   integer. A non-object `data` is not malformed; the event simply has no account.
+7. An event is malformed when it is not an object; when `section` or `method` is missing, not a
+   string or empty; when `block_hash` is not `0x` followed by 64 lower case hex digits; when
+   `index` is missing, not an integer (a boolean is not an integer) or negative; or when
+   `block_number` is missing, or present but neither null nor an integer. A non-object `data` is
+   not malformed; the event simply has no account. The escrow rules read events the same way.
 8. A missing or non-boolean `finalized` means not finalized: the event is pending.
 9. All copies of one key form a group; `duplicates_dropped` adds copies minus one per group. If any
    copy is not finalized, the group is one pending event. If copies disagree on section, method
@@ -138,8 +151,14 @@ check below to run and pass.
     Neither is ever turned into a partial count.
 13. A request with a negative `from_block` or `from_block` greater than `to_block` is refused.
 14. An integer is a JSON number with no fractional part, judged by value: `1.0` is the integer 1,
-    `1.5` is not an integer, and a boolean is never an integer. This holds for every integer field
-    in these rules (`index`, `block_number`, `page`, `next_page`, `from_block`, `to_block`).
+    `1.5` is not an integer, and a boolean is never an integer. It must also be safe: from
+    -(2^53 - 1) to 2^53 - 1. A larger value is not an integer, so a page field holding one refuses
+    the census and an event field holding one makes the event malformed. This holds for every
+    integer field in these rules (`index`, `block_number`, `page`, `next_page`, `from_block`,
+    `to_block`) and for the request.
+15. Every entry in `event-pages/` must be a page file: a regular file whose name ends in `.json` and
+    does not start with a dot. Any other entry (a dotfile, another extension, a folder) refuses the
+    census and leaves every escrow `unverified`, because it may be a page that was meant to count.
 
 ## 4. Read only
 
@@ -151,9 +170,13 @@ Tests fail if any attempt is left in the log.
   WebSocket: `node:http`, `node:https` and `node:http2` requests, `node:net` and `node:tls`
   connections and listeners, `node:dgram` sockets, `node:dns` lookups, worker threads, and every
   `node:child_process` call (spawn, exec, execFile, fork and their sync forms). Named imports see
-  the block too.
+  the block too. So do the lower layers: `dgram.Socket` send, bind and connect, `dns.Resolver`
+  queries, `ChildProcess.prototype.spawn`, `process.binding`, `process.dlopen` and
+  `inspector.open`.
 - A source scan fails any `src` module, other than `guard.ts`, that imports one of those modules or
-  calls fetch, WebSocket, a signing API or a key API.
+  calls fetch, WebSocket, a signing API or a key API. It also fails the indirect forms:
+  `process.getBuiltinModule`, `createRequire`, an `import()` or `require()` whose argument is not
+  a plain string, `process.binding`, `eval` and `new Function`.
 - The harness canary proves that a test leaving any of these in the log fails: a fetch, an
   `node:https` request, a `node:net` connection, a child process, a refused RPC write, a refused
   signature and a refused spend.
@@ -166,6 +189,8 @@ blank on the page and `null` in JSON and MCP.
 - Each feed's payload (`status`, `escrows`, `census`, `drift`) equals the matching part of the
   snapshot exactly, every field included. MCP tool text equals the feed file byte for byte.
   `snapshot.json` equals the last line of the snapshot log, and its hash verifies.
+- Every `td` on the page carries `data-k`; a cell without one fails the check. The visible text of
+  every marked element, nested tags included, must match its value as rendered below.
 - Every value cell on the page carries `data-k`, the path of the value in the snapshot:
   `status.<field>` with nested fields joined by dots (`status.rpc.stale`, `status.genesis.faucet`),
   `escrow.<escrow_id>.<field>`, `census.<field>` and `census.totals.<kind>`, and

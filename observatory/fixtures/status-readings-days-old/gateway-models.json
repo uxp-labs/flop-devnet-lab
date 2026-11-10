@@ -1,0 +1,16 @@
+{
+  "http": 200,
+  "error": null,
+  "fetched_at": "2026-11-01T23:47:41Z",
+  "body": {
+    "object": "list",
+    "data": [
+      {
+        "id": "qwen/qwen2.5-0.5b-instruct"
+      },
+      {
+        "id": "qwen/qwen3-8b"
+      }
+    ]
+  }
+}

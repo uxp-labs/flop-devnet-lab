@@ -138,10 +138,18 @@
   {
     "id": "census-malformed-fields-accepted",
     "file": "src/census.ts",
-    "find": "if (!isText(section) || !isText(method) || !isText(block_hash)) return null;",
+    "find": "if (!isText(section) || !isText(method)) return null;",
     "replace": "if (false) return null;",
     "test": "test/census.test.ts",
-    "why": "Events missing section, method or block hash are no longer counted in malformed_dropped (clause 7)."
+    "why": "Events missing section or method are no longer counted in malformed_dropped (clause 7)."
+  },
+  {
+    "id": "census-block-hash-any-text",
+    "file": "src/census.ts",
+    "find": "return typeof v === \"string\" && /^0x[0-9a-f]{64}$/.test(v);",
+    "replace": "return isText(v);",
+    "test": "test/census.test.ts",
+    "why": "Any block_hash that is a string and not empty is accepted, though clause 7 requires 0x and 64 lower case hex digits, so the census would count an upper case or short hash that the escrow rules ignore."
   },
   {
     "id": "census-finalized-truthy",
@@ -186,9 +194,25 @@
   {
     "id": "census-fraction-is-integer",
     "file": "src/census.ts",
-    "find": "return typeof v === \"number\" && Number.isInteger(v);",
+    "find": "return typeof v === \"number\" && Number.isSafeInteger(v);",
     "replace": "return typeof v === \"number\" && Number.isFinite(v);",
     "test": "test/census.test.ts",
     "why": "A number with a fractional part, such as index 1.5, passes as an integer, though clause 14 judges integers by value and 1.5 is not one."
+  },
+  {
+    "id": "census-unsafe-integer-accepted",
+    "file": "src/census.ts",
+    "find": "return typeof v === \"number\" && Number.isSafeInteger(v);",
+    "replace": "return typeof v === \"number\" && Number.isInteger(v);",
+    "test": "test/census.test.ts",
+    "why": "An integer past 2^53 less 1 is accepted, though clause 14 says it is not an integer: JSON.parse rounds 2^53 plus 1 to 2^53, so a page could cover or count blocks it does not name, and coverage arithmetic loses precision."
+  },
+  {
+    "id": "census-below-page-range-kept",
+    "file": "src/census.ts",
+    "find": "return b < req.from_block || b > req.to_block || b < page.from_block || b > page.to_block;",
+    "replace": "return b < req.from_block || b > req.to_block || b > page.to_block;",
+    "test": "test/census.test.ts",
+    "why": "An event below its page's range is counted, though clause 4 skips an event outside its page's range on either side."
   }
 ]

@@ -19,14 +19,14 @@ and `SHA256SUMS`:
 | Step | Proves |
 |---|---|
 | install, typecheck, build | clean install from the lockfile and a clean compile |
-| test | unit, boundary and consistency tests. Every network and child process path is blocked at runtime (fetch, WebSocket, node:http, https, http2, net, tls, dgram, dns, child_process, worker threads), and any attempt left in the log, or any refused write, signature or spend, fails its file |
+| test | unit, boundary and consistency tests. Every network and child process path is blocked at runtime (fetch, WebSocket, node:http, https, http2, net, tls, dgram, dns, child_process, worker threads, and the lower layers: dgram and dns resolver objects, ChildProcess spawn, native bindings, process.dlopen, inspector), and any attempt left in the log, or any refused write, signature or spend, fails its file |
 | canary | the harness fails a throwaway test that leaves a fetch, an https request, a net connection, a child process, a refused RPC write, a refused signature or a refused spend; a clean throwaway test passes |
 | mutants | in a full copy of the repo layout, an unmutated control passes, then each injected bug (reset ignored, stale RPC, conflicts dropped, malformed escrow accepted, one event claiming two escrows, an unreadable page dropped, a partial census shown complete, ...) makes at least one test fail. A mutant that only breaks loading is never counted as caught |
 | mutants-canary | the mutation runner classifies a real bug, an equivalent change, a syntax error and a missing test correctly |
 | recount | the TypeScript census and an independent Python recount agree on every census fixture, including the ones both must refuse, and a nudged total is caught in every fixture that produces totals |
 | cli-checks | the command line passes unreadable pages to the census and escrows, refuses parts pinned to another chain, and reports the health rules |
-| snapshot, mcp, consistency | five real snapshots (healthy, reset, nothing read, degraded faucet, conflicting evidence), each rendered as feeds, page, snapshot log and a real MCP stdio transcript. Every page cell is resolved in the snapshot and compared; feeds equal the snapshot exactly; MCP equals the feeds byte for byte; the snapshot hash verifies |
-| consistency-canary | clean copies pass, and 14 tampered copies (a reset flipped on the page or in the feed, stale flipped, a conflict dropped, a census total nudged, an empty list shown blank, a key dropped or invented, the snapshot edited after hashing, ...) each fail |
+| snapshot, mcp, consistency | five real snapshots (healthy, reset, nothing read, degraded faucet, conflicting evidence), each rendered as feeds, page, snapshot log and a real MCP stdio transcript. Every page cell is resolved in the snapshot and compared, in data-v and in its whole visible text, and every td and span must carry data-k; feeds equal the snapshot exactly; MCP equals the feeds byte for byte; the snapshot hash verifies |
+| consistency-canary | clean copies pass, and 20 tampered copies (a reset flipped on the page or in the feed, stale flipped, a conflict dropped, a census total nudged, an empty list shown blank, a key dropped or invented, a wrong value hidden in a nested span or shown in a cell without data-k, the snapshot edited after hashing, ...) each fail |
 
 `SHA256SUMS` shows files were not changed after the run. It does not prove the run was honest.
 For that, rerun on the same revision in a fresh clone (or read the CI artifact) and compare

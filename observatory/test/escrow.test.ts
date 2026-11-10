@@ -101,19 +101,23 @@ function validate(schema: Schema, v: unknown, path = "$"): string[] {
 }
 
 describe("fixture scenarios", () => {
-  it("has all thirteen escrow scenarios", () => {
+  it("has all seventeen escrow scenarios", () => {
     expect(scenarios).toEqual([
       "escrows-block-number-disagrees",
       "escrows-conflicting",
       "escrows-duplicate",
       "escrows-finality-disagrees",
       "escrows-gateway-report-only",
+      "escrows-genesis-case",
       "escrows-invalid-page",
       "escrows-malformed",
       "escrows-one-event-two-escrows",
       "escrows-opened-only",
       "escrows-other-genesis",
+      "escrows-outside-page-range",
       "escrows-unfinalized-only",
+      "escrows-unparsable-copies-disagree",
+      "escrows-unparsable-copy-disagrees",
       "escrows-unreadable-page",
       "escrows-verification",
     ]);
@@ -146,7 +150,7 @@ describe("fixture scenarios", () => {
         checked++;
       }
     }
-    expect(checked).toBeGreaterThanOrEqual(24);
+    expect(checked).toBeGreaterThanOrEqual(30);
   });
 
   it("the schema check itself rejects bad objects", () => {
@@ -206,9 +210,12 @@ describe("finalized only", () => {
     expect(s.evidence.map((e) => e.event)).toEqual(["hasStation.EscrowOpened"]);
   });
   it("an event above the finalized height does not count", () => {
-    const s = escrowState(A, [page([ev("EscrowReleased", A, 2, { block_number: 2000 })])], opts);
+    // Inside the page's range (100 to 199) but above the finalized height.
+    const low = { ...opts, finalizedHeight: 150 };
+    const s = escrowState(A, [page([ev("EscrowReleased", A, 2, { block_number: 160 })])], low);
     expect(s.state).toBe("unverified");
     expect(s.notes.join(" ")).toContain("above the finalized height");
+    expect(escrowState(A, [page([ev("EscrowReleased", A, 2, { block_number: 150 })])], low).state).toBe("claimed");
   });
 });
 
@@ -224,10 +231,34 @@ describe("pinned genesis only", () => {
     expect(s.state).toBe("funded");
     expect(s.evidence.every((e) => e.genesis === G)).toBe(true);
   });
-  it("genesis and id comparison ignore hex case", () => {
-    const s = escrowState(A.toUpperCase().replace("0X", "0x"), [page([ev("EscrowOpened", A, 1)], G.toUpperCase().replace("0X", "0x"))], opts);
+  const upper = (h: string) => "0x" + h.slice(2).toUpperCase();
+  it("escrow ids are matched without regard to case", () => {
+    const s = escrowState(upper(A), [page([ev("EscrowOpened", upper(A), 1)])], opts);
     expect(s.state).toBe("funded");
     expect(s.escrow_id).toBe(A);
+  });
+  it("genesis is compared exactly: the pinned genesis in upper case is another genesis", () => {
+    const s = escrowState(A, [page([ev("EscrowOpened", A, 1), ev("EscrowReleased", A, 2)], upper(G))], opts);
+    expect(s.state).toBe("unverified");
+    expect(s.evidence).toEqual([]);
+    expect(s.notes.join(" ")).toContain("another genesis");
+  });
+  it("a pinned genesis that is not lower case hex verifies nothing", () => {
+    const s = escrowState(A, [page([ev("EscrowReleased", A, 2)], upper(G))], { ...opts, pinnedGenesis: upper(G) });
+    expect(s.state).toBe("unverified");
+    expect(s.evidence).toEqual([]);
+  });
+  it("block hashes are compared exactly: an upper case block hash is malformed, never evidence", () => {
+    const s = escrowState(A, [page([{ ...ev("EscrowReleased", A, 2), block_hash: upper(bh(171)) }])], opts);
+    expect(s.state).toBe("unverified");
+    expect(s.evidence).toEqual([]);
+    expect(s.notes.some((n) => n.startsWith("malformed event ignored"))).toBe(true);
+  });
+  it("fixture: the pinned genesis in upper case does not count", async () => {
+    const { expected, pages, o } = await loadScenario("escrows-genesis-case");
+    const [a] = escrowStates(expected.escrows.map((e) => e.id), pages, o) as [EscrowState];
+    expect(a.state).toBe("unverified");
+    expect(a.notes.join(" ")).toContain("another genesis");
   });
   it("a pinned genesis that does not parse verifies nothing", () => {
     const s = escrowState(A, [page([ev("EscrowOpened", A, 1)], "devnet")], { ...opts, pinnedGenesis: "devnet" });
@@ -592,8 +623,8 @@ describe("copies of one event must agree on block_number", () => {
     }
   });
   it("a copy above the finalized height cannot hide behind a lower number", () => {
-    const pages = [page([ev("EscrowReleased", A, 2, { block_number: 120 }), ev("EscrowReleased", A, 2, { block_number: 5000 })])];
-    expect(escrowState(A, pages, opts).state).toBe("unverified");
+    const pages = [page([ev("EscrowReleased", A, 2, { block_number: 120 }), ev("EscrowReleased", A, 2, { block_number: 160 })])];
+    expect(escrowState(A, pages, { ...opts, finalizedHeight: 150 }).state).toBe("unverified");
   });
   it("control: copies that agree, both null or both the same number, still count once", () => {
     const same = ev("EscrowReleased", A, 2, { block_number: 120 });
@@ -607,5 +638,136 @@ describe("copies of one event must agree on block_number", () => {
     expect(got.map((g) => g.state)).toEqual(["unverified", "unverified", "claimed"]);
     expect(got[0]?.notes.join(" ")).toContain("block number");
     expect(got[1]?.notes.join(" ")).toContain("block number");
+  });
+});
+
+describe("an unparsable terminal copy counts whatever the other copies say", () => {
+  const badRelease = ev("EscrowReleased", "0x12", 9);
+  it("control: alone it leaves a funded escrow unverified", () => {
+    const s = escrowState(B, [page([ev("EscrowOpened", B, 1), badRelease])], opts);
+    expect(s.state).toBe("unverified");
+  });
+  it("with a well formed copy naming another escrow, both are unverified", () => {
+    const pages = [page([ev("EscrowOpened", B, 1), badRelease, ev("EscrowReleased", A, 9)])];
+    const [a, b] = escrowStates([A, B], pages, opts) as [EscrowState, EscrowState];
+    expect(a.state).toBe("unverified");
+    expect(b.state).toBe("unverified");
+    expect(b.evidence).toEqual([]);
+    expect(b.notes.join(" ")).toContain("a malformed finalized terminal event could be about this escrow");
+  });
+  it("copy order does not matter", () => {
+    const pages = [page([ev("EscrowReleased", A, 9), badRelease, ev("EscrowOpened", B, 1)])];
+    expect(escrowState(B, pages, opts).state).toBe("unverified");
+  });
+  it("two unparsable copies that disagree on method both count", () => {
+    const pages = [page([ev("EscrowOpened", B, 1), badRelease, ev("EscrowRefunded", "0x34", 9)])];
+    const s = escrowState(B, pages, opts);
+    expect(s.state).toBe("unverified");
+    expect(s.notes.join(" ")).toContain("conflicting evidence");
+  });
+  it("an unparsable refund copy in a disagreeing group contradicts a claimed escrow", () => {
+    const pages = [page([ev("EscrowReleased", B, 2), ev("EscrowRefunded", "0x34", 9), ev("EscrowRefunded", A, 9)])];
+    expect(escrowState(B, pages, opts).state).toBe("unverified");
+  });
+  it("fixtures: every escrow is unverified", async () => {
+    for (const name of ["escrows-unparsable-copy-disagrees", "escrows-unparsable-copies-disagree"]) {
+      const { expected, pages, o } = await loadScenario(name);
+      for (const s of escrowStates(expected.escrows.map((e) => e.id), pages, o)) {
+        expect(s.state, name).toBe("unverified");
+        expect(s.evidence).toEqual([]);
+      }
+    }
+  });
+});
+
+describe("conflict rules for distinct events", () => {
+  it("an open plus two distinct finalized refunds is unverified", () => {
+    const pages = [page([ev("EscrowOpened", A, 1), ev("EscrowRefunded", A, 2), ev("EscrowRefunded", A, 3)])];
+    const s = escrowState(A, pages, opts);
+    expect(s.state).toBe("unverified");
+    expect(s.evidence).toEqual([]);
+    expect(s.notes).toContain("conflicting evidence: more than one distinct finalized refund for this escrow");
+  });
+  it("an open plus two distinct finalized releases is unverified", () => {
+    const pages = [page([ev("EscrowOpened", A, 1), ev("EscrowReleased", A, 2), ev("EscrowReleased", A, 3)])];
+    const s = escrowState(A, pages, opts);
+    expect(s.state).toBe("unverified");
+    expect(s.notes).toContain("conflicting evidence: more than one distinct finalized release for this escrow");
+  });
+  it("two distinct finalized opens are unverified, with a note that says so", () => {
+    const s = escrowState(A, [page([ev("EscrowOpened", A, 1), ev("EscrowOpened", A, 2)])], opts);
+    expect(s.state).toBe("unverified");
+    expect(s.evidence).toEqual([]);
+    expect(s.notes).toEqual(["conflicting evidence: more than one distinct finalized open for this escrow"]);
+  });
+  it("a refund plus a malformed finalized release is unverified", () => {
+    const pages = [page([ev("EscrowRefunded", A, 3), { ...ev("EscrowReleased", A, 2), index: "0" }])];
+    const s = escrowState(A, pages, opts);
+    expect(s.state).toBe("unverified");
+    expect(s.evidence).toEqual([]);
+    expect(s.notes).toContain("conflicting evidence: a malformed finalized release could be about this escrow");
+  });
+  it("a release plus a malformed finalized refund is unverified", () => {
+    const pages = [page([ev("EscrowReleased", A, 2), { ...ev("EscrowRefunded", A, 3), index: "0" }])];
+    const s = escrowState(A, pages, opts);
+    expect(s.state).toBe("unverified");
+    expect(s.notes).toContain("conflicting evidence: a malformed finalized refund could be about this escrow");
+  });
+  it("control: a refund plus a malformed finalized refund stays refunded", () => {
+    const pages = [page([ev("EscrowRefunded", A, 3), { ...ev("EscrowRefunded", A, 4), index: "0" }])];
+    expect(escrowState(A, pages, opts).state).toBe("refunded");
+  });
+});
+
+describe("an event outside its page's block range is not evidence", () => {
+  it("a release above the page range does not claim, and is noted", () => {
+    const pages = [page([ev("EscrowOpened", A, 1), ev("EscrowReleased", A, 2, { block_number: 500 })])];
+    const s = escrowState(A, pages, opts);
+    expect(s.state).toBe("funded");
+    expect(s.evidence.map((e) => e.event)).toEqual(["hasStation.EscrowOpened"]);
+    expect(s.notes).toContain("1 event outside its page's block range ignored");
+  });
+  it("a release below the page range does not claim either", () => {
+    const s = escrowState(A, [page([ev("EscrowReleased", A, 2, { block_number: 99 })])], opts);
+    expect(s.state).toBe("unverified");
+    expect(s.notes).toContain("1 event outside its page's block range ignored");
+  });
+  it("the edges of the range are inside", () => {
+    expect(escrowState(A, [page([ev("EscrowReleased", A, 2, { block_number: 100 })])], opts).state).toBe("claimed");
+    expect(escrowState(A, [page([ev("EscrowReleased", A, 2, { block_number: 199 })])], opts).state).toBe("claimed");
+  });
+  it("a null block number is kept", () => {
+    expect(escrowState(A, [page([ev("EscrowReleased", A, 2, { block_number: null })])], opts).state).toBe("claimed");
+  });
+  it("fixture: a1 funded with a note, b2 unverified", async () => {
+    const { expected, pages, o } = await loadScenario("escrows-outside-page-range");
+    const [a, b] = escrowStates(expected.escrows.map((e) => e.id), pages, o) as [EscrowState, EscrowState];
+    expect(a.state).toBe("funded");
+    expect(a.notes.join(" ")).toContain("outside its page's block range");
+    expect(b.state).toBe("unverified");
+  });
+});
+
+describe("evidence without a finalized height says so", () => {
+  const unbounded = "evidence is not bounded by a finalized height: no finalized height from an RPC head on the pinned genesis";
+  it("a result with evidence and a null height carries the note", () => {
+    const s = escrowState(A, [page([ev("EscrowReleased", A, 2)])], { ...opts, finalizedHeight: null });
+    expect(s.state).toBe("claimed");
+    expect(s.finalized_height).toBeNull();
+    expect(s.notes).toContain(unbounded);
+  });
+  it("with a height there is no such note", () => {
+    expect(escrowState(A, [page([ev("EscrowReleased", A, 2)])], opts).notes).toEqual([]);
+  });
+  it("an unverified result has no evidence, so no such note", () => {
+    expect(escrowState(A, [], { ...opts, finalizedHeight: null }).notes).not.toContain(unbounded);
+  });
+  it("fixture: the verification escrows have no height and say so", async () => {
+    const { expected, pages, o } = await loadScenario("escrows-verification");
+    expect(o.finalizedHeight).toBeNull();
+    const got = escrowStates(expected.escrows.map((e) => e.id), pages, o);
+    expect(got[0]?.notes).toContain(unbounded);
+    expect(got[1]?.notes).toContain(unbounded);
+    expect(got[2]?.notes).not.toContain(unbounded);
   });
 });

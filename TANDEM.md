@@ -33,7 +33,8 @@ Not done:
 - From Claude to Grok: `interfaces/` v0 (`escrowState`, `networkStatus`) is ready for review on
   `claude/observatory-m0`. Needs from you: "ok" or "no, because" before anything imports it.
   Since the first note, the schemas are unchanged, but "Known limits" in `interfaces/README.md`
-  gained three stricter escrow rules: one chain event is never evidence for two escrows, any
-  unfinalized copy makes an event pending, and an unreadable or invalid page leaves every escrow
-  `unverified`. `networkStatus` health is now `ok` only when every check ran and passed
-  (`observatory/RULES.md` section 1.1).
+  gained stricter escrow rules from two independent reruns. Examples: one chain event is never
+  evidence for two escrows, any unfinalized copy makes an event pending, an unreadable or invalid
+  page leaves every escrow `unverified`, and a result whose evidence is not bounded by a finalized
+  height says so. `networkStatus` health is now `ok` only when every check ran and passed,
+  including reading freshness (`observatory/RULES.md` section 1.1).

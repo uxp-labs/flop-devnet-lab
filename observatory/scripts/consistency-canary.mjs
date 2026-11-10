@@ -158,6 +158,44 @@ const tampers = [
       writeFileSync(p, readFileSync(p, "utf8").replace("</body>", '<table><tr><td data-k="status.made_up" data-v="ok">ok</td></tr></table></body>'));
     },
   },
+  // The round 2 rerun's page tampers: a wrong value hidden in nested markup, or shown in a cell
+  // with no data-k, must not slip past the comparison.
+  {
+    name: "reset-word-flipped-inside-a-nested-span",
+    applies: (d) => snap(d).status.reset_detected === true,
+    run: (d) => editCell(d, "status.reset_detected", (a) => [a, "<span>false</span>"]),
+  },
+  {
+    name: "rpc-health-shown-down-inside-a-span",
+    applies: (d) => snap(d).status.rpc.health === "ok",
+    run: (d) => editCell(d, "status.rpc.health", (a) => [a, "<span>down</span>"]),
+  },
+  {
+    name: "null-best-height-shows-a-number-inside-a-span",
+    applies: (d) => snap(d).status.best_height === null,
+    run: (d) => editCell(d, "status.best_height", (a) => [a, "<span>3341577</span>"]),
+  },
+  {
+    name: "pending-count-in-a-cell-without-data-k",
+    applies: (d) => snap(d).census !== null && snap(d).census.pending_unfinalized > 0,
+    run: (d) => editCell(d, "census.pending_unfinalized", () => ["", "0"]),
+  },
+  {
+    name: "escrow-height-in-a-cell-without-data-k",
+    applies: (d) => snap(d).escrows.some((e) => e.finalized_height !== null),
+    run: (d) => {
+      const e = snap(d).escrows.find((x) => x.finalized_height !== null);
+      editCell(d, `escrow.${e.escrow_id}.finalized_height`, () => ["", String(e.finalized_height + 1)]);
+    },
+  },
+  {
+    name: "a-value-in-a-new-span-outside-every-cell",
+    applies: () => true,
+    run: (d) => {
+      const p = join(d, "index.html");
+      writeFileSync(p, readFileSync(p, "utf8").replace("</h1>", "</h1><p>reset detected: <span>false</span></p>"));
+    },
+  },
   {
     // Everything agrees, but the snapshot was changed after it was hashed: only the hash and
     // the log can catch this.

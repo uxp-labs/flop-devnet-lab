@@ -11,8 +11,10 @@
 //   Covered ranges are clipped to the request and merged when they overlap or touch. Gaps are the
 //   rest of the request. Any gap makes the census partial, and then every total is partial (3).
 //   Per event, in this order: block range filter, malformed, dedupe, pending or finalized, kind (10).
-//   An unreadable page file, a structurally invalid page or an invalid request refuses the whole
-//   census. None of them is ever turned into a partial count (12, 13).
+//   An integer is judged by value and must be safe, at most 2^53 less 1 in size (14).
+//   An unreadable page file, an entry in event-pages that is not a page file, a structurally invalid
+//   page or an invalid request refuses the whole census. None of them is ever turned into a partial
+//   count (12, 13, 15).
 // Pure: no clock and no I/O. Everything comes in through the arguments.
 import type { BlockRange, CensusCounts, CensusReport, Trust } from "./types.js";
 
@@ -33,9 +35,9 @@ export interface CensusOptions {
   observedAt: string;
   trust: Trust;
   /**
-   * Event page files that exist but could not be read or parsed, as "file: reason", for example
-   * from Source.eventPageErrors(). Any entry refuses the census, since the lost page could hold
-   * any event (clause 12).
+   * Event page files that could not be read or parsed (clause 12), and entries in event-pages that
+   * are not page files (clause 15), as "file: reason", for example from Source.eventPageErrors().
+   * Any entry refuses the census, since the lost page could hold any event.
    */
   unreadablePages?: readonly string[];
 }
@@ -96,13 +98,21 @@ function isObject(v: unknown): v is Record<string, unknown> {
   return typeof v === "object" && v !== null && !Array.isArray(v);
 }
 
-/** Integers only: booleans and fractions are not integers. */
+/**
+ * Clause 14: an integer is judged by value (1.0 is 1) and must be safe, so its size is at most
+ * 2^53 less 1. Booleans, fractions and larger numbers are not integers.
+ */
 function isInt(v: unknown): v is number {
-  return typeof v === "number" && Number.isInteger(v);
+  return typeof v === "number" && Number.isSafeInteger(v);
 }
 
 function isText(v: unknown): v is string {
   return typeof v === "string" && v.length > 0;
+}
+
+/** Clause 7: a block hash is 0x followed by 64 lower case hex digits, as the escrow rules read it. */
+function isBlockHash(v: unknown): v is string {
+  return typeof v === "string" && /^0x[0-9a-f]{64}$/.test(v);
 }
 
 /** Clause 13: a negative start or an inverted request is refused. */
@@ -110,7 +120,7 @@ function checkRequest(r: unknown): BlockRange {
   if (!isObject(r)) throw new CensusRefused("no requested block range");
   const { from_block, to_block } = r;
   if (!isInt(from_block) || !isInt(to_block)) {
-    throw new CensusRefused("the requested range needs integer from_block and to_block");
+    throw new CensusRefused("the requested range needs safe integer from_block and to_block");
   }
   if (from_block < 0) throw new CensusRefused(`the requested range starts below block 0 (${from_block})`);
   if (from_block > to_block) throw new CensusRefused(`the requested range is inverted (${from_block} > ${to_block})`);
@@ -123,12 +133,12 @@ function checkPage(raw: unknown, n: number): Page {
   if (!isObject(raw)) throw new CensusRefused(`${at} is not an object`);
   const { genesis, from_block, to_block, page, next_page, events } = raw;
   if (typeof genesis !== "string") throw new CensusRefused(`${at}: genesis is not a string`);
-  if (!isInt(from_block)) throw new CensusRefused(`${at}: from_block is missing or not an integer`);
-  if (!isInt(to_block)) throw new CensusRefused(`${at}: to_block is missing or not an integer`);
-  if (!isInt(page)) throw new CensusRefused(`${at}: page is missing or not an integer`);
+  if (!isInt(from_block)) throw new CensusRefused(`${at}: from_block is missing or not a safe integer`);
+  if (!isInt(to_block)) throw new CensusRefused(`${at}: to_block is missing or not a safe integer`);
+  if (!isInt(page)) throw new CensusRefused(`${at}: page is missing or not a safe integer`);
   if (page < 0) throw new CensusRefused(`${at}: page ${page} is negative`);
   if (next_page !== null && !isInt(next_page)) {
-    throw new CensusRefused(`${at}: next_page is missing or neither an integer nor null`);
+    throw new CensusRefused(`${at}: next_page is missing or neither a safe integer nor null`);
   }
   if (!Array.isArray(events)) throw new CensusRefused(`${at}: events is not a list`);
   if (from_block > to_block) throw new CensusRefused(`${at}: inverted range ${from_block} to ${to_block}`);
@@ -215,7 +225,8 @@ function accountOf(data: unknown): string | null {
 function readEvent(raw: unknown): Event | null {
   if (!isObject(raw)) return null;
   const { section, method, block_hash, index, block_number } = raw;
-  if (!isText(section) || !isText(method) || !isText(block_hash)) return null;
+  if (!isText(section) || !isText(method)) return null;
+  if (!isBlockHash(block_hash)) return null;
   if (!isInt(index) || index < 0) return null;
   if (block_number !== null && !isInt(block_number)) return null;
   return { block_hash, index, section, method, account: accountOf(raw.data), finalized: raw.finalized === true };
@@ -262,10 +273,11 @@ export function census(pages: readonly unknown[], opts: CensusOptions): CensusRe
   const req = checkRequest(opts.requested);
   const pinned = opts.pinnedGenesis;
   if (!isText(pinned)) throw new CensusRefused("no pinned genesis");
-  // Clause 12: an event page file that cannot be read or parsed refuses the census.
+  // Clauses 12 and 15: a page file that cannot be read or parsed, or an entry in event-pages that
+  // is not a page file, refuses the census.
   const unreadable = opts.unreadablePages ?? [];
   if (unreadable.length > 0) {
-    throw new CensusRefused(`unreadable event page file(s): ${unreadable.join("; ")}`);
+    throw new CensusRefused(`unusable event page file(s): ${unreadable.join("; ")}`);
   }
   if (!Array.isArray(pages)) throw new CensusRefused("the event pages are not a list");
   const valid = pages.map((p, n) => checkPage(p, n));

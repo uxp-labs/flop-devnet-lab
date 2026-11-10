@@ -2,7 +2,8 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { FixtureSource } from "../src/source.js";
-import { DEVNET_GENESIS, networkStatus, resetDetected } from "../src/status.js";
+import { unknownHttp } from "../src/source.js";
+import { DEVNET_GENESIS, classifyFaucet, classifyGateway, networkStatus, resetDetected } from "../src/status.js";
 
 const NOW = "2026-11-09T23:47:41Z";
 const OTHER = "0x" + "ab".repeat(32);
@@ -229,6 +230,82 @@ describe("health is ok only when every check ran and passed (RULES 1.1)", () => 
   it("a faucet answering 200 with a degraded body: degraded", async () => {
     const s = await status(withFaucet({ body: { status: "degraded", ready: false } }));
     expect(s.faucet.health).toBe("degraded");
+  });
+
+  it("only HTTP 200 is ok: a faucet or gateway 204 is degraded", async () => {
+    expect((await status(withFaucet({ http: 204 }))).faucet.health).toBe("degraded");
+    const src = healthy();
+    const gw = new FixtureSource({ ...src.data, gatewayModels: { ...(src.data.gatewayModels as object), http: 204 } as never });
+    expect((await status(gw)).gateway.health).toBe("degraded");
+  });
+
+  it("finality lag: 30 blocks is ok, 31 is degraded", async () => {
+    const at = (lag: number) => status(withHead({ best_number: 3341575 + lag }));
+    expect((await at(30)).rpc.health).toBe("ok");
+    const s = await at(31);
+    expect(s.rpc.health).toBe("degraded");
+    expect(s.rpc.detail).toMatch(/finality lag 31/);
+  });
+
+  it("head age: 120 s is fresh, 121 s is stale", async () => {
+    expect((await status(withHead({ observed_at: "2026-11-09T23:45:41Z" }))).rpc.stale).toBe(false);
+    const s = await status(withHead({ observed_at: "2026-11-09T23:45:40Z" }));
+    expect(s.rpc.stale).toBe(true);
+    expect(s.rpc.health).toBe("degraded");
+  });
+
+  it("a head time even 1 s later than the snapshot time is a conflict", async () => {
+    const s = await status(withHead({ observed_at: "2026-11-09T23:47:42Z" }));
+    expect(s.rpc.health).toBe("degraded");
+    expect(s.rpc.stale).toBeNull();
+    expect(s.conflicts.join(" ")).toMatch(/later than the snapshot time/);
+  });
+});
+
+describe("the classifiers on their own, before freshness is applied", () => {
+  it("a faucet or gateway that gave no response is unknown, never ok", () => {
+    expect(classifyGateway(unknownHttp("no response")).health).toBe("unknown");
+    expect(classifyFaucet(unknownHttp("no response")).health).toBe("unknown");
+  });
+});
+
+describe("faucet and gateway freshness (RULES 1.1)", () => {
+  const healthy = () => fx("status-healthy");
+  const status = (src: FixtureSource) => networkStatus(src, { pinnedGenesis: DEVNET_GENESIS, now: NOW });
+  const edit = (key: "faucetHealth" | "gatewayModels", patch: Record<string, unknown>) => {
+    const src = healthy();
+    return new FixtureSource({ ...src.data, [key]: { ...(src.data[key] as object), ...patch } as never });
+  };
+
+  it("readings eight days old are degraded, never ok", async () => {
+    const s = await run("status-readings-days-old");
+    expect(s.faucet.health).toBe("degraded");
+    expect(s.gateway.health).toBe("degraded");
+    expect(s.faucet.detail).toMatch(/faucet reading is \d+s old/);
+    expect(s.rpc.health).toBe("ok");
+  });
+
+  it("a reading exactly at the stale limit is fresh, one second more is degraded", async () => {
+    expect((await status(edit("faucetHealth", { fetched_at: "2026-11-09T23:45:41Z" }))).faucet.health).toBe("ok");
+    expect((await status(edit("faucetHealth", { fetched_at: "2026-11-09T23:45:40Z" }))).faucet.health).toBe("degraded");
+    expect((await status(edit("gatewayModels", { fetched_at: "2026-11-09T23:45:40Z" }))).gateway.health).toBe("degraded");
+  });
+
+  it("an ok reading with no parsable time is unknown", async () => {
+    expect((await status(edit("faucetHealth", { fetched_at: null }))).faucet.health).toBe("unknown");
+    expect((await status(edit("gatewayModels", { fetched_at: "soon" }))).gateway.health).toBe("unknown");
+  });
+
+  it("a reading time later than the snapshot time is a conflict and degraded", async () => {
+    const s = await status(edit("gatewayModels", { fetched_at: "2026-11-09T23:47:42Z" }));
+    expect(s.gateway.health).toBe("degraded");
+    expect(s.conflicts.join(" ")).toMatch(/gateway reading time .* is later than the snapshot time/);
+  });
+
+  it("freshness never improves a reading that is not ok", async () => {
+    const s = await run("status-degraded-real");
+    expect(s.faucet.health).toBe("degraded");
+    expect(s.gateway.health).toBe("unknown");
   });
 });
 

@@ -2,8 +2,9 @@
 //
 // Every way out is replaced before any test runs: fetch and WebSocket, node:http, node:https and
 // node:http2 requests and servers, node:net and node:tls connections and listeners, node:dgram
-// sockets, node:dns lookups, worker threads and every node:child_process call. Each attempt is
-// recorded and throws. The node: modules are patched on their shared module objects and then
+// sockets, node:dns lookups and resolvers, worker threads, every node:child_process call, and the
+// lower layers (ChildProcess.prototype.spawn, the native bindings behind process.binding,
+// process.dlopen and inspector.open). Each attempt is recorded and throws. The node: modules are patched on their shared module objects and then
 // synced, so named ESM imports (`import { request } from "node:https"`) see the block too.
 //
 // After each test file, any attempt still in the log fails the file. A test that provokes a
@@ -75,6 +76,26 @@ threads.Worker = class {
     blocked("process", "worker_threads.Worker")(file);
   }
 };
+
+// The lower layers, which a module function block alone would miss.
+const dgramSocket = require("node:dgram").Socket.prototype;
+for (const name of ["send", "bind", "connect"]) dgramSocket[name] = blocked("network", `dgram.Socket.${name}`);
+for (const [proto, prefix] of [
+  [dns.Resolver.prototype, "dns.Resolver"],
+  [dns.promises.Resolver.prototype, "dns.promises.Resolver"],
+] as const) {
+  for (const name of Object.getOwnPropertyNames(proto).filter((k) => /^(resolve|reverse)/.test(k))) {
+    (proto as Record<string, unknown>)[name] = blocked("network", `${prefix}.${name}`);
+  }
+}
+require("node:child_process").ChildProcess.prototype.spawn = blocked("process", "child_process.ChildProcess.spawn");
+block(require("node:inspector"), ["open"], "network", "inspector");
+// process.binding reaches the native socket and spawn layers directly. Only those are refused.
+const NATIVE = new Set(["spawn_sync", "process_wrap", "tcp_wrap", "udp_wrap", "pipe_wrap", "tls_wrap", "cares_wrap", "stream_wrap", "js_stream", "inspector"]);
+const realBinding = (process as unknown as { binding: (name: string) => unknown }).binding.bind(process);
+(process as unknown as { binding: (name: string) => unknown }).binding = (name: string) =>
+  NATIVE.has(name) ? blocked("process", "process.binding")(name) : realBinding(name);
+process.dlopen = blocked("process", "process.dlopen") as typeof process.dlopen;
 syncBuiltinESMExports();
 
 /** For test/guard.test.ts: a binding that existed before the block, read after it. */
