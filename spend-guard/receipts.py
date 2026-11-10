@@ -1,11 +1,18 @@
 #!/usr/bin/env python3
 """Read-only receipt tracker. Reads a gateway key from a file (never prints it),
 lists receipts, and reports each state as given. Null spend stays null (blank), never 0.
-Every outcome, including a malformed body or a network error, is one JSON row and exit 0."""
+Every outcome, including a malformed body or a network error, is one JSON row and exit 0.
+Redirects are never followed: the gateway key would go to whatever host the Location names, so a 3xx is
+reported as an error row (http 3xx, state null)."""
 import argparse, json, sys, urllib.request, urllib.error
 from guard import BASE, classify_receipt
 
 KEY_FIELDS = ("api_key", "key", "token")  # exact names, in priority order
+
+class NoRedirect(urllib.request.HTTPRedirectHandler):
+    """Refuse every redirect; urllib then raises HTTPError with the 3xx code, which get() reports."""
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
 
 def get(path, key):
     req = urllib.request.Request(BASE + path, headers={"Authorization": f"Bearer {key}", "User-Agent": "uxp-labs-flop-spend-guard/0 (+https://github.com/uxp-labs)"})
@@ -38,6 +45,7 @@ def main():
     ap = argparse.ArgumentParser(); ap.add_argument("--key-file", required=True)
     ap.add_argument("--request-id"); ap.add_argument("--last-known", help="json file of last saved receipt")
     a = ap.parse_args(); key = read_key(a.key_file)
+    urllib.request.install_opener(urllib.request.build_opener(NoRedirect))  # this CLI's HTTP policy, set once
     path = f"/keys/me/receipts/{a.request_id}" if a.request_id else "/keys/me/receipts"
     code, body, neterr = get(path, key)
     if code != 200:
