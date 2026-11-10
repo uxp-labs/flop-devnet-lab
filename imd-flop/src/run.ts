@@ -4,7 +4,7 @@ import { randomBytes, bytesToHex, utf8ToBytes } from "@noble/hashes/utils.js";
 import { sha256 } from "@noble/hashes/sha2.js";
 import { CliError, EXIT } from "./errors.js";
 import { loadConfig } from "./config.js";
-import { linkFile, receiptsDir, responsesDir } from "./paths.js";
+import { linkFile, responsesDir } from "./paths.js";
 import { redactFlagged, scanForSecrets } from "./secrets.js";
 import { readJson, writeJsonSafe } from "./store.js";
 import { loadSigner, readIdentity, revokedDids } from "./keys.js";
@@ -14,6 +14,7 @@ import { checkBudget, padQuote, requireCap, validateJob, validatePayer, validate
 import { appendLedger, jobSpent, LedgerLockError, spentToday, UnusableLedgerCharge, utcDay, withLedgerLock, type LedgerEntry } from "./ledger.js";
 import { classifyReceipt, type Classified } from "./receipts.js";
 import { holdCharge, nextBooking, receiptIdentity } from "./settlement.js";
+import { receiptPath, writeReceipt } from "./receipt-store.js";
 import type { Provider } from "./providers.js";
 import { assertPaidNetwork, checkImdJob, PreSendError, readVerifiedSeatOwner, type Fetch } from "./gateway.js";
 import { FlopHTTPError } from "@flop-labs/client";
@@ -249,17 +250,11 @@ export async function runJob(h: string, provider: Provider, o: RunOpts, deps: { 
     classified.request_id = typeof rawId === "string" ? rawId : "";
   }
   const receipt0 = { ...classified, seat, did: signer.identity.did };
-  let receiptBody: unknown = { ...classified, seat, did: signer.identity.did, ss58: signer.identity.ss58, network: net.name, ...(provider.name === "mock" ? { mock_scenario: (provider as { scenario?: string }).scenario ?? "ok" } : {}) };
-  let receiptRedacted = false;
-  try {
-    writeJsonSafe(join(receiptsDir(h), `${requestId}.json`), receiptBody, "receipt");
-  } catch {
-    receiptRedacted = true;
-    const redacted = redactFlagged(receiptBody);
-    receiptBody = redacted.copy;
-    writeJsonSafe(join(receiptsDir(h), `${requestId}.json`), receiptBody, "receipt");
+  const stored = writeReceipt(receiptPath(h, requestId), { ...classified, seat, did: signer.identity.did, ss58: signer.identity.ss58, network: net.name, ...(provider.name === "mock" ? { mock_scenario: (provider as { scenario?: string }).scenario ?? "ok" } : {}) });
+  const receiptRedacted = stored.redacted;
+  if (receiptRedacted) {
     // stdout shows what was stored: every redacted field, not only error and settled_raw.
-    const cleaned = receiptBody as Record<string, unknown>;
+    const cleaned = stored.body as Record<string, unknown>;
     const r0 = receipt0 as unknown as Record<string, unknown>;
     for (const k of Object.keys(r0)) if (k in cleaned) r0[k] = cleaned[k] ?? null;
   }

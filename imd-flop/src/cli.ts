@@ -14,9 +14,9 @@ import { FlopProvider, MOCK_SCENARIOS, MockProvider, type MockScenario, type Pro
 import { checkLinkForRun, runJob } from "./run.js";
 import { padQuote, parseAmount } from "./policy.js";
 import { appendLedger, latestAttempts, spentToday } from "./ledger.js";
-import { DISAGREE, isFreshRead, receiptIdentity, refreshBooking } from "./settlement.js";
+import { readSavedReceipt, refreshReceipt, type SavedReceipt } from "./receipt-store.js";
 import { blank, classifyReceipt, receiptLine, type Classified } from "./receipts.js";
-import { redactFlagged, registerSecret } from "./secrets.js";
+import { registerSecret } from "./secrets.js";
 import { matchReceipt } from "./match.js";
 
 export interface IO {
@@ -392,58 +392,13 @@ export async function main(argv: string[], io: IO): Promise<number> {
         const { values, positionals } = parse(rest, { refresh: { type: "boolean" }, live: { type: "boolean" } });
         const rid = positionals[0];
         if (!rid || !/^[\x21-\x7e]{1,128}$/.test(rid) || rid.includes("/")) throw new CliError("usage: receipt <request_id>", EXIT.USAGE);
-        const path = join(receiptsDir(h), `${rid}.json`);
-        let saved = readJson<Classified & { seat: string; mock_scenario?: string }>(path);
+        let saved: SavedReceipt | null = readSavedReceipt(h, rid);
         // Timeouts have a ledger row but no receipt file yet.
         let ledgerRow = latestAttempts(h).find((e) => e.request_id === rid);
         if (!saved && !ledgerRow) throw new CliError(`no receipt or ledger entry for ${rid}`, EXIT.USAGE);
         if (values.refresh) {
-          const seat = saved?.seat ?? ledgerRow!.seat;
-          const pname = saved?.provider ?? ledgerRow!.provider;
-          const p = makeProvider(io, pname, h, seat, { live: values.live, scenario: saved?.mock_scenario });
-          const rr = await p.readReceipt(rid);
-          const c = classifyReceipt(rr.receipt, { job: saved?.job ?? ledgerRow?.job ?? null, provider: pname, http: rr.http, error: rr.error, requestId: rid, mock: pname === "mock" });
-          // Identity is decided on the raw gateway receipt, exactly as run does. classifyReceipt's
-          // requestId fallback never decides identity, settlement or the stored request_id.
-          const fresh = isFreshRead(rr);
-          const { rawId, identityOk } = fresh ? receiptIdentity(rr.receipt, rid) : { rawId: undefined, identityOk: false };
-          // A timeout leaves a ledger row but no receipt file. Take the seat identity from that row (what run
-          // recorded at call time), never from the gateway, so the first receipt file is not a permanent mismatch.
-          const ident = saved ? {} : (() => {
-            const id = readIdentity(h, ledgerRow!.seat);
-            return { seat: ledgerRow!.seat, did: ledgerRow!.did, ss58: id && id.did === ledgerRow!.did ? id.ss58 : null, network: ledgerRow!.network };
-          })();
-          let merged: Record<string, unknown> = fresh
-            ? { ...ident, ...saved, ...c, request_id: typeof rawId === "string" ? rawId : "", ...(identityOk ? {} : { settled: null, chain_final: false }) }
-            // No fresh receipt: keep what was stored, including its request_id (a recorded mismatch stays one).
-            : { ...ident, ...saved, ...c, request_id: saved?.request_id ?? "", state: saved?.state ?? null, reserved: saved?.reserved ?? null, settled: saved?.settled ?? null, chain_final: saved?.chain_final ?? false, last_known_at: saved?.observed_at ?? null };
-          try {
-            writeJsonSafe(path, merged, "receipt");
-          } catch {
-            // Same fallback as run: null only the flagged fields, then still reach the ledger logic.
-            const redacted = redactFlagged(merged);
-            if (redacted.residual.length > 0) throw new CliError("secret scan blocked writing receipt and redaction could not clear it", EXIT.REFUSED_RULE);
-            merged = redacted.copy as Record<string, unknown>;
-            writeJsonSafe(path, merged, "receipt");
-          }
-          saved = merged as unknown as typeof saved;
-          const prev = latestAttempts(h).find((e) => e.request_id === rid);
-          if (prev) {
-            const next = refreshBooking(prev, { fresh, identityOk, state: saved?.state ?? null, settled: saved?.settled });
-            if (next.kind === "disagree") {
-              // Unknown charge and no exact-identity settlement: never substitute 0. Leave the row (and the refusal) alone.
-              io.err(DISAGREE);
-              saved = { ...saved, status: DISAGREE } as typeof saved;
-            } else if (next.kind === "append") {
-              try {
-                appendLedger(h, { ...prev, ts: new Date().toISOString(), state: next.booking.state, reason: saved?.flag ?? null, spend: next.booking.spend, cap_charge: next.booking.cap_charge });
-              } catch {
-                io.err(DISAGREE);
-                saved = { ...saved, status: DISAGREE } as typeof saved;
-              }
-            }
-            ledgerRow = latestAttempts(h).find((e) => e.request_id === rid);
-          }
+          const p = makeProvider(io, saved?.provider ?? ledgerRow!.provider, h, saved?.seat ?? ledgerRow!.seat, { live: values.live, scenario: saved?.mock_scenario });
+          ({ saved, ledgerRow } = await refreshReceipt(h, rid, p, { saved, ledgerRow }, io.err));
         }
         const match = await matchReceipt(h, saved ?? null, ledgerRow ?? null);
         const show = { ...(saved ?? { ...classifyReceipt(null, { job: ledgerRow!.job, provider: ledgerRow!.provider, requestId: rid, mock: ledgerRow!.mock }), seat: ledgerRow!.seat, did: ledgerRow!.did }), match };
