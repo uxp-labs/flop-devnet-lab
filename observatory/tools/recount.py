@@ -138,7 +138,7 @@ def load_pages(scenario_dir):
     if mode is not None:
         # event-pages must be a real folder, not a file or a link (lstat does not follow links).
         if not stat.S_ISDIR(mode):
-            raise Unreadable("page-file", "event-pages: not a folder (%s)" % pages_dir)
+            raise Unreadable("page-file", "event-pages: not a folder (%s)" % _text(pages_dir))
         try:
             # Sorted by bytes, as the TypeScript census sorts them (clause 16 names the first).
             names = sorted(os.listdir(pages_dir), key=os.fsencode)

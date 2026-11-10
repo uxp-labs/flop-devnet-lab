@@ -66,13 +66,15 @@ const hash = (v: unknown): boolean => typeof v === "string" && HASH.test(v);
 const hashOrNull = (v: unknown): boolean => v === null || hash(v);
 const heightOrNull = (v: unknown): boolean => v === null || (typeof v === "number" && Number.isSafeInteger(v) && v >= 0);
 const textOrNull = (v: unknown): boolean => v === null || typeof v === "string";
+// An HTTP status as the status keeps it: any safe integer (RULES.md 1.1), not only one from 0 (seventh rerun U1).
+const statusCodeOrNull = (v: unknown): boolean => v === null || (typeof v === "number" && Number.isSafeInteger(v));
 const flagOrNull = (v: unknown): boolean => v === null || typeof v === "boolean";
 const texts = (v: unknown): boolean => Array.isArray(v) && v.every((x) => typeof x === "string");
 const time = (v: unknown): boolean => parseZoned(v) !== null;
 // A service holds its health as one of the four words (round 9 review L6) and every field of its
 // schema with its type (sixth rerun U1: rpc, gateway and faucet holding only a health word).
 const service = (v: unknown, extra: readonly string[]): v is Record<string, unknown> =>
-  isObject(v) && exactly(v, [...SERVICE_KEYS, ...extra]) && HEALTHS.includes(v.health as string) && heightOrNull(v.http) && textOrNull(v.detail) && textOrNull(v.observed_at);
+  isObject(v) && exactly(v, [...SERVICE_KEYS, ...extra]) && HEALTHS.includes(v.health as string) && statusCodeOrNull(v.http) && textOrNull(v.detail) && textOrNull(v.observed_at);
 const lagOf = (finalized: unknown, best: unknown): number | null =>
   typeof finalized === "number" && typeof best === "number" && best >= finalized ? best - finalized : null;
 const limits = (v: unknown): boolean => v === null || (isObject(v) && Object.values(v).every((x) => typeof x === "boolean" || (typeof x === "number" && Number.isFinite(x))));
@@ -155,7 +157,9 @@ const shaped =
   TRUSTS.includes(snapshot.trust as string) &&
   isObject(snapshot.pin) &&
   exactly(snapshot.pin as unknown as Record<string, unknown>, PIN_KEYS) &&
-  (snapshot.pin.source_sha === null || (typeof snapshot.pin.source_sha === "string" && /^[0-9a-f]{40}$/.test(snapshot.pin.source_sha))) &&
+  // The revision as the snapshot command was given it, which check.sh gives as unknown outside a
+  // git checkout: text or none, not only a full sha (seventh rerun U1).
+  textOrNull(snapshot.pin.source_sha) &&
   typeof snapshot.pin.source === "string" &&
   hashOrNull(snapshot.pin.genesis) &&
   heightOrNull(snapshot.pin.finalized_height) &&
@@ -174,8 +178,14 @@ const shaped =
       e.evidence.every((x) => x.genesis === snapshot.status?.genesis?.pinned) &&
       // The bound is the status's finalized height or none, and no evidence lies above it.
       (e.finalized_height === null || e.finalized_height === snapshot.status?.finalized_height) &&
+      // and it comes only from a head on the pinned genesis (seventh rerun U7).
+      (e.finalized_height === null || snapshot.status?.genesis?.rpc === snapshot.status?.genesis?.pinned) &&
       e.evidence.every((x) => e.finalized_height === null || x.block_number === null || x.block_number <= (e.finalized_height as number)),
   ) &&
+  // One finalized event is evidence once: it names one escrow, and is one event of it (RULES.md
+  // section 2, seventh rerun U7).
+  new Set(snapshot.escrows.flatMap((e) => e.evidence.map((x) => `${x.block_hash} ${x.event_index}`))).size ===
+    snapshot.escrows.reduce((n, e) => n + e.evidence.length, 0) &&
   (snapshot.census === null || part(snapshot.census, "flop-observatory/census@0")) &&
   (snapshot.drift === null || part(snapshot.drift, "flop-observatory/drift@0")) &&
   // The pin names the chain point the status read (snapshot.ts builds it from the status).

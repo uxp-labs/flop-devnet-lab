@@ -258,8 +258,8 @@
   {
     "id": "mcp-bin-service-any-health",
     "file": "src/mcp-bin.ts",
-    "find": "exactly(v, [...SERVICE_KEYS, ...extra]) && HEALTHS.includes(v.health as string) && heightOrNull(v.http)",
-    "replace": "exactly(v, [...SERVICE_KEYS, ...extra]) && heightOrNull(v.http)",
+    "find": "exactly(v, [...SERVICE_KEYS, ...extra]) && HEALTHS.includes(v.health as string) && statusCodeOrNull(v.http)",
+    "replace": "exactly(v, [...SERVICE_KEYS, ...extra]) && statusCodeOrNull(v.http)",
     "test": "scripts/cli-checks.mjs",
     "why": "round 9 review L6: a served service health is one of the four words"
   },
@@ -458,7 +458,7 @@
   {
     "id": "mcp-bin-service-types-unchecked",
     "file": "src/mcp-bin.ts",
-    "find": "HEALTHS.includes(v.health as string) && heightOrNull(v.http) && textOrNull(v.detail) && textOrNull(v.observed_at);",
+    "find": "HEALTHS.includes(v.health as string) && statusCodeOrNull(v.http) && textOrNull(v.detail) && textOrNull(v.observed_at);",
     "replace": "HEALTHS.includes(v.health as string);",
     "test": "scripts/cli-checks.mjs",
     "why": "sixth rerun U1: a service's http status, detail and time have their types"
@@ -510,5 +510,229 @@
     "replace": "`fixture ${dir} has no readable meta.json`",
     "test": "scripts/cli-checks.mjs",
     "why": "sixth rerun U8: a scenario folder is named as a page file is, so a line break in its name cannot break the refusal's line"
+  },
+  {
+    "id": "mcp-bin-status-schema-any",
+    "file": "src/mcp-bin.ts",
+    "find": "  st.schema === \"flop-observatory/network-status@0\" &&",
+    "replace": "  true &&",
+    "test": "scripts/cli-checks.mjs",
+    "why": "seventh rerun U2: the status names its own schema (variant status-schema-other)"
+  },
+  {
+    "id": "mcp-bin-status-extra-field-served",
+    "file": "src/mcp-bin.ts",
+    "find": "  exactly(st, STATUS_KEYS) &&",
+    "replace": "  true &&",
+    "test": "scripts/cli-checks.mjs",
+    "why": "seventh rerun U2: the status holds exactly its fields (variant status-extra-field)"
+  },
+  {
+    "id": "mcp-bin-status-time-any",
+    "file": "src/mcp-bin.ts",
+    "find": "  time(st.observed_at) &&",
+    "replace": "  true &&",
+    "test": "scripts/cli-checks.mjs",
+    "why": "seventh rerun U2: the status's observed_at is a time with a zone (variant status-time-a-word)"
+  },
+  {
+    "id": "mcp-bin-status-trust-any-word",
+    "file": "src/mcp-bin.ts",
+    "find": "  TRUSTS.includes(st.trust as string) &&",
+    "replace": "  true &&",
+    "test": "scripts/cli-checks.mjs",
+    "why": "seventh rerun U2: the status's trust is one of the two labels (variant status-trust-a-word)"
+  },
+  {
+    "id": "mcp-bin-best-height-any-type",
+    "file": "src/mcp-bin.ts",
+    "find": "  heightOrNull(st.best_height) &&",
+    "replace": "  true &&",
+    "test": "scripts/cli-checks.mjs",
+    "why": "seventh rerun U2: the best height is a safe integer from 0 or null (variant best-height-text)"
+  },
+  {
+    "id": "mcp-bin-runtime-version-any-type",
+    "file": "src/mcp-bin.ts",
+    "find": "  heightOrNull(st.runtime_version) &&",
+    "replace": "  true &&",
+    "test": "scripts/cli-checks.mjs",
+    "why": "seventh rerun U2: the runtime version is a safe integer from 0 or null (variant runtime-version-text)"
+  },
+  {
+    "id": "mcp-bin-pinned-genesis-any",
+    "file": "src/mcp-bin.ts",
+    "find": "  hash(st.genesis.pinned) &&",
+    "replace": "  true &&",
+    "test": "scripts/cli-checks.mjs",
+    "why": "seventh rerun U2: the pinned genesis is a hash (variant pinned-genesis-no-hash)"
+  },
+  {
+    "id": "mcp-bin-faucet-genesis-any",
+    "file": "src/mcp-bin.ts",
+    "find": "  hashOrNull(st.genesis.faucet) &&",
+    "replace": "  true &&",
+    "test": "scripts/cli-checks.mjs",
+    "why": "seventh rerun U2: the faucet's genesis is a hash or null (variant faucet-genesis-no-hash)"
+  },
+  {
+    "id": "mcp-bin-evidence-event-any-name",
+    "file": "src/mcp-bin.ts",
+    "find": "  [OPENED, RELEASED, REFUNDED].includes(v.event as string) &&",
+    "replace": "  true &&",
+    "test": "scripts/cli-checks.mjs",
+    "why": "seventh rerun U2: each evidence item is one of the three escrow events (variant evidence-event-unknown)"
+  },
+  {
+    "id": "mcp-bin-evidence-block-hash-any",
+    "file": "src/mcp-bin.ts",
+    "find": "  hash(v.block_hash) &&",
+    "replace": "  true &&",
+    "test": "scripts/cli-checks.mjs",
+    "why": "seventh rerun U2: an evidence block hash is 0x plus 64 lower case hex (variant evidence-block-hash-upper-case)"
+  },
+  {
+    "id": "mcp-bin-evidence-block-number-any-type",
+    "file": "src/mcp-bin.ts",
+    "find": "  heightOrNull(v.block_number) &&",
+    "replace": "  true &&",
+    "test": "scripts/cli-checks.mjs",
+    "why": "seventh rerun U2: an evidence block number is a safe integer from 0 or null (variant evidence-block-number-text)"
+  },
+  {
+    "id": "mcp-bin-evidence-index-any-type",
+    "file": "src/mcp-bin.ts",
+    "find": "  typeof v.event_index === \"number\" &&\n  Number.isSafeInteger(v.event_index) &&\n  v.event_index >= 0 &&",
+    "replace": "  true &&",
+    "test": "scripts/cli-checks.mjs",
+    "why": "seventh rerun U2: an evidence event index is a safe integer from 0 (variant evidence-index-text)"
+  },
+  {
+    "id": "mcp-bin-escrow-schema-any",
+    "file": "src/mcp-bin.ts",
+    "find": "  e.schema === \"flop-observatory/escrow-state@0\" &&",
+    "replace": "  true &&",
+    "test": "scripts/cli-checks.mjs",
+    "why": "seventh rerun U2: an escrow names its own schema (variant escrow-schema-other)"
+  },
+  {
+    "id": "mcp-bin-escrow-notes-any-items",
+    "file": "src/mcp-bin.ts",
+    "find": "  texts(e.notes) &&",
+    "replace": "  Array.isArray(e.notes) &&",
+    "test": "scripts/cli-checks.mjs",
+    "why": "seventh rerun U2: an escrow's notes are text (variant escrow-notes-not-text)"
+  },
+  {
+    "id": "mcp-bin-escrow-time-any",
+    "file": "src/mcp-bin.ts",
+    "find": "  time(e.observed_at) &&",
+    "replace": "  true &&",
+    "test": "scripts/cli-checks.mjs",
+    "why": "seventh rerun U2: an escrow's observed_at is a time with a zone (variant escrow-time-a-word)"
+  },
+  {
+    "id": "mcp-bin-escrow-trust-any-word",
+    "file": "src/mcp-bin.ts",
+    "find": "  TRUSTS.includes(e.trust as string) &&",
+    "replace": "  true &&",
+    "test": "scripts/cli-checks.mjs",
+    "why": "seventh rerun U2: an escrow's trust is one of the two labels (variant escrow-trust-a-word)"
+  },
+  {
+    "id": "mcp-bin-escrow-scope-any",
+    "file": "src/mcp-bin.ts",
+    "find": "  e.scope === \"settlement only; says nothing about output quality\";",
+    "replace": "  true;",
+    "test": "scripts/cli-checks.mjs",
+    "why": "seventh rerun U2: an escrow says it covers settlement only (variant escrow-scope-other)"
+  },
+  {
+    "id": "mcp-bin-snapshot-extra-field-served",
+    "file": "src/mcp-bin.ts",
+    "find": "  exactly(snapshot as unknown as Record<string, unknown>, SNAPSHOT_KEYS) &&",
+    "replace": "  true &&",
+    "test": "scripts/cli-checks.mjs",
+    "why": "seventh rerun U2: the snapshot holds exactly its fields (variant snapshot-extra-field)"
+  },
+  {
+    "id": "mcp-bin-snapshot-schema-any",
+    "file": "src/mcp-bin.ts",
+    "find": "  snapshot.schema === \"flop-observatory/snapshot@0\" &&",
+    "replace": "  true &&",
+    "test": "scripts/cli-checks.mjs",
+    "why": "seventh rerun U2: the snapshot names its own schema (variant snapshot-schema-other)"
+  },
+  {
+    "id": "mcp-bin-source-sha-any-type",
+    "file": "src/mcp-bin.ts",
+    "find": "  textOrNull(snapshot.pin.source_sha) &&",
+    "replace": "  true &&",
+    "test": "scripts/cli-checks.mjs",
+    "why": "seventh rerun U2: the pin's source_sha is text or null (variant pin-source-sha-a-number)"
+  },
+  {
+    "id": "mcp-bin-pin-source-any-type",
+    "file": "src/mcp-bin.ts",
+    "find": "  typeof snapshot.pin.source === \"string\" &&",
+    "replace": "  true &&",
+    "test": "scripts/cli-checks.mjs",
+    "why": "seventh rerun U2: the pin's source is text (variant pin-source-a-number)"
+  },
+  {
+    "id": "mcp-bin-census-schema-any",
+    "file": "src/mcp-bin.ts",
+    "find": "  (snapshot.census === null || part(snapshot.census, \"flop-observatory/census@0\")) &&",
+    "replace": "  true &&",
+    "test": "scripts/cli-checks.mjs",
+    "why": "seventh rerun U2: the census names its own schema (variant census-schema-other)"
+  },
+  {
+    "id": "mcp-bin-drift-schema-any",
+    "file": "src/mcp-bin.ts",
+    "find": "  (snapshot.drift === null || part(snapshot.drift, \"flop-observatory/drift@0\")) &&",
+    "replace": "  true &&",
+    "test": "scripts/cli-checks.mjs",
+    "why": "seventh rerun U2: the drift report names its own schema (variant drift-schema-other)"
+  },
+  {
+    "id": "mcp-bin-faucet-fields-unchecked",
+    "file": "src/mcp-bin.ts",
+    "find": "  service(st.faucet, [\"ready\", \"limits\"]) &&",
+    "replace": "  isObject(st.faucet) &&",
+    "test": "scripts/cli-checks.mjs",
+    "why": "seventh rerun U2: the faucet holds a health word and every field of its schema (variant faucet-extra-field)"
+  },
+  {
+    "id": "mcp-bin-status-code-from-zero-only",
+    "file": "src/mcp-bin.ts",
+    "find": "const statusCodeOrNull = (v: unknown): boolean => v === null || (typeof v === \"number\" && Number.isSafeInteger(v));",
+    "replace": "const statusCodeOrNull = (v: unknown): boolean => v === null || (typeof v === \"number\" && Number.isSafeInteger(v) && v >= 0);",
+    "test": "scripts/cli-checks.mjs",
+    "why": "seventh rerun U1: a saved reading's http status of -1 is a safe integer the status keeps, and the binary serves it"
+  },
+  {
+    "id": "mcp-bin-source-sha-full-only",
+    "file": "src/mcp-bin.ts",
+    "find": "  textOrNull(snapshot.pin.source_sha) &&",
+    "replace": "  (snapshot.pin.source_sha === null || /^[0-9a-f]{40}$/.test(String(snapshot.pin.source_sha))) &&",
+    "test": "scripts/cli-checks.mjs",
+    "why": "seventh rerun U1: a short sha, or the unknown check.sh passes outside a git checkout, is a revision the binary serves"
+  },
+  {
+    "id": "mcp-bin-bound-any-genesis",
+    "file": "src/mcp-bin.ts",
+    "find": "      (e.finalized_height === null || snapshot.status?.genesis?.rpc === snapshot.status?.genesis?.pinned) &&",
+    "replace": "      true &&",
+    "test": "scripts/cli-checks.mjs",
+    "why": "seventh rerun U7: an escrow's bound comes only from a head on the pinned genesis"
+  },
+  {
+    "id": "mcp-bin-evidence-used-twice",
+    "file": "src/mcp-bin.ts",
+    "find": "  new Set(snapshot.escrows.flatMap((e) => e.evidence.map((x) => `${x.block_hash} ${x.event_index}`))).size ===\n    snapshot.escrows.reduce((n, e) => n + e.evidence.length, 0) &&",
+    "replace": "  true &&",
+    "test": "scripts/cli-checks.mjs",
+    "why": "seventh rerun U7: one finalized event is evidence once, for one escrow"
   }
 ]

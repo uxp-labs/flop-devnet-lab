@@ -406,7 +406,8 @@ const cases = [
   {
     name: "the MCP binary refuses a hashed snapshot whose parts are empty shells",
     run: () => {
-      // Only the status is an empty shell, so the status check alone has to refuse it.
+      // Only the status is an empty shell. The pin agreements refuse it too (a pin genesis of none
+      // against a status with no genesis); the variants case below proves the status check alone.
       const pin = { source_sha: null, source: "fixture:none", genesis: null, finalized_height: null, finalized_hash: null, node: "v22.23.4" };
       const s = { schema: "flop-observatory/snapshot@0", observed_at: "2026-11-10T00:00:00Z", trust: "fixture", pin, status: {}, escrows: [], census: null, drift: null, seq: 0, prev_hash: null };
       const bad = join(work, "mcp-empty-parts.json");
@@ -425,7 +426,7 @@ const cases = [
       const variant = (name, edit) => {
         const { hash: _hash, ...s } = structuredClone(s0);
         edit(s);
-        const p = join(work, `mcp-${name}.json`);
+        const p = join(work, `mcp-${name.replace(":", "-")}.json`);
         writeFileSync(p, feedText({ ...s, hash: hashSnapshot(s) }));
         return { name, ...mcp(p) };
       };
@@ -499,14 +500,67 @@ const cases = [
         variant("pin-height-other", (s) => (s.pin.finalized_height = 7)),
         variant("pin-hash-other", (s) => (s.pin.finalized_hash = "0x" + "ef".repeat(32))),
         variant("trusted-with-fixture-parts", (s) => (s.trust = "trusted RPC")),
+        // Seventh rerun U1: values the snapshot command writes, which the binary must serve.
+        variant("served:pin-source-sha-unknown", (s) => (s.pin.source_sha = "unknown")),
+        variant("served:pin-source-sha-short", (s) => (s.pin.source_sha = s.pin.source_sha === null ? "979298d" : s.pin.source_sha.slice(0, 7))),
+        variant("served:gateway-http-negative", (s) => (s.status.gateway.http = -1)),
+        variant("served:faucet-http-negative", (s) => (s.status.faucet.http = -1)),
+        // Seventh rerun U2: each stated check with a snapshot that only it refuses.
+        variant("status-schema-other", (s) => (s.status.schema = "flop-observatory/network-status@1")),
+        variant("status-extra-field", (s) => (s.status.approved = true)),
+        variant("status-time-a-word", (s) => (s.status.observed_at = "yesterday")),
+        variant("status-trust-a-word", (s) => (s.status.trust = "approved")),
+        variant("best-height-text", (s) => {
+          s.status.best_height = String(s.status.best_height);
+          s.status.finality_lag = null;
+        }),
+        variant("runtime-version-text", (s) => (s.status.runtime_version = String(s.status.runtime_version))),
+        variant("pinned-genesis-no-hash", (s) => {
+          s.status.genesis.pinned = "x";
+          s.status.reset_detected = null;
+          s.escrows = [];
+        }),
+        variant("faucet-genesis-no-hash", (s) => {
+          s.status.genesis.faucet = "x";
+          s.status.reset_detected = null;
+        }),
+        variant("faucet-extra-field", (s) => (s.status.faucet.approved = true)),
+        variant("evidence-event-unknown", (s) => s.escrows[0].evidence.push({ ...s.escrows[0].evidence[0], event: "hasStation.EscrowSettled", event_index: s.escrows[0].evidence[0].event_index + 1 })),
+        variant("evidence-block-hash-upper-case", (s) => (s.escrows[0].evidence[0].block_hash = "0x" + "AB".repeat(32))),
+        variant("evidence-block-number-text", (s) => (s.escrows[0].evidence[0].block_number = "5")),
+        variant("evidence-index-text", (s) => (s.escrows[0].evidence[0].event_index = "0")),
+        variant("escrow-schema-other", (s) => (s.escrows[0].schema = "flop-observatory/escrow-state@1")),
+        variant("escrow-notes-not-text", (s) => (s.escrows[0].notes = [5])),
+        variant("escrow-time-a-word", (s) => (s.escrows[0].observed_at = "yesterday")),
+        variant("escrow-trust-a-word", (s) => (s.escrows[0].trust = "approved")),
+        variant("escrow-scope-other", (s) => (s.escrows[0].scope = "everything")),
+        variant("snapshot-extra-field", (s) => (s.approved = true)),
+        variant("snapshot-schema-other", (s) => (s.schema = "flop-observatory/snapshot@1")),
+        variant("pin-source-sha-a-number", (s) => (s.pin.source_sha = 5)),
+        variant("pin-source-a-number", (s) => (s.pin.source = 5)),
+        variant("census-schema-other", (s) => (s.census = { schema: "flop-observatory/census@1" })),
+        variant("drift-schema-other", (s) => (s.drift = { schema: "flop-observatory/drift@1" })),
+        // Seventh rerun U7: a bound from a head on another genesis, and one event as evidence twice.
+        variant("bound-from-another-genesis", (s) => {
+          s.status.genesis.rpc = "0x" + "ab".repeat(32);
+          s.pin.genesis = s.status.genesis.rpc;
+          s.status.reset_detected = true;
+        }),
+        variant("one-release-for-two-escrows", (s) => {
+          s.escrows[1].state = "claimed";
+          s.escrows[1].evidence = [structuredClone(s.escrows[0].evidence[0])];
+        }),
       ];
       // Each snapshot by name with its exit, so a failure says which one was served.
       return { exit: runs.map((x) => x.exit).join(","), stderr: runs.map((x) => `${x.name}: exit ${x.exit}`).join("; "), runs };
     },
     ok: (r) =>
-      r.runs.length === 36 &&
-      r.runs[0].exit === 0 &&
-      r.runs.slice(1).every((x) => x.exit === 2 && x.stdout === "" && /is not an observatory snapshot; refusing to serve it/.test(x.stderr)),
+      r.runs.length === 66 &&
+      r.runs.every((x) =>
+        x.name === "honest" || x.name.startsWith("served:")
+          ? x.exit === 0
+          : x.exit === 2 && x.stdout === "" && /is not an observatory snapshot; refusing to serve it/.test(x.stderr),
+      ),
   },
   {
     name: "the MCP binary refuses a snapshot behind a byte order mark",

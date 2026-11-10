@@ -344,10 +344,13 @@ check below to run and pass.
     characters (C0, DEL and C1) and the line and paragraph separators, each as the `%XX` of its
     UTF-8 bytes, and byte for byte with every other byte as `%XX` when it is not, so a name holds no
     line break of any kind and no two names are shown alike. Every refusal that names a file or a
-    folder shows it so, page structure refusals and a scenario folder that does not exist included.
-    The TypeScript command also reads the folder's `meta.json` and refuses as an input problem when
-    it cannot; the recount does not read `meta.json`, so that one input problem is the command's
-    alone.
+    folder shows it so, page structure refusals and a scenario folder that does not exist included,
+    but for one case: Node decodes the command's arguments before the command reads them, so a
+    scenario folder name that is not UTF-8 reaches it with U+FFFD in place of each bad byte, and the
+    command can neither name nor open such a folder as the recount can. Such a folder is outside
+    what the two sides compare. The TypeScript command also reads the folder's `meta.json` and
+    refuses as an input problem when it cannot; the recount does not read `meta.json`, so that one
+    input problem is the command's alone.
 
 ## 4. Read only
 
@@ -484,26 +487,29 @@ blank on the page and `null` in JSON and MCP.
   too. Every object in it but the census and the drift report holds exactly its schema's fields with
   its schema's types: the snapshot (`seq` a safe integer from 0, `prev_hash` none on the first line
   and 64 lower case hex on every other, `observed_at` a time with a zone, the trust one of the two
-  labels), its pin, the status (its genesis exactly its three hashes, each service's health one of
-  the four words and its other fields of their types, its conflicts text), every escrow (its id `0x`
-  plus 64 lower case hex and listed once, its notes text) and every evidence item (one of the three
-  escrow events, its block hash and genesis hashes); the census and the drift report are checked for
-  their schema only. The values the settlement rules tie together agree: `reset_detected` false only
-  with both genesis readings on the pinned genesis and both heights read, and true only with a
-  reading on another genesis; the finality lag the best height less the finalized one, and none when
-  either is missing or the finalized one is higher; an escrow unverified with no evidence, funded on
-  one open and nothing else, claimed on one release and refunded on one refund, each with at most
-  one open and no event of the other kind, every item on the pinned genesis; an escrow's finalized
-  height none or the status's, with no evidence above it; the pin's genesis, finalized height and
-  hash the status's RPC genesis, finalized height and hash; and the snapshot a fixture when any part
-  is. Anything else is refused and nothing is served. A call it cannot answer gets a JSON-RPC error,
-  never a dead server. These are all the binary checks: times are not compared with each other, nor
-  the parts' trust labels beyond the fixture rule. The hash is no signature: whoever writes the file
-  can write a hash that verifies, so these checks catch a file that is broken or contradicts itself
-  in one of the ways above, not one written to deceive, which serves what it holds. The output check
-  (`scripts/consistency.mjs`) does not apply these rules: outputs written from a snapshot the binary
-  refuses can still agree with each other, and in the check the step that drives the binary fails
-  first. The snapshot command and its log are where the rules are applied.
+  labels), its pin (`source_sha` text or none, as the command was given it), the status
+  (`observed_at` a time with a zone, its genesis exactly its three hashes, each service's health one
+  of the four words, its http status a safe integer or none and its other fields of their types, its
+  conflicts text), every escrow (its id `0x` plus 64 lower case hex and listed once, `observed_at` a
+  time with a zone, its notes text) and every evidence item (one of the three escrow events, its
+  block hash and genesis hashes); the census and the drift report are checked for their schema only.
+  The values the settlement rules tie together agree: `reset_detected` false only with both genesis
+  readings on the pinned genesis and both heights read, and true only with a reading on another
+  genesis; the finality lag the best height less the finalized one, and none when either is missing
+  or the finalized one is higher; an escrow unverified with no evidence, funded on one open and
+  nothing else, claimed on one release and refunded on one refund, each with at most one open and no
+  event of the other kind, every item on the pinned genesis; an escrow's finalized height none or
+  the status's, and none unless the status's RPC genesis is the pinned one, with no evidence above
+  it; no finalized event evidence twice, for two escrows or for one; the pin's genesis, finalized
+  height and hash the status's RPC genesis, finalized height and hash; and the snapshot a fixture
+  when any part is. Anything else is refused and nothing is served. A call it cannot answer gets a
+  JSON-RPC error, never a dead server. These are all the binary checks: times are not compared with
+  each other, nor the parts' trust labels beyond the fixture rule. The hash is no signature: whoever
+  writes the file can write a hash that verifies, so these checks catch a file that is broken or
+  contradicts itself in one of the ways above, not one written to deceive, which serves what it
+  holds. The output check (`scripts/consistency.mjs`) does not apply these rules: outputs written
+  from a snapshot the binary refuses can still agree with each other, and in the check the step that
+  drives the binary fails first. The snapshot command and its log are where the rules are applied.
 - The snapshot log is read the same way: every line strict UTF-8, ending in a newline, with no
   blank line and nothing after the last newline, and in canonical form byte for byte. A line that
   is padded, ends in a carriage return or spells a number another way breaks the chain, and the

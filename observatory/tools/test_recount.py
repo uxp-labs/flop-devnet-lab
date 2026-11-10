@@ -734,6 +734,17 @@ class RecountTests(unittest.TestCase):
             self.assertEqual((code, out), (2, ""))
             self.assertEqual(err, "census refused (input): scenario dir not found: %s\n" % os.path.join(d, "no%0Asuch-folder"))
 
+    def test_event_pages_not_a_folder_is_named_in_one_line(self):
+        """Seventh rerun U4: the folder an event-pages refusal names is shown as a page file is."""
+        with tempfile.TemporaryDirectory() as d:
+            scenario = os.path.join(d, "a\nb")
+            os.mkdir(scenario)
+            with open(os.path.join(scenario, "event-pages"), "w", encoding="utf-8") as fh:
+                fh.write("not a folder")
+            code, out, err = run(scenario, 0, 10)
+            self.assertEqual((code, out), (2, ""))
+            self.assertEqual(err, "census refused (page-file): event-pages: not a folder (%s)\n" % os.path.join(d, "a%0Ab", "event-pages"))
+
     def test_output_is_deterministic(self):
         a = run(os.path.join(DATA, "gap"), 1, 30)[1]
         b = run(os.path.join(DATA, "gap"), 1, 30)[1]

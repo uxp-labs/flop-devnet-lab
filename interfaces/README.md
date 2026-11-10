@@ -88,7 +88,8 @@ Known limits (v0):
   more than the lag limit below a best height an earlier snapshot saw). Otherwise it is `null`.
 - The same escrow id listed twice (in either case) is refused by the command line, never shown as
   two results, and so is an escrow id that is not 0x plus 64 hex, which the MCP server could not
-  look up. The MCP server checks every field of a snapshot for its type and the agreements
+  look up. The MCP server checks every field of the snapshot, its pin, the status and every
+  escrow for its type (the census and the drift report for their schema only) and the agreements
   observatory/RULES.md section 5 lists, but its hash is no signature: serve only a snapshot the
   snapshot command wrote.
 - Amount, payee and policy are not checked here. FlopRail's `verifyLock` does that. Use both.

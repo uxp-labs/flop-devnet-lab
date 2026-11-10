@@ -9,7 +9,7 @@
 // Prints a JSON array; exit 1 on any disagreement, a run that printed no census, or a scenario
 // without census_request.
 import { spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -162,7 +162,20 @@ for (const g of generated) {
   else results.push({ scenario: g.skipped, outcome: "not-made", why: g.why });
 }
 for (const { name: d, dir } of scenarios) {
-  const meta = JSON.parse(readFileSync(resolve(pkg, dir, "meta.json"), "utf8"));
+  // Read only a regular file: a meta.json that is a pipe would wait here for ever (seventh rerun U3).
+  const metaPath = resolve(pkg, dir, "meta.json");
+  let isFile = false;
+  try {
+    isFile = lstatSync(metaPath).isFile();
+  } catch {
+    isFile = false;
+  }
+  if (!isFile) {
+    results.push({ scenario: d, outcome: "meta.json is not a regular file" });
+    bad++;
+    continue;
+  }
+  const meta = JSON.parse(readFileSync(metaPath, "utf8"));
   const req = meta.census_request;
   if (!req) {
     results.push({ scenario: d, outcome: "missing census_request in meta.json" });
