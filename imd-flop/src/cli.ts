@@ -447,10 +447,12 @@ export async function main(argv: string[], io: IO): Promise<number> {
             } else {
               const capCharge = settledKnown ?? prev.cap_charge;
               const nextState = state ?? prev.state;
+              // A failed read proves nothing new: keep the booked spend instead of erasing it to null.
+              const spend = fresh ? settledKnown : prev.spend;
               // Append when anything the ledger derives changes, not only the state string.
-              if (nextState !== prev.state || settledKnown !== prev.spend || capCharge !== prev.cap_charge) {
+              if (nextState !== prev.state || spend !== prev.spend || capCharge !== prev.cap_charge) {
                 try {
-                  appendLedger(h, { ...prev, ts: new Date().toISOString(), state: nextState, reason: saved?.flag ?? null, spend: settledKnown, cap_charge: capCharge });
+                  appendLedger(h, { ...prev, ts: new Date().toISOString(), state: nextState, reason: saved?.flag ?? null, spend, cap_charge: capCharge });
                 } catch {
                   io.err(disagree);
                   saved = { ...saved, status: disagree } as typeof saved;

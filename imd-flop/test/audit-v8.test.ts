@@ -145,3 +145,29 @@ describe("v8 item 3 (TS-c, cli.ts:418): receipt --refresh after a timeout keeps 
     expect([latest.state, latest.spend, latest.cap_charge]).toEqual(["settled", 0.05, 0.05]);
   });
 });
+
+describe("v8 item 6 (Sonar X1, cli.ts:440-446): a failed refresh keeps the booked spend", () => {
+  const failed: Record<string, Receipt> = { "HTTP 503": { http: 503, error: "HTTP 503", receipt: null }, "http 0 fetch failed": { http: 0, error: "fetch failed", receipt: null } };
+  for (const start of ["normal run", "timed-out run"]) {
+    for (const [name, rr] of Object.entries(failed)) {
+      it(`X1 ${start}, refresh settles 0.05, then a refresh with ${name}: ledger keeps spend 0.05 / cap_charge 0.05`, async () => {
+        const h = await ready("5");
+        let rid: string;
+        if (start === "normal run") {
+          const r = await cli(h, runArgs("j1"), { provider: new P() });
+          expect(r.code).toBe(0);
+          rid = r.json().request_id;
+        } else rid = await timedOutRun(h);
+        const ok = await cli(h, ["receipt", rid, "--refresh", "--json"], { provider: new P({ receipt: settledReceipt(0.05) }) });
+        expect(ok.code).toBe(0);
+        let latest = ledger(h).filter((x) => x.request_id === rid).at(-1)!;
+        expect([latest.state, latest.spend, latest.cap_charge]).toEqual(["settled", 0.05, 0.05]);
+        const bad = await cli(h, ["receipt", rid, "--refresh", "--json"], { provider: new P({ receipt: () => rr }) });
+        expect(bad.code).toBe(0);
+        expect(bad.json().ledger_spend).toBe(0.05);
+        latest = ledger(h).filter((x) => x.request_id === rid).at(-1)!;
+        expect([latest.state, latest.spend, latest.cap_charge]).toEqual(["settled", 0.05, 0.05]);
+      });
+    }
+  }
+});
