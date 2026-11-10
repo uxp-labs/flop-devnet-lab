@@ -180,11 +180,12 @@
     },
     {
       "id": "Q-SECONDARY-UNKNOWN",
-      "status": "current behavior",
+      "status": "fixed: [fix: one-chip]",
       "parts": [
         "viewer"
       ],
-      "summary": "Viewer mismatch and disagree rows append a second red 'unknown' chip when the ledger state is timeout_unknown or error."
+      "summary": "Viewer mismatch and disagree rows append a second red 'unknown' chip when the ledger state is timeout_unknown or error.",
+      "fixed_behavior": "One status chip per row: such a row shows only [grey sent, red unknown]; its identity-mismatch or disagree text and flags stay in the row."
     },
     {
       "id": "R-a",

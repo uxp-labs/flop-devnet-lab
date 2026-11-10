@@ -502,7 +502,7 @@
      "reservation_line": "reservation held 0.186"
     }
    },
-   "note": "KNOWN DEFECT KD-5: the snapshot pins today's wording 'reservation <amount>'; FIXER's target is 'reservation held <amount>', not asserted."
+   "note": "KNOWN DEFECT KD-5: the snapshot pins today's wording 'reservation <amount>'; FIXER's target is 'reservation held <amount>', not asserted. [fix: one-chip] shows one status chip [grey sent, red unknown]; the disagree text stays as a flag."
   },
   {
    "id": "21-G8",

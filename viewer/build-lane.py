@@ -128,8 +128,13 @@ def row_refused(row, e, r, reservation):
     row.update(chips=None, bad=True); row["flop"] = [["", "refused before the call, no FLOP chips"]]
     row["spend_flags"] = ["cap hit = stop", esc(e.get("reason") or "")]
 
+def unknown_chips():
+    """One status chip per row: red 'unknown' (precedence: unreadable, unknown, identity mismatch, disagree).
+    A timeout_unknown or error ledger row shows only this; its mismatch or disagree stays in the row text."""
+    return [["grey", "sent"], ["red", "unknown"]]
+
 def row_no_receipt(row, e, r, reservation):
-    row["chips"] = [["grey", "sent"], ["red", "unknown"]]; row["bad"] = True
+    row["chips"] = unknown_chips(); row["bad"] = True
     # No receipt file yet (a timeout): the reservation is still held, so it is shown (residual d).
     row["flop"] = [["last seen", "sent"], ["reservation", reservation], ["observed spend", None]]
     row["flags"] = [unresolved_flag(e)]
@@ -143,13 +148,13 @@ def row_read_failed(row, e, r, reservation):
     # Same labels and markup as the key-expired row; the link column stays grey "not checked".
     err = r.get("error") if present(r.get("error")) else ""
     why = esc(err) if err.startswith("HTTP ") else esc(f"HTTP {r.get('http')} {err}".strip())
-    row["chips"] = [["grey", "sent"], ["red", "unknown"]]; row["bad"] = True
+    row["chips"] = unknown_chips(); row["bad"] = True
     # Keep the reservation label, as the unreadable-file branch does: a failed read must not drop it.
     row["flop"] = [["last seen", esc(r.get("state") or "unknown")], ["now", f'unreadable: <span class="mono">{why}</span>'], ["reservation", reservation], ["observed spend", None]]
     row["flags"] = ["receipt read failed, can't re-check"] + ([unresolved_flag(e)] if unresolved(e) else [])
 
 def row_mismatch(row, e, r, reservation):
-    chips = [["grey", "sent"], ["red", "mismatch"]]; row["bad"] = True
+    chips = unknown_chips() if unresolved(e) else [["grey", "sent"], ["red", "mismatch"]]; row["bad"] = True
     row["flags"].append(IDENTITY)  # visible row text, not hover-only
     row["flags"].append("receipt's request_id, job, seat or DID doesn't match this row")
     for k in identity_diff(r, e):
@@ -157,11 +162,11 @@ def row_mismatch(row, e, r, reservation):
     row["flop"].append(["reservation", reservation])
     row["flop"].append(["match", "mismatch"])
     row["flop"].append(["observed spend", None])
-    if unresolved(e): chips.append(["red", "unknown"]); row["flags"].append(unresolved_flag(e))
+    if unresolved(e): row["flags"].append(unresolved_flag(e))
     row["chips"] = chips
 
 def row_disagree(row, e, r, reservation):
-    row["chips"] = [["amber", DISAGREE]] + ([["red", "unknown"]] if unresolved(e) else [])
+    row["chips"] = unknown_chips() if unresolved(e) else [["amber", DISAGREE]]
     row["bad"] = True
     row["flags"].append(DISAGREE)
     if unresolved(e): row["flags"].append(unresolved_flag(e))

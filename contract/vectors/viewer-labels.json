@@ -375,7 +375,7 @@
    ]
   },
   {
-   "id": "label-identity-with-timeout-adds-unknown",
+   "id": "label-identity-with-timeout-shows-one-unknown",
    "rule": "viewer.label",
    "input": {
     "ledger": {
@@ -419,10 +419,6 @@
       [
        "grey",
        "sent"
-      ],
-      [
-       "red",
-       "mismatch"
       ],
       [
        "red",
