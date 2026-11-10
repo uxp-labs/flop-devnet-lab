@@ -3,7 +3,7 @@
 
 Each test asserts the SAFE outcome, so it fails on 288a03e and passes after fix-v7.
 Names start with the judge's finding number (PY_M1 medium, PY_L2..PY_L10 low).
-guard.py runs through test_guard_numeric.run_guard (stubbed urlopen, sockets blocked).
+guard.py runs through guard_harness.run_guard (stubbed urlopen, sockets blocked).
 receipts.py runs in-process with urllib.request.urlopen replaced; nothing reaches the network.
 """
 import contextlib
@@ -21,7 +21,7 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
-from test_guard_numeric import run_guard, strict_load  # noqa: E402
+from guard_harness import run_guard, strict_load  # noqa: E402
 
 RECEIPTS = HERE / "receipts.py"
 Q = {"estimated_cost_flop": 0.066, "estimated_input_tokens": 3, "estimated_output_tokens": 8}

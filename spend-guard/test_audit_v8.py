@@ -4,7 +4,7 @@
 --max-tokens above MAX_TOKEN_COUNT (10,000,000) can never get a usable quote (tout must be >= max_tokens
 and <= MAX_TOKEN_COUNT), and a cap below 1e-6 can never pass (the padded quote is rounded up to at least
 1e-6). Both are locally decidable, so they must be refused before the estimate request, as v7d does for
-negative max-tokens and caps <= 0. guard.py runs through test_guard_numeric.run_guard (stubbed urlopen).
+negative max-tokens and caps <= 0. guard.py runs through guard_harness.run_guard (stubbed urlopen).
 """
 import sys
 import unittest
@@ -12,7 +12,7 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
-from test_guard_numeric import KEYS, run_guard, strict_load  # noqa: E402
+from guard_harness import KEYS, run_guard, strict_load  # noqa: E402
 
 
 def guard(body, args):

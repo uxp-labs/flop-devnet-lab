@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """spend-guard against the shared contract (contract/rules.json, contract/vectors/*.json).
 
-Current behavior at 3ae1cdf, not intent. guard.py runs through test_guard_numeric.run_guard (stubbed
+Current behavior at 3ae1cdf, not intent. guard.py runs through guard_harness.run_guard (stubbed
 urlopen, sockets blocked); receipts.py runs in-process with get() replaced. Offline."""
 import argparse
 import contextlib
@@ -19,7 +19,7 @@ sys.path.insert(0, str(HERE.parent / "contract"))
 import contract_vectors as cv  # noqa: E402
 import guard  # noqa: E402
 import receipts  # noqa: E402
-from test_guard_numeric import run_guard, strict_load  # noqa: E402
+from guard_harness import run_guard, strict_load  # noqa: E402
 
 PART = "spend-guard"
 

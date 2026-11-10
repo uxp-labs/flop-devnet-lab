@@ -2,7 +2,7 @@
 """Fail-first regressions for the open infos of IMD audit 355a3703 (spend-guard at 288a03e).
 
 Each test asserts the SAFE outcome, so it fails on 87130f8 and passes after the fix.
-guard.py runs through test_guard_numeric.run_guard (stubbed urlopen, sockets blocked).
+guard.py runs through guard_harness.run_guard (stubbed urlopen, sockets blocked).
 """
 import sys
 import unittest
@@ -10,7 +10,7 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
-from test_guard_numeric import KEYS, run_guard, strict_load  # noqa: E402
+from guard_harness import KEYS, run_guard, strict_load  # noqa: E402
 
 Q = {"estimated_cost_flop": 0.066, "estimated_input_tokens": 3, "estimated_output_tokens": 8}
 
