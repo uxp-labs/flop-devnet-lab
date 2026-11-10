@@ -1,0 +1,299 @@
+{
+  "contract": "flop-devnet-lab shared rules, as they behave at 3ae1cdfa55707dd8e02678acdba57faec5aa50bf",
+  "status": "current behavior: a snapshot of today's code, not a specification of intent. Nothing here is a fix.",
+  "parts": [
+    "imd-flop",
+    "spend-guard",
+    "viewer"
+  ],
+  "constants": {
+    "TEMPLATE_PAD": {
+      "value": 20,
+      "imd-flop": "src/run.ts TEMPLATE_PAD",
+      "spend-guard": "guard.py TEMPLATE_PAD",
+      "viewer": null
+    },
+    "MAX_TOKEN_COUNT": {
+      "value": 10000000,
+      "imd-flop": null,
+      "spend-guard": "guard.py MAX_TOKEN_COUNT",
+      "viewer": null
+    },
+    "MIN_CAP": {
+      "value": 1e-06,
+      "imd-flop": null,
+      "spend-guard": "guard.py MIN_CAP",
+      "viewer": null
+    },
+    "RECEIPT_STATES": {
+      "value": [
+        "reserved",
+        "estimated",
+        "settled",
+        "released"
+      ],
+      "imd-flop": "src/receipts.ts RECEIPT_STATES",
+      "spend-guard": null,
+      "viewer": null
+    },
+    "SETTLES": {
+      "value": [
+        "settled",
+        "released"
+      ],
+      "imd-flop": "literal in run.ts:329 and cli.ts:440",
+      "spend-guard": null,
+      "viewer": "build-lane.py SETTLES"
+    },
+    "STAGE_GATEWAY": {
+      "value": "gateway observed",
+      "imd-flop": "src/receipts.ts STAGE_GATEWAY",
+      "spend-guard": "literal in guard.py classify_receipt",
+      "viewer": "receipt field read by build-lane.py"
+    },
+    "DISAGREE": {
+      "value": "receipt and ledger disagree; reservation held, chain-final green blocked",
+      "imd-flop": "literal in cli.ts:442 (receipt --refresh stderr)",
+      "spend-guard": null,
+      "viewer": "build-lane.py DISAGREE"
+    },
+    "IDENTITY": {
+      "value": "receipt identity mismatch; chain-final green blocked",
+      "imd-flop": "src/match.ts RECEIPT_IDENTITY_STATUS",
+      "spend-guard": null,
+      "viewer": "build-lane.py IDENTITY"
+    },
+    "MAX_TOKENS_RANGE": {
+      "value": null,
+      "imd-flop": {
+        "run": [
+          1,
+          8192
+        ],
+        "quote": "unchecked"
+      },
+      "spend-guard": [
+        0,
+        10000000
+      ],
+      "viewer": null,
+      "note": "per-part ranges differ today; see quirk Q-MAXTOK-RANGE"
+    },
+    "EXIT": {
+      "imd-flop": {
+        "OK": 0,
+        "ERROR": 1,
+        "USAGE": 2,
+        "REFUSED_CAP": 3,
+        "REFUSED_LINK": 4,
+        "REFUSED_RULE": 5,
+        "TIMEOUT_UNKNOWN": 6,
+        "ESTIMATE_FAILED": 7,
+        "VERIFY_FAILED": 8,
+        "FAUCET_REFUSED": 9,
+        "REFUSED_LOCK": 10
+      },
+      "spend-guard": {
+        "would_send": 0,
+        "uncaught": 1,
+        "usage": 2,
+        "refused_local": 3
+      },
+      "viewer": null
+    }
+  },
+  "quirks": [
+    {
+      "id": "Q-QUOTE-COVER",
+      "status": "current behavior",
+      "parts": [
+        "imd-flop",
+        "spend-guard"
+      ],
+      "summary": "imd-flop padQuote does not require estimated_output_tokens >= max_tokens or input tokens >= 1; spend-guard refuses such quotes."
+    },
+    {
+      "id": "Q-QUOTE-COUNTS",
+      "status": "current behavior",
+      "parts": [
+        "imd-flop",
+        "spend-guard"
+      ],
+      "summary": "imd-flop accepts a missing token count as 0, fractional counts and counts above 10M; spend-guard requires nonnegative integer counts <= MAX_TOKEN_COUNT."
+    },
+    {
+      "id": "Q-AMOUNT-TEXT",
+      "status": "current behavior",
+      "parts": [
+        "imd-flop",
+        "spend-guard"
+      ],
+      "summary": "imd-flop cap set / --per-call / --job-budget parse with JS Number(): 0x10, ' 1 ', '1e3' are accepted. spend-guard --cap uses a strict ASCII decimal regex; nan/inf spellings pass the syntax check and are refused later."
+    },
+    {
+      "id": "Q-AMOUNT-JSON",
+      "status": "current behavior",
+      "parts": [
+        "imd-flop",
+        "spend-guard",
+        "viewer"
+      ],
+      "summary": "Viewer amount() accepts negative numbers; imd-flop knownSettledSpend/usableCapCharge and spend-guard spend_amount require >= 0."
+    },
+    {
+      "id": "Q-MAXTOK-RANGE",
+      "status": "current behavior",
+      "parts": [
+        "imd-flop",
+        "spend-guard"
+      ],
+      "summary": "imd-flop run accepts 1..8192 via Number() (so 0x10, 1e3 and ' 8 ' pass); quote does not check. spend-guard takes argparse int, 0..10M, refusing out-of-range before the estimate."
+    },
+    {
+      "id": "Q-STATE-FILTER",
+      "status": "current behavior",
+      "parts": [
+        "imd-flop",
+        "spend-guard",
+        "viewer"
+      ],
+      "summary": "imd-flop keeps only the 4 documented receipt states (else null); spend-guard passes the state through as given; viewer only asks whether the state is in SETTLES."
+    },
+    {
+      "id": "Q-FAILED-READ",
+      "status": "current behavior",
+      "parts": [
+        "imd-flop",
+        "spend-guard",
+        "viewer"
+      ],
+      "summary": "'Failed read' differs: imd-flop refresh = not (http === 200 and an object body); spend-guard receipts.py = code != 200; viewer = http not in (None, 200) or a non-empty error, with key_expired routed to its own branch. http null + no error is fresh in the viewer only; http 200 + error text is failed in the viewer only."
+    },
+    {
+      "id": "Q-RUN-FRESH",
+      "status": "current behavior",
+      "parts": [
+        "imd-flop"
+      ],
+      "summary": "runJob decides identity and settlement from the receipt body without checking http === 200 (run.ts:301); receipt --refresh requires http === 200 (cli.ts:414)."
+    },
+    {
+      "id": "Q-IDENTITY-FIELDS",
+      "status": "current behavior",
+      "parts": [
+        "imd-flop",
+        "viewer"
+      ],
+      "summary": "imd-flop matchReceipt compares job/seat with !== (null equals null) and also checks correlation_id; viewer identity_ok needs each of request_id/job/seat/did to be a non-empty string on both sides and ignores correlation_id. A numeric seat on the receipt makes imd-flop matchReceipt throw TypeError (it builds the link path from the seat); the viewer reports it as a seat difference."
+    },
+    {
+      "id": "Q-SECONDARY-UNKNOWN",
+      "status": "current behavior",
+      "parts": [
+        "viewer"
+      ],
+      "summary": "Viewer mismatch and disagree rows append a second red 'unknown' chip when the ledger state is timeout_unknown or error."
+    },
+    {
+      "id": "Q-LINK-BYPASS-TEXT",
+      "status": "current behavior",
+      "parts": [
+        "viewer"
+      ],
+      "summary": "A ledger row with link_bypassed: true shows the link column as grey 'bypassed (mock)' instead of grey 'not checked'. imd-flop never writes that field today."
+    },
+    {
+      "id": "R-a",
+      "residual": "a",
+      "status": "current behavior",
+      "parts": [
+        "imd-flop"
+      ],
+      "summary": "A fresh refresh that is unusable (no settling state, or wrong identity) writes spend null over a previously booked spend; cap_charge stays."
+    },
+    {
+      "id": "R-b",
+      "residual": "b",
+      "status": "current behavior",
+      "parts": [
+        "imd-flop"
+      ],
+      "summary": "receipt --refresh fills seat/did/ss58/network from the ledger only when no receipt file exists; an existing file without them (716819c-era) is not migrated."
+    },
+    {
+      "id": "R-c",
+      "residual": "c",
+      "status": "current behavior",
+      "parts": [
+        "viewer"
+      ],
+      "summary": "A failed read with a wrong identity renders red 'unknown', not 'mismatch' (failed-read branch runs before the identity check)."
+    },
+    {
+      "id": "R-d",
+      "residual": "d",
+      "status": "current behavior",
+      "parts": [
+        "viewer"
+      ],
+      "summary": "A row with no receipt file shows no reservation line."
+    },
+    {
+      "id": "R-e",
+      "residual": "e",
+      "status": "current behavior",
+      "parts": [
+        "imd-flop"
+      ],
+      "summary": "A pre-send error message with a 0x + 64 hex hash is stored as [hash] in the ledger reason but printed raw on stderr."
+    }
+  ],
+  "viewer_label_rules": {
+    "source": "FIXER, relayed by PRODY 2026-11-10",
+    "status": "pinned as current behavior at 3ae1cdf",
+    "rules": [
+      {
+        "id": "V-PRECEDENCE",
+        "text": "Precedence: unreadable, then unknown, then identity mismatch, then disagree."
+      },
+      {
+        "id": "V-FAILED-READ",
+        "text": "A failed read never shows 'matches' and never releases the reservation."
+      },
+      {
+        "id": "V-UNKNOWN-SETTLED",
+        "text": "An unknown row beside a settled ledger keeps the reservation line and keeps chain-final green blocked."
+      },
+      {
+        "id": "V-LINK-GREY",
+        "text": "The link column stays grey 'not checked' and never turns green from ledger data alone."
+      }
+    ]
+  },
+  "vector_status": {
+    "default": "A vector without a status pins current behavior: each part asserts `expect`.",
+    "known_defect": "A vector with status \"known_defect\" names a defect id from known_defects. `expect` is today's exact output and IS asserted, so the suite stays green and documents the defect. `target` holds the agreed label per affected part and is NOT asserted yet; the step that fixes the defect moves `target` into `expect` and drops the status."
+  },
+  "known_defects": [
+    {
+      "id": "KD-1",
+      "source": "IMD viewer medium, FIXER ruling relayed by PRODY 2026-11-10",
+      "parts": [
+        "viewer"
+      ],
+      "where": "build-lane.py:113 (failed-read test skips key_expired) and the green path at :155-163",
+      "today": "a key_expired (401) receipt row renders 'match matches' with no reservation line",
+      "target": "red 'unknown', reservation held (reservation line shown), chain-final green blocked, never 'matches'"
+    },
+    {
+      "id": "KD-2",
+      "source": "IMD viewer medium, FIXER ruling relayed by PRODY 2026-11-10",
+      "parts": [
+        "viewer"
+      ],
+      "where": "build-lane.py:139-141 (settled compare ignores the reservation and per-call cap)",
+      "today": "a settlement above its reservation (quote_padded) or above the per-call cap renders green 'chain final' and 'matches'",
+      "target": "amber 'disagree', reservation held (reservation line shown), chain-final green blocked"
+    }
+  ]
+}

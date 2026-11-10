@@ -1,0 +1,433 @@
+{
+ "file": "settlement-refresh.json",
+ "description": "imd-flop `receipt <id> --refresh` after a mock run: rows appended, the latest ledger row, the DISAGREE line on stderr, and the stored receipt file. run_read is the run's own receipt read (http 200); run_complete timeout leaves no receipt file. prev_cap_charge replaces the latest row's cap_charge before the refresh. strip_receipt_fields deletes keys from the stored file before the refresh.",
+ "status": "current behavior at 3ae1cdf",
+ "vectors": [
+  {
+   "id": "refresh-pending-to-settled",
+   "rule": "settlement.refresh",
+   "input": {
+    "run_read": {
+     "request_id": "$rid",
+     "correlation_id": "imd-job-j1",
+     "model": "m",
+     "reserved_spend": 0.186,
+     "settled_spend": null,
+     "state": "estimated"
+    },
+    "refresh_read": {
+     "http": 200,
+     "error": null,
+     "receipt": {
+      "request_id": "$rid",
+      "correlation_id": "imd-job-j1",
+      "model": "m",
+      "reserved_spend": 0.186,
+      "settled_spend": 0.05,
+      "state": "settled"
+     }
+    }
+   },
+   "expect": {
+    "imd-flop": {
+     "exit": 0,
+     "appended": 1,
+     "last": {
+      "state": "settled",
+      "spend": 0.05,
+      "cap_charge": 0.05
+     },
+     "stderr_disagree": false
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard is a dry run: it writes spend 0 and keeps no reservation or settlement"
+    },
+    "viewer": {
+     "not_applicable": "viewer renders ledger rows; it never writes them"
+    }
+   }
+  },
+  {
+   "id": "refresh-settled-then-failed-read-keeps-spend",
+   "rule": "settlement.refresh",
+   "input": {
+    "run_read": {
+     "request_id": "$rid",
+     "correlation_id": "imd-job-j1",
+     "model": "m",
+     "reserved_spend": 0.186,
+     "settled_spend": 0.05,
+     "state": "settled"
+    },
+    "refresh_read": {
+     "http": 503,
+     "error": "HTTP 503",
+     "receipt": null
+    }
+   },
+   "expect": {
+    "imd-flop": {
+     "exit": 0,
+     "appended": 0,
+     "last": {
+      "state": "settled",
+      "spend": 0.05,
+      "cap_charge": 0.05
+     },
+     "stderr_disagree": false
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard is a dry run: it writes spend 0 and keeps no reservation or settlement"
+    },
+    "viewer": {
+     "not_applicable": "viewer renders ledger rows; it never writes them"
+    }
+   }
+  },
+  {
+   "id": "refresh-pending-then-failed-read-keeps-reservation",
+   "rule": "settlement.refresh",
+   "input": {
+    "run_read": {
+     "request_id": "$rid",
+     "correlation_id": "imd-job-j1",
+     "model": "m",
+     "reserved_spend": 0.186,
+     "settled_spend": null,
+     "state": "estimated"
+    },
+    "refresh_read": {
+     "http": 500,
+     "error": "HTTP 500",
+     "receipt": null
+    }
+   },
+   "expect": {
+    "imd-flop": {
+     "exit": 0,
+     "appended": 0,
+     "last": {
+      "state": "estimated",
+      "spend": null,
+      "cap_charge": 0.186
+     },
+     "stderr_disagree": false
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard is a dry run: it writes spend 0 and keeps no reservation or settlement"
+    },
+    "viewer": {
+     "not_applicable": "viewer renders ledger rows; it never writes them"
+    }
+   }
+  },
+  {
+   "id": "refresh-settled-then-fresh-pending-nulls-spend",
+   "rule": "settlement.refresh",
+   "input": {
+    "run_read": {
+     "request_id": "$rid",
+     "correlation_id": "imd-job-j1",
+     "model": "m",
+     "reserved_spend": 0.186,
+     "settled_spend": 0.05,
+     "state": "settled"
+    },
+    "refresh_read": {
+     "http": 200,
+     "error": null,
+     "receipt": {
+      "request_id": "$rid",
+      "correlation_id": "imd-job-j1",
+      "model": "m",
+      "reserved_spend": 0.186,
+      "settled_spend": null,
+      "state": "estimated"
+     }
+    }
+   },
+   "expect": {
+    "imd-flop": {
+     "exit": 0,
+     "appended": 1,
+     "last": {
+      "state": "estimated",
+      "spend": null,
+      "cap_charge": 0.05
+     },
+     "stderr_disagree": false
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard is a dry run: it writes spend 0 and keeps no reservation or settlement"
+    },
+    "viewer": {
+     "not_applicable": "viewer renders ledger rows; it never writes them"
+    }
+   },
+   "quirks": [
+    "R-a"
+   ]
+  },
+  {
+   "id": "refresh-settled-then-fresh-wrong-identity-nulls-spend",
+   "rule": "settlement.refresh",
+   "input": {
+    "run_read": {
+     "request_id": "$rid",
+     "correlation_id": "imd-job-j1",
+     "model": "m",
+     "reserved_spend": 0.186,
+     "settled_spend": 0.05,
+     "state": "settled"
+    },
+    "refresh_read": {
+     "http": 200,
+     "error": null,
+     "receipt": {
+      "request_id": "other",
+      "correlation_id": "imd-job-j1",
+      "model": "m",
+      "reserved_spend": 0.186,
+      "settled_spend": 0.05,
+      "state": "settled"
+     }
+    }
+   },
+   "expect": {
+    "imd-flop": {
+     "exit": 0,
+     "appended": 1,
+     "last": {
+      "state": "settled",
+      "spend": null,
+      "cap_charge": 0.05
+     },
+     "stderr_disagree": false
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard is a dry run: it writes spend 0 and keeps no reservation or settlement"
+    },
+    "viewer": {
+     "not_applicable": "viewer renders ledger rows; it never writes them"
+    }
+   },
+   "quirks": [
+    "R-a"
+   ]
+  },
+  {
+   "id": "refresh-pending-to-released-zero",
+   "rule": "settlement.refresh",
+   "input": {
+    "run_read": {
+     "request_id": "$rid",
+     "correlation_id": "imd-job-j1",
+     "model": "m",
+     "reserved_spend": 0.186,
+     "settled_spend": null,
+     "state": "estimated"
+    },
+    "refresh_read": {
+     "http": 200,
+     "error": null,
+     "receipt": {
+      "request_id": "$rid",
+      "correlation_id": "imd-job-j1",
+      "model": "m",
+      "reserved_spend": 0.186,
+      "settled_spend": 0,
+      "state": "released"
+     }
+    }
+   },
+   "expect": {
+    "imd-flop": {
+     "exit": 0,
+     "appended": 1,
+     "last": {
+      "state": "released",
+      "spend": 0,
+      "cap_charge": 0
+     },
+     "stderr_disagree": false
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard is a dry run: it writes spend 0 and keeps no reservation or settlement"
+    },
+    "viewer": {
+     "not_applicable": "viewer renders ledger rows; it never writes them"
+    }
+   }
+  },
+  {
+   "id": "refresh-unusable-cap-charge-prints-disagree",
+   "rule": "settlement.refresh",
+   "input": {
+    "run_read": {
+     "request_id": "$rid",
+     "correlation_id": "imd-job-j1",
+     "model": "m",
+     "reserved_spend": 0.186,
+     "settled_spend": null,
+     "state": "estimated"
+    },
+    "prev_cap_charge": null,
+    "refresh_read": {
+     "http": 200,
+     "error": null,
+     "receipt": {
+      "request_id": "$rid",
+      "correlation_id": "imd-job-j1",
+      "model": "m",
+      "reserved_spend": 0.186,
+      "settled_spend": null,
+      "state": "estimated"
+     }
+    }
+   },
+   "expect": {
+    "imd-flop": {
+     "exit": 0,
+     "appended": 0,
+     "last": {
+      "state": "estimated",
+      "spend": null,
+      "cap_charge": null
+     },
+     "stderr_disagree": true
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard is a dry run: it writes spend 0 and keeps no reservation or settlement"
+    },
+    "viewer": {
+     "not_applicable": "viewer renders ledger rows; it never writes them"
+    }
+   }
+  },
+  {
+   "id": "refresh-timeout-then-settled",
+   "rule": "settlement.refresh",
+   "input": {
+    "run_complete": "timeout",
+    "refresh_read": {
+     "http": 200,
+     "error": null,
+     "receipt": {
+      "request_id": "$rid",
+      "correlation_id": "imd-job-j1",
+      "model": "m",
+      "reserved_spend": 0.186,
+      "settled_spend": 0.05,
+      "state": "settled"
+     }
+    }
+   },
+   "expect": {
+    "imd-flop": {
+     "exit": 0,
+     "appended": 1,
+     "last": {
+      "state": "settled",
+      "spend": 0.05,
+      "cap_charge": 0.05
+     },
+     "stderr_disagree": false
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard is a dry run: it writes spend 0 and keeps no reservation or settlement"
+    },
+    "viewer": {
+     "not_applicable": "viewer renders ledger rows; it never writes them"
+    }
+   }
+  },
+  {
+   "id": "refresh-file-without-seat-did-not-migrated",
+   "rule": "settlement.refresh",
+   "input": {
+    "run_read": {
+     "request_id": "$rid",
+     "correlation_id": "imd-job-j1",
+     "model": "m",
+     "reserved_spend": 0.186,
+     "settled_spend": null,
+     "state": "estimated"
+    },
+    "strip_receipt_fields": [
+     "seat",
+     "did",
+     "ss58",
+     "network"
+    ],
+    "refresh_read": {
+     "http": 200,
+     "error": null,
+     "receipt": {
+      "request_id": "$rid",
+      "correlation_id": "imd-job-j1",
+      "model": "m",
+      "reserved_spend": 0.186,
+      "settled_spend": null,
+      "state": "estimated"
+     }
+    }
+   },
+   "expect": {
+    "imd-flop": {
+     "exit": 0,
+     "file_absent": [
+      "seat",
+      "did",
+      "ss58",
+      "network"
+     ]
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard is a dry run: it writes spend 0 and keeps no reservation or settlement"
+    },
+    "viewer": {
+     "not_applicable": "viewer renders ledger rows; it never writes them"
+    }
+   },
+   "quirks": [
+    "R-b"
+   ]
+  },
+  {
+   "id": "refresh-no-file-fills-identity-from-ledger",
+   "rule": "settlement.refresh",
+   "input": {
+    "run_complete": "timeout",
+    "refresh_read": {
+     "http": 200,
+     "error": null,
+     "receipt": {
+      "request_id": "$rid",
+      "correlation_id": "imd-job-j1",
+      "model": "m",
+      "reserved_spend": 0.186,
+      "settled_spend": null,
+      "state": "estimated"
+     }
+    }
+   },
+   "expect": {
+    "imd-flop": {
+     "exit": 0,
+     "file_present": [
+      "seat",
+      "did",
+      "ss58",
+      "network"
+     ]
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard is a dry run: it writes spend 0 and keeps no reservation or settlement"
+    },
+    "viewer": {
+     "not_applicable": "viewer renders ledger rows; it never writes them"
+    }
+   }
+  }
+ ]
+}

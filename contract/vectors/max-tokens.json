@@ -1,0 +1,309 @@
+{
+ "file": "max-tokens.json",
+ "description": "--max-tokens as typed (passed as --max-tokens=<text>). imd-flop: `run` with a mock provider and a ready seat: accepted (exit 0) or exit 2 before the estimate. spend-guard: guard.py: usage_error (argparse exit 2), refused_before_estimate (exit 3, no estimate request) or estimate_requested.",
+ "status": "current behavior at 3ae1cdf",
+ "vectors": [
+  {
+   "id": "max-tokens-8",
+   "rule": "max_tokens",
+   "input": {
+    "text": "8"
+   },
+   "expect": {
+    "imd-flop": {
+     "accepted": true
+    },
+    "spend-guard": {
+     "outcome": "estimate_requested"
+    },
+    "viewer": {
+     "not_applicable": "viewer does not read max_tokens"
+    }
+   },
+   "quirks": [
+    "Q-MAXTOK-RANGE"
+   ]
+  },
+  {
+   "id": "max-tokens-1",
+   "rule": "max_tokens",
+   "input": {
+    "text": "1"
+   },
+   "expect": {
+    "imd-flop": {
+     "accepted": true
+    },
+    "spend-guard": {
+     "outcome": "estimate_requested"
+    },
+    "viewer": {
+     "not_applicable": "viewer does not read max_tokens"
+    }
+   },
+   "quirks": [
+    "Q-MAXTOK-RANGE"
+   ]
+  },
+  {
+   "id": "max-tokens-0",
+   "rule": "max_tokens",
+   "input": {
+    "text": "0"
+   },
+   "expect": {
+    "imd-flop": {
+     "accepted": false,
+     "exit": 2
+    },
+    "spend-guard": {
+     "outcome": "estimate_requested"
+    },
+    "viewer": {
+     "not_applicable": "viewer does not read max_tokens"
+    }
+   },
+   "quirks": [
+    "Q-MAXTOK-RANGE"
+   ]
+  },
+  {
+   "id": "max-tokens--1",
+   "rule": "max_tokens",
+   "input": {
+    "text": "-1"
+   },
+   "expect": {
+    "imd-flop": {
+     "accepted": false,
+     "exit": 2
+    },
+    "spend-guard": {
+     "outcome": "refused_before_estimate"
+    },
+    "viewer": {
+     "not_applicable": "viewer does not read max_tokens"
+    }
+   },
+   "quirks": [
+    "Q-MAXTOK-RANGE"
+   ]
+  },
+  {
+   "id": "max-tokens-8192",
+   "rule": "max_tokens",
+   "input": {
+    "text": "8192"
+   },
+   "expect": {
+    "imd-flop": {
+     "accepted": true
+    },
+    "spend-guard": {
+     "outcome": "estimate_requested"
+    },
+    "viewer": {
+     "not_applicable": "viewer does not read max_tokens"
+    }
+   },
+   "quirks": [
+    "Q-MAXTOK-RANGE"
+   ]
+  },
+  {
+   "id": "max-tokens-8193",
+   "rule": "max_tokens",
+   "input": {
+    "text": "8193"
+   },
+   "expect": {
+    "imd-flop": {
+     "accepted": false,
+     "exit": 2
+    },
+    "spend-guard": {
+     "outcome": "estimate_requested"
+    },
+    "viewer": {
+     "not_applicable": "viewer does not read max_tokens"
+    }
+   },
+   "quirks": [
+    "Q-MAXTOK-RANGE"
+   ]
+  },
+  {
+   "id": "max-tokens-10000000",
+   "rule": "max_tokens",
+   "input": {
+    "text": "10000000"
+   },
+   "expect": {
+    "imd-flop": {
+     "accepted": false,
+     "exit": 2
+    },
+    "spend-guard": {
+     "outcome": "estimate_requested"
+    },
+    "viewer": {
+     "not_applicable": "viewer does not read max_tokens"
+    }
+   },
+   "quirks": [
+    "Q-MAXTOK-RANGE"
+   ]
+  },
+  {
+   "id": "max-tokens-10000001",
+   "rule": "max_tokens",
+   "input": {
+    "text": "10000001"
+   },
+   "expect": {
+    "imd-flop": {
+     "accepted": false,
+     "exit": 2
+    },
+    "spend-guard": {
+     "outcome": "refused_before_estimate"
+    },
+    "viewer": {
+     "not_applicable": "viewer does not read max_tokens"
+    }
+   },
+   "quirks": [
+    "Q-MAXTOK-RANGE"
+   ]
+  },
+  {
+   "id": "max-tokens-1.5",
+   "rule": "max_tokens",
+   "input": {
+    "text": "1.5"
+   },
+   "expect": {
+    "imd-flop": {
+     "accepted": false,
+     "exit": 2
+    },
+    "spend-guard": {
+     "outcome": "usage_error"
+    },
+    "viewer": {
+     "not_applicable": "viewer does not read max_tokens"
+    }
+   },
+   "quirks": [
+    "Q-MAXTOK-RANGE"
+   ]
+  },
+  {
+   "id": "max-tokens-0x10",
+   "rule": "max_tokens",
+   "input": {
+    "text": "0x10"
+   },
+   "expect": {
+    "imd-flop": {
+     "accepted": true
+    },
+    "spend-guard": {
+     "outcome": "usage_error"
+    },
+    "viewer": {
+     "not_applicable": "viewer does not read max_tokens"
+    }
+   },
+   "quirks": [
+    "Q-MAXTOK-RANGE"
+   ]
+  },
+  {
+   "id": "max-tokens-1e3",
+   "rule": "max_tokens",
+   "input": {
+    "text": "1e3"
+   },
+   "expect": {
+    "imd-flop": {
+     "accepted": true
+    },
+    "spend-guard": {
+     "outcome": "usage_error"
+    },
+    "viewer": {
+     "not_applicable": "viewer does not read max_tokens"
+    }
+   },
+   "quirks": [
+    "Q-MAXTOK-RANGE"
+   ]
+  },
+  {
+   "id": "max-tokens-8-spaced",
+   "rule": "max_tokens",
+   "input": {
+    "text": " 8 "
+   },
+   "expect": {
+    "imd-flop": {
+     "accepted": true
+    },
+    "spend-guard": {
+     "outcome": "estimate_requested"
+    },
+    "viewer": {
+     "not_applicable": "viewer does not read max_tokens"
+    }
+   },
+   "quirks": [
+    "Q-MAXTOK-RANGE"
+   ]
+  },
+  {
+   "id": "max-tokens-abc",
+   "rule": "max_tokens",
+   "input": {
+    "text": "abc"
+   },
+   "expect": {
+    "imd-flop": {
+     "accepted": false,
+     "exit": 2
+    },
+    "spend-guard": {
+     "outcome": "usage_error"
+    },
+    "viewer": {
+     "not_applicable": "viewer does not read max_tokens"
+    }
+   },
+   "quirks": [
+    "Q-MAXTOK-RANGE"
+   ]
+  },
+  {
+   "id": "max-tokens-quote-unchecked",
+   "rule": "max_tokens.quote",
+   "input": {
+    "text": "-5"
+   },
+   "expect": {
+    "imd-flop": {
+     "exit": 0
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard has no separate quote command"
+    },
+    "viewer": {
+     "not_applicable": "viewer has no quote command"
+    }
+   },
+   "quirks": [
+    "Q-MAXTOK-RANGE"
+   ],
+   "note": "imd-flop quote passes Number(text) to the estimate with no range check"
+  }
+ ]
+}

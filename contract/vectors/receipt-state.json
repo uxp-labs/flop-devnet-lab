@@ -1,0 +1,160 @@
+{
+ "file": "receipt-state.json",
+ "description": "Receipt state values. imd-flop: classifyReceipt(...).state. spend-guard: classify_receipt(...)['state']. viewer: whether the state counts as settled (in SETTLES).",
+ "status": "current behavior at 3ae1cdf",
+ "vectors": [
+  {
+   "id": "receipt-state-reserved",
+   "rule": "receipt.state",
+   "input": {
+    "state": "reserved"
+   },
+   "expect": {
+    "imd-flop": {
+     "state": "reserved"
+    },
+    "spend-guard": {
+     "state": "reserved"
+    },
+    "viewer": {
+     "settles": false
+    }
+   }
+  },
+  {
+   "id": "receipt-state-estimated",
+   "rule": "receipt.state",
+   "input": {
+    "state": "estimated"
+   },
+   "expect": {
+    "imd-flop": {
+     "state": "estimated"
+    },
+    "spend-guard": {
+     "state": "estimated"
+    },
+    "viewer": {
+     "settles": false
+    }
+   }
+  },
+  {
+   "id": "receipt-state-settled",
+   "rule": "receipt.state",
+   "input": {
+    "state": "settled"
+   },
+   "expect": {
+    "imd-flop": {
+     "state": "settled"
+    },
+    "spend-guard": {
+     "state": "settled"
+    },
+    "viewer": {
+     "settles": true
+    }
+   }
+  },
+  {
+   "id": "receipt-state-released",
+   "rule": "receipt.state",
+   "input": {
+    "state": "released"
+   },
+   "expect": {
+    "imd-flop": {
+     "state": "released"
+    },
+    "spend-guard": {
+     "state": "released"
+    },
+    "viewer": {
+     "settles": true
+    }
+   }
+  },
+  {
+   "id": "receipt-state-SETTLED",
+   "rule": "receipt.state",
+   "input": {
+    "state": "SETTLED"
+   },
+   "expect": {
+    "imd-flop": {
+     "state": null
+    },
+    "spend-guard": {
+     "state": "SETTLED"
+    },
+    "viewer": {
+     "settles": false
+    }
+   },
+   "quirks": [
+    "Q-STATE-FILTER"
+   ]
+  },
+  {
+   "id": "receipt-state-bogus",
+   "rule": "receipt.state",
+   "input": {
+    "state": "bogus"
+   },
+   "expect": {
+    "imd-flop": {
+     "state": null
+    },
+    "spend-guard": {
+     "state": "bogus"
+    },
+    "viewer": {
+     "settles": false
+    }
+   },
+   "quirks": [
+    "Q-STATE-FILTER"
+   ]
+  },
+  {
+   "id": "receipt-state-None",
+   "rule": "receipt.state",
+   "input": {
+    "state": null
+   },
+   "expect": {
+    "imd-flop": {
+     "state": null
+    },
+    "spend-guard": {
+     "state": null
+    },
+    "viewer": {
+     "settles": false
+    }
+   }
+  },
+  {
+   "id": "receipt-state-5",
+   "rule": "receipt.state",
+   "input": {
+    "state": 5
+   },
+   "expect": {
+    "imd-flop": {
+     "state": null
+    },
+    "spend-guard": {
+     "state": 5
+    },
+    "viewer": {
+     "settles": false
+    }
+   },
+   "quirks": [
+    "Q-STATE-FILTER"
+   ]
+  }
+ ]
+}

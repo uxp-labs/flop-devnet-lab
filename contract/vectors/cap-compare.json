@@ -1,0 +1,103 @@
+{
+ "file": "cap-compare.json",
+ "description": "Cap compare against the padded quote for the estimate {0.066 FLOP, 3 in, 8 out, max-tokens 8} (padded 0.186). imd-flop: `cap set <cap>` then `run` (mock, fresh ledger): exit code. spend-guard: guard.py --cap <cap>: decision. imd-flop compares the padded quote only; spend-guard also compares the unrounded pad and the exact raw quote.",
+ "status": "current behavior at 3ae1cdf",
+ "vectors": [
+  {
+   "id": "cap-equals-padded",
+   "rule": "cap.compare",
+   "input": {
+    "estimate": {
+     "estimated_cost_flop": 0.066,
+     "estimated_input_tokens": 3,
+     "estimated_output_tokens": 8
+    },
+    "max_tokens": 8,
+    "cap": "0.186"
+   },
+   "expect": {
+    "imd-flop": {
+     "exit": 0
+    },
+    "spend-guard": {
+     "decision": "would_send"
+    },
+    "viewer": {
+     "not_applicable": "viewer does not decide caps; it renders per_call_cap and daily cap left from the ledger"
+    }
+   }
+  },
+  {
+   "id": "cap-just-below-padded",
+   "rule": "cap.compare",
+   "input": {
+    "estimate": {
+     "estimated_cost_flop": 0.066,
+     "estimated_input_tokens": 3,
+     "estimated_output_tokens": 8
+    },
+    "max_tokens": 8,
+    "cap": "0.185999"
+   },
+   "expect": {
+    "imd-flop": {
+     "exit": 3
+    },
+    "spend-guard": {
+     "decision": "refused_local"
+    },
+    "viewer": {
+     "not_applicable": "viewer does not decide caps; it renders per_call_cap and daily cap left from the ledger"
+    }
+   }
+  },
+  {
+   "id": "cap-well-above",
+   "rule": "cap.compare",
+   "input": {
+    "estimate": {
+     "estimated_cost_flop": 0.066,
+     "estimated_input_tokens": 3,
+     "estimated_output_tokens": 8
+    },
+    "max_tokens": 8,
+    "cap": "1"
+   },
+   "expect": {
+    "imd-flop": {
+     "exit": 0
+    },
+    "spend-guard": {
+     "decision": "would_send"
+    },
+    "viewer": {
+     "not_applicable": "viewer does not decide caps; it renders per_call_cap and daily cap left from the ledger"
+    }
+   }
+  },
+  {
+   "id": "cap-below-padded",
+   "rule": "cap.compare",
+   "input": {
+    "estimate": {
+     "estimated_cost_flop": 0.066,
+     "estimated_input_tokens": 3,
+     "estimated_output_tokens": 8
+    },
+    "max_tokens": 8,
+    "cap": "0.1"
+   },
+   "expect": {
+    "imd-flop": {
+     "exit": 3
+    },
+    "spend-guard": {
+     "decision": "refused_local"
+    },
+    "viewer": {
+     "not_applicable": "viewer does not decide caps; it renders per_call_cap and daily cap left from the ledger"
+    }
+   }
+  }
+ ]
+}

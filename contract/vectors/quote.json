@@ -1,0 +1,308 @@
+{
+ "file": "quote.json",
+ "description": "Quote padding: raw + TEMPLATE_PAD * raw/(tin+tout), rounded up to 6 decimals; which estimates are usable. imd-flop: padQuote(est).padded (null when unusable). spend-guard: guard.py CLI decision and quote_padded with --cap 1000 so only the quote decides.",
+ "status": "current behavior at 3ae1cdf",
+ "vectors": [
+  {
+   "id": "quote-base",
+   "rule": "quote.pad",
+   "input": {
+    "estimate": {
+     "estimated_cost_flop": 0.066,
+     "estimated_input_tokens": 3,
+     "estimated_output_tokens": 8
+    },
+    "max_tokens": 8
+   },
+   "expect": {
+    "imd-flop": {
+     "padded": 0.186
+    },
+    "spend-guard": {
+     "decision": "would_send",
+     "quote_padded": 0.186
+    },
+    "viewer": {
+     "not_applicable": "viewer never computes a quote; it renders quote_padded from the ledger"
+    }
+   }
+  },
+  {
+   "id": "quote-tout-below-max-tokens",
+   "rule": "quote.pad",
+   "input": {
+    "estimate": {
+     "estimated_cost_flop": 0.066,
+     "estimated_input_tokens": 3,
+     "estimated_output_tokens": 8
+    },
+    "max_tokens": 16
+   },
+   "expect": {
+    "imd-flop": {
+     "padded": 0.186
+    },
+    "spend-guard": {
+     "decision": "refused_local",
+     "quote_padded": null
+    },
+    "viewer": {
+     "not_applicable": "viewer never computes a quote; it renders quote_padded from the ledger"
+    }
+   },
+   "quirks": [
+    "Q-QUOTE-COVER"
+   ]
+  },
+  {
+   "id": "quote-zero-input-tokens",
+   "rule": "quote.pad",
+   "input": {
+    "estimate": {
+     "estimated_cost_flop": 0.066,
+     "estimated_input_tokens": 0,
+     "estimated_output_tokens": 8
+    },
+    "max_tokens": 8
+   },
+   "expect": {
+    "imd-flop": {
+     "padded": 0.231
+    },
+    "spend-guard": {
+     "decision": "refused_local",
+     "quote_padded": null
+    },
+    "viewer": {
+     "not_applicable": "viewer never computes a quote; it renders quote_padded from the ledger"
+    }
+   },
+   "quirks": [
+    "Q-QUOTE-COVER"
+   ]
+  },
+  {
+   "id": "quote-missing-input-tokens",
+   "rule": "quote.pad",
+   "input": {
+    "estimate": {
+     "estimated_cost_flop": 0.066,
+     "estimated_output_tokens": 8
+    },
+    "max_tokens": 8
+   },
+   "expect": {
+    "imd-flop": {
+     "padded": 0.231
+    },
+    "spend-guard": {
+     "decision": "refused_local",
+     "quote_padded": null
+    },
+    "viewer": {
+     "not_applicable": "viewer never computes a quote; it renders quote_padded from the ledger"
+    }
+   },
+   "quirks": [
+    "Q-QUOTE-COUNTS"
+   ]
+  },
+  {
+   "id": "quote-fractional-input-tokens",
+   "rule": "quote.pad",
+   "input": {
+    "estimate": {
+     "estimated_cost_flop": 0.066,
+     "estimated_input_tokens": 2.5,
+     "estimated_output_tokens": 8
+    },
+    "max_tokens": 8
+   },
+   "expect": {
+    "imd-flop": {
+     "padded": 0.191715
+    },
+    "spend-guard": {
+     "decision": "refused_local",
+     "quote_padded": null
+    },
+    "viewer": {
+     "not_applicable": "viewer never computes a quote; it renders quote_padded from the ledger"
+    }
+   },
+   "quirks": [
+    "Q-QUOTE-COUNTS"
+   ]
+  },
+  {
+   "id": "quote-output-tokens-above-10M",
+   "rule": "quote.pad",
+   "input": {
+    "estimate": {
+     "estimated_cost_flop": 0.066,
+     "estimated_input_tokens": 3,
+     "estimated_output_tokens": 10000001
+    },
+    "max_tokens": 8
+   },
+   "expect": {
+    "imd-flop": {
+     "padded": 0.066001
+    },
+    "spend-guard": {
+     "decision": "refused_local",
+     "quote_padded": null
+    },
+    "viewer": {
+     "not_applicable": "viewer never computes a quote; it renders quote_padded from the ledger"
+    }
+   },
+   "quirks": [
+    "Q-QUOTE-COUNTS"
+   ]
+  },
+  {
+   "id": "quote-raw-zero",
+   "rule": "quote.pad",
+   "input": {
+    "estimate": {
+     "estimated_cost_flop": 0,
+     "estimated_input_tokens": 3,
+     "estimated_output_tokens": 8
+    },
+    "max_tokens": 8
+   },
+   "expect": {
+    "imd-flop": {
+     "padded": null
+    },
+    "spend-guard": {
+     "decision": "refused_local",
+     "quote_padded": null
+    },
+    "viewer": {
+     "not_applicable": "viewer never computes a quote; it renders quote_padded from the ledger"
+    }
+   }
+  },
+  {
+   "id": "quote-raw-negative",
+   "rule": "quote.pad",
+   "input": {
+    "estimate": {
+     "estimated_cost_flop": -0.066,
+     "estimated_input_tokens": 3,
+     "estimated_output_tokens": 8
+    },
+    "max_tokens": 8
+   },
+   "expect": {
+    "imd-flop": {
+     "padded": null
+    },
+    "spend-guard": {
+     "decision": "refused_local",
+     "quote_padded": null
+    },
+    "viewer": {
+     "not_applicable": "viewer never computes a quote; it renders quote_padded from the ledger"
+    }
+   }
+  },
+  {
+   "id": "quote-raw-string",
+   "rule": "quote.pad",
+   "input": {
+    "estimate": {
+     "estimated_cost_flop": "0.066",
+     "estimated_input_tokens": 3,
+     "estimated_output_tokens": 8
+    },
+    "max_tokens": 8
+   },
+   "expect": {
+    "imd-flop": {
+     "padded": null
+    },
+    "spend-guard": {
+     "decision": "refused_local",
+     "quote_padded": null
+    },
+    "viewer": {
+     "not_applicable": "viewer never computes a quote; it renders quote_padded from the ledger"
+    }
+   }
+  },
+  {
+   "id": "quote-input-tokens-bool",
+   "rule": "quote.pad",
+   "input": {
+    "estimate": {
+     "estimated_cost_flop": 0.066,
+     "estimated_input_tokens": true,
+     "estimated_output_tokens": 8
+    },
+    "max_tokens": 8
+   },
+   "expect": {
+    "imd-flop": {
+     "padded": null
+    },
+    "spend-guard": {
+     "decision": "refused_local",
+     "quote_padded": null
+    },
+    "viewer": {
+     "not_applicable": "viewer never computes a quote; it renders quote_padded from the ledger"
+    }
+   }
+  },
+  {
+   "id": "quote-tiny-rounds-up-to-1e-6",
+   "rule": "quote.pad",
+   "input": {
+    "estimate": {
+     "estimated_cost_flop": 1e-08,
+     "estimated_input_tokens": 3,
+     "estimated_output_tokens": 8
+    },
+    "max_tokens": 8
+   },
+   "expect": {
+    "imd-flop": {
+     "padded": 1e-06
+    },
+    "spend-guard": {
+     "decision": "would_send",
+     "quote_padded": 1e-06
+    },
+    "viewer": {
+     "not_applicable": "viewer never computes a quote; it renders quote_padded from the ledger"
+    }
+   }
+  },
+  {
+   "id": "quote-raw-missing",
+   "rule": "quote.pad",
+   "input": {
+    "estimate": {
+     "estimated_input_tokens": 3,
+     "estimated_output_tokens": 8
+    },
+    "max_tokens": 8
+   },
+   "expect": {
+    "imd-flop": {
+     "padded": null
+    },
+    "spend-guard": {
+     "decision": "refused_local",
+     "quote_padded": null
+    },
+    "viewer": {
+     "not_applicable": "viewer never computes a quote; it renders quote_padded from the ledger"
+    }
+   }
+  }
+ ]
+}

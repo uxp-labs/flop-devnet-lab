@@ -1,0 +1,208 @@
+{
+ "file": "failed-read.json",
+ "description": "Is a receipt read a failed (not fresh) read? imd-flop: `receipt --refresh` with the read {http, error, receipt}; failed = the stored file carries last_known_at (cli.ts non-fresh branch). spend-guard: receipts.py main with get() returning (http, body, neterr); failed = the printed row carries an http field. viewer: build_row on a receipt file with these http/error/flag fields; failed = the failed-read branch (flag \"receipt read failed, can't re-check\").",
+ "status": "current behavior at 3ae1cdf",
+ "vectors": [
+  {
+   "id": "read-fresh-200",
+   "rule": "read.failed",
+   "input": {
+    "http": 200,
+    "error": null,
+    "flag": null,
+    "body": "object"
+   },
+   "expect": {
+    "imd-flop": {
+     "failed": false
+    },
+    "spend-guard": {
+     "failed": false
+    },
+    "viewer": {
+     "failed": false
+    }
+   }
+  },
+  {
+   "id": "read-http-500",
+   "rule": "read.failed",
+   "input": {
+    "http": 500,
+    "error": "HTTP 500",
+    "flag": null,
+    "body": "object"
+   },
+   "expect": {
+    "imd-flop": {
+     "failed": true
+    },
+    "spend-guard": {
+     "failed": true
+    },
+    "viewer": {
+     "failed": true
+    }
+   }
+  },
+  {
+   "id": "read-http-0-fetch-failed",
+   "rule": "read.failed",
+   "input": {
+    "http": 0,
+    "error": "fetch failed",
+    "flag": null,
+    "body": "object"
+   },
+   "expect": {
+    "imd-flop": {
+     "failed": true
+    },
+    "spend-guard": {
+     "failed": true
+    },
+    "viewer": {
+     "failed": true
+    }
+   }
+  },
+  {
+   "id": "read-http-null-with-error",
+   "rule": "read.failed",
+   "input": {
+    "http": null,
+    "error": "boom",
+    "flag": null,
+    "body": "object"
+   },
+   "expect": {
+    "imd-flop": {
+     "failed": true
+    },
+    "spend-guard": {
+     "failed": true
+    },
+    "viewer": {
+     "failed": true
+    }
+   }
+  },
+  {
+   "id": "read-http-null-no-error",
+   "rule": "read.failed",
+   "input": {
+    "http": null,
+    "error": null,
+    "flag": null,
+    "body": "object"
+   },
+   "expect": {
+    "imd-flop": {
+     "failed": true
+    },
+    "spend-guard": {
+     "failed": true
+    },
+    "viewer": {
+     "failed": false
+    }
+   },
+   "quirks": [
+    "Q-FAILED-READ"
+   ]
+  },
+  {
+   "id": "read-http-string-200",
+   "rule": "read.failed",
+   "input": {
+    "http": "200",
+    "error": null,
+    "flag": null,
+    "body": "object"
+   },
+   "expect": {
+    "imd-flop": {
+     "failed": true
+    },
+    "spend-guard": {
+     "failed": true
+    },
+    "viewer": {
+     "failed": true
+    }
+   }
+  },
+  {
+   "id": "read-http-200-with-error-text",
+   "rule": "read.failed",
+   "input": {
+    "http": 200,
+    "error": "oops",
+    "flag": null,
+    "body": "object"
+   },
+   "expect": {
+    "imd-flop": {
+     "failed": false
+    },
+    "spend-guard": {
+     "failed": false
+    },
+    "viewer": {
+     "failed": true
+    }
+   },
+   "quirks": [
+    "Q-FAILED-READ"
+   ]
+  },
+  {
+   "id": "read-key-expired-401",
+   "rule": "read.failed",
+   "input": {
+    "http": 401,
+    "error": "api_key_expired",
+    "flag": "key_expired",
+    "body": "object"
+   },
+   "expect": {
+    "imd-flop": {
+     "failed": true
+    },
+    "spend-guard": {
+     "failed": true
+    },
+    "viewer": {
+     "failed": false
+    }
+   },
+   "quirks": [
+    "Q-FAILED-READ"
+   ]
+  },
+  {
+   "id": "read-http-200-body-null",
+   "rule": "read.failed",
+   "input": {
+    "http": 200,
+    "error": null,
+    "flag": null,
+    "body": "null"
+   },
+   "expect": {
+    "imd-flop": {
+     "failed": true
+    },
+    "spend-guard": {
+     "failed": true
+    },
+    "viewer": {
+     "not_applicable": "viewer reads a stored file; imd-flop never writes a null receipt body"
+    }
+   },
+   "quirks": [
+    "Q-FAILED-READ"
+   ]
+  }
+ ]
+}

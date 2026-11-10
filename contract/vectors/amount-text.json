@@ -1,0 +1,380 @@
+{
+ "file": "amount-text.json",
+ "description": "Amount text from the command line. imd-flop: `cap set <text>` (the same num() parses --per-call and --job-budget): accepted with the stored daily cap, or exit 2. spend-guard: guard.cap_arg(text): accepted float, or ArgumentTypeError (argparse exit 2). nan/inf are accepted by cap_arg and refused later by json_number (decision refused_local).",
+ "status": "current behavior at 3ae1cdf",
+ "vectors": [
+  {
+   "id": "amount-text-0dot25",
+   "rule": "amount.text",
+   "input": {
+    "text": "0.25"
+   },
+   "expect": {
+    "imd-flop": {
+     "accepted": true,
+     "value": 0.25
+    },
+    "spend-guard": {
+     "accepted": true,
+     "value": 0.25
+    },
+    "viewer": {
+     "not_applicable": "viewer reads amounts from JSON files, not command-line text; see amount-json.json"
+    }
+   }
+  },
+  {
+   "id": "amount-text-1",
+   "rule": "amount.text",
+   "input": {
+    "text": "1"
+   },
+   "expect": {
+    "imd-flop": {
+     "accepted": true,
+     "value": 1
+    },
+    "spend-guard": {
+     "accepted": true,
+     "value": 1.0
+    },
+    "viewer": {
+     "not_applicable": "viewer reads amounts from JSON files, not command-line text; see amount-json.json"
+    }
+   }
+  },
+  {
+   "id": "amount-text-dot5",
+   "rule": "amount.text",
+   "input": {
+    "text": ".5"
+   },
+   "expect": {
+    "imd-flop": {
+     "accepted": true,
+     "value": 0.5
+    },
+    "spend-guard": {
+     "accepted": true,
+     "value": 0.5
+    },
+    "viewer": {
+     "not_applicable": "viewer reads amounts from JSON files, not command-line text; see amount-json.json"
+    }
+   }
+  },
+  {
+   "id": "amount-text-5dot",
+   "rule": "amount.text",
+   "input": {
+    "text": "5."
+   },
+   "expect": {
+    "imd-flop": {
+     "accepted": true,
+     "value": 5
+    },
+    "spend-guard": {
+     "accepted": true,
+     "value": 5.0
+    },
+    "viewer": {
+     "not_applicable": "viewer reads amounts from JSON files, not command-line text; see amount-json.json"
+    }
+   }
+  },
+  {
+   "id": "amount-text-+2",
+   "rule": "amount.text",
+   "input": {
+    "text": "+2"
+   },
+   "expect": {
+    "imd-flop": {
+     "accepted": true,
+     "value": 2
+    },
+    "spend-guard": {
+     "accepted": true,
+     "value": 2.0
+    },
+    "viewer": {
+     "not_applicable": "viewer reads amounts from JSON files, not command-line text; see amount-json.json"
+    }
+   }
+  },
+  {
+   "id": "amount-text-1e3",
+   "rule": "amount.text",
+   "input": {
+    "text": "1e3"
+   },
+   "expect": {
+    "imd-flop": {
+     "accepted": true,
+     "value": 1000
+    },
+    "spend-guard": {
+     "accepted": true,
+     "value": 1000.0
+    },
+    "viewer": {
+     "not_applicable": "viewer reads amounts from JSON files, not command-line text; see amount-json.json"
+    }
+   }
+  },
+  {
+   "id": "amount-text-0x10",
+   "rule": "amount.text",
+   "input": {
+    "text": "0x10"
+   },
+   "expect": {
+    "imd-flop": {
+     "accepted": true,
+     "value": 16
+    },
+    "spend-guard": {
+     "accepted": false
+    },
+    "viewer": {
+     "not_applicable": "viewer reads amounts from JSON files, not command-line text; see amount-json.json"
+    }
+   },
+   "quirks": [
+    "Q-AMOUNT-TEXT"
+   ]
+  },
+  {
+   "id": "amount-text-1-spaced",
+   "rule": "amount.text",
+   "input": {
+    "text": " 1 "
+   },
+   "expect": {
+    "imd-flop": {
+     "accepted": true,
+     "value": 1
+    },
+    "spend-guard": {
+     "accepted": false
+    },
+    "viewer": {
+     "not_applicable": "viewer reads amounts from JSON files, not command-line text; see amount-json.json"
+    }
+   },
+   "quirks": [
+    "Q-AMOUNT-TEXT"
+   ]
+  },
+  {
+   "id": "amount-text-1_000",
+   "rule": "amount.text",
+   "input": {
+    "text": "1_000"
+   },
+   "expect": {
+    "imd-flop": {
+     "accepted": false,
+     "exit": 2
+    },
+    "spend-guard": {
+     "accepted": false
+    },
+    "viewer": {
+     "not_applicable": "viewer reads amounts from JSON files, not command-line text; see amount-json.json"
+    }
+   },
+   "quirks": [
+    "Q-AMOUNT-TEXT"
+   ]
+  },
+  {
+   "id": "amount-text-nan",
+   "rule": "amount.text",
+   "input": {
+    "text": "nan"
+   },
+   "expect": {
+    "imd-flop": {
+     "accepted": false,
+     "exit": 2
+    },
+    "spend-guard": {
+     "accepted": true,
+     "value": {
+      "$float": "nan"
+     }
+    },
+    "viewer": {
+     "not_applicable": "viewer reads amounts from JSON files, not command-line text; see amount-json.json"
+    }
+   },
+   "quirks": [
+    "Q-AMOUNT-TEXT"
+   ]
+  },
+  {
+   "id": "amount-text-inf",
+   "rule": "amount.text",
+   "input": {
+    "text": "inf"
+   },
+   "expect": {
+    "imd-flop": {
+     "accepted": false,
+     "exit": 2
+    },
+    "spend-guard": {
+     "accepted": true,
+     "value": {
+      "$float": "inf"
+     }
+    },
+    "viewer": {
+     "not_applicable": "viewer reads amounts from JSON files, not command-line text; see amount-json.json"
+    }
+   },
+   "quirks": [
+    "Q-AMOUNT-TEXT"
+   ]
+  },
+  {
+   "id": "amount-text-Infinity",
+   "rule": "amount.text",
+   "input": {
+    "text": "Infinity"
+   },
+   "expect": {
+    "imd-flop": {
+     "accepted": false,
+     "exit": 2
+    },
+    "spend-guard": {
+     "accepted": true,
+     "value": {
+      "$float": "inf"
+     }
+    },
+    "viewer": {
+     "not_applicable": "viewer reads amounts from JSON files, not command-line text; see amount-json.json"
+    }
+   },
+   "quirks": [
+    "Q-AMOUNT-TEXT"
+   ]
+  },
+  {
+   "id": "amount-text-0",
+   "rule": "amount.text",
+   "input": {
+    "text": "0"
+   },
+   "expect": {
+    "imd-flop": {
+     "accepted": false,
+     "exit": 2
+    },
+    "spend-guard": {
+     "accepted": true,
+     "value": 0.0
+    },
+    "viewer": {
+     "not_applicable": "viewer reads amounts from JSON files, not command-line text; see amount-json.json"
+    }
+   },
+   "quirks": [
+    "Q-AMOUNT-TEXT"
+   ]
+  },
+  {
+   "id": "amount-text--1",
+   "rule": "amount.text",
+   "input": {
+    "text": "-1"
+   },
+   "expect": {
+    "imd-flop": {
+     "accepted": false,
+     "exit": 2
+    },
+    "spend-guard": {
+     "accepted": true,
+     "value": -1.0
+    },
+    "viewer": {
+     "not_applicable": "viewer reads amounts from JSON files, not command-line text; see amount-json.json"
+    }
+   },
+   "quirks": [
+    "Q-AMOUNT-TEXT"
+   ]
+  },
+  {
+   "id": "amount-text-١",
+   "rule": "amount.text",
+   "input": {
+    "text": "١"
+   },
+   "expect": {
+    "imd-flop": {
+     "accepted": false,
+     "exit": 2
+    },
+    "spend-guard": {
+     "accepted": false
+    },
+    "viewer": {
+     "not_applicable": "viewer reads amounts from JSON files, not command-line text; see amount-json.json"
+    }
+   },
+   "quirks": [
+    "Q-AMOUNT-TEXT"
+   ]
+  },
+  {
+   "id": "amount-text-blank",
+   "rule": "amount.text",
+   "input": {
+    "text": ""
+   },
+   "expect": {
+    "imd-flop": {
+     "accepted": false,
+     "exit": 2
+    },
+    "spend-guard": {
+     "accepted": false
+    },
+    "viewer": {
+     "not_applicable": "viewer reads amounts from JSON files, not command-line text; see amount-json.json"
+    }
+   },
+   "quirks": [
+    "Q-AMOUNT-TEXT"
+   ]
+  },
+  {
+   "id": "amount-text-abc",
+   "rule": "amount.text",
+   "input": {
+    "text": "abc"
+   },
+   "expect": {
+    "imd-flop": {
+     "accepted": false,
+     "exit": 2
+    },
+    "spend-guard": {
+     "accepted": false
+    },
+    "viewer": {
+     "not_applicable": "viewer reads amounts from JSON files, not command-line text; see amount-json.json"
+    }
+   },
+   "quirks": [
+    "Q-AMOUNT-TEXT"
+   ]
+  }
+ ]
+}
