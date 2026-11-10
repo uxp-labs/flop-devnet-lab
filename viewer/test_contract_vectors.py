@@ -3,6 +3,7 @@
 
 Current behavior at 3ae1cdf, not intent. build-lane.py is exec'd into a namespace on temp dirs, as
 test_audit_v7.lane does. Offline."""
+import re
 import sys
 import unittest
 from pathlib import Path
@@ -48,7 +49,18 @@ def label(i):
             "greens": greens(html), "link": row["link"]}
 
 
-ADAPTERS = {"amount.json": amount_json, "receipt.state": receipt_state, "identity": identity, "read.failed": read_failed, "viewer.label": label}
+RESERVATION_LINE = re.compile(r'<div><span class="k">(reservation[^<]*)</span> (.*?)</div>')
+
+
+def reservation_line(i):
+    """The visible text of the row's reservation line ("reservation 0.186" today), or "absent"."""
+    rid = i["ledger"]["request_id"]
+    _, html = lane([i["ledger"]], {} if i["receipt"] is None else {rid: i["receipt"]})
+    m = RESERVATION_LINE.findall(html)
+    return {"line": f"{m[0][0]} {visible(m[0][1])}" if m else "absent"}
+
+
+ADAPTERS = {"amount.json": amount_json, "receipt.state": receipt_state, "identity": identity, "read.failed": read_failed, "viewer.label": label, "viewer.reservation_line": reservation_line}
 
 
 class ContractVectors(unittest.TestCase):

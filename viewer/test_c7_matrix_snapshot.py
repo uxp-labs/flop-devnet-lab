@@ -3,7 +3,7 @@
 
 Each snapshot is the HTML build-lane.py renders today (3ae1cdf) for one ledger row and its receipt file.
 Current behavior, not intent: cases marked known_defect (19-G6, KD-1) are pinned as they render today and
-carry a target that is not asserted (see contract/rules.json known_defects). Offline: build-lane.py is exec'd on temp dirs via lane_harness.lane."""
+carry a target that is not asserted. KD-5 (reservation wording) labels every held row (see contract/rules.json known_defects). Offline: build-lane.py is exec'd on temp dirs via lane_harness.lane."""
 import json
 import sys
 import unittest
@@ -43,13 +43,16 @@ class C7MatrixSnapshot(unittest.TestCase):
 
     def test_known_defect_snapshots_are_labelled(self):
         """A snapshot that pins a known defect says so: status known_defect, known defect ids, and a target.
-        Every key_expired case pins KD-1 (build-lane.py's failed-read test skips key_expired)."""
+        Every key_expired case pins KD-1 (build-lane.py's failed-read test skips key_expired), and every snapshot
+        with today's 'reservation <amount>' line pins KD-5 (FIXER's wording is 'reservation held <amount>')."""
         defect_ids = {d["id"] for d in cv.rules()["known_defects"]}
         for case in load()["cases"]:
             with self.subTest(case["id"]):
                 rf = case["receipt_file"]
                 if rf is not None and "merge" in rf and rf["merge"].get("flag") == "key_expired":
                     self.assertIn("KD-1", case.get("defects", []), f"{case['id']} pins KD-1's output but is not labelled")
+                if '<span class="k">reservation</span>' in (HERE / case["snapshot"]).read_text():
+                    self.assertIn("KD-5", case.get("defects", []), f"{case['id']} pins KD-5's wording but is not labelled")
                 if "status" not in case:
                     self.assertNotIn("defects", case)
                     continue

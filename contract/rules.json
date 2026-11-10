@@ -305,6 +305,18 @@
       "replaces_quirk": "Q-LINK-BYPASS-TEXT",
       "replaced_quirk_summary": "A ledger row with link_bypassed: true shows the link column as grey 'bypassed (mock)' instead of grey 'not checked'. imd-flop never writes that field today.",
       "fix_step": "step 3"
+    },
+    {
+      "id": "KD-5",
+      "source": "FIXER ruling on step 3 viewer items (reservation-held-wording), Sonar step 1 independent check F2, relayed by PRODY 2026-11-10",
+      "parts": [
+        "viewer"
+      ],
+      "where": "build-lane.py build_row: the flop ['reservation', amount] entries rendered by render() as <span class=\"k\">reservation</span>",
+      "today": "a held-reservation row reads 'reservation <amount>'; a row with no receipt file has no reservation line (residual R-d)",
+      "target": "every held-reservation row reads 'reservation held <amount>'",
+      "conflicts_with": "viewer/test_audit_v8.py lines 90-91 and 110-111 assert the exact pair ['reservation', amount] and the markup <span class=\"k\">reservation</span> <span class=\"mono\">amount</span>; the fix needs FIXER/Chief to approve a labelled edit of those lines or another wording",
+      "fix_step": "step 3"
     }
   ]
 }

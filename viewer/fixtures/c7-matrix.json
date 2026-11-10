@@ -48,7 +48,17 @@
      "error": "HTTP 503"
     }
    },
-   "snapshot": "snapshots/c7-matrix/01-F1.html"
+   "snapshot": "snapshots/c7-matrix/01-F1.html",
+   "status": "known_defect",
+   "defects": [
+    "KD-5"
+   ],
+   "target": {
+    "viewer": {
+     "reservation_line": "reservation held 0.05"
+    }
+   },
+   "note": "KNOWN DEFECT KD-5: the snapshot pins today's wording 'reservation <amount>'; FIXER's target is 'reservation held <amount>', not asserted."
   },
   {
    "id": "02-F2",
@@ -67,7 +77,17 @@
      "error": "HTTP 503"
     }
    },
-   "snapshot": "snapshots/c7-matrix/02-F2.html"
+   "snapshot": "snapshots/c7-matrix/02-F2.html",
+   "status": "known_defect",
+   "defects": [
+    "KD-5"
+   ],
+   "target": {
+    "viewer": {
+     "reservation_line": "reservation held 0.198"
+    }
+   },
+   "note": "KNOWN DEFECT KD-5: the snapshot pins today's wording 'reservation <amount>'; FIXER's target is 'reservation held <amount>', not asserted."
   },
   {
    "id": "03-F3",
@@ -79,7 +99,17 @@
      "error": "fetch failed"
     }
    },
-   "snapshot": "snapshots/c7-matrix/03-F3.html"
+   "snapshot": "snapshots/c7-matrix/03-F3.html",
+   "status": "known_defect",
+   "defects": [
+    "KD-5"
+   ],
+   "target": {
+    "viewer": {
+     "reservation_line": "reservation held 0.186"
+    }
+   },
+   "note": "KNOWN DEFECT KD-5: the snapshot pins today's wording 'reservation <amount>'; FIXER's target is 'reservation held <amount>', not asserted."
   },
   {
    "id": "04-F4",
@@ -94,7 +124,17 @@
      "error": "HTTP 500"
     }
    },
-   "snapshot": "snapshots/c7-matrix/04-F4.html"
+   "snapshot": "snapshots/c7-matrix/04-F4.html",
+   "status": "known_defect",
+   "defects": [
+    "KD-5"
+   ],
+   "target": {
+    "viewer": {
+     "reservation_line": "reservation held 0.186"
+    }
+   },
+   "note": "KNOWN DEFECT KD-5: the snapshot pins today's wording 'reservation <amount>'; FIXER's target is 'reservation held <amount>', not asserted."
   },
   {
    "id": "05-F5",
@@ -108,7 +148,17 @@
      "error": "HTTP 500"
     }
    },
-   "snapshot": "snapshots/c7-matrix/05-F5.html"
+   "snapshot": "snapshots/c7-matrix/05-F5.html",
+   "status": "known_defect",
+   "defects": [
+    "KD-5"
+   ],
+   "target": {
+    "viewer": {
+     "reservation_line": "reservation held 0.186"
+    }
+   },
+   "note": "KNOWN DEFECT KD-5: the snapshot pins today's wording 'reservation <amount>'; FIXER's target is 'reservation held <amount>', not asserted."
   },
   {
    "id": "06-F6",
@@ -120,7 +170,17 @@
      "error": "<script>alert(1)</script>"
     }
    },
-   "snapshot": "snapshots/c7-matrix/06-F6.html"
+   "snapshot": "snapshots/c7-matrix/06-F6.html",
+   "status": "known_defect",
+   "defects": [
+    "KD-5"
+   ],
+   "target": {
+    "viewer": {
+     "reservation_line": "reservation held 0.186"
+    }
+   },
+   "note": "KNOWN DEFECT KD-5: the snapshot pins today's wording 'reservation <amount>'; FIXER's target is 'reservation held <amount>', not asserted."
   },
   {
    "id": "07-F7",
@@ -132,7 +192,17 @@
      "error": "boom"
     }
    },
-   "snapshot": "snapshots/c7-matrix/07-F7.html"
+   "snapshot": "snapshots/c7-matrix/07-F7.html",
+   "status": "known_defect",
+   "defects": [
+    "KD-5"
+   ],
+   "target": {
+    "viewer": {
+     "reservation_line": "reservation held 0.186"
+    }
+   },
+   "note": "KNOWN DEFECT KD-5: the snapshot pins today's wording 'reservation <amount>'; FIXER's target is 'reservation held <amount>', not asserted."
   },
   {
    "id": "08-F8",
@@ -143,7 +213,17 @@
      "http": "200"
     }
    },
-   "snapshot": "snapshots/c7-matrix/08-F8.html"
+   "snapshot": "snapshots/c7-matrix/08-F8.html",
+   "status": "known_defect",
+   "defects": [
+    "KD-5"
+   ],
+   "target": {
+    "viewer": {
+     "reservation_line": "reservation held 0.186"
+    }
+   },
+   "note": "KNOWN DEFECT KD-5: the snapshot pins today's wording 'reservation <amount>'; FIXER's target is 'reservation held <amount>', not asserted."
   },
   {
    "id": "09-F9",
@@ -158,7 +238,17 @@
      "error": "HTTP 503"
     }
    },
-   "snapshot": "snapshots/c7-matrix/09-F9.html"
+   "snapshot": "snapshots/c7-matrix/09-F9.html",
+   "status": "known_defect",
+   "defects": [
+    "KD-5"
+   ],
+   "target": {
+    "viewer": {
+     "reservation_line": "reservation held 0.3"
+    }
+   },
+   "note": "KNOWN DEFECT KD-5: the snapshot pins today's wording 'reservation <amount>'; FIXER's target is 'reservation held <amount>', not asserted."
   },
   {
    "id": "10-F10",
@@ -174,7 +264,17 @@
    "snapshot": "snapshots/c7-matrix/10-F10.html",
    "quirks": [
     "R-c"
-   ]
+   ],
+   "status": "known_defect",
+   "defects": [
+    "KD-5"
+   ],
+   "target": {
+    "viewer": {
+     "reservation_line": "reservation held 0.186"
+    }
+   },
+   "note": "KNOWN DEFECT KD-5: the snapshot pins today's wording 'reservation <amount>'; FIXER's target is 'reservation held <amount>', not asserted."
   },
   {
    "id": "11-B1",
@@ -183,7 +283,17 @@
    "receipt_file": {
     "raw": "{not json"
    },
-   "snapshot": "snapshots/c7-matrix/11-B1.html"
+   "snapshot": "snapshots/c7-matrix/11-B1.html",
+   "status": "known_defect",
+   "defects": [
+    "KD-5"
+   ],
+   "target": {
+    "viewer": {
+     "reservation_line": "reservation held 0.186"
+    }
+   },
+   "note": "KNOWN DEFECT KD-5: the snapshot pins today's wording 'reservation <amount>'; FIXER's target is 'reservation held <amount>', not asserted."
   },
   {
    "id": "12-B2",
@@ -192,7 +302,17 @@
    "receipt_file": {
     "raw": "[1, 2]"
    },
-   "snapshot": "snapshots/c7-matrix/12-B2.html"
+   "snapshot": "snapshots/c7-matrix/12-B2.html",
+   "status": "known_defect",
+   "defects": [
+    "KD-5"
+   ],
+   "target": {
+    "viewer": {
+     "reservation_line": "reservation held 0.186"
+    }
+   },
+   "note": "KNOWN DEFECT KD-5: the snapshot pins today's wording 'reservation <amount>'; FIXER's target is 'reservation held <amount>', not asserted."
   },
   {
    "id": "13-B3",
@@ -205,7 +325,17 @@
    "receipt_file": {
     "raw": "{not json"
    },
-   "snapshot": "snapshots/c7-matrix/13-B3.html"
+   "snapshot": "snapshots/c7-matrix/13-B3.html",
+   "status": "known_defect",
+   "defects": [
+    "KD-5"
+   ],
+   "target": {
+    "viewer": {
+     "reservation_line": "reservation held 0.198"
+    }
+   },
+   "note": "KNOWN DEFECT KD-5: the snapshot pins today's wording 'reservation <amount>'; FIXER's target is 'reservation held <amount>', not asserted."
   },
   {
    "id": "14-G1",
@@ -239,7 +369,17 @@
      "chain_final": true
     }
    },
-   "snapshot": "snapshots/c7-matrix/15-G2.html"
+   "snapshot": "snapshots/c7-matrix/15-G2.html",
+   "status": "known_defect",
+   "defects": [
+    "KD-5"
+   ],
+   "target": {
+    "viewer": {
+     "reservation_line": "reservation held 0.05"
+    }
+   },
+   "note": "KNOWN DEFECT KD-5: the snapshot pins today's wording 'reservation <amount>'; FIXER's target is 'reservation held <amount>', not asserted."
   },
   {
    "id": "16-G3",
@@ -250,7 +390,17 @@
      "seat": "9999"
     }
    },
-   "snapshot": "snapshots/c7-matrix/16-G3.html"
+   "snapshot": "snapshots/c7-matrix/16-G3.html",
+   "status": "known_defect",
+   "defects": [
+    "KD-5"
+   ],
+   "target": {
+    "viewer": {
+     "reservation_line": "reservation held 0.186"
+    }
+   },
+   "note": "KNOWN DEFECT KD-5: the snapshot pins today's wording 'reservation <amount>'; FIXER's target is 'reservation held <amount>', not asserted."
   },
   {
    "id": "17-G4",
@@ -268,7 +418,17 @@
      "chain_final": true
     }
    },
-   "snapshot": "snapshots/c7-matrix/17-G4.html"
+   "snapshot": "snapshots/c7-matrix/17-G4.html",
+   "status": "known_defect",
+   "defects": [
+    "KD-5"
+   ],
+   "target": {
+    "viewer": {
+     "reservation_line": "reservation held 0.05"
+    }
+   },
+   "note": "KNOWN DEFECT KD-5: the snapshot pins today's wording 'reservation <amount>'; FIXER's target is 'reservation held <amount>', not asserted."
   },
   {
    "id": "18-G5",
@@ -295,7 +455,8 @@
    "snapshot": "snapshots/c7-matrix/19-G6.html",
    "status": "known_defect",
    "defects": [
-    "KD-1"
+    "KD-1",
+    "KD-5"
    ],
    "target": {
     "viewer": {
@@ -316,10 +477,11 @@
       "grey",
       "not checked",
       null
-     ]
+     ],
+     "reservation_line": "reservation held 0.186"
     }
    },
-   "note": "KNOWN DEFECT KD-1: the snapshot pins today's wrong output ('match matches', no reservation line). Fixing KD-1 regenerates it; target is not asserted."
+   "note": "KNOWN DEFECT KD-1: the snapshot pins today's wrong output ('match matches', no reservation line). Also KD-5 (no reservation line; target 'reservation held 0.186'). Fixing either regenerates it; target is not asserted."
   },
   {
    "id": "20-G7",
@@ -330,7 +492,17 @@
    "receipt_file": {
     "merge": {}
    },
-   "snapshot": "snapshots/c7-matrix/20-G7.html"
+   "snapshot": "snapshots/c7-matrix/20-G7.html",
+   "status": "known_defect",
+   "defects": [
+    "KD-5"
+   ],
+   "target": {
+    "viewer": {
+     "reservation_line": "reservation held 0.186"
+    }
+   },
+   "note": "KNOWN DEFECT KD-5: the snapshot pins today's wording 'reservation <amount>'; FIXER's target is 'reservation held <amount>', not asserted."
   },
   {
    "id": "21-G8",
@@ -340,7 +512,17 @@
    "snapshot": "snapshots/c7-matrix/21-G8.html",
    "quirks": [
     "R-d"
-   ]
+   ],
+   "status": "known_defect",
+   "defects": [
+    "KD-5"
+   ],
+   "target": {
+    "viewer": {
+     "reservation_line": "reservation held 0.186"
+    }
+   },
+   "note": "KNOWN DEFECT KD-5: the snapshot pins today's wording 'reservation <amount>' (no line at all: residual R-d); FIXER's target is 'reservation held <amount>', not asserted."
   },
   {
    "id": "22-G9",
@@ -363,7 +545,17 @@
      "settled": 0.05
     }
    },
-   "snapshot": "snapshots/c7-matrix/23-G10.html"
+   "snapshot": "snapshots/c7-matrix/23-G10.html",
+   "status": "known_defect",
+   "defects": [
+    "KD-5"
+   ],
+   "target": {
+    "viewer": {
+     "reservation_line": "reservation held 0.186"
+    }
+   },
+   "note": "KNOWN DEFECT KD-5: the snapshot pins today's wording 'reservation <amount>'; FIXER's target is 'reservation held <amount>', not asserted."
   },
   {
    "id": "24-G11",
@@ -374,7 +566,17 @@
      "chain_final": true
     }
    },
-   "snapshot": "snapshots/c7-matrix/24-G11.html"
+   "snapshot": "snapshots/c7-matrix/24-G11.html",
+   "status": "known_defect",
+   "defects": [
+    "KD-5"
+   ],
+   "target": {
+    "viewer": {
+     "reservation_line": "reservation held 0.186"
+    }
+   },
+   "note": "KNOWN DEFECT KD-5: the snapshot pins today's wording 'reservation <amount>'; FIXER's target is 'reservation held <amount>', not asserted."
   }
  ]
 }
