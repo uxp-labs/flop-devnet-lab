@@ -12,7 +12,8 @@ import { verifyLink, type LinkFile } from "./link.js";
 import { DEFAULT_MODEL, network, SEAT_COLLECTION } from "./networks.js";
 import { checkBudget, padQuote, requireCap, validateJob, validatePayer, validateRunMaxTokens } from "./policy.js";
 import { appendLedger, jobSpent, LedgerLockError, spentToday, UnusableLedgerCharge, utcDay, withLedgerLock, type LedgerEntry } from "./ledger.js";
-import { classifyReceipt, knownSettledSpend, type Classified } from "./receipts.js";
+import { classifyReceipt, type Classified } from "./receipts.js";
+import { holdCharge, nextBooking, receiptIdentity } from "./settlement.js";
 import type { Provider } from "./providers.js";
 import { assertPaidNetwork, checkImdJob, PreSendError, readVerifiedSeatOwner, type Fetch } from "./gateway.js";
 import { FlopHTTPError } from "@flop-labs/client";
@@ -241,8 +242,7 @@ export async function runJob(h: string, provider: Provider, o: RunOpts, deps: { 
 
   const rr = await provider.readReceipt(requestId);
   const classified = classifyReceipt(rr.receipt, { job, provider: provider.name, http: rr.http, error: rr.error, requestId, mock: provider.name === "mock" });
-  const rawId = rr.receipt ? (rr.receipt as { request_id?: unknown }).request_id : undefined;
-  const identityOk = typeof rawId === "string" && rawId.length > 0 && rawId === requestId;
+  const { rawId, identityOk } = receiptIdentity(rr.receipt, requestId);
   if (!identityOk) {
     classified.settled = null;
     classified.chain_final = false;
@@ -266,17 +266,13 @@ export async function runJob(h: string, provider: Provider, o: RunOpts, deps: { 
 
   const usage = res.usage;
   const costReported = typeof usage?.cost_flop === "number" && Number.isFinite(usage.cost_flop) ? usage.cost_flop : null;
-  // A known settlement is a finite amount >= 0, including explicit 0, and only
-  // once the receipt state is settled or released. Otherwise the pre-call
-  // reservation stays. Reported usage may raise that reservation, not lower it.
-  const unresolvedCharge = costReported !== null ? Math.max(q.padded, costReported) : q.padded;
-  const stateSettles = classified.state === "settled" || classified.state === "released";
-  const settledKnown = !receiptRedacted && identityOk && stateSettles ? knownSettledSpend(classified.settled) : null;
-  const chosen = settledKnown ?? unresolvedCharge;
-  const capCharge = Number.isFinite(chosen) ? chosen : q.padded;
-  appendLedger(h, { ...sent, ts: new Date().toISOString(), state: classified.state ?? "sent", reason: classified.flag, spend: settledKnown, cost_reported: costReported, cap_charge: capCharge, http: rr.http });
+  // run treats its own post-call read as fresh whatever the HTTP status (known defect KD-3, fixed in step 3), and a
+  // receipt body that had to be redacted never proves a settlement.
+  const outcome = { fresh: true, identityOk: identityOk && !receiptRedacted, state: classified.state, settled: classified.settled };
+  const booking = nextBooking({ state: sent.state, spend: sent.spend }, outcome, holdCharge(q.padded, costReported));
+  appendLedger(h, { ...sent, ts: new Date().toISOString(), ...booking, reason: classified.flag, cost_reported: costReported, http: rr.http });
 
   const match = await matchReceipt(h, receipt0, latestAttempts(h).find((e) => e.request_id === requestId) ?? null);
   const receipt = { ...receipt0, match };
-  return { request_id: requestId, job, provider: provider.name, payer, quote_padded: q.padded, cap_charge: capCharge, receipt, response_file: responseFile, text, ...(withheld !== undefined ? { withheld } : {}), link_bypassed: linkBypassed };
+  return { request_id: requestId, job, provider: provider.name, payer, quote_padded: q.padded, cap_charge: booking.cap_charge, receipt, response_file: responseFile, text, ...(withheld !== undefined ? { withheld } : {}), link_bypassed: linkBypassed };
 }
