@@ -11,8 +11,23 @@ D = os.path.dirname(os.path.abspath(__file__))
 VIEWER = os.path.join(D, "settlement-viewer-2026-11-09.html")
 RDIR = sys.argv[1] if len(sys.argv) > 1 else os.path.join(D, "mock-receipts")
 BLANK = '<span class="unk blank" title="unknown spend">&nbsp;</span>'
-DISAGREE = "receipt and ledger disagree; reservation held, chain-final green blocked"
-IDENTITY = "receipt identity mismatch; chain-final green blocked"
+
+def load_rules(start=__file__):
+    """contract/rules.json from the nearest ancestor folder of this file (symlinks resolved), so the build works
+    from any cwd. Fails closed: no rules file means no rebuild, never built-in labels."""
+    d = os.path.dirname(os.path.realpath(start))
+    while True:
+        p = os.path.join(d, "contract", "rules.json")
+        if os.path.isfile(p):
+            with open(p) as fh: return json.load(fh)
+        up = os.path.dirname(d)
+        if up == d: raise RuntimeError(f"contract/rules.json not found in any parent of {os.path.realpath(start)}; refusing to build without the shared rules")
+        d = up
+_C = load_rules()["constants"]
+DISAGREE = _C["DISAGREE"]["value"]
+IDENTITY = _C["IDENTITY"]["value"]
+SETTLES = tuple(_C["SETTLES"]["value"])
+STAGE_GATEWAY = _C["STAGE_GATEWAY"]["value"]
 ET = ZoneInfo("America/New_York")
 
 def num(v): return BLANK if v is None else f'<span class="mono">{v}</span>'
@@ -31,7 +46,6 @@ def identity_ok(r, e):
     return all(present(r.get(k)) and present(e.get(k)) and r.get(k) == e.get(k) for k in ("request_id", "job", "seat", "did"))
 def identity_diff(r, e): return [k for k in ("request_id", "job", "seat", "did") if not (present(r.get(k)) and present(e.get(k)) and r.get(k) == e.get(k))]
 def when(ts): return datetime.fromisoformat(ts.replace("Z", "+00:00")).astimezone(ET).strftime("%b %-d, %-I:%M %p ET")
-SETTLES = ("settled", "released")
 
 def unreadable(what, why):
     """A red row for an item that could not be read, instead of aborting the whole rebuild."""
@@ -158,8 +172,8 @@ def row_matches(row, e, r, reservation, key_expired=False):
     chips = [["grey", "sent"]]
     if key_expired:
         chips.append(["red", "unknown"]); row["bad"] = True; row["flags"].append("key expired, can't re-check")
-    elif r.get("stage") == "gateway observed":
-        chips.append(["amber", "gateway observed"])
+    elif r.get("stage") == STAGE_GATEWAY:
+        chips.append(["amber", STAGE_GATEWAY])
     if chain_final and not row["bad"]: chips.append(["green", "chain final"])
     row["chips"] = chips
     if not chain_final: row["flop"].append(["chain final", '<span class="unk">not checked yet</span>'])
