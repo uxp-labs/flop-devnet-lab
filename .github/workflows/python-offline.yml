@@ -1,0 +1,40 @@
+# Offline CI for the two Python parts: spend-guard and the viewer.
+# Workflow permissions are contents: read only. No secrets, wallet keys,
+# deploys, or publishing. Checkout does not persist credentials.
+# Each part runs its own unittest suite from its own folder, the same command
+# a person runs locally. Both suites use the standard library only, stub their
+# network calls and block sockets, and read the shared contract vectors in
+# contract/, so a vector that one part breaks fails here.
+
+name: python offline
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  unittest:
+    name: ${{ matrix.part }} offline tests
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        part: [spend-guard, viewer]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+
+      - name: Use Python 3.13
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Offline tests
+        working-directory: ${{ matrix.part }}
+        run: python3 -m unittest discover -s . -p "test_*.py" -v

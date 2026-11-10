@@ -89,7 +89,7 @@ to the job. The per-call cap still applies in both modes.
 
 ```
 npm install
-npm test          # tsc + vitest: 61 tests, no network (fetch and WebSocket are disabled in tests)
+npm test          # tsc + vitest, no network (fetch and WebSocket are disabled in tests)
 npm run check     # same command CI runs: clean install, clean build, then npm test
 ./demo.sh         # init, link, cap, run (mock), status, receipt in a temp IMD_FLOP_HOME
 ```
