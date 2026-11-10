@@ -1,0 +1,6 @@
+{
+  "scenario": "status-finality-lag",
+  "description": "Synthetic finality lag: best is 100 blocks ahead of finalized.",
+  "now": "2026-11-09T23:47:41Z",
+  "synthetic": true
+}

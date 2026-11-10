@@ -1,0 +1,76 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/uxp-labs/flop-devnet-lab/interfaces/network-status.v0.schema.json",
+  "title": "NetworkStatus v0",
+  "description": "Result of networkStatus() in FLOP Observatory. Matches NetworkStatus in observatory/src/types.ts. Unknown values are null, never ok and never 0.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "observed_at", "trust", "genesis", "reset_detected", "conflicts", "finalized_height", "finalized_hash", "best_height", "finality_lag", "runtime_version", "rpc", "gateway", "faucet"],
+  "properties": {
+    "schema": { "const": "flop-observatory/network-status@0" },
+    "observed_at": { "type": "string", "description": "When this status was taken, ISO 8601." },
+    "trust": { "enum": ["trusted RPC", "fixture"] },
+    "genesis": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["pinned", "faucet", "rpc"],
+      "properties": {
+        "pinned": { "type": "string", "description": "The genesis hash the observatory is pinned to." },
+        "faucet": { "type": ["string", "null"], "description": "Genesis reported by the faucet GET /chain. null when unread." },
+        "rpc": { "type": ["string", "null"], "description": "Hash of block 0 from the RPC. null when unread." }
+      }
+    },
+    "reset_detected": {
+      "type": ["boolean", "null"],
+      "description": "true: some source reports a genesis other than the pinned one. false: both faucet and RPC report the pinned genesis. null: not enough evidence. Treat null like true before any spend."
+    },
+    "conflicts": { "type": "array", "items": { "type": "string" }, "description": "Disagreements between sources, in plain words." },
+    "finalized_height": { "type": ["integer", "null"], "minimum": 0 },
+    "finalized_hash": { "type": ["string", "null"] },
+    "best_height": { "type": ["integer", "null"], "minimum": 0 },
+    "finality_lag": { "type": ["integer", "null"], "description": "best_height minus finalized_height. null when either is unknown." },
+    "runtime_version": { "type": ["integer", "null"] },
+    "rpc": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["health", "http", "detail", "observed_at", "stale"],
+      "properties": {
+        "health": { "$ref": "#/$defs/health" },
+        "http": { "type": ["integer", "null"] },
+        "detail": { "type": ["string", "null"] },
+        "observed_at": { "type": ["string", "null"] },
+        "stale": { "type": ["boolean", "null"], "description": "true when the head read is too old to rely on. null when unknown." }
+      }
+    },
+    "gateway": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["health", "http", "detail", "observed_at"],
+      "properties": {
+        "health": { "$ref": "#/$defs/health" },
+        "http": { "type": ["integer", "null"] },
+        "detail": { "type": ["string", "null"] },
+        "observed_at": { "type": ["string", "null"] }
+      }
+    },
+    "faucet": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["health", "http", "detail", "observed_at", "ready", "limits"],
+      "properties": {
+        "health": { "$ref": "#/$defs/health" },
+        "http": { "type": ["integer", "null"] },
+        "detail": { "type": ["string", "null"] },
+        "observed_at": { "type": ["string", "null"] },
+        "ready": { "type": ["boolean", "null"] },
+        "limits": {
+          "type": ["object", "null"],
+          "additionalProperties": { "type": ["number", "boolean"] }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "health": { "enum": ["ok", "degraded", "down", "unknown"], "description": "unknown is not ok." }
+  }
+}

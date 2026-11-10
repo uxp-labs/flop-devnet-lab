@@ -1,0 +1,49 @@
+# Offline check for FLOP Observatory. Permissions are contents: read only. No secrets, keys,
+# deploys or publishing. The check runs `npm run check` in observatory/ and uploads the
+# evidence directory it writes. A CI run is a fresh, independent rerun on the exact revision.
+
+name: observatory check
+
+on:
+  push:
+    paths:
+      - "observatory/**"
+      - "interfaces/**"
+      - ".github/workflows/observatory-check.yml"
+  pull_request:
+    paths:
+      - "observatory/**"
+      - "interfaces/**"
+      - ".github/workflows/observatory-check.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: observatory offline check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+
+      - name: Use Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Check
+        working-directory: observatory
+        run: npm run check
+
+      - name: Upload evidence
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: observatory-check-${{ github.run_id }}-${{ github.run_attempt }}
+          path: observatory/check-runs
+          retention-days: 14
+          if-no-files-found: error

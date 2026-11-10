@@ -1,0 +1,6 @@
+{
+  "scenario": "status-healthy",
+  "description": "Synthetic healthy devnet. Faucet health is the real body with status ok and ready true; /chain is real; gateway list and RPC head are made up (finalized and best heights taken from the real faucet indexer view, finalized hash invented).",
+  "now": "2026-11-09T23:47:41Z",
+  "synthetic": true
+}

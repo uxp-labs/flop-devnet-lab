@@ -1,0 +1,158 @@
+// Where observations come from. M0 has one implementation, FixtureSource, which reads a
+// scenario directory of saved responses. M1 adds a live source behind the read-only guard.
+//
+// A scenario directory may hold any of these files. A missing file means "unknown",
+// never "ok" and never 0:
+//   meta.json               { "scenario", "description", "now", "synthetic" }
+//   faucet-health.json      HttpResult<FaucetHealthBody>
+//   faucet-chain.json       HttpResult<FaucetChainBody>
+//   gateway-models.json     HttpResult<unknown>
+//   rpc-head.json           RpcHead
+//   runtime-constants.json  RuntimeConstants
+//   event-pages/*.json      EventPage, one page per file, read in file-name order
+import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { join } from "node:path";
+import type {
+  EventPage,
+  FaucetChainBody,
+  FaucetHealthBody,
+  HttpResult,
+  RpcHead,
+  RuntimeConstants,
+  Trust,
+} from "./types.js";
+
+export interface Source {
+  readonly kind: "fixture" | "rpc";
+  readonly trust: Trust;
+  /** Short description of where data comes from, for the run pin. */
+  readonly label: string;
+  faucetHealth(): Promise<HttpResult<FaucetHealthBody>>;
+  faucetChain(): Promise<HttpResult<FaucetChainBody>>;
+  gatewayModels(): Promise<HttpResult<unknown>>;
+  rpcHead(): Promise<RpcHead>;
+  runtimeConstants(): Promise<RuntimeConstants | null>;
+  /** Raw event pages, verbatim. Retained so any count can be recomputed from them. */
+  eventPages(): Promise<EventPage[]>;
+}
+
+export interface FixtureMeta {
+  scenario: string;
+  description: string;
+  /** The clock for this scenario (ISO 8601). Snapshots use it so reruns are byte-identical. */
+  now: string;
+  /** True when the data is made up for a test, false when it was copied from a real response. */
+  synthetic: boolean;
+  /** Census scenarios: the block range the census is asked for. */
+  census_request?: { from_block: number; to_block: number };
+  /** Census and escrow scenarios: the genesis to treat as pinned, when not the devnet one. */
+  pinned_genesis?: string;
+  /** Escrow scenarios: the escrow ids to look up. */
+  escrow_ids?: string[];
+}
+
+export interface FixtureData {
+  meta: FixtureMeta;
+  faucetHealth?: HttpResult<FaucetHealthBody>;
+  faucetChain?: HttpResult<FaucetChainBody>;
+  gatewayModels?: HttpResult<unknown>;
+  rpcHead?: RpcHead;
+  runtimeConstants?: RuntimeConstants;
+  eventPages?: EventPage[];
+  /** Files that existed but could not be parsed. Reported, never silently dropped. */
+  loadErrors?: string[];
+}
+
+export function unknownHttp<T>(error: string): HttpResult<T> {
+  return { http: null, body: null, error, fetched_at: null };
+}
+
+/**
+ * An RPC head that was never read. Its error is null: "not read" is unknown, while a read
+ * that was tried and failed (error set) is down.
+ */
+export function unknownHead(): RpcHead {
+  return {
+    genesis_hash: null,
+    finalized: null,
+    best_number: null,
+    runtime_spec_version: null,
+    observed_at: null,
+    error: null,
+  };
+}
+
+export class FixtureSource implements Source {
+  readonly kind = "fixture" as const;
+  readonly trust: Trust = "fixture";
+  readonly label: string;
+  readonly data: FixtureData;
+
+  constructor(data: FixtureData, label?: string) {
+    this.data = data;
+    this.label = label ?? `fixture:${data.meta.scenario}`;
+  }
+
+  /** Loads a scenario directory. Unparsable files are listed in data.loadErrors, not thrown. */
+  static fromDir(dir: string): FixtureSource {
+    const loadErrors: string[] = [];
+    const read = <T>(name: string): T | undefined => {
+      const path = join(dir, name);
+      if (!existsSync(path)) return undefined;
+      try {
+        return JSON.parse(readFileSync(path, "utf8")) as T;
+      } catch (e) {
+        loadErrors.push(`${name}: ${(e as Error).message}`);
+        return undefined;
+      }
+    };
+    const meta = read<FixtureMeta>("meta.json");
+    if (!meta) throw new Error(`fixture ${dir} has no readable meta.json`);
+    const pagesDir = join(dir, "event-pages");
+    let eventPages: EventPage[] | undefined;
+    if (existsSync(pagesDir)) {
+      eventPages = [];
+      for (const name of readdirSync(pagesDir).filter((n) => n.endsWith(".json")).sort()) {
+        const page = read<EventPage>(join("event-pages", name));
+        if (page !== undefined) eventPages.push(page);
+      }
+    }
+    return new FixtureSource(
+      {
+        meta,
+        faucetHealth: read("faucet-health.json"),
+        faucetChain: read("faucet-chain.json"),
+        gatewayModels: read("gateway-models.json"),
+        rpcHead: read("rpc-head.json"),
+        runtimeConstants: read("runtime-constants.json"),
+        eventPages,
+        loadErrors,
+      },
+      `fixture:${meta.scenario}`,
+    );
+  }
+
+  async faucetHealth(): Promise<HttpResult<FaucetHealthBody>> {
+    return this.data.faucetHealth ?? unknownHttp("no faucet health in fixture");
+  }
+
+  async faucetChain(): Promise<HttpResult<FaucetChainBody>> {
+    return this.data.faucetChain ?? unknownHttp("no faucet chain in fixture");
+  }
+
+  async gatewayModels(): Promise<HttpResult<unknown>> {
+    return this.data.gatewayModels ?? unknownHttp("no gateway models in fixture");
+  }
+
+  async rpcHead(): Promise<RpcHead> {
+    return this.data.rpcHead ?? unknownHead();
+  }
+
+  async runtimeConstants(): Promise<RuntimeConstants | null> {
+    return this.data.runtimeConstants ?? null;
+  }
+
+  async eventPages(): Promise<EventPage[]> {
+    return this.data.eventPages ?? [];
+  }
+}

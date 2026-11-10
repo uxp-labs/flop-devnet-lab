@@ -1,0 +1,12 @@
+{
+  "scenario": "escrows-verification",
+  "description": "The claim and refund escrows recorded in flop-labs/tclk flop/VERIFICATION.md (verified there on 2026-10-22). Copied from that file: genesis, both escrow ids, both finalized block hashes, the event names hasStation.EscrowReleased and hasStation.EscrowRefunded, and that the blocks were finalized. NOT in that file and therefore not real here: block numbers (left null), the page block range (left null), the event index (0 is synthetic) and the position of the escrow id in event data (assumed data[0], as tclk/flop/src/chain.ts reads EscrowOpened). The EscrowOpened events are not in the file and are not included. The clock is synthetic. Nothing here was read from the chain by us. The third escrow id (0xe0 repeated) is synthetic and has no events at all, to show an unverified row.",
+  "now": "2026-11-10T00:00:00Z",
+  "synthetic": true,
+  "escrow_ids": [
+    "0x6fca0e2333da351600475a298ff0bd15acc42933b1ea6873ced2c15910e2cac5",
+    "0x222eb1c4dc1aee313d4e89e29ce89299cf0fb8ea16739872da21f68e78a5f851",
+    "0xe0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0"
+  ],
+  "pinned_genesis": "0x99c172c095340ace980631f9123544c6bebd4839f3437e463533422d8be2d631"
+}

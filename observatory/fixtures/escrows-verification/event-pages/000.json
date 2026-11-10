@@ -1,0 +1,31 @@
+{
+  "genesis": "0x99c172c095340ace980631f9123544c6bebd4839f3437e463533422d8be2d631",
+  "from_block": null,
+  "to_block": null,
+  "page": 0,
+  "next_page": null,
+  "events": [
+    {
+      "block_number": null,
+      "block_hash": "0xeafcbbc66e68895b686dd3ab5ac647db41dba785cabd740e53a2727256b5794a",
+      "finalized": true,
+      "index": 0,
+      "section": "hasStation",
+      "method": "EscrowReleased",
+      "data": {
+        "0": "0x6fca0e2333da351600475a298ff0bd15acc42933b1ea6873ced2c15910e2cac5"
+      }
+    },
+    {
+      "block_number": null,
+      "block_hash": "0xfefa385a2438805f23e260cfb9bf66efcecdb463e065b1de896f402f666dd538",
+      "finalized": true,
+      "index": 0,
+      "section": "hasStation",
+      "method": "EscrowRefunded",
+      "data": {
+        "0": "0x222eb1c4dc1aee313d4e89e29ce89299cf0fb8ea16739872da21f68e78a5f851"
+      }
+    }
+  ]
+}

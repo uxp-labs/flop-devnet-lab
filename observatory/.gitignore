@@ -1,0 +1,5 @@
+node_modules/
+dist/
+out/
+# Each `npm run check` writes a new evidence directory here. Kept local and uploaded by CI, never committed.
+check-runs/

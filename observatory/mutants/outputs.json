@@ -1,0 +1,154 @@
+[
+ {
+  "id": "page-unknown-health-ok",
+  "file": "src/page.ts",
+  "find": "if (h === null || h === \"unknown\") return",
+  "replace": "if (h === null) return",
+  "test": "test/page.test.ts",
+  "why": "unknown health must be blank, never rendered as a value"
+ },
+ {
+  "id": "page-unknown-health-as-ok-text",
+  "file": "src/page.ts",
+  "find": "if (v === null || v === undefined || v === \"\") return",
+  "replace": "if (v === undefined || v === \"\") return",
+  "test": "test/page.test.ts",
+  "why": "a null value must be a blank cell, not the text null"
+ },
+ {
+  "id": "page-partial-shown-complete",
+  "file": "src/page.ts",
+  "find": "const partial = c.status !== \"complete\" || !c.complete;",
+  "replace": "const partial = false;",
+  "test": "test/page.test.ts",
+  "why": "partial census totals must be labeled partial"
+ },
+ {
+  "id": "page-no-escape",
+  "file": "src/page.ts",
+  "find": ".replace(/</g, \"&lt;\")",
+  "replace": "",
+  "test": "test/page.test.ts",
+  "why": "strings from data must be escaped"
+ },
+ {
+  "id": "page-no-settlement-banner",
+  "file": "src/page.ts",
+  "find": "Escrow state is settlement only. It says nothing about output quality.",
+  "replace": "Escrow state shown.",
+  "test": "test/page.test.ts",
+  "why": "page must say settlement only"
+ },
+ {
+  "id": "page-census-null-zero",
+  "file": "src/page.ts",
+  "find": "if (c === null) {",
+  "replace": "if (c === null && false) {",
+  "test": "test/page.test.ts",
+  "why": "a null census must not render as totals"
+ },
+ {
+  "id": "feed-null-census-as-object",
+  "file": "src/feed.ts",
+  "find": "census: s.census ?? null }",
+  "replace": "census: s.census ?? { totals: { escrows_opened: 0 } } }",
+  "test": "test/store.test.ts",
+  "why": "a null census must be written as null, not zeros"
+ },
+ {
+  "id": "feed-drops-trust",
+  "file": "src/feed.ts",
+  "find": "observed_at: s.observed_at, trust: s.trust, escrows: s.escrows }",
+  "replace": "observed_at: s.observed_at, escrows: s.escrows }",
+  "test": "test/store.test.ts",
+  "why": "every feed carries trust"
+ },
+ {
+  "id": "feed-unsorted",
+  "file": "src/feed.ts",
+  "find": "for (const k of Object.keys(o).sort())",
+  "replace": "for (const k of Object.keys(o))",
+  "test": "test/store.test.ts",
+  "why": "feeds must have sorted keys"
+ },
+ {
+  "id": "mcp-drops-trust",
+  "file": "src/mcp.ts",
+  "find": "return ok(id, content(escrowsFeed(s)));",
+  "replace": "return ok(id, content({ ...escrowsFeed(s), trust: undefined }));",
+  "test": "test/mcp.test.ts",
+  "why": "MCP must carry the trust label"
+ },
+ {
+  "id": "mcp-unknown-tool-ok",
+  "file": "src/mcp.ts",
+  "find": "return err(id, -32602, `unknown tool: ${name}`);",
+  "replace": "return ok(id, content({}));",
+  "test": "test/mcp.test.ts",
+  "why": "unknown tools must be errors"
+ },
+ {
+  "id": "mcp-unseen-escrow-funded",
+  "file": "src/mcp.ts",
+  "find": "    state: \"unverified\",\n    evidence: [],",
+  "replace": "    state: \"funded\",\n    evidence: [],",
+  "test": "test/mcp.test.ts",
+  "why": "an escrow with no evidence must stay unverified"
+ },
+ {
+  "id": "mcp-notification-answered",
+  "file": "src/mcp.ts",
+  "find": "if (!hasId) return null;",
+  "replace": "",
+  "test": "test/mcp.test.ts",
+  "why": "notifications get no response"
+ },
+ {
+  "id": "store-ignores-prev-hash",
+  "file": "src/store.ts",
+  "find": "if (s.prev_hash !== prev) return i;",
+  "replace": "",
+  "test": "test/store.test.ts",
+  "why": "chain must detect a wrong prev_hash"
+ },
+ {
+  "id": "store-ignores-hash",
+  "file": "src/store.ts",
+  "find": "if (s.hash !== hashSnapshot(s)) return i;",
+  "replace": "",
+  "test": "test/store.test.ts",
+  "why": "chain must detect an edited line"
+ },
+ {
+  "id": "store-hash-includes-hash-field",
+  "file": "src/store.ts",
+  "find": "delete rest.hash;",
+  "replace": "",
+  "test": "test/store.test.ts",
+  "why": "hash is over the snapshot without its hash field"
+ },
+ {
+  "id": "consistency-page-escrow-state-diverges",
+  "file": "src/page.ts",
+  "find": "data-v=\"${esc(e.state)}\" class=\"s-${esc(e.state)}\">${esc(e.state)}</td>",
+  "replace": "data-v=\"${esc(e.state === \"unverified\" ? \"funded\" : e.state)}\" class=\"s-${esc(e.state)}\">${esc(e.state)}</td>",
+  "test": "test/consistency.test.ts",
+  "why": "page and feeds must agree on escrow state"
+ },
+ {
+  "id": "consistency-feed-null-lag-zero",
+  "file": "src/feed.ts",
+  "find": "trust: s.status.trust, status: s.status }",
+  "replace": "trust: s.status.trust, status: { ...s.status, finality_lag: s.status.finality_lag ?? 0 } }",
+  "test": "test/consistency.test.ts",
+  "why": "feed must keep null as null where the page and MCP show unknown"
+ },
+ {
+  "id": "consistency-mcp-census-partial-complete",
+  "file": "src/feed.ts",
+  "find": "census: s.census ?? null }",
+  "replace": "census: s.census ? { ...s.census, status: \"complete\" } : null }",
+  "test": "test/consistency.test.ts",
+  "why": "partial census must read partial in JSON and MCP as on the page"
+ }
+]

@@ -1,0 +1,74 @@
+[
+  {
+    "id": "status-reset-ignores-mismatch",
+    "file": "src/status.ts",
+    "find": "if (known.some((g) => g !== pinned)) return true;",
+    "replace": "if (false) return true;",
+    "test": "test/status.test.ts",
+    "why": "a different genesis on any source must raise the reset flag"
+  },
+  {
+    "id": "status-unknown-becomes-clean",
+    "file": "src/status.ts",
+    "find": "  if (faucet !== null && rpc !== null) return false;\n  return null;",
+    "replace": "  if (faucet !== null && rpc !== null) return false;\n  return false;",
+    "test": "test/status.test.ts",
+    "why": "one or zero matching sources is not enough evidence for reset_detected false"
+  },
+  {
+    "id": "status-stale-ignored",
+    "file": "src/status.ts",
+    "find": "stale = age > o.staleAfterSeconds;",
+    "replace": "stale = false;",
+    "test": "test/status.test.ts",
+    "why": "an old RPC head must be stale"
+  },
+  {
+    "id": "status-degraded-faucet-shown-ok",
+    "file": "src/status.ts",
+    "find": "} else if (body.status === \"ok\" && ready === true) {",
+    "replace": "} else if (true) {",
+    "test": "test/status.test.ts",
+    "why": "the real degraded faucet must never show as ok"
+  },
+  {
+    "id": "status-conflict-dropped",
+    "file": "src/status.ts",
+    "find": "conflicts.push(`faucet genesis ${faucetGenesis} differs from rpc genesis ${rpcGenesis}`);",
+    "replace": "",
+    "test": "test/status.test.ts",
+    "why": "conflicting genesis answers must be reported"
+  },
+  {
+    "id": "status-unknown-gateway-ok",
+    "file": "src/status.ts",
+    "find": "    health = \"unknown\";\n    detail = r.error ?? \"no response\";\n  } else if (r.http === 200) {",
+    "replace": "    health = \"ok\";\n    detail = r.error ?? \"no response\";\n  } else if (r.http === 200) {",
+    "test": "test/status.test.ts",
+    "why": "a gateway we did not read is unknown, never ok"
+  },
+  {
+    "id": "status-rollback-ignored",
+    "file": "src/status.ts",
+    "find": "if (finalized.number < previous.finalized_height) {",
+    "replace": "if (false) {",
+    "test": "test/status.test.ts",
+    "why": "a finalized height going backwards is a conflict"
+  },
+  {
+    "id": "status-lag-ignored",
+    "file": "src/status.ts",
+    "find": "} else if (best - finalized.number > o.maxFinalityLag) {",
+    "replace": "} else if (false) {",
+    "test": "test/status.test.ts",
+    "why": "a large finality lag is degraded"
+  },
+  {
+    "id": "status-malformed-genesis-accepted",
+    "file": "src/status.ts",
+    "find": "return HASH_RE.test(v) ? v : null;",
+    "replace": "return v;",
+    "test": "test/status.test.ts",
+    "why": "a malformed genesis is unknown, never a value"
+  }
+]

@@ -1,0 +1,34 @@
+[
+  {
+    "id": "guard-allows-submit",
+    "file": "src/guard.ts",
+    "find": "  \"chain_getBlockHash\",",
+    "replace": "  \"chain_getBlockHash\",\n  \"author_submitExtrinsic\",",
+    "test": "test/guard.test.ts",
+    "why": "submitting an extrinsic is a write and must be refused"
+  },
+  {
+    "id": "guard-allows-post",
+    "file": "src/guard.ts",
+    "find": "if (m !== \"GET\" && m !== \"HEAD\") {",
+    "replace": "if (false) {",
+    "test": "test/guard.test.ts",
+    "why": "the faucet's POST /fund must be refused"
+  },
+  {
+    "id": "guard-sign-not-recorded",
+    "file": "src/guard.ts",
+    "find": "throw new ReadOnlyViolation(recordAttempt(\"sign\", what));",
+    "replace": "throw new ReadOnlyViolation({ kind: \"sign\", what, at: \"\" });",
+    "test": "test/guard.test.ts",
+    "why": "a refused signing attempt must be recorded"
+  },
+  {
+    "id": "guard-spend-allowed",
+    "file": "src/guard.ts",
+    "find": "export function refuseSpend(what: string): never {\n  throw new ReadOnlyViolation(recordAttempt(\"spend\", what));",
+    "replace": "export function refuseSpend(what: string): never {\n  return undefined as never;",
+    "test": "test/guard.test.ts",
+    "why": "spending must throw"
+  }
+]

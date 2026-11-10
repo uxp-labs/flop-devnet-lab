@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/uxp-labs/flop-devnet-lab/interfaces/escrow-state.v0.schema.json",
+  "title": "EscrowState v0",
+  "description": "Result of escrowState() in FLOP Observatory. Settlement only; says nothing about output quality. Matches EscrowState in observatory/src/types.ts.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "escrow_id", "state", "evidence", "notes", "finalized_height", "observed_at", "trust", "scope"],
+  "properties": {
+    "schema": { "const": "flop-observatory/escrow-state@0" },
+    "escrow_id": {
+      "type": "string",
+      "description": "The escrow id asked about. Lower-case 0x plus 64 hex when valid. An id that does not parse is echoed as given and the state is unverified."
+    },
+    "state": {
+      "enum": ["unverified", "funded", "claimed", "refunded"],
+      "description": "unverified: missing, conflicting or malformed evidence. funded: a finalized EscrowOpened and no finalized terminal event. claimed: a finalized EscrowReleased. refunded: a finalized EscrowRefunded."
+    },
+    "evidence": {
+      "type": "array",
+      "description": "Finalized events on the pinned genesis behind the state. Always empty when unverified.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["event", "block_hash", "block_number", "event_index", "genesis"],
+        "properties": {
+          "event": { "enum": ["hasStation.EscrowOpened", "hasStation.EscrowReleased", "hasStation.EscrowRefunded"] },
+          "block_hash": { "type": "string", "pattern": "^0x[0-9a-f]{64}$" },
+          "block_number": { "type": ["integer", "null"], "minimum": 0, "description": "null when the source did not give it." },
+          "event_index": { "type": "integer", "minimum": 0 },
+          "genesis": { "type": "string", "pattern": "^0x[0-9a-f]{64}$" }
+        }
+      }
+    },
+    "notes": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Plain-language reasons: ignored events, conflicts, missing evidence. For people, not for parsing."
+    },
+    "finalized_height": { "type": ["integer", "null"], "minimum": 0, "description": "Finalized height the events were read at. null when unknown." },
+    "observed_at": { "type": "string", "description": "When the events were read, ISO 8601." },
+    "trust": { "enum": ["trusted RPC", "fixture"], "description": "trusted RPC: one node was trusted, no light client. fixture: saved test data, not a live read." },
+    "scope": { "const": "settlement only; says nothing about output quality" }
+  }
+}
