@@ -223,7 +223,7 @@ async function main(): Promise<void> {
         // Every earlier snapshot's own time, whatever it read, so a log that runs backwards shows.
         earlierTimes.push(typeof taken === "string" ? taken : null);
         // Every best height on a genesis counts, with or without a finalized head (round 8 review L1).
-        if (st.genesis.rpc !== null && st.best_height !== null) earlierBest.push({ genesis: st.genesis.rpc, best_height: st.best_height, finalized_height: st.finalized_height });
+        if (st.genesis.rpc !== null && st.best_height !== null) earlierBest.push({ genesis: st.genesis.rpc, best_height: st.best_height });
         // A head time is needed only for the stuck check, so a snapshot without one still counts.
         if (st.genesis.rpc !== null && st.finalized_height !== null && st.finalized_hash !== null) {
           previous.push({

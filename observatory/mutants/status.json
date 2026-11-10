@@ -522,8 +522,8 @@
   {
     "id": "status-earlier-best-any-genesis",
     "file": "src/status.ts",
-    "find": "(earlierBest ?? []).filter((p) => p.genesis === genesis && p.finalized_height === null).map((p) => p.best_height)",
-    "replace": "(earlierBest ?? []).filter((p) => p.finalized_height === null).map((p) => p.best_height)",
+    "find": "(earlierBest ?? []).filter((p) => p.genesis === genesis).map((p) => p.best_height)",
+    "replace": "(earlierBest ?? []).map((p) => p.best_height)",
     "test": "test/status.test.ts",
     "why": "round 8 review L1: only best heights read on this genesis are a floor"
   },
@@ -534,13 +534,5 @@
     "replace": "    faucet: withChainNote(applyFreshness(classifyFaucet(health), \"faucet\", o, conflicts), chainUnusable),",
     "test": "test/status.test.ts",
     "why": "round 8 review L2: a usable /chain reading that names no genesis says so in the faucet's detail"
-  },
-  {
-    "id": "status-earlier-best-with-finalized-counted",
-    "file": "src/status.ts",
-    "find": "p.genesis === genesis && p.finalized_height === null",
-    "replace": "p.genesis === genesis",
-    "test": "test/status.test.ts",
-    "why": "round 9 review L5: a long fork that finality never reached may fall away without a conflict"
   }
 ]

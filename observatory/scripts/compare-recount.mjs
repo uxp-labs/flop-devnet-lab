@@ -61,7 +61,9 @@ function run(cmd, args) {
  */
 function shownName(raw) {
   try {
-    return new TextDecoder("utf-8", { fatal: true }).decode(raw).replace(/[%\u0000-\u001f\u007f]/g, (c) => `%${c.charCodeAt(0).toString(16).toUpperCase().padStart(2, "0")}`);
+    return new TextDecoder("utf-8", { fatal: true })
+      .decode(raw)
+      .replace(/[%\u0000-\u001f\u007f-\u009f\u2028\u2029]/g, (c) => [...Buffer.from(c, "utf8")].map((b) => `%${b.toString(16).toUpperCase().padStart(2, "0")}`).join(""));
   } catch {
     return [...raw].map((b) => (b >= 0x20 && b < 0x7f && b !== 0x25 ? String.fromCharCode(b) : `%${b.toString(16).toUpperCase().padStart(2, "0")}`)).join("");
   }

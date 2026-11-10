@@ -75,7 +75,11 @@ const statusShaped = (st: unknown): boolean =>
   (st.genesis.rpc === null || hash(st.genesis.rpc)) &&
   service(st.rpc) &&
   service(st.gateway) &&
-  service(st.faucet);
+  service(st.faucet) &&
+  // reset_detected says what the genesis values allow (RULES.md 1.1, round 10 review I3): false
+  // only with both readings on the pinned genesis, true only with one on another.
+  (st.reset_detected !== false || (st.genesis.faucet === st.genesis.pinned && st.genesis.rpc === st.genesis.pinned)) &&
+  (st.reset_detected !== true || (st.genesis.faucet !== null && st.genesis.faucet !== st.genesis.pinned) || (st.genesis.rpc !== null && st.genesis.rpc !== st.genesis.pinned));
 const escrowShaped = (e: unknown): boolean =>
   isObject(e) &&
   e.schema === "flop-observatory/escrow-state@0" &&
@@ -86,6 +90,8 @@ const escrowShaped = (e: unknown): boolean =>
   Array.isArray(e.evidence) &&
   Array.isArray(e.notes) &&
   heightOrNull(e.finalized_height) &&
+  // A state other than unverified rests on evidence, and unverified holds none (RULES.md section 2).
+  (e.state === "unverified" ? (e.evidence as unknown[]).length === 0 : (e.evidence as unknown[]).length > 0) &&
   typeof e.observed_at === "string" &&
   TRUSTS.includes(e.trust as string) &&
   e.scope === "settlement only; says nothing about output quality";
@@ -93,7 +99,7 @@ const shaped =
   isObject(snapshot) &&
   snapshot.schema === "flop-observatory/snapshot@0" &&
   typeof snapshot.observed_at === "string" &&
-  typeof snapshot.trust === "string" &&
+  TRUSTS.includes(snapshot.trust as string) &&
   isObject(snapshot.pin) &&
   statusShaped(snapshot.status) &&
   Array.isArray(snapshot.escrows) &&

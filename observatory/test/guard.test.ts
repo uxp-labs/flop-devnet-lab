@@ -325,5 +325,8 @@ describe("source scan", () => {
     expect(text).not.toMatch(/^[ \t]*import[ \t][^\n#]*\bas\b/m);
     expect(text).not.toMatch(/^[ \t]*(?:match|case)[ \t][^\n]*:[ \t]*(?:#.*)?$/m);
     expect(text).not.toMatch(/\.mro\b/);
+    // A submodule import, and a write call reached through a stream (round 10 review I5).
+    expect(text).not.toMatch(/^[ \t]*import[ \t][^\n#]*\b[A-Za-z_]\w*\.[A-Za-z_]/m);
+    expect(text).not.toMatch(/\.(?:buffer|raw|truncate|write|writelines|detach|fileno)\b/);
   });
 });

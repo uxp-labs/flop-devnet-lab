@@ -175,8 +175,13 @@ function moduleProblem(name, file, scanned) {
   return ALLOWED_MODULES.has(name) ? null : `imports ${JSON.stringify(name)}, which is not on the allow-list`;
 }
 
-/** A banned name as a string: a key, an argument or any other string is the name all the same. */
-const bannedText = (v) => typeof v === "string" && (BANNED.has(v) || /mnemonic/i.test(v));
+/**
+ * A banned name as a string: a key, an argument or any other string is the name all the same, an
+ * underscore name included (round 10 review L1: x["__proto__"], console["_stdout"]).
+ */
+const bannedText = (v) => typeof v === "string" && (BANNED.has(v) || /mnemonic/i.test(v) || INTERNAL.test(v));
+// The reader's own streams: createInterface hands stdin back as .input (round 10 review L3).
+const READER_STREAMS = new Set(["input", "output"]);
 
 /**
  * Every rule the code breaks, as short sentences; empty when it breaks none. file is the module's
@@ -215,6 +220,9 @@ function problems(code, file = "sample.ts", scanned = SCANNED) {
         // export *, hands over a whole module object.
         if (n.type === "ExportAllDeclaration") out.push(`re-exports the whole of ${JSON.stringify(name)} (export *)`);
         if (n.type === "ImportDeclaration" && n.specifiers.some((s) => s.type !== "ImportSpecifier")) out.push(`imports ${JSON.stringify(name)} as a module object (a default or namespace import)`);
+        // The default export by its name is the module object too (round 10 review L2).
+        const names = (n.specifiers ?? []).flatMap((s) => [s.imported, s.local].map((x) => x?.name ?? x?.value));
+        if (names.includes("default")) out.push(`takes the default export of ${JSON.stringify(name)} by its name`);
         if (name === "node:crypto") {
           const only =
             n.type === "ImportDeclaration" &&
@@ -267,6 +275,16 @@ function problems(code, file = "sample.ts", scanned = SCANNED) {
       case "MemberExpression": {
         // A literal computed key, as in ["constructor"], is a string, which the Literal rule reads.
         if (!n.computed && n.object?.type === "Identifier" && n.object.name === "api" && n.property?.name === "tx") out.push("uses api.tx");
+        const member = n.computed ? (n.property?.type === "Literal" ? n.property.value : undefined) : n.property?.name;
+        if (READER_STREAMS.has(member)) out.push(`reads .${member}, a reader's stream`);
+        break;
+      }
+      case "ObjectPattern": {
+        // The same read by destructuring: const { input } = rl.
+        for (const p of n.properties ?? []) {
+          const name = p.type === "Property" ? (p.key?.type === "Identifier" ? p.key.name : p.key?.value) : undefined;
+          if (READER_STREAMS.has(name)) out.push(`reads ${name}, a reader's stream, by destructuring`);
+        }
         break;
       }
       case "Literal": {
@@ -405,6 +423,17 @@ const BAD = [
   "const k3 = CryptoKey;",
   "const s5 = { input: process.stdin }.input;",
   "const s6 = make({ input: process.stdin });",
+  // Round 10 review L1 to L3: underscore names as strings, the default export by its name, and the
+  // reader's stream read back.
+  'const pr2 = x["__proto__"];',
+  'const { "__proto__": p7 } = x;',
+  'const out7 = console["_stdout"];',
+  "const h7 = rl.input[`_handle`];",
+  'import { default as m7 } from "node:fs";',
+  'export { default as pathModule } from "node:path";',
+  "const s7 = rl.input;",
+  'const s8 = rl["output"];',
+  "const { input: s9 } = rl;",
   "class A { constructor() {} } const k = Object.getOwnPropertyNames(A.prototype)[0] as string; const C = ((() => 0) as any)[k];",
   'const k = atob("Y29uc3RydWN0b3I="); const C = ((() => 0) as any)[k];',
   String.raw`const k = JSON.parse('"\u0063onstructor"') as string; const C = ((() => 0) as any)[k];`,

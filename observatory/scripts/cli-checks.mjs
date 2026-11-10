@@ -117,12 +117,15 @@ cpSync(join(pkg, fx("status-healthy")), restartLow, { recursive: true });
   edit(restartLow, "meta.json", (o) => (o.now = "2026-11-09T23:48:41Z"));
   for (const f of ["faucet-health.json", "faucet-chain.json", "gateway-models.json"]) edit(restartLow, f, (o) => (o.fetched_at = "2026-11-09T23:48:40Z"));
 }
-// The round 9 review's case L5: finality stalls with the best block 100 ahead, then the long fork
-// that was never final falls away. The finalized floor holds, so this is no conflict.
+// The round 9 review's case L5 and the round 10 review's case L4: finality stalls with the best
+// block 100 ahead, then 75 blocks fall away. That may be a long fork lost or a restart, so the head
+// is not usable (it fails closed) until the best height is back within the lag limit.
 const stalled = join(work, "stalled-finality");
 const reorged = join(work, "after-reorg");
+const healed = join(work, "healed");
 cpSync(join(pkg, fx("status-healthy")), stalled, { recursive: true });
 cpSync(join(pkg, fx("status-healthy")), reorged, { recursive: true });
+cpSync(join(pkg, fx("status-healthy")), healed, { recursive: true });
 {
   const edit = (dir, file, fn) => {
     const p = join(dir, file);
@@ -138,6 +141,13 @@ cpSync(join(pkg, fx("status-healthy")), reorged, { recursive: true });
   });
   edit(reorged, "meta.json", (o) => (o.now = "2026-11-09T23:48:41Z"));
   for (const f of ["faucet-health.json", "faucet-chain.json", "gateway-models.json"]) edit(reorged, f, (o) => (o.fetched_at = "2026-11-09T23:48:40Z"));
+  edit(healed, "rpc-head.json", (o) => {
+    o.finalized = { number: 3341650, hash: "0x" + "65".repeat(32) };
+    o.best_number = 3341660;
+    o.observed_at = "2026-11-09T23:49:28Z";
+  });
+  edit(healed, "meta.json", (o) => (o.now = "2026-11-09T23:49:29Z"));
+  for (const f of ["faucet-health.json", "faucet-chain.json", "gateway-models.json"]) edit(healed, f, (o) => (o.fetched_at = "2026-11-09T23:49:28Z"));
 }
 // The round 8 review's case L2: a usable /chain reading whose body names no genesis.
 const chainEmpty = join(work, "chain-body-empty");
@@ -342,7 +352,8 @@ const cases = [
     run: () => {
       const path = mcpSnapshot();
       const s = JSON.parse(readFileSync(path, "utf8"));
-      s.status.reset_detected = !s.status.reset_detected;
+      // A change no shape or sense check reads, so the hash check alone has to refuse it.
+      s.status.conflicts = [...s.status.conflicts, "a conflict added after hashing"];
       const bad = join(work, "mcp-tampered.json");
       writeFileSync(bad, JSON.stringify(s, null, 2) + "\n");
       return mcp(bad);
@@ -415,7 +426,7 @@ const cases = [
         edit(s);
         const p = join(work, `mcp-${name}.json`);
         writeFileSync(p, feedText({ ...s, hash: hashSnapshot(s) }));
-        return mcp(p);
+        return { name, ...mcp(p) };
       };
       const runs = [
         variant("honest", () => {}),
@@ -431,11 +442,19 @@ const cases = [
         variant("escrow-listed-twice", (s) => (s.escrows[1] = { ...s.escrows[0], state: "refunded" })),
         variant("genesis-extra-field", (s) => (s.status.genesis.approved = s.status.genesis.pinned)),
         variant("rpc-health-a-word", (s) => (s.status.rpc.health = "great")),
+        // Round 10 review I3: values their own fields contradict.
+        variant("claimed-with-no-evidence", (s) => {
+          s.escrows[0].state = "claimed";
+          s.escrows[0].evidence = [];
+        }),
+        variant("reset-false-with-no-rpc-genesis", (s) => (s.status.genesis.rpc = null)),
+        variant("snapshot-trust-a-word", (s) => (s.trust = "certified")),
       ];
-      return { exit: runs.map((x) => x.exit).join(","), stderr: runs.map((x) => x.stderr).join(" | "), runs };
+      // Each snapshot by name with its exit, so a failure says which one was served.
+      return { exit: runs.map((x) => x.exit).join(","), stderr: runs.map((x) => `${x.name}: exit ${x.exit}`).join("; "), runs };
     },
     ok: (r) =>
-      r.runs.length === 9 &&
+      r.runs.length === 12 &&
       r.runs[0].exit === 0 &&
       r.runs.slice(1).every((x) => x.exit === 2 && x.stdout === "" && /is not an observatory snapshot; refusing to serve it/.test(x.stderr)),
   },
@@ -567,15 +586,23 @@ const cases = [
     ok: (r) => r.exit === 2 && /census refused \(request\): missing --fixtures/.test(r.stderr),
   },
   {
-    name: "a finality stall then a reorganisation that drops the long fork is no conflict: the finalized floor holds",
+    name: "after a finality stall, a best height that falls further than the lag limit is a conflict (a restart looks the same), and once it is back within the limit the head counts again",
     run: () => {
       const first = cli("snapshot", "--status", stalled, "--out", join(work, "stall-o1"), "--log", join(work, "stall.jsonl"));
       if (first.exit !== 0) return first;
       const second = cli("snapshot", "--status", reorged, "--out", join(work, "stall-o2"), "--log", join(work, "stall.jsonl"));
       if (second.exit !== 0) return second;
-      return { ...second, json: JSON.parse(readFileSync(join(work, "stall-o2", "status.json"), "utf8")).status };
+      const third = cli("snapshot", "--status", healed, "--out", join(work, "stall-o3"), "--log", join(work, "stall.jsonl"));
+      if (third.exit !== 0) return third;
+      const read = (o) => JSON.parse(readFileSync(join(work, o, "status.json"), "utf8")).status;
+      return { ...third, json: { fell: read("stall-o2"), back: read("stall-o3") } };
     },
-    ok: (r) => r.exit === 0 && r.json.reset_detected === false && r.json.rpc.health === "ok" && r.json.conflicts.length === 0,
+    ok: (r) =>
+      r.exit === 0 &&
+      r.json.fell.reset_detected === null &&
+      r.json.fell.conflicts.some((c) => /best block 3341600 is more than 30 blocks below the best block 3341675/.test(c)) &&
+      r.json.back.reset_detected === false &&
+      r.json.back.conflicts.length === 0,
   },
 ];
 

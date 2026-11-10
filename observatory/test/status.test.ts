@@ -154,7 +154,7 @@ describe("injected failures", () => {
       expect(moved.rpc.stale).toBe(false);
     });
     it("an earlier best height is a floor too, less the lag limit, with or without a finalized head (Fable review r8 L1)", async () => {
-      const best = (best_height: number, genesis: string = DEVNET_GENESIS, finalized_height: number | null = null) => ({ genesis, best_height, finalized_height });
+      const best = (best_height: number, genesis: string = DEVNET_GENESIS) => ({ genesis, best_height });
       // status-healthy reads best block 3341577 with the default lag limit of 30.
       const within = await run("status-healthy", { earlierBest: [best(3341577 + 30)] });
       expect(within.conflicts).toEqual([]);
@@ -174,15 +174,22 @@ describe("injected failures", () => {
       expect(other.conflicts).toEqual([]);
       expect(other.reset_detected).toBe(false);
     });
-    it("an earlier best height that came with a finalized head is no floor: a long fork finality never reached may fall away (Fable review r9 L5)", async () => {
-      // Finality stalled at 3341570 with the best block at 3341675; this head reads best 3341577.
-      const s = await run("status-healthy", {
-        earlierBest: [{ genesis: DEVNET_GENESIS, best_height: 3341675, finalized_height: 3341570 }],
-        previous: [{ genesis: DEVNET_GENESIS, finalized_height: 3341570, finalized_hash: "0x" + "77".repeat(32), observed_at: "2026-11-09T23:47:00Z" }],
+    it("an earlier best height is a floor whether or not that head read a finalized head, so a restart after a finality stall is seen, and a long fork that falls away fails closed (Fable review r10 L4, r9 L5)", async () => {
+      // Finality never got past block 0 while the best block reached 3341675; this head reads best
+      // 3341577, so 98 blocks fell away. That is a restart or a long fork lost: not usable, either way.
+      const fell = await run("status-healthy", {
+        earlierBest: [{ genesis: DEVNET_GENESIS, best_height: 3341675 }],
+        previous: [{ genesis: DEVNET_GENESIS, finalized_height: 0, finalized_hash: "0x" + "77".repeat(32), observed_at: "2026-11-09T23:47:00Z" }],
       });
-      expect(s.conflicts).toEqual([]);
-      expect(s.reset_detected).toBe(false);
-      expect(s.rpc.health).toBe("ok");
+      expect(fell.conflicts.join(" ")).toMatch(/best block 3341577 is more than 30 blocks below the best block 3341675/);
+      expect(fell.reset_detected).toBeNull();
+      // Back within the lag limit of the highest best height seen, the head counts again.
+      const healed = await run("status-healthy", {
+        earlierBest: [{ genesis: DEVNET_GENESIS, best_height: 3341600 }],
+        previous: [{ genesis: DEVNET_GENESIS, finalized_height: 0, finalized_hash: "0x" + "77".repeat(32), observed_at: "2026-11-09T23:47:00Z" }],
+      });
+      expect(healed.conflicts).toEqual([]);
+      expect(healed.reset_detected).toBe(false);
     });
     it("earlier heads on another genesis alone change nothing", async () => {
       const s = await run("status-healthy", { previous: [head(3341600, NOW, "0x" + "11".repeat(32), OTHER)] });

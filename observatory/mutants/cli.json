@@ -162,7 +162,7 @@
   {
     "id": "cli-earlier-best-not-read",
     "file": "src/cli.ts",
-    "find": "        if (st.genesis.rpc !== null && st.best_height !== null) earlierBest.push({ genesis: st.genesis.rpc, best_height: st.best_height, finalized_height: st.finalized_height });\n",
+    "find": "        if (st.genesis.rpc !== null && st.best_height !== null) earlierBest.push({ genesis: st.genesis.rpc, best_height: st.best_height });\n",
     "replace": "",
     "test": "scripts/cli-checks.mjs",
     "why": "round 8 review L1: every earlier snapshot's best height reaches the floor, with or without a finalized head"
@@ -288,11 +288,27 @@
     "why": "round 9 review I1: census without its folder flag is a request refusal, as the recount's missing --dir is"
   },
   {
-    "id": "cli-earlier-best-finalized-dropped",
-    "file": "src/cli.ts",
-    "find": "best_height: st.best_height, finalized_height: st.finalized_height });",
-    "replace": "best_height: st.best_height, finalized_height: null });",
+    "id": "mcp-bin-evidence-unchecked",
+    "file": "src/mcp-bin.ts",
+    "find": "  (e.state === \"unverified\" ? (e.evidence as unknown[]).length === 0 : (e.evidence as unknown[]).length > 0) &&",
+    "replace": "  true &&",
     "test": "scripts/cli-checks.mjs",
-    "why": "round 9 review L5: an earlier head that read a finalized head sets the finalized floor, not a best height floor"
+    "why": "round 10 review I3: a served escrow that is funded, claimed or refunded rests on evidence"
+  },
+  {
+    "id": "mcp-bin-reset-false-unchecked",
+    "file": "src/mcp-bin.ts",
+    "find": "  (st.reset_detected !== false || (st.genesis.faucet === st.genesis.pinned && st.genesis.rpc === st.genesis.pinned)) &&",
+    "replace": "  true &&",
+    "test": "scripts/cli-checks.mjs",
+    "why": "round 10 review I3: a served reset_detected false has both readings on the pinned genesis"
+  },
+  {
+    "id": "mcp-bin-snapshot-trust-any-word",
+    "file": "src/mcp-bin.ts",
+    "find": "  TRUSTS.includes(snapshot.trust as string) &&",
+    "replace": "  typeof snapshot.trust === \"string\" &&",
+    "test": "scripts/cli-checks.mjs",
+    "why": "round 10 review I3: the snapshot's trust label is one of the two the schema names"
   }
 ]

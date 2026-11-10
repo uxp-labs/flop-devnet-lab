@@ -65,10 +65,12 @@ def _shown(raw):
 
 
 def _text(name):
-    # A file name that is UTF-8, as itself but for % and the control characters, which are %XX, as
-    # the TypeScript loader shows it: no line break inside a refusal's line, and no name that is
-    # UTF-8 shown as one that is not (Fable review r9 I2).
-    return "".join("%%%02X" % ord(c) if c == "%" or ord(c) < 0x20 or ord(c) == 0x7F else c for c in name)
+    # A file name that is UTF-8, as itself but for %, the control characters (C0, DEL and C1) and
+    # the line and paragraph separators, each as the %XX of its UTF-8 bytes, as the TypeScript
+    # loader shows it: no line break of any kind inside a refusal's line, and no name that is UTF-8
+    # shown as one that is not (Fable review r9 I2, r10 I2).
+    special = lambda c: c == "%" or ord(c) < 0x20 or 0x7F <= ord(c) <= 0x9F or c in "\u2028\u2029"
+    return "".join("".join("%%%02X" % b for b in c.encode("utf-8")) if special(c) else c for c in name)
 
 
 def _nesting(text):
@@ -168,23 +170,23 @@ def load_pages(scenario_dir):
         loaded.append((entry, page))
     for name, page in loaded:
         if not isinstance(page, dict):
-            raise Unreadable("page-structure", "%s: page is not an object" % name)
+            raise Unreadable("page-structure", "%s: page is not an object" % _text(name))
         if not isinstance(page.get("genesis"), str):
-            raise Unreadable("page-structure", "%s: genesis missing or not a string" % name)
+            raise Unreadable("page-structure", "%s: genesis missing or not a string" % _text(name))
         for f in ("from_block", "to_block", "page"):
             if not is_int(page.get(f)):
-                raise Unreadable("page-structure", "%s: %s missing or not an integer" % (name, f))
+                raise Unreadable("page-structure", "%s: %s missing or not an integer" % (_text(name), f))
         # Block numbers start at 0: a range that starts below 0 describes no real blocks.
         if page["page"] < 0 or page["from_block"] < 0 or page["from_block"] > page["to_block"]:
-            raise Unreadable("page-structure", "%s: bad page number or block range" % name)
+            raise Unreadable("page-structure", "%s: bad page number or block range" % _text(name))
         if "next_page" not in page or not (page["next_page"] is None or is_int(page["next_page"])):
-            raise Unreadable("page-structure", "%s: next_page missing or not an integer or null" % name)
+            raise Unreadable("page-structure", "%s: next_page missing or not an integer or null" % _text(name))
         for f in ("from_block", "to_block", "page"):
             page[f] = as_int(page[f])
         if page["next_page"] is not None:
             page["next_page"] = as_int(page["next_page"])
         if not isinstance(page.get("events"), list):
-            raise Unreadable("page-structure", "%s: events missing or not a list" % name)
+            raise Unreadable("page-structure", "%s: events missing or not a list" % _text(name))
         pages.append(page)
     return pages
 

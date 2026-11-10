@@ -61,6 +61,14 @@ OPEN_KEYWORDS = {"mode", "encoding", "errors", "newline"}
 # A class's method resolution order hands over object, which every value is an instance of
 # (round 9 review L1).
 BANNED_ATTRS = {"mro"}
+# The attributes recount.py uses, and no others (Fable review r10 I5): an attribute off this list,
+# sys.stderr.buffer.raw say, reaches what a recount has no use for. A new one is added here, read.
+ALLOWED_ATTRS = {
+    "S_ISDIR", "S_ISREG", "__init__", "add", "append", "argv", "compile", "count", "decode", "dumps",
+    "encode", "endswith", "exit", "extend", "fsencode", "fullmatch", "get", "is_integer", "isdir",
+    "items", "join", "kind", "listdir", "loads", "lstat", "lstrip", "path", "pop", "read",
+    "setdefault", "st_mode", "startswith", "stderr", "values",
+}
 
 
 def _dotted(node):
@@ -110,8 +118,10 @@ def scan_problems(code):
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
             found += ["import " + a.name for a in node.names if a.name.split(".")[0] not in ALLOWED_IMPORTS]
-            # An alias is a module under a name the dotted name rule never reads (round 9 review M2).
+            # An alias is a module under a name the dotted name rule never reads (round 9 review M2),
+            # and a dotted import loads a submodule off the list (r10 I5).
             found += ["imports %s as %s" % (a.name, a.asname) for a in node.names if a.asname is not None]
+            found += ["imports the submodule %s" % a.name for a in node.names if "." in a.name]
         elif isinstance(node, ast.ImportFrom):
             found.append("from %s import" % node.module)
         elif isinstance(node, ast.Match):
@@ -132,6 +142,8 @@ def scan_problems(code):
                 found.append("reaches the frame, code or traceback field ." + node.attr)
             elif node.attr in BANNED_ATTRS:
                 found.append("reaches ." + node.attr)
+            elif node.attr not in ALLOWED_ATTRS:
+                found.append("reaches .%s, an attribute recount.py does not use" % node.attr)
         if not isinstance(node, ast.Name):
             continue
         if node.id in ALLOWED_IMPORTS:
@@ -634,7 +646,9 @@ class RecountTests(unittest.TestCase):
                'O = str.mro()[1]\nmatch os.listdir:\n    case O(__self__=m):\n        m.system("id")',
                'def g():\n    yield\nmatch g():\n    case object(gi_frame=fr):\n        pass',
                'match sys.stderr:\n    case Exception(__traceback__=tb):\n        pass',
-               'x = Exception.mro()')
+               'x = Exception.mro()',
+               # Fable review r10 I5: a submodule import, and a write reached through stderr.
+               'import json.tool', 'import re, json.decoder', 'e = sys.stderr\ne.buffer.raw.truncate(0)')
         for code in bad:
             self.assertNotEqual(scan_problems(code), [], code)
         good = ("import os", 'os.path.join("a", "b")', 'open("x", "r", encoding="utf-8")', 'os.lstat("x")',
@@ -672,6 +686,22 @@ class RecountTests(unittest.TestCase):
                            capture_output=True, text=True)
         self.assertEqual(p.returncode, 0, p.stderr)
         self.assertEqual(json.loads(p.stdout), census("complete", 1, 30))
+
+    def test_file_names_show_specials_as_bytes(self):
+        """Fable review r9 I2 and r10 I2: a page file name that is UTF-8 is shown as itself but for
+        %, control characters and line separators, each as %XX of its UTF-8 bytes, as the
+        TypeScript loader shows it."""
+        for name, shown in (("01%FF.json", "01%25FF.json"), ("02\na.json", "02%0Aa.json"),
+                            ("03\u0085b.json", "03%C2%85b.json"), ("04\u2028c.json", "04%E2%80%A8c.json"),
+                            ("05\u00e9d.json", "05\u00e9d.json")):
+            with tempfile.TemporaryDirectory() as d:
+                os.mkdir(os.path.join(d, "event-pages"))
+                with open(os.path.join(d, "event-pages", name), "w", encoding="utf-8") as fh:
+                    fh.write("{ not json")
+                code, out, err = run(d, 0, 10)
+                self.assertEqual((code, out), (2, ""), name)
+                self.assertTrue(err.startswith("census refused (page-file): event-pages/%s: cannot read" % shown), (name, err))
+                self.assertEqual(len(err.rstrip("\n").split("\n")), 1, name)
 
     def test_output_is_deterministic(self):
         a = run(os.path.join(DATA, "gap"), 1, 30)[1]

@@ -101,12 +101,13 @@ function shownName(raw: Uint8Array): string {
 }
 
 /**
- * A file name that is UTF-8, shown as itself but for % and the control characters, which are
- * %XX as in shownName. So no name holds a line break that would end a refusal's line, and no name
- * that is UTF-8 can be shown as one that is not (round 9 review I2). The recount does the same.
+ * A file name that is UTF-8, shown as itself but for %, the control characters (C0, DEL and C1)
+ * and the line and paragraph separators, each as the %XX of its UTF-8 bytes, as in shownName. So
+ * no name holds a line break of any kind, and no name that is UTF-8 can be shown as one that is not
+ * (round 9 review I2, round 10 review I2). The recount does the same.
  */
 function shownText(name: string): string {
-  return name.replace(/[%\u0000-\u001f\u007f]/g, (c) => `%${c.charCodeAt(0).toString(16).toUpperCase().padStart(2, "0")}`);
+  return name.replace(/[%\u0000-\u001f\u007f-\u009f\u2028\u2029]/g, (c) => [...Buffer.from(c, "utf8")].map((b) => `%${b.toString(16).toUpperCase().padStart(2, "0")}`).join(""));
 }
 
 /** A JSON file whose arrays and objects nest deeper than MAX_NESTING. */

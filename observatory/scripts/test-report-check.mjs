@@ -7,13 +7,13 @@
 // One test may skip by design: the page file whose name is not valid UTF-8 needs a filesystem
 // that accepts such a name, which stock macOS does not. On Linux, which accepts any name, it must
 // run, so there no skip at all is allowed. Each file must run exactly the tests
-// test/test-counts.json pins, by number and by a digest of their names, so a test removed or
-// renamed shows (round 8 review I5, round 9 review I5); adding or renaming a test means updating
+// test/test-counts.json pins, by number and by a digest of their names in their order, so a test
+// removed, renamed or moved shows (round 8 review I5, round 9 and 10 review I5 and I6); adding or renaming a test means updating
 // its file's entry there. A status cannot show a test written to pass when its body fails
 // (it.fails) or a table with no rows (it.each([]), it.for([])), so the test sources are read for
 // those. A table held in a variable, and a test that returns before its assertion, are not seen.
 // The rules are then run on doctored copies of the report (one test skipped, one left as a todo,
-// one file missing, one test removed, one renamed), each of which must fail.
+// one file missing, one test removed, one renamed, two that swap names), each of which must fail.
 // Prints a JSON array of {check, outcome}; exit 1 unless every check passes.
 import { createHash } from "node:crypto";
 import { readdirSync, readFileSync } from "node:fs";
@@ -28,10 +28,13 @@ const PLATFORM_SKIPS = [/a page file whose name is not valid UTF-8 is a page err
 const pkg = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const testDir = join(pkg, "test");
 const canon = (o) => JSON.stringify(Object.keys(o).sort().map((k) => [k, o[k]]));
-/** One file's pinned entry: its number of tests and a digest of their full names, sorted. */
+/**
+ * One file's pinned entry: its number of tests and a digest of their full names in the order the
+ * file declares them, so two tests that swap names show too (round 10 review I6).
+ */
 function entryOf(f) {
   const tests = Array.isArray(f.assertionResults) ? f.assertionResults : [];
-  const names = tests.map((t) => String(t.fullName ?? t.title ?? "")).sort();
+  const names = tests.map((t) => String(t.fullName ?? t.title ?? ""));
   return { tests: tests.length, names: createHash("sha256").update(names.join("\n")).digest("hex") };
 }
 let pinned = null;
@@ -99,6 +102,11 @@ if (report) {
       const t = r.testResults[0].assertionResults[0];
       t.fullName = `${t.fullName ?? t.title} (renamed)`;
       t.title = `${t.title} (renamed)`;
+    },
+    "two tests that swap names": (r) => {
+      const [a, b] = r.testResults[0].assertionResults;
+      [a.fullName, b.fullName] = [b.fullName, a.fullName];
+      [a.title, b.title] = [b.title, a.title];
     },
   };
   for (const [name, edit] of Object.entries(doctored)) {

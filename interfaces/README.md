@@ -85,11 +85,11 @@ Known limits (v0):
 - `finalized_height` bounds the evidence only when it comes from a usable RPC head on the pinned
   genesis (no read error, fresh, not later than the snapshot, and not contradicting itself or an
   earlier snapshot: no rollback, no changed finalized hash, best height not below finalized, nor
-  more than the lag limit below a best height an earlier snapshot saw with no finalized head).
-  Otherwise it is `null`.
+  more than the lag limit below a best height an earlier snapshot saw). Otherwise it is `null`.
 - The same escrow id listed twice (in either case) is refused by the command line, never shown as
   two results, and so is an escrow id that is not 0x plus 64 hex, which the MCP server could not
-  look up.
+  look up. The MCP server checks a snapshot's shape and that its values agree with each other,
+  but its hash is no signature: serve only a snapshot the snapshot command wrote.
 - Amount, payee and policy are not checked here. FlopRail's `verifyLock` does that. Use both.
 
 ## NetworkStatus
@@ -130,9 +130,9 @@ Known limits (v0):
 - An RPC head whose best height is below a finalized height an earlier snapshot saw on the same
   genesis is a conflict, even with no finalized head of its own: that is what a chain restarted
   from the same spec looks like. So is a best height more than the lag limit (30 blocks) below a
-  best height an earlier snapshot saw on the same genesis with no finalized head. After a finality
-  stall, a long fork that was never final may fall away without a conflict: the finalized floor
-  holds instead.
+  best height an earlier snapshot saw on the same genesis, with or without a finalized head. After
+  a finality stall, a long fork that falls away reads the same way, since a restart looks the
+  same: `reset_detected` stays `null` until the best height is back within the limit.
 - Those checks against earlier snapshots run in the snapshot command, which reads its log. The
   `status` command reads no log: its `reset_detected` speaks for that one reading only, so a gate
   should read the snapshot's status.

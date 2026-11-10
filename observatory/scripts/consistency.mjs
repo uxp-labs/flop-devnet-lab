@@ -418,7 +418,10 @@ expectSame("the page shows exactly the renderer's keys, in its order", [...cells
     const body = row[2];
     const dataRow = attr(row[1], "data-row");
     if (dataRow !== null) {
-      // An item row holds cells only. A th here would be read by no check below.
+      // An item row holds cells only. A th here would be read by no check below. Only a drift item
+      // has one, named drift.<index>, so no labeled row can be turned into one (round 10 review L5).
+      checks++;
+      if (!/^drift\.\d+$/.test(dataRow)) failures.push({ what: `row ${dataRow} is a drift item row (data-row drift.<index>)`, detail: body.replace(/\s+/g, " ").slice(0, 160) });
       checks++;
       if (/<th\b/i.test(body)) failures.push({ what: `row ${dataRow} holds no th`, detail: body.replace(/\s+/g, " ").slice(0, 160) });
       for (const k of keysIn(body)) {

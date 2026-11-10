@@ -422,5 +422,37 @@
     "replace": "",
     "test": "scripts/source-scan.mjs",
     "why": "round 9 review M1: the SubtleCrypto prototype lists the key and signing methods"
+  },
+  {
+    "id": "scan-tree-underscore-strings-allowed",
+    "file": "scripts/source-scan.mjs",
+    "find": " || INTERNAL.test(v));",
+    "replace": ");",
+    "test": "scripts/source-scan.mjs",
+    "why": "round 10 review L1: an underscore name as a string key reads an internal, x[\"__proto__\"] or console[\"_stdout\"]"
+  },
+  {
+    "id": "scan-tree-default-by-name-allowed",
+    "file": "scripts/source-scan.mjs",
+    "find": "        if (names.includes(\"default\")) out.push(",
+    "replace": "        if (false) out.push(",
+    "test": "scripts/source-scan.mjs",
+    "why": "round 10 review L2: import { default as m } is the module object by another spelling"
+  },
+  {
+    "id": "scan-tree-reader-streams-allowed",
+    "file": "scripts/source-scan.mjs",
+    "find": "        if (READER_STREAMS.has(member)) out.push(",
+    "replace": "        if (false) out.push(",
+    "test": "scripts/source-scan.mjs",
+    "why": "round 10 review L3: the reader hands stdin back as .input"
+  },
+  {
+    "id": "scan-tree-reader-streams-destructured",
+    "file": "scripts/source-scan.mjs",
+    "find": "          if (READER_STREAMS.has(name)) out.push(",
+    "replace": "          if (false) out.push(",
+    "test": "scripts/source-scan.mjs",
+    "why": "round 10 review L3: const { input } = rl reads the reader's stream too"
   }
 ]

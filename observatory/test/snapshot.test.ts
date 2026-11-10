@@ -167,6 +167,26 @@ describe("fixture source: unreadable event pages are reported, never dropped", (
     }
   });
 
+  it("a page file name that is UTF-8 is shown as itself but for %, control characters and line separators, each as %XX of its bytes (Fable review r9 I2, r10 I2)", async () => {
+    const names = ["01%FF.json", "02\na.json", "03\u0085b.json", "04\u2028c.json", "05\u00e9d.json"];
+    const dir = scenario((d) => {
+      mkdirSync(join(d, "event-pages"));
+      for (const n of names) writeFileSync(join(d, "event-pages", n), "{ not json");
+    });
+    try {
+      const src = FixtureSource.fromDir(dir);
+      expect(await src.eventPageErrors()).toEqual([
+        "event-pages/01%25FF.json: not valid JSON",
+        "event-pages/02%0Aa.json: not valid JSON",
+        "event-pages/03%C2%85b.json: not valid JSON",
+        "event-pages/04%E2%80%A8c.json: not valid JSON",
+        "event-pages/05\u00e9d.json: not valid JSON",
+      ]);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it("does not count other unreadable files as page errors", async () => {
     const src = fx("status-malformed");
     expect(src.data.loadErrors?.join(" ")).toMatch(/faucet-health\.json/);

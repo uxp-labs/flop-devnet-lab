@@ -884,6 +884,21 @@ const tampers = [
         return out;
       }),
   },
+  // Round 10 review L5: labeled rows turned into item rows, so their values lose their labels.
+  {
+    name: "two-labeled-rows-turned-into-item-rows",
+    expect: /row status is a drift item row/,
+    applies: (d) => typeof snap(d).status.finalized_height === "number",
+    run: (d) =>
+      editHtml(d, (h) => {
+        let out = h;
+        for (const k of ["status.finalized_height", "status.best_height"]) {
+          const row = rowOf(out, k);
+          out = out.replace(row, `<tr data-row="status">${/<td\b[\s\S]*<\/td>/.exec(row)[0]}</tr>`);
+        }
+        return out;
+      }),
+  },
   // Round 9 review B2, B4, B7 and B8: a label or a value set apart, and a blank cell that says null.
   {
     name: "row-label-wrapped-in-h1",
@@ -1014,7 +1029,11 @@ for (const t of tampers) {
     const full = check(tmp, false);
     const sem = check(tmp, true);
     exits = { full: full.exit, semantic_only: sem.exit };
-    const named = (fs) => (t.expect ? fs.filter((w) => t.expect.test(w)) : fs);
+    // The output check reports a thrown error as a failure of its own. A tamper that names no
+    // check is caught only by some other failure, so a crash of the check never counts as a catch
+    // (round 10 review I4).
+    const CRASH = /^the outputs have the shape the check reads$/;
+    const named = (fs) => (t.expect ? fs.filter((w) => t.expect.test(w)) : fs.filter((w) => !CRASH.test(w)));
     if (!full.verdict || !sem.verdict) outcome = "no-verdict";
     else if (full.exit === 0) outcome = "missed";
     else if (t.bytesOnly) outcome = sem.exit !== 0 ? "bytes-only-tamper-also-caught-by-sections-1-to-9" : named(full.failures).length === 0 ? "caught-but-not-by-the-named-check" : "caught";
