@@ -344,7 +344,7 @@
    }
   },
   {
-   "id": "refresh-file-without-seat-did-not-migrated",
+   "id": "refresh-file-without-seat-did-migrated-from-ledger",
    "rule": "settlement.refresh",
    "input": {
     "run_read": {
@@ -377,7 +377,7 @@
    "expect": {
     "imd-flop": {
      "exit": 0,
-     "file_absent": [
+     "file_present": [
       "seat",
       "did",
       "ss58",
@@ -393,7 +393,8 @@
    },
    "quirks": [
     "R-b"
-   ]
+   ],
+   "note": "[fix: residual-b] renamed from refresh-file-without-seat-did-not-migrated; was file_absent [seat, did, ss58, network]"
   },
   {
    "id": "refresh-no-file-fills-identity-from-ledger",

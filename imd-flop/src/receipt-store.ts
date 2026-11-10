@@ -38,6 +38,8 @@ export function writeReceipt(path: string, body: unknown): { body: unknown; reda
   }
 }
 
+const present = (v: unknown): boolean => typeof v === "string" && v.length > 0;
+
 /**
  * A timeout leaves a ledger row but no receipt file. Take the seat identity from that row (what run recorded
  * at call time), never from the gateway, so the first receipt file is not a permanent mismatch.
@@ -72,7 +74,9 @@ export async function refreshReceipt(
   const c = classifyReceipt(rr.receipt, { job: stored?.job ?? ledgerRow?.job ?? null, provider: pname, http: rr.http, error: rr.error, requestId: rid, mock: pname === "mock" });
   const fresh = isFreshRead(rr);
   const { rawId, identityOk } = fresh ? receiptIdentity(rr.receipt, rid) : { rawId: undefined, identityOk: false };
-  const ident = stored ? {} : identityFromLedger(h, ledgerRow!);
+  // No file yet, or an older file without seat/did (716819c era): seed them from the ledger row. Stored values win.
+  const lacksIdentity = !stored || (ledgerRow !== undefined && (!present(stored.seat) || !present((stored as { did?: unknown }).did)));
+  const ident = lacksIdentity ? identityFromLedger(h, ledgerRow!) : {};
   let saved = writeReceipt(receiptPath(h, rid), refreshedBody(stored, ident, c, { fresh, rawId, identityOk })).body as SavedReceipt;
 
   const prev = latestAttempts(h).find((e) => e.request_id === rid);

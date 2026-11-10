@@ -199,11 +199,12 @@
     {
       "id": "R-b",
       "residual": "b",
-      "status": "current behavior",
+      "status": "fixed: [fix: residual-b]",
       "parts": [
         "imd-flop"
       ],
-      "summary": "receipt --refresh fills seat/did/ss58/network from the ledger only when no receipt file exists; an existing file without them (716819c-era) is not migrated."
+      "summary": "receipt --refresh fills seat/did/ss58/network from the ledger only when no receipt file exists; an existing file without them (716819c-era) is not migrated.",
+      "fixed_behavior": "receipt --refresh seeds seat/did/ss58/network from the ledger row whenever the stored file lacks seat or did (stored values still win); IMD TS low #9."
     },
     {
       "id": "R-c",
