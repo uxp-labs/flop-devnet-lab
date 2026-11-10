@@ -1,6 +1,6 @@
 {
  "source": "Sonar's 24-case viewer matrix, pr6-1cbdbfc-v8-independent/probes/viewer_c7_probe.py (case table copied verbatim)",
- "status": "current behavior at 3ae1cdf: each snapshot is today's rendered row, byte for byte. Cases with status known_defect render today's output, which is NOT the agreed label; see contract/rules.json known_defects.",
+ "status": "current behavior at 3ae1cdf: each snapshot is today's rendered row, byte for byte. A case with status known_defect lists the defect ids in defects and pins today's output, which is NOT the agreed label; its target (viewer.label vocabulary of contract/vectors/viewer-labels.json) is recorded and not asserted. See contract/rules.json known_defects.",
  "base_ledger": {
   "ts": "2026-11-10T15:00:00Z",
   "request_id": "req-1",
@@ -294,7 +294,32 @@
    },
    "snapshot": "snapshots/c7-matrix/19-G6.html",
    "status": "known_defect",
-   "defect": "KD-1"
+   "defects": [
+    "KD-1"
+   ],
+   "target": {
+    "viewer": {
+     "chips": [
+      [
+       "grey",
+       "sent"
+      ],
+      [
+       "red",
+       "unknown"
+      ]
+     ],
+     "reservation": 0.186,
+     "matches_shown": false,
+     "greens": [],
+     "link": [
+      "grey",
+      "not checked",
+      null
+     ]
+    }
+   },
+   "note": "KNOWN DEFECT KD-1: the snapshot pins today's wrong output ('match matches', no reservation line). Fixing KD-1 regenerates it; target is not asserted."
   },
   {
    "id": "20-G7",
