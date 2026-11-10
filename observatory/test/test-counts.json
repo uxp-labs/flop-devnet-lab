@@ -16,16 +16,16 @@
     "names": "ccf91ffb198b753d6ede400557b6a2bd36da1afcc99552d21fafc9b2601db7c6"
   },
   "escrow.test.ts": {
-    "tests": 179,
-    "names": "c8f7b9a0e07a8b73e8e759b55d4b651cae1f2a3ef02cab2826b9d6e3b287c7c5"
+    "tests": 180,
+    "names": "bd439ca49837d3e62977352e9315883dd115a9abd92613ad412e6457ee0f7bc5"
   },
   "guard.test.ts": {
-    "tests": 57,
-    "names": "ab4578ae24e4c48fea417bea2c64853fbac1fcd8707cea95a6c4f920d5f3c204"
+    "tests": 63,
+    "names": "6123e52cdf5103b12efe44c2c3597ac6982ac7882fe4f070adc6b0fe88ab68aa"
   },
   "mcp.test.ts": {
-    "tests": 12,
-    "names": "e5afca739caced24b9ec4d4b58efb333c710d40e8e45768c8213f5f0b9346781"
+    "tests": 13,
+    "names": "386c37c6722d7c6b8032fa68be18daf2f1e8fdd3a9b4e6fb438036ff79a6cb5a"
   },
   "page.test.ts": {
     "tests": 40,
@@ -39,13 +39,17 @@
     "tests": 22,
     "names": "739678e02983ce83080baf6b87548d1360a11c48255953fae444eb98e44dcbb1"
   },
+  "source.test.ts": {
+    "tests": 8,
+    "names": "b2b71fe985b974b8e45244b541f8d09f9f8db0683a291d3cf2c5d98fb421f3f6"
+  },
   "status-schema.test.ts": {
     "tests": 15,
     "names": "de59fc974e7a9ef6ac6ebea8086881c36f93b210d7ada69de6aceadcd5650d81"
   },
   "status.test.ts": {
-    "tests": 113,
-    "names": "8a2567409f04da8f3da4151d2bd5ddb7b6ed68e10130be371ee600e82b43d418"
+    "tests": 118,
+    "names": "870754fcc8b7c06245b1f2eeae8b90989c673e743531c7be0660f258b3a11036"
   },
   "store.test.ts": {
     "tests": 16,

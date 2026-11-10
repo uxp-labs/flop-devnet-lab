@@ -1,0 +1,50 @@
+[
+  {
+    "id": "files-reads-any-kind",
+    "file": "src/files.ts",
+    "find": "    if (!fstatSync(fd).isFile()) throw new NotARegularFile();\n",
+    "replace": "",
+    "test": "test/source.test.ts",
+    "why": "third IMD audit J4: only a regular file is read; a folder or a device is refused by name, never read"
+  },
+  {
+    "id": "files-waits-on-a-pipe",
+    "file": "src/files.ts",
+    "find": "constants.O_RDONLY | (constants.O_NONBLOCK ?? 0)",
+    "replace": "constants.O_RDONLY",
+    "test": "scripts/cli-checks.mjs",
+    "why": "third IMD audit J4: a named pipe is opened without waiting, so status, snapshot, drift and the MCP binary answer at once instead of waiting for a writer for ever"
+  },
+  {
+    "id": "store-pipe-refusal-unnamed",
+    "file": "src/store.ts",
+    "find": "    if (e instanceof NotARegularFile) throw new Error(`snapshot log ${path} is not a regular file; it is never extended or trusted`);\n",
+    "replace": "",
+    "test": "scripts/cli-checks.mjs",
+    "why": "third IMD audit J4: a snapshot log that is no regular file is refused in words that name the log"
+  },
+  {
+    "id": "mcp-bin-pipe-refusal-unnamed",
+    "file": "src/mcp-bin.ts",
+    "find": "    if (e instanceof NotARegularFile) throw new Error(\"it is not a regular file\");\n",
+    "replace": "",
+    "test": "scripts/cli-checks.mjs",
+    "why": "third IMD audit J4: a served snapshot that is no regular file is refused in the binary's own words"
+  },
+  {
+    "id": "source-listing-error-dropped",
+    "file": "src/source.ts",
+    "find": "    onError(e);\n    return [];",
+    "replace": "    return [];",
+    "test": "test/source.test.ts",
+    "why": "third IMD audit J8: an event-pages folder that cannot be listed is a page file problem, never a folder with no pages"
+  },
+  {
+    "id": "source-read-error-as-no-folder",
+    "file": "src/source.ts",
+    "find": "      if (errorCode(e) !== \"ENOENT\") {",
+    "replace": "      if (false) {",
+    "test": "test/source.test.ts",
+    "why": "third IMD audit J8: an event-pages folder that is there but cannot be read is a page file problem; only one that is not there means no pages"
+  }
+]

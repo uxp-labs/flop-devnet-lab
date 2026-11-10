@@ -74,7 +74,8 @@ Known limits (v0):
 - A finalized release or refund above the finalized height is not evidence yet, and it leaves the
   escrow it names `unverified`.
 - A page file that is not strict UTF-8 JSON, a page whose block range starts below 0, and an
-  `event-pages` that is not a real folder each leave every escrow `unverified`.
+  `event-pages` that is not a real folder, or cannot be read or listed, each leave every escrow
+  `unverified`.
 - So do a page file name that is not UTF-8, a key repeated in one JSON object, JSON nested deeper
   than 64 levels, and a broken page chain on the pinned genesis (census clause 2). An event on a
   page that the walk from page 0 never reaches is not evidence.
@@ -86,6 +87,8 @@ Known limits (v0):
   genesis (no read error, fresh, not later than the snapshot, and not contradicting itself or an
   earlier snapshot: no rollback, no changed finalized hash, best height not below finalized, nor
   more than the lag limit below a best height an earlier snapshot saw). Otherwise it is `null`.
+  A height handed to `escrowState` that is not a whole number from 0 bounds nothing and reads as
+  `null` too.
 - The same escrow id listed twice (in either case) is refused by the command line, never shown as
   two results, and so is an escrow id that is not 0x plus 64 hex, which the MCP server could not
   look up. The MCP server checks every field of the snapshot, its pin, the status and every
@@ -102,7 +105,7 @@ What it answers: is this still the chain we pinned, how far is finality, and are
 |---|---|
 | `schema` | Always `flop-observatory/network-status@0`. |
 | `genesis.pinned`, `.faucet`, `.rpc` | The pinned genesis and what each source reported. `null` means unread. |
-| `reset_detected` | `true`: a usable reading reports another genesis. `false`: a usable faucet `/chain` reading and a usable RPC head both report the pinned one. `null`: not enough evidence. A reading with an error (or no error field), a stale one, one later than the snapshot, an RPC head with no valid finalized head or best height, or one that contradicts itself or an earlier snapshot counts for neither. |
+| `reset_detected` | `true`: a usable reading reports another genesis. `false`: a usable faucet `/chain` reading and a usable RPC head both report the pinned one. `null`: not enough evidence. A reading with an error (or no error field), a stale one, one later than the snapshot, an RPC head with no valid finalized head or best height, or one that contradicts itself or an earlier snapshot counts for neither. An RPC head whose finalized height is stuck, or whose stuck check cannot run, never counts toward `false`. |
 | `conflicts` | Disagreements between sources, in words. |
 | `finalized_height`, `finalized_hash`, `best_height`, `finality_lag` | Chain head as read. `null` when unknown. |
 | `runtime_version` | Runtime spec version, or `null`. |
@@ -139,9 +142,9 @@ Known limits (v0):
   `status` command reads no log: its `reset_detected` speaks for that one reading only, so a gate
   should read the snapshot's status.
 - A field of the wrong type (a number for `observed_at`, a string for `http`, a nested object in
-  `limits`) reads as `null`.
+  `limits`) reads as `null`, and so does a field an RPC head leaves out.
 - A saved reading that cannot be read (not strict UTF-8 JSON, a key twice in one object, nested
-  deeper than 64 levels) counts as nothing read: that service is `unknown`, and its `detail` names
+  deeper than 64 levels, or not a regular file) counts as nothing read: that service is `unknown`, and its `detail` names
   the file and why.
 - Times are compared to the millisecond. A reading less than 1 ms after the snapshot time is not
   "later".

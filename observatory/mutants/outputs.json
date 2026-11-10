@@ -350,5 +350,13 @@
     "replace": "  const strict = new TextDecoder(\"utf-8\", { fatal: true });",
     "test": "test/store.test.ts",
     "why": "round 7 review L6: a byte order mark in the log is refused, never dropped"
+  },
+  {
+    "id": "mcp-unseen-id-as-asked",
+    "file": "src/mcp.ts",
+    "find": "    escrow_id: id.toLowerCase(),",
+    "replace": "    escrow_id: id,",
+    "test": "test/mcp.test.ts",
+    "why": "third IMD audit J10: an unseen escrow id is answered in lower case, so one escrow has one spelling"
   }
 ]

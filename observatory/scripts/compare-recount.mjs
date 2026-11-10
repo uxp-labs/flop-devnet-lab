@@ -148,6 +148,54 @@ const generated = [];
     generated.push({ skipped: "generated-page-names-with-a-line-break", why: `this filesystem refuses the name: ${e.code ?? e.message}` });
   }
 }
+{
+  // A scenario folder whose path is so long that its meta.json can be opened but its event-pages
+  // cannot be read at all (third IMD audit J8): both sides must refuse it as a page file problem
+  // naming event-pages, never read it as a folder with no pages. The system's path limit is found
+  // first, as the shortest path a lookup refuses as too long rather than as missing.
+  const name = "generated-event-pages-past-the-path-limit";
+  /** A path of exactly n bytes under the generated root, made of folders of at most 200 bytes. */
+  const pathOf = (n) => {
+    const names = [];
+    // Each folder costs its name and a slash. What is left is never one byte, which no name fits.
+    for (let left = n - generatedRoot.length; left > 0; ) {
+      let len = Math.min(200, left - 1);
+      if (left - 1 - len === 1) len -= 1;
+      names.push("p".repeat(len));
+      left -= len + 1;
+    }
+    return join(generatedRoot, ...names);
+  };
+  const tooLong = (n) => {
+    try {
+      lstatSync(pathOf(n));
+      return false;
+    } catch (e) {
+      return e.code === "ENAMETOOLONG";
+    }
+  };
+  let lo = generatedRoot.length + 2;
+  let hi = 1 << 16;
+  if (!tooLong(hi)) {
+    generated.push({ skipped: name, why: "this system refuses no path as too long" });
+  } else {
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1;
+      if (tooLong(mid)) hi = mid;
+      else lo = mid + 1;
+    }
+    // hi bytes is the shortest path refused: the folder's event-pages is exactly that long, and its
+    // meta.json two bytes shorter.
+    const dir = join(pathOf(hi - "/event-pages".length - name.length - 1), name);
+    try {
+      mkdirSync(dir, { recursive: true });
+      writeFileSync(join(dir, "meta.json"), JSON.stringify({ scenario: name, description: "made at run time", now: "2026-11-10T00:00:00.000Z", synthetic: true, census_request: { from_block: 0, to_block: 99 }, pinned_genesis: DEVNET }));
+      generated.push(dir);
+    } catch (e) {
+      generated.push({ skipped: name, why: `this system will not make the folder: ${e.code ?? e.message}` });
+    }
+  }
+}
 
 const results = [];
 let bad = 0;

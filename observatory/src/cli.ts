@@ -9,16 +9,17 @@
 //                             --out <dir> [--log <file>] [--now <iso>] [--source-sha <sha>]
 //
 // JSON goes to stdout. Errors go to stderr with exit 2 for bad usage or input.
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { CensusRefused, census, checkRequest } from "./census.js";
 import { DriftSpecError, drift } from "./drift.js";
 import { escrowStates, isHash32 } from "./escrow.js";
 import { feedText, writeFeeds } from "./feed.js";
+import { readRegularFile } from "./files.js";
 import { renderPage } from "./page.js";
 import { buildSnapshot } from "./snapshot.js";
-import { FixtureSource } from "./source.js";
+import { type FixtureMeta, FixtureSource } from "./source.js";
 import { DEVNET_GENESIS, type EarlierBest, networkStatus, type PreviousHead } from "./status.js";
 import { appendSnapshot, hashSnapshot, readSnapshots, verifyChain } from "./store.js";
 import { parseZoned } from "./strict.js";
@@ -73,6 +74,21 @@ function fail(msg: string): never {
 
 const one = (a: Args, k: string): string | undefined => a.flags.get(k)?.at(-1);
 const need = (a: Args, k: string): string => one(a, k) ?? fail(`missing ${k}`);
+
+/**
+ * The time every command reads its fixtures at: --now, or else the scenario's meta.json now, which
+ * must then be a time with a zone too (RULES.md 1.1). Every command takes its time here, so none
+ * prints a reading time that is missing or is no time (third IMD audit J3). --now was checked as
+ * the flags were read.
+ */
+function readingTime(a: Args, meta: FixtureMeta, refuse: (why: string) => never = fail): string {
+  const flagged = one(a, "--now");
+  if (flagged !== undefined) return flagged;
+  const now: unknown = meta.now;
+  if (typeof now !== "string" || parseZoned(now) === null) refuse("meta.json now must be an ISO 8601 time with a zone, such as 2026-11-09T23:47:41Z, or --now must give one");
+  return now as string;
+}
+
 const print = (v: unknown) => process.stdout.write(JSON.stringify(v, null, 2) + "\n");
 const int = (s: string | undefined, k: string): number | undefined => {
   if (s === undefined) return undefined;
@@ -105,7 +121,7 @@ async function main(): Promise<void> {
 
   if (cmd === "status") {
     const src = FixtureSource.fromDir(need(a, "--fixtures"));
-    print(await networkStatus(src, { pinnedGenesis: src.data.meta.pinned_genesis ?? DEVNET_GENESIS, now: one(a, "--now") ?? src.data.meta.now }));
+    print(await networkStatus(src, { pinnedGenesis: src.data.meta.pinned_genesis ?? DEVNET_GENESIS, now: readingTime(a, src.data.meta) }));
     return;
   }
 
@@ -117,7 +133,7 @@ async function main(): Promise<void> {
       escrowStates(ids, await src.eventPages(), {
         pinnedGenesis: src.data.meta.pinned_genesis ?? DEVNET_GENESIS,
         finalizedHeight: null,
-        observedAt: one(a, "--now") ?? src.data.meta.now,
+        observedAt: readingTime(a, src.data.meta),
         trust: src.trust,
         unreadablePages: await src.eventPageErrors(),
       }),
@@ -152,11 +168,14 @@ async function main(): Promise<void> {
     const to = toFlag ?? meta.census_request?.to_block;
     // No range at all is a request problem, named as one (clause 16, sixth rerun U8).
     if (from === undefined || to === undefined) fail("census refused (request): no --from/--to and no census_request in meta.json");
+    // No time is an input problem, after any request problem, and the command's alone: the recount
+    // reads no clock (RULES.md 3.1 clause 16).
+    const observedAt = readingTime(a, meta, (why) => fail(`census refused (input): ${why}`));
     print(
       runCensus(await src.eventPages(), {
         pinnedGenesis: one(a, "--genesis") ?? meta.pinned_genesis ?? DEVNET_GENESIS,
         requested: { from_block: from, to_block: to },
-        observedAt: one(a, "--now") ?? meta.now,
+        observedAt,
         trust: src.trust,
         unreadablePages: await src.eventPageErrors(),
       }),
@@ -166,14 +185,15 @@ async function main(): Promise<void> {
 
   if (cmd === "drift") {
     const dir = need(a, "--fixtures");
-    print(await driftFor(dir, one(a, "--spec"), one(a, "--now")));
+    const src = FixtureSource.fromDir(dir);
+    print(await driftFor(src, dir, one(a, "--spec"), readingTime(a, src.data.meta)));
     return;
   }
 
   if (cmd === "snapshot") {
     const status = FixtureSource.fromDir(need(a, "--status"));
     const out = need(a, "--out");
-    const now = one(a, "--now") ?? status.data.meta.now;
+    const now = readingTime(a, status.data.meta);
     const pinned = status.data.meta.pinned_genesis ?? DEVNET_GENESIS;
     const escrowDir = one(a, "--escrows");
     const censusDir = one(a, "--census");
@@ -207,7 +227,7 @@ async function main(): Promise<void> {
     let driftPart = null;
     if (driftDir) {
       const src = samePin(FixtureSource.fromDir(driftDir), driftDir);
-      driftPart = { label: `fixture:${src.data.meta.scenario}`, report: await driftFor(driftDir, one(a, "--spec"), now) };
+      driftPart = { label: `fixture:${src.data.meta.scenario}`, report: await driftFor(src, driftDir, one(a, "--spec"), now) };
     }
     const log = one(a, "--log");
     // RULES.md 1.1: the rollback, changed hash and stuck height checks need the earlier snapshots.
@@ -269,20 +289,22 @@ function runCensus(pages: unknown[], opts: Parameters<typeof census>[1]) {
   }
 }
 
-/** Drift for one fixture directory. The spec is --spec, or meta.params_spec relative to the directory. */
-async function driftFor(dir: string, specPath: string | undefined, now: string | undefined) {
-  const src = FixtureSource.fromDir(dir);
+/**
+ * Drift for one fixture directory at the time given. The spec is --spec, or meta.params_spec
+ * relative to the directory, read only when it is a regular file (src/files.ts).
+ */
+async function driftFor(src: FixtureSource, dir: string, specPath: string | undefined, now: string) {
   const rel = specPath ?? (src.data.meta.params_spec ? resolve(dir, src.data.meta.params_spec) : undefined);
   if (!rel) fail(`no --spec and no params_spec in ${dir}/meta.json`);
   let text: string;
   try {
-    text = readFileSync(rel as string, "utf8");
+    text = readRegularFile(rel as string).toString("utf8");
   } catch (e) {
     fail(`cannot read spec ${rel}: ${(e as Error).message}`);
   }
   try {
     return drift(text, await src.runtimeConstants(), {
-      observedAt: now ?? src.data.meta.now,
+      observedAt: now,
       trust: src.trust,
       // Relative to the package, so the report is the same in any clone.
       specSource: relative(PKG, resolve(rel as string)),

@@ -10,8 +10,9 @@
 //   rpc-head.json           RpcHead
 //   runtime-constants.json  RuntimeConstants
 //   event-pages/*.json      EventPage, one page per file, read in file-name order
-import { existsSync, lstatSync, readFileSync, readdirSync } from "node:fs";
+import { existsSync, lstatSync, readdirSync } from "node:fs";
 import { join } from "node:path";
+import { readRegularFile } from "./files.js";
 import { MAX_NESTING, duplicateKey, nestingDepth } from "./strict.js";
 import type {
   EventPage,
@@ -110,6 +111,25 @@ function shownText(name: string): string {
   return name.replace(/[%\u0000-\u001f\u007f-\u009f\u2028\u2029]/g, (c) => [...Buffer.from(c, "utf8")].map((b) => `%${b.toString(16).toUpperCase().padStart(2, "0")}`).join(""));
 }
 
+/** The system's error code (ENOENT, EACCES, ...) of a failed file call, or null. */
+function errorCode(e: unknown): string | null {
+  const code = e !== null && typeof e === "object" ? (e as { code?: unknown }).code : undefined;
+  return typeof code === "string" ? code : null;
+}
+
+/**
+ * A folder's entries with their names as bytes, sorted by bytes as the recount sorts them, or none
+ * when the folder cannot be listed, after onError is told why.
+ */
+function sortedEntries(dir: string, onError: (e: unknown) => void) {
+  try {
+    return readdirSync(dir, { withFileTypes: true, encoding: "buffer" }).sort((x, y) => Buffer.compare(x.name, y.name));
+  } catch (e) {
+    onError(e);
+    return [];
+  }
+}
+
 /** A JSON file whose arrays and objects nest deeper than MAX_NESTING. */
 class TooDeep extends Error {}
 
@@ -150,7 +170,8 @@ export class FixtureSource implements Source {
       try {
         // RFC 8259 JSON text is UTF-8: decode strictly, so an invalid byte refuses instead of
         // turning into U+FFFD, and keep a byte order mark so JSON.parse refuses it as Python does.
-        const text = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(readFileSync(path));
+        // Only a regular file is read: a named pipe would block the command (src/files.ts).
+        const text = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(readRegularFile(path));
         // Checked before parsing, so no parser's own stack limit ever decides (clause 12).
         if (nestingDepth(text) > MAX_NESTING) throw new TooDeep();
         const value = JSON.parse(text) as T;
@@ -186,40 +207,51 @@ export class FixtureSource implements Source {
     if (!meta) throw new Error(`fixture ${shownText(dir)} has no readable meta.json`);
     const pagesDir = join(dir, "event-pages");
     let eventPages: EventPage[] | undefined;
-    let pagesStat: ReturnType<typeof lstatSync> | null = null;
-    try {
-      pagesStat = lstatSync(pagesDir);
-    } catch {
-      pagesStat = null;
-    }
-    if (pagesStat && !pagesStat.isDirectory()) {
-      // RULES.md 3.1 clause 15: event-pages must be a real folder. A file or a link refuses.
-      const why = "event-pages: not a folder (it must be a real folder, not a file or a link)";
+    // A page problem refuses the census and leaves every escrow unverified (clause 15).
+    const pageProblem = (why: string): void => {
       loadErrors.push(why);
       pageErrors.push(why);
+    };
+    // No event-pages folder means no pages. One that is there but cannot be read or listed is a
+    // page file problem, as the recount reads it (RULES.md 3.1 clauses 15 and 16, third IMD audit
+    // J8): it may hold pages that were meant to count. The system's error code says why, never a
+    // path, so the words are the same on any machine.
+    const unreadablePages = (e: unknown, what: string): void => pageProblem(`event-pages: ${what} (${errorCode(e) ?? "error"})`);
+    let pagesStat: ReturnType<typeof lstatSync> | null = null;
+    let pagesRead = true;
+    try {
+      pagesStat = lstatSync(pagesDir);
+    } catch (e) {
+      pagesStat = null;
+      if (errorCode(e) !== "ENOENT") {
+        unreadablePages(e, "cannot be read");
+        pagesRead = false;
+      }
+    }
+    if (!pagesRead) {
+      eventPages = [];
+    } else if (pagesStat && !pagesStat.isDirectory()) {
+      // RULES.md 3.1 clause 15: event-pages must be a real folder. A file or a link refuses.
+      pageProblem("event-pages: not a folder (it must be a real folder, not a file or a link)");
       eventPages = [];
     } else if (pagesStat) {
       eventPages = [];
       // Names are read as bytes and sorted by bytes, as the recount does. A name that is not strict
       // UTF-8 would otherwise be decoded to U+FFFD and name a file that does not exist (clause 15).
-      const entries = readdirSync(pagesDir, { withFileTypes: true, encoding: "buffer" }).sort((x, y) => Buffer.compare(x.name, y.name));
+      const entries = sortedEntries(pagesDir, (e) => unreadablePages(e, "cannot be listed"));
       const strictName = new TextDecoder("utf-8", { fatal: true });
       for (const entry of entries) {
         let name: string;
         try {
           name = strictName.decode(entry.name);
         } catch {
-          const why = `event-pages/${shownName(entry.name)}: not a page file (its name is not valid UTF-8)`;
-          loadErrors.push(why);
-          pageErrors.push(why);
+          pageProblem(`event-pages/${shownName(entry.name)}: not a page file (its name is not valid UTF-8)`);
           continue;
         }
         // RULES.md 3.1 clause 15: anything else in event-pages may be a page meant to count, so it
         // is reported, never skipped.
         if (!entry.isFile() || name.startsWith(".") || !name.endsWith(".json")) {
-          const why = `event-pages/${shownText(name)}: not a page file (a regular file named *.json, not starting with a dot)`;
-          loadErrors.push(why);
-          pageErrors.push(why);
+          pageProblem(`event-pages/${shownText(name)}: not a page file (a regular file named *.json, not starting with a dot)`);
           continue;
         }
         const page = read<EventPage>(join("event-pages", name), [loadErrors, pageErrors], true);

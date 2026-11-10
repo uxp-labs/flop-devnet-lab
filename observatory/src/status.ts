@@ -3,8 +3,9 @@
 // Rules (RULES.md section 1):
 // - Unknown is null. Health "unknown" is never shown as "ok".
 // - Health is "ok" only when every check ran and passed (section 1.1).
-// - reset_detected is false only when the faucet and the RPC both report the pinned genesis.
-//   Any source with a different genesis makes it true. Not enough evidence makes it null.
+// - reset_detected is false only when the faucet and the RPC both report the pinned genesis, from
+//   usable readings, and the RPC's finalized height is known not to be stuck. Any usable source
+//   with a different genesis makes it true. Not enough evidence makes it null.
 // - Disagreements between sources go in `conflicts`, in plain words.
 import type { FaucetHealthBody, Health, HttpResult, NetworkStatus, RpcHead, ServiceStatus } from "./types.js";
 import type { Source } from "./source.js";
@@ -89,6 +90,39 @@ function httpField(h: unknown): number | null {
   return isSafeInt(h) ? h : null;
 }
 
+/**
+ * Why a reading has no HTTP status to judge, or null when it has one: no response (its read error
+ * when it gives one), or a status that is not a whole number, said as such and never as the value
+ * it holds (third IMD audit J9). The faucet, the gateway and the /chain reading all read it so.
+ */
+function noStatus(r: HttpResult<unknown>): string | null {
+  if (r.http === null) return hasError(errorOf(r)) ? String(errorOf(r)) : "no response";
+  return httpField(r.http) === null ? "http status is not a whole number" : null;
+}
+
+/**
+ * The head as the status reads it: every field the interface names, one the reading left out as
+ * null, as a reading that read nothing writes it (RULES.md 1.1), so a missing key is never taken
+ * for a value that failed a check (third IMD audit J5). Its error is kept as given, or left out,
+ * since a reading with no error key counts as a failed one. A head that is not an object read
+ * nothing, and says so.
+ */
+function headOf(raw: unknown): RpcHead {
+  if (raw === null || typeof raw !== "object" || Array.isArray(raw)) {
+    return { genesis_hash: null, finalized: null, best_number: null, runtime_spec_version: null, observed_at: null, error: null, unreadable: "the rpc head is not an object" };
+  }
+  const r = raw as Partial<Record<keyof RpcHead, unknown>>;
+  return {
+    genesis_hash: r.genesis_hash ?? null,
+    finalized: r.finalized ?? null,
+    best_number: r.best_number ?? null,
+    runtime_spec_version: r.runtime_spec_version ?? null,
+    observed_at: r.observed_at ?? null,
+    ...("error" in r ? { error: r.error } : {}),
+    ...(typeof r.unreadable === "string" ? { unreadable: r.unreadable } : {}),
+  } as RpcHead;
+}
+
 /** A safe integer (clause 14, src/strict.ts) that is not negative, or null. */
 function nonNegativeInt(value: unknown): number | null {
   return isSafeInt(value) && value >= 0 ? value : null;
@@ -109,7 +143,7 @@ export function classifyFaucet(r: HttpResult<FaucetHealthBody>): NetworkStatus["
   let detail: string | null;
   if (http === null) {
     health = "unknown";
-    detail = r.http === null ? (hasError(errorOf(r)) ? String(errorOf(r)) : "no response") : "http status is not a whole number";
+    detail = noStatus(r);
   } else if (!body) {
     health = http >= 500 ? "down" : "unknown";
     detail = `http ${http} with no readable body`;
@@ -143,7 +177,7 @@ export function classifyGateway(r: HttpResult<unknown>): ServiceStatus {
   let detail: string | null = null;
   if (http === null) {
     health = "unknown";
-    detail = r.http === null ? (hasError(errorOf(r)) ? String(errorOf(r)) : "no response") : "http status is not a whole number";
+    detail = noStatus(r);
   } else if (http === 200) {
     health = "ok";
   } else if (http === 429 || http === 503) {
@@ -190,14 +224,25 @@ export function applyFreshness<T extends ServiceStatus>(
   return svc;
 }
 
+/**
+ * What classifyRpc finds about a head beyond its health. contradicted: it contradicts itself or an
+ * earlier snapshot. stuck: its finalized height has not moved for longer than the stale limit
+ * (true), moved or is new to the log (false), or could not be checked, since an earlier head time
+ * at this height does not parse (null).
+ */
+export interface HeadFlags {
+  contradicted: boolean;
+  stuck: boolean | null;
+}
+
 export function classifyRpc(
   head: RpcHead,
   o: Required<Pick<StatusOptions, "now" | "staleAfterSeconds" | "maxFinalityLag">>,
   conflicts: string[],
   previous: StatusOptions["previous"],
   genesis: string | null,
-  /** Set to true when this head contradicts itself or an earlier snapshot. */
-  flags: { contradicted: boolean } = { contradicted: false },
+  /** What the checks found beyond health: see HeadFlags. */
+  flags: HeadFlags = { contradicted: false, stuck: false },
   earlierTimes: StatusOptions["earlierTimes"] = null,
   earlierBest: StatusOptions["earlierBest"] = null,
 ): NetworkStatus["rpc"] {
@@ -309,9 +354,11 @@ export function classifyRpc(
       problems.push("finalized block changed");
       flags.contradicted = true;
     } else if (sinceUnknown) {
+      flags.stuck = null;
       cannotRun.push("an earlier snapshot at this finalized height has a head time that does not parse, so whether the height is stuck is unknown");
     } else if (since !== null && since > o.staleAfterSeconds) {
       stale = true;
+      flags.stuck = true;
       problems.push(`finalized height stuck at ${finalized.number} for ${Math.round(since)}s`);
     }
   }
@@ -386,12 +433,13 @@ export async function assessNetwork(source: Source, opts: StatusOptions): Promis
     staleAfterSeconds: opts.staleAfterSeconds ?? 120,
     maxFinalityLag: opts.maxFinalityLag ?? 30,
   };
-  const [health, chain, gateway, head] = await Promise.all([
+  const [health, chain, gateway, rawHead] = await Promise.all([
     source.faucetHealth(),
     source.faucetChain(),
     source.gatewayModels(),
     source.rpcHead(),
   ]);
+  const head = headOf(rawHead);
   const conflicts: string[] = [];
 
   // RULES.md 1.1: the faucet genesis counts toward reset_detected only from a usable /chain
@@ -404,21 +452,18 @@ export async function assessNetwork(source: Source, opts: StatusOptions): Promis
   }
   const chainError = errorOf(chain);
   const chainUnusable =
-    chain.http === null
-      ? hasError(chainError)
-        ? String(chainError)
-        : "no response"
-      : chain.http !== 200
-        ? `http ${String(chain.http)}`
-        : hasError(chainError)
-          ? `read error: ${String(chainError)}`
-          : chainAge === null
-            ? "no parsable reading time"
-            : chainAge < 0
-              ? "reading time later than the snapshot time"
-              : chainAge > o.staleAfterSeconds
-                ? `reading is ${Math.round(chainAge)}s old`
-                : null;
+    noStatus(chain) ??
+    (chain.http !== 200
+      ? `http ${String(chain.http)}`
+      : hasError(chainError)
+        ? `read error: ${String(chainError)}`
+        : chainAge === null
+          ? "no parsable reading time"
+          : chainAge < 0
+            ? "reading time later than the snapshot time"
+            : chainAge > o.staleAfterSeconds
+              ? `reading is ${Math.round(chainAge)}s old`
+              : null);
   const chainUsable = chainUnusable === null;
   const rawFaucetGenesis = chain.body && typeof chain.body === "object" ? chain.body.genesisHash : undefined;
   const shownFaucetGenesis = normalizeHash(rawFaucetGenesis);
@@ -444,7 +489,7 @@ export async function assessNetwork(source: Source, opts: StatusOptions): Promis
     conflicts.push(`faucet genesis ${shownFaucetGenesis} differs from rpc genesis ${rpcGenesis}`);
   }
 
-  const flags = { contradicted: false };
+  const flags: HeadFlags = { contradicted: false, stuck: false };
   const rpc = classifyRpc(head, o, conflicts, opts.previous ?? null, rpcGenesis, flags, opts.earlierTimes ?? null, opts.earlierBest ?? null);
   const finalizedValid =
     head.finalized && nonNegativeInt(head.finalized.number) !== null && normalizeHash(head.finalized.hash) !== null;
@@ -455,13 +500,19 @@ export async function assessNetwork(source: Source, opts: StatusOptions): Promis
   const rpcUsable = fresh && !flags.contradicted && finalizedHeight !== null && bestHeight !== null;
   const lag =
     finalizedHeight !== null && bestHeight !== null && bestHeight >= finalizedHeight ? bestHeight - finalizedHeight : null;
+  // RULES.md 1.1: a usable head's genesis counts toward reset_detected, and toward false only once
+  // its finalized height is known not to be stuck. Unknown is never good news, so a stall, or a
+  // stuck check that could not run, leaves the answer open (third IMD audit J11); another genesis
+  // counts either way. The head still bounds escrow evidence: a finalized height stays final
+  // however long it holds, and a lower bound only keeps more evidence waiting.
+  const rpcForReset = rpcUsable && (flags.stuck === false || rpcGenesis !== pinned) ? rpcGenesis : null;
 
   const status: NetworkStatus = {
     schema: "flop-observatory/network-status@0",
     observed_at: opts.now,
     trust: source.trust,
     genesis: { pinned, faucet: shownFaucetGenesis, rpc: rpcGenesis },
-    reset_detected: resetDetected(pinned, faucetGenesis, rpcUsable ? rpcGenesis : null),
+    reset_detected: resetDetected(pinned, faucetGenesis, rpcForReset),
     conflicts,
     finalized_height: finalizedHeight,
     finalized_hash: finalizedHash,

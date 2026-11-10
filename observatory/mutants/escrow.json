@@ -398,5 +398,21 @@
     "replace": "",
     "test": "test/escrow.test.ts",
     "why": "a finalized event naming the escrow with a broken kind could be its release or refund"
+  },
+  {
+    "id": "escrow-bound-any-number",
+    "file": "src/escrow.ts",
+    "find": "  return isSafeInt(h) && h >= 0 ? h : null;",
+    "replace": "  return typeof h === \"number\" ? h : null;",
+    "test": "test/escrow.test.ts",
+    "why": "third IMD audit J6: NaN, Infinity or 1.5 bounds nothing; it reads as no height, with the not bounded note"
+  },
+  {
+    "id": "escrow-bound-negative",
+    "file": "src/escrow.ts",
+    "find": "  return isSafeInt(h) && h >= 0 ? h : null;",
+    "replace": "  return isSafeInt(h) ? h : null;",
+    "test": "test/escrow.test.ts",
+    "why": "third IMD audit J6: a negative height bounds nothing"
   }
 ]

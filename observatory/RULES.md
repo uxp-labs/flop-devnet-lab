@@ -29,13 +29,17 @@ check below to run and pass.
   also be a real instant: a date such as 2026-11-31, an hour of 24, a minute or second of 60, or
   an offset beyond 23:59 does not parse (it is never rolled over). A fraction of a second is cut
   to whole milliseconds, never rounded, so `23:47:53.9999999Z` stays in second 53. The snapshot
-  time must parse, or the status refuses.
+  time must parse, or the status refuses. Every command reads its time from `--now`, or else from
+  the scenario's `meta.json` `now`, which must then parse too: `status`, `escrow`, `census`,
+  `drift` and `snapshot` each refuse a scenario that gives no time or one that is no time, `census`
+  as an input problem, so no output carries a reading time that is missing or is no time.
 - The faucet genesis counts toward `reset_detected` only from a usable `GET /chain` reading: HTTP
   200 with no error and a reading time that parses, is at most the stale limit old, and is not
   later than the snapshot time. Otherwise it counts for neither, as section 1 says: `genesis.faucet`
   still shows what the reading said, as `genesis.rpc` does for the RPC; a reading that names a
   genesis other than the pinned one is a conflict; and the faucet's detail says why the reading
-  does not count, the file and reason included when the saved reading cannot be read. A usable
+  does not count, the file and reason included when the saved reading cannot be read, and an HTTP
+  status that is not a whole number said as such, never as the value it holds. A usable
   reading whose body names no `genesisHash`, or a malformed one, gives `reset_detected` nothing to
   go on, and the faucet's detail says that too. A `/chain` reading time later than the snapshot
   time is also a conflict.
@@ -49,8 +53,13 @@ check below to run and pass.
   its head read, later than this snapshot time. A head that fails any of these is not usable,
   however fresh: a chain restarted from the same spec keeps its genesis, and its first heads
   report a low best height and no finalized head yet. `genesis.rpc` still shows what the head
-  said. The same usable head is the only one whose finalized height may bound escrow evidence
-  (section 2).
+  said. A usable head counts toward `reset_detected` false only once its finalized height is known
+  not to be stuck: the stuck check below ran and found it moving, or new to the log. A height stuck
+  past the stale limit, or one whose stuck check cannot run, leaves `reset_detected` null unless a
+  reading names another genesis, which counts either way. The same usable head is the only one
+  whose finalized height may bound escrow evidence (section 2), stuck or not: a finalized height
+  stays final however long it holds, and a bound below the chain's only keeps more evidence
+  waiting.
 - Heights and the runtime version are safe integers (census clause 14). A finalized or best
   height past 2^53 - 1 was already rounded by the JSON parser, so it is not a valid one.
 - A reading time later than the snapshot time is a conflict, noted in `conflicts`, whatever that
@@ -62,11 +71,16 @@ check below to run and pass.
   same reading of `error`.
 - Each reading's fields reach the status only with the interface's types: `observed_at` a string,
   `http` a safe integer, the faucet `limits` an object whose every value is a finite number or a
-  boolean. A field of any other type is `null`.
+  boolean. A field of any other type is `null`. A field the RPC head leaves out reads as `null`,
+  as a head that read nothing writes it, so a missing key is never taken for a value that failed a
+  check: a head of only `{"error": ...}` is a failed read, `down` with its error, and no genesis
+  conflict. A head that is not a JSON object read nothing: the RPC is `unknown` and says so.
 - A saved reading that cannot be read (not strict UTF-8, not JSON, nested deeper than 64 levels or
-  holding one key twice, as census clause 12 reads a page file) counts as nothing read: the faucet
-  or gateway is `unknown`, and so is the RPC, each with the file and the reason as its detail. Its
-  last copy of a repeated key never wins. A `meta.json` that cannot be read refuses the scenario.
+  holding one key twice, as census clause 12 reads a page file, or not a regular file: a named
+  pipe, a device or a folder at its path, which is never opened to wait on) counts as nothing read:
+  the faucet or gateway is `unknown`, and so is the RPC, each with the file and the reason as its
+  detail. Its last copy of a repeated key never wins. A `meta.json` that cannot be read refuses
+  the scenario.
 
 - Faucet: `ok` needs HTTP 200 and a body with `status` "ok" and `ready` true. A body that says ok
   with any other HTTP status is `degraded`. A body with `status` "degraded", or `ready` false, is
@@ -178,7 +192,8 @@ check below to run and pass.
   time and is at most the stale limit old, and no check that found the head contradicting itself
   or an earlier snapshot. Otherwise (the RPC was not read, the reading is not usable, or it reports
   another genesis) `finalized_height` is `null`, and a result with evidence notes that its
-  evidence is not bounded by a finalized height.
+  evidence is not bounded by a finalized height. A height handed to the escrow rules that is not a
+  whole number from 0 (NaN, infinity, 1.5, -1) bounds nothing and reads the same way.
 - An event with no `block_number` key is malformed (census clause 7). One whose `block_number`
   is `null` is kept, but no finalized height can bound it, and a result whose evidence includes
   one says so.
@@ -308,15 +323,17 @@ check below to run and pass.
     does not start with a dot. Any other entry (a dotfile, another extension, a folder) refuses the
     census and leaves every escrow `unverified`, because it may be a page that was meant to count.
     A symbolic link is not a regular file, even when it points to one. `event-pages` itself must
-    be a folder, not a file or a link; otherwise the census refuses and every escrow is
-    `unverified`.
+    be a folder, not a file or a link, and one that is there but cannot be read or listed (no
+    permission, or a path past the system's limit) holds pages no one can see; otherwise the census
+    refuses and every escrow is `unverified`.
 16. A refusal names its reason, and the Python recount names the same one:
     - `request`: the request is invalid (clause 13). On the command line both sides read
       `--from` and `--to` as ASCII digits only, so " 0", "+5", "1_0", "0x10" or digits of
       another script refuse here, never read as a number;
     - `page-file`: an event page file cannot be read, decoded or parsed, an entry in
-      `event-pages/` is not a page file, or `event-pages` is not a real folder (clauses 12 and
-      15). The refusal names the first such entry in name order, or `event-pages` itself, whole:
+      `event-pages/` is not a page file, or `event-pages` is not a real folder or cannot be read or
+      listed (clauses 12 and 15). The refusal names the first such entry in name order, or
+      `event-pages` itself, whole:
       the cross-check reads the name as the longest entry of the scenario the message names, so
       a name that holds a colon or a semicolon is compared in full;
     - `page-structure`: a page file parses, but the page is structurally invalid (clause 12);
@@ -348,12 +365,16 @@ check below to run and pass.
     but for one case: Node decodes the command's arguments before the command reads them, so a
     scenario folder name that is not UTF-8 reaches it with U+FFFD in place of each bad byte, and the
     command can neither name nor open such a folder as the recount can. Such a folder is outside
-    what the two sides compare, and so is a scenario path so long that `event-pages` cannot be read
-    at all (past the system's path limit): the command reads it as a partial census with no pages,
-    never a complete one, while the recount refuses it and names the system's error, path quoted.
-    The TypeScript command also reads the folder's `meta.json` and refuses as an input problem when
-    it cannot; the recount does not read `meta.json`, so that one input problem is the command's
-    alone.
+    what the two sides compare. A scenario path so long that `event-pages` cannot be read at all
+    (past the system's path limit) is a page file problem on both sides, naming `event-pages`, and
+    the cross-check makes one at run time; so is an `event-pages` folder they may not read or list,
+    which the cross-check cannot make when it runs as root, where every folder opens, so each side's
+    own tests make the call fail instead. The TypeScript command also reads the folder's `meta.json`
+    and refuses as an input problem when it cannot, a scenario folder it may not search included;
+    the recount does not read `meta.json`, so that one input problem is the command's alone, and
+    the recount, which cannot search such a folder either, names `event-pages` as a page file
+    problem there. So is a `meta.json` whose `now` is missing or no time when no `--now` is given
+    (section 1.1): the recount reads no clock.
 
 ## 4. Read only
 
@@ -363,11 +384,15 @@ Tests fail if any attempt is left in the log.
 
 - In tests every network and process path is blocked at runtime and recorded, not only fetch and
   WebSocket: `node:http`, `node:https` and `node:http2` requests, `node:net` and `node:tls`
-  connections and listeners, `node:dgram` sockets, `node:dns` lookups, worker threads, and every
-  `node:child_process` call (spawn, exec, execFile, fork and their sync forms). Named imports see
-  the block too. So do the lower layers: `dgram.Socket` send, bind and connect, `dns.Resolver`
-  queries, `ChildProcess.prototype.spawn`, `process.binding`, `process.dlopen` and
-  `inspector.open`.
+  connections and listeners, `node:dgram` sockets, `node:dns` lookups, worker threads, module hooks
+  (`module.register`, whose hooks run on a loader thread that holds unpatched modules of its own,
+  and `module.registerHooks`), and every `node:child_process` call (spawn, exec, execFile, fork and
+  their sync forms). Named imports see the block too. So do the lower layers: `net.Server`'s
+  `_listen2`, which makes the handle under `listen`, the `dgram.Socket` constructor, which opens its
+  native handle at once, and `dgram.Socket` send, bind and connect, `dns.Resolver` queries,
+  `ChildProcess.prototype.spawn`, `process.binding`, `process.dlopen` and `inspector.open`. The
+  block covers the ways out named here and is tried against each of them; it is no proof that
+  Node has no other.
 - A source scan fails any `src` module, other than `guard.ts`, that imports one of those modules or
   calls fetch, WebSocket, a signing API or a key API. It also fails the indirect forms:
   `process.getBuiltinModule`, `createRequire`, an `import()` or `require()` whose argument is not
@@ -571,7 +596,10 @@ blank on the page and `null` in JSON and MCP.
   element holds no markup but the one the renderer nests, a bare `<code>` around an escrow id, so
   a span inside a cell cannot paint its value as something else. The page holds exactly the keys
   the renderer writes for the snapshot, in its order, so a row dropped or moved and escrow cards
-  in another order fail without the byte comparison.
+  in another order fail without the byte comparison. Each sits in the element the renderer writes
+  it in: the snapshot hash in a `code`, its time and trust in `span`s, the census status in a `p`
+  and every other value in a `td`, so a row turned into a bare marked `span`, which a browser moves
+  out of its table and away from its label, fails without it too.
 - Every value sits where a person reads it:
   - A table row with a label is one `th` and one `td`. The `th` carries `data-for`, equal to the
     `td`'s `data-k`, and its text is the label for that key.
@@ -584,7 +612,8 @@ blank on the page and `null` in JSON and MCP.
   - Each drift item row carries `data-row` with its `drift.<index>` path and holds only that
     item's cells.
 - An escrow id asked for over MCP that is not in the snapshot is `unverified`, with
-  `finalized_height` null.
+  `finalized_height` null, and its id is shown in lower case, as every escrow id is, however it
+  was asked for.
 - Every value cell on the page carries `data-k`, the path of the value in the snapshot:
   `status.<field>` with nested fields joined by dots (`status.rpc.stale`, `status.genesis.faucet`),
   `escrow.<escrow_id>.<field>`, `census.<field>` and `census.totals.<kind>`, and

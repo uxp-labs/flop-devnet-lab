@@ -745,6 +745,33 @@ class RecountTests(unittest.TestCase):
             self.assertEqual((code, out), (2, ""))
             self.assertEqual(err, "census refused (page-file): event-pages: not a folder (%s)\n" % os.path.join(d, "a%0Ab", "event-pages"))
 
+    def test_event_pages_that_cannot_be_read_or_listed_refuse_as_a_page_file_problem(self):
+        """Third IMD audit J8: a folder the recount may not open is a page file problem, as the
+        TypeScript census reads it, never a folder with no pages. Root opens any folder, so here the
+        call fails on purpose, in the recount's own process."""
+        import importlib.util
+        from unittest import mock
+        spec = importlib.util.spec_from_file_location("recount_under_test", RECOUNT)
+        rc = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(rc)
+        real_lstat = os.lstat
+
+        def denied(*args):
+            raise PermissionError(13, "Permission denied")
+
+        def lstat_denied_on_event_pages(path, *args):
+            if str(path).endswith("event-pages"):
+                denied()
+            return real_lstat(path, *args)
+
+        for name, fake, words in [("listdir", denied, "event-pages: cannot list"),
+                                  ("lstat", lstat_denied_on_event_pages, "event-pages: cannot stat")]:
+            with self.subTest(call=name), mock.patch.object(rc.os, name, side_effect=fake):
+                with self.assertRaises(rc.Unreadable) as caught:
+                    rc.load_pages(os.path.join(DATA, "complete"))
+                self.assertEqual(caught.exception.kind, "page-file")
+                self.assertTrue(str(caught.exception).startswith(words), str(caught.exception))
+
     def test_output_is_deterministic(self):
         a = run(os.path.join(DATA, "gap"), 1, 30)[1]
         b = run(os.path.join(DATA, "gap"), 1, 30)[1]

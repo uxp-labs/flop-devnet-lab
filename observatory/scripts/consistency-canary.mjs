@@ -878,6 +878,20 @@ const tampers = [
     applies: (d) => typeof snap(d).status.reset_detected === "boolean",
     run: (d) => editCell(d, "status.reset_detected", (a, t) => [a.replace(/ data-v="[^"]*"/, ""), t]),
   },
+  // Third IMD audit J7: the reset row replaced by a bare marked span holding the same value. A
+  // browser moves it out of the table, so the value loses its label, and no td is left for the
+  // labeled row rule to read.
+  {
+    name: "reset-row-replaced-by-a-bare-span",
+    expect: /page status\.reset_detected is written as a td/,
+    applies: () => true,
+    run: (d) =>
+      editHtml(d, (h) => {
+        const row = rowOf(h, "status.reset_detected");
+        const td = /<td\b([^>]*)>([\s\S]*?)<\/td>/.exec(row);
+        return h.replace(row, `<span${td[1]}>${td[2]}</span>`);
+      }),
+  },
   // Round 9 review L4: a value cut out of its row, so it sits in its table with no label.
   {
     name: "reset-row-cut-to-its-bare-cell",

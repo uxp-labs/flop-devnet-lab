@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 import { afterAll, describe, expect, it } from "vitest";
 import { FixtureSource } from "../src/source.js";
 import { unknownHttp } from "../src/source.js";
-import { DEVNET_GENESIS, classifyFaucet, classifyGateway, networkStatus, resetDetected, rpcHeadUsable } from "../src/status.js";
+import { DEVNET_GENESIS, assessNetwork, classifyFaucet, classifyGateway, networkStatus, resetDetected, rpcHeadUsable } from "../src/status.js";
 
 const NOW = "2026-11-09T23:47:53Z";
 const OTHER = "0x" + "ab".repeat(32);
@@ -783,5 +783,65 @@ describe("Fable review r7: a head that lost its finalized head, a log that runs 
     expect(s.reset_detected).toBeNull();
     expect(s.rpc.detail).toMatch(/read error: the reading has no error field/);
     expect(s.faucet.detail).toMatch(/the \/chain reading does not count: read error: the reading has no error field/);
+  });
+});
+
+describe("third IMD audit: a head with keys left out, a /chain status that is no number, and a stuck finalized height", () => {
+  const healthy = fx("status-healthy").data;
+  const withData = (patch: Record<string, unknown>, extra: Record<string, unknown> = {}) =>
+    networkStatus(new FixtureSource({ ...healthy, ...patch } as never), { pinnedGenesis: DEVNET_GENESIS, now: NOW, ...extra });
+
+  it("J5: a head that left its keys out reads as one that wrote them as null: a failed read is down with its error, and no genesis conflict", async () => {
+    const failed = await withData({ rpcHead: { error: "connection refused" } });
+    expect(failed.rpc.health).toBe("down");
+    expect(failed.rpc.detail).toBe("connection refused");
+    expect(failed.conflicts).toEqual([]);
+    expect(failed.reset_detected).toBeNull();
+    // The same reading with the keys written as null, for comparison.
+    const nulls = await withData({ rpcHead: { genesis_hash: null, finalized: null, best_number: null, runtime_spec_version: null, observed_at: null, error: "connection refused" } });
+    expect([nulls.rpc.health, nulls.rpc.detail, nulls.conflicts]).toEqual([failed.rpc.health, failed.rpc.detail, failed.conflicts]);
+    // No key at all, no error key either: a read that does not say it worked counts as failed.
+    const empty = await withData({ rpcHead: {} });
+    expect([empty.rpc.health, empty.rpc.detail, empty.conflicts]).toEqual(["down", "the reading has no error field", []]);
+  });
+
+  it("J5: a head that is not an object read nothing, and says so", async () => {
+    for (const rpcHead of [[], 5, "head"]) {
+      const s = await withData({ rpcHead });
+      expect([s.rpc.health, s.rpc.detail, s.conflicts, s.reset_detected]).toEqual(["unknown", "the rpc head is not an object", [], null]);
+    }
+  });
+
+  it("J9: a /chain reading whose http status is no whole number says so, not the value it holds", async () => {
+    const s = await withData({ faucetChain: { ...(healthy.faucetChain as object), http: "200" } });
+    expect(s.faucet.detail).toBe("the /chain reading does not count: http status is not a whole number");
+    expect(s.reset_detected).toBeNull();
+  });
+
+  // One earlier snapshot at the healthy head's height and hash, read long enough ago to be stuck.
+  const head = healthy.rpcHead as { finalized: { number: number; hash: string } };
+  const earlierAt = (observed_at: string, genesis: string = DEVNET_GENESIS) => [{ genesis, finalized_height: head.finalized.number, finalized_hash: head.finalized.hash, observed_at }];
+  const assess = (patch: Record<string, unknown>, previous: unknown) =>
+    assessNetwork(new FixtureSource({ ...healthy, ...patch } as never), { pinnedGenesis: DEVNET_GENESIS, now: NOW, previous: previous as never });
+
+  it("J11: a stuck finalized height, or one whose stuck check cannot run, leaves reset_detected open, and still bounds escrow evidence", async () => {
+    const stuck = await assess({}, earlierAt("2026-11-09T23:30:00Z"));
+    expect([stuck.status.rpc.stale, stuck.status.reset_detected]).toEqual([true, null]);
+    expect(stuck.status.rpc.detail).toMatch(/finalized height stuck at 3341575/);
+    // A finalized height stays final however long it holds: the head still bounds escrows.
+    expect(stuck.rpcUsable).toBe(true);
+    const unsure = await assess({}, earlierAt("2026-11-09T23:47:40"));
+    expect([unsure.status.rpc.health, unsure.status.reset_detected, unsure.rpcUsable]).toEqual(["unknown", null, true]);
+    // Not stuck: the earlier snapshot at this height is recent, so the answer is given.
+    const moving = await assess({}, earlierAt("2026-11-09T23:46:53Z"));
+    expect([moving.status.rpc.stale, moving.status.reset_detected]).toEqual([false, false]);
+  });
+
+  it("J11: a stuck head on another genesis still shows the reset", async () => {
+    const other = { ...(healthy.rpcHead as object), genesis_hash: OTHER };
+    const s = await assess({ rpcHead: other }, earlierAt("2026-11-09T23:30:00Z", OTHER));
+    expect(s.status.rpc.stale).toBe(true);
+    expect(s.status.genesis.faucet).toBe(DEVNET_GENESIS);
+    expect(s.status.reset_detected).toBe(true);
   });
 });

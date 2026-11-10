@@ -383,6 +383,15 @@ function pageKeys(s) {
   return k;
 }
 expectSame("the page shows exactly the renderer's keys, in its order", [...cells.keys()], pageKeys(snapshot));
+// Each value in the element the renderer writes it in (src/page.ts): the snapshot hash in code,
+// its time and trust in spans, the census status in a paragraph and every other value in a td. A
+// value moved into another element fails here, a bare span in a table say, which a browser moves
+// out of the table and away from its label (third IMD audit J7).
+const tagFor = (k) => (k === "snapshot.hash" ? "code" : k === "snapshot.observed_at" || k === "snapshot.trust" ? "span" : k === "census.status" ? "p" : "td");
+for (const [k, c] of cells) {
+  checks++;
+  if (c.tag !== tagFor(k)) failures.push({ what: `page ${k} is written as a ${tagFor(k)}`, detail: `a ${c.tag}` });
+}
 
 // Every td and span carries data-k, unless it sits inside a marked element, whose whole text is
 // already compared. A value shown anywhere else would escape the check.

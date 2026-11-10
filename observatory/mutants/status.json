@@ -42,8 +42,8 @@
   {
     "id": "status-unknown-gateway-ok",
     "file": "src/status.ts",
-    "find": "    health = \"unknown\";\n    detail = r.http === null ? (hasError(errorOf(r)) ? String(errorOf(r)) : \"no response\") : \"http status is not a whole number\";\n  } else if (http === 200) {",
-    "replace": "    health = \"ok\";\n    detail = r.http === null ? (hasError(errorOf(r)) ? String(errorOf(r)) : \"no response\") : \"http status is not a whole number\";\n  } else if (http === 200) {",
+    "find": "    health = \"unknown\";\n    detail = noStatus(r);\n  } else if (http === 200) {",
+    "replace": "    health = \"ok\";\n    detail = noStatus(r);\n  } else if (http === 200) {",
     "test": "test/status.test.ts",
     "why": "a gateway we did not read is unknown, never ok"
   },
@@ -218,24 +218,24 @@
   {
     "id": "status-chain-http-ignored",
     "file": "src/status.ts",
-    "find": "      : chain.http !== 200\n        ? `http ${String(chain.http)}`\n        : hasError(chainError)",
-    "replace": "      : false\n        ? `http ${String(chain.http)}`\n        : hasError(chainError)",
+    "find": "    (chain.http !== 200\n      ? `http ${String(chain.http)}`",
+    "replace": "    (false\n      ? `http ${String(chain.http)}`",
     "test": "test/status.test.ts",
     "why": "a /chain body on HTTP 500 must not report the faucet genesis"
   },
   {
     "id": "status-chain-error-ignored",
     "file": "src/status.ts",
-    "find": "        : hasError(chainError)\n          ? `read error: ${String(chainError)}`",
-    "replace": "        : false\n          ? `read error: ${String(chainError)}`",
+    "find": "      : hasError(chainError)\n        ? `read error: ${String(chainError)}`",
+    "replace": "      : false\n        ? `read error: ${String(chainError)}`",
     "test": "test/status.test.ts",
     "why": "a /chain reading with an error must not report the faucet genesis"
   },
   {
     "id": "status-chain-freshness-ignored",
     "file": "src/status.ts",
-    "find": "              : chainAge > o.staleAfterSeconds\n",
-    "replace": "              : false\n",
+    "find": "            : chainAge > o.staleAfterSeconds\n",
+    "replace": "            : false\n",
     "test": "test/status.test.ts",
     "why": "a 39 day old /chain reading must not report the faucet genesis"
   },
@@ -250,8 +250,8 @@
   {
     "id": "status-chain-time-not-needed",
     "file": "src/status.ts",
-    "find": "          : chainAge === null\n            ? \"no parsable reading time\"",
-    "replace": "          : false\n            ? \"no parsable reading time\"",
+    "find": "        : chainAge === null\n          ? \"no parsable reading time\"",
+    "replace": "        : false\n          ? \"no parsable reading time\"",
     "test": "test/status.test.ts",
     "why": "a /chain reading with no time cannot be shown as current"
   },
@@ -290,8 +290,8 @@
   {
     "id": "status-rpc-gate-dropped",
     "file": "src/status.ts",
-    "find": "resetDetected(pinned, faucetGenesis, rpcUsable ? rpcGenesis : null)",
-    "replace": "resetDetected(pinned, faucetGenesis, rpcGenesis)",
+    "find": "  const rpcForReset = rpcUsable && (flags.stuck === false || rpcGenesis !== pinned) ? rpcGenesis : null;",
+    "replace": "  const rpcForReset = rpcGenesis;",
     "test": "test/status.test.ts",
     "why": "reset_detected false needs a usable RPC reading of the pinned genesis"
   },
@@ -534,5 +534,69 @@
     "replace": "    faucet: withChainNote(applyFreshness(classifyFaucet(health), \"faucet\", o, conflicts), chainUnusable),",
     "test": "test/status.test.ts",
     "why": "round 8 review L2: a usable /chain reading that names no genesis says so in the faucet's detail"
+  },
+  {
+    "id": "status-head-genesis-key-not-filled",
+    "file": "src/status.ts",
+    "find": "    genesis_hash: r.genesis_hash ?? null,\n",
+    "replace": "    genesis_hash: r.genesis_hash as never,\n",
+    "test": "test/status.test.ts",
+    "why": "third IMD audit J5: a head that left out its genesis reads as one that wrote null, so no malformed genesis conflict is made up"
+  },
+  {
+    "id": "status-head-finalized-key-not-filled",
+    "file": "src/status.ts",
+    "find": "    finalized: r.finalized ?? null,\n",
+    "replace": "    finalized: r.finalized as never,\n",
+    "test": "test/status.test.ts",
+    "why": "third IMD audit J5: a head that left out its finalized head reads as one that read nothing, so a failed read is down with its error, not degraded"
+  },
+  {
+    "id": "status-head-not-an-object-read",
+    "file": "src/status.ts",
+    "find": "  if (raw === null || typeof raw !== \"object\" || Array.isArray(raw)) {",
+    "replace": "  if (raw === null) {",
+    "test": "test/status.test.ts",
+    "why": "third IMD audit J5: a head that is not a JSON object read nothing, and the rpc detail says so"
+  },
+  {
+    "id": "status-chain-status-as-its-value",
+    "file": "src/status.ts",
+    "find": "    noStatus(chain) ??\n",
+    "replace": "    (chain.http === null ? noStatus(chain) : null) ??\n",
+    "test": "test/status.test.ts",
+    "why": "third IMD audit J9: a /chain status that is no whole number is said as such, never as the http value it holds"
+  },
+  {
+    "id": "status-reset-false-on-a-stuck-head",
+    "file": "src/status.ts",
+    "find": "(flags.stuck === false || rpcGenesis !== pinned)",
+    "replace": "(true || rpcGenesis !== pinned)",
+    "test": "test/status.test.ts",
+    "why": "third IMD audit J11: reset_detected false needs the finalized height known not to be stuck"
+  },
+  {
+    "id": "status-stuck-head-hides-another-genesis",
+    "file": "src/status.ts",
+    "find": "(flags.stuck === false || rpcGenesis !== pinned)",
+    "replace": "(flags.stuck === false)",
+    "test": "test/status.test.ts",
+    "why": "third IMD audit J11: a stuck head that names another genesis still shows the reset"
+  },
+  {
+    "id": "status-unsure-stuck-check-counts",
+    "file": "src/status.ts",
+    "find": "      flags.stuck = null;\n",
+    "replace": "",
+    "test": "test/status.test.ts",
+    "why": "third IMD audit J11: a stuck check that cannot run leaves reset_detected open, as a stuck height does"
+  },
+  {
+    "id": "status-stuck-not-flagged",
+    "file": "src/status.ts",
+    "find": "      flags.stuck = true;\n",
+    "replace": "",
+    "test": "test/status.test.ts",
+    "why": "third IMD audit J11: a finalized height stuck past the stale limit is flagged, so it cannot count toward reset_detected false"
   }
 ]

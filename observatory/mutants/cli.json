@@ -10,8 +10,8 @@
   {
     "id": "cli-census-unreadable-pages-dropped",
     "file": "src/cli.ts",
-    "find": "        observedAt: one(a, \"--now\") ?? meta.now,\n        trust: src.trust,\n        unreadablePages: await src.eventPageErrors(),",
-    "replace": "        observedAt: one(a, \"--now\") ?? meta.now,\n        trust: src.trust,\n        unreadablePages: [],",
+    "find": "        observedAt,\n        trust: src.trust,\n        unreadablePages: await src.eventPageErrors(),",
+    "replace": "        observedAt,\n        trust: src.trust,\n        unreadablePages: [],",
     "test": "scripts/cli-checks.mjs",
     "why": "the census command must refuse a scenario with an unreadable page file"
   },
@@ -74,8 +74,8 @@
   {
     "id": "mcp-bin-lossy-utf8",
     "file": "src/mcp-bin.ts",
-    "find": "    text = new TextDecoder(\"utf-8\", { fatal: true, ignoreBOM: true }).decode(readFileSync(path));",
-    "replace": "    text = readFileSync(path, \"utf8\");",
+    "find": "    text = new TextDecoder(\"utf-8\", { fatal: true, ignoreBOM: true }).decode(readRegularFile(path));",
+    "replace": "    text = readRegularFile(path).toString(\"utf8\");",
     "test": "scripts/cli-checks.mjs",
     "why": "the MCP binary must read the snapshot as strict UTF-8, not turn a bad byte into U+FFFD"
   },
@@ -138,8 +138,8 @@
   {
     "id": "mcp-bin-bom-dropped",
     "file": "src/mcp-bin.ts",
-    "find": "    text = new TextDecoder(\"utf-8\", { fatal: true, ignoreBOM: true }).decode(readFileSync(path));",
-    "replace": "    text = new TextDecoder(\"utf-8\", { fatal: true }).decode(readFileSync(path));",
+    "find": "    text = new TextDecoder(\"utf-8\", { fatal: true, ignoreBOM: true }).decode(readRegularFile(path));",
+    "replace": "    text = new TextDecoder(\"utf-8\", { fatal: true }).decode(readRegularFile(path));",
     "test": "scripts/cli-checks.mjs",
     "why": "round 7 review L6: a byte order mark is refused, never dropped silently"
   },
@@ -254,5 +254,37 @@
     "replace": "`fixture ${dir} has no readable meta.json`",
     "test": "scripts/cli-checks.mjs",
     "why": "sixth rerun U8: a scenario folder is named as a page file is, so a line break in its name cannot break the refusal's line"
+  },
+  {
+    "id": "cli-reading-time-unchecked",
+    "file": "src/cli.ts",
+    "find": "  if (typeof now !== \"string\" || parseZoned(now) === null) refuse(",
+    "replace": "  if (false) refuse(",
+    "test": "scripts/cli-checks.mjs",
+    "why": "third IMD audit J3: a meta.json now that is missing or no time is refused by every command, never printed as the reading time"
+  },
+  {
+    "id": "cli-census-time-not-an-input-problem",
+    "file": "src/cli.ts",
+    "find": "    const observedAt = readingTime(a, meta, (why) => fail(`census refused (input): ${why}`));",
+    "replace": "    const observedAt = readingTime(a, meta);",
+    "test": "scripts/cli-checks.mjs",
+    "why": "third IMD audit J3: census refuses a scenario with no time as an input problem, its kind named as clause 16 asks"
+  },
+  {
+    "id": "cli-escrow-time-from-meta-unchecked",
+    "file": "src/cli.ts",
+    "find": "        observedAt: readingTime(a, src.data.meta),",
+    "replace": "        observedAt: one(a, \"--now\") ?? src.data.meta.now,",
+    "test": "scripts/cli-checks.mjs",
+    "why": "third IMD audit J3: the escrow command takes its time from the one checked resolver"
+  },
+  {
+    "id": "cli-drift-time-from-meta-unchecked",
+    "file": "src/cli.ts",
+    "find": "    print(await driftFor(src, dir, one(a, \"--spec\"), readingTime(a, src.data.meta)));",
+    "replace": "    print(await driftFor(src, dir, one(a, \"--spec\"), one(a, \"--now\") ?? src.data.meta.now));",
+    "test": "scripts/cli-checks.mjs",
+    "why": "third IMD audit J3: the drift command takes its time from the one checked resolver"
   }
 ]

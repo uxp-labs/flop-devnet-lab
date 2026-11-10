@@ -30,7 +30,8 @@
 //    still see it. A finalized release or refund out of range that names this escrow leaves
 //    it unverified.
 // 6. A null finalizedHeight means the evidence is not bounded by a finalized height, and
-//    a result with evidence says so in its notes.
+//    a result with evidence says so in its notes. So does one that is not a whole number from 0
+//    (NaN, Infinity, 1.5, -1): it bounds nothing.
 //
 // How the two "malformed" rules are read together
 // - A malformed event is never evidence. It cannot make an escrow funded, claimed or refunded.
@@ -143,6 +144,16 @@ function describePage(page: unknown, position: number): string {
   return `${where} (blocks ${show(page["from_block"])} to ${show(page["to_block"])}, page ${show(page["page"])})`;
 }
 
+/**
+ * The finalized height that bounds the evidence: a whole number from 0, as the status reads one
+ * (RULES.md 1.1), or null. Any other value bounds nothing and reads as null, so a result with
+ * evidence says it is not bounded (third IMD audit J6).
+ */
+function boundOf(opts: EscrowStateOptions): number | null {
+  const h: unknown = opts.finalizedHeight;
+  return isSafeInt(h) && h >= 0 ? h : null;
+}
+
 function unverified(
   escrowId: string,
   notes: string[],
@@ -154,7 +165,7 @@ function unverified(
     state: "unverified",
     evidence: [],
     notes,
-    finalized_height: typeof opts.finalizedHeight === "number" ? opts.finalizedHeight : null,
+    finalized_height: boundOf(opts),
     observed_at: opts.observedAt,
     trust: opts.trust,
     scope: ESCROW_SCOPE,
@@ -202,7 +213,7 @@ export function escrowState(
     return unverified(id, ["pinned genesis is not 0x plus 64 lower case hex; no event can count"], opts);
   }
   const pinned = opts.pinnedGenesis;
-  const height = typeof opts.finalizedHeight === "number" ? opts.finalizedHeight : null;
+  const height = boundOf(opts);
   const pageList: readonly unknown[] = Array.isArray(pages) ? pages : [];
 
   // Unreadable or invalid input: nothing can be verified from the rest.

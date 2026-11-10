@@ -18,8 +18,15 @@ import { hashSnapshot } from "../dist/store.js";
 const pkg = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const work = realpathSync(mkdtempSync(join(tmpdir(), "obs-cli-checks-")));
 const fx = (n) => join("fixtures", n);
-const cli = (...args) => {
-  const r = spawnSync("node", [join(pkg, "dist", "cli.js"), ...args], { cwd: pkg, encoding: "utf8" });
+// Every node this script starts runs with its warnings off, so a warning Node prints for the
+// environment it finds (NODE_USE_ENV_PROXY, say) never reaches a check that reads a refusal whole
+// (the third IMD audit's specialists saw two checks fail on one).
+// Each has a minute, so a command that waits for ever fails its check instead of the run.
+const node = (args, opts = {}) => spawnSync("node", args, { cwd: pkg, encoding: "utf8", timeout: 60000, ...opts, env: { ...process.env, NODE_NO_WARNINGS: "1" } });
+const cli = (...args) => cliWithin(60000, ...args);
+/** The command line, stopped after ms: a command stopped so has no exit code. */
+function cliWithin(ms, ...args) {
+  const r = node([join(pkg, "dist", "cli.js"), ...args], { timeout: ms });
   let json = null;
   try {
     json = JSON.parse(r.stdout);
@@ -27,7 +34,7 @@ const cli = (...args) => {
     json = null;
   }
   return { exit: r.status, json, stderr: (r.stderr ?? "").trim() };
-};
+}
 
 // A copy of census-complete pinned to another genesis, for the one-chain rule.
 const otherPin = join(work, "census-other-pin");
@@ -183,7 +190,7 @@ cpSync(join(pkg, fx("escrows-verification")), dupIds, { recursive: true });
 // The MCP binary on one real snapshot, as written and with one field changed after hashing.
 const mcp = (snapshotPath) => {
   const call = { jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: "get_status", arguments: {} } };
-  const r = spawnSync("node", [join(pkg, "dist", "mcp-bin.js"), snapshotPath], { cwd: pkg, encoding: "utf8", input: JSON.stringify(call) + "\n" });
+  const r = node([join(pkg, "dist", "mcp-bin.js"), snapshotPath], { input: JSON.stringify(call) + "\n" });
   return { exit: r.status, stdout: r.stdout ?? "", stderr: (r.stderr ?? "").trim() };
 };
 const mcpSnapshot = () => {
@@ -192,6 +199,38 @@ const mcpSnapshot = () => {
   if (r.exit !== 0) throw new Error(`snapshot for the MCP checks failed: ${r.stderr}`);
   return join(out, "snapshot.json");
 };
+
+// Third IMD audit J3: scenarios whose meta.json gives no time, or one that is no time.
+const timeless = {};
+for (const [part, name] of [["status", "status-healthy"], ["escrow", "escrows-verification"], ["census", "census-complete"], ["drift", "drift-seeded"]]) {
+  for (const [how, now] of [["missing", undefined], ["a-word", "yesterday"]]) {
+    const d = join(work, `${part}-now-${how}`);
+    cpSync(join(pkg, fx(name)), d, { recursive: true });
+    const m = JSON.parse(readFileSync(join(d, "meta.json"), "utf8"));
+    if (now === undefined) delete m.now;
+    else m.now = now;
+    // The drift spec stays where it is: the copy names it by its full path.
+    if (m.params_spec) m.params_spec = join(pkg, fx(name), m.params_spec);
+    writeFileSync(join(d, "meta.json"), JSON.stringify(m, null, 2));
+    timeless[`${part}-${how}`] = d;
+  }
+}
+// Third IMD audit J4: named pipes where a command reads a file. Nothing ever writes to them, so a
+// command that opened one to read would wait for ever; each run below has ten seconds.
+const fifo = (p) => {
+  const r = spawnSync("mkfifo", [p], { encoding: "utf8" });
+  if (r.status !== 0) throw new Error(`mkfifo ${p} failed: ${r.stderr ?? r.error?.message}`);
+  return p;
+};
+const pipedReading = join(work, "status-faucet-health-a-pipe");
+cpSync(join(pkg, fx("status-healthy")), pipedReading, { recursive: true });
+rmSync(join(pipedReading, "faucet-health.json"));
+fifo(join(pipedReading, "faucet-health.json"));
+const pipedMeta = join(work, "status-meta-a-pipe");
+cpSync(join(pkg, fx("status-healthy")), pipedMeta, { recursive: true });
+rmSync(join(pipedMeta, "meta.json"));
+fifo(join(pipedMeta, "meta.json"));
+const pipe = fifo(join(work, "a-pipe"));
 
 const cases = [
   {
@@ -614,6 +653,62 @@ const cases = [
       r.json.fell.conflicts.some((c) => /best block 3341600 is more than 30 blocks below the best block 3341675/.test(c)) &&
       r.json.back.reset_detected === false &&
       r.json.back.conflicts.length === 0,
+  },
+  {
+    name: "every command refuses a scenario whose meta.json now is missing or no time, unless --now gives one, census as an input problem (third IMD audit J3)",
+    run: () => {
+      const runs = [];
+      for (const how of ["missing", "a-word"]) {
+        runs.push({ name: `status-${how}`, ...cli("status", "--fixtures", timeless[`status-${how}`]) });
+        runs.push({ name: `escrow-${how}`, ...cli("escrow", "--fixtures", timeless[`escrow-${how}`]) });
+        runs.push({ name: `census-${how}`, ...cli("census", "--fixtures", timeless[`census-${how}`]) });
+        runs.push({ name: `drift-${how}`, ...cli("drift", "--fixtures", timeless[`drift-${how}`]) });
+        runs.push({ name: `snapshot-${how}`, ...cli("snapshot", "--status", timeless[`status-${how}`], "--out", join(work, `now-${how}-out`)) });
+      }
+      const given = "2026-11-10T00:00:00Z";
+      const withNow = [
+        cli("escrow", "--fixtures", timeless["escrow-missing"], "--now", given),
+        cli("census", "--fixtures", timeless["census-missing"], "--now", given),
+        cli("drift", "--fixtures", timeless["drift-a-word"], "--now", given),
+      ];
+      return { exit: runs.map((x) => x.exit).join(","), stderr: runs.map((x) => `${x.name}: ${x.stderr}`).join(" | "), runs, withNow, given };
+    },
+    ok: (r) =>
+      r.runs.length === 10 &&
+      r.runs.every(
+        (x) =>
+          x.exit === 2 &&
+          x.stderr ===
+            `flop-observatory: ${x.name.startsWith("census") ? "census refused (input): " : ""}meta.json now must be an ISO 8601 time with a zone, such as 2026-11-09T23:47:41Z, or --now must give one`,
+      ) &&
+      r.withNow.every((x) => x.exit === 0) &&
+      r.withNow[0].json.every((e) => e.observed_at === r.given) &&
+      r.withNow[1].json.observed_at === r.given &&
+      r.withNow[2].json.observed_at === r.given,
+  },
+  {
+    name: "a saved reading that is a named pipe counts as nothing read, naming the file, and the command answers at once (third IMD audit J4)",
+    run: () => cliWithin(10000, "status", "--fixtures", pipedReading),
+    ok: (r) => r.exit === 0 && r.json.faucet.health === "unknown" && r.json.faucet.detail === "faucet-health.json: not a regular file",
+  },
+  {
+    name: "a meta.json, a snapshot log, a drift spec or a served snapshot that is a named pipe is refused at once, never waited on (third IMD audit J4)",
+    run: () => {
+      const served = node([join(pkg, "dist", "mcp-bin.js"), pipe], { input: "", timeout: 10000 });
+      const runs = [
+        { name: "meta", ...cliWithin(10000, "status", "--fixtures", pipedMeta) },
+        { name: "log", ...cliWithin(10000, "snapshot", "--status", fx("status-healthy"), "--out", join(work, "pipe-log-out"), "--log", pipe) },
+        { name: "spec", ...cliWithin(10000, "drift", "--fixtures", fx("drift-seeded"), "--spec", pipe) },
+        { name: "mcp", exit: served.status, stderr: (served.stderr ?? "").trim() },
+      ];
+      return { exit: runs.map((x) => x.exit).join(","), stderr: runs.map((x) => `${x.name}: ${x.stderr}`).join(" | "), runs };
+    },
+    ok: (r) =>
+      r.runs.every((x) => x.exit === 2) &&
+      /has no readable meta\.json/.test(r.runs[0].stderr) &&
+      r.runs[1].stderr === `flop-observatory: snapshot log ${pipe} is not a regular file; it is never extended or trusted` &&
+      r.runs[2].stderr === `flop-observatory: cannot read spec ${pipe}: not a regular file` &&
+      r.runs[3].stderr === `cannot read snapshot ${pipe}: it is not a regular file; refusing to serve it`,
   },
 ];
 

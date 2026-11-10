@@ -1,7 +1,8 @@
 // Hash-chained snapshot log: one canonical JSON line per snapshot.
-import { appendFileSync, existsSync, mkdirSync, readFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { dirname } from "node:path";
+import { NotARegularFile, readRegularFile } from "./files.js";
 import { duplicateKey } from "./strict.js";
 import type { Snapshot } from "./types.js";
 
@@ -48,7 +49,14 @@ interface LogLine {
  */
 function lines(path: string): LogLine[] {
   if (!existsSync(path)) return [];
-  const raw = readFileSync(path);
+  let raw: Buffer;
+  try {
+    raw = readRegularFile(path);
+  } catch (e) {
+    // A named pipe or a folder at the log's path is no log: it is never read, extended or trusted.
+    if (e instanceof NotARegularFile) throw new Error(`snapshot log ${path} is not a regular file; it is never extended or trusted`);
+    throw e;
+  }
   const strict = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true });
   const decode = (b: Uint8Array): string | null => {
     try {

@@ -494,5 +494,37 @@
     "replace": "declaration.kind === \"const\") {",
     "test": "scripts/source-scan.mjs",
     "why": "lead's check after round 10: an exported reader is named in another module, where the reader rule does not follow it"
+  },
+  {
+    "id": "setup-module-register-unblocked",
+    "file": "test/setup.ts",
+    "find": "nodeModule.register = blocked(\"process\", \"module.register\", \"module hooks\");\n",
+    "replace": "",
+    "test": "test/guard.test.ts",
+    "why": "third IMD audit J1: module.register starts a loader thread whose modules hold none of the patches, so it is refused and recorded itself"
+  },
+  {
+    "id": "setup-module-register-hooks-unblocked",
+    "file": "test/setup.ts",
+    "find": "nodeModule.registerHooks = blocked(\"process\", \"module.registerHooks\", \"module hooks\");\n",
+    "replace": "",
+    "test": "test/guard.test.ts",
+    "why": "third IMD audit J1: module.registerHooks rewires how every later module loads, so it is refused and recorded"
+  },
+  {
+    "id": "setup-listen2-unblocked",
+    "file": "test/setup.ts",
+    "find": "net.Server.prototype._listen2 = blocked(\"network\", \"net.Server._listen2\");\n",
+    "replace": "",
+    "test": "test/guard.test.ts",
+    "why": "third IMD audit J2: _listen2 makes the listening handle under listen, so a test calling it directly is refused and recorded"
+  },
+  {
+    "id": "setup-dgram-constructor-unblocked",
+    "file": "test/setup.ts",
+    "find": "dgram.Socket = function Socket(...args: unknown[]) {\n  blocked(\"network\", \"dgram.Socket\")(...args);\n};\ndgram.Socket.prototype = dgramSocket;\n",
+    "replace": "",
+    "test": "test/guard.test.ts",
+    "why": "third IMD audit J2: a dgram.Socket made directly holds a native handle that binds without the prototype's bind, so the constructor is refused and recorded"
   }
 ]

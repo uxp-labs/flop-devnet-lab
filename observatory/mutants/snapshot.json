@@ -66,8 +66,8 @@
   {
     "id": "source-other-files-skipped",
     "file": "src/source.ts",
-    "find": "          const why = `event-pages/${shownText(name)}: not a page file (a regular file named *.json, not starting with a dot)`;\n          loadErrors.push(why);\n          pageErrors.push(why);\n          continue;",
-    "replace": "          const why = `event-pages/${shownText(name)}: not a page file (a regular file named *.json, not starting with a dot)`;\n          continue;",
+    "find": "          pageProblem(`event-pages/${shownText(name)}: not a page file (a regular file named *.json, not starting with a dot)`);\n          continue;",
+    "replace": "          continue;",
     "test": "test/snapshot.test.ts",
     "why": "an entry that is not a page file must be reported, never skipped silently"
   },
@@ -82,8 +82,8 @@
   {
     "id": "source-lossy-utf8",
     "file": "src/source.ts",
-    "find": "        const text = new TextDecoder(\"utf-8\", { fatal: true, ignoreBOM: true }).decode(readFileSync(path));",
-    "replace": "        const text = readFileSync(path, \"utf8\");",
+    "find": "        const text = new TextDecoder(\"utf-8\", { fatal: true, ignoreBOM: true }).decode(readRegularFile(path));",
+    "replace": "        const text = readRegularFile(path).toString(\"utf8\");",
     "test": "test/snapshot.test.ts",
     "why": "an invalid UTF-8 byte must refuse, never become U+FFFD"
   },
@@ -98,8 +98,8 @@
   {
     "id": "source-event-pages-file-accepted",
     "file": "src/source.ts",
-    "find": "    if (pagesStat && !pagesStat.isDirectory()) {",
-    "replace": "    if (false) {",
+    "find": "    } else if (pagesStat && !pagesStat.isDirectory()) {",
+    "replace": "    } else if (false) {",
     "test": "test/snapshot.test.ts",
     "why": "event-pages that is not a real folder must refuse"
   },

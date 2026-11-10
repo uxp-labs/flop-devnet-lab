@@ -42,13 +42,17 @@ function content(obj: unknown) {
   return { content: [{ type: "text", text: feedText(obj) }] };
 }
 
-/** Escrow ids are matched case-insensitively. An id not in the snapshot is unverified, with a note. */
+/**
+ * Escrow ids are matched case-insensitively. An id not in the snapshot is unverified, with a note,
+ * and shown in lower case as every other escrow id is, so one escrow has one spelling for a client
+ * that keys by it (third IMD audit J10).
+ */
 function escrowFor(s: Snapshot, id: string): EscrowState {
   const hit = s.escrows.find((e) => e.escrow_id.toLowerCase() === id.toLowerCase());
   if (hit) return hit;
   return {
     schema: "flop-observatory/escrow-state@0",
-    escrow_id: id,
+    escrow_id: id.toLowerCase(),
     state: "unverified",
     evidence: [],
     notes: ["escrow id not present in this snapshot; no finalized evidence seen"],

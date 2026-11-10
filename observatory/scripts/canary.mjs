@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 // Harness canary: proves the read-only harness itself bites.
 // In a temp copy of the package's tracked files, throwaway tests each leave one forbidden attempt
-// in the log: a fetch, an https request, a net connection, a child process, a refused
+// in the log: a fetch, an https request, a net connection, a child process, module hooks, a
+// listening handle made under listen, a dgram socket made directly, a refused
 // author_submitExtrinsic, a refused signature and a refused spend. Each must make vitest fail
 // with the "unexpected ... attempts" error from test/setup.ts. Two more make their attempt from a
 // timer that fires after the file's final check (one also resets the log there); each must fail
@@ -31,6 +32,11 @@ const canaries = {
   "zz-canary-https.test.ts": leave(`import https from "node:https";`, `https.request("https://canary.invalid/fund")`),
   "zz-canary-net.test.ts": leave(`import { connect } from "node:net";`, `connect(9, "canary.invalid")`),
   "zz-canary-process.test.ts": leave(`import { execFileSync } from "node:child_process";`, `execFileSync("true")`),
+  // Third IMD audit J1 and J2. An empty hook module and an address that resolves nowhere, so even a
+  // broken harness starts no hook code and opens nothing that reaches anything.
+  "zz-canary-module-hooks.test.ts": leave(`import { register } from "node:module";`, `register("data:text/javascript,")`),
+  "zz-canary-listen2.test.ts": leave(`import { Server } from "node:net";`, `(new Server() as unknown as { _listen2: (...a: unknown[]) => unknown })._listen2("canary.invalid", 0, 4, -1, false)`),
+  "zz-canary-dgram-socket.test.ts": leave(`import { Socket } from "node:dgram";`, `new Socket({ type: "udp4" })`),
   "zz-canary-write.test.ts": leave(`import { guardRpc } from "../src/guard.js";`, `guardRpc("author_submitExtrinsic")`),
   "zz-canary-sign.test.ts": leave(`import { refuseSigning } from "../src/guard.js";`, `refuseSigning("escrow open")`),
   "zz-canary-spend.test.ts": leave(`import { refuseSpend } from "../src/guard.js";`, `refuseSpend("0.001 FLOP")`),

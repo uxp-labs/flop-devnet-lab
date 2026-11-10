@@ -836,6 +836,16 @@ describe("evidence without a finalized height says so", () => {
   it("an unverified result has no evidence, so no such note", () => {
     expect(escrowState(A, [], { ...opts, finalizedHeight: null }).notes).not.toContain(unbounded);
   });
+  it("a height that is not a whole number from 0 bounds nothing: it reads as none, and says so (third IMD audit J6)", () => {
+    // The release is at block 190. A real bound below it leaves the escrow unverified.
+    expect(escrowState(A, [page([ev("EscrowReleased", A, 90)])], { ...opts, finalizedHeight: 150 }).state).toBe("unverified");
+    for (const finalizedHeight of [Number.NaN, Number.POSITIVE_INFINITY, 1.5, -1, 2 ** 53, "150" as unknown as number]) {
+      const s = escrowState(A, [page([ev("EscrowReleased", A, 90)])], { ...opts, finalizedHeight });
+      expect([s.state, s.finalized_height, s.notes], String(finalizedHeight)).toEqual(["claimed", null, [unbounded]]);
+      // The same holds for a result with no evidence, whose height also reads as none.
+      expect(escrowState(A, [], { ...opts, finalizedHeight }).finalized_height, String(finalizedHeight)).toBeNull();
+    }
+  });
   it("fixture: the verification escrows have no height and say so", async () => {
     const { expected, pages, o } = await loadScenario("escrows-verification");
     expect(o.finalizedHeight).toBeNull();

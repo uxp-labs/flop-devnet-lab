@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 // Newline-delimited JSON-RPC over stdio. Usage: flop-observatory-mcp <snapshot.json>
 // Reads the snapshot once. Writes nothing but protocol lines on stdout.
-import { readFileSync } from "node:fs";
 import { createInterface } from "node:readline";
 import { feedText } from "./feed.js";
+import { NotARegularFile, readRegularFile } from "./files.js";
 import { handleLine } from "./mcp.js";
 import { checkSnapshot } from "./snapshot-check.js";
 import { hashSnapshot } from "./store.js";
@@ -21,12 +21,14 @@ try {
   // strict UTF-8 with a byte order mark kept (so it refuses), nesting checked before parsing, one
   // value per key, and the text byte for byte in the feed format. A key twice, a bad byte read as
   // U+FFFD, an integer past 2^53 - 1 that JSON.parse rounds, or any other spelling of the same
-  // values could each be read two ways.
+  // values could each be read two ways. Only a regular file is read: a named pipe would leave the
+  // server waiting for ever (src/files.ts).
   let text: string;
   try {
-    text = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(readFileSync(path));
+    text = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(readRegularFile(path));
   } catch (e) {
     if (e instanceof TypeError) throw new Error("it is not valid UTF-8");
+    if (e instanceof NotARegularFile) throw new Error("it is not a regular file");
     throw e;
   }
   if (nestingDepth(text) > MAX_NESTING) throw new Error(`it nests deeper than ${MAX_NESTING} levels`);

@@ -2,10 +2,14 @@
 //
 // Every way out is replaced before any test runs: fetch and WebSocket, node:http, node:https and
 // node:http2 requests and servers, node:net and node:tls connections and listeners, node:dgram
-// sockets, node:dns lookups and resolvers, worker threads, every node:child_process call, and the
-// lower layers (ChildProcess.prototype.spawn, the native bindings behind process.binding,
-// process.dlopen and inspector.open). Each attempt is recorded and throws. The node: modules are patched on their shared module objects and then
-// synced, so named ESM imports (`import { request } from "node:https"`) see the block too.
+// sockets, node:dns lookups and resolvers, worker threads, module hooks (module.register, whose
+// hooks run on a loader thread that holds its own unpatched copy of every module, and
+// module.registerHooks), every node:child_process call, and the lower layers
+// (ChildProcess.prototype.spawn, net.Server's _listen2 under listen, the dgram.Socket
+// constructor, which opens its native handle at once, the native bindings behind process.binding,
+// process.dlopen and inspector.open). Each attempt is recorded and throws. The node: modules are
+// patched on their shared module objects and then synced, so named ESM imports
+// (`import { request } from "node:https"`) see the block too.
 //
 // After each test file, any attempt still in the log fails the file. A test that provokes a
 // refusal on purpose must assert it and then call resetAttempts().
@@ -46,11 +50,12 @@ function describeTarget(args: unknown[]): string {
   return "";
 }
 
-function blocked(kind: AttemptKind, label: string) {
+/** A stand in that records the attempt and throws. what names the way out in the error. */
+function blocked(kind: AttemptKind, label: string, what = kind === "process" ? "child processes" : "network") {
   return function blockedCall(...args: unknown[]): never {
     const target = describeTarget(args);
     recordAttempt(kind, target ? `${label} ${target}` : label);
-    throw new Error(kind === "process" ? "child processes disabled in tests" : "network disabled in tests");
+    throw new Error(`${what} disabled in tests`);
   };
 }
 
@@ -74,6 +79,8 @@ const net = require("node:net");
 block(net, ["connect", "createConnection", "createServer"], "network", "net");
 net.Socket.prototype.connect = blocked("network", "net.Socket.connect");
 net.Server.prototype.listen = blocked("network", "net.Server.listen");
+// listen() hands over to _listen2, which makes the listening handle itself (third IMD audit J2).
+net.Server.prototype._listen2 = blocked("network", "net.Server._listen2");
 block(require("node:tls"), ["connect", "createServer"], "network", "tls");
 block(require("node:dgram"), ["createSocket"], "network", "dgram");
 const dns = require("node:dns");
@@ -92,10 +99,23 @@ threads.Worker = class {
     blocked("process", "worker_threads.Worker")(file);
   }
 };
+// Module hooks (third IMD audit J1): register() starts Node's loader thread, whose code sees none
+// of the patches here, and registerHooks() rewires how every later module loads.
+const nodeModule = require("node:module");
+nodeModule.register = blocked("process", "module.register", "module hooks");
+nodeModule.registerHooks = blocked("process", "module.registerHooks", "module hooks");
 
 // The lower layers, which a module function block alone would miss.
-const dgramSocket = require("node:dgram").Socket.prototype;
+const dgram = require("node:dgram");
+const dgramSocket = dgram.Socket.prototype;
 for (const name of ["send", "bind", "connect"]) dgramSocket[name] = blocked("network", `dgram.Socket.${name}`);
+// A socket made directly holds its native handle from the constructor on, and that handle binds
+// without the prototype's bind (third IMD audit J2), so the constructor itself is refused. The
+// prototype stays the real one, with its methods blocked above.
+dgram.Socket = function Socket(...args: unknown[]) {
+  blocked("network", "dgram.Socket")(...args);
+};
+dgram.Socket.prototype = dgramSocket;
 for (const [proto, prefix] of [
   [dns.Resolver.prototype, "dns.Resolver"],
   [dns.promises.Resolver.prototype, "dns.promises.Resolver"],

@@ -192,6 +192,10 @@ describe("mcp tools", () => {
       expect(JSON.parse(text(call("get_escrow_state", { escrow_id: e.escrow_id })))).toEqual(JSON.parse(JSON.stringify(e)));
     }
   });
+  it("an unseen escrow id asked for in upper case is answered in lower case, as every escrow id is (third IMD audit J10)", () => {
+    const o = JSON.parse(text(call("get_escrow_state", { escrow_id: "0x" + "AB".repeat(32) })));
+    expect([o.escrow_id, o.state]).toEqual(["0x" + "ab".repeat(32), "unverified"]);
+  });
   it("an unseen escrow id is unverified with a note and the scope line", () => {
     const o = JSON.parse(text(call("get_escrow_state", { escrow_id: "0x" + "99".repeat(32) })));
     expect(o.state).toBe("unverified");
