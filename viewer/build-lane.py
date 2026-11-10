@@ -95,7 +95,9 @@ def from_files():
 
 def unresolved(e): return e.get("state") in ("timeout_unknown", "error")
 
+OVER_PER_CALL = "over the per-call cap"
 OVER_DAILY = "over the daily cap"
+OVER_RESERVATION = "over the reservation"
 
 def daily_left(e):
     """Daily cap left after this row's cap_charge, or None when any input is unknown (cap math uses cap_charge)."""
@@ -109,9 +111,9 @@ def over_limit(e, r):
     settled = amount(r.get("settled"))
     if settled is None or r.get("state") not in SETTLES: return None
     per_call, quote, left = amount(e.get("per_call_cap")), amount(e.get("quote_padded")), daily_left(e)
-    if per_call is not None and settled > per_call: return "over the per-call cap"
+    if per_call is not None and settled > per_call: return OVER_PER_CALL
     if left is not None and left < 0: return OVER_DAILY
-    if quote is not None and settled > quote: return "over the reservation"
+    if quote is not None and settled > quote: return OVER_RESERVATION
     return None
 
 def disagrees(e, r):
@@ -126,46 +128,48 @@ def disagrees(e, r):
     return d or unresolved(e)
 
 def classify(e, r):
-    """The one ordered decision for a ledger row e and its receipt file r (None if there is no file).
-    First match wins: refused, no receipt, unreadable file, key expired, failed read, identity mismatch,
-    disagree, over limit, matches. Rendering per kind is in ROW_KINDS."""
-    if e.get("state") == "refused_local": return "refused"
-    if r is None: return "no_receipt"
-    if r.get("_unreadable"): return "unreadable"
+    """The one ordered decision for a ledger row e and its receipt file r (None if there is no file), as
+    (kind, limit). First match wins: refused, no receipt, unreadable file, key expired, failed read, identity
+    mismatch, disagree, over limit, matches. limit is the first limit broken (over_limit), set only for kind
+    over_limit, so over_limit() runs once per row. Rendering per kind is in ROW_KINDS."""
+    if e.get("state") == "refused_local": return "refused", None
+    if r is None: return "no_receipt", None
+    if r.get("_unreadable"): return "unreadable", None
     # The last receipt read failed (key expired, an HTTP error, or http 0 for a dropped connection). The file
     # holds the last known state, not a fresh read, so it can't be compared: runs before the identity and
     # disagree checks. A key-expired read is a failed read with its own wording.
-    if r.get("flag") == "key_expired": return "key_expired"
-    if r.get("http") not in (None, 200) or present(r.get("error")): return "read_failed"
-    if not identity_ok(r, e): return "mismatch"
-    if disagrees(e, r): return "disagree"
-    if over_limit(e, r): return "over_limit"
-    return "matches"
+    if r.get("flag") == "key_expired": return "key_expired", None
+    if r.get("http") not in (None, 200) or present(r.get("error")): return "read_failed", None
+    if not identity_ok(r, e): return "mismatch", None
+    if disagrees(e, r): return "disagree", None
+    limit = over_limit(e, r)
+    if limit: return "over_limit", limit
+    return "matches", None
 
 def unresolved_flag(e):
     return "timeout: spend unknown, not retried" if e.get("state") == "timeout_unknown" else esc(e.get("reason") or e.get("state"))
 
-def row_refused(row, e, r, reservation):
+def row_refused(row, e, r, reservation, limit):
     row.update(chips=None, bad=True); row["flop"] = [["", "refused before the call, no FLOP chips"]]
-    row["spend_flags"] = ["cap hit = stop", esc(e.get("reason") or "")]
+    row["spend_flags"] = ["cap hit = stop", esc(e.get("reason") or "")] + row["spend_flags"]
 
 def unknown_chips():
     """One status chip per row: red 'unknown' (precedence: unreadable, unknown, identity mismatch, disagree).
     A timeout_unknown or error ledger row shows only this; its mismatch or disagree stays in the row text."""
     return [["grey", "sent"], ["red", "unknown"]]
 
-def row_no_receipt(row, e, r, reservation):
+def row_no_receipt(row, e, r, reservation, limit):
     row["chips"] = unknown_chips(); row["bad"] = True
     # No receipt file yet (a timeout): the reservation is still held, so it is shown (residual d).
     row["flop"] = [["last seen", "sent"], ["reservation", reservation], ["observed spend", None]]
     row["flags"] = [unresolved_flag(e)]
 
-def row_unreadable(row, e, r, reservation):
+def row_unreadable(row, e, r, reservation, limit):
     row["chips"] = [["grey", "sent"], ["red", "unreadable"]]; row["bad"] = True
     row["flags"] = ["receipt file unreadable: not shown as OK"]
     row["flop"] = [["reservation", reservation], ["observed spend", None]]
 
-def row_read_failed(row, e, r, reservation, flag="receipt read failed, can't re-check"):
+def row_read_failed(row, e, r, reservation, limit, flag="receipt read failed, can't re-check"):
     # A key-expired read uses the same labels and markup with its own flag; the link column stays grey "not checked".
     err = r.get("error") if present(r.get("error")) else ""
     why = esc(err) if err.startswith("HTTP ") else esc(f"HTTP {r.get('http')} {err}".strip())
@@ -174,7 +178,7 @@ def row_read_failed(row, e, r, reservation, flag="receipt read failed, can't re-
     row["flop"] = [["last seen", esc(r.get("state") or "unknown")], ["now", f'unreadable: <span class="mono">{why}</span>'], ["reservation", reservation], ["observed spend", None]]
     row["flags"] = [flag] + ([unresolved_flag(e)] if unresolved(e) else [])
 
-def row_mismatch(row, e, r, reservation):
+def row_mismatch(row, e, r, reservation, limit):
     chips = unknown_chips() if unresolved(e) else [["grey", "sent"], ["red", "mismatch"]]; row["bad"] = True
     row["flags"].append(IDENTITY)  # visible row text, not hover-only
     row["flags"].append("receipt's request_id, job, seat or DID doesn't match this row")
@@ -186,7 +190,7 @@ def row_mismatch(row, e, r, reservation):
     if unresolved(e): row["flags"].append(unresolved_flag(e))
     row["chips"] = chips
 
-def row_disagree(row, e, r, reservation):
+def row_disagree(row, e, r, reservation, limit):
     row["chips"] = unknown_chips() if unresolved(e) else [["amber", DISAGREE]]
     row["bad"] = True
     row["flags"].append(DISAGREE)
@@ -194,14 +198,14 @@ def row_disagree(row, e, r, reservation):
     row["flop"].append(["reservation", reservation])
     row["flop"].append(["observed spend", None])
 
-def row_over_limit(row, e, r, reservation):
+def row_over_limit(row, e, r, reservation, limit):
     # Receipt and ledger agree, but the settlement breaks a limit: amber, the hold stays, never green (KD-2).
     # Here cap_charge is the settled amount, so the held reservation shown is quote_padded first (FIXER).
     quote = amount(e.get("quote_padded"))
-    row["chips"] = [["amber", over_limit(e, r)]]; row["bad"] = True
+    row["chips"] = [["amber", limit]]; row["bad"] = True
     row["flop"] += [["reservation", reservation if quote is None else quote], ["settled", amount(r.get("settled"))]]
 
-def row_matches(row, e, r, reservation):
+def row_matches(row, e, r, reservation, limit):
     chain_final = r.get("chain_final") is True
     chips = [["grey", "sent"]]
     if r.get("stage") == STAGE_GATEWAY:
@@ -214,9 +218,10 @@ def row_matches(row, e, r, reservation):
     row["flop"].append(["match", "matches"])
     row["flop"].append(["observed spend", amount(r.get("settled"))])
 
+# Each kind renders from (row, e, r, reservation, limit); limit is set only for over_limit.
 ROW_KINDS = {"refused": row_refused, "no_receipt": row_no_receipt, "unreadable": row_unreadable, "read_failed": row_read_failed,
              "mismatch": row_mismatch, "disagree": row_disagree, "over_limit": row_over_limit, "matches": row_matches,
-             "key_expired": lambda row, e, r, reservation: row_read_failed(row, e, r, reservation, flag="key expired, can't re-check")}
+             "key_expired": lambda row, e, r, reservation, limit: row_read_failed(row, e, r, reservation, limit, flag="key expired, can't re-check")}
 
 def build_row(e, r):
     rid = e.get("request_id")
@@ -228,12 +233,13 @@ def build_row(e, r):
                est=amount(e.get("quote_padded")), per_call=amount(e.get("per_call_cap")),
                outcome=["grey", "not read", "mock job, no imd lookup"], link=["grey", "not checked", None], bad=False)
     row["daily_left"] = daily_left(e)
+    kind, limit = classify(e, r)
+    # Say it once per row: a row whose limit is the daily cap says so on its chip, so no spend flag repeats it.
+    if row["daily_left"] is not None and row["daily_left"] < 0 and limit != OVER_DAILY:
+        row["spend_flags"].append(OVER_DAILY)
     cap_charge = amount(e.get("cap_charge"))
     reservation = cap_charge if cap_charge is not None else amount(e.get("quote_padded"))
-    ROW_KINDS[classify(e, r)](row, e, r, reservation)
-    # Say it once per row: when the row's chip already reads 'over the daily cap', no spend flag repeats it.
-    if row["daily_left"] is not None and row["daily_left"] < 0 and ["amber", OVER_DAILY] not in (row["chips"] or []):
-        row["spend_flags"].append(OVER_DAILY)
+    ROW_KINDS[kind](row, e, r, reservation, limit)
     return row
 BLANK_NODE = '<span class="unk">unknown</span>'
 HELD_NOTE = '<span class="note">(held)</span>'
