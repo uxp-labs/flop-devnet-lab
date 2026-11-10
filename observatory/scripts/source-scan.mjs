@@ -26,8 +26,9 @@
 // reach Function; the runtime guard in the tests covers that path, not this scan.
 //
 // Prints a JSON array of {check, outcome: "pass" | "fail", stderr?}; exit 1 on any failure.
-import { readdirSync, readFileSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
+import { lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { dirname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseAst } from "rolldown/parseAst";
 
@@ -94,16 +95,58 @@ const BANNED = new Set([
   "createECDH",
   "createDiffieHellman",
   "diffieHellman",
+  // The Web Crypto global and its key and signing methods, reached by name or by string key.
+  "crypto",
+  "importKey",
+  "exportKey",
+  "deriveKey",
+  "deriveBits",
+  "wrapKey",
+  "unwrapKey",
+  "encrypt",
+  "decrypt",
+  // Ways to define a getter on a prototype or rewire one, which reach the global object under a
+  // name that is not banned (round 7 review M3).
+  "defineProperty",
+  "defineProperties",
+  "__defineGetter__",
+  "__defineSetter__",
+  "__lookupGetter__",
+  "__lookupSetter__",
+  "getOwnPropertyDescriptor",
+  "getOwnPropertyDescriptors",
+  "setPrototypeOf",
+  "getPrototypeOf",
 ]);
 const WRITE_RPC = /author_submit|eth_send(?:Raw)?Transaction|eth_sign|personal_sign/;
 
-function moduleProblem(name) {
-  if (name.startsWith("./") || name.startsWith("../")) return null;
+const SRC = join(pkg, "src");
+
+/**
+ * A relative module must land on a scanned module: a `.js` name whose `.ts` file is in src. So a
+ * path out of src (into scripts, node_modules or anywhere else) and a `.mjs` or `.cjs` module that
+ * neither scan reads both fail (round 7 review M4).
+ */
+function moduleProblem(name, file, scanned) {
+  if (name.startsWith("./") || name.startsWith("../")) {
+    const target = resolve(dirname(join(SRC, file)), name);
+    const inside = relative(SRC, target);
+    if (inside.startsWith("..") || inside.startsWith(sep) || inside === "") return `imports ${JSON.stringify(name)}, which leaves src`;
+    if (!inside.endsWith(".js")) return `imports ${JSON.stringify(name)}, which is not a .js name of a .ts module in src`;
+    const ts = inside.slice(0, -3) + ".ts";
+    return scanned.has(ts.split(sep).join("/")) ? null : `imports ${JSON.stringify(name)}, which is no scanned module in src`;
+  }
   return ALLOWED_MODULES.has(name) ? null : `imports ${JSON.stringify(name)}, which is not on the allow-list`;
 }
 
-/** Every rule the code breaks, as short sentences; empty when it breaks none. */
-function problems(code) {
+/** A banned name as a string: a key, an argument or any other string is the name all the same. */
+const bannedText = (v) => typeof v === "string" && (BANNED.has(v) || /mnemonic/i.test(v));
+
+/**
+ * Every rule the code breaks, as short sentences; empty when it breaks none. file is the module's
+ * path inside src (a sample is read as src/sample.ts), and scanned the src modules both scans read.
+ */
+function problems(code, file = "sample.ts", scanned = SCANNED) {
   let ast;
   try {
     ast = parseAst(code, { lang: "ts" });
@@ -123,7 +166,7 @@ function problems(code) {
       case "ExportAllDeclaration": {
         if (!n.source) break;
         const name = n.source.value;
-        const p = moduleProblem(name);
+        const p = moduleProblem(name, file, scanned);
         if (p) out.push(p);
         if (name === "node:crypto") {
           const only =
@@ -137,9 +180,14 @@ function problems(code) {
       case "ImportExpression": {
         if (n.source?.type !== "Literal" || typeof n.source.value !== "string") out.push("a dynamic import names its module as something other than one plain string");
         else {
-          const p = moduleProblem(n.source.value);
+          const p = moduleProblem(n.source.value, file, scanned);
           if (p) out.push(p);
         }
+        break;
+      }
+      case "TSImportEqualsDeclaration": {
+        // import n = require("..."): tsc writes a require for it, and no other rule reads its name.
+        out.push("uses an import-equals declaration (import x = require(...))");
         break;
       }
       case "Identifier": {
@@ -153,18 +201,21 @@ function problems(code) {
         break;
       }
       case "MemberExpression": {
-        const k = n.computed && n.property?.type === "Literal" && typeof n.property.value === "string" ? n.property.value : null;
-        if (k !== null && (BANNED.has(k) || /mnemonic/i.test(k))) out.push(`reaches ${k} by a computed key`);
+        // A literal computed key, as in ["constructor"], is a string, which the Literal rule reads.
         if (!n.computed && n.object?.type === "Identifier" && n.object.name === "api" && n.property?.name === "tx") out.push("uses api.tx");
         break;
       }
       case "Literal": {
         if (typeof n.value === "string" && WRITE_RPC.test(n.value)) out.push(`names the RPC method ${n.value}`);
+        // A string key in a pattern or an object, a computed key or a plain argument: a banned name
+        // spelled as a string reaches the same thing (round 7 review M3).
+        if (bannedText(n.value)) out.push(`names ${n.value} in a string`);
         break;
       }
       case "TemplateElement": {
         const cooked = n.value?.cooked;
         if (typeof cooked === "string" && WRITE_RPC.test(cooked)) out.push(`names the RPC method ${cooked}`);
+        if (bannedText(cooked)) out.push(`names ${cooked} in a template`);
         break;
       }
     }
@@ -173,6 +224,23 @@ function problems(code) {
   visit(ast, null, null);
   return out;
 }
+
+/** Every regular .ts file under dir (as a path with /), and every other file or link there. */
+function listSrc(dir) {
+  const modules = [];
+  const others = [];
+  for (const entry of readdirSync(dir, { recursive: true }).map(String).sort()) {
+    const st = lstatSync(join(dir, entry));
+    if (st.isDirectory()) continue;
+    const name = entry.split(sep).join("/");
+    if (st.isFile() && name.endsWith(".ts")) modules.push(name);
+    else others.push(name);
+  }
+  return { modules, others };
+}
+// The modules a relative import may land on: every .ts file in src, guard.ts included (it is
+// read by the raw text scan and is the one module allowed to name what it blocks).
+const SCANNED = new Set(listSrc(SRC).modules);
 
 // Forms the scan must catch: the Fable review's M10 probes (escapes, legacy modules, a comment
 // before the module name, key and signing APIs, third party clients) and every form the raw text
@@ -236,6 +304,23 @@ const BAD = [
   'const method = "author_submitExtrinsic";',
   "const call = `eth_sendRawTransaction`;",
   "const k = createSecretKey(bytes);",
+  // Round 7 review M3: string keys, a template key, a plain string argument, a getter on a
+  // prototype, and the Web Crypto global.
+  'const { "constructor": C } = () => 0;',
+  "const F3 = arrow[`constructor`];",
+  'const d2 = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(() => 0), "constructor");',
+  'Object.defineProperty(Object.prototype, "__g", { get() { return this; } });',
+  'const { "f\\u0065tch": f3, "W\\u0065bSocket": W3 } = __g;',
+  'const { "subtle": s3 } = webcrypto2;',
+  'const { "s\\u0069gn": sg, "generateKey": gk, "importKey": ik } = s3;',
+  "const r4 = crypto.getRandomValues(buf);",
+  // Round 7 review M4: an import-equals, and relative paths that leave src or land on a module no
+  // scan reads.
+  'import n = require("node:n\\x65t");',
+  'import { reach6 } from "./p6_transport.mjs";',
+  'const m5 = await import("../scripts/mcp-transcript.mjs");',
+  'import ws from "../node_modules/ws/index.js";',
+  'import { x } from "./no-such-module.js";',
 ];
 
 // Forms src uses that must pass.
@@ -271,14 +356,32 @@ for (const code of GOOD) {
   const p = problems(code);
   record(`allows: ${code}`, p.length === 0, p.join("; "));
 }
-const src = join(pkg, "src");
-const files = readdirSync(src, { recursive: true })
-  .map(String)
-  .filter((f) => f.endsWith(".ts") && f !== "guard.ts")
-  .sort();
-record("src holds the modules the scan expects to read", files.length > 10 && files.includes("status.ts") && files.includes("cli.ts"), `found ${files.length}: ${files.join(", ")}`);
-for (const f of files) {
-  const p = problems(readFileSync(join(src, f), "utf8"));
+// The file list check, proved on a throwaway folder: a .mts module, a .js file and a link to a
+// .ts file are each something tsc may compile that no scan would read.
+{
+  const box = realpathSync(mkdtempSync(join(tmpdir(), "obs-scan-list-")));
+  try {
+    mkdirSync(join(box, "live"));
+    writeFileSync(join(box, "a.ts"), "");
+    writeFileSync(join(box, "live", "b.ts"), "");
+    writeFileSync(join(box, "c.mts"), "");
+    writeFileSync(join(box, "d.js"), "");
+    symlinkSync(join(box, "a.ts"), join(box, "e.ts"));
+    const got = listSrc(box);
+    record(
+      "the file list reads .ts modules in subfolders, and names every other file",
+      JSON.stringify(got.modules) === JSON.stringify(["a.ts", "live/b.ts"]) && JSON.stringify(got.others) === JSON.stringify(["c.mts", "d.js", "e.ts"]),
+      JSON.stringify(got),
+    );
+  } finally {
+    rmSync(box, { recursive: true, force: true });
+  }
+}
+const { modules, others } = listSrc(SRC);
+record("src holds the modules the scan expects to read", modules.length > 10 && modules.includes("status.ts") && modules.includes("cli.ts"), `found ${modules.length}: ${modules.join(", ")}`);
+record("src holds nothing but regular .ts files, so every file tsc compiles is scanned", others.length === 0, `also found: ${others.join(", ")}`);
+for (const f of modules.filter((m) => m !== "guard.ts")) {
+  const p = problems(readFileSync(join(SRC, f), "utf8"), f);
   record(`src/${f} passes the syntax tree scan`, p.length === 0, p.join("; "));
 }
 console.log(JSON.stringify(results, null, 2));

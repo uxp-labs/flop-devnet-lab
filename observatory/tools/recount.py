@@ -339,10 +339,15 @@ def recount(scenario_dir, genesis, req_lo, req_hi):
 
 def request_int(flag, text):
     """A request number read as the TypeScript command reads it: ASCII digits only. Python's int()
-    would also take " 0", "+5", "1_0" and other scripts' digits, which the other side refuses."""
+    would also take " 0", "+5", "1_0" and other scripts' digits, which the other side refuses.
+    More than 16 significant digits is past 2^53 - 1 whatever they are, and Python would refuse
+    to convert one past 4300 digits, so such a number is a request problem here too."""
     if re.fullmatch(r"[0-9]+", text) is None:
         raise Unreadable("request", "%s must be a non-negative integer" % flag)
-    return int(text)
+    digits = text.lstrip("0") or "0"
+    if len(digits) > 16:
+        raise Unreadable("request", "%s is too large to be a safe integer" % flag)
+    return int(digits)
 
 
 def main(argv=None):
@@ -360,6 +365,9 @@ def main(argv=None):
         hi = request_int("--to", args.hi)
         if as_int(lo) is None or as_int(hi) is None or lo > hi:
             raise Unreadable("request", "bad requested range %d..%d" % (lo, hi))
+        # Clause 16, input: a census needs a pinned genesis to count against.
+        if args.genesis == "":
+            raise Unreadable("input", "no pinned genesis")
         result = recount(args.dir, args.genesis, lo, hi)
     except Unreadable as exc:
         print("census refused (%s): %s" % (exc.kind, exc), file=sys.stderr)

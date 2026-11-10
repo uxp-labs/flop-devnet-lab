@@ -20,6 +20,8 @@ export interface SnapshotOptions {
   now: string;
   sourceSha: string | null;
   previous?: StatusOptions["previous"];
+  /** Every earlier snapshot's own time, oldest first (RULES.md 1.1: a log that runs backwards). */
+  earlierTimes?: StatusOptions["earlierTimes"];
 }
 
 /** The weakest trust among the parts: one fixture input makes the whole snapshot "fixture". */
@@ -32,6 +34,7 @@ export async function buildSnapshot(parts: SnapshotParts, o: SnapshotOptions): P
     pinnedGenesis: o.pinnedGenesis,
     now: o.now,
     previous: o.previous ?? null,
+    earlierTimes: o.earlierTimes ?? null,
   });
   // RULES.md section 2: a finalized height bounds escrow evidence only from a usable RPC head on
   // the pinned genesis (assessNetwork says what usable means). Another chain's height, or a

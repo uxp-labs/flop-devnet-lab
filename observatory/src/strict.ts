@@ -40,7 +40,9 @@ export function parseZoned(t: unknown): number | null {
     if (oh > 23 || om > 59) return null;
     offsetMinutes = (m[9] === "+" ? 1 : -1) * (oh * 60 + om);
   }
-  const millis = m[7] === undefined ? 0 : Math.trunc(Number(`0.${m[7]}`) * 1000);
+  // The first three fraction digits, cut, never rounded: Number("0.9999999999999999999") is 1,
+  // which would roll the time into the next second.
+  const millis = m[7] === undefined ? 0 : Number(m[7].slice(0, 3).padEnd(3, "0"));
   const d = new Date(0);
   d.setUTCFullYear(year, month - 1, day);
   d.setUTCHours(hour, minute, second, millis);

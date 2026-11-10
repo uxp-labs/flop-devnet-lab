@@ -35,42 +35,60 @@ export function hashSnapshot(s: Omit<Snapshot, "hash"> | Snapshot): string {
 
 export type NewSnapshot = Omit<Snapshot, "hash" | "seq" | "prev_hash">;
 
+/** One line of the log as read: its text (null when it is not valid UTF-8) and whether a newline ended it. */
+interface LogLine {
+  text: string | null;
+  ended: boolean;
+}
+
 /**
- * The log's non-blank lines, each decoded as strict UTF-8. A line that is not valid UTF-8 is null:
- * it is never read with U+FFFD in place of its bad bytes.
+ * Every line of the log, decoded as strict UTF-8 with a byte order mark kept, so a mark refuses
+ * (RULES.md 3.1 clause 12) and a bad byte is never read as U+FFFD. Blank lines and a last line
+ * with no newline are kept too, so they fail their own checks: the log the code writes is
+ * canonical JSON lines, each ending in a newline, and nothing else.
  */
-function lines(path: string): (string | null)[] {
+function lines(path: string): LogLine[] {
   if (!existsSync(path)) return [];
   const raw = readFileSync(path);
-  const strict = new TextDecoder("utf-8", { fatal: true });
-  const out: (string | null)[] = [];
-  let start = 0;
-  for (let i = 0; i <= raw.length; i++) {
-    if (i < raw.length && raw[i] !== 0x0a) continue;
-    let line: string | null;
+  const strict = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true });
+  const decode = (b: Uint8Array): string | null => {
     try {
-      line = strict.decode(raw.subarray(start, i));
+      return strict.decode(b);
     } catch {
-      line = null;
+      return null;
     }
+  };
+  const out: LogLine[] = [];
+  let start = 0;
+  for (let i = 0; i < raw.length; i++) {
+    if (raw[i] !== 0x0a) continue;
+    out.push({ text: decode(raw.subarray(start, i)), ended: true });
     start = i + 1;
-    if (line === null || line.trim() !== "") out.push(line);
   }
+  if (start < raw.length) out.push({ text: decode(raw.subarray(start)), ended: false });
   return out;
 }
 
-/** One log line as a snapshot, or the reason it is not one (strict UTF-8, JSON, one value per key). */
-function parseLine(line: string | null): Snapshot | string {
-  if (line === null) return "is not valid UTF-8";
+/**
+ * One log line as a snapshot, or the reason it is not one. The line must be strict UTF-8, end in
+ * a newline, parse as JSON with one value per key, and be in canonical form byte for byte, so it
+ * has one reading only: padding, a carriage return, `0.0e0` for 0 or an integer past 2^53 - 1
+ * (which JSON.parse rounds) all refuse.
+ */
+function parseLine(line: LogLine | undefined): Snapshot | string {
+  if (line === undefined || line.text === null) return "is not valid UTF-8";
+  if (!line.ended) return "does not end with a newline (a line cut short)";
+  if (line.text === "") return "is blank";
   let s: Snapshot;
   try {
-    s = JSON.parse(line) as Snapshot;
+    s = JSON.parse(line.text) as Snapshot;
   } catch {
     return "is not JSON";
   }
   // Two readers of a line with a repeated key can see two different snapshots.
-  const twice = duplicateKey(line);
-  return twice === null ? s : `holds the key ${JSON.stringify(twice)} twice in one object`;
+  const twice = duplicateKey(line.text);
+  if (twice !== null) return `holds the key ${JSON.stringify(twice)} twice in one object`;
+  return canonicalJson(s) === line.text ? s : "is not in canonical form";
 }
 
 export function readSnapshots(path: string): Snapshot[] {
@@ -101,7 +119,7 @@ export function verifyChain(path: string): number | null {
   const ls = lines(path);
   let prev: string | null = null;
   for (let i = 0; i < ls.length; i++) {
-    const s = parseLine(ls[i] ?? null);
+    const s = parseLine(ls[i]);
     if (typeof s === "string") return i;
     if (s.seq !== i) return i;
     if (s.prev_hash !== prev) return i;

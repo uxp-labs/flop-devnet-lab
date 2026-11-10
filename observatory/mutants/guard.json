@@ -280,19 +280,67 @@
     "why": "a dynamic import whose module is built at run time cannot be checked, so it fails"
   },
   {
-    "id": "scan-tree-computed-keys-unchecked",
-    "file": "scripts/source-scan.mjs",
-    "find": "        if (k !== null && (BANNED.has(k) || /mnemonic/i.test(k))) out.push(`reaches ${k} by a computed key`);",
-    "replace": "",
-    "test": "scripts/source-scan.mjs",
-    "why": "a banned name reached by a literal computed key, as in [\"constructor\"], fails like the dotted form"
-  },
-  {
     "id": "scan-tree-class-constructor-exemption-everywhere",
     "file": "scripts/source-scan.mjs",
     "find": "const ownConstructor = key === \"key\" && parent?.type === \"MethodDefinition\" && parent.kind === \"constructor\";",
     "replace": "const ownConstructor = n.name === \"constructor\";",
     "test": "scripts/source-scan.mjs",
     "why": "only a class's own constructor method is exempt; .constructor reaches Function"
+  },
+  {
+    "id": "scan-tree-strings-unchecked",
+    "file": "scripts/source-scan.mjs",
+    "find": "        if (bannedText(n.value)) out.push(`names ${n.value} in a string`);",
+    "replace": "",
+    "test": "scripts/source-scan.mjs",
+    "why": "round 7 review M3: a banned name as a string key or argument reaches the same thing"
+  },
+  {
+    "id": "scan-tree-templates-unchecked",
+    "file": "scripts/source-scan.mjs",
+    "find": "        if (bannedText(cooked)) out.push(`names ${cooked} in a template`);",
+    "replace": "",
+    "test": "scripts/source-scan.mjs",
+    "why": "round 7 review M3: a template with no substitution is a string key too"
+  },
+  {
+    "id": "scan-tree-import-equals-allowed",
+    "file": "scripts/source-scan.mjs",
+    "find": "        out.push(\"uses an import-equals declaration (import x = require(...))\");",
+    "replace": "",
+    "test": "scripts/source-scan.mjs",
+    "why": "round 7 review M4: tsc writes a require for an import-equals"
+  },
+  {
+    "id": "scan-tree-relative-unscanned",
+    "file": "scripts/source-scan.mjs",
+    "find": "    return scanned.has(ts.split(sep).join(\"/\")) ? null : `imports ${JSON.stringify(name)}, which is no scanned module in src`;",
+    "replace": "    return null;",
+    "test": "scripts/source-scan.mjs",
+    "why": "round 7 review M4: a relative import must land on a module the scans read"
+  },
+  {
+    "id": "scan-tree-file-list-any-file",
+    "file": "scripts/source-scan.mjs",
+    "find": "    if (st.isFile() && name.endsWith(\".ts\")) modules.push(name);",
+    "replace": "    if (!st.isDirectory()) modules.push(name);",
+    "test": "scripts/source-scan.mjs",
+    "why": "round 7 review M4: a .mts module or a link in src is named, never read as a .ts module"
+  },
+  {
+    "id": "scan-tree-define-property-allowed",
+    "file": "scripts/source-scan.mjs",
+    "find": "  \"defineProperty\",\n",
+    "replace": "",
+    "test": "scripts/source-scan.mjs",
+    "why": "round 7 review M3: a getter defined on a prototype reaches the global object under another name"
+  },
+  {
+    "id": "scan-tree-crypto-global-allowed",
+    "file": "scripts/source-scan.mjs",
+    "find": "  \"crypto\",\n",
+    "replace": "",
+    "test": "scripts/source-scan.mjs",
+    "why": "round 7 review M3: the Web Crypto global holds the key and signing API"
   }
 ]

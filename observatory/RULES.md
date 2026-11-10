@@ -15,6 +15,9 @@ These rules are the spec. Code and tests follow them, and the independent recoun
 - A genesis is `0x` plus 64 lower case hex digits, compared exactly as written, as in census
   clause 5. Any other spelling, upper case hex included, is not a valid genesis: the status reads
   it as `null`, so it can never make `reset_detected` `false`.
+- In M0 the pinned genesis is the devnet genesis in `src/status.ts`, unless a scenario's
+  `meta.json` names another (the census and escrow fixtures that test other chains do); the
+  snapshot command takes it from the status scenario. M1 takes it from the code alone.
 
 ### 1.1 Health
 
@@ -24,27 +27,36 @@ check below to run and pass.
 - Times are ISO 8601 with an explicit zone: `Z` or an offset such as `+00:00`. A time without a
   zone does not parse, because its meaning would depend on the machine's time zone. A time must
   also be a real instant: a date such as 2026-11-31, an hour of 24, a minute or second of 60, or
-  an offset beyond 23:59 does not parse (it is never rolled over). The snapshot time must parse,
-  or the status refuses.
-- The faucet genesis comes from `GET /chain` only when that reading is HTTP 200 with no error and
-  a reading time that parses, is at most the stale limit old, and is not later than the snapshot
-  time. Otherwise the faucet genesis is `null`, so `reset_detected` cannot be `false`. A `/chain`
+  an offset beyond 23:59 does not parse (it is never rolled over). A fraction of a second is cut
+  to whole milliseconds, never rounded, so `23:47:53.9999999Z` stays in second 53. The snapshot
+  time must parse, or the status refuses.
+- The faucet genesis counts toward `reset_detected` only from a usable `GET /chain` reading: HTTP
+  200 with no error and a reading time that parses, is at most the stale limit old, and is not
+  later than the snapshot time. Otherwise it counts for neither, as section 1 says: `genesis.faucet`
+  still shows what the reading said, as `genesis.rpc` does for the RPC; a reading that names a
+  genesis other than the pinned one is a conflict; and the faucet's detail says why the reading
+  does not count, the file and reason included when the saved reading cannot be read. A `/chain`
   reading time later than the snapshot time is also a conflict.
 - The RPC genesis counts toward `reset_detected` only from a usable head: no read error, an
   `observed_at` that parses, is at most the stale limit old and is not later than the snapshot
-  time, and nothing below found the head contradicting itself or an earlier snapshot: no
-  rollback, no changed finalized hash, a best height not below the finalized height, and no
-  earlier snapshot read later than this snapshot time. A head that fails any of these is not
-  usable, however fresh. `genesis.rpc` still shows what the head said. The same usable head is the
-  only one whose finalized height may bound escrow evidence (section 2).
+  time, a valid finalized head and a valid best height (so every check against them can run),
+  and nothing below found the head contradicting itself or an earlier snapshot: no rollback, no
+  changed finalized hash, a best height not below the finalized height nor below the highest
+  finalized height an earlier snapshot saw on this genesis, and no earlier snapshot taken, or
+  its head read, later than this snapshot time. A head that fails any of these is not usable,
+  however fresh: a chain restarted from the same spec keeps its genesis, and its first heads
+  report a low best height and no finalized head yet. `genesis.rpc` still shows what the head
+  said. The same usable head is the only one whose finalized height may bound escrow evidence
+  (section 2).
 - Heights and the runtime version are safe integers (census clause 14). A finalized or best
   height past 2^53 - 1 was already rounded by the JSON parser, so it is not a valid one.
 - A reading time later than the snapshot time is a conflict, noted in `conflicts`, whatever that
   reading's health.
-- An `error` holding any value but `null`, an empty string included, is a read error. A faucet or
-  gateway reading with a read error is never `ok`: with an HTTP status it is `degraded` and its
-  detail names the error; with none it is `unknown`. The `/chain` reading and the RPC head follow
-  the same reading of `error`.
+- An `error` holding any value but `null`, an empty string included, is a read error, and so is a
+  reading with no `error` key at all, which does not say whether it failed. A faucet or gateway
+  reading with a read error is never `ok`: with an HTTP status it is `degraded` and its detail
+  names the error; with none it is `unknown`. The `/chain` reading and the RPC head follow the
+  same reading of `error`.
 - Each reading's fields reach the status only with the interface's types: `observed_at` a string,
   `http` a safe integer, the faucet `limits` an object whose every value is a finite number or a
   boolean. A field of any other type is `null`.
@@ -73,17 +85,21 @@ check below to run and pass.
   - `observed_at` parses, is not later than the snapshot time, and is at most the stale limit old
     (120 seconds by default)
   - when earlier snapshots recorded a finalized head on the same genesis: no rollback below the
-    highest finalized height any of them saw, no changed hash at this height in any of them, and
+    highest finalized height any of them saw (for the best height too, even when this head has no
+    valid finalized head), no changed hash at this height in any of them, and
     no finalized height stuck for longer than the stale limit, counted from the oldest of the
     latest run of snapshots at this same height. If a head time in that run does not parse, the
     stuck check cannot run. The snapshot command reads the earlier snapshots from its log, after
     verifying the log's hash chain (a broken log refuses), and passes every one that recorded a
     finalized head, oldest first, so a snapshot in between with no RPC reading, or one on another
     genesis, hides nothing. An earlier snapshot that recorded no head time still sets the
-    floor; only the stuck check needs the time. An earlier snapshot whose head was read later
-    than this snapshot time is a conflict. The floor is only as durable as the log: an absent
-    log means no earlier snapshot, and a log cut short or removed cannot be detected from the
-    log itself.
+    floor; only the stuck check needs the time. So does one whose head came with a read error:
+    the floor fails closed, and a reading that later proves wrong keeps every later snapshot on
+    that log degraded until the operator starts a new log (README.md says how). The command
+    also passes every earlier snapshot's own time, whatever it read: an earlier snapshot taken,
+    or its head read, later than this snapshot time is a conflict, and this head is not usable.
+    The floor is only as durable as the log: an absent log means no earlier snapshot, and a log
+    cut short or removed cannot be detected from the log itself.
 - Any failed check makes RPC health `degraded`. A missing or invalid genesis hash, finalized head
   or best height is a failed check. A missing or unparsable `observed_at` means the age check
   cannot run: health is `unknown` when nothing else failed.
@@ -157,6 +173,8 @@ check below to run and pass.
 - Event data written as a list rather than an object (the positional form) holds no escrow id
   these rules can read: for an escrow it is malformed, with a note, while the census counts it
   with no account. The difference can only make an escrow less confident, never more.
+- Copies of one event must agree on its block number. Two different events (another index) in
+  one block are not checked against each other's block number.
 - Block order is not checked: a release counts whatever block its open sits at, and a finalized
   release makes an escrow `claimed` even when its open is pending or absent. A caller that needs
   funded, then released, checks both itself.
@@ -279,7 +297,13 @@ check below to run and pass.
     - `page-structure`: a page file parses, but the page is structurally invalid (clause 12);
     - `input`: anything else the census cannot start from, such as no pinned genesis.
     A request problem is named before any page problem, and a page file problem before any page
-    structure problem, so both implementations name the same reason for the same input.
+    structure problem, so both implementations name the same reason for the same input. On the
+    command line both sides read the same arguments: a request number that is not plain digits,
+    or has more than 16 significant digits (so it is past 2^53 - 1), is a request problem, a range
+    given there is checked before the folder is read, and an empty pinned genesis or a scenario
+    folder that does not exist is an input problem. The TypeScript command also reads the folder's
+    `meta.json` and refuses as an input problem when it cannot; the recount does not read
+    `meta.json`, so that one input problem is the command's alone.
 
 ## 4. Read only
 
@@ -307,15 +331,22 @@ Tests fail if any attempt is left in the log.
   and re-export names one plain string, and the module must be relative or on an allow-list:
   `node:fs`, `node:path`, `node:readline`, `node:url`, `node:crypto` (`createHash` only) and
   `yaml`. A module nobody thought to ban, a legacy one such as `_http_client` or a third party
-  client, fails. It also fails the banned names as identifiers, properties or literal computed
-  keys (transports, the global object, `eval`, `Function`, `Reflect`, `constructor` but a class's
-  own, module loading, signing, key and cipher APIs), `process` other than `version`, `argv`,
+  client, fails. A relative module must land on a scanned `.ts` module inside `src`, so a path out
+  of `src` or to a `.mjs` file fails, and an import-equals (`import x = require(...)`) fails. It
+  also fails the banned names as identifiers, properties, string keys, template keys or any other
+  string (transports, the global object, the Web Crypto global, `eval`, `Function`, `Reflect`,
+  `constructor` but a class's own method, the APIs that define getters on a prototype or rewire
+  one, module loading, signing, key and cipher APIs), `process` other than `version`, `argv`,
   `exit`, `stdout`, `stderr` and `stdin`, and any string naming an RPC method that writes or
-  signs. It proves itself on known bad and good samples before it scans. It cannot see a
-  computed key assembled at run time; the runtime block in the tests covers that path.
+  signs. `src` must hold nothing but regular `.ts` files, so every file tsc compiles is read; both
+  scans check that. It proves itself on known bad and good samples, and its file list on a
+  throwaway folder, before it scans. It cannot see a computed key assembled at run time from
+  pieces; the runtime block in the tests covers that path.
 - `tools/recount.py` is read the same two ways: its own tests walk its syntax tree (exactly six
-  plain imports, no from-import, no `os` call but reads, nothing that runs code from a string,
-  and `open` only for reading), and the guard test reads every name on every import line.
+  plain imports, no from-import, every use of a module one of a fixed list of full dotted names,
+  so no alias of a module or of part of one, no attribute that starts with an underscore but
+  `super().__init__`, nothing that runs code from a string, and `open` only called directly for
+  reading), and the guard test reads every name on every import line and the same bans as text.
 - Every attempt, every reset of the log and every test file's final check is written to a
   journal the moment it happens. Once every test file has ended, and again after the test run
   exits, the journal is checked:
@@ -351,10 +382,24 @@ blank on the page and `null` in JSON and MCP.
   snapshot's meta (`schema` `flop-observatory/feed-snapshot-meta@0`, hash, seq, previous hash,
   `observed_at`, trust and pin), in the feed format. A tool answer is exactly one text item: no
   `isError`, no `structuredContent`, no second item a client could read instead. `tools/list`
-  names exactly the six read-only tools. Each answer is checked as the server wrote its line.
-- The MCP binary serves only an observatory snapshot (`schema` `flop-observatory/snapshot@0`)
-  whose hash verifies, read as strict UTF-8 with one value per key; anything else is refused and
-  nothing is served. A call it cannot answer gets a JSON-RPC error, never a dead server.
+  names exactly the six read-only tools, and is exactly the server's declared list (descriptions,
+  input schemas and annotations); the initialize answer is exactly the server's name, version and
+  read-only instructions; each refusal has its own code and words. The transcript holds exactly
+  the exchanges `scripts/mcp-transcript.mjs` makes, in order, one of them a well formed escrow id
+  the snapshot does not hold, so the unseen escrow rule is asked of the real binary. Each answer is
+  checked as the server wrote its line.
+- The MCP binary serves only an observatory snapshot (`schema` `flop-observatory/snapshot@0`, and
+  each part with its own schema) whose hash verifies, read as strict UTF-8 with a byte order mark
+  refused, nesting checked before parsing, one value per key, and the text byte for byte in the
+  feed format, so an integer past 2^53 - 1 that the parser would round is refused too; anything
+  else is refused and nothing is served. A call it cannot answer gets a JSON-RPC error, never a
+  dead server.
+- The snapshot log is read the same way: every line strict UTF-8, ending in a newline, with no
+  blank line and nothing after the last newline, and in canonical form byte for byte. A line that
+  is padded, ends in a carriage return or spells a number another way breaks the chain, and the
+  snapshot command neither extends nor trusts it.
+- The outputs folder holds exactly the nine files the commands write, the whole log's hash chain
+  verifies, and the last line's `seq` is its position.
 - Nothing on the page is hidden, so nothing the check compares can be invisible to a reader:
   - the head is the renderer's fixed head (charset, viewport, colour scheme, title and
     stylesheet), so no `meta` or `title` can carry a value or change how the page is decoded;
@@ -382,7 +427,11 @@ blank on the page and `null` in JSON and MCP.
   appears only as `unknown` on a blank unknown cell, and each cell's `class` is the one its value
   calls for (`unk` for unknown, `h-<health>`, `s-<state>`, none otherwise).
 - Every `td` on the page carries `data-k`; a cell without one fails the check. The visible text of
-  every marked element, nested tags included, must match its value as rendered below.
+  every marked element, nested tags included, must match its value as rendered below. A marked
+  element holds no markup but the one the renderer nests, a bare `<code>` around an escrow id, so
+  a span inside a cell cannot paint its value as something else. The page holds exactly the keys
+  the renderer writes for the snapshot, in its order, so a row dropped or moved and escrow cards
+  in another order fail without the byte comparison.
 - Every value sits where a person reads it:
   - A table row with a label is one `th` and one `td`. The `th` carries `data-for`, equal to the
     `td`'s `data-k`, and its text is the label for that key.

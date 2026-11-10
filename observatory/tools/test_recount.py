@@ -32,28 +32,58 @@ def census(scn, lo, hi, genesis=G):
 
 
 ALLOWED_IMPORTS = {"argparse", "json", "os", "re", "stat", "sys"}
-OS_READS = {"path", "lstat", "listdir", "fsencode", "fsdecode"}
+# Every use of a module, as the full dotted name. Each is a read, a parse or a print; anything
+# else, an alias of a module or of part of one included, is not on the list.
+ALLOWED_CHAINS = {
+    "argparse.ArgumentParser", "json.dumps", "json.loads", "os.fsencode", "os.listdir", "os.lstat",
+    "os.path.isdir", "os.path.join", "re.compile", "re.fullmatch", "stat.S_ISDIR", "stat.S_ISREG",
+    "sys.exit", "sys.stderr",
+}
 BANNED_NAMES = {"eval", "exec", "compile", "__import__", "__builtins__", "builtins", "getattr", "setattr",
                 "delattr", "globals", "locals", "vars", "breakpoint", "input", "importlib", "subprocess", "socket"}
 
 
+def _dotted(node):
+    parts = []
+    while isinstance(node, ast.Attribute):
+        parts.append(node.attr)
+        node = node.value
+    return ".".join([node.id] + parts[::-1]) if isinstance(node, ast.Name) else None
+
+
 def scan_problems(code):
-    """What the read-only scan finds in Python source: an import outside the allow-list, any
-    from-import, a name that runs code or reaches processes and sockets, an os call other than a
-    read, and open in a mode that writes."""
+    """What the read-only scan finds in Python source (Fable review r7 L5): an import outside the
+    allow-list, any from-import, a module used other than through one of the allowed dotted names
+    (so an alias, argparse._os or os.path kept in a variable all fail), an attribute that starts
+    with an underscore (but super().__init__), a name that runs code or reaches processes and
+    sockets, and open used other than in a direct call for reading."""
+    tree = ast.parse(code)
+    parents = {child: node for node in ast.walk(tree) for child in ast.iter_child_nodes(node)}
     found = []
-    for node in ast.walk(ast.parse(code)):
+    for node in ast.walk(tree):
         if isinstance(node, ast.Import):
             found += ["import " + a.name for a in node.names if a.name.split(".")[0] not in ALLOWED_IMPORTS]
         elif isinstance(node, ast.ImportFrom):
             found.append("from %s import" % node.module)
+        elif isinstance(node, ast.Name) and node.id in ALLOWED_IMPORTS:
+            top = node
+            while isinstance(parents.get(top), ast.Attribute) and parents[top].value is top:
+                top = parents[top]
+            if _dotted(top) not in ALLOWED_CHAINS:
+                found.append("uses %s" % (_dotted(top) or node.id))
         elif isinstance(node, ast.Name) and node.id in BANNED_NAMES:
             found.append(node.id)
-        elif isinstance(node, ast.Attribute) and isinstance(node.value, ast.Name) and node.value.id == "os" \
-                and node.attr not in OS_READS:
-            found.append("os." + node.attr)
-        elif isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "open":
-            mode = node.args[1] if len(node.args) > 1 else next((k.value for k in node.keywords if k.arg == "mode"), None)
+        elif isinstance(node, ast.Attribute) and node.attr.startswith("_"):
+            own_init = node.attr == "__init__" and isinstance(node.value, ast.Call) \
+                and isinstance(node.value.func, ast.Name) and node.value.func.id == "super"
+            if not own_init:
+                found.append("reaches ." + node.attr)
+        elif isinstance(node, ast.Name) and node.id == "open":
+            call = parents.get(node)
+            if not (isinstance(call, ast.Call) and call.func is node):
+                found.append("open used other than in a call")
+                continue
+            mode = call.args[1] if len(call.args) > 1 else next((k.value for k in call.keywords if k.arg == "mode"), None)
             if mode is not None and not (isinstance(mode, ast.Constant) and mode.value in ("r", "rb")):
                 found.append("open for writing")
     return found
@@ -219,6 +249,16 @@ class RecountTests(unittest.TestCase):
         self.assertEqual(code, 2)
         self.assertIn("census refused (request): --to must be a non-negative integer", err)
         self.assertEqual(run(os.path.join(DATA, "complete"), "01", "10")[0], 0)
+        # Fable review r7 L4: a number too long for int(), refused as a request, never a traceback.
+        code, out, err = run(os.path.join(DATA, "complete"), 1, "9" * 5000)
+        self.assertEqual((code, out), (2, ""))
+        self.assertIn("census refused (request): --to is too large to be a safe integer", err)
+        self.assertEqual(run(os.path.join(DATA, "complete"), "0" * 30 + "1", "10")[0], 0)
+
+    def test_an_empty_genesis_is_an_input_problem(self):
+        code, out, err = run(os.path.join(DATA, "complete"), 1, 10, genesis="")
+        self.assertEqual((code, out), (2, ""))
+        self.assertIn("census refused (input): no pinned genesis", err)
 
     def test_block_number_key_missing_is_malformed_but_null_is_kept(self):
         r = census("bnmissing", 1, 10)
@@ -487,16 +527,21 @@ class RecountTests(unittest.TestCase):
         self.assertEqual(names, ALLOWED_IMPORTS)
 
     def test_the_scan_catches_every_form(self):
-        # Fable review L12: the old line scan read only the first name of an import line and five
-        # os calls. Each of these must be found; each of the last four must pass.
+        # Fable review L12 and r7 L5: the old line scan read only the first name of an import line
+        # and five os calls. Each of these must be found; each of the good ones must pass.
         bad = ("import json, socket", "import os, subprocess", "from os import system", "x = 1; import socket",
                "if True: import socket", "import urllib.request", "import http.client", "import importlib",
                'os.posix_spawn("/bin/sh", [], {})', 'getattr(os, "sys" + "tem")("id")', 'os.system("id")',
                'os.popen("id")', 'os.remove("x")', 'eval("1")', 'exec("1")', '__import__("socket")',
-               'open("x", "w")', 'open("x", mode="a")', 'open("x", "r+")')
+               'open("x", "w")', 'open("x", mode="a")', 'open("x", "r+")',
+               # Fable review r7 L5: reached through another module, an alias, or open kept in a name.
+               'argparse._os.system("id")', 'argparse._os.popen("id")', 'p = os.path\nq = p.os\nq.system("id")',
+               'argparse._sys.modules["o" "s"].system("id")', 'f = open\nf("x", "w")', 'argparse.FileType("w")("x")',
+               'json.decoder.scanner.__loader__.load_module("sock" "et")', 'm = os', 'x = (1).__class__')
         for code in bad:
             self.assertNotEqual(scan_problems(code), [], code)
-        good = ("import os", 'os.path.join("a", "b")', 'open("x", "r", encoding="utf-8")', 'os.lstat("x")')
+        good = ("import os", 'os.path.join("a", "b")', 'open("x", "r", encoding="utf-8")', 'os.lstat("x")',
+                "class E(Exception):\n    def __init__(self, m):\n        super().__init__(m)")
         for code in good:
             self.assertEqual(scan_problems(code), [], code)
 

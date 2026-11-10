@@ -42,8 +42,8 @@
   {
     "id": "cli-previous-last-line-only",
     "file": "src/cli.ts",
-    "find": "      for (const { status: st } of readSnapshots(log)) {",
-    "replace": "      for (const { status: st } of readSnapshots(log).slice(-1)) {",
+    "find": "      for (const { status: st, observed_at: taken } of readSnapshots(log)) {",
+    "replace": "      for (const { status: st, observed_at: taken } of readSnapshots(log).slice(-1)) {",
     "test": "scripts/cli-checks.mjs",
     "why": "a snapshot with no RPC reading in between must not hide a rollback"
   },
@@ -74,8 +74,8 @@
   {
     "id": "mcp-bin-lossy-utf8",
     "file": "src/mcp-bin.ts",
-    "find": "text = new TextDecoder(\"utf-8\", { fatal: true }).decode(readFileSync(path));",
-    "replace": "text = readFileSync(path, \"utf8\");",
+    "find": "    text = new TextDecoder(\"utf-8\", { fatal: true, ignoreBOM: true }).decode(readFileSync(path));",
+    "replace": "    text = readFileSync(path, \"utf8\");",
     "test": "scripts/cli-checks.mjs",
     "why": "the MCP binary must read the snapshot as strict UTF-8, not turn a bad byte into U+FFFD"
   },
@@ -94,5 +94,69 @@
     "replace": "",
     "test": "scripts/cli-checks.mjs",
     "why": "Fable review L8: the same escrow listed twice would give two cards with one key"
+  },
+  {
+    "id": "cli-earlier-times-not-passed",
+    "file": "src/cli.ts",
+    "find": "        earlierTimes.push(typeof taken === \"string\" ? taken : null);\n",
+    "replace": "",
+    "test": "scripts/cli-checks.mjs",
+    "why": "round 7 review L1: every earlier snapshot's own time reaches the status, so a log that runs backwards shows"
+  },
+  {
+    "id": "cli-census-folder-error-not-input",
+    "file": "src/cli.ts",
+    "find": "      fail(`census refused (input): ${(e as Error).message}`);",
+    "replace": "      throw e;",
+    "test": "scripts/cli-checks.mjs",
+    "why": "round 7 review L4: a scenario folder that cannot be read is an input problem, as in the recount"
+  },
+  {
+    "id": "cli-request-checked-after-folder",
+    "file": "src/cli.ts",
+    "find": "    if (fromFlag !== undefined && toFlag !== undefined) {",
+    "replace": "    if (fromFlag !== undefined && toFlag !== undefined && process.argv.length < 0) {",
+    "test": "scripts/cli-checks.mjs",
+    "why": "clause 16: a range given on the command line is a request problem before any folder problem"
+  },
+  {
+    "id": "cli-pin-json-unsorted",
+    "file": "src/cli.ts",
+    "find": "    writeFileSync(join(out, \"pin.json\"), feedText(snap.pin));",
+    "replace": "    writeFileSync(join(out, \"pin.json\"), JSON.stringify(snap.pin, null, 2) + \"\\n\");",
+    "test": "scripts/cli-checks.mjs",
+    "why": "round 7 review L7: pin.json has one spelling, the feed format"
+  },
+  {
+    "id": "mcp-bin-written-form-not-required",
+    "file": "src/mcp-bin.ts",
+    "find": "  if (feedText(snapshot) !== text) throw new Error(\"it is not in the written form (keys sorted, two-space indent, one trailing newline)\");",
+    "replace": "",
+    "test": "scripts/cli-checks.mjs",
+    "why": "round 7 review L6: the served file is byte for byte what the snapshot command wrote, so an integer the parser rounds is refused"
+  },
+  {
+    "id": "mcp-bin-bom-dropped",
+    "file": "src/mcp-bin.ts",
+    "find": "    text = new TextDecoder(\"utf-8\", { fatal: true, ignoreBOM: true }).decode(readFileSync(path));",
+    "replace": "    text = new TextDecoder(\"utf-8\", { fatal: true }).decode(readFileSync(path));",
+    "test": "scripts/cli-checks.mjs",
+    "why": "round 7 review L6: a byte order mark is refused, never dropped silently"
+  },
+  {
+    "id": "mcp-bin-nesting-unchecked",
+    "file": "src/mcp-bin.ts",
+    "find": "  if (nestingDepth(text) > MAX_NESTING) throw new Error(`it nests deeper than ${MAX_NESTING} levels`);",
+    "replace": "",
+    "test": "scripts/cli-checks.mjs",
+    "why": "round 7 review I2: deep nesting is refused before parsing, with the binary's own refusal"
+  },
+  {
+    "id": "mcp-bin-parts-unchecked",
+    "file": "src/mcp-bin.ts",
+    "find": "  part(snapshot.status, \"flop-observatory/network-status@0\") &&",
+    "replace": "  true &&",
+    "test": "scripts/cli-checks.mjs",
+    "why": "round 7 review I2: each part of a served snapshot has its own schema, so an empty shell is refused"
   }
 ]

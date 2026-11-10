@@ -10,6 +10,7 @@ import { cpSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync 
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { feedText } from "../dist/feed.js";
 import { hashSnapshot } from "../dist/store.js";
 
 const pkg = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -70,6 +71,30 @@ cpSync(join(pkg, fx("status-healthy")), noTime, { recursive: true });
   writeFileSync(p, JSON.stringify(o, null, 2));
 }
 const noTimeLog = join(work, "roll-no-time.jsonl");
+// The round 7 review's case M1: a head that has lost its finalized head and reports a best
+// height far below what the earlier snapshot saw finalized, on the same genesis.
+const restart = join(work, "restart-low-best");
+cpSync(join(pkg, fx("status-healthy")), restart, { recursive: true });
+{
+  const p = join(restart, "rpc-head.json");
+  const o = JSON.parse(readFileSync(p, "utf8"));
+  o.finalized = null;
+  o.best_number = 10;
+  writeFileSync(p, JSON.stringify(o, null, 2));
+}
+// The round 7 review's case L1: an earlier snapshot taken later than the next one, with no head time.
+const later = join(work, "later-no-head-time");
+cpSync(join(pkg, fx("status-healthy")), later, { recursive: true });
+{
+  const edit = (file, fn) => {
+    const p = join(later, file);
+    const o = JSON.parse(readFileSync(p, "utf8"));
+    fn(o);
+    writeFileSync(p, JSON.stringify(o, null, 2));
+  };
+  edit("meta.json", (o) => (o.now = "2026-11-09T23:48:41Z"));
+  edit("rpc-head.json", (o) => (o.observed_at = null));
+}
 // The Fable review's case L8: one escrow id listed twice, once in upper case hex.
 const dupIds = join(work, "escrows-dup-ids");
 cpSync(join(pkg, fx("escrows-verification")), dupIds, { recursive: true });
@@ -167,6 +192,28 @@ const cases = [
     ok: (r) => r.exit === 0 && r.json.rpc.health === "degraded" && r.json.conflicts.some((c) => /went backwards from 3341575 to 3340000/.test(c)),
   },
   {
+    name: "a head with no finalized head and a best height below an earlier finalized height is a conflict, and reset_detected is not false",
+    run: () => {
+      const first = cli("snapshot", "--status", fx("status-healthy"), "--out", join(work, "restart-o1"), "--log", join(work, "restart.jsonl"));
+      if (first.exit !== 0) return first;
+      const second = cli("snapshot", "--status", restart, "--escrows", fx("escrows-opened-only"), "--out", join(work, "restart-o2"), "--log", join(work, "restart.jsonl"));
+      if (second.exit !== 0) return second;
+      return { ...second, json: JSON.parse(readFileSync(join(work, "restart-o2", "status.json"), "utf8")).status };
+    },
+    ok: (r) => r.exit === 0 && r.json.reset_detected === null && r.json.conflicts.some((c) => /best block 10 is below the finalized height 3341575/.test(c)),
+  },
+  {
+    name: "an earlier snapshot taken later than this one is a conflict, though it recorded no head time",
+    run: () => {
+      const first = cli("snapshot", "--status", later, "--out", join(work, "later-o1"), "--log", join(work, "later.jsonl"));
+      if (first.exit !== 0) return first;
+      const second = cli("snapshot", "--status", fx("status-healthy"), "--out", join(work, "later-o2"), "--log", join(work, "later.jsonl"));
+      if (second.exit !== 0) return second;
+      return { ...second, json: JSON.parse(readFileSync(join(work, "later-o2", "status.json"), "utf8")).status };
+    },
+    ok: (r) => r.exit === 0 && r.json.reset_detected === null && r.json.conflicts.some((c) => /an earlier snapshot was taken at 2026-11-09T23:48:41Z, later than this snapshot time/.test(c)),
+  },
+  {
     name: "a snapshot refuses to extend or trust a log whose hash chain is broken",
     run: () => {
       const lines = readFileSync(rollLog, "utf8").split("\n").filter(Boolean);
@@ -187,6 +234,25 @@ const cases = [
       return cli("census", "--fixtures", fx("census-complete"), "--from", "00", "--to", "199");
     },
     ok: (r) => r.exit === 0 && r.json?.complete === true,
+  },
+  {
+    name: "the census command refuses a scenario folder that does not exist as an input problem",
+    run: () => cli("census", "--fixtures", fx("no-such-scenario"), "--from", "0", "--to", "10"),
+    ok: (r) => r.exit === 2 && /census refused \(input\): /.test(r.stderr),
+  },
+  {
+    name: "the census command checks a range given on the command line before the folder: an inverted range is a request problem first",
+    run: () => cli("census", "--fixtures", fx("no-such-scenario"), "--from", "9", "--to", "3"),
+    ok: (r) => r.exit === 2 && /census refused \(request\): the requested range is inverted/.test(r.stderr),
+  },
+  {
+    name: "pin.json is the snapshot's pin in the feed format",
+    run: () => {
+      const path = mcpSnapshot();
+      const pinText = readFileSync(join(dirname(path), "pin.json"), "utf8");
+      return { exit: pinText === feedText(JSON.parse(readFileSync(path, "utf8")).pin) ? 0 : 1, stderr: pinText.slice(0, 200) };
+    },
+    ok: (r) => r.exit === 0,
   },
   {
     name: "a snapshot refuses an escrow id listed twice, in either case",
@@ -243,9 +309,9 @@ const cases = [
     run: () => {
       const s = JSON.parse(readFileSync(mcpSnapshot(), "utf8"));
       s.status.conflicts = [...s.status.conflicts, "a \uFFFD in a conflict"];
-      delete s.hash;
       s.hash = hashSnapshot(s);
-      const raw = Buffer.from(JSON.stringify(s, null, 2) + "\n", "utf8");
+      // In the written form, so the bad byte is the only thing wrong with the file.
+      const raw = Buffer.from(feedText(s), "utf8");
       const at = raw.indexOf(Buffer.from([0xef, 0xbf, 0xbd]));
       if (at < 0) throw new Error("no U+FFFD to replace");
       // One invalid byte where U+FFFD was: a lossy read turns it back into U+FFFD and verifies.
@@ -259,10 +325,66 @@ const cases = [
     name: "the MCP binary refuses an object that hashes to its own hash field but is no snapshot",
     run: () => {
       const bad = join(work, "mcp-not-a-snapshot.json");
-      writeFileSync(bad, JSON.stringify({ hash: hashSnapshot({}) }) + "\n");
+      writeFileSync(bad, feedText({ hash: hashSnapshot({}) }));
       return mcp(bad);
     },
     ok: (r) => r.exit === 2 && r.stdout === "" && /is not an observatory snapshot; refusing to serve it/.test(r.stderr),
+  },
+  {
+    name: "the MCP binary refuses a hashed snapshot whose parts are empty shells",
+    run: () => {
+      // Only the status is an empty shell, so the status check alone has to refuse it.
+      const s = { schema: "flop-observatory/snapshot@0", observed_at: "2026-11-10T00:00:00Z", trust: "fixture", pin: {}, status: {}, escrows: [], census: null, drift: null, seq: 0, prev_hash: null };
+      const bad = join(work, "mcp-empty-parts.json");
+      writeFileSync(bad, feedText({ ...s, hash: hashSnapshot(s) }));
+      return mcp(bad);
+    },
+    ok: (r) => r.exit === 2 && r.stdout === "" && /is not an observatory snapshot; refusing to serve it/.test(r.stderr),
+  },
+  {
+    name: "the MCP binary refuses a snapshot behind a byte order mark",
+    run: () => {
+      const bad = join(work, "mcp-bom.json");
+      writeFileSync(bad, Buffer.concat([Buffer.from([0xef, 0xbb, 0xbf]), readFileSync(mcpSnapshot())]));
+      return mcp(bad);
+    },
+    ok: (r) => r.exit === 2 && r.stdout === "" && /it is not JSON; refusing to serve it/.test(r.stderr),
+  },
+  {
+    name: "the MCP binary refuses an integer past 2^53 - 1, though the value JSON.parse reads hashes right",
+    run: () => {
+      const s = JSON.parse(readFileSync(mcpSnapshot(), "utf8"));
+      s.status.runtime_version = 2 ** 53;
+      s.hash = hashSnapshot(s);
+      const text = feedText(s).replace('"runtime_version": 9007199254740992', '"runtime_version": 9007199254740993');
+      if (!text.includes("9007199254740993")) throw new Error("no runtime_version to respell");
+      const bad = join(work, "mcp-unsafe.json");
+      writeFileSync(bad, text);
+      return mcp(bad);
+    },
+    ok: (r) => r.exit === 2 && r.stdout === "" && /it is not in the written form/.test(r.stderr),
+  },
+  {
+    name: "the MCP binary refuses a file nested 20000 levels deep with its own refusal, not a crash",
+    run: () => {
+      const bad = join(work, "mcp-deep.json");
+      writeFileSync(bad, "[".repeat(20000) + "]".repeat(20000));
+      return mcp(bad);
+    },
+    ok: (r) => r.exit === 2 && r.stdout === "" && /nests deeper than 64 levels; refusing to serve it/.test(r.stderr),
+  },
+  {
+    name: "a snapshot refuses a log whose line is not in canonical form, and appends nothing",
+    run: () => {
+      const first = cli("snapshot", "--status", fx("status-healthy"), "--out", join(work, "pad-o1"), "--log", join(work, "pad.jsonl"));
+      if (first.exit !== 0) return first;
+      const p = join(work, "pad.jsonl");
+      writeFileSync(p, " " + readFileSync(p, "utf8"));
+      const before = readFileSync(p, "utf8");
+      const second = cli("snapshot", "--status", fx("status-healthy"), "--out", join(work, "pad-o2"), "--log", p);
+      return { ...second, unchanged: readFileSync(p, "utf8") === before };
+    },
+    ok: (r) => r.exit === 2 && /is broken at line 0/.test(r.stderr) && r.unchanged === true,
   },
   {
     name: "status: a head time later than the snapshot time is a conflict and degraded",

@@ -298,16 +298,16 @@
  {
   "id": "store-repeated-key-line-trusted",
   "file": "src/store.ts",
-  "find": "  return twice === null ? s : `holds the key ${JSON.stringify(twice)} twice in one object`;",
-  "replace": "  return s;",
+  "find": "  if (twice !== null) return `holds the key ${JSON.stringify(twice)} twice in one object`;",
+  "replace": "",
   "test": "test/store.test.ts",
   "why": "a log line with a key twice can read as two different snapshots, so it breaks the chain"
  },
  {
   "id": "store-lossy-utf8",
   "file": "src/store.ts",
-  "find": "const strict = new TextDecoder(\"utf-8\", { fatal: true });",
-  "replace": "const strict = new TextDecoder(\"utf-8\");",
+  "find": "  const strict = new TextDecoder(\"utf-8\", { fatal: true, ignoreBOM: true });",
+  "replace": "  const strict = new TextDecoder(\"utf-8\", { ignoreBOM: true });",
   "test": "test/store.test.ts",
   "why": "the log is read as strict UTF-8, or a changed byte reads back as U+FFFD and still verifies"
  },
@@ -318,5 +318,37 @@
   "replace": "throw new Error(\"unhandled\");",
   "test": "test/mcp.test.ts",
   "why": "a call the server cannot answer gets a JSON-RPC error, not a thrown exception that kills the server"
+ },
+ {
+  "id": "store-blank-line-accepted",
+  "file": "src/store.ts",
+  "find": "  if (line.text === \"\") return \"is blank\";",
+  "replace": "",
+  "test": "test/store.test.ts",
+  "why": "round 7 review L6: the log the code writes has no blank line"
+ },
+ {
+  "id": "store-cut-line-accepted",
+  "file": "src/store.ts",
+  "find": "  if (!line.ended) return \"does not end with a newline (a line cut short)\";",
+  "replace": "",
+  "test": "test/store.test.ts",
+  "why": "round 7 review L6: a last line with no newline is a line cut short"
+ },
+ {
+  "id": "store-canonical-form-not-required",
+  "file": "src/store.ts",
+  "find": "  return canonicalJson(s) === line.text ? s : \"is not in canonical form\";",
+  "replace": "  return s;",
+  "test": "test/store.test.ts",
+  "why": "round 7 review L6: a log line has one spelling, so padding, a carriage return or an integer the parser rounds breaks the chain"
+ },
+ {
+  "id": "store-bom-dropped",
+  "file": "src/store.ts",
+  "find": "  const strict = new TextDecoder(\"utf-8\", { fatal: true, ignoreBOM: true });",
+  "replace": "  const strict = new TextDecoder(\"utf-8\", { fatal: true });",
+  "test": "test/store.test.ts",
+  "why": "round 7 review L6: a byte order mark in the log is refused, never dropped"
  }
 ]

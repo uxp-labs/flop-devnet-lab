@@ -68,6 +68,16 @@ describe("parseZoned (RULES 1.1)", () => {
     expect(parseZoned(new Date())).toBeNull();
   });
 
+  it("cuts the fraction to whole milliseconds, never rounding into the next second (Fable review r7 I1)", () => {
+    const t = at("2026-11-09T23:47:53");
+    expect(parseZoned("2026-11-09T23:47:53.9999999999999999999Z")).toBe(t + 999);
+    expect(parseZoned("2026-11-09T23:47:53.9995Z")).toBe(t + 999);
+    expect(parseZoned("2026-11-09T23:47:53.0009Z")).toBe(t);
+    expect(parseZoned("2026-11-09T23:47:53.12Z")).toBe(t + 120);
+    expect(parseZoned("2026-11-09T23:47:59.9999Z")).toBe(at("2026-11-09T23:47:59") + 999);
+    expect(secondsBetween("2026-11-09T23:47:53.9999999Z", "2026-11-09T23:47:54Z")).toBeGreaterThan(0);
+  });
+
   it("reads years below 100 as written, never as 19xx", () => {
     expect(new Date(parseZoned("0050-01-01T00:00:00Z") as number).getUTCFullYear()).toBe(50);
   });

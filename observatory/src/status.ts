@@ -31,6 +31,11 @@ export interface StatusOptions {
    * stalls. Only those on the same genesis as this reading count (RULES.md 1.1). One head or a list.
    */
   previous?: PreviousHead | readonly PreviousHead[] | null;
+  /**
+   * The snapshot time of every earlier snapshot in the log, oldest first, whatever it read. One
+   * later than this snapshot's time means the log runs backwards (RULES.md 1.1).
+   */
+  earlierTimes?: readonly (string | null)[] | null;
 }
 
 /** One earlier snapshot's finalized head, as its status recorded it. Its time may be null. */
@@ -52,6 +57,14 @@ export function normalizeHash(value: unknown): string | null {
 /** Any error value at all, an empty string included, is an error (RULES.md 1.1). */
 function hasError(e: unknown): boolean {
   return e !== null && e !== undefined;
+}
+
+/**
+ * A reading's error. A reading with no error key at all does not say whether it failed, so it
+ * counts as a failed one (RULES.md 1.1).
+ */
+export function errorOf(r: unknown): unknown {
+  return r !== null && typeof r === "object" && "error" in r ? (r as { error: unknown }).error : "the reading has no error field";
 }
 
 /** A reading time as given when it is a string, else null: the interface carries strings only. */
@@ -84,7 +97,7 @@ export function classifyFaucet(r: HttpResult<FaucetHealthBody>): NetworkStatus["
   let detail: string | null;
   if (http === null) {
     health = "unknown";
-    detail = r.http === null ? (hasError(r.error) ? String(r.error) : "no response") : "http status is not a whole number";
+    detail = r.http === null ? (hasError(errorOf(r)) ? String(errorOf(r)) : "no response") : "http status is not a whole number";
   } else if (!body) {
     health = http >= 500 ? "down" : "unknown";
     detail = `http ${http} with no readable body`;
@@ -105,9 +118,9 @@ export function classifyFaucet(r: HttpResult<FaucetHealthBody>): NetworkStatus["
     detail = `unrecognized health body, http ${http}`;
   }
   // A reading that came with an error is a failed read, never ok (RULES.md 1.1).
-  if (http !== null && hasError(r.error)) {
+  if (http !== null && hasError(errorOf(r))) {
     if (health === "ok") health = "degraded";
-    detail = [detail, `read error: ${String(r.error)}`].filter((d) => d !== null).join("; ");
+    detail = [detail, `read error: ${String(errorOf(r))}`].filter((d) => d !== null).join("; ");
   }
   return { health, http, detail, observed_at: timeField(r.fetched_at), ready, limits };
 }
@@ -118,7 +131,7 @@ export function classifyGateway(r: HttpResult<unknown>): ServiceStatus {
   let detail: string | null = null;
   if (http === null) {
     health = "unknown";
-    detail = r.http === null ? (hasError(r.error) ? String(r.error) : "no response") : "http status is not a whole number";
+    detail = r.http === null ? (hasError(errorOf(r)) ? String(errorOf(r)) : "no response") : "http status is not a whole number";
   } else if (http === 200) {
     health = "ok";
   } else if (http === 429 || http === 503) {
@@ -132,9 +145,9 @@ export function classifyGateway(r: HttpResult<unknown>): ServiceStatus {
     detail = `http ${http}`;
   }
   // A reading that came with an error is a failed read, never ok (RULES.md 1.1).
-  if (http !== null && hasError(r.error)) {
+  if (http !== null && hasError(errorOf(r))) {
     if (health === "ok") health = "degraded";
-    detail = [detail, `read error: ${String(r.error)}`].filter((d) => d !== null).join("; ");
+    detail = [detail, `read error: ${String(errorOf(r))}`].filter((d) => d !== null).join("; ");
   }
   return { health, http, detail, observed_at: timeField(r.fetched_at) };
 }
@@ -173,6 +186,7 @@ export function classifyRpc(
   genesis: string | null,
   /** Set to true when this head contradicts itself or an earlier snapshot. */
   flags: { contradicted: boolean } = { contradicted: false },
+  earlierTimes: StatusOptions["earlierTimes"] = null,
 ): NetworkStatus["rpc"] {
   // Every earlier head on this genesis counts, in log order, so a snapshot in between with no RPC
   // reading (or one on another genesis) cannot hide a rollback.
@@ -184,16 +198,39 @@ export function classifyRpc(
   const best = nonNegativeInt(head.best_number);
   const nothing = head.genesis_hash === null && head.finalized === null && head.best_number === null;
   const age = secondsBetween(head.observed_at, o.now);
+  const error = errorOf(head);
   if (age !== null && age < 0) {
     // A reading time later than the snapshot time is a conflict whatever the reading holds.
     conflicts.push(`rpc head observed_at ${String(head.observed_at)} is later than the snapshot time ${o.now}`);
     flags.contradicted = true;
   }
+  // A log that runs backwards: an earlier snapshot taken, or an earlier head read, later than this
+  // snapshot's time. Checked whatever this head holds, so a snapshot with no reading still sees it.
+  let backwards = false;
+  for (const t of earlierTimes ?? []) {
+    const d = secondsBetween(t, o.now);
+    if (d !== null && d < 0) {
+      conflicts.push(`an earlier snapshot was taken at ${String(t)}, later than this snapshot time ${o.now}`);
+      backwards = true;
+      break;
+    }
+  }
+  if (!backwards) {
+    for (const p of earlier) {
+      const t = secondsBetween(p.observed_at, o.now);
+      if (t !== null && t < 0) {
+        conflicts.push(`an earlier snapshot read the rpc head at ${String(p.observed_at)}, later than this snapshot time ${o.now}`);
+        backwards = true;
+        break;
+      }
+    }
+  }
+  if (backwards) flags.contradicted = true;
   if (nothing) {
     return {
-      health: hasError(head.error) ? "down" : "unknown",
+      health: hasError(error) ? "down" : "unknown",
       http: null,
-      detail: hasError(head.error) ? String(head.error) : typeof head.unreadable === "string" ? head.unreadable : "no rpc head",
+      detail: hasError(error) ? String(error) : typeof head.unreadable === "string" ? head.unreadable : "no rpc head",
       observed_at: timeField(head.observed_at),
       stale: null,
     };
@@ -202,7 +239,7 @@ export function classifyRpc(
   // unless another check failed. Nothing missing is ever counted as passing.
   const problems: string[] = [];
   const cannotRun: string[] = [];
-  if (hasError(head.error)) problems.push(`read error: ${String(head.error)}`);
+  if (hasError(error)) problems.push(`read error: ${String(error)}`);
   if (genesis === null) problems.push("no valid genesis hash");
   let stale: boolean | null = null;
   if (age === null) {
@@ -213,20 +250,20 @@ export function classifyRpc(
     stale = age > o.staleAfterSeconds;
     if (stale) problems.push(`head is ${Math.round(age)}s old`);
   }
-  // An earlier snapshot's head read later than this snapshot's time means the log runs backwards.
-  for (const p of earlier) {
-    const t = secondsBetween(p.observed_at, o.now);
-    if (t !== null && t < 0) {
-      conflicts.push(`an earlier snapshot read the rpc head at ${String(p.observed_at)}, later than this snapshot time ${o.now}`);
-      problems.push("an earlier snapshot is later than this one");
-      flags.contradicted = true;
-      break;
-    }
+  if (backwards) problems.push("an earlier snapshot is later than this one");
+  // Finality never goes back: the highest finalized height any earlier snapshot saw on this
+  // genesis is the floor, for this head's finalized height and for its best height alike. A head
+  // whose best height is below the floor contradicts history even when it has no finalized head
+  // (a chain restarted from the same spec keeps its genesis and starts again near block 0).
+  const highest = sameGenesis.length > 0 ? Math.max(...sameGenesis.map((p) => p.finalized_height)) : null;
+  // With a valid finalized head, a best height under the floor is already a rollback or best below
+  // finalized; this catches the head that has no valid finalized head at all.
+  if (highest !== null && best !== null && best < highest && finalized === null) {
+    conflicts.push(`best block ${best} is below the finalized height ${highest} an earlier snapshot saw on this genesis`);
+    problems.push("best height is below an earlier finalized height");
+    flags.contradicted = true;
   }
-  if (finalized && sameGenesis.length > 0) {
-    // Finality never goes back: the highest finalized height any earlier snapshot saw on this
-    // genesis is the floor.
-    const highest = Math.max(...sameGenesis.map((p) => p.finalized_height));
+  if (finalized && highest !== null) {
     const changed = sameGenesis.find((p) => p.finalized_height === finalized.number && p.finalized_hash !== finalized.hash);
     // Stuck since the oldest of the latest run of snapshots at this same height. A time there that
     // does not parse means the check cannot run.
@@ -291,7 +328,14 @@ export function resetDetected(pinned: string, faucet: string | null, rpc: string
  */
 export function rpcHeadUsable(head: RpcHead, now: string, staleAfterSeconds = 120): boolean {
   const age = secondsBetween(head.observed_at, now);
-  return !hasError(head.error) && age !== null && age >= 0 && age <= staleAfterSeconds;
+  return !hasError(errorOf(head)) && age !== null && age >= 0 && age <= staleAfterSeconds;
+}
+
+/** The faucet's detail also says why its /chain reading does not count, so that reason shows somewhere. */
+function withChainNote(faucet: NetworkStatus["faucet"], why: string | null): NetworkStatus["faucet"] {
+  if (why === null) return faucet;
+  const note = `the /chain reading does not count: ${why}`;
+  return { ...faucet, detail: faucet.detail === null ? note : `${faucet.detail}; ${note}` };
 }
 
 export async function networkStatus(source: Source, opts: StatusOptions): Promise<NetworkStatus> {
@@ -300,9 +344,11 @@ export async function networkStatus(source: Source, opts: StatusOptions): Promis
 
 /**
  * The status, and whether its RPC head is usable: no read error, a fresh head time that is not
- * later than the snapshot, and no contradiction of itself or of an earlier snapshot (a rollback,
- * a changed finalized hash, best below finalized). Only a usable head counts toward
- * reset_detected, and only a usable head on the pinned genesis bounds escrow evidence.
+ * later than the snapshot, a valid finalized head and best height (so every check against them
+ * ran), and no contradiction of itself or of an earlier snapshot (a rollback, a changed finalized
+ * hash, a best height below finalized or below an earlier finalized height, a log that runs
+ * backwards). Only a usable head counts toward reset_detected, and only a usable head on the
+ * pinned genesis bounds escrow evidence.
  */
 export async function assessNetwork(source: Source, opts: StatusOptions): Promise<{ status: NetworkStatus; rpcUsable: boolean }> {
   const pinned = normalizeHash(opts.pinnedGenesis);
@@ -321,18 +367,40 @@ export async function assessNetwork(source: Source, opts: StatusOptions): Promis
   ]);
   const conflicts: string[] = [];
 
-  // RULES.md 1.1: the faucet genesis counts only from a usable /chain reading: HTTP 200, no error,
-  // and a reading time that parses, is not later than the snapshot time and is fresh. Otherwise it
-  // is null, so reset_detected cannot be false on the faucet's word.
+  // RULES.md 1.1: the faucet genesis counts toward reset_detected only from a usable /chain
+  // reading: HTTP 200, no error, and a reading time that parses, is not later than the snapshot
+  // time and is fresh. genesis.faucet still shows what any reading said, as genesis.rpc does, and a
+  // reading that names another genesis is a conflict even when it does not count.
   const chainAge = secondsBetween(chain.fetched_at, o.now);
   if (chainAge !== null && chainAge < 0) {
     conflicts.push(`faucet /chain reading time ${String(chain.fetched_at)} is later than the snapshot time ${o.now}`);
   }
-  const chainUsable = chain.http === 200 && !hasError(chain.error) && chainAge !== null && chainAge >= 0 && chainAge <= o.staleAfterSeconds;
-  const rawFaucetGenesis = chainUsable && chain.body && typeof chain.body === "object" ? chain.body.genesisHash : undefined;
-  const faucetGenesis = normalizeHash(rawFaucetGenesis);
-  if (rawFaucetGenesis !== undefined && faucetGenesis === null) {
+  const chainError = errorOf(chain);
+  const chainUnusable =
+    chain.http === null
+      ? hasError(chainError)
+        ? String(chainError)
+        : "no response"
+      : chain.http !== 200
+        ? `http ${String(chain.http)}`
+        : hasError(chainError)
+          ? `read error: ${String(chainError)}`
+          : chainAge === null
+            ? "no parsable reading time"
+            : chainAge < 0
+              ? "reading time later than the snapshot time"
+              : chainAge > o.staleAfterSeconds
+                ? `reading is ${Math.round(chainAge)}s old`
+                : null;
+  const chainUsable = chainUnusable === null;
+  const rawFaucetGenesis = chain.body && typeof chain.body === "object" ? chain.body.genesisHash : undefined;
+  const shownFaucetGenesis = normalizeHash(rawFaucetGenesis);
+  if (rawFaucetGenesis !== undefined && shownFaucetGenesis === null) {
     conflicts.push("faucet /chain genesisHash is malformed");
+  }
+  const faucetGenesis = chainUsable ? shownFaucetGenesis : null;
+  if (!chainUsable && shownFaucetGenesis !== null && shownFaucetGenesis !== pinned) {
+    conflicts.push(`faucet /chain reading that does not count (${chainUnusable}) reports genesis ${shownFaucetGenesis}, not the pinned genesis`);
   }
   const rpcGenesis = normalizeHash(head.genesis_hash);
   if (head.genesis_hash !== null && rpcGenesis === null) {
@@ -341,18 +409,19 @@ export async function assessNetwork(source: Source, opts: StatusOptions): Promis
   // RULES.md 1.1: the RPC genesis counts toward reset_detected only from a usable head reading,
   // the same gate as the faucet /chain. genesis.rpc still shows what the head said.
   const fresh = rpcHeadUsable(head, o.now, o.staleAfterSeconds);
-  if (faucetGenesis !== null && rpcGenesis !== null && faucetGenesis !== rpcGenesis) {
-    conflicts.push(`faucet genesis ${faucetGenesis} differs from rpc genesis ${rpcGenesis}`);
+  if (shownFaucetGenesis !== null && rpcGenesis !== null && shownFaucetGenesis !== rpcGenesis) {
+    conflicts.push(`faucet genesis ${shownFaucetGenesis} differs from rpc genesis ${rpcGenesis}`);
   }
 
   const flags = { contradicted: false };
-  const rpc = classifyRpc(head, o, conflicts, opts.previous ?? null, rpcGenesis, flags);
-  const rpcUsable = fresh && !flags.contradicted;
+  const rpc = classifyRpc(head, o, conflicts, opts.previous ?? null, rpcGenesis, flags, opts.earlierTimes ?? null);
   const finalizedValid =
     head.finalized && nonNegativeInt(head.finalized.number) !== null && normalizeHash(head.finalized.hash) !== null;
   const finalizedHeight = finalizedValid ? (head.finalized as { number: number }).number : null;
   const finalizedHash = finalizedValid ? normalizeHash((head.finalized as { hash: string }).hash) : null;
   const bestHeight = nonNegativeInt(head.best_number);
+  // Every check against the finalized head and the best height must have run (RULES.md 1.1).
+  const rpcUsable = fresh && !flags.contradicted && finalizedHeight !== null && bestHeight !== null;
   const lag =
     finalizedHeight !== null && bestHeight !== null && bestHeight >= finalizedHeight ? bestHeight - finalizedHeight : null;
 
@@ -360,7 +429,7 @@ export async function assessNetwork(source: Source, opts: StatusOptions): Promis
     schema: "flop-observatory/network-status@0",
     observed_at: opts.now,
     trust: source.trust,
-    genesis: { pinned, faucet: faucetGenesis, rpc: rpcGenesis },
+    genesis: { pinned, faucet: shownFaucetGenesis, rpc: rpcGenesis },
     reset_detected: resetDetected(pinned, faucetGenesis, rpcUsable ? rpcGenesis : null),
     conflicts,
     finalized_height: finalizedHeight,
@@ -370,7 +439,7 @@ export async function assessNetwork(source: Source, opts: StatusOptions): Promis
     runtime_version: nonNegativeInt(head.runtime_spec_version),
     rpc,
     gateway: applyFreshness(classifyGateway(gateway), "gateway", o, conflicts),
-    faucet: applyFreshness(classifyFaucet(health), "faucet", o, conflicts),
+    faucet: withChainNote(applyFreshness(classifyFaucet(health), "faucet", o, conflicts), chainUnusable),
   };
   return { status, rpcUsable };
 }

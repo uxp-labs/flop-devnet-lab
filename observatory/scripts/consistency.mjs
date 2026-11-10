@@ -39,12 +39,14 @@
 // Every JSON file and transcript line is read strictly: a key that appears twice in one object
 // fails (RULES.md 3.1 clause 12), and each JSON output must be in its own written format.
 // Prints {"dir", "checks", "keys", "failures"}; exit 1 on any failure.
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { basename, join, resolve } from "node:path";
 import { censusFeed, driftFeed, escrowsFeed, feedText as writtenFeed, snapshotMeta, statusFeed } from "../dist/feed.js";
+import { TOOLS, handleMcp } from "../dist/mcp.js";
 import { PAGE_CSS, renderPage } from "../dist/page.js";
-import { canonicalJson, hashSnapshot } from "../dist/store.js";
+import { canonicalJson, hashSnapshot, verifyChain } from "../dist/store.js";
 import { duplicateKey } from "../dist/strict.js";
+import { exchangesFor, unseenEscrowId } from "./mcp-exchanges.mjs";
 
 const args = process.argv.slice(2);
 const semanticOnly = args.includes("--semantic-only");
@@ -80,6 +82,11 @@ const sortDeep = (v) =>
 const formatted = (v) => JSON.stringify(sortDeep(v), null, 2) + "\n";
 const sameKeys = (o, keys) => o !== null && typeof o === "object" && !Array.isArray(o) && canonicalJson(Object.keys(o).sort()) === canonicalJson([...keys].sort());
 
+// 0. The folder holds exactly the files the snapshot command and the transcript script write, so
+//    no other file can sit beside them and say something else (round 7 review L7).
+const FILES = ["census.json", "drift.json", "escrows.json", "index.html", "mcp-transcript.jsonl", "pin.json", "snapshot.json", "snapshots.jsonl", "status.json"];
+expectSame("the outputs folder holds exactly the nine files the commands write", readdirSync(dir).sort(), FILES);
+
 // 1. Snapshot integrity.
 const snapshotText = read("snapshot.json");
 const snapshot = strictJson("snapshot.json", snapshotText);
@@ -87,13 +94,18 @@ const snapshot = strictJson("snapshot.json", snapshotText);
   const { hash, ...rest } = snapshot;
   expectEq("snapshot.json hash verifies", hashSnapshot(rest), hash);
   expectEq("snapshot.json is in the feed format", snapshotText, formatted(snapshot));
+  // The whole log, not only its last line: its hash chain verifies, every line in canonical form,
+  // and the last line's seq is its position, so seq and prev_hash stand on something.
+  const logPath = join(dir, "snapshots.jsonl");
+  expectEq("the snapshot log's hash chain verifies, every line in its written form", verifyChain(logPath), null);
   const lines = read("snapshots.jsonl").split("\n").filter(Boolean);
   const last = lines.at(-1) ?? "null";
   expectSame("snapshot.json equals the last line of the snapshot log", strictJson("the snapshot log's last line", last), snapshot);
   expectEq("the snapshot log's last line is snapshot.json in canonical form, byte for byte", last, canonicalJson(snapshot));
+  expectEq("snapshot.json's seq is the last line's position in the log", snapshot.seq, lines.length - 1);
   const pinText = read("pin.json");
   expectSame("pin.json equals snapshot.pin", strictJson("pin.json", pinText), snapshot.pin);
-  expectEq("pin.json is in its written format (two-space indent, one trailing newline)", pinText, JSON.stringify(JSON.parse(pinText), null, 2) + "\n");
+  expectEq("pin.json is in the feed format", pinText, formatted(snapshot.pin));
 }
 
 // 2. Feeds against the snapshot.
@@ -121,30 +133,54 @@ for (const [name, f, key, part, observedAt, trust] of wrappers) {
   expectEq(`${name} is in the feed format`, feedText[Object.keys(FEED_FILE).find((t) => FEED_FILE[t] === name)], formatted(f));
 }
 
-// 3. MCP against the feeds and the snapshot. Each answer is read as the server wrote it, and a
-//    tool answer is exactly {content: [{type: "text", text}]}: no isError, no structuredContent and
-//    no second item, any of which a client could read instead of the text.
+// 3. MCP against the feeds and the snapshot. The transcript is exactly the exchanges
+//    scripts/mcp-transcript.mjs makes (scripts/mcp-exchanges.mjs), in order, so nothing a client is
+//    shown can be added, dropped or edited. Each answer is read as the server wrote its line, and
+//    is exactly what the rules say: the initialize answer and the tool list as the server declares
+//    them, a tool answer as exactly one text item (no isError, no structuredContent and no second
+//    item, any of which a client could read instead), and each refusal with its own code and words.
+const INSTRUCTIONS = "Read-only observatory for FLOP devnet. Escrow state is settlement only and says nothing about output quality. null means unknown.";
 const TOOL_NAMES = ["get_status", "get_escrow_state", "list_escrows", "get_census", "get_drift", "get_snapshot_meta"];
+const expectedExchanges = exchangesFor(snapshot);
+const unseen = unseenEscrowId(snapshot);
+const REFUSALS = {
+  sign_transaction: { code: -32602, message: "unknown tool: sign_transaction" },
+  "get_escrow_state:not-an-id": { code: -32602, message: "escrow_id must be 0x plus 64 hex" },
+};
 const transcript = read("mcp-transcript.jsonl")
   .split("\n")
   .filter(Boolean)
   .map((l, i) => strictJson(`mcp transcript line ${i}`, l));
+expectSame(
+  "the transcript holds exactly the exchanges the transcript script makes, in order",
+  transcript.map((x) => [x.request, x.expect_error]),
+  expectedExchanges.map((x) => [x.req, x.expectError]),
+);
 const mcpText = new Map();
 for (const [i, x] of transcript.entries()) {
+  expectEq(`mcp transcript line ${i} holds exactly request, expect_error, response and response_line`, sameKeys(x, ["request", "expect_error", "response", "response_line"]), true);
   const { request, response, expect_error: expectError } = x;
   if (typeof x.response_line !== "string") fail(`mcp transcript line ${i} records the server's own line`, "no response_line");
   else expectSame(`mcp transcript line ${i} response is the server's line`, strictJson(`mcp response line ${i}`, x.response_line), response);
   const base = response !== null && typeof response === "object" && response.jsonrpc === "2.0" && response.id === request?.id;
+  const label = request?.params?.name ?? request?.method;
   if (expectError === true) {
     const e = response?.error;
-    expectEq(`mcp request ${request?.id} (${request?.params?.name ?? request?.method}) is refused with an error and nothing else`, base && sameKeys(response, ["jsonrpc", "id", "error"]) && sameKeys(e, ["code", "message"]) && Number.isInteger(e.code) && typeof e.message === "string", true);
+    expectEq(`mcp request ${request?.id} (${label}) is refused with an error and nothing else`, base && sameKeys(response, ["jsonrpc", "id", "error"]) && sameKeys(e, ["code", "message"]), true);
+    const which = label === "get_escrow_state" ? `get_escrow_state:${request?.params?.arguments?.escrow_id}` : label;
+    expectSame(`mcp request ${request?.id} (${label}) is refused with its own code and words`, e, REFUSALS[which] ?? "an unexpected refusal");
     continue;
   }
   expectEq(`mcp request ${request?.id} (${request?.method}) has a result and no error`, base && sameKeys(response, ["jsonrpc", "id", "result"]), true);
+  if (request?.method === "initialize") {
+    const want = { protocolVersion: request.params?.protocolVersion, capabilities: { tools: {} }, serverInfo: { name: "flop-observatory", version: "0.0.1" }, instructions: INSTRUCTIONS };
+    expectSame("mcp initialize answer is exactly the server's: its name, version and read-only instructions", response?.result, want);
+  }
   if (request?.method === "tools/list") {
     const tools = response?.result?.tools ?? [];
     expectSame("mcp tools/list names exactly the six read-only tools", tools.map((t) => t.name).sort(), [...TOOL_NAMES].sort());
     for (const t of tools) expectEq(`mcp tool ${t.name} is marked read only and not destructive`, t.annotations?.readOnlyHint === true && t.annotations?.destructiveHint === false, true);
+    expectSame("mcp tools/list is exactly the server's declared tools: names, descriptions, input schemas and annotations", response?.result, { tools: TOOLS });
   }
   if (request?.method !== "tools/call") continue;
   const name = request.params.name;
@@ -168,6 +204,23 @@ for (const e of snapshot.escrows) {
     expectSame(`mcp get_escrow_state ${e.escrow_id} equals the snapshot escrow`, JSON.parse(text ?? "null"), e);
     expectEq(`mcp get_escrow_state ${e.escrow_id} is that escrow in the feed format, byte for byte`, text, formatted(e));
   }
+}
+{
+  // RULES.md section 5: an escrow id the snapshot does not hold is unverified, with no height.
+  const want = {
+    schema: "flop-observatory/escrow-state@0",
+    escrow_id: unseen,
+    state: "unverified",
+    evidence: [],
+    notes: ["escrow id not present in this snapshot; no finalized evidence seen"],
+    finalized_height: null,
+    observed_at: snapshot.observed_at,
+    trust: snapshot.trust,
+    scope: "settlement only; says nothing about output quality",
+  };
+  const text = mcpText.get(`escrow:${unseen}`);
+  if (text === undefined) fail("mcp get_escrow_state for an unseen escrow id was called", "no result in the transcript");
+  else expectEq("mcp get_escrow_state for an unseen escrow id is unverified with no height, in the feed format", text, formatted(want));
 }
 {
   const text = mcpText.get("get_snapshot_meta") ?? null;
@@ -205,6 +258,12 @@ for (const m of html.matchAll(/<([a-z][a-z0-9]*)\b([^>]*\bdata-k="[^"]*"[^>]*)>/
   marked.push([start, end === -1 ? start : end]);
   const k = attr(m[2], "data-k");
   if (cells.has(k)) fail(`page key ${k} appears once`, "duplicate data-k");
+  // A marked cell holds its value as text, and the renderer nests one thing only: a bare <code>
+  // around an escrow id. Any other tag inside, a span with a class say, could paint the value as
+  // something else while its words stay right (round 7 review L8).
+  const nested = [...inner.matchAll(/<[^>]*>/g)].map((t) => t[0]).filter((t) => t !== "<code>" && t !== "</code>");
+  checks++;
+  if (nested.length > 0) failures.push({ what: `page ${k} holds no markup but a bare code element`, detail: nested.slice(0, 3).join(" ") });
   cells.set(k, {
     tag,
     v: attr(m[2], "data-v"),
@@ -214,6 +273,31 @@ for (const m of html.matchAll(/<([a-z][a-z0-9]*)\b([^>]*\bdata-k="[^"]*"[^>]*)>/
     text: unescape(inner.replace(/<[^>]*>/g, "")),
   });
 }
+// Every key the renderer writes for this snapshot, in its order (src/page.ts), so a row dropped,
+// added or moved and escrow cards in another order all fail, without the byte comparison.
+function pageKeys(s) {
+  const k = ["snapshot.hash", "snapshot.observed_at", "snapshot.trust"];
+  for (const f of ["observed_at", "trust", "genesis.pinned", "genesis.faucet", "genesis.rpc", "reset_detected", "conflicts", "finalized_height", "finalized_hash", "best_height", "finality_lag", "runtime_version"]) k.push(`status.${f}`);
+  for (const svc of ["rpc", "gateway", "faucet"]) for (const f of ["health", "http", "detail", "observed_at"]) k.push(`status.${svc}.${f}`);
+  k.push("status.rpc.stale", "status.faucet.ready");
+  for (const e of s.escrows) for (const f of ["escrow_id", "state", "observed_at", "trust", "finalized_height", "evidence", "notes", "scope"]) k.push(`escrow.${e.escrow_id}.${f}`);
+  if (s.census === null) k.push("census");
+  else {
+    k.push("census.status", "census.observed_at", "census.trust", "census.requested", "census.covered", "census.gaps");
+    for (const t of ["escrows_opened", "escrows_released", "escrows_refunded", "channels_opened", "channels_settled"]) k.push(`census.totals.${t}`);
+    k.push("census.totals_label", "census.requested_blocks", "census.covered_blocks", "census.reset_detected", "census.notes", "census.pending_unfinalized", "census.duplicates_dropped", "census.excluded_other_genesis", "census.malformed_dropped");
+  }
+  if (s.drift === null) k.push("drift");
+  else {
+    for (const f of ["observed_at", "trust", "genesis", "finalized_height", "runtime_version", "spec_source", "runtime_observed_at", "matches", "mismatches", "unknown"]) k.push(`drift.${f}`);
+    s.drift.items.forEach((_, i) => {
+      for (const f of ["param", "spec", "runtime", "status", "note", "mapping", "unit", "expected", "runtime_path"]) k.push(`drift.${i}.${f}`);
+    });
+  }
+  return k;
+}
+expectSame("the page shows exactly the renderer's keys, in its order", [...cells.keys()], pageKeys(snapshot));
+
 // Every td and span carries data-k, unless it sits inside a marked element, whose whole text is
 // already compared. A value shown anywhere else would escape the check.
 {
@@ -636,6 +720,10 @@ if (!semanticOnly) {
   }
   expectEq("snapshot.json is exactly what src/feed.ts writes for this snapshot", snapshotText, writtenFeed(snapshot));
   expectEq("mcp get_snapshot_meta is exactly what src/feed.ts writes for this snapshot", mcpText.get("get_snapshot_meta") ?? null, writtenFeed(snapshotMeta(snapshot)));
+  for (const [i, x] of transcript.entries()) {
+    const want = handleMcp(x.request, { snapshot });
+    expectEq(`mcp transcript line ${i} is exactly the line src/mcp.ts answers`, x.response_line, want === null ? null : JSON.stringify(want));
+  }
 }
 
 console.log(JSON.stringify({ dir: basename(dir), semantic_only: semanticOnly, checks, keys: cells.size, failures }, null, 2));

@@ -2,7 +2,7 @@ import * as childProcess from "node:child_process";
 import { spawnSync } from "node:child_process";
 import * as dgram from "node:dgram";
 import * as dns from "node:dns";
-import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import * as http from "node:http";
@@ -267,6 +267,12 @@ describe("source scan", () => {
     expect(re.test("vi.reset" + "Modules()")).toBe(true);
   });
 
+  it("src holds nothing but regular .ts files, so the scans read every file tsc compiles (round 7 review M4)", () => {
+    const entries = (readdirSync(dir, { recursive: true }) as string[]).filter((f) => !lstatSync(new URL(f, dir)).isDirectory());
+    expect(entries.length).toBeGreaterThan(10);
+    expect(entries.filter((f) => !f.endsWith(".ts") || !lstatSync(new URL(f, dir)).isFile())).toEqual([]);
+  });
+
   it("lists every module under src, subfolders included, and the list is not empty", () => {
     expect(files.length).toBeGreaterThan(10);
     expect(files).toContain("status.ts");
@@ -288,5 +294,10 @@ describe("source scan", () => {
     expect(text).not.toMatch(/[;:][ \t]*(?:import|from)[ \t]/);
     expect(text).not.toMatch(/\bos\.(?:system|popen|exec\w*|spawn\w*|posix_spawn\w*|fork\w*|kill\w*|remove|unlink|rename|replace)\b/);
     expect(text).not.toMatch(/__import__|importlib|\bgetattr\s*\(|\bsubprocess\b|\bsocket\b|\beval\s*\(|\bexec\s*\(/);
+    // A private attribute reaches other modules (argparse._os), open kept in a name can write, and
+    // FileType opens files: none of them belongs in a recount that only reads (round 7 review L5).
+    expect(text).not.toMatch(/\.(?!__init__\b)_\w/);
+    expect(text).not.toMatch(/\bopen\b(?!\()/);
+    expect(text).not.toMatch(/\bFileType\b|__loader__|\bload_module\b|\bmodules\s*\[/);
   });
 });

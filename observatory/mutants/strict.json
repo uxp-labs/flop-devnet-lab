@@ -102,5 +102,13 @@
     "replace": "      if (c === '\"') inString = false;",
     "test": "test/strict.test.ts",
     "why": "an escaped quote does not end a string"
+  },
+  {
+    "id": "strict-time-fraction-rounded",
+    "file": "src/strict.ts",
+    "find": "  const millis = m[7] === undefined ? 0 : Number(m[7].slice(0, 3).padEnd(3, \"0\"));",
+    "replace": "  const millis = m[7] === undefined ? 0 : Math.round(Number(`0.${m[7]}`) * 1000);",
+    "test": "test/strict.test.ts",
+    "why": "round 7 review I1: a fraction is cut to whole milliseconds, never rounded into the next second"
   }
 ]

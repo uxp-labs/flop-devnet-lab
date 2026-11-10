@@ -342,8 +342,9 @@ export function escrowState(
     for (const c of copies) {
       if (c.escrowEvent && c.id.ok) named.add(c.id.id);
       const idPart = c.escrowEvent && c.id.ok ? c.id.id : "?";
-      // A block hash fixes the block number, so copies must agree on it. Null against a number
-      // disagrees. They must agree on the account too, as census clause 9 says.
+      // Copies of one event share its block hash, so they must agree on its block number; null
+      // against a number disagrees. They must agree on the account too, as census clause 9 says.
+      // Two different events in one block are not checked against each other (RULES.md 2).
       signatures.add(JSON.stringify([String(c.section), String(c.method), idPart, String(c.block_number), c.account]));
     }
     // A finalized terminal copy whose escrow id does not parse could contradict any escrow.

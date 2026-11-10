@@ -127,7 +127,7 @@ function isBlockHash(v: unknown): v is string {
 }
 
 /** Clause 13: a negative start or an inverted request is refused. */
-function checkRequest(r: unknown): BlockRange {
+export function checkRequest(r: unknown): BlockRange {
   if (!isObject(r)) throw new CensusRefused("request", "no requested block range");
   const { from_block, to_block } = r;
   if (!isSafeInt(from_block) || !isSafeInt(to_block)) {

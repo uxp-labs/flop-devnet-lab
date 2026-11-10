@@ -34,7 +34,7 @@
   {
     "id": "status-conflict-dropped",
     "file": "src/status.ts",
-    "find": "conflicts.push(`faucet genesis ${faucetGenesis} differs from rpc genesis ${rpcGenesis}`);",
+    "find": "conflicts.push(`faucet genesis ${shownFaucetGenesis} differs from rpc genesis ${rpcGenesis}`);",
     "replace": "",
     "test": "test/status.test.ts",
     "why": "conflicting genesis answers must be reported"
@@ -42,8 +42,8 @@
   {
     "id": "status-unknown-gateway-ok",
     "file": "src/status.ts",
-    "find": "    health = \"unknown\";\n    detail = r.http === null ? (hasError(r.error) ? String(r.error) : \"no response\") : \"http status is not a whole number\";\n  } else if (http === 200) {",
-    "replace": "    health = \"ok\";\n    detail = r.http === null ? (hasError(r.error) ? String(r.error) : \"no response\") : \"http status is not a whole number\";\n  } else if (http === 200) {",
+    "find": "    health = \"unknown\";\n    detail = r.http === null ? (hasError(errorOf(r)) ? String(errorOf(r)) : \"no response\") : \"http status is not a whole number\";\n  } else if (http === 200) {",
+    "replace": "    health = \"ok\";\n    detail = r.http === null ? (hasError(errorOf(r)) ? String(errorOf(r)) : \"no response\") : \"http status is not a whole number\";\n  } else if (http === 200) {",
     "test": "test/status.test.ts",
     "why": "a gateway we did not read is unknown, never ok"
   },
@@ -106,7 +106,7 @@
   {
     "id": "status-read-error-ignored",
     "file": "src/status.ts",
-    "find": "  if (hasError(head.error)) problems.push(`read error: ${String(head.error)}`);\n",
+    "find": "  if (hasError(error)) problems.push(`read error: ${String(error)}`);\n",
     "replace": "",
     "test": "test/status.test.ts",
     "why": "a read error on part of the head cannot be ok"
@@ -170,8 +170,8 @@
   {
     "id": "status-faucet-freshness-ignored",
     "file": "src/status.ts",
-    "find": "    faucet: applyFreshness(classifyFaucet(health), \"faucet\", o, conflicts),",
-    "replace": "    faucet: classifyFaucet(health),",
+    "find": "    faucet: withChainNote(applyFreshness(classifyFaucet(health), \"faucet\", o, conflicts), chainUnusable),",
+    "replace": "    faucet: withChainNote(classifyFaucet(health), chainUnusable),",
     "test": "test/status.test.ts",
     "why": "an eight day old faucet reading must not be ok"
   },
@@ -218,24 +218,24 @@
   {
     "id": "status-chain-http-ignored",
     "file": "src/status.ts",
-    "find": "  const chainUsable = chain.http === 200 && !hasError(chain.error) && chainAge !== null && chainAge >= 0 && chainAge <= o.staleAfterSeconds;",
-    "replace": "  const chainUsable = !hasError(chain.error) && chainAge !== null && chainAge >= 0 && chainAge <= o.staleAfterSeconds;",
+    "find": "      : chain.http !== 200\n        ? `http ${String(chain.http)}`\n        : hasError(chainError)",
+    "replace": "      : false\n        ? `http ${String(chain.http)}`\n        : hasError(chainError)",
     "test": "test/status.test.ts",
     "why": "a /chain body on HTTP 500 must not report the faucet genesis"
   },
   {
     "id": "status-chain-error-ignored",
     "file": "src/status.ts",
-    "find": "  const chainUsable = chain.http === 200 && !hasError(chain.error) && chainAge !== null && chainAge >= 0 && chainAge <= o.staleAfterSeconds;",
-    "replace": "  const chainUsable = chain.http === 200 && chainAge !== null && chainAge >= 0 && chainAge <= o.staleAfterSeconds;",
+    "find": "        : hasError(chainError)\n          ? `read error: ${String(chainError)}`",
+    "replace": "        : false\n          ? `read error: ${String(chainError)}`",
     "test": "test/status.test.ts",
     "why": "a /chain reading with an error must not report the faucet genesis"
   },
   {
     "id": "status-chain-freshness-ignored",
     "file": "src/status.ts",
-    "find": " && chainAge <= o.staleAfterSeconds;",
-    "replace": ";",
+    "find": "              : chainAge > o.staleAfterSeconds\n",
+    "replace": "              : false\n",
     "test": "test/status.test.ts",
     "why": "a 39 day old /chain reading must not report the faucet genesis"
   },
@@ -250,15 +250,15 @@
   {
     "id": "status-chain-time-not-needed",
     "file": "src/status.ts",
-    "find": "  const chainUsable = chain.http === 200 && !hasError(chain.error) && chainAge !== null && chainAge >= 0 && chainAge <= o.staleAfterSeconds;",
-    "replace": "  const chainUsable = chain.http === 200 && !hasError(chain.error) && (chainAge === null || (chainAge >= 0 && chainAge <= o.staleAfterSeconds));",
+    "find": "          : chainAge === null\n            ? \"no parsable reading time\"",
+    "replace": "          : false\n            ? \"no parsable reading time\"",
     "test": "test/status.test.ts",
     "why": "a /chain reading with no time cannot be shown as current"
   },
   {
     "id": "status-rpc-error-counts-for-reset",
     "file": "src/status.ts",
-    "find": "  return !hasError(head.error) && age !== null && age >= 0 && age <= staleAfterSeconds;",
+    "find": "  return !hasError(errorOf(head)) && age !== null && age >= 0 && age <= staleAfterSeconds;",
     "replace": "  return age !== null && age >= 0 && age <= staleAfterSeconds;",
     "test": "test/status.test.ts",
     "why": "an RPC head with a read error must not count toward reset_detected"
@@ -266,24 +266,24 @@
   {
     "id": "status-rpc-freshness-ignored-for-reset",
     "file": "src/status.ts",
-    "find": "  return !hasError(head.error) && age !== null && age >= 0 && age <= staleAfterSeconds;",
-    "replace": "  return !hasError(head.error) && age !== null && age >= 0;",
+    "find": "  return !hasError(errorOf(head)) && age !== null && age >= 0 && age <= staleAfterSeconds;",
+    "replace": "  return !hasError(errorOf(head)) && age !== null && age >= 0;",
     "test": "test/status.test.ts",
     "why": "an old RPC head must not count toward reset_detected"
   },
   {
     "id": "status-rpc-future-counts-for-reset",
     "file": "src/status.ts",
-    "find": "  return !hasError(head.error) && age !== null && age >= 0 && age <= staleAfterSeconds;",
-    "replace": "  return !hasError(head.error) && age !== null && age <= staleAfterSeconds;",
+    "find": "  return !hasError(errorOf(head)) && age !== null && age >= 0 && age <= staleAfterSeconds;",
+    "replace": "  return !hasError(errorOf(head)) && age !== null && age <= staleAfterSeconds;",
     "test": "test/status.test.ts",
     "why": "an RPC head time later than the snapshot must not count toward reset_detected"
   },
   {
     "id": "status-rpc-time-not-needed-for-reset",
     "file": "src/status.ts",
-    "find": "  return !hasError(head.error) && age !== null && age >= 0 && age <= staleAfterSeconds;",
-    "replace": "  return !hasError(head.error) && (age === null || (age >= 0 && age <= staleAfterSeconds));",
+    "find": "  return !hasError(errorOf(head)) && age !== null && age >= 0 && age <= staleAfterSeconds;",
+    "replace": "  return !hasError(errorOf(head)) && (age === null || (age >= 0 && age <= staleAfterSeconds));",
     "test": "test/status.test.ts",
     "why": "an RPC head with no usable time must not count toward reset_detected"
   },
@@ -306,8 +306,8 @@
   {
     "id": "status-rollback-against-latest-only",
     "file": "src/status.ts",
-    "find": "    const highest = Math.max(...sameGenesis.map((p) => p.finalized_height));",
-    "replace": "    const highest = (sameGenesis.at(-1) as PreviousHead).finalized_height;",
+    "find": "  const highest = sameGenesis.length > 0 ? Math.max(...sameGenesis.map((p) => p.finalized_height)) : null;",
+    "replace": "  const highest = sameGenesis.length > 0 ? (sameGenesis.at(-1) as PreviousHead).finalized_height : null;",
     "test": "test/status.test.ts",
     "why": "finality never goes back below the highest height ever seen on the genesis"
   },
@@ -346,16 +346,16 @@
   {
     "id": "status-faucet-error-ignored",
     "file": "src/status.ts",
-    "find": "    if (health === \"ok\") health = \"degraded\";\n    detail = [detail, `read error: ${String(r.error)}`].filter((d) => d !== null).join(\"; \");\n  }\n  return { health, http, detail, observed_at: timeField(r.fetched_at), ready, limits };",
-    "replace": "    detail = [detail, `read error: ${String(r.error)}`].filter((d) => d !== null).join(\"; \");\n  }\n  return { health, http, detail, observed_at: timeField(r.fetched_at), ready, limits };",
+    "find": "    if (health === \"ok\") health = \"degraded\";\n    detail = [detail, `read error: ${String(errorOf(r))}`].filter((d) => d !== null).join(\"; \");\n  }\n  return { health, http, detail, observed_at: timeField(r.fetched_at), ready, limits };",
+    "replace": "    detail = [detail, `read error: ${String(errorOf(r))}`].filter((d) => d !== null).join(\"; \");\n  }\n  return { health, http, detail, observed_at: timeField(r.fetched_at), ready, limits };",
     "test": "test/status.test.ts",
     "why": "a faucet reading that came with an error is never ok"
   },
   {
     "id": "status-gateway-error-ignored",
     "file": "src/status.ts",
-    "find": "    if (health === \"ok\") health = \"degraded\";\n    detail = [detail, `read error: ${String(r.error)}`].filter((d) => d !== null).join(\"; \");\n  }\n  return { health, http, detail, observed_at: timeField(r.fetched_at) };",
-    "replace": "    detail = [detail, `read error: ${String(r.error)}`].filter((d) => d !== null).join(\"; \");\n  }\n  return { health, http, detail, observed_at: timeField(r.fetched_at) };",
+    "find": "    if (health === \"ok\") health = \"degraded\";\n    detail = [detail, `read error: ${String(errorOf(r))}`].filter((d) => d !== null).join(\"; \");\n  }\n  return { health, http, detail, observed_at: timeField(r.fetched_at) };",
+    "replace": "    detail = [detail, `read error: ${String(errorOf(r))}`].filter((d) => d !== null).join(\"; \");\n  }\n  return { health, http, detail, observed_at: timeField(r.fetched_at) };",
     "test": "test/status.test.ts",
     "why": "a gateway reading that came with an error is never ok"
   },
@@ -370,16 +370,16 @@
   {
     "id": "status-contradicted-head-usable",
     "file": "src/status.ts",
-    "find": "  const rpcUsable = fresh && !flags.contradicted;",
-    "replace": "  const rpcUsable = fresh;",
+    "find": "  const rpcUsable = fresh && !flags.contradicted && finalizedHeight !== null && bestHeight !== null;",
+    "replace": "  const rpcUsable = fresh && finalizedHeight !== null && bestHeight !== null;",
     "test": "test/status.test.ts",
     "why": "a head that contradicts itself or history must not count toward reset_detected"
   },
   {
     "id": "status-earlier-later-ignored",
     "file": "src/status.ts",
-    "find": "    if (t !== null && t < 0) {\n      conflicts.push(`an earlier snapshot read",
-    "replace": "    if (false) {\n      conflicts.push(`an earlier snapshot read",
+    "find": "      if (t !== null && t < 0) {\n        conflicts.push(`an earlier snapshot read",
+    "replace": "      if (false) {\n        conflicts.push(`an earlier snapshot read",
     "test": "test/status.test.ts",
     "why": "a log that runs backwards in time is a conflict"
   },
@@ -446,5 +446,61 @@
     "replace": "\"no rpc head\"",
     "test": "test/status.test.ts",
     "why": "the reason a saved RPC head could not be read shows as the RPC detail"
+  },
+  {
+    "id": "status-best-floor-ignored",
+    "file": "src/status.ts",
+    "find": "  if (highest !== null && best !== null && best < highest && finalized === null) {",
+    "replace": "  if (false) {",
+    "test": "test/status.test.ts",
+    "why": "round 7 review M1: a best height below an earlier finalized height is a restart, even with no finalized head"
+  },
+  {
+    "id": "status-usable-without-finalized-or-best",
+    "file": "src/status.ts",
+    "find": "  const rpcUsable = fresh && !flags.contradicted && finalizedHeight !== null && bestHeight !== null;",
+    "replace": "  const rpcUsable = fresh && !flags.contradicted;",
+    "test": "test/status.test.ts",
+    "why": "round 7 review M1: a head whose checks against its finalized head and best height could not run does not count"
+  },
+  {
+    "id": "status-earlier-snapshot-time-ignored",
+    "file": "src/status.ts",
+    "find": "  for (const t of earlierTimes ?? []) {",
+    "replace": "  for (const t of (earlierTimes ?? []).slice(0, 0)) {",
+    "test": "test/status.test.ts",
+    "why": "round 7 review L1: an earlier snapshot taken later than this one is a conflict, whatever it read"
+  },
+  {
+    "id": "status-missing-error-key-ok",
+    "file": "src/status.ts",
+    "find": "  return r !== null && typeof r === \"object\" && \"error\" in r ? (r as { error: unknown }).error : \"the reading has no error field\";",
+    "replace": "  return r !== null && typeof r === \"object\" ? (r as { error: unknown }).error : null;",
+    "test": "test/status.test.ts",
+    "why": "round 7 review L2: a reading with no error key does not say it did not fail"
+  },
+  {
+    "id": "status-unusable-chain-genesis-silent",
+    "file": "src/status.ts",
+    "find": "  if (!chainUsable && shownFaucetGenesis !== null && shownFaucetGenesis !== pinned) {",
+    "replace": "  if (false) {",
+    "test": "test/status.test.ts",
+    "why": "round 7 review L3: a /chain reading that does not count but names another genesis is a conflict"
+  },
+  {
+    "id": "status-chain-note-dropped",
+    "file": "src/status.ts",
+    "find": "  if (why === null) return faucet;",
+    "replace": "  if (why === null || why !== null) return faucet;",
+    "test": "test/status.test.ts",
+    "why": "round 7 review L3: the faucet detail says why its /chain reading does not count"
+  },
+  {
+    "id": "status-unusable-chain-counted",
+    "file": "src/status.ts",
+    "find": "  const faucetGenesis = chainUsable ? shownFaucetGenesis : null;",
+    "replace": "  const faucetGenesis = shownFaucetGenesis;",
+    "test": "test/status.test.ts",
+    "why": "a /chain reading that does not count must not count toward reset_detected, though genesis.faucet shows it"
   }
 ]

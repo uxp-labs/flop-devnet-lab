@@ -98,7 +98,7 @@ What it answers: is this still the chain we pinned, how far is finality, and are
 |---|---|
 | `schema` | Always `flop-observatory/network-status@0`. |
 | `genesis.pinned`, `.faucet`, `.rpc` | The pinned genesis and what each source reported. `null` means unread. |
-| `reset_detected` | `true`: a usable reading reports another genesis. `false`: a usable faucet `/chain` reading and a usable RPC head both report the pinned one. `null`: not enough evidence. A reading with an error, a stale one, one later than the snapshot, or an RPC head that contradicts itself or an earlier snapshot counts for neither. |
+| `reset_detected` | `true`: a usable reading reports another genesis. `false`: a usable faucet `/chain` reading and a usable RPC head both report the pinned one. `null`: not enough evidence. A reading with an error (or no error field), a stale one, one later than the snapshot, an RPC head with no valid finalized head or best height, or one that contradicts itself or an earlier snapshot counts for neither. |
 | `conflicts` | Disagreements between sources, in words. |
 | `finalized_height`, `finalized_hash`, `best_height`, `finality_lag` | Chain head as read. `null` when unknown. |
 | `runtime_version` | Runtime spec version, or `null`. |
@@ -118,7 +118,14 @@ Known limits (v0):
 
 - A genesis must be `0x` plus 64 lower case hex. Any other spelling, upper case included, reads as
   `null`, so it never makes `reset_detected` `false`.
-- A reading whose `error` holds any value but `null`, an empty string included, is never `ok`.
+- A reading whose `error` holds any value but `null`, an empty string included, is never `ok`, and
+  neither is a reading with no `error` field at all.
+- `genesis.faucet` and `genesis.rpc` show what each reading said, even when that reading does not
+  count. Only `reset_detected` says whether it counted. When the faucet `/chain` reading does not
+  count, the faucet `detail` says why, and a reading that names another genesis is a conflict.
+- An RPC head whose best height is below a finalized height an earlier snapshot saw on the same
+  genesis is a conflict, even with no finalized head of its own: that is what a chain restarted
+  from the same spec looks like.
 - A field of the wrong type (a number for `observed_at`, a string for `http`, a nested object in
   `limits`) reads as `null`.
 - A saved reading that cannot be read (not strict UTF-8 JSON, a key twice in one object, nested

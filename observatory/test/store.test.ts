@@ -178,7 +178,8 @@ describe("snapshot log chain", () => {
     const ls = readFileSync(p, "utf8").trim().split("\n");
     const mid = JSON.parse(ls[1] as string);
     mid.observed_at = "2030-01-01T00:00:00.000Z";
-    ls[1] = JSON.stringify(mid);
+    // Canonical, so only the hash check can catch it.
+    ls[1] = canonicalJson(mid);
     writeFileSync(p, ls.join("\n") + "\n");
     expect(verifyChain(p)).toBe(1);
   });
@@ -186,7 +187,10 @@ describe("snapshot log chain", () => {
     const p = join(tmp(), "s.jsonl");
     const a = appendSnapshot(p, fresh());
     const forged = { ...fresh(), seq: 1, prev_hash: "0".repeat(64) } as Omit<Snapshot, "hash">;
-    appendFileSync(p, JSON.stringify({ ...forged, hash: hashSnapshot(forged) }) + "\n");
+    // In canonical form with a hash of its own that verifies, so only the prev_hash check can catch it.
+    const line = canonicalJson({ ...forged, hash: hashSnapshot(forged) });
+    expect(canonicalJson(JSON.parse(line))).toBe(line);
+    appendFileSync(p, line + "\n");
     expect(a.seq).toBe(0);
     expect(verifyChain(p)).toBe(1);
   });
@@ -231,14 +235,49 @@ describe("snapshot log read strictly", () => {
     expect(verifyChain(p)).toBe(0);
     expect(() => readSnapshots(p)).toThrow(/line 0 is not valid UTF-8/);
   });
-  it("still reads a valid log after a line that ends without a newline, and skips blank lines", () => {
+  it("refuses every line that is not exactly what appendSnapshot writes (Fable review r7 L6)", () => {
+    const dir = tmp();
+    const p = join(dir, "log.jsonl");
+    appendSnapshot(p, fresh());
+    appendSnapshot(p, fresh());
+    const [a, b] = readFileSync(p, "utf8").trim().split("\n") as [string, string];
+    expect(verifyChain(p)).toBeNull();
+    const cases: [string, string | Buffer, number, RegExp][] = [
+      ["a blank line between", `${a}\n\n${b}\n`, 1, /line 1 is blank/],
+      ["a last line with no newline", `${a}\n${b}`, 1, /line 1 does not end with a newline/],
+      ["a byte order mark", Buffer.concat([Buffer.from([0xef, 0xbb, 0xbf]), Buffer.from(`${a}\n${b}\n`)]), 0, /line 0 is not JSON/],
+      ["a padded line", ` ${a}\n${b}\n`, 0, /line 0 is not in canonical form/],
+      ["a carriage return", `${a}\r\n${b}\n`, 0, /line 0 is not in canonical form/],
+      ["seq written as 0.0e0", `${a.replace('"seq":0', '"seq":0.0e0')}\n${b}\n`, 0, /line 0 is not in canonical form/],
+    ];
+    for (const [name, text, at, why] of cases) {
+      writeFileSync(p, text);
+      expect(verifyChain(p), name).toBe(at);
+      expect(() => readSnapshots(p), name).toThrow(why);
+    }
+  });
+  it("refuses an integer past 2^53 - 1 that JSON.parse rounds, though the rounded line's hash verifies", () => {
     const p = join(tmp(), "log.jsonl");
     appendSnapshot(p, fresh());
-    appendSnapshot(p, fresh());
-    const [a, b] = readFileSync(p, "utf8").trim().split("\n");
-    writeFileSync(p, `${a}\n\n${b}`);
+    const line = readFileSync(p, "utf8").trim();
+    const parsed = JSON.parse(line) as Snapshot;
+    // finalized_height 10 is in the line; spell a value past 2^53 - 1 that reads as 2^53.
+    const unsafe = { ...parsed, status: { ...parsed.status, runtime_version: 2 ** 53 } };
+    const { hash: _h, ...rest } = unsafe;
+    const hashed = { ...rest, hash: hashSnapshot(rest as Snapshot) };
+    const text = canonicalJson(hashed).replace('"runtime_version":9007199254740992', '"runtime_version":9007199254740993');
+    expect(text).toContain("9007199254740993");
+    writeFileSync(p, text + "\n");
+    const back = JSON.parse(text) as Snapshot;
+    expect(hashSnapshot(back)).toBe(back.hash);
+    expect(verifyChain(p)).toBe(0);
+    expect(() => readSnapshots(p)).toThrow(/line 0 is not in canonical form/);
+  });
+  it("an empty file is an empty log", () => {
+    const p = join(tmp(), "log.jsonl");
+    writeFileSync(p, "");
     expect(verifyChain(p)).toBeNull();
-    expect(readSnapshots(p).map((x) => x.seq)).toEqual([0, 1]);
+    expect(readSnapshots(p)).toEqual([]);
   });
 });
 

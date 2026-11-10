@@ -12,6 +12,8 @@
 #     steps.tsv           one line per step: name, command, exit code
 #     *.log               full output of each step
 #     vitest.json         machine-readable test results
+#     test-report.json    the results read again: every file ran, nothing skipped or left as a
+#                         todo, and the same rules failing doctored copies of the report
 #     attempts-journal.jsonl  every attempt, reset and final check, written by test/setup.ts the
 #                         moment it happened (the attempts tests provoke on purpose and clear)
 #     attempts-check.json the journal checked again once vitest has exited
@@ -138,9 +140,12 @@ step build npx --no-install tsc -p tsconfig.json
 #    moment it happens, and vitest checks the journal once every file has ended.
 step test env OBS_ATTEMPTS_FILE="$evidence/attempts-journal.jsonl" npx --no-install vitest run \
   --reporter=default --reporter=json --outputFile.json="$evidence/vitest.json"
+test_files="$(find test -maxdepth 1 -name '*.test.ts' | wc -l | tr -d ' ')"
+# The test report again: every file ran, and no test was skipped, left as a todo or shut out by
+# a .only, which vitest's exit code alone would not show.
+step test-report sh -c "node scripts/test-report-check.mjs '$evidence/vitest.json' --expect-files $test_files > '$evidence/test-report.json'"
 # The journal again, after vitest has exited: no attempt left in a file's log, nothing at all
 # after a file's final check, and every test file reached that check.
-test_files="$(find test -maxdepth 1 -name '*.test.ts' | wc -l | tr -d ' ')"
 step attempts sh -c "node scripts/attempts-check.mjs '$evidence/attempts-journal.jsonl' --unexpected '$evidence/attempts.jsonl' --expect-files $test_files > '$evidence/attempts-check.json'"
 
 # The source scan over the syntax tree: module names and identifiers after their escapes are

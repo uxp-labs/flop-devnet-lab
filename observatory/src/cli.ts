@@ -12,10 +12,10 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { CensusRefused, census } from "./census.js";
+import { CensusRefused, census, checkRequest } from "./census.js";
 import { DriftSpecError, drift } from "./drift.js";
 import { escrowStates } from "./escrow.js";
-import { writeFeeds } from "./feed.js";
+import { feedText, writeFeeds } from "./feed.js";
 import { renderPage } from "./page.js";
 import { buildSnapshot } from "./snapshot.js";
 import { FixtureSource } from "./source.js";
@@ -101,10 +101,29 @@ async function main(): Promise<void> {
   }
 
   if (cmd === "census") {
-    const src = FixtureSource.fromDir(need(a, "--fixtures"));
+    // RULES.md 3.1 clause 16: a request problem is named first, so a range given on the command
+    // line is checked before the scenario folder is read. A folder that cannot be read, or holds no
+    // readable meta.json, is an input problem, as in the recount.
+    const fromFlag = int(one(a, "--from"), "--from");
+    const toFlag = int(one(a, "--to"), "--to");
+    if (fromFlag !== undefined && toFlag !== undefined) {
+      try {
+        checkRequest({ from_block: fromFlag, to_block: toFlag });
+      } catch (e) {
+        if (e instanceof CensusRefused) fail(e.message);
+        throw e;
+      }
+    }
+    const dir = need(a, "--fixtures");
+    let src: FixtureSource;
+    try {
+      src = FixtureSource.fromDir(dir);
+    } catch (e) {
+      fail(`census refused (input): ${(e as Error).message}`);
+    }
     const meta = src.data.meta;
-    const from = int(one(a, "--from"), "--from") ?? meta.census_request?.from_block;
-    const to = int(one(a, "--to"), "--to") ?? meta.census_request?.to_block;
+    const from = fromFlag ?? meta.census_request?.from_block;
+    const to = toFlag ?? meta.census_request?.to_block;
     if (from === undefined || to === undefined) fail("no --from/--to and no census_request in meta.json");
     print(
       runCensus(await src.eventPages(), {
@@ -169,10 +188,13 @@ async function main(): Promise<void> {
     // that recorded a finalized head counts, oldest first, so one in between with no RPC reading
     // cannot hide a rollback; the status checks use those on the same genesis.
     const previous: PreviousHead[] = [];
+    const earlierTimes: (string | null)[] = [];
     if (log && existsSync(log)) {
       const broken = verifyChain(log);
       if (broken !== null) fail(`snapshot log ${log} is broken at line ${broken}; it is never extended or trusted`);
-      for (const { status: st } of readSnapshots(log)) {
+      for (const { status: st, observed_at: taken } of readSnapshots(log)) {
+        // Every earlier snapshot's own time, whatever it read, so a log that runs backwards shows.
+        earlierTimes.push(typeof taken === "string" ? taken : null);
         // A head time is needed only for the stuck check, so a snapshot without one still counts.
         if (st.genesis.rpc !== null && st.finalized_height !== null && st.finalized_hash !== null) {
           previous.push({
@@ -186,7 +208,7 @@ async function main(): Promise<void> {
     }
     const fresh = await buildSnapshot(
       { status, escrows, census: censusPart, drift: driftPart },
-      { pinnedGenesis: pinned, now, sourceSha: one(a, "--source-sha") ?? null, previous },
+      { pinnedGenesis: pinned, now, sourceSha: one(a, "--source-sha") ?? null, previous, earlierTimes },
     );
     let snap: Snapshot;
     if (log) {
@@ -199,7 +221,8 @@ async function main(): Promise<void> {
     mkdirSync(out, { recursive: true });
     writeFeeds(out, snap);
     writeFileSync(join(out, "index.html"), renderPage(snap));
-    writeFileSync(join(out, "pin.json"), JSON.stringify(snap.pin, null, 2) + "\n");
+    // The feed format, keys sorted, so pin.json has one spelling the output check can hold it to.
+    writeFileSync(join(out, "pin.json"), feedText(snap.pin));
     print({ hash: snap.hash, seq: snap.seq, observed_at: snap.observed_at, trust: snap.trust, pin: snap.pin, out });
     return;
   }

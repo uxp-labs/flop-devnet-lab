@@ -389,10 +389,12 @@ describe("the faucet genesis comes only from a usable /chain reading (RULES 1.1)
     ["a reading 121 s old", { fetched_at: "2026-11-09T23:45:52Z" }],
     ["a reading with no time", { fetched_at: null }],
     ["a reading time without a zone", { fetched_at: "2026-11-09T23:47:52" }],
-  ])("%s does not count: faucet genesis null, reset_detected null", async (_name, patch) => {
+  ])("%s does not count: reset_detected null, and the faucet detail says why", async (_name, patch) => {
     const s = await chainWith(patch);
-    expect(s.genesis.faucet).toBeNull();
+    // genesis.faucet still shows what the reading said, as genesis.rpc does (RULES.md section 1).
+    expect(s.genesis.faucet).toBe(DEVNET_GENESIS);
     expect(s.reset_detected).toBeNull();
+    expect(s.faucet.detail).toMatch(/the \/chain reading does not count: /);
   });
 
   it("a reading 120 s old still counts", async () => {
@@ -402,8 +404,22 @@ describe("the faucet genesis comes only from a usable /chain reading (RULES 1.1)
   it("a reading time later than the snapshot time is a conflict and does not count", async () => {
     const s = await chainWith({ fetched_at: "2026-12-01T00:00:00Z" });
     expect(s.conflicts.join(" ")).toMatch(/faucet \/chain reading time .* is later than the snapshot time/);
-    expect(s.genesis.faucet).toBeNull();
+    expect(s.genesis.faucet).toBe(DEVNET_GENESIS);
     expect(s.reset_detected).toBeNull();
+  });
+
+  it("a reading that does not count but names another genesis is a conflict, and never sets reset_detected (Fable review r7 L3)", async () => {
+    for (const patch of [{ fetched_at: "2026-11-09T21:00:00Z" }, { error: "x" }, { http: 500 }]) {
+      const s = await chainWith({ ...patch, body: { genesisHash: OTHER } });
+      expect(s.genesis.faucet).toBe(OTHER);
+      expect(s.reset_detected).toBeNull();
+      expect(s.conflicts.join(" ")).toMatch(new RegExp(`faucet /chain reading that does not count \\(.*\\) reports genesis ${OTHER}, not the pinned genesis`));
+      expect(s.conflicts.join(" ")).toMatch(/faucet genesis 0xabab.* differs from rpc genesis/);
+    }
+  });
+
+  it("a usable reading says nothing in the faucet detail", async () => {
+    expect((await run("status-healthy")).faucet.detail).toBeNull();
   });
 });
 
@@ -534,8 +550,9 @@ describe("Fable review: status readings", () => {
     expect(s.rpc.health).toBe("degraded");
     expect(s.reset_detected).toBeNull();
     const c = await withData({ faucetChain: { ...(healthy.faucetChain as object), error: "" } });
-    expect(c.genesis.faucet).toBeNull();
+    expect(c.genesis.faucet).toBe(DEVNET_GENESIS);
     expect(c.reset_detected).toBeNull();
+    expect(c.faucet.detail).toBe("the /chain reading does not count: read error: ");
   });
 
   it("a head that contradicts itself (best below finalized) never counts toward reset_detected", async () => {
@@ -658,5 +675,63 @@ describe("a saved reading that cannot be read (Fable review M5)", () => {
   });
   it("a meta.json that holds its clock twice refuses the scenario", () => {
     expect(() => withFile("meta.json", twice("now", '"2030-01-01T00:00:00Z"'))).toThrow(/has no readable meta\.json/);
+  });
+});
+
+describe("Fable review r7: a head that lost its finalized head, a log that runs backwards, a reading with no error key", () => {
+  const healthy = fx("status-healthy").data;
+  const head = healthy.rpcHead as { finalized: { number: number; hash: string } };
+  // One earlier snapshot at the healthy head's own height and hash, read 113 s before NOW.
+  const earlier = [{ genesis: DEVNET_GENESIS, finalized_height: head.finalized.number, finalized_hash: head.finalized.hash, observed_at: "2026-11-09T23:46:00Z" }];
+  const withHead = (patch: Record<string, unknown>, extra: Record<string, unknown> = {}) =>
+    networkStatus(new FixtureSource({ ...healthy, rpcHead: { ...(healthy.rpcHead as object), ...patch } as never }), { pinnedGenesis: DEVNET_GENESIS, now: NOW, ...extra });
+
+  it("control: the healthy head after that earlier snapshot counts", async () => {
+    const s = await withHead({}, { previous: earlier });
+    expect(s.reset_detected).toBe(false);
+    expect(s.conflicts).toEqual([]);
+  });
+  it("M1: a best height below an earlier finalized height, with no valid finalized head, is a conflict and the head does not count", async () => {
+    for (const finalized of [null, { number: 1e300, hash: "0x" + "11".repeat(32) }]) {
+      const s = await withHead({ finalized, best_number: 10 }, { previous: earlier });
+      expect(s.conflicts.join(" "), JSON.stringify(finalized)).toMatch(/best block 10 is below the finalized height 3341575 an earlier snapshot saw on this genesis/);
+      expect(s.reset_detected).toBeNull();
+      expect(s.rpc.health).toBe("degraded");
+    }
+  });
+  it("M1: a head with no valid finalized head or best height never counts, even with no earlier snapshot", async () => {
+    for (const patch of [{ finalized: null }, { best_number: null }, { finalized: { number: -1, hash: "0x" + "11".repeat(32) } }, { best_number: 2 ** 53 }]) {
+      const s = await withHead(patch);
+      expect(s.reset_detected, JSON.stringify(patch)).toBeNull();
+      expect(s.genesis.rpc).toBe(DEVNET_GENESIS);
+    }
+  });
+  it("L1: an earlier snapshot taken later than this one is a conflict, whatever it read, and the head does not count", async () => {
+    const s = await withHead({}, { earlierTimes: ["2026-11-09T23:47:00Z", "2026-11-09T23:48:41Z"] });
+    expect(s.conflicts.join(" ")).toMatch(/an earlier snapshot was taken at 2026-11-09T23:48:41Z, later than this snapshot time/);
+    expect(s.reset_detected).toBeNull();
+    expect(s.rpc.health).toBe("degraded");
+    const fine = await withHead({}, { earlierTimes: ["2026-11-09T23:47:00Z", null, "not a time"] });
+    expect(fine.reset_detected).toBe(false);
+    expect(fine.conflicts).toEqual([]);
+  });
+  it("L1: the conflict shows even when this snapshot read no RPC head", async () => {
+    const s = await networkStatus(fx("status-unknown"), { pinnedGenesis: DEVNET_GENESIS, now: NOW, earlierTimes: ["2026-11-09T23:48:41Z"] });
+    expect(s.conflicts.join(" ")).toMatch(/an earlier snapshot was taken at 2026-11-09T23:48:41Z/);
+    expect(s.reset_detected).toBeNull();
+  });
+  it("L2: a reading with no error key counts as a failed read: never ok, and reset_detected null", async () => {
+    const strip = (o: unknown) => {
+      const { error: _e, ...rest } = o as Record<string, unknown>;
+      return rest as never;
+    };
+    const s = await networkStatus(
+      new FixtureSource({ ...healthy, rpcHead: strip(healthy.rpcHead), faucetHealth: strip(healthy.faucetHealth), faucetChain: strip(healthy.faucetChain), gatewayModels: strip(healthy.gatewayModels) }),
+      { pinnedGenesis: DEVNET_GENESIS, now: NOW },
+    );
+    expect([s.rpc.health, s.faucet.health, s.gateway.health]).toEqual(["degraded", "degraded", "degraded"]);
+    expect(s.reset_detected).toBeNull();
+    expect(s.rpc.detail).toMatch(/read error: the reading has no error field/);
+    expect(s.faucet.detail).toMatch(/the \/chain reading does not count: read error: the reading has no error field/);
   });
 });

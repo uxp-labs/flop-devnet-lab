@@ -3,7 +3,10 @@
 // (dist/cli.js census) and the independent Python recount (tools/recount.py) on the same
 // request, and compare every shared field. Both refusing counts as agreement only for the same
 // reason (RULES.md 3.1 clause 16): the same kind, and for a page file problem the same file.
-// Prints a JSON array; exit 1 on any disagreement or a scenario without census_request.
+// Then command line inputs both sides must refuse alike: request numbers that are not plain
+// digits or too long, an inverted range, an empty genesis and a missing folder.
+// Prints a JSON array; exit 1 on any disagreement, a run that printed no census, or a scenario
+// without census_request.
 import { spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -102,6 +105,34 @@ for (const { name: d, dir } of scenarios) {
   const genesis = meta.pinned_genesis ?? DEVNET;
   const ts = run("node", ["dist/cli.js", "census", "--fixtures", dir]);
   const py = run("python3", ["-I", "tools/recount.py", "--dir", dir, "--genesis", genesis, "--from", String(req.from_block), "--to", String(req.to_block)]);
+  compare(d, ts, py, false);
+}
+
+// Command line inputs (RULES.md 3.1 clause 16): both sides get the same arguments and must refuse
+// them with the same kind. A request problem comes first, so an inverted range is named before a
+// missing folder.
+{
+  const complete = join("fixtures", "census-complete");
+  const missing = join("fixtures", "no-such-scenario");
+  const cases = [
+    ["request-number-with-a-space", complete, DEVNET, " 0", "199"],
+    ["request-number-with-a-plus", complete, DEVNET, "+5", "199"],
+    ["request-number-with-an-underscore", complete, DEVNET, "1_0", "199"],
+    ["request-number-of-5000-digits", complete, DEVNET, "0", "9".repeat(5000)],
+    ["request-inverted", complete, DEVNET, "9", "3"],
+    ["request-inverted-and-no-folder", missing, DEVNET, "9", "3"],
+    ["genesis-empty", complete, "", "0", "199"],
+    ["scenario-folder-missing", missing, DEVNET, "0", "199"],
+  ];
+  for (const [name, dir, genesis, from, to] of cases) {
+    const ts = run("node", ["dist/cli.js", "census", "--fixtures", dir, "--genesis", genesis, "--from", from, "--to", to]);
+    const py = run("python3", ["-I", "tools/recount.py", "--dir", dir, "--genesis", genesis, "--from", from, "--to", to]);
+    compare(`command-line:${name}`, ts, py, true);
+  }
+}
+
+/** Compares one run of each side, recording the outcome. mustRefuse: both must refuse. */
+function compare(d, ts, py, mustRefuse) {
   if (ts.exit !== 0 || py.exit !== 0) {
     const tr = refusal(ts.stderr);
     const pr = refusal(py.stderr);
@@ -123,7 +154,20 @@ for (const { name: d, dir } of scenarios) {
       ts_err: ts.stderr,
       py_err: py.stderr,
     });
-    continue;
+    return;
+  }
+  if (mustRefuse) {
+    bad++;
+    results.push({ scenario: d, outcome: "should-have-refused", ts_exit: ts.exit, py_exit: py.exit });
+    return;
+  }
+  // Both exited 0, so both must have printed a census: one with every compared key. Two runs that
+  // printed nothing would otherwise compare undefined with undefined and agree.
+  const report = (j) => j !== null && typeof j === "object" && !Array.isArray(j) && KEYS.every((k) => k in j);
+  if (!report(ts.json) || !report(py.json)) {
+    bad++;
+    results.push({ scenario: d, outcome: "no-report", ts_report: report(ts.json), py_report: report(py.json) });
+    return;
   }
   if (perturb && ts.json?.totals) ts.json.totals.escrows_opened += 1;
   const diffs = KEYS.filter((k) => canon(ts.json?.[k]) !== canon(py.json?.[k])).map((k) => ({ key: k, ts: ts.json?.[k], py: py.json?.[k] }));
