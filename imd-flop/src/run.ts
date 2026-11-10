@@ -253,12 +253,16 @@ export async function runJob(h: string, provider: Provider, o: RunOpts, deps: { 
     // Pre-mint failure minted nothing. `error` would show in status as a pending paid attempt.
     // `refused_local` with cap charge 0 is the latest line. Hashes are stripped so the secret scan
     // can store that line; otherwise the pre-call `sent` charge would stay in effect.
-    const reason = timedOut ? `${err.name}: no answer; spend unknown, not retried` : preSend ? `nothing sent: ${err.message.replace(/0x[0-9a-fA-F]{64}/g, "[hash]")}` : `HTTP ${http}`;
+    let reason = timedOut ? `${err.name}: no answer; spend unknown, not retried` : preSend ? `nothing sent: ${err.message.replace(/0x[0-9a-fA-F]{64}/g, "[hash]")}` : `HTTP ${http}`;
+    // A key-shaped provider message would make the secret scan refuse the release row and strand
+    // the reservation. Withhold the message instead, so the refused_local (cap charge 0) line is written.
+    const preSendWithheld = preSend && scanForSecrets({ reason }).length > 0;
+    if (preSendWithheld) reason = "nothing sent: provider error withheld by the secret scan";
     appendLedger(h, { ...sent, ts: new Date().toISOString(), state: timedOut ? "timeout_unknown" : preSend ? "refused_local" : "error", reason, spend: null, cap_charge: preSend ? 0 : sent.cap_charge, http });
     if (timedOut) {
       throw new CliError(`no answer within ${o.timeoutMs} ms. Spend is UNKNOWN (recorded as null). Not retried. Check later with \`imd-flop receipt ${requestId}\`.`, EXIT.TIMEOUT_UNKNOWN);
     }
-    if (preSend) throw new CliError(`nothing sent: ${err.message}`, EXIT.ERROR);
+    if (preSend) throw new CliError(preSendWithheld ? reason : `nothing sent: ${err.message}`, EXIT.ERROR);
     throw new CliError(`gateway refused the call (HTTP ${http}); spend recorded as unknown`, EXIT.ERROR);
   } finally {
     clearTimeout(timer);

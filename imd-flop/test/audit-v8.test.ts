@@ -7,6 +7,7 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
+import { PreSendError } from "../src/gateway.js";
 import type { CompleteReq, CompleteRes, Provider } from "../src/providers.js";
 import { cli, readLines, readySeat, tmpHome } from "./helpers.js";
 
@@ -76,4 +77,38 @@ describe("v8 item 1 (TS-a, run.ts:219): a payer outside holder|requester fails c
     expect(codes).toEqual([0, 3]);
     expect(p.calls).toBe(1);
   });
+});
+
+describe("v8 item 2 (TS-b, run.ts:250): a pre-send refusal releases its reservation", () => {
+  const HEX = "ee".repeat(32);
+  const flagged: Record<string, string> = {
+    "bare 64hex": "eth_chainId error: " + HEX,
+    "78-digit decimal chain id": `Ethereum chain id ${BigInt("0x" + "f".repeat(64)).toString()} is not 1`,
+    "Bearer": "rpc error: Bearer SYNTHETICNOTAKEY0123456789",
+    "flop_ek_": "rpc error: flop_ek_SYNTHETICNOTAKEY0123456789",
+  };
+  const controls: Record<string, string> = { "clean (control)": "eth_chainId mismatch", "0x+64hex (control)": "tx 0x" + HEX };
+  for (const [name, msg] of Object.entries({ ...flagged, ...controls })) {
+    it(`TS-b ${name}: exit 1, latest row refused_local with cap_charge 0, next run is not capped`, async () => {
+      const h = await ready("0.186");
+      const p = new P({ complete: async () => { throw new PreSendError(msg); } });
+      const r1 = await cli(h, runArgs("m1"), { provider: p });
+      expect(r1.code).toBe(1);
+      const ids = [...new Set(ledger(h).filter((r) => r.request_id).map((r) => r.request_id))];
+      expect(ids).toHaveLength(1);
+      const latest = ledger(h).filter((r) => r.request_id === ids[0]).at(-1)!;
+      expect(latest.state).toBe("refused_local");
+      expect(latest.cap_charge).toBe(0);
+      // Nothing key-shaped reaches the ledger or stderr.
+      const raw = readFileSync(join(h, "ledger.jsonl"), "utf8");
+      for (const needle of ["SYNTHETICNOTAKEY", BigInt("0x" + "f".repeat(64)).toString(), "error: " + HEX]) {
+        expect(raw).not.toContain(needle);
+        if (name in flagged) expect(r1.err).not.toContain(needle);
+      }
+      const p2 = new P();
+      const r2 = await cli(h, runArgs("m2"), { provider: p2 });
+      expect(r2.code).toBe(0);
+      expect(p2.calls).toBe(1);
+    });
+  }
 });
