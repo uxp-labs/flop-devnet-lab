@@ -255,17 +255,15 @@ class GuardEntrypointTests(unittest.TestCase):
         self.assertEqual(rec["spend"], "not_sent")
         self.assertEqual(rec["quote_padded"], 0.186)
 
-    def test_one_sided_zero_count_would_send(self):
+    # IMD 355a3703 finding 6: a non-empty prompt cannot cost 0 input tokens. These two cases used to
+    # assert would_send (locking the defect in); they now assert the refusal.
+    def test_one_sided_zero_count_refuses(self):
         rec = self.run_case({"estimated_cost_flop": 0.066, "estimated_input_tokens": 0, "estimated_output_tokens": 8})
-        self.assertEqual(rec["decision"], "would_send")
-        self.assertEqual(rec["spend"], "not_sent")
-        self.assertEqual(rec["quote_padded"], 0.231)
+        self.assert_refused(rec, 0.066, None, 1.0)
 
-    def test_negative_zero_count_would_send(self):
+    def test_negative_zero_count_refuses(self):
         rec = self.run_case({"estimated_cost_flop": 0.066, "estimated_input_tokens": -0.0, "estimated_output_tokens": 8})
-        self.assertEqual(rec["decision"], "would_send")
-        self.assertEqual(rec["spend"], "not_sent")
-        self.assertEqual(rec["quote_padded"], 0.231)
+        self.assert_refused(rec, 0.066, None, 1.0)
 
     def test_integer_valued_float_counts_would_send(self):
         rec = self.run_case({"estimated_cost_flop": 0.066, "estimated_input_tokens": 3.0, "estimated_output_tokens": 8.0})
