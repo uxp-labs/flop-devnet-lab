@@ -95,6 +95,46 @@ cpSync(join(pkg, fx("status-healthy")), later, { recursive: true });
   edit("meta.json", (o) => (o.now = "2026-11-09T23:48:41Z"));
   edit("rpc-head.json", (o) => (o.observed_at = null));
 }
+// The round 8 review's case L1: an earlier snapshot read a best height but no finalized head; the
+// next reads a fresh, low head on the same genesis, as a chain restarted from the same spec would.
+const bestOnly = join(work, "best-only-high");
+const restartLow = join(work, "restart-low-head");
+cpSync(join(pkg, fx("status-healthy")), bestOnly, { recursive: true });
+cpSync(join(pkg, fx("status-healthy")), restartLow, { recursive: true });
+{
+  const edit = (dir, file, fn) => {
+    const p = join(dir, file);
+    const o = JSON.parse(readFileSync(p, "utf8"));
+    fn(o);
+    writeFileSync(p, JSON.stringify(o, null, 2));
+  };
+  edit(bestOnly, "rpc-head.json", (o) => (o.finalized = null));
+  edit(restartLow, "rpc-head.json", (o) => {
+    o.finalized = { number: 5, hash: "0x" + "55".repeat(32) };
+    o.best_number = 8;
+    o.observed_at = "2026-11-09T23:48:40Z";
+  });
+  edit(restartLow, "meta.json", (o) => (o.now = "2026-11-09T23:48:41Z"));
+  for (const f of ["faucet-health.json", "faucet-chain.json", "gateway-models.json"]) edit(restartLow, f, (o) => (o.fetched_at = "2026-11-09T23:48:40Z"));
+}
+// The round 8 review's case L2: a usable /chain reading whose body names no genesis.
+const chainEmpty = join(work, "chain-body-empty");
+cpSync(join(pkg, fx("status-healthy")), chainEmpty, { recursive: true });
+{
+  const p = join(chainEmpty, "faucet-chain.json");
+  const o = JSON.parse(readFileSync(p, "utf8"));
+  o.body = {};
+  writeFileSync(p, JSON.stringify(o, null, 2));
+}
+// The round 8 review's case I2: escrow ids the MCP server would refuse to look up.
+const oddIds = join(work, "escrows-odd-ids");
+cpSync(join(pkg, fx("escrows-verification")), oddIds, { recursive: true });
+{
+  const p = join(oddIds, "meta.json");
+  const o = JSON.parse(readFileSync(p, "utf8"));
+  o.escrow_ids = [...o.escrow_ids, "0x12"];
+  writeFileSync(p, JSON.stringify(o, null, 2));
+}
 // The Fable review's case L8: one escrow id listed twice, once in upper case hex.
 const dupIds = join(work, "escrows-dup-ids");
 cpSync(join(pkg, fx("escrows-verification")), dupIds, { recursive: true });
@@ -342,6 +382,37 @@ const cases = [
     ok: (r) => r.exit === 2 && r.stdout === "" && /is not an observatory snapshot; refusing to serve it/.test(r.stderr),
   },
   {
+    name: "the MCP binary refuses a hashed snapshot whose status or escrow lacks a field, holds one its schema does not, or holds one of the wrong type",
+    run: () => {
+      const out = join(work, "mcp-snap-escrows");
+      const made = cli("snapshot", "--status", fx("status-healthy"), "--escrows", fx("escrows-verification"), "--out", out);
+      if (made.exit !== 0) return { ...made, runs: [] };
+      const s0 = JSON.parse(readFileSync(join(out, "snapshot.json"), "utf8"));
+      const variant = (name, edit) => {
+        const { hash: _hash, ...s } = structuredClone(s0);
+        edit(s);
+        const p = join(work, `mcp-${name}.json`);
+        writeFileSync(p, feedText({ ...s, hash: hashSnapshot(s) }));
+        return mcp(p);
+      };
+      const runs = [
+        variant("honest", () => {}),
+        variant("schema-shell", (s) => {
+          s.status = { schema: s.status.schema };
+          s.escrows = [{ schema: "flop-observatory/escrow-state@0", escrow_id: s.escrows[0].escrow_id, state: "claimed" }];
+        }),
+        variant("escrow-extra-field", (s) => (s.escrows[0].approved = true)),
+        variant("status-reset-a-word", (s) => (s.status.reset_detected = "no")),
+        variant("escrow-state-invented", (s) => (s.escrows[0].state = "settled")),
+      ];
+      return { exit: runs.map((x) => x.exit).join(","), stderr: runs.map((x) => x.stderr).join(" | "), runs };
+    },
+    ok: (r) =>
+      r.runs.length === 5 &&
+      r.runs[0].exit === 0 &&
+      r.runs.slice(1).every((x) => x.exit === 2 && x.stdout === "" && /is not an observatory snapshot; refusing to serve it/.test(x.stderr)),
+  },
+  {
     name: "the MCP binary refuses a snapshot behind a byte order mark",
     run: () => {
       const bad = join(work, "mcp-bom.json");
@@ -401,6 +472,50 @@ const cases = [
     run: () => cli("status", "--fixtures", fx("status-rpc-no-observed-at")),
     ok: (r) => r.exit === 0 && r.json.rpc.health === "unknown" && r.json.rpc.stale === null,
   },
+  {
+    name: "an earlier best height with no finalized head is a floor too: a fresh low head on that genesis is a conflict, and reset_detected is not false",
+    run: () => {
+      const first = cli("snapshot", "--status", bestOnly, "--out", join(work, "best-o1"), "--log", join(work, "best.jsonl"));
+      if (first.exit !== 0) return first;
+      const second = cli("snapshot", "--status", restartLow, "--escrows", fx("escrows-opened-only"), "--out", join(work, "best-o2"), "--log", join(work, "best.jsonl"));
+      if (second.exit !== 0) return second;
+      return { ...second, json: JSON.parse(readFileSync(join(work, "best-o2", "snapshot.json"), "utf8")) };
+    },
+    ok: (r) =>
+      r.exit === 0 &&
+      r.json.status.reset_detected === null &&
+      r.json.status.rpc.health === "degraded" &&
+      r.json.status.conflicts.some((c) => /best block 8 is more than 30 blocks below the best block 3341577/.test(c)) &&
+      r.json.escrows.every((e) => e.finalized_height === null),
+  },
+  {
+    name: "status: a usable /chain reading that names no genesis says so in the faucet's detail",
+    run: () => cli("status", "--fixtures", chainEmpty),
+    ok: (r) => r.exit === 0 && r.json.reset_detected === null && /the \/chain reading does not count: it names no genesisHash/.test(r.json.faucet.detail ?? ""),
+  },
+  {
+    name: "a snapshot refuses an escrow id that is not 0x plus 64 hex, which the MCP server could not look up",
+    run: () => cli("snapshot", "--status", fx("status-healthy"), "--escrows", oddIds, "--out", join(work, "odd-ids-o")),
+    ok: (r) => r.exit === 2 && /escrow id "0x12" is not 0x plus 64 hex/.test(r.stderr),
+  },
+  {
+    name: "a command refuses a flag it does not read, a flag given twice and a value after =",
+    run: () => {
+      const runs = [
+        cli("status", "--fixtures", fx("status-healthy"), "--log", join(work, "x.jsonl")),
+        cli("snapshot", "--status", fx("status-healthy"), "--status", fx("status-reset"), "--out", join(work, "twice-o")),
+        cli("status", `--fixtures=${fx("status-healthy")}`),
+        cli("status", fx("status-healthy")),
+      ];
+      return { exit: runs.map((x) => x.exit).join(","), stderr: runs.map((x) => x.stderr).join(" | "), runs };
+    },
+    ok: (r) =>
+      r.runs.every((x) => x.exit === 2 && x.json === null) &&
+      /--log is not a flag status reads/.test(r.runs[0].stderr) &&
+      /--status is given twice/.test(r.runs[1].stderr) &&
+      /give a flag's value as the next argument, not after =/.test(r.runs[2].stderr) &&
+      /is no flag's value/.test(r.runs[3].stderr),
+  },
 ];
 
 const results = [];
@@ -421,4 +536,6 @@ try {
   rmSync(work, { recursive: true, force: true });
 }
 console.log(JSON.stringify(results, null, 2));
-process.exit(bad ? 1 : 0);
+// exitCode, not exit(): the mutation runner reads this report through a pipe, where a write is
+// asynchronous and exit() could cut it short.
+process.exitCode = bad ? 1 : 0;

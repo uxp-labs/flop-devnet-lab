@@ -84,10 +84,11 @@ Known limits (v0):
   whatever state the clean evidence would give: it could be a second release or refund.
 - `finalized_height` bounds the evidence only when it comes from a usable RPC head on the pinned
   genesis (no read error, fresh, not later than the snapshot, and not contradicting itself or an
-  earlier snapshot: no rollback, no changed finalized hash, best height not below finalized).
-  Otherwise it is `null`.
+  earlier snapshot: no rollback, no changed finalized hash, best height not below finalized, nor
+  more than the lag limit below a best height an earlier snapshot saw). Otherwise it is `null`.
 - The same escrow id listed twice (in either case) is refused by the command line, never shown as
-  two results.
+  two results, and so is an escrow id that is not 0x plus 64 hex, which the MCP server could not
+  look up.
 - Amount, payee and policy are not checked here. FlopRail's `verifyLock` does that. Use both.
 
 ## NetworkStatus
@@ -122,10 +123,17 @@ Known limits (v0):
   neither is a reading with no `error` field at all.
 - `genesis.faucet` and `genesis.rpc` show what each reading said, even when that reading does not
   count. Only `reset_detected` says whether it counted. When the faucet `/chain` reading does not
-  count, the faucet `detail` says why, and a reading that names another genesis is a conflict.
+  count, the faucet `detail` says why, and a reading that names another genesis is a conflict. A
+  usable `/chain` reading that names no genesis leaves `reset_detected` `null`, and the `detail`
+  says that too.
 - An RPC head whose best height is below a finalized height an earlier snapshot saw on the same
   genesis is a conflict, even with no finalized head of its own: that is what a chain restarted
-  from the same spec looks like.
+  from the same spec looks like. So is a best height more than the lag limit (30 blocks) below a
+  best height an earlier snapshot saw on the same genesis, whether or not either read a finalized
+  head.
+- Those checks against earlier snapshots run in the snapshot command, which reads its log. The
+  `status` command reads no log: its `reset_detected` speaks for that one reading only, so a gate
+  should read the snapshot's status.
 - A field of the wrong type (a number for `observed_at`, a string for `http`, a nested object in
   `limits`) reads as `null`.
 - A saved reading that cannot be read (not strict UTF-8 JSON, a key twice in one object, nested

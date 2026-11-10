@@ -48,6 +48,7 @@ import type {
   RawEvent,
 } from "./types.js";
 import { accountOf, walkChain } from "./census.js";
+import { own } from "./own.js";
 import { isSafeInt } from "./strict.js";
 
 export const ESCROW_SCOPE = "settlement only; says nothing about output quality" as const;
@@ -122,7 +123,7 @@ export function pageProblem(page: unknown): string | null {
   if (!isRecord(page)) return "not an object";
   if (typeof page["genesis"] !== "string") return "genesis is not a string";
   for (const k of ["from_block", "to_block", "page"]) {
-    if (!isSafeInt(page[k])) return `${k} is missing or not a safe whole number`;
+    if (!isSafeInt(own(page, k))) return `${k} is missing or not a safe whole number`;
   }
   if (!("next_page" in page) || (page["next_page"] !== null && !isSafeInt(page["next_page"]))) {
     return "next_page is missing or not a safe whole number or null";

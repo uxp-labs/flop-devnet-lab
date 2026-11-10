@@ -35,14 +35,17 @@ check below to run and pass.
   later than the snapshot time. Otherwise it counts for neither, as section 1 says: `genesis.faucet`
   still shows what the reading said, as `genesis.rpc` does for the RPC; a reading that names a
   genesis other than the pinned one is a conflict; and the faucet's detail says why the reading
-  does not count, the file and reason included when the saved reading cannot be read. A `/chain`
-  reading time later than the snapshot time is also a conflict.
+  does not count, the file and reason included when the saved reading cannot be read. A usable
+  reading whose body names no `genesisHash`, or a malformed one, gives `reset_detected` nothing to
+  go on, and the faucet's detail says that too. A `/chain` reading time later than the snapshot
+  time is also a conflict.
 - The RPC genesis counts toward `reset_detected` only from a usable head: no read error, an
   `observed_at` that parses, is at most the stale limit old and is not later than the snapshot
   time, a valid finalized head and a valid best height (so every check against them can run),
   and nothing below found the head contradicting itself or an earlier snapshot: no rollback, no
   changed finalized hash, a best height not below the finalized height nor below the highest
-  finalized height an earlier snapshot saw on this genesis, and no earlier snapshot taken, or
+  finalized height an earlier snapshot saw on this genesis nor more than the lag limit below the
+  highest best height an earlier snapshot saw on this genesis, and no earlier snapshot taken, or
   its head read, later than this snapshot time. A head that fails any of these is not usable,
   however fresh: a chain restarted from the same spec keeps its genesis, and its first heads
   report a low best height and no finalized head yet. `genesis.rpc` still shows what the head
@@ -100,6 +103,13 @@ check below to run and pass.
     or its head read, later than this snapshot time is a conflict, and this head is not usable.
     The floor is only as durable as the log: an absent log means no earlier snapshot, and a log
     cut short or removed cannot be detected from the log itself.
+  - every earlier snapshot's best height on the same genesis is a floor too, less the lag limit,
+    whether or not either snapshot read a finalized head: a best height more than the lag limit
+    below the highest of them is a conflict, and this head is not usable. A reorganisation undoes
+    only blocks that are not final, and a head within the lag limit has at most that many, so a
+    fall further than that is a restart, a node still syncing or a rollback.
+  - The `status` command reads no log, so none of the checks against earlier snapshots runs there:
+    its `reset_detected` speaks for that one reading only. The snapshot command's does not.
 - Any failed check makes RPC health `degraded`. A missing or invalid genesis hash, finalized head
   or best height is a failed check. A missing or unparsable `observed_at` means the age check
   cannot run: health is `unknown` when nothing else failed.
@@ -293,15 +303,24 @@ check below to run and pass.
       another script refuse here, never read as a number;
     - `page-file`: an event page file cannot be read, decoded or parsed, an entry in
       `event-pages/` is not a page file, or `event-pages` is not a real folder (clauses 12 and
-      15). The refusal names the first such entry in name order, or `event-pages` itself;
+      15). The refusal names the first such entry in name order, or `event-pages` itself, whole:
+      the cross-check reads the name as the longest entry of the scenario the message names, so
+      a name that holds a colon or a semicolon is compared in full;
     - `page-structure`: a page file parses, but the page is structurally invalid (clause 12);
     - `input`: anything else the census cannot start from, such as no pinned genesis.
     A request problem is named before any page problem, and a page file problem before any page
     structure problem, so both implementations name the same reason for the same input. On the
-    command line both sides read the same arguments: a request number that is not plain digits,
-    or has more than 16 significant digits (so it is past 2^53 - 1), is a request problem, a range
-    given there is checked before the folder is read, and an empty pinned genesis or a scenario
-    folder that does not exist is an input problem. The TypeScript command also reads the folder's
+    command line both sides read the same arguments by the same rules: every flag is `--name`
+    followed by its value as the next argument, so `--name=value`, a name the command does not
+    read (an abbreviation such as `--gen` included), a flag given twice, a flag with no value (the
+    next argument missing or itself a flag), and an argument that is no flag's value are each a
+    request problem, while a value that starts with one dash (`-5`, `-a`) is a value, judged as
+    one. A request number that is not plain digits, or has more than 16 significant digits (so it
+    is past 2^53 - 1), is a request problem, a range given there is checked before the folder is
+    read, and an empty pinned genesis or a scenario folder that does not exist is an input
+    problem. The recount needs all four of its flags, and one left out is a request problem; the
+    TypeScript command reads a missing `--genesis`, `--from` or `--to` from the scenario's
+    `meta.json`, so a flag left out is compared only through `meta.json`, as every scenario is. The TypeScript command also reads the folder's
     `meta.json` and refuses as an input problem when it cannot; the recount does not read
     `meta.json`, so that one input problem is the command's alone.
 
@@ -333,20 +352,38 @@ Tests fail if any attempt is left in the log.
   `yaml`. A module nobody thought to ban, a legacy one such as `_http_client` or a third party
   client, fails. A relative module must land on a scanned `.ts` module inside `src`, so a path out
   of `src` or to a `.mjs` file fails, and an import-equals (`import x = require(...)`) fails. It
-  also fails the banned names as identifiers, properties, string keys, template keys or any other
-  string (transports, the global object, the Web Crypto global, `eval`, `Function`, `Reflect`,
-  `constructor` but a class's own method, the APIs that define getters on a prototype or rewire
-  one, module loading, signing, key and cipher APIs), `process` other than `version`, `argv`,
-  `exit`, `stdout`, `stderr` and `stdin`, and any string naming an RPC method that writes or
-  signs. `src` must hold nothing but regular `.ts` files, so every file tsc compiles is read; both
-  scans check that. It proves itself on known bad and good samples, and its file list on a
-  throwaway folder, before it scans. It cannot see a computed key assembled at run time from
-  pieces; the runtime block in the tests covers that path.
-- `tools/recount.py` is read the same two ways: its own tests walk its syntax tree (exactly six
+  also fails the banned names as identifiers, properties, string keys, template keys, regular
+  expression patterns or any other string (transports, the global object, the Web Crypto global,
+  `eval`, `Function`, `Reflect`, `constructor` but a class's own method, the APIs that define
+  getters on a prototype, rewire one or list its names, `atob`, `Object.assign`, the stack trace
+  hook `prepareStackTrace`, `WebAssembly`, the socket calls `connect`, `listen` and `bind`,
+  module loading, signing, key and cipher APIs), any name that starts with an underscore (an
+  internal such as a stream's `_handle` or `__proto__`), `process` other than `process.version`,
+  `process.argv`, `process.exit`, `process.stdout.write(...)`, `process.stderr.write(...)` and
+  `{ input: process.stdin }` (so a stream `src` holds is never handed on, listed or asked to
+  connect: under a pipe `process.stdout` is a socket), and any string naming an RPC method that
+  writes or signs. It also fails every computed key that is not a string or number literal, in a
+  member access (`o[k]`, `o?.[k]`, `super[k]`), an object, a pattern or a class: every property
+  `src` reads or writes is named in its code, where the rules above read it, so a name only known
+  at run time (read back from a regular expression, decoded, trimmed, listed or parsed) can never
+  reach anything. `src` reads a data record by a run time key through `own()` in `src/own.ts`,
+  which walks the record's own entries, never reaches an inherited member and never hands back a
+  function. A name list refuses some plain words too (`sign`, `self`, `window`, `binding`,
+  `encrypt` and the others, as identifiers or whole strings); `src` uses none of them. `src` must
+  hold nothing but regular `.ts` files, so every file tsc compiles is read; both scans check that.
+  It proves itself on known bad and good samples, and its file list on a throwaway folder, before
+  it scans. What it cannot see is what an allowed module does with the arguments `src` passes it;
+  the runtime block in the tests covers that.
+- `tools/recount.py` is read the same two ways: its own tests walk its syntax tree (exactly five
   plain imports, no from-import, every use of a module one of a fixed list of full dotted names,
-  so no alias of a module or of part of one, no attribute that starts with an underscore but
-  `super().__init__`, nothing that runs code from a string, and `open` only called directly for
-  reading), and the guard test reads every name on every import line and the same bans as text.
+  so no alias of a module or of part of one; every other name one the file binds or a builtin on a
+  fixed list of the ones it uses, so `type`, `help`, `vars` and every other builtin fail wherever
+  they appear, as a name of the file's own too; no attribute that starts with an underscore but
+  `super().__init__`, and none that names a frame, code or traceback field (`gi_frame`,
+  `f_globals`, `tb_frame` and the rest), so a generator's frame cannot hand over the module's
+  globals; nothing that runs code from a string; and `open` only called directly for reading, with
+  a file and a mode and no unpacked argument or opener), and the guard test reads every name on
+  every import line and the same bans as text.
 - Every attempt, every reset of the log and every test file's final check is written to a
   journal the moment it happens. Once every test file has ended, and again after the test run
   exits, the journal is checked:
@@ -373,8 +410,10 @@ blank on the page and `null` in JSON and MCP.
 - Each feed's payload (`status`, `escrows`, `census`, `drift`) equals the matching part of the
   snapshot exactly, every field included. MCP tool text equals the feed file byte for byte.
   `snapshot.json` equals the last line of the snapshot log, and its hash verifies.
-- Every JSON output is read strictly: no key twice in one object, and each is in its written
-  format (keys sorted, two-space indent, one trailing newline; `pin.json` two-space indent). A
+- Every output is read as strict UTF-8, and every JSON output strictly: it is parsed first, and
+  one that is not JSON ends the check with that failure, never a hang; then no key twice in one
+  object, and each is in its written format (keys sorted, two-space indent, one trailing newline;
+  `pin.json` two-space indent). A
   feed holds exactly `schema` (`flop-observatory/feed-<part>@0`), `snapshot_hash`,
   `observed_at`, `trust` and its part. The log's last line is `snapshot.json` in canonical form,
   byte for byte.
@@ -387,9 +426,19 @@ blank on the page and `null` in JSON and MCP.
   read-only instructions; each refusal has its own code and words. The transcript holds exactly
   the exchanges `scripts/mcp-transcript.mjs` makes, in order, one of them a well formed escrow id
   the snapshot does not hold, so the unseen escrow rule is asked of the real binary. Each answer is
-  checked as the server wrote its line.
-- The MCP binary serves only an observatory snapshot (`schema` `flop-observatory/snapshot@0`, and
-  each part with its own schema) whose hash verifies, read as strict UTF-8 with a byte order mark
+  checked as the server wrote its line, which is one compact JSON line. The transcript is in its
+  written format: one line per exchange ended by a newline and nothing else in the file, each
+  line its four keys in the script's order (`request`, `expect_error`, `response`,
+  `response_line`), the request spelled as the script sends it and the response as the server's
+  own line.
+- The snapshot command takes an escrow id only as `0x` plus 64 hex, the one form
+  `get_escrow_state` answers for, so the page, the feeds and the MCP server hold the same ids.
+- The MCP binary serves only an observatory snapshot (`schema` `flop-observatory/snapshot@0`,
+  each part with its own schema, and the status and every escrow, which `get_status` and
+  `get_escrow_state` answer field by field, holding exactly their schema's fields, with
+  `reset_detected`, the state, the trust label, the heights, the lists and the scope of their
+  schema's types; the census and the drift report are checked for their schema only) whose hash
+  verifies, read as strict UTF-8 with a byte order mark
   refused, nesting checked before parsing, one value per key, and the text byte for byte in the
   feed format, so an integer past 2^53 - 1 that the parser would round is refused too; anything
   else is refused and nothing is served. A call it cannot answer gets a JSON-RPC error, never a
@@ -426,6 +475,14 @@ blank on the page and `null` in JSON and MCP.
   page's fixed words, in order, with the intro's `seq` equal to the snapshot's. `aria-label`
   appears only as `unknown` on a blank unknown cell, and each cell's `class` is the one its value
   calls for (`unk` for unknown, `h-<health>`, `s-<state>`, none otherwise).
+- Every element's `class` is the one the renderer writes for it, so nothing paints a cell from
+  outside it: a marked cell's by its value, as above; the fixed paragraphs `note` and `banner`,
+  in their order; `card` on every `div`; and none on any other element, so a class on a row, a
+  table or a card fails. The page holds exactly the renderer's paragraphs, cards and tables (one
+  card each for the status, every escrow and the census, and one or two for the drift), so an
+  empty one cannot add a mark of its own. Every value cell but the intro line's carries `data-v`
+  with its value as rendered (none for `null` and an empty list), so a machine reading `data-v`
+  reads what a person reads.
 - Every `td` on the page carries `data-k`; a cell without one fails the check. The visible text of
   every marked element, nested tags included, must match its value as rendered below. A marked
   element holds no markup but the one the renderer nests, a bare `<code>` around an escrow id, so
@@ -464,7 +521,8 @@ blank on the page and `null` in JSON and MCP.
   the trust label; for every escrow: state, evidence, notes, `observed_at`, trust and scope; for
   the census: status, coverage, gaps and every total.
 - Last, every file is compared byte for byte with what the code writes for the snapshot:
-  `index.html` with `src/page.ts`, the feeds and `snapshot.json` with `src/feed.ts`. The rules
+  `index.html` with `src/page.ts`, the feeds and `snapshot.json` with `src/feed.ts`, and the
+  transcript with what `scripts/mcp-transcript.mjs` writes from `src/mcp.ts`'s answers. The rules
   above judge the outputs against the snapshot on their own; this closes what they do not model.
   The canary runs every tamper with and without this comparison, so each tamper is shown caught
   by the rules alone, and one tamper that changes nothing they model shows the comparison bites.

@@ -1,0 +1,15 @@
+{
+  "attempts-check.test.ts": 11,
+  "census.test.ts": 176,
+  "consistency.test.ts": 14,
+  "drift.test.ts": 40,
+  "escrow.test.ts": 179,
+  "guard.test.ts": 56,
+  "mcp.test.ts": 12,
+  "page.test.ts": 40,
+  "snapshot.test.ts": 21,
+  "status-schema.test.ts": 15,
+  "status.test.ts": 112,
+  "store.test.ts": 16,
+  "strict.test.ts": 66
+}

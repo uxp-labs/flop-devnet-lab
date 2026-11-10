@@ -778,6 +778,87 @@ const tampers = [
         return h.slice(0, a.index) + b[0] + h.slice(a.index + a[0].length, b.index) + a[0] + h.slice(b.index + b[0].length);
       }),
   },
+  // Round 8 review L3: a JSON output cut short ends the check with a failure, never a hang.
+  {
+    name: "snapshot-json-cut-short",
+    expect: /snapshot\.json is JSON/,
+    applies: () => true,
+    run: (d) => writeFileSync(join(d, "snapshot.json"), '{"a'),
+  },
+  {
+    name: "status-json-cut-short",
+    expect: /status\.json is JSON/,
+    applies: () => true,
+    run: (d) => writeFileSync(join(d, "status.json"), '{"schema": "x'),
+  },
+  {
+    name: "transcript-gains-a-line-cut-short",
+    expect: /mcp transcript line \d+ is JSON/,
+    applies: () => true,
+    run: (d) => writeFileSync(join(d, "mcp-transcript.jsonl"), readFileSync(join(d, "mcp-transcript.jsonl"), "utf8") + '{"request\n'),
+  },
+  {
+    name: "snapshot-json-not-utf8",
+    expect: /snapshot\.json can be read as UTF-8/,
+    applies: () => true,
+    run: (d) => writeFileSync(join(d, "snapshot.json"), Buffer.concat([readFileSync(join(d, "snapshot.json")).subarray(0, 40), Buffer.from([0xff]), readFileSync(join(d, "snapshot.json")).subarray(40)])),
+  },
+  // Round 8 review L4: the transcript respelled, its meaning unchanged.
+  {
+    name: "transcript-respelled-keys-reversed-crlf-blank-lines",
+    expect: /mcp-transcript\.jsonl is in its written format/,
+    applies: () => true,
+    run: (d) => {
+      const p = join(d, "mcp-transcript.jsonl");
+      const lines = readFileSync(p, "utf8").split("\n").filter(Boolean).map((l) => JSON.parse(l));
+      const reversed = lines.map((x) => JSON.stringify(Object.fromEntries(Object.entries(x).reverse())));
+      writeFileSync(p, "\r\n" + reversed.join("\r\n\r\n") + "\r\n\r\n");
+    },
+  },
+  {
+    name: "transcript-response-lines-respelled",
+    expect: /response_line is one compact JSON line/,
+    applies: () => true,
+    run: (d) =>
+      editTranscript(d, () => true, (x) => {
+        const reordered = Object.fromEntries(Object.entries(x.response).reverse());
+        return JSON.stringify(reordered, null, 3);
+      }, true),
+  },
+  // Round 8 review L5: a class outside a cell that paints it, and empty marks added.
+  {
+    name: "reset-row-painted-ok",
+    expect: /a tr that is no marked cell carries no class/,
+    applies: (d) => snap(d).status.reset_detected === true,
+    run: (d) => editHtml(d, (h) => h.replace('<tr><th scope="row" data-for="status.reset_detected">', '<tr class="h-ok"><th scope="row" data-for="status.reset_detected">')),
+  },
+  {
+    name: "escrow-card-painted-claimed",
+    expect: /every div is a card/,
+    applies: (d) => snap(d).escrows.some((e) => e.state !== "claimed"),
+    run: (d) => {
+      const e = snap(d).escrows.find((x) => x.state !== "claimed");
+      editHtml(d, (h) => h.replace(`<div class="card" data-escrow="${e.escrow_id}">`, `<div class="card s-claimed" data-escrow="${e.escrow_id}">`));
+    },
+  },
+  {
+    name: "status-table-painted-ok",
+    expect: /a table that is no marked cell carries no class/,
+    applies: () => true,
+    run: (d) => editHtml(d, (h) => h.replace('<table data-section="status">', '<table class="h-ok" data-section="status">')),
+  },
+  {
+    name: "empty-banner-and-card-under-census",
+    expect: /the paragraphs outside the marked cells are the renderer's|every div is a card/,
+    applies: () => true,
+    run: (d) => editHtml(d, (h) => h.replace("<h2>Census</h2>", '<h2>Census</h2><p class="banner"></p><div class="card"></div>')),
+  },
+  {
+    name: "reset-cell-loses-its-data-v",
+    expect: /page status\.reset_detected data-v/,
+    applies: (d) => typeof snap(d).status.reset_detected === "boolean",
+    run: (d) => editCell(d, "status.reset_detected", (a, t) => [a.replace(/ data-v="[^"]*"/, ""), t]),
+  },
   // Changes nothing sections 1 to 9 model: only section 10's byte comparison can see it.
   {
     name: "the-page-gains-one-line-break-and-nothing-else",
@@ -802,15 +883,21 @@ const tampers = [
   },
 ];
 
+/**
+ * One run of the check. A run that printed no report, exited other than 0 or 1, or ran past the
+ * time limit gave no verdict: it never counts as catching a tamper (round 8 review L3).
+ */
 function check(dir, semanticOnly) {
-  const r = spawnSync("node", [join(pkg, "scripts", "consistency.mjs"), dir, ...(semanticOnly ? ["--semantic-only"] : [])], { encoding: "utf8" });
-  let failures = [];
+  const r = spawnSync("node", [join(pkg, "scripts", "consistency.mjs"), dir, ...(semanticOnly ? ["--semantic-only"] : [])], { encoding: "utf8", timeout: 120_000, maxBuffer: 1 << 28 });
+  let failures = null;
   try {
-    failures = JSON.parse(r.stdout).failures.map((f) => f.what);
+    const rep = JSON.parse(r.stdout);
+    failures = Array.isArray(rep.failures) ? rep.failures.map((f) => f.what) : null;
   } catch {
-    failures = ["no report"];
+    failures = null;
   }
-  return { exit: r.status, failures };
+  const verdict = failures !== null && (r.status === 0 || r.status === 1) && (r.status === 0) === (failures.length === 0);
+  return { exit: r.status, failures: failures ?? [], verdict };
 }
 
 const results = [];
@@ -821,7 +908,7 @@ for (const src of dirs) {
   const full = check(tmp, false);
   const sem = check(tmp, true);
   rmSync(tmp, { recursive: true, force: true });
-  const outcome = full.exit === 0 && sem.exit === 0 ? "control-pass" : "control-fail";
+  const outcome = full.verdict && sem.verdict && full.exit === 0 && sem.exit === 0 ? "control-pass" : "control-fail";
   if (outcome !== "control-pass") bad++;
   results.push({ tamper: "none (control)", outputs: basename(src), outcome, failures: [...full.failures, ...sem.failures].slice(0, 3) });
 }
@@ -849,7 +936,8 @@ for (const t of tampers) {
     const sem = check(tmp, true);
     exits = { full: full.exit, semantic_only: sem.exit };
     const named = (fs) => (t.expect ? fs.filter((w) => t.expect.test(w)) : fs);
-    if (full.exit === 0) outcome = "missed";
+    if (!full.verdict || !sem.verdict) outcome = "no-verdict";
+    else if (full.exit === 0) outcome = "missed";
     else if (t.bytesOnly) outcome = sem.exit !== 0 ? "bytes-only-tamper-also-caught-by-sections-1-to-9" : named(full.failures).length === 0 ? "caught-but-not-by-the-named-check" : "caught";
     else if (sem.exit === 0) outcome = "caught-only-by-the-byte-comparison";
     else outcome = named(sem.failures).length === 0 ? "caught-but-not-by-the-named-check" : "caught";

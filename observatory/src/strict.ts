@@ -12,7 +12,8 @@ const ZONED = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2})(?:\.(\d+))?)?
 
 function daysInMonth(year: number, month: number): number {
   const leap = (year % 4 === 0 && year % 100 !== 0) || year % 400 === 0;
-  return [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31][month - 1] as number;
+  // month is 1 to 12 here: parseZoned checks it first.
+  return [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31].at(month - 1) as number;
 }
 
 /**
@@ -65,10 +66,13 @@ export function secondsBetween(earlier: unknown, later: unknown): number | null 
 export function duplicateKey(text: string): string | null {
   const stack: ({ keys: Set<string>; expectKey: boolean } | null)[] = [];
   for (let i = 0; i < text.length; i++) {
-    const c = text[i];
+    const c = text.charAt(i);
     if (c === '"') {
       let j = i + 1;
-      while (text[j] !== '"') j += text[j] === "\\" ? 2 : 1;
+      while (j < text.length && text.charAt(j) !== '"') j += text.charAt(j) === "\\" ? 2 : 1;
+      // A string that never closes is not JSON, which JSON.parse refuses first; stop rather than
+      // read past the end (round 8 review L3).
+      if (j >= text.length) return null;
       const top = stack.at(-1);
       if (top && top.expectKey) {
         const key = JSON.parse(text.slice(i, j + 1)) as string;
@@ -104,7 +108,7 @@ export function nestingDepth(text: string): number {
   let deepest = 0;
   let inString = false;
   for (let i = 0; i < text.length; i++) {
-    const c = text[i];
+    const c = text.charAt(i);
     if (inString) {
       if (c === "\\") i++;
       else if (c === '"') inString = false;

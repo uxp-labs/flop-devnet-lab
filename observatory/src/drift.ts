@@ -23,6 +23,7 @@
 // written as (SpecDecimal), because a JS number keeps only about 17 significant digits. A value
 // that cannot be read exactly is unknown, never a match from a rounded number.
 import { isScalar, parse, type ScalarTag, type Tags } from "yaml";
+import { own } from "./own.js";
 import { isSafeInt, parseZoned } from "./strict.js";
 import type { DriftItem, DriftReport, RuntimeConstants, Trust } from "./types.js";
 
@@ -78,11 +79,11 @@ function keepSource(tags: Tags): Tags {
   return tags.map((t) => {
     if (typeof t === "string" || t.collection !== undefined) return t;
     const tag = t as ScalarTag;
-    const resolve = tag.resolve.bind(tag);
     const wrapped: ScalarTag = {
       ...tag,
       resolve: (str, onError, options) => {
-        const v = resolve(str, onError, options);
+        // Called on the tag itself, so the original resolve keeps its own this.
+        const v = tag.resolve(str, onError, options);
         const n = isScalar(v) ? v.value : v;
         return typeof n === "number" ? new SpecDecimal(str, n) : v;
       },
@@ -130,7 +131,7 @@ export function parseSpec(text: string): ParsedSpec {
   if (!isObject(doc)) throw new DriftSpecError("the YAML is not a mapping");
   const entries: unknown[] = [];
   for (const section of ["parameters", "reference"] as const) {
-    const list = doc[section];
+    const list = own(doc, section);
     if (list === undefined || list === null) continue;
     if (!Array.isArray(list)) throw new DriftSpecError(`${section} is not a list`);
     entries.push(...list);
@@ -242,7 +243,7 @@ function lookUp(values: Record<string, unknown>, pallet: string, item: string): 
     Object.hasOwn(values, k),
   );
   if (keys.length === 0) return { found: false, why: "the runtime value is missing" };
-  const [a, b] = keys.map((k) => values[k]);
+  const [a, b] = keys.map((k) => own(values, k));
   if (keys.length === 2) {
     const ra = runtimeValue(a);
     const rb = runtimeValue(b);

@@ -5,7 +5,6 @@ Usage: python3 -I tools/recount.py --dir <scenario dir> --genesis <0x..> --from 
 Prints one JSON object. Exit 2 on unreadable input (reason on stderr).
 Standard library only.
 """
-import argparse
 import json
 import re
 import stat
@@ -350,25 +349,47 @@ def request_int(flag, text):
     return int(digits)
 
 
+FLAGS = ("--dir", "--genesis", "--from", "--to")
+
+
+def read_args(argv):
+    """The flags, read by the TypeScript command's rules (RULES.md 3.1 clause 16): each is --name
+    followed by its value as the next argument, so --name=value, a name not on the list, a flag
+    given twice, a flag with no value and an argument that is no flag's value are each a request
+    problem, and so is a flag left out. argparse would take --name=value and any abbreviation of a
+    name, and refuse a value that starts with a dash, none of which the other side does."""
+    rest = list(argv)
+    values = {}
+    while rest:
+        a = rest.pop(0)
+        if not a.startswith("--"):
+            raise Unreadable("request", "%s is no flag's value; every argument is --name followed by its value" % json.dumps(a))
+        if "=" in a:
+            raise Unreadable("request", "%s: give a flag's value as the next argument, not after =" % json.dumps(a))
+        if a not in FLAGS:
+            raise Unreadable("request", "%s is not a flag the recount reads" % json.dumps(a))
+        if a in values:
+            raise Unreadable("request", "%s is given twice" % a)
+        if not rest or rest[0].startswith("--"):
+            raise Unreadable("request", "%s needs a value" % a)
+        values[a] = rest.pop(0)
+    for flag in FLAGS:
+        if flag not in values:
+            raise Unreadable("request", "missing %s" % flag)
+    return values
+
+
 def main(argv=None):
-    ap = argparse.ArgumentParser(description="Independent census recount")
-    ap.add_argument("--dir", required=True)
-    ap.add_argument("--genesis", required=True)
-    ap.add_argument("--from", dest="lo", required=True)
-    ap.add_argument("--to", dest="hi", required=True)
     try:
-        args = ap.parse_args(argv)
-    except SystemExit as exc:
-        return 2 if exc.code else 0
-    try:
-        lo = request_int("--from", args.lo)
-        hi = request_int("--to", args.hi)
+        args = read_args(sys.argv[1:] if argv is None else argv)
+        lo = request_int("--from", args["--from"])
+        hi = request_int("--to", args["--to"])
         if as_int(lo) is None or as_int(hi) is None or lo > hi:
             raise Unreadable("request", "bad requested range %d..%d" % (lo, hi))
         # Clause 16, input: a census needs a pinned genesis to count against.
-        if args.genesis == "":
+        if args["--genesis"] == "":
             raise Unreadable("input", "no pinned genesis")
-        result = recount(args.dir, args.genesis, lo, hi)
+        result = recount(args["--dir"], args["--genesis"], lo, hi)
     except Unreadable as exc:
         print("census refused (%s): %s" % (exc.kind, exc), file=sys.stderr)
         return 2

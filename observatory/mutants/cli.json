@@ -90,7 +90,7 @@
   {
     "id": "cli-duplicate-escrow-id-accepted",
     "file": "src/cli.ts",
-    "find": "    if (seen.has(k)) fail(`${where}: escrow id ${String(id)} is listed twice`);\n",
+    "find": "    if (seen.has(k)) fail(`${where}: escrow id ${id} is listed twice`);\n",
     "replace": "",
     "test": "scripts/cli-checks.mjs",
     "why": "Fable review L8: the same escrow listed twice would give two cards with one key"
@@ -154,9 +154,81 @@
   {
     "id": "mcp-bin-parts-unchecked",
     "file": "src/mcp-bin.ts",
-    "find": "  part(snapshot.status, \"flop-observatory/network-status@0\") &&",
+    "find": "  statusShaped(snapshot.status) &&",
     "replace": "  true &&",
     "test": "scripts/cli-checks.mjs",
     "why": "round 7 review I2: each part of a served snapshot has its own schema, so an empty shell is refused"
+  },
+  {
+    "id": "cli-earlier-best-not-read",
+    "file": "src/cli.ts",
+    "find": "        if (st.genesis.rpc !== null && st.best_height !== null) earlierBest.push({ genesis: st.genesis.rpc, best_height: st.best_height });\n",
+    "replace": "",
+    "test": "scripts/cli-checks.mjs",
+    "why": "round 8 review L1: every earlier snapshot's best height reaches the floor, with or without a finalized head"
+  },
+  {
+    "id": "cli-unknown-flag-ignored",
+    "file": "src/cli.ts",
+    "find": "    if (!known.one.includes(a) && !known.many.includes(a)) refuse(`${a} is not a flag ${cmd} reads`);\n",
+    "replace": "",
+    "test": "scripts/cli-checks.mjs",
+    "why": "round 8 review L7: a flag the command does not read is refused, never ignored"
+  },
+  {
+    "id": "cli-flag-equals-value-read",
+    "file": "src/cli.ts",
+    "find": "    if (a.includes(\"=\")) refuse(`${JSON.stringify(a)}: give a flag's value as the next argument, not after =`);\n",
+    "replace": "",
+    "test": "scripts/cli-checks.mjs",
+    "why": "round 8 review L7: --name=value is refused on both sides, as the recount reads it"
+  },
+  {
+    "id": "cli-flag-twice-last-wins",
+    "file": "src/cli.ts",
+    "find": "    if (flags.has(a) && !known.many.includes(a)) refuse(`${a} is given twice`);\n",
+    "replace": "",
+    "test": "scripts/cli-checks.mjs",
+    "why": "round 8 review L7: a flag given twice has no one meaning, so it is refused"
+  },
+  {
+    "id": "cli-stray-argument-ignored",
+    "file": "src/cli.ts",
+    "find": "    if (!a.startsWith(\"--\")) refuse(`${JSON.stringify(a)} is no flag's value; every argument is --name followed by its value`);\n",
+    "replace": "",
+    "test": "scripts/cli-checks.mjs",
+    "why": "round 8 review L7: an argument that is no flag's value is refused"
+  },
+  {
+    "id": "cli-escrow-id-any-text",
+    "file": "src/cli.ts",
+    "find": "    if (!isHash32(id)) fail(`${where}: escrow id ${JSON.stringify(id)} is not 0x plus 64 hex`);\n",
+    "replace": "",
+    "test": "scripts/cli-checks.mjs",
+    "why": "round 8 review I2: an escrow id the MCP server cannot look up never reaches the page or the feeds"
+  },
+  {
+    "id": "mcp-bin-escrow-extra-field-served",
+    "file": "src/mcp-bin.ts",
+    "find": "  exactly(e, ESCROW_KEYS) &&",
+    "replace": "  true &&",
+    "test": "scripts/cli-checks.mjs",
+    "why": "round 8 review I1: a served escrow holds exactly its schema's fields, so get_escrow_state answers only those"
+  },
+  {
+    "id": "mcp-bin-status-reset-any-type",
+    "file": "src/mcp-bin.ts",
+    "find": "  (st.reset_detected === null || typeof st.reset_detected === \"boolean\") &&",
+    "replace": "  true &&",
+    "test": "scripts/cli-checks.mjs",
+    "why": "round 8 review I1: reset_detected is true, false or null, the only values a gate may branch on"
+  },
+  {
+    "id": "mcp-bin-escrow-state-any-word",
+    "file": "src/mcp-bin.ts",
+    "find": "  STATES.includes(e.state as string) &&",
+    "replace": "  true &&",
+    "test": "scripts/cli-checks.mjs",
+    "why": "round 8 review I1: an escrow state is one of the four the schema names"
   }
 ]

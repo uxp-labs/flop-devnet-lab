@@ -5,11 +5,15 @@
 // Every tool, every escrow id in the snapshot, one well formed id the snapshot does not hold, one
 // unknown tool and one malformed id. Each entry is { req, expectError }.
 
-/** An escrow id the snapshot does not hold, so the unseen escrow rule is asked of the real binary. */
+/**
+ * An escrow id the snapshot does not hold, so the unseen escrow rule is asked of the real binary:
+ * 0x and one byte 32 times, trying ee, ed, ec and on down through every byte (round 8 review I2),
+ * so only a snapshot that holds all 256 such ids leaves none.
+ */
 export function unseenEscrowId(snapshot) {
   const held = new Set((snapshot.escrows ?? []).map((e) => String(e.escrow_id).toLowerCase()));
-  for (const b of ["ee", "ed", "ec"]) {
-    const id = "0x" + b.repeat(32);
+  for (let n = 0; n < 256; n++) {
+    const id = "0x" + ((0xee - n + 256) % 256).toString(16).padStart(2, "0").repeat(32);
     if (!held.has(id)) return id;
   }
   throw new Error("no unseen escrow id left");

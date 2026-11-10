@@ -19,11 +19,19 @@
 //   globals, the global object by any name, code from strings, Reflect, constructor (a class's own
 //   constructor method is fine), module loading outside import statements, and signing, key and
 //   spending names.
-// - process only as process.version, argv, exit, stdout, stderr or stdin.
-// - No string or template names an RPC method that writes or signs.
+// - process only as process.version, argv, exit, process.stdout.write(...),
+//   process.stderr.write(...) and { input: process.stdin }, so no stream src holds can be asked to
+//   connect or be read for its handle.
+// - No string, template or regular expression names an RPC method that writes or signs.
+// - No computed key that is not a string or number literal, in a member access (o[k], o?.[k],
+//   super[k]), an object, a pattern or a class (round 8 review M1). A name only known at run time,
+//   read back from a regular expression, decoded, trimmed or listed, can then never be used to
+//   reach anything: every property src reads or writes is named in the code, where the rules above
+//   read it. src reads a data record by a run time key through own() in src/own.ts, which walks the
+//   record's own entries and never hands back a function.
 // Before it scans src it proves itself: every BAD sample must fail and every GOOD sample must pass.
-// Known limit: a computed key built at run time ([][k][k] with k assembled from pieces) can still
-// reach Function; the runtime guard in the tests covers that path, not this scan.
+// Known limit: the scan reads what src names, not what an allowed module does with the arguments
+// it is given; the runtime guard in the tests covers that.
 //
 // Prints a JSON array of {check, outcome: "pass" | "fail", stderr?}; exit 1 on any failure.
 import { lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
@@ -117,7 +125,27 @@ const BANNED = new Set([
   "getOwnPropertyDescriptors",
   "setPrototypeOf",
   "getPrototypeOf",
+  // Round 8 review M1: names that list or decode a key, write properties by names from data, hook
+  // stack frames or run code from bytes, and the calls that open a socket or a pipe on a stream
+  // src already holds (process.stdout is a socket under a pipe).
+  "getOwnPropertyNames",
+  "getOwnPropertySymbols",
+  "atob",
+  "assign",
+  "prepareStackTrace",
+  "WebAssembly",
+  "connect",
+  "connect6",
+  "listen",
+  "bind",
+  "bind6",
 ]);
+// An underscore name is an internal (a stream's _handle, console._stdout, __proto__): src has no
+// use for one.
+const INTERNAL = /^_[A-Za-z_$]/;
+// Keys the scan reads itself: a string or a number written in the code.
+const literalKey = (k) => k?.type === "Literal" && (typeof k.value === "string" || typeof k.value === "number");
+const KEYED = new Set(["MemberExpression", "Property", "MethodDefinition", "PropertyDefinition", "AccessorProperty"]);
 const WRITE_RPC = /author_submit|eth_send(?:Raw)?Transaction|eth_sign|personal_sign/;
 
 const SRC = join(pkg, "src");
@@ -154,12 +182,19 @@ function problems(code, file = "sample.ts", scanned = SCANNED) {
     return [`does not parse: ${String(e?.message ?? e).split("\n")[0]}`];
   }
   const out = [];
+  // Each node's parent and the key it sits under, so a rule can read a node's context.
+  const up = new Map();
   const visit = (n, parent, key) => {
     if (Array.isArray(n)) {
       for (const x of n) visit(x, parent, key);
       return;
     }
     if (!n || typeof n !== "object" || typeof n.type !== "string") return;
+    up.set(n, { parent, key });
+    if (KEYED.has(n.type) && n.computed === true) {
+      const k = n.type === "MemberExpression" ? n.property : n.key;
+      if (!literalKey(k)) out.push(`uses a computed key the scan cannot read: ${code.slice(n.start, n.end).replace(/\s+/g, " ").slice(0, 60)}`);
+    }
     switch (n.type) {
       case "ImportDeclaration":
       case "ExportNamedDeclaration":
@@ -194,9 +229,21 @@ function problems(code, file = "sample.ts", scanned = SCANNED) {
         const ownConstructor = key === "key" && parent?.type === "MethodDefinition" && parent.kind === "constructor";
         if (BANNED.has(n.name) && !ownConstructor) out.push(`uses ${n.name}`);
         else if (/mnemonic/i.test(n.name)) out.push(`uses ${n.name}`);
+        else if (INTERNAL.test(n.name)) out.push(`uses the internal ${n.name}`);
         if (n.name === "process") {
-          const allowed = key === "object" && parent?.type === "MemberExpression" && !parent.computed && PROCESS_MEMBERS.has(parent.property?.name);
-          if (!allowed) out.push("uses process other than process.version, argv, exit, stdout, stderr or stdin");
+          const member = key === "object" && parent?.type === "MemberExpression" && !parent.computed ? parent.property?.name : undefined;
+          let allowed = PROCESS_MEMBERS.has(member);
+          if (member === "stdout" || member === "stderr") {
+            // Only process.stdout.write(...) and process.stderr.write(...).
+            const write = up.get(parent);
+            const call = write ? up.get(write.parent) : undefined;
+            allowed = write?.key === "object" && write.parent?.type === "MemberExpression" && !write.parent.computed && write.parent.property?.name === "write" && call?.key === "callee" && call.parent?.type === "CallExpression";
+          } else if (member === "stdin") {
+            // Only as the input of a reader: { input: process.stdin }.
+            const prop = up.get(parent);
+            allowed = prop?.key === "value" && prop.parent?.type === "Property" && !prop.parent.computed && prop.parent.key?.type === "Identifier" && prop.parent.key.name === "input" && up.get(prop.parent)?.parent?.type === "ObjectExpression";
+          }
+          if (!allowed) out.push("uses process other than process.version, argv, exit, stdout.write(...), stderr.write(...) or { input: process.stdin }");
         }
         break;
       }
@@ -206,6 +253,8 @@ function problems(code, file = "sample.ts", scanned = SCANNED) {
         break;
       }
       case "Literal": {
+        // A regular expression's pattern can be read back as a string (/constructor/.source).
+        if (n.regex && (bannedText(n.regex.pattern) || WRITE_RPC.test(n.regex.pattern))) out.push(`names ${n.regex.pattern} in a regular expression`);
         if (typeof n.value === "string" && WRITE_RPC.test(n.value)) out.push(`names the RPC method ${n.value}`);
         // A string key in a pattern or an object, a computed key or a plain argument: a banned name
         // spelled as a string reaches the same thing (round 7 review M3).
@@ -321,6 +370,42 @@ const BAD = [
   'const m5 = await import("../scripts/mcp-transcript.mjs");',
   'import ws from "../node_modules/ws/index.js";',
   'import { x } from "./no-such-module.js";',
+  // Round 8 review M1: a key that is one literal read back, decoded or listed, then used as a
+  // computed key; and a stream src holds asked to connect.
+  "const k = /constructor/.source; const C = ((() => 0) as any)[k];",
+  // A banned name in a template that is no key: the template rule alone reads it.
+  "const k2 = `constructor`;",
+  "class A { constructor() {} } const k = Object.getOwnPropertyNames(A.prototype)[0] as string; const C = ((() => 0) as any)[k];",
+  'const k = atob("Y29uc3RydWN0b3I="); const C = ((() => 0) as any)[k];',
+  String.raw`const k = JSON.parse('"\u0063onstructor"') as string; const C = ((() => 0) as any)[k];`,
+  'const k = "constructor ".trim(); const C = ((() => 0) as any)[k];',
+  "const t = typeof (process.stdout as any).connect;",
+  "const t2 = typeof (process.stdin as any).connect;",
+  "const v = Object.values(process.stdout);",
+  "process.stdin.on(\"data\", f);",
+  "const s9 = process.stdin;",
+  "const out9 = process.stdout;",
+  "rl.input.connect(path);",
+  "const h = stream._handle;",
+  "const pr = x.__proto__;",
+  "Error.prepareStackTrace = (e, s) => s;",
+  "const w = await WebAssembly.instantiate(bytes);",
+  "Object.assign(Error, extra);",
+  "const f4 = run.bind(null);",
+  "const r5 = /fetch/;",
+  // Every computed key that is not a literal, wherever it sits.
+  "const { [k]: C2 } = obj;",
+  "const o2 = { [k]: 1 };",
+  "class B { [k]() {} }",
+  "class B2 { static [k] = 1; }",
+  "const v2 = o?.[k];",
+  "const v3 = o[`x`];",
+  "delete o[k];",
+  "o[k] = 1;",
+  "o[k] += 1;",
+  "for (const k2 in o) use(o[k2]);",
+  "class C3 extends A { m() { return super[k]; } }",
+  "const v4 = o[null];",
 ];
 
 // Forms src uses that must pass.
@@ -339,7 +424,11 @@ const GOOD = [
   "const signal = 1; const signed = true; const design = 2;",
   "// fetch, WebSocket and process.env in a comment are not code",
   'const note = "a gateway report is not chain proof";',
-  "const o = { [key]: 1 }; const w = o[key];",
+  'const o = { a: 1, "b-c": 2 }; const w = o["b-c"] + o.a + list[0];',
+  'const w2 = own(record, key); const first = list.at(0); const c = text.charAt(i);',
+  "const rl = createInterface({ input: process.stdin });",
+  "process.stderr.write(msg);",
+  "for (const [k, v] of Object.entries(o)) use(k, v);",
 ];
 
 const results = [];
@@ -385,4 +474,6 @@ for (const f of modules.filter((m) => m !== "guard.ts")) {
   record(`src/${f} passes the syntax tree scan`, p.length === 0, p.join("; "));
 }
 console.log(JSON.stringify(results, null, 2));
-process.exit(bad ? 1 : 0);
+// exitCode, not exit(): the mutation runner reads this report through a pipe, where a write is
+// asynchronous and exit() could cut it short.
+process.exitCode = bad ? 1 : 0;

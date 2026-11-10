@@ -266,10 +266,10 @@
   {
     "id": "scan-tree-any-process-member",
     "file": "scripts/source-scan.mjs",
-    "find": "!parent.computed && PROCESS_MEMBERS.has(parent.property?.name)",
-    "replace": "true",
+    "find": "          let allowed = PROCESS_MEMBERS.has(member);",
+    "replace": "          let allowed = true;",
     "test": "scripts/source-scan.mjs",
-    "why": "process is used only through its six allowed members, never env, binding or a computed key"
+    "why": "process is used only through its allowed members, never env, binding or a computed key"
   },
   {
     "id": "scan-tree-dynamic-import-any-argument",
@@ -342,5 +342,53 @@
     "replace": "",
     "test": "scripts/source-scan.mjs",
     "why": "round 7 review M3: the Web Crypto global holds the key and signing API"
+  },
+  {
+    "id": "scan-tree-computed-keys-unread",
+    "file": "scripts/source-scan.mjs",
+    "find": "      if (!literalKey(k)) out.push(",
+    "replace": "      if (false) out.push(",
+    "test": "scripts/source-scan.mjs",
+    "why": "round 8 review M1: a computed key the scan cannot read could name anything at run time"
+  },
+  {
+    "id": "scan-tree-stdout-any-member",
+    "file": "scripts/source-scan.mjs",
+    "find": "            allowed = write?.key === \"object\" &&",
+    "replace": "            allowed = true || write?.key === \"object\" &&",
+    "test": "scripts/source-scan.mjs",
+    "why": "round 8 review M1: process.stdout and stderr only as .write(...), so a stream src holds is never handed on or listed"
+  },
+  {
+    "id": "scan-tree-stdin-any-use",
+    "file": "scripts/source-scan.mjs",
+    "find": "            allowed = prop?.key === \"value\" &&",
+    "replace": "            allowed = true || prop?.key === \"value\" &&",
+    "test": "scripts/source-scan.mjs",
+    "why": "round 8 review M1: process.stdin only as the input of a reader"
+  },
+  {
+    "id": "scan-tree-regex-unread",
+    "file": "scripts/source-scan.mjs",
+    "find": "        if (n.regex && (bannedText(n.regex.pattern) || WRITE_RPC.test(n.regex.pattern))) out.push(",
+    "replace": "        if (false) out.push(",
+    "test": "scripts/source-scan.mjs",
+    "why": "round 8 review M1: a regular expression's pattern can be read back as a string"
+  },
+  {
+    "id": "scan-tree-internal-names-allowed",
+    "file": "scripts/source-scan.mjs",
+    "find": "        else if (INTERNAL.test(n.name)) out.push(`uses the internal ${n.name}`);\n",
+    "replace": "",
+    "test": "scripts/source-scan.mjs",
+    "why": "round 8 review M1: an underscore name is an internal, such as a stream's _handle"
+  },
+  {
+    "id": "scan-tree-connect-allowed",
+    "file": "scripts/source-scan.mjs",
+    "find": "  \"connect\",\n",
+    "replace": "",
+    "test": "scripts/source-scan.mjs",
+    "why": "round 8 review M1: process.stdout is a socket under a pipe, and connect opens a new connection on it"
   }
 ]

@@ -170,8 +170,8 @@
   {
     "id": "status-faucet-freshness-ignored",
     "file": "src/status.ts",
-    "find": "    faucet: withChainNote(applyFreshness(classifyFaucet(health), \"faucet\", o, conflicts), chainUnusable),",
-    "replace": "    faucet: withChainNote(classifyFaucet(health), chainUnusable),",
+    "find": "    faucet: withChainNote(applyFreshness(classifyFaucet(health), \"faucet\", o, conflicts), chainNote),",
+    "replace": "    faucet: withChainNote(classifyFaucet(health), chainNote),",
     "test": "test/status.test.ts",
     "why": "an eight day old faucet reading must not be ok"
   },
@@ -502,5 +502,37 @@
     "replace": "  const faucetGenesis = shownFaucetGenesis;",
     "test": "test/status.test.ts",
     "why": "a /chain reading that does not count must not count toward reset_detected, though genesis.faucet shows it"
+  },
+  {
+    "id": "status-earlier-best-ignored",
+    "file": "src/status.ts",
+    "find": "  if (highestBest !== null && best !== null && best < highestBest - o.maxFinalityLag) {",
+    "replace": "  if (highestBest !== null && best !== null && best < highestBest - o.maxFinalityLag - 1e12) {",
+    "test": "test/status.test.ts",
+    "why": "round 8 review L1: a best height that falls further than the lag limit on the same genesis contradicts history"
+  },
+  {
+    "id": "status-earlier-best-no-margin",
+    "file": "src/status.ts",
+    "find": "  if (highestBest !== null && best !== null && best < highestBest - o.maxFinalityLag) {",
+    "replace": "  if (highestBest !== null && best !== null && best <= highestBest - o.maxFinalityLag) {",
+    "test": "test/status.test.ts",
+    "why": "round 8 review L1: a fall of exactly the lag limit is still a reorganisation, not a contradiction"
+  },
+  {
+    "id": "status-earlier-best-any-genesis",
+    "file": "src/status.ts",
+    "find": "(earlierBest ?? []).filter((p) => p.genesis === genesis).map((p) => p.best_height)",
+    "replace": "(earlierBest ?? []).map((p) => p.best_height)",
+    "test": "test/status.test.ts",
+    "why": "round 8 review L1: only best heights read on this genesis are a floor"
+  },
+  {
+    "id": "status-chain-no-genesis-silent",
+    "file": "src/status.ts",
+    "find": "    faucet: withChainNote(applyFreshness(classifyFaucet(health), \"faucet\", o, conflicts), chainNote),",
+    "replace": "    faucet: withChainNote(applyFreshness(classifyFaucet(health), \"faucet\", o, conflicts), chainUnusable),",
+    "test": "test/status.test.ts",
+    "why": "round 8 review L2: a usable /chain reading that names no genesis says so in the faucet's detail"
   }
 ]

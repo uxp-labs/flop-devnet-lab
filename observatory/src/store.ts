@@ -10,10 +10,9 @@ function canon(v: unknown): string | undefined {
   if (v === null) return "null";
   if (Array.isArray(v)) return "[" + v.map((x) => canon(x) ?? "null").join(",") + "]";
   if (typeof v === "object") {
-    const o = v as Record<string, unknown>;
     const parts: string[] = [];
-    for (const k of Object.keys(o).sort()) {
-      const c = canon(o[k]);
+    for (const [k, x] of Object.entries(v).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))) {
+      const c = canon(x);
       if (c !== undefined) parts.push(JSON.stringify(k) + ":" + c);
     }
     return "{" + parts.join(",") + "}";
@@ -60,8 +59,7 @@ function lines(path: string): LogLine[] {
   };
   const out: LogLine[] = [];
   let start = 0;
-  for (let i = 0; i < raw.length; i++) {
-    if (raw[i] !== 0x0a) continue;
+  for (let i = raw.indexOf(0x0a); i !== -1; i = raw.indexOf(0x0a, start)) {
     out.push({ text: decode(raw.subarray(start, i)), ended: true });
     start = i + 1;
   }
@@ -102,7 +100,7 @@ export function readSnapshots(path: string): Snapshot[] {
 /** Sets seq and prev_hash from the last line, hashes, appends one line. Returns the stored snapshot. */
 export function appendSnapshot(path: string, snap: NewSnapshot): Snapshot {
   const existing = readSnapshots(path);
-  const last = existing[existing.length - 1];
+  const last = existing.at(-1);
   const base = {
     ...snap,
     seq: last ? last.seq + 1 : 0,
@@ -118,8 +116,8 @@ export function appendSnapshot(path: string, snap: NewSnapshot): Snapshot {
 export function verifyChain(path: string): number | null {
   const ls = lines(path);
   let prev: string | null = null;
-  for (let i = 0; i < ls.length; i++) {
-    const s = parseLine(ls[i]);
+  for (const [i, line] of ls.entries()) {
+    const s = parseLine(line);
     if (typeof s === "string") return i;
     if (s.seq !== i) return i;
     if (s.prev_hash !== prev) return i;

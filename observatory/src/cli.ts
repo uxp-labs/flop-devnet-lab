@@ -14,33 +14,52 @@ import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { CensusRefused, census, checkRequest } from "./census.js";
 import { DriftSpecError, drift } from "./drift.js";
-import { escrowStates } from "./escrow.js";
+import { escrowStates, isHash32 } from "./escrow.js";
 import { feedText, writeFeeds } from "./feed.js";
 import { renderPage } from "./page.js";
 import { buildSnapshot } from "./snapshot.js";
 import { FixtureSource } from "./source.js";
-import { DEVNET_GENESIS, networkStatus, type PreviousHead } from "./status.js";
+import { DEVNET_GENESIS, type EarlierBest, networkStatus, type PreviousHead } from "./status.js";
 import { appendSnapshot, hashSnapshot, readSnapshots, verifyChain } from "./store.js";
 import type { Snapshot } from "./types.js";
 
 const PKG = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
-type Args = { _: string[]; flags: Map<string, string[]> };
+/** The flags each command reads. A flag in many may be given more than once, any other once. */
+const COMMANDS = new Map<string, { one: readonly string[]; many: readonly string[] }>([
+  ["status", { one: ["--fixtures", "--now"], many: [] }],
+  ["escrow", { one: ["--fixtures", "--now"], many: ["--id"] }],
+  ["census", { one: ["--fixtures", "--genesis", "--from", "--to", "--now"], many: [] }],
+  ["drift", { one: ["--fixtures", "--spec", "--now"], many: [] }],
+  ["snapshot", { one: ["--status", "--escrows", "--census", "--drift", "--out", "--log", "--now", "--source-sha"], many: [] }],
+]);
 
-function parse(argv: string[]): Args {
-  const out: Args = { _: [], flags: new Map() };
-  for (let i = 0; i < argv.length; i++) {
-    const a = argv[i] as string;
-    if (a.startsWith("--")) {
-      const v = argv[i + 1];
-      if (v === undefined || v.startsWith("--")) fail(`${a} needs a value`);
-      const list = out.flags.get(a) ?? [];
-      list.push(v as string);
-      out.flags.set(a, list);
-      i++;
-    } else out._.push(a);
+type Args = { cmd: string; flags: Map<string, string[]> };
+
+/**
+ * The command and its flags. Every flag is --name followed by its value as the next argument, so
+ * --name=value, a name the command does not read, a flag given twice, a flag with no value and an
+ * argument that is no flag's value are each refused, for census as a refusal of the request.
+ * tools/recount.py reads its flags by the same rules (RULES.md 3.1 clause 16).
+ */
+function parse(argv: readonly string[]): Args {
+  const rest = [...argv];
+  const cmd = rest.shift();
+  const known = cmd === undefined ? undefined : COMMANDS.get(cmd);
+  if (cmd === undefined || known === undefined) fail("usage: flop-observatory <status|escrow|census|drift|snapshot> ...");
+  const refuse = (why: string): never => fail(cmd === "census" ? `census refused (request): ${why}` : why);
+  const flags = new Map<string, string[]>();
+  while (rest.length > 0) {
+    const a = rest.shift() as string;
+    if (!a.startsWith("--")) refuse(`${JSON.stringify(a)} is no flag's value; every argument is --name followed by its value`);
+    if (a.includes("=")) refuse(`${JSON.stringify(a)}: give a flag's value as the next argument, not after =`);
+    if (!known.one.includes(a) && !known.many.includes(a)) refuse(`${a} is not a flag ${cmd} reads`);
+    if (flags.has(a) && !known.many.includes(a)) refuse(`${a} is given twice`);
+    const v = rest.shift();
+    if (v === undefined || v.startsWith("--")) refuse(`${a} needs a value`);
+    flags.set(a, [...(flags.get(a) ?? []), v as string]);
   }
-  return out;
+  return { cmd, flags };
 }
 
 function fail(msg: string): never {
@@ -59,15 +78,18 @@ const int = (s: string | undefined, k: string): number | undefined => {
 };
 
 /**
- * Escrow ids to look up, each once. Ids compare in lower case, as escrow results show them, so the
- * same escrow listed twice (in either case) refuses rather than giving two cards with one key.
+ * Escrow ids to look up, each once and each 0x plus 64 hex, the one form get_escrow_state answers
+ * for (round 8 review I2), so the page, the feeds and the MCP server hold the same ids. Ids compare
+ * in lower case, as escrow results show them, so the same escrow listed twice (in either case)
+ * refuses rather than giving two cards with one key.
  */
 function distinctIds(ids: unknown, where: string): string[] {
   if (!Array.isArray(ids) || ids.length === 0) fail(`${where}: escrow ids must be a non-empty list`);
   const seen = new Set<string>();
   for (const id of ids) {
-    const k = String(id).toLowerCase();
-    if (seen.has(k)) fail(`${where}: escrow id ${String(id)} is listed twice`);
+    if (!isHash32(id)) fail(`${where}: escrow id ${JSON.stringify(id)} is not 0x plus 64 hex`);
+    const k = id.toLowerCase();
+    if (seen.has(k)) fail(`${where}: escrow id ${id} is listed twice`);
     seen.add(k);
   }
   return ids as string[];
@@ -75,8 +97,7 @@ function distinctIds(ids: unknown, where: string): string[] {
 
 async function main(): Promise<void> {
   const a = parse(process.argv.slice(2));
-  const cmd = a._[0];
-  if (!cmd) fail("usage: flop-observatory <status|escrow|census|drift|snapshot> ...");
+  const cmd = a.cmd;
 
   if (cmd === "status") {
     const src = FixtureSource.fromDir(need(a, "--fixtures"));
@@ -189,12 +210,15 @@ async function main(): Promise<void> {
     // cannot hide a rollback; the status checks use those on the same genesis.
     const previous: PreviousHead[] = [];
     const earlierTimes: (string | null)[] = [];
+    const earlierBest: EarlierBest[] = [];
     if (log && existsSync(log)) {
       const broken = verifyChain(log);
       if (broken !== null) fail(`snapshot log ${log} is broken at line ${broken}; it is never extended or trusted`);
       for (const { status: st, observed_at: taken } of readSnapshots(log)) {
         // Every earlier snapshot's own time, whatever it read, so a log that runs backwards shows.
         earlierTimes.push(typeof taken === "string" ? taken : null);
+        // Every best height on a genesis counts, with or without a finalized head (round 8 review L1).
+        if (st.genesis.rpc !== null && st.best_height !== null) earlierBest.push({ genesis: st.genesis.rpc, best_height: st.best_height });
         // A head time is needed only for the stuck check, so a snapshot without one still counts.
         if (st.genesis.rpc !== null && st.finalized_height !== null && st.finalized_hash !== null) {
           previous.push({
@@ -208,7 +232,7 @@ async function main(): Promise<void> {
     }
     const fresh = await buildSnapshot(
       { status, escrows, census: censusPart, drift: driftPart },
-      { pinnedGenesis: pinned, now, sourceSha: one(a, "--source-sha") ?? null, previous, earlierTimes },
+      { pinnedGenesis: pinned, now, sourceSha: one(a, "--source-sha") ?? null, previous, earlierTimes, earlierBest },
     );
     let snap: Snapshot;
     if (log) {

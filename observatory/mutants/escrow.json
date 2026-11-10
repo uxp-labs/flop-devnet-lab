@@ -274,8 +274,8 @@
   {
     "id": "escrow-unsafe-page-field-accepted",
     "file": "src/escrow.ts",
-    "find": "if (!isSafeInt(page[k])) return",
-    "replace": "if (!(typeof page[k] === \"number\" && Number.isInteger(page[k]))) return",
+    "find": "if (!isSafeInt(own(page, k))) return",
+    "replace": "if (!(typeof own(page, k) === \"number\" && Number.isInteger(own(page, k)))) return",
     "test": "test/escrow.test.ts",
     "why": "An unsafe integer in a page field makes the page invalid (IMD audit finding 2)."
   },

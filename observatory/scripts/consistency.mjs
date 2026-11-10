@@ -36,10 +36,11 @@
 // 10. Every file is exactly what the code writes for this snapshot: index.html is what src/page.ts
 //    renders, and each feed and snapshot.json what src/feed.ts writes. With --semantic-only this
 //    section is skipped; the canary uses that to prove sections 1 to 9 catch each tamper alone.
-// Every JSON file and transcript line is read strictly: a key that appears twice in one object
+// Every file is read as strict UTF-8, and every JSON file and transcript line strictly: a file that
+// is not JSON ends the check at once with that failure, a key that appears twice in one object
 // fails (RULES.md 3.1 clause 12), and each JSON output must be in its own written format.
 // Prints {"dir", "checks", "keys", "failures"}; exit 1 on any failure.
-import { readdirSync, readFileSync } from "node:fs";
+import { readdirSync, readFileSync, writeSync } from "node:fs";
 import { basename, join, resolve } from "node:path";
 import { censusFeed, driftFeed, escrowsFeed, feedText as writtenFeed, snapshotMeta, statusFeed } from "../dist/feed.js";
 import { TOOLS, handleMcp } from "../dist/mcp.js";
@@ -51,10 +52,37 @@ import { exchangesFor, unseenEscrowId } from "./mcp-exchanges.mjs";
 const args = process.argv.slice(2);
 const semanticOnly = args.includes("--semantic-only");
 const dir = resolve(args.find((a) => !a.startsWith("--")) ?? "out");
-const read = (f) => readFileSync(join(dir, f), "utf8");
-
 let checks = 0;
 const failures = [];
+// The number of marked page cells, once the page has been read.
+let keysShown = null;
+/**
+ * Prints the report and exits: 1 on any failure. The report is written to fd 1 synchronously and
+ * whole: console.log to a pipe is asynchronous, and process.exit would cut a long report short,
+ * which a caller reading the pipe could not parse (round 8).
+ */
+function report() {
+  const text = Buffer.from(JSON.stringify({ dir: basename(dir), semantic_only: semanticOnly, checks, keys: keysShown, failures }, null, 2) + "\n");
+  for (let off = 0; off < text.length; ) {
+    try {
+      off += writeSync(1, text, off);
+    } catch (e) {
+      if (e?.code !== "EAGAIN") throw e;
+    }
+  }
+  process.exit(failures.length ? 1 : 0);
+}
+const utf8 = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true });
+/** A file's text, read as strict UTF-8; a file that cannot be read so ends the check. */
+const read = (f) => {
+  try {
+    return utf8.decode(readFileSync(join(dir, f)));
+  } catch (e) {
+    checks++;
+    failures.push({ what: `${f} can be read as UTF-8`, detail: String(e?.message ?? e) });
+    report();
+  }
+};
 const expectEq = (what, a, b) => {
   checks++;
   if (a !== b) failures.push({ what, got: a, want: b });
@@ -64,12 +92,23 @@ const fail = (what, detail) => {
   checks++;
   failures.push({ what, detail });
 };
-/** JSON.parse, failing the check when one object holds a key twice (the parser keeps one copy). */
+/**
+ * JSON.parse, failing the check when one object holds a key twice (the parser keeps one copy).
+ * The text is parsed first, so the repeated key reader only ever reads JSON, and text that is not
+ * JSON ends the check with that failure (round 8 review L3).
+ */
 const strictJson = (what, text) => {
   checks++;
+  let value;
+  try {
+    value = JSON.parse(text);
+  } catch (e) {
+    failures.push({ what: `${what} is JSON`, detail: String(e?.message ?? e) });
+    report();
+  }
   const twice = duplicateKey(text);
   if (twice !== null) failures.push({ what: `${what} holds no repeated key`, detail: twice });
-  return JSON.parse(text);
+  return value;
 };
 // The feed format, written here rather than imported, so the semantic checks do not rest on
 // src/feed.ts: keys sorted, two-space indent, one trailing newline.
@@ -147,15 +186,43 @@ const REFUSALS = {
   sign_transaction: { code: -32602, message: "unknown tool: sign_transaction" },
   "get_escrow_state:not-an-id": { code: -32602, message: "escrow_id must be 0x plus 64 hex" },
 };
-const transcript = read("mcp-transcript.jsonl")
+const transcriptText = read("mcp-transcript.jsonl");
+// Blank lines and line ends other than \n are left to the written format check below.
+const transcript = transcriptText
   .split("\n")
-  .filter(Boolean)
+  .filter((l) => l.trim() !== "")
   .map((l, i) => strictJson(`mcp transcript line ${i}`, l));
 expectSame(
   "the transcript holds exactly the exchanges the transcript script makes, in order",
   transcript.map((x) => [x.request, x.expect_error]),
   expectedExchanges.map((x) => [x.req, x.expectError]),
 );
+// The transcript's written format (round 8 review L4): one line per exchange, ended by a newline,
+// nothing else in the file, each line its four keys in the script's order with the request as the
+// script sends it and the response spelled as the server's own line, which is one compact line.
+for (const [i, x] of transcript.entries()) {
+  if (typeof x.response_line !== "string") continue;
+  let compact = false;
+  try {
+    compact = JSON.stringify(JSON.parse(x.response_line)) === x.response_line;
+  } catch {
+    compact = false;
+  }
+  expectEq(`mcp transcript line ${i} response_line is one compact JSON line, as the server writes`, compact, true);
+}
+{
+  const spelled = (x, i) => {
+    let response = x.response;
+    try {
+      response = typeof x.response_line === "string" ? JSON.parse(x.response_line) : x.response;
+    } catch {
+      response = x.response;
+    }
+    const e = expectedExchanges.at(i);
+    return JSON.stringify({ request: e ? e.req : x.request, expect_error: e ? e.expectError : x.expect_error, response, response_line: x.response_line }) + "\n";
+  };
+  expectEq("mcp-transcript.jsonl is in its written format: one line per exchange, as the transcript script writes it", transcriptText, transcript.map(spelled).join(""));
+}
 const mcpText = new Map();
 for (const [i, x] of transcript.entries()) {
   expectEq(`mcp transcript line ${i} holds exactly request, expect_error, response and response_line`, sameKeys(x, ["request", "expect_error", "response", "response_line"]), true);
@@ -482,8 +549,9 @@ function checkCell(key, cell, value) {
     expectEq(`page ${key} empty string`, `${cell.v}|${cell.text}`, "|(empty)");
     return;
   }
-  // Every value shows as itself: in data-v when the element has one, and always in its text.
-  if (cell.v !== null) expectEq(`page ${key} data-v`, cell.v, want);
+  // Every value shows as itself, in its text and in data-v, which the renderer writes on every cell
+  // but the intro line's (round 8 review A7).
+  expectEq(`page ${key} data-v`, cell.v, key.startsWith("snapshot.") ? null : want);
   expectEq(`page ${key} visible text`, cell.text, want);
 }
 
@@ -564,6 +632,7 @@ for (const k of required) {
   // A browser shows "< x >" or "<1" as text, so a < that opens no tag would hide its words from
   // every check that strips tags.
   expectSame("every < in the body opens a lower case tag", [...body.matchAll(/<(?!\/?[a-z])/g)].map((m) => body.slice(m.index, m.index + 60)), []);
+  const opened = [];
   for (const m of body.matchAll(/<(\/?)([a-zA-Z][^\s/>]*)([^>]*)>/g)) {
     checks++;
     const tag = m[2];
@@ -575,12 +644,32 @@ for (const k of required) {
       if (m[3] !== "") failures.push({ what: "a closing tag holds nothing but its name", detail: m[0].slice(0, 120) });
       continue;
     }
+    opened.push({ tag, attrs: m[3], text: m[0] });
     const rest = m[3].replace(/\s+([a-z][a-z-]*)="[^"]*"/g, (_all, name) => {
       if (!ATTRS.has(name)) failures.push({ what: "the body uses only the attributes the renderer writes", detail: `${name} on <${tag}>` });
       return "";
     });
     if (rest.trim() !== "") failures.push({ what: "the body uses only the attributes the renderer writes", detail: `<${tag}> ${rest.trim().slice(0, 80)}` });
   }
+  // Every element's class is the one the renderer writes for it (round 8 review L5), so nothing
+  // paints a cell from outside it: a marked element's class is its value's (checked with its
+  // cell), the fixed paragraphs are note and banner in their order, every div is a card, and no
+  // other element has a class. The page holds exactly the renderer's paragraphs, cards and
+  // tables, so an empty one cannot add a mark of its own.
+  const unmarked = opened.filter((o) => attr(o.attrs, "data-k") === null);
+  for (const o of unmarked) {
+    if (o.tag === "p" || o.tag === "div") continue;
+    checks++;
+    if (attr(o.attrs, "class") !== null) failures.push({ what: `a ${o.tag} that is no marked cell carries no class`, detail: o.text.slice(0, 120) });
+  }
+  expectSame(
+    "the paragraphs outside the marked cells are the renderer's, with their classes, in order",
+    unmarked.filter((o) => o.tag === "p").map((o) => attr(o.attrs, "class")),
+    ["note", "banner", "note", ...(snapshot.escrows.length === 0 ? ["note"] : [])],
+  );
+  const cards = 1 + snapshot.escrows.length + 1 + (snapshot.drift === null ? 1 : 2);
+  expectSame("every div is a card, and the page holds the renderer's cards", unmarked.filter((o) => o.tag === "div").map((o) => attr(o.attrs, "class")), Array(cards).fill("card"));
+  expectEq("the page holds the renderer's tables, one in each card", opened.filter((o) => o.tag === "table").length, cards);
 }
 
 // 8. Every value sits in its own section.
@@ -724,7 +813,15 @@ if (!semanticOnly) {
     const want = handleMcp(x.request, { snapshot });
     expectEq(`mcp transcript line ${i} is exactly the line src/mcp.ts answers`, x.response_line, want === null ? null : JSON.stringify(want));
   }
+  // The whole file, as scripts/mcp-transcript.mjs writes it from the server's answers.
+  const written = expectedExchanges
+    .map(({ req, expectError }) => {
+      const line = JSON.stringify(handleMcp(req, { snapshot }));
+      return JSON.stringify({ request: req, expect_error: expectError, response: JSON.parse(line), response_line: line }) + "\n";
+    })
+    .join("");
+  expectEq("mcp-transcript.jsonl is exactly what scripts/mcp-transcript.mjs writes from src/mcp.ts's answers", transcriptText, written);
 }
 
-console.log(JSON.stringify({ dir: basename(dir), semantic_only: semanticOnly, checks, keys: cells.size, failures }, null, 2));
-process.exit(failures.length ? 1 : 0);
+keysShown = cells.size;
+report();

@@ -172,6 +172,15 @@ describe("source scan", () => {
     /mnemonic/i,
     /\bsecretKey\b/,
     /\bprivateKey\b/,
+    // A socket or pipe opened from a stream src already holds, a hook V8 calls with stack frames,
+    // code from bytes, and the ways to read or write a property by a name only known at run time
+    // (round 8 review M1). The syntax tree scan holds the full rule: no computed key at all.
+    /\.\s*(?:connect|connect6|listen|bind|bind6)\b/,
+    /\bprepareStackTrace\b/,
+    /\bWebAssembly\b/,
+    /\bgetOwnPropertyNames\b/,
+    /\bObject\s*\.\s*assign\b/,
+    /\batob\b/,
   ];
   const dir = new URL("../src/", import.meta.url);
   // Every module under src, in subfolders too, since tsconfig compiles all of src.
@@ -233,6 +242,13 @@ describe("source scan", () => {
       'const m = proc.getBuiltinModule("node:https");',
       "const p = process;",
       "process.env.HOME;",
+      "(process.stdout as any).connect(443, host);",
+      "rl.input.listen(path);",
+      'Error.prepareStackTrace = (e, frames) => frames;',
+      "const m = await WebAssembly.instantiate(bytes);",
+      "const k = Object.getOwnPropertyNames(A.prototype)[0];",
+      'Object.assign(Error, extra);',
+      'const k = atob("Y29uc3RydWN0b3I=");',
     ];
     for (const line of samples) expect(forbidden.some((re) => re.test(line)), line).toBe(true);
   });
@@ -288,7 +304,7 @@ describe("source scan", () => {
     const names = [...text.matchAll(/^[ \t]*import[ \t]+([^\n#]+)/gm)].flatMap((m) =>
       (m[1] as string).split(",").map((p) => (p.trim().split(/\s+/)[0] as string).split(".")[0]),
     );
-    expect([...new Set(names)].sort()).toEqual(["argparse", "json", "os", "re", "stat", "sys"]);
+    expect([...new Set(names)].sort()).toEqual(["json", "os", "re", "stat", "sys"]);
     expect(text).not.toMatch(/^[ \t]*from[ \t]+\S+[ \t]+import\b/m);
     // An import after a semicolon or a colon would not start its own line.
     expect(text).not.toMatch(/[;:][ \t]*(?:import|from)[ \t]/);
@@ -299,5 +315,10 @@ describe("source scan", () => {
     expect(text).not.toMatch(/\.(?!__init__\b)_\w/);
     expect(text).not.toMatch(/\bopen\b(?!\()/);
     expect(text).not.toMatch(/\bFileType\b|__loader__|\bload_module\b|\bmodules\s*\[/);
+    // A frame's globals and builtins, a builtin that reaches a file type or a pager, and open with
+    // its arguments unpacked or an opener (round 8 review L6).
+    expect(text).not.toMatch(/\.(?:gi|cr|ag|tb|f|co)_\w/);
+    expect(text).not.toMatch(/\b(?:type|help|vars|dir|memoryview|object)\s*\(/);
+    expect(text).not.toMatch(/\bopen\s*\([^)\n]*(?:\*|\bopener\b)/);
   });
 });

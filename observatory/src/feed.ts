@@ -6,14 +6,14 @@ import type { Snapshot } from "./types.js";
 function sortDeep(v: unknown): unknown {
   if (Array.isArray(v)) return v.map(sortDeep);
   if (v !== null && typeof v === "object") {
-    const o = v as Record<string, unknown>;
     // fromEntries defines each key as an own property. Plain assignment would treat a key named
-    // __proto__ (an account, say) as the prototype and drop it from the written file.
+    // __proto__ (an account, say) as the prototype and drop it from the written file. Keys sort by
+    // UTF-16 unit, as Array.prototype.sort does by default.
     return Object.fromEntries(
-      Object.keys(o)
-        .sort()
-        .filter((k) => o[k] !== undefined)
-        .map((k) => [k, sortDeep(o[k])]),
+      Object.entries(v)
+        .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+        .filter(([, x]) => x !== undefined)
+        .map(([k, x]) => [k, sortDeep(x)]),
     );
   }
   return v;

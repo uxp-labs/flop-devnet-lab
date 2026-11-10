@@ -153,6 +153,27 @@ describe("injected failures", () => {
       const moved = await run2([head(3341575, "2026-11-09T23:30:00Z"), head(3341574, "2026-11-09T23:40:00Z"), head(3341575, "2026-11-09T23:46:53Z")]);
       expect(moved.rpc.stale).toBe(false);
     });
+    it("an earlier best height is a floor too, less the lag limit, with or without a finalized head (Fable review r8 L1)", async () => {
+      const best = (best_height: number, genesis: string = DEVNET_GENESIS) => ({ genesis, best_height });
+      // status-healthy reads best block 3341577 with the default lag limit of 30.
+      const within = await run("status-healthy", { earlierBest: [best(3341577 + 30)] });
+      expect(within.conflicts).toEqual([]);
+      expect(within.reset_detected).toBe(false);
+      const fell = await run("status-healthy", { earlierBest: [best(3341000), best(3341577 + 31), best(3341500)] });
+      expect(fell.conflicts.join(" ")).toMatch(/best block 3341577 is more than 30 blocks below the best block 3341608 an earlier snapshot saw on this genesis/);
+      expect(fell.rpc.health).toBe("degraded");
+      expect(fell.reset_detected).toBeNull();
+      // A restarted head with no finalized head is caught the same way.
+      const src = fx("status-healthy");
+      const restarted = new FixtureSource({ ...src.data, rpcHead: { ...(src.data.rpcHead as object), finalized: null, best_number: 8 } as never });
+      const s = await networkStatus(restarted, { pinnedGenesis: DEVNET_GENESIS, now: NOW, earlierBest: [best(3341577)] });
+      expect(s.conflicts.join(" ")).toMatch(/best block 8 is more than 30 blocks below the best block 3341577/);
+      expect(s.reset_detected).toBeNull();
+      // Best heights read on another genesis change nothing.
+      const other = await run("status-healthy", { earlierBest: [best(9_000_000, OTHER)] });
+      expect(other.conflicts).toEqual([]);
+      expect(other.reset_detected).toBe(false);
+    });
     it("earlier heads on another genesis alone change nothing", async () => {
       const s = await run("status-healthy", { previous: [head(3341600, NOW, "0x" + "11".repeat(32), OTHER)] });
       expect(s.conflicts).toEqual([]);
@@ -416,6 +437,18 @@ describe("the faucet genesis comes only from a usable /chain reading (RULES 1.1)
       expect(s.conflicts.join(" ")).toMatch(new RegExp(`faucet /chain reading that does not count \\(.*\\) reports genesis ${OTHER}, not the pinned genesis`));
       expect(s.conflicts.join(" ")).toMatch(/faucet genesis 0xabab.* differs from rpc genesis/);
     }
+  });
+
+  it.each([
+    ["a body with no genesisHash", { body: {} }, /it names no genesisHash/],
+    ["a body that is null", { body: null }, /it names no genesisHash/],
+    ["a malformed genesisHash", { body: { genesisHash: "0x12" } }, /its genesisHash is malformed/],
+  ])("a usable reading that gives no genesis (%s) leaves reset_detected null, and the faucet detail says why (Fable review r8 L2)", async (_name, patch, why) => {
+    const s = await chainWith(patch);
+    expect(s.genesis.faucet).toBeNull();
+    expect(s.reset_detected).toBeNull();
+    expect(s.faucet.detail).toMatch(/the \/chain reading does not count: /);
+    expect(s.faucet.detail).toMatch(why);
   });
 
   it("a usable reading says nothing in the faucet detail", async () => {

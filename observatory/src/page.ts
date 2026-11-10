@@ -1,4 +1,5 @@
 // One self-contained HTML page. No external assets. Unknown values render as empty cells.
+import { own } from "./own.js";
 import type { CensusCounts, Snapshot } from "./types.js";
 
 export function esc(v: unknown): string {
@@ -87,8 +88,7 @@ export function renderPage(s: Snapshot): string {
   out.push(row("status.best_height", cell("status.best_height", st.best_height), "status."));
   out.push(row("status.finality_lag", cell("status.finality_lag", st.finality_lag), "status."));
   out.push(row("status.runtime_version", cell("status.runtime_version", st.runtime_version), "status."));
-  for (const svc of ["rpc", "gateway", "faucet"] as const) {
-    const x = st[svc];
+  for (const [svc, x] of [["rpc", st.rpc], ["gateway", st.gateway], ["faucet", st.faucet]] as const) {
     out.push(row(`status.${svc}.health`, healthCell(`status.${svc}.health`, x.health), "status."));
     out.push(row(`status.${svc}.http`, cell(`status.${svc}.http`, x.http), "status."));
     out.push(row(`status.${svc}.detail`, cell(`status.${svc}.detail`, x.detail), "status."));
@@ -131,7 +131,7 @@ export function renderPage(s: Snapshot): string {
     out.push(row("census.covered", rangeCell("census.covered", c.covered), "census."));
     out.push(row("census.gaps", rangeCell("census.gaps", c.gaps), "census."));
     for (const k of COUNT_KEYS) {
-      out.push(row(`census.totals.${k}`, cell(`census.totals.${k}`, c.totals[k] ?? null), "census.", partial));
+      out.push(row(`census.totals.${k}`, cell(`census.totals.${k}`, own(c.totals, k) ?? null), "census.", partial));
     }
     out.push(row("census.totals_label", cell("census.totals_label", c.totals_label), "census."));
     out.push(row("census.requested_blocks", cell("census.requested_blocks", c.requested_blocks), "census."));

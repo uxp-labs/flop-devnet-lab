@@ -1,5 +1,6 @@
 // The shared strict readings (src/strict.ts): RULES.md 3.1 clause 14 and section 1.1.
 import { describe, expect, it } from "vitest";
+import { own } from "../src/own.js";
 import { MAX_NESTING, duplicateKey, isSafeInt, nestingDepth, parseZoned, secondsBetween } from "../src/strict.js";
 
 describe("isSafeInt (clause 14)", () => {
@@ -116,6 +117,38 @@ describe("duplicateKey (clause 12: one value per key)", () => {
   ])("finds none in %s: the same key in sibling or nested objects, as a value, or inside a string", (text) => {
     expect(() => JSON.parse(text)).not.toThrow();
     expect(duplicateKey(text)).toBeNull();
+  });
+
+  it.each(['{"a', '{"a": 1, "a', '{"a": "b\\', '"', '{"a": "\\"'])(
+    "stops at the end of %s, whose last string never closes, rather than read past it (Fable review r8 L3)",
+    (text) => {
+      expect(() => JSON.parse(text)).toThrow();
+      expect(duplicateKey(text)).toBeNull();
+    },
+  );
+});
+
+describe("own (RULES.md section 4: no property is read by a name the code does not write)", () => {
+  it("reads a record's own data by a run time key", () => {
+    const record = JSON.parse('{"who": "alice", "__proto__": 7, "constructor": "a name", "0": "zero"}') as Record<string, unknown>;
+    expect(own(record, "who")).toBe("alice");
+    expect(own(record, "__proto__")).toBe(7);
+    expect(own(record, "constructor")).toBe("a name");
+    expect(own(record, "0")).toBe("zero");
+    expect(own(record, "payer")).toBeUndefined();
+  });
+
+  it("never reaches an inherited member, whatever its name", () => {
+    for (const k of ["constructor", "__proto__", "toString", "hasOwnProperty", "valueOf", "__defineGetter__"]) {
+      expect(own({}, k), k).toBeUndefined();
+      expect(own([] as unknown as object, k), k).toBeUndefined();
+      expect(own((() => 0) as unknown as object, k), k).toBeUndefined();
+    }
+  });
+
+  it("never hands back a function, own or not", () => {
+    expect(() => own({ f: () => 0 }, "f")).toThrow(/holds a function, not data/);
+    expect(() => own({ C: class {} }, "C")).toThrow(/holds a function, not data/);
   });
 });
 

@@ -2,8 +2,10 @@
 python3 -I -m unittest tools/test_recount.py
 """
 import ast
+import builtins
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -31,16 +33,31 @@ def census(scn, lo, hi, genesis=G):
     return json.loads(out)
 
 
-ALLOWED_IMPORTS = {"argparse", "json", "os", "re", "stat", "sys"}
+ALLOWED_IMPORTS = {"json", "os", "re", "stat", "sys"}
 # Every use of a module, as the full dotted name. Each is a read, a parse or a print; anything
 # else, an alias of a module or of part of one included, is not on the list.
 ALLOWED_CHAINS = {
-    "argparse.ArgumentParser", "json.dumps", "json.loads", "os.fsencode", "os.listdir", "os.lstat",
-    "os.path.isdir", "os.path.join", "re.compile", "re.fullmatch", "stat.S_ISDIR", "stat.S_ISREG",
+    "json.dumps", "json.loads", "os.fsencode", "os.listdir", "os.lstat", "os.path.isdir",
+    "os.path.join", "re.compile", "re.fullmatch", "stat.S_ISDIR", "stat.S_ISREG", "sys.argv",
     "sys.exit", "sys.stderr",
 }
+# The builtins recount.py uses, and no others: type, help, vars, memoryview and the rest reach
+# objects, pagers and files a recount has no use for (round 8 review L6). A builtin off this list
+# is refused wherever its name appears, as a name of the module's own too, so it cannot be kept
+# under its own name (type = type) or as a parameter's default.
+ALLOWED_BUILTINS = {
+    "Exception", "FileNotFoundError", "OSError", "RecursionError", "UnicodeDecodeError", "ValueError",
+    "__name__", "all", "any", "bool", "chr", "dict", "float", "int", "isinstance", "len", "list", "max",
+    "min", "open", "print", "set", "sorted", "str", "sum", "super",
+}
+BUILTIN_NAMES = set(dir(builtins))
 BANNED_NAMES = {"eval", "exec", "compile", "__import__", "__builtins__", "builtins", "getattr", "setattr",
                 "delattr", "globals", "locals", "vars", "breakpoint", "input", "importlib", "subprocess", "socket"}
+# Frame, code and traceback attributes: a generator's or a coroutine's frame holds the module's
+# globals and builtins, so g().gi_frame.f_globals["os"] reaches os without naming it (r8 L6).
+FRAME_ATTR = re.compile(r"(?:gi|cr|ag|f|tb|co)_")
+# open takes a file and a mode, by position or as mode=, and only these words besides.
+OPEN_KEYWORDS = {"mode", "encoding", "errors", "newline"}
 
 
 def _dotted(node):
@@ -51,38 +68,84 @@ def _dotted(node):
     return ".".join([node.id] + parts[::-1]) if isinstance(node, ast.Name) else None
 
 
+def _bound(tree):
+    """Every name the code binds anywhere: imports, definitions, parameters, assignment, loop and
+    with targets, except and match names, global and nonlocal names."""
+    names = set()
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.Import, ast.ImportFrom)):
+            names |= {(a.asname or a.name).split(".")[0] for a in node.names}
+        elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            names.add(node.name)
+        elif isinstance(node, ast.arg):
+            names.add(node.arg)
+        elif isinstance(node, ast.Name) and isinstance(node.ctx, (ast.Store, ast.Del)):
+            names.add(node.id)
+        elif isinstance(node, ast.ExceptHandler) and node.name:
+            names.add(node.name)
+        elif isinstance(node, (ast.Global, ast.Nonlocal)):
+            names |= set(node.names)
+        elif isinstance(node, (ast.MatchAs, ast.MatchStar)) and node.name:
+            names.add(node.name)
+        elif isinstance(node, ast.MatchMapping) and node.rest:
+            names.add(node.rest)
+    return names
+
+
 def scan_problems(code):
-    """What the read-only scan finds in Python source (Fable review r7 L5): an import outside the
-    allow-list, any from-import, a module used other than through one of the allowed dotted names
-    (so an alias, argparse._os or os.path kept in a variable all fail), an attribute that starts
-    with an underscore (but super().__init__), a name that runs code or reaches processes and
-    sockets, and open used other than in a direct call for reading."""
+    """What the read-only scan finds in Python source (Fable review r7 L5 and r8 L6): an import
+    outside the allow-list, any from-import, a module used other than through one of the allowed
+    dotted names (so an alias, argparse._os or os.path kept in a variable all fail), a name that is
+    neither one the code binds nor an allowed builtin, a builtin off the list wherever it appears,
+    an attribute that starts with an underscore (but super().__init__) or names a frame, code or
+    traceback field, a name that runs code or reaches processes and sockets, and open used other
+    than in a direct call for reading with a plain file and mode."""
     tree = ast.parse(code)
     parents = {child: node for node in ast.walk(tree) for child in ast.iter_child_nodes(node)}
+    bound = _bound(tree)
     found = []
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
             found += ["import " + a.name for a in node.names if a.name.split(".")[0] not in ALLOWED_IMPORTS]
         elif isinstance(node, ast.ImportFrom):
             found.append("from %s import" % node.module)
-        elif isinstance(node, ast.Name) and node.id in ALLOWED_IMPORTS:
+        elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef, ast.arg)):
+            name = node.arg if isinstance(node, ast.arg) else node.name
+            if name in BUILTIN_NAMES and name not in ALLOWED_BUILTINS:
+                found.append("binds the builtin name %s" % name)
+        elif isinstance(node, ast.Attribute):
+            if node.attr.startswith("_"):
+                own_init = node.attr == "__init__" and isinstance(node.value, ast.Call) \
+                    and isinstance(node.value.func, ast.Name) and node.value.func.id == "super"
+                if not own_init:
+                    found.append("reaches ." + node.attr)
+            elif FRAME_ATTR.match(node.attr):
+                found.append("reaches the frame, code or traceback field ." + node.attr)
+        if not isinstance(node, ast.Name):
+            continue
+        if node.id in ALLOWED_IMPORTS:
             top = node
             while isinstance(parents.get(top), ast.Attribute) and parents[top].value is top:
                 top = parents[top]
             if _dotted(top) not in ALLOWED_CHAINS:
                 found.append("uses %s" % (_dotted(top) or node.id))
-        elif isinstance(node, ast.Name) and node.id in BANNED_NAMES:
+            continue
+        if node.id in BANNED_NAMES:
             found.append(node.id)
-        elif isinstance(node, ast.Attribute) and node.attr.startswith("_"):
-            own_init = node.attr == "__init__" and isinstance(node.value, ast.Call) \
-                and isinstance(node.value.func, ast.Name) and node.value.func.id == "super"
-            if not own_init:
-                found.append("reaches ." + node.attr)
-        elif isinstance(node, ast.Name) and node.id == "open":
+        elif node.id in BUILTIN_NAMES and node.id not in ALLOWED_BUILTINS:
+            found.append("uses the builtin %s" % node.id)
+        elif node.id not in BUILTIN_NAMES and node.id not in bound:
+            found.append("uses %s, which the code never binds" % node.id)
+        if node.id == "open":
             call = parents.get(node)
             if not (isinstance(call, ast.Call) and call.func is node):
                 found.append("open used other than in a call")
                 continue
+            if any(isinstance(a, ast.Starred) for a in call.args) or any(k.arg is None for k in call.keywords):
+                found.append("open with a starred argument")
+                continue
+            if len(call.args) > 2 or any(k.arg not in OPEN_KEYWORDS for k in call.keywords):
+                found.append("open with more than a file, a mode, an encoding, errors and newline")
             mode = call.args[1] if len(call.args) > 1 else next((k.value for k in call.keywords if k.arg == "mode"), None)
             if mode is not None and not (isinstance(mode, ast.Constant) and mode.value in ("r", "rb")):
                 found.append("open for writing")
@@ -537,13 +600,52 @@ class RecountTests(unittest.TestCase):
                # Fable review r7 L5: reached through another module, an alias, or open kept in a name.
                'argparse._os.system("id")', 'argparse._os.popen("id")', 'p = os.path\nq = p.os\nq.system("id")',
                'argparse._sys.modules["o" "s"].system("id")', 'f = open\nf("x", "w")', 'argparse.FileType("w")("x")',
-               'json.decoder.scanner.__loader__.load_module("sock" "et")', 'm = os', 'x = (1).__class__')
+               'json.decoder.scanner.__loader__.load_module("sock" "et")', 'm = os', 'x = (1).__class__',
+               # Fable review r8 L6: a frame's globals and builtins, open with starred arguments
+               # or an opener, and builtins that reach a file type or a pager.
+               'def g():\n    yield\nfr = g().gi_frame\nfr.f_globals["os"].system("id")',
+               'def g():\n    yield\ng().gi_frame.f_builtins["exec"]("x = 1")',
+               'async def c():\n    pass\nc().cr_frame.f_globals["os"].popen("id")',
+               'tb = None\ntb.tb_frame.f_back', 'open("x", **{"mode": "w"})', 'open(*["x", "w"])',
+               'open("x", "r", opener=os.open)', 'open("x", "r", 1)', 'e = sys.stderr\ntype(e.buffer.raw)("x", "w")',
+               'help("os")', 'type = 1', 'def f(t=type):\n    return t', 'def f(type):\n    return 1',
+               'x = memoryview(b"")', 'import argparse', 'argparse.FileType("w")', 'x = y')
         for code in bad:
             self.assertNotEqual(scan_problems(code), [], code)
         good = ("import os", 'os.path.join("a", "b")', 'open("x", "r", encoding="utf-8")', 'os.lstat("x")',
-                "class E(Exception):\n    def __init__(self, m):\n        super().__init__(m)")
+                "class E(Exception):\n    def __init__(self, m):\n        super().__init__(m)",
+                "for i in [1, 2]:\n    print(len(str(i)), file=sys.stderr)", 'with open("x", "rb") as fh:\n    data = fh.read()')
         for code in good:
             self.assertEqual(scan_problems(code), [], code)
+
+    def test_arguments_read_like_the_typescript_command(self):
+        """RULES.md 3.1 clause 16 and Fable review r8 L7: every flag is --name and then its value,
+        so each of these is a request problem, as src/cli.ts reads it, and none reaches the pages."""
+        d = os.path.join(DATA, "complete")
+        cases = {
+            "value after =": ["--dir", d, "--genesis=" + G, "--from", "1", "--to", "30"],
+            "abbreviated flag": ["--dir", d, "--gen", G, "--from", "1", "--to", "30"],
+            "unknown flag": ["--dir", d, "--genesis", G, "--from", "1", "--to", "30", "--form", "5"],
+            "value that starts with a dash": ["--dir", d, "--genesis", G, "--from", "-a", "--to", "30"],
+            "negative number": ["--dir", d, "--genesis", G, "--from", "-5", "--to", "30"],
+            "flag with no value at the end": ["--dir", d, "--genesis", G, "--from", "1", "--to"],
+            "flag whose value is a flag": ["--dir", d, "--genesis", G, "--from", "--to", "30"],
+            "flag given twice": ["--dir", d, "--genesis", G, "--from", "1", "--from", "2", "--to", "30"],
+            "argument that is no flag's value": ["--dir", d, "--genesis", G, "--from", "1", "--to", "30", "extra"],
+            "flag left out": ["--dir", d, "--from", "1", "--to", "30"],
+            "help": ["--help"],
+            "nothing": [],
+        }
+        for name, args in cases.items():
+            p = subprocess.run([sys.executable, "-I", RECOUNT, *args], capture_output=True, text=True)
+            self.assertEqual(p.returncode, 2, name)
+            self.assertTrue(p.stderr.startswith("census refused (request): "), (name, p.stderr))
+            self.assertEqual(p.stdout, "", name)
+        # The same flags in another order are read the same.
+        p = subprocess.run([sys.executable, "-I", RECOUNT, "--to", "30", "--genesis", G, "--from", "1", "--dir", d],
+                           capture_output=True, text=True)
+        self.assertEqual(p.returncode, 0, p.stderr)
+        self.assertEqual(json.loads(p.stdout), census("complete", 1, 30))
 
     def test_output_is_deterministic(self):
         a = run(os.path.join(DATA, "gap"), 1, 30)[1]

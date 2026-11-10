@@ -36,6 +36,18 @@ export interface StatusOptions {
    * later than this snapshot's time means the log runs backwards (RULES.md 1.1).
    */
   earlierTimes?: readonly (string | null)[] | null;
+  /**
+   * The best height every earlier snapshot in the log read, with its RPC genesis, oldest first,
+   * whether or not it also read a finalized head (RULES.md 1.1: a best height that falls further
+   * than the lag limit on the same genesis).
+   */
+  earlierBest?: readonly EarlierBest[] | null;
+}
+
+/** One earlier snapshot's best height and the RPC genesis it read it on. */
+export interface EarlierBest {
+  genesis: string;
+  best_height: number;
 }
 
 /** One earlier snapshot's finalized head, as its status recorded it. Its time may be null. */
@@ -187,6 +199,7 @@ export function classifyRpc(
   /** Set to true when this head contradicts itself or an earlier snapshot. */
   flags: { contradicted: boolean } = { contradicted: false },
   earlierTimes: StatusOptions["earlierTimes"] = null,
+  earlierBest: StatusOptions["earlierBest"] = null,
 ): NetworkStatus["rpc"] {
   // Every earlier head on this genesis counts, in log order, so a snapshot in between with no RPC
   // reading (or one on another genesis) cannot hide a rollback.
@@ -263,14 +276,25 @@ export function classifyRpc(
     problems.push("best height is below an earlier finalized height");
     flags.contradicted = true;
   }
+  // An earlier best height is a floor too, less the lag limit (round 8 review L1): a reorganisation
+  // undoes only blocks that are not final, and a head within the lag limit has at most that many,
+  // so a best height that falls further on the same genesis is a restart, a node still syncing or a
+  // rollback. This holds whether or not either snapshot read a finalized head.
+  const bestSeen = genesis === null ? [] : (earlierBest ?? []).filter((p) => p.genesis === genesis).map((p) => p.best_height);
+  const highestBest = bestSeen.length > 0 ? Math.max(...bestSeen) : null;
+  if (highestBest !== null && best !== null && best < highestBest - o.maxFinalityLag) {
+    conflicts.push(`best block ${best} is more than ${o.maxFinalityLag} blocks below the best block ${highestBest} an earlier snapshot saw on this genesis`);
+    problems.push("best height fell further than the lag limit below an earlier best height");
+    flags.contradicted = true;
+  }
   if (finalized && highest !== null) {
     const changed = sameGenesis.find((p) => p.finalized_height === finalized.number && p.finalized_hash !== finalized.hash);
     // Stuck since the oldest of the latest run of snapshots at this same height. A time there that
     // does not parse means the check cannot run.
     let since: number | null = null;
     let sinceUnknown = false;
-    for (let i = sameGenesis.length - 1; i >= 0 && (sameGenesis[i] as PreviousHead).finalized_height === finalized.number; i--) {
-      since = secondsBetween((sameGenesis[i] as PreviousHead).observed_at, o.now);
+    for (let i = sameGenesis.length - 1; i >= 0 && (sameGenesis.at(i) as PreviousHead).finalized_height === finalized.number; i--) {
+      since = secondsBetween((sameGenesis.at(i) as PreviousHead).observed_at, o.now);
       if (since === null) sinceUnknown = true;
     }
     if (finalized.number < highest) {
@@ -399,6 +423,10 @@ export async function assessNetwork(source: Source, opts: StatusOptions): Promis
     conflicts.push("faucet /chain genesisHash is malformed");
   }
   const faucetGenesis = chainUsable ? shownFaucetGenesis : null;
+  // A usable reading that names no genesis, or a malformed one, gives reset_detected nothing to
+  // go on, so the faucet's detail says why (round 8 review L2).
+  const chainNote =
+    chainUnusable ?? (shownFaucetGenesis !== null ? null : rawFaucetGenesis === undefined ? "it names no genesisHash" : "its genesisHash is malformed");
   if (!chainUsable && shownFaucetGenesis !== null && shownFaucetGenesis !== pinned) {
     conflicts.push(`faucet /chain reading that does not count (${chainUnusable}) reports genesis ${shownFaucetGenesis}, not the pinned genesis`);
   }
@@ -414,7 +442,7 @@ export async function assessNetwork(source: Source, opts: StatusOptions): Promis
   }
 
   const flags = { contradicted: false };
-  const rpc = classifyRpc(head, o, conflicts, opts.previous ?? null, rpcGenesis, flags, opts.earlierTimes ?? null);
+  const rpc = classifyRpc(head, o, conflicts, opts.previous ?? null, rpcGenesis, flags, opts.earlierTimes ?? null, opts.earlierBest ?? null);
   const finalizedValid =
     head.finalized && nonNegativeInt(head.finalized.number) !== null && normalizeHash(head.finalized.hash) !== null;
   const finalizedHeight = finalizedValid ? (head.finalized as { number: number }).number : null;
@@ -439,7 +467,7 @@ export async function assessNetwork(source: Source, opts: StatusOptions): Promis
     runtime_version: nonNegativeInt(head.runtime_spec_version),
     rpc,
     gateway: applyFreshness(classifyGateway(gateway), "gateway", o, conflicts),
-    faucet: withChainNote(applyFreshness(classifyFaucet(health), "faucet", o, conflicts), chainUnusable),
+    faucet: withChainNote(applyFreshness(classifyFaucet(health), "faucet", o, conflicts), chainNote),
   };
   return { status, rpcUsable };
 }

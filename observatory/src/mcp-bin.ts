@@ -42,18 +42,52 @@ try {
   process.exit(2);
 }
 // Only an observatory snapshot is served: an object that merely hashes to its own hash field
-// would make every tool answer about nothing.
+// would make every tool answer about nothing. The status and each escrow, which get_status and
+// get_escrow_state answer field by field, hold exactly their schema's fields, and the fields a
+// caller branches on have their schema's types (round 8 review I1).
 const isObject = (v: unknown): v is Record<string, unknown> => v !== null && typeof v === "object" && !Array.isArray(v);
 const part = (v: unknown, schema: string): boolean => isObject(v) && v.schema === schema;
+const exactly = (v: Record<string, unknown>, keys: readonly string[]): boolean => Object.keys(v).length === keys.length && keys.every((k) => Object.hasOwn(v, k));
+const STATUS_KEYS = ["schema", "observed_at", "trust", "genesis", "reset_detected", "conflicts", "finalized_height", "finalized_hash", "best_height", "finality_lag", "runtime_version", "rpc", "gateway", "faucet"];
+const ESCROW_KEYS = ["schema", "escrow_id", "state", "evidence", "notes", "finalized_height", "observed_at", "trust", "scope"];
+const STATES = ["unverified", "funded", "claimed", "refunded"];
+const TRUSTS = ["trusted RPC", "fixture"];
+const heightOrNull = (v: unknown): boolean => v === null || (typeof v === "number" && Number.isSafeInteger(v) && v >= 0);
+const statusShaped = (st: unknown): boolean =>
+  isObject(st) &&
+  st.schema === "flop-observatory/network-status@0" &&
+  exactly(st, STATUS_KEYS) &&
+  typeof st.observed_at === "string" &&
+  TRUSTS.includes(st.trust as string) &&
+  (st.reset_detected === null || typeof st.reset_detected === "boolean") &&
+  Array.isArray(st.conflicts) &&
+  heightOrNull(st.finalized_height) &&
+  heightOrNull(st.best_height) &&
+  isObject(st.genesis) &&
+  isObject(st.rpc) &&
+  isObject(st.gateway) &&
+  isObject(st.faucet);
+const escrowShaped = (e: unknown): boolean =>
+  isObject(e) &&
+  e.schema === "flop-observatory/escrow-state@0" &&
+  exactly(e, ESCROW_KEYS) &&
+  typeof e.escrow_id === "string" &&
+  STATES.includes(e.state as string) &&
+  Array.isArray(e.evidence) &&
+  Array.isArray(e.notes) &&
+  heightOrNull(e.finalized_height) &&
+  typeof e.observed_at === "string" &&
+  TRUSTS.includes(e.trust as string) &&
+  e.scope === "settlement only; says nothing about output quality";
 const shaped =
   isObject(snapshot) &&
   snapshot.schema === "flop-observatory/snapshot@0" &&
   typeof snapshot.observed_at === "string" &&
   typeof snapshot.trust === "string" &&
   isObject(snapshot.pin) &&
-  part(snapshot.status, "flop-observatory/network-status@0") &&
+  statusShaped(snapshot.status) &&
   Array.isArray(snapshot.escrows) &&
-  snapshot.escrows.every((e) => part(e, "flop-observatory/escrow-state@0") && typeof e.escrow_id === "string") &&
+  snapshot.escrows.every(escrowShaped) &&
   (snapshot.census === null || part(snapshot.census, "flop-observatory/census@0")) &&
   (snapshot.drift === null || part(snapshot.drift, "flop-observatory/drift@0"));
 if (!shaped) {

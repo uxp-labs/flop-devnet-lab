@@ -20,6 +20,7 @@
 //   page or an invalid request refuses the whole census. None of them is ever turned into a partial
 //   count (12, 13, 15).
 // Pure: no clock and no I/O. Everything comes in through the arguments.
+import { own } from "./own.js";
 import { isSafeInt } from "./strict.js";
 import type { BlockRange, CensusCounts, CensusReport, Trust } from "./types.js";
 
@@ -74,9 +75,10 @@ const KINDS: readonly Kind[] = [
   "channels_settled",
 ];
 
-const KIND_OF = new Map<string, Kind>(
-  KINDS.map((k) => [JSON.stringify([CENSUS_EVENTS[k].section, CENSUS_EVENTS[k].method]), k]),
-);
+/** The table's row for a kind. */
+const eventOf = (k: Kind): (typeof CENSUS_EVENTS)[Kind] => own(CENSUS_EVENTS, k) as (typeof CENSUS_EVENTS)[Kind];
+
+const KIND_OF = new Map<string, Kind>(KINDS.map((k) => [JSON.stringify([eventOf(k).section, eventOf(k).method]), k]));
 
 /** Clause 11: the account is the first of these whose value is a string that is not empty. */
 const ACCOUNT_FIELDS = ["who", "owner", "agent", "payer"] as const;
@@ -198,7 +200,7 @@ function mergeRanges(ranges: BlockRange[]): BlockRange[] {
   const sorted = [...ranges].sort((a, b) => a.from_block - b.from_block || a.to_block - b.to_block);
   const out: BlockRange[] = [];
   for (const r of sorted) {
-    const last = out[out.length - 1];
+    const last = out.at(-1);
     if (last !== undefined && r.from_block <= last.to_block + 1) {
       last.to_block = Math.max(last.to_block, r.to_block);
     } else {
@@ -228,7 +230,7 @@ function blocks(ranges: BlockRange[]): number {
 export function accountOf(data: unknown): string | null {
   if (!isObject(data)) return null;
   for (const field of ACCOUNT_FIELDS) {
-    const v = Object.hasOwn(data, field) ? data[field] : undefined;
+    const v = own(data, field);
     if (isText(v)) return v;
   }
   return null;
@@ -257,10 +259,10 @@ function outOfRange(raw: unknown, page: Page, req: BlockRange): boolean {
 
 /** Sorts like Python's str ordering: by code point, not by UTF16 unit. */
 function byCodePoint(a: string, b: string): number {
-  const x = Array.from(a);
-  const y = Array.from(b);
+  const x = Array.from(a, (c) => c.codePointAt(0) as number);
+  const y = Array.from(b, (c) => c.codePointAt(0) as number);
   for (let i = 0; i < Math.min(x.length, y.length); i++) {
-    const d = x[i]!.codePointAt(0)! - y[i]!.codePointAt(0)!;
+    const d = (x.at(i) as number) - (y.at(i) as number);
     if (d !== 0) return d;
   }
   return x.length - y.length;
@@ -271,17 +273,13 @@ function shown(genesis: string): string {
   return /^0x[0-9a-fA-F]{1,128}$/.test(genesis) ? genesis : "a genesis value that is not hex";
 }
 
-function zeroCounts(): CensusCounts {
-  return { escrows_opened: 0, escrows_released: 0, escrows_refunded: 0, channels_opened: 0, channels_settled: 0 };
-}
-
 function eventNames(): CensusReport["event_names"] {
-  const out = {} as CensusReport["event_names"];
-  for (const k of KINDS) {
-    const e = CENSUS_EVENTS[k];
-    out[k] = { event: `${e.section}.${e.method}`, confirmed: e.confirmed };
-  }
-  return out;
+  return Object.fromEntries(
+    KINDS.map((k) => {
+      const e = eventOf(k);
+      return [k, { event: `${e.section}.${e.method}`, confirmed: e.confirmed }];
+    }),
+  ) as CensusReport["event_names"];
 }
 
 /** Census over the given raw event pages. Throws CensusRefused for input it cannot count (12, 13). */
@@ -381,8 +379,8 @@ export function census(pages: readonly unknown[], opts: CensusOptions): CensusRe
   }
 
   // Clause 4 for each group, then clauses 9 and 10: dedupe, pending or finalized, then kind.
-  const totals = zeroCounts();
-  const perAccount = new Map<string, Partial<CensusCounts>>();
+  const totals = new Map<Kind, number>(KINDS.map((k) => [k, 0]));
+  const perAccount = new Map<string, Map<Kind, number>>();
   let duplicates = 0;
   let pending = 0;
   for (const group of groups.values()) {
@@ -413,10 +411,10 @@ export function census(pages: readonly unknown[], opts: CensusOptions): CensusRe
     }
     const kind = KIND_OF.get(JSON.stringify([first.section, first.method]));
     if (kind === undefined) continue;
-    totals[kind] += 1;
+    totals.set(kind, (totals.get(kind) ?? 0) + 1);
     if (first.account !== null) {
-      const row = perAccount.get(first.account) ?? {};
-      row[kind] = (row[kind] ?? 0) + 1;
+      const row = perAccount.get(first.account) ?? new Map<Kind, number>();
+      row.set(kind, (row.get(kind) ?? 0) + 1);
       perAccount.set(first.account, row);
     }
   }
@@ -424,10 +422,8 @@ export function census(pages: readonly unknown[], opts: CensusOptions): CensusRe
   // Clause 11: only kinds with a count, accounts ascending.
   const by_account: Record<string, Partial<CensusCounts>> = Object.fromEntries(
     [...perAccount.keys()].sort(byCodePoint).map((account) => {
-      const row = perAccount.get(account)!;
-      const kinds: Partial<CensusCounts> = {};
-      for (const k of KINDS) if (row[k]) kinds[k] = row[k];
-      return [account, kinds];
+      const row = perAccount.get(account) as Map<Kind, number>;
+      return [account, Object.fromEntries(KINDS.filter((k) => (row.get(k) ?? 0) > 0).map((k) => [k, row.get(k)]))];
     }),
   );
 
@@ -462,7 +458,7 @@ export function census(pages: readonly unknown[], opts: CensusOptions): CensusRe
     gaps,
     complete,
     status,
-    totals,
+    totals: Object.fromEntries(KINDS.map((k) => [k, totals.get(k) ?? 0])) as unknown as CensusCounts,
     totals_label: status,
     by_account,
     pending_unfinalized: pending,

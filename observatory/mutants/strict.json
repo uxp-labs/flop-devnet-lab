@@ -110,5 +110,29 @@
     "replace": "  const millis = m[7] === undefined ? 0 : Math.round(Number(`0.${m[7]}`) * 1000);",
     "test": "test/strict.test.ts",
     "why": "round 7 review I1: a fraction is cut to whole milliseconds, never rounded into the next second"
+  },
+  {
+    "id": "own-reads-inherited",
+    "file": "src/own.ts",
+    "find": "  for (const [key, v] of Object.entries(o)) {\n    if (key !== k) continue;",
+    "replace": "  if (!Object.hasOwn(o, k)) return (o as { constructor?: unknown }).constructor;\n  for (const [key, v] of Object.entries(o)) {\n    if (key !== k) continue;",
+    "test": "test/strict.test.ts",
+    "why": "round 8 review M1: own() reads only a record's own data, never an inherited member such as constructor"
+  },
+  {
+    "id": "own-hands-back-functions",
+    "file": "src/own.ts",
+    "find": "    if (typeof v === \"function\") throw new TypeError(`own: ${JSON.stringify(k)} holds a function, not data`);\n",
+    "replace": "",
+    "test": "test/strict.test.ts",
+    "why": "round 8 review M1: own() never hands back a function, so a run time key never reaches code"
+  },
+  {
+    "id": "strict-duplicate-key-reads-past-the-end",
+    "file": "src/strict.ts",
+    "find": "      if (j >= text.length) return null;\n",
+    "replace": "",
+    "test": "test/strict.test.ts",
+    "why": "round 8 review L3: a string that never closes ends the repeated key reader instead of reading past the end"
   }
 ]

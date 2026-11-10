@@ -4,7 +4,8 @@
 // request, and compare every shared field. Both refusing counts as agreement only for the same
 // reason (RULES.md 3.1 clause 16): the same kind, and for a page file problem the same file.
 // Then command line inputs both sides must refuse alike: request numbers that are not plain
-// digits or too long, an inverted range, an empty genesis and a missing folder.
+// digits or too long, an inverted range, an empty genesis, a missing folder, and arguments read
+// other than as --name followed by its value (round 8 review L7).
 // Prints a JSON array; exit 1 on any disagreement, a run that printed no census, or a scenario
 // without census_request.
 import { spawnSync } from "node:child_process";
@@ -44,22 +45,51 @@ function canon(v) {
 }
 
 function run(cmd, args) {
-  const r = spawnSync(cmd, args, { cwd: pkg, encoding: "utf8" });
+  const r = spawnSync(cmd, args, { cwd: pkg, encoding: "utf8", maxBuffer: 1 << 28 });
   let json = null;
   try {
     json = JSON.parse(r.stdout);
   } catch {
     json = null;
   }
-  return { exit: r.status, json, stderr: (r.stderr ?? "").trim().slice(0, 400) };
+  return { exit: r.status, json, stderr: (r.stderr ?? "").trim() };
 }
 
-/** The reason one side refused (clause 16), from the first "census refused (kind): ..." line. */
-function refusal(stderr) {
+/** A file name as both sides show it: as itself when it is UTF-8, else byte for byte with %XX. */
+function shownName(raw) {
+  try {
+    return new TextDecoder("utf-8", { fatal: true }).decode(raw);
+  } catch {
+    return [...raw].map((b) => (b >= 0x20 && b < 0x7f && b !== 0x25 ? String.fromCharCode(b) : `%${b.toString(16).toUpperCase().padStart(2, "0")}`)).join("");
+  }
+}
+
+/**
+ * Every file a refusal can name in a scenario: event-pages itself and each entry in it, longest
+ * first, so a name that holds a colon or a semicolon is read whole (round 8 review I6).
+ */
+function namesIn(dir) {
+  const names = ["event-pages"];
+  try {
+    for (const e of readdirSync(join(resolve(pkg, dir), "event-pages"), { encoding: "buffer" })) names.push(`event-pages/${shownName(e)}`);
+  } catch {
+    // No folder: only event-pages itself can be named.
+  }
+  return names.sort((a, b) => b.length - a.length);
+}
+
+/**
+ * The reason one side refused (clause 16), from the first "census refused (kind): ..." line: its
+ * kind and, for a page file problem, the file, read as the longest name in the scenario that the
+ * message names before a colon. A message that names none keeps its whole text, so two such
+ * messages agree only if they are the same.
+ */
+function refusal(stderr, names) {
   const m = /census refused \(([a-z-]+)\): ([^\n]*)/.exec(stderr);
   if (!m) return { kind: null, file: null };
-  const file = m[1] === "page-file" ? (/^(?:unusable event page file\(s\): )?(event-pages(?:\/[^:;]*)?)(?=:)/.exec(m[2])?.[1] ?? null) : null;
-  return { kind: m[1], file };
+  if (m[1] !== "page-file") return { kind: m[1], file: null };
+  const rest = m[2].replace(/^unusable event page file\(s\): /, "");
+  return { kind: m[1], file: names.find((n) => rest.startsWith(`${n}:`)) ?? `no file of the scenario: ${rest}` };
 }
 
 // Scenarios made at run time, for inputs that git cannot hold on every machine: a page file whose
@@ -79,6 +109,20 @@ const generated = [];
     generated.push(dir);
   } catch (e) {
     generated.push({ skipped: "generated-page-name-not-utf8", why: `this filesystem refuses the name: ${e.code ?? e.message}` });
+  }
+}
+{
+  // A bad page file whose name holds a colon and a semicolon, beside a good one whose name starts
+  // the same way, so each side must name the file whole (round 8 review I6).
+  const dir = join(generatedRoot, "generated-page-name-with-a-colon");
+  mkdirSync(join(dir, "event-pages"), { recursive: true });
+  writeFileSync(join(dir, "meta.json"), JSON.stringify({ scenario: "generated-page-name-with-a-colon", description: "made at run time", now: "2026-11-10T00:00:00.000Z", synthetic: true, census_request: { from_block: 0, to_block: 99 }, pinned_genesis: DEVNET }));
+  writeFileSync(join(dir, "event-pages", "01.json"), JSON.stringify({ genesis: DEVNET, from_block: 0, to_block: 99, page: 0, next_page: null, events: [] }));
+  try {
+    writeFileSync(join(dir, "event-pages", "01:a;b.json"), "{ not json");
+    generated.push(dir);
+  } catch (e) {
+    generated.push({ skipped: "generated-page-name-with-a-colon", why: `this filesystem refuses the name: ${e.code ?? e.message}` });
   }
 }
 
@@ -105,7 +149,7 @@ for (const { name: d, dir } of scenarios) {
   const genesis = meta.pinned_genesis ?? DEVNET;
   const ts = run("node", ["dist/cli.js", "census", "--fixtures", dir]);
   const py = run("python3", ["-I", "tools/recount.py", "--dir", dir, "--genesis", genesis, "--from", String(req.from_block), "--to", String(req.to_block)]);
-  compare(d, ts, py, false);
+  compare(d, ts, py, false, namesIn(dir));
 }
 
 // Command line inputs (RULES.md 3.1 clause 16): both sides get the same arguments and must refuse
@@ -114,28 +158,43 @@ for (const { name: d, dir } of scenarios) {
 {
   const complete = join("fixtures", "census-complete");
   const missing = join("fixtures", "no-such-scenario");
+  const req = (from, to, genesis = DEVNET) => ["--genesis", genesis, "--from", from, "--to", to];
+  // [name, folder, every argument after the folder flag, both must refuse]
   const cases = [
-    ["request-number-with-a-space", complete, DEVNET, " 0", "199"],
-    ["request-number-with-a-plus", complete, DEVNET, "+5", "199"],
-    ["request-number-with-an-underscore", complete, DEVNET, "1_0", "199"],
-    ["request-number-of-5000-digits", complete, DEVNET, "0", "9".repeat(5000)],
-    ["request-inverted", complete, DEVNET, "9", "3"],
-    ["request-inverted-and-no-folder", missing, DEVNET, "9", "3"],
-    ["genesis-empty", complete, "", "0", "199"],
-    ["scenario-folder-missing", missing, DEVNET, "0", "199"],
+    ["request-number-with-a-space", complete, req(" 0", "199"), true],
+    ["request-number-with-a-plus", complete, req("+5", "199"), true],
+    ["request-number-with-an-underscore", complete, req("1_0", "199"), true],
+    ["request-number-of-5000-digits", complete, req("0", "9".repeat(5000)), true],
+    ["request-inverted", complete, req("9", "3"), true],
+    ["request-inverted-and-no-folder", missing, req("9", "3"), true],
+    ["genesis-empty", complete, req("0", "199", ""), true],
+    ["scenario-folder-missing", missing, req("0", "199"), true],
+    // Every flag is --name and then its value as the next argument, on both sides.
+    ["flag-value-after-equals", complete, [`--genesis=${DEVNET}`, "--from", "0", "--to", "199"], true],
+    ["flag-abbreviated", complete, ["--gen", DEVNET, "--from", "0", "--to", "199"], true],
+    ["flag-unknown", complete, [...req("0", "199"), "--form", "100"], true],
+    ["flag-value-starts-with-a-dash", complete, req("-a", "199"), true],
+    ["flag-value-negative", complete, req("-5", "199"), true],
+    ["flag-without-a-value-at-the-end", complete, ["--genesis", DEVNET, "--from", "0", "--to"], true],
+    ["flag-whose-value-is-a-flag", complete, ["--genesis", DEVNET, "--from", "--to", "199"], true],
+    ["flag-given-twice", complete, [...req("0", "199"), "--from", "5"], true],
+    ["argument-that-is-no-flag-value", complete, [...req("0", "199"), "extra"], true],
+    ["flag-unknown-and-no-folder", missing, [...req("0", "199"), "--form", "100"], true],
+    // The same flags in another order count the same.
+    ["flags-in-another-order", complete, ["--to", "199", "--genesis", DEVNET, "--from", "0"], false],
   ];
-  for (const [name, dir, genesis, from, to] of cases) {
-    const ts = run("node", ["dist/cli.js", "census", "--fixtures", dir, "--genesis", genesis, "--from", from, "--to", to]);
-    const py = run("python3", ["-I", "tools/recount.py", "--dir", dir, "--genesis", genesis, "--from", from, "--to", to]);
-    compare(`command-line:${name}`, ts, py, true);
+  for (const [name, dir, args, mustRefuse] of cases) {
+    const ts = run("node", ["dist/cli.js", "census", "--fixtures", dir, ...args]);
+    const py = run("python3", ["-I", "tools/recount.py", "--dir", dir, ...args]);
+    compare(`command-line:${name}`, ts, py, mustRefuse, namesIn(dir));
   }
 }
 
 /** Compares one run of each side, recording the outcome. mustRefuse: both must refuse. */
-function compare(d, ts, py, mustRefuse) {
+function compare(d, ts, py, mustRefuse, names) {
   if (ts.exit !== 0 || py.exit !== 0) {
-    const tr = refusal(ts.stderr);
-    const pr = refusal(py.stderr);
+    const tr = refusal(ts.stderr, names);
+    const pr = refusal(py.stderr, names);
     if (perturb && tr.kind !== null) {
       if (tr.file !== null) tr.file += "x";
       else tr.kind = tr.kind === "page-structure" ? "page-file" : "page-structure";
@@ -151,8 +210,8 @@ function compare(d, ts, py, mustRefuse) {
       py_exit: py.exit,
       ts_reason: tr,
       py_reason: pr,
-      ts_err: ts.stderr,
-      py_err: py.stderr,
+      ts_err: ts.stderr.slice(0, 400),
+      py_err: py.stderr.slice(0, 400),
     });
     return;
   }
