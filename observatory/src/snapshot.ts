@@ -43,6 +43,8 @@ export async function buildSnapshot(parts: SnapshotParts, o: SnapshotOptions): P
       finalizedHeight: status.finalized_height,
       observedAt: o.now,
       trust: parts.escrows.source.trust,
+      // An unreadable page could hold a conflicting event, so it is never dropped silently.
+      unreadablePages: await parts.escrows.source.eventPageErrors(),
     });
     labels.push(parts.escrows.source.label);
     trusts.push(parts.escrows.source.trust);
@@ -58,7 +60,8 @@ export async function buildSnapshot(parts: SnapshotParts, o: SnapshotOptions): P
   const pin: RunPin = {
     source_sha: o.sourceSha,
     source: labels.join(" + "),
-    genesis: status.genesis.rpc ?? status.genesis.faucet,
+    // The RPC's genesis, which the finalized head below belongs to. Never mixed with the faucet's.
+    genesis: status.genesis.rpc,
     finalized_height: status.finalized_height,
     finalized_hash: status.finalized_hash,
     node: process.version,

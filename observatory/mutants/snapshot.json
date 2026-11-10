@@ -1,0 +1,50 @@
+[
+  {
+    "id": "snapshot-unreadable-escrow-pages-dropped",
+    "file": "src/snapshot.ts",
+    "find": "      unreadablePages: await parts.escrows.source.eventPageErrors(),\n",
+    "replace": "",
+    "test": "test/snapshot.test.ts",
+    "why": "an unreadable escrow page must reach the escrow module, never be dropped"
+  },
+  {
+    "id": "source-page-errors-not-recorded",
+    "file": "src/source.ts",
+    "find": "const page = read<EventPage>(join(\"event-pages\", name), [loadErrors, pageErrors]);",
+    "replace": "const page = read<EventPage>(join(\"event-pages\", name), [loadErrors]);",
+    "test": "test/snapshot.test.ts",
+    "why": "an unreadable event page must be listed as a page error"
+  },
+  {
+    "id": "source-parser-wording-leaks",
+    "file": "src/source.ts",
+    "find": "const reason = e instanceof SyntaxError ? \"not valid JSON\" : (e as Error).message;",
+    "replace": "const reason = (e as Error).message;",
+    "test": "test/snapshot.test.ts",
+    "why": "outputs must not carry the parser's wording, which changes between Node versions"
+  },
+  {
+    "id": "snapshot-trust-strongest",
+    "file": "src/snapshot.ts",
+    "find": "return trusts.includes(\"fixture\") ? \"fixture\" : \"trusted RPC\";",
+    "replace": "return \"trusted RPC\";",
+    "test": "test/snapshot.test.ts",
+    "why": "one fixture input makes the whole snapshot a fixture, never trusted RPC"
+  },
+  {
+    "id": "snapshot-escrows-ignore-finalized-height",
+    "file": "src/snapshot.ts",
+    "find": "      finalizedHeight: status.finalized_height,\n",
+    "replace": "      finalizedHeight: null,\n",
+    "test": "test/snapshot.test.ts",
+    "why": "escrow evidence is bounded by the finalized height the status read"
+  },
+  {
+    "id": "snapshot-pin-mixes-sources",
+    "file": "src/snapshot.ts",
+    "find": "    genesis: status.genesis.rpc,\n",
+    "replace": "    genesis: status.genesis.rpc ?? status.genesis.faucet,\n",
+    "test": "test/snapshot.test.ts",
+    "why": "the pin's genesis must come from the same source as its finalized head"
+  }
+]

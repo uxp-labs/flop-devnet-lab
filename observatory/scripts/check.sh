@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # The one check command for FLOP Observatory:   npm run check   (from observatory/)
 #
-# Offline by design: tests reject fetch and WebSocket, and nothing signs, spends or writes.
-# The only network use is `npm ci`, which installs the pinned dev tools from the lockfile.
+# Offline by design: tests block every network and child process path (fetch, WebSocket, node:http,
+# https, http2, net, tls, dgram, dns, child_process, worker threads), and nothing signs, spends or
+# writes. The only network use is `npm ci`, which installs the pinned dev tools from the lockfile.
 #
 # Every run writes a new evidence directory and leaves earlier runs in place:
 #   check-runs/<source-sha>/<timestamp>-<runner>-<random>/
@@ -11,11 +12,15 @@
 #     *.log               full output of each step
 #     vitest.json         machine-readable test results
 #     attempts.jsonl      any network, write, sign or spend attempt left by a test (should be absent)
-#     mutants.json        each injected bug, the test that must catch it, and the outcome
+#     canary.json         throwaway tests that each leave one forbidden attempt, all caught
+#     mutants.json        each injected bug, the test that caught it, and both controls
+#     mutants-canary.json the mutation runner classifying a real bug, an equivalent change, a
+#                         syntax error and a missing test correctly
 #     recount.json        TypeScript census against the independent Python recount, per fixture
 #     recount-canary.json the cross-check catching a deliberately nudged total in every scenario
-#     outputs/            one snapshot rendered as feeds, page and an MCP transcript
-#     consistency.json    page, feeds and MCP compared field by field
+#     cli-checks.json     the command line wiring for unreadable pages, pins and health rules
+#     outputs/<scenario>/ one snapshot per scenario rendered as feeds, page and an MCP transcript
+#     consistency-<scenario>.json  page, feeds and MCP compared with the snapshot, every cell
 #     consistency-canary.json  tampered copies of the outputs, each of which must fail the comparison
 #     SHA256SUMS          hashes of every other file in this directory
 #
@@ -88,11 +93,12 @@ finalize() {
     echo "ended_utc: $ended"
     echo "evidence_dir: check-runs/$source_sha/$run_id"
     echo "overall_exit: $overall"
-    if [ -f "$evidence/outputs/pin.json" ]; then
+    for pin in "$evidence"/outputs/*/pin.json; do
+      [ -f "$pin" ] || continue
       echo
-      echo "chain point described by outputs/ (from fixtures in M0, not from a live chain):"
-      cat "$evidence/outputs/pin.json"
-    fi
+      echo "chain point for outputs/$(basename "$(dirname "$pin")") (from fixtures in M0, not from a live chain):"
+      cat "$pin"
+    done
     echo
     echo "steps:"
     cat "$evidence/steps.tsv"
@@ -123,11 +129,14 @@ step build npx --no-install tsc -p tsconfig.json
 step test env OBS_ATTEMPTS_FILE="$evidence/attempts.jsonl" npx --no-install vitest run \
   --reporter=default --reporter=json --outputFile.json="$evidence/vitest.json"
 
-# 3. The harness itself: a test that leaves a fetch attempt in the log must fail.
-step canary node scripts/canary.mjs
+# 3. The harness itself: a test that leaves any forbidden attempt in the log must fail.
+step canary sh -c "node scripts/canary.mjs > '$evidence/canary.json'"
 
-# 4. Injected bugs: every mutant must make its named test fail, and every named test must pass clean.
+# 4. Injected bugs, in a full copy of the repo layout: an unmutated control must pass, then every
+#    mutant must make at least one test in its named file fail. The runner proves its own
+#    classification on four throwaway mutants.
 step mutants sh -c "node scripts/mutate.mjs > '$evidence/mutants.json'"
+step mutants-canary sh -c "node scripts/mutate-canary.mjs > '$evidence/mutants-canary.json'"
 
 # 5. Independent recount: the Python recount's own tests, then TypeScript against Python per fixture.
 step recount-tests python3 -I tools/test_recount.py
@@ -135,18 +144,31 @@ step recount sh -c "node scripts/compare-recount.mjs > '$evidence/recount.json'"
 # The cross-check itself: with one TypeScript total nudged by one, every scenario must disagree.
 step recount-canary sh -c "node scripts/compare-recount.mjs --perturb > '$evidence/recount-canary.json'"
 
-# 6. One snapshot through every output: feeds, page, snapshot log, and an MCP transcript.
-step snapshot node dist/cli.js snapshot \
-  --status fixtures/status-healthy \
-  --escrows fixtures/escrows-verification \
-  --census fixtures/census-complete \
-  --drift fixtures/drift-seeded \
-  --out "$evidence/outputs" \
-  --log "$evidence/outputs/snapshots.jsonl" \
-  --source-sha "$source_sha"
-step mcp sh -c "node scripts/mcp-transcript.mjs '$evidence/outputs' > '$evidence/outputs/mcp-transcript.jsonl'"
-step consistency sh -c "node scripts/consistency.mjs '$evidence/outputs' > '$evidence/consistency.json'"
-# The consistency check itself: tampered copies (feed, page, MCP) must each fail it.
-step consistency-canary sh -c "node scripts/consistency-canary.mjs '$evidence/outputs' > '$evidence/consistency-canary.json'"
+# 6. The command line wiring end to end.
+step cli-checks sh -c "node scripts/cli-checks.mjs > '$evidence/cli-checks.json'"
+
+# 7. One real snapshot per scenario through every output: feeds, page, snapshot log and an MCP
+#    transcript, each compared with its snapshot cell by cell.
+scenario() {
+  # scenario <name> <cli snapshot part flags...>
+  local name="$1"
+  shift
+  local out="$evidence/outputs/$name"
+  step "snapshot-$name" node dist/cli.js snapshot "$@" --out "$out" --log "$out/snapshots.jsonl" --source-sha "$source_sha"
+  step "mcp-$name" sh -c "node scripts/mcp-transcript.mjs '$out' > '$out/mcp-transcript.jsonl'"
+  step "consistency-$name" sh -c "node scripts/consistency.mjs '$out' > '$evidence/consistency-$name.json'"
+}
+scenario healthy --status fixtures/status-healthy --escrows fixtures/escrows-verification \
+  --census fixtures/census-complete --drift fixtures/drift-seeded
+scenario reset --status fixtures/status-reset --escrows fixtures/escrows-conflicting \
+  --census fixtures/census-reset --drift fixtures/drift-all-match
+scenario nothing-read --status fixtures/status-unknown --census fixtures/census-gap
+scenario degraded-faucet --status fixtures/status-degraded-real --escrows fixtures/escrows-unreadable-page \
+  --census fixtures/census-unfinalized --drift fixtures/drift-seeded
+scenario conflict --status fixtures/status-conflict --escrows fixtures/escrows-one-event-two-escrows \
+  --census fixtures/census-paginated --drift fixtures/drift-seeded
+# The comparison itself: tampered copies of these outputs must each fail it, and clean copies pass.
+step consistency-canary sh -c "node scripts/consistency-canary.mjs '$evidence/outputs/healthy' '$evidence/outputs/reset' \
+  '$evidence/outputs/nothing-read' '$evidence/outputs/degraded-faucet' '$evidence/outputs/conflict' > '$evidence/consistency-canary.json'"
 
 exit "$overall"

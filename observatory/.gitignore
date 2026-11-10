@@ -3,3 +3,5 @@ dist/
 out/
 # Each `npm run check` writes a new evidence directory here. Kept local and uploaded by CI, never committed.
 check-runs/
+# Private builds that builders make for command line repros. Never committed.
+.build-*/

@@ -1,5 +1,5 @@
-import { describe, expect, it } from "vitest";
-import { appendFileSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { afterAll, describe, expect, it } from "vitest";
+import { appendFileSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { appendSnapshot, canonicalJson, hashSnapshot, readSnapshots, verifyChain } from "../src/store.js";
@@ -68,6 +68,11 @@ function build(over: Partial<Snapshot> = {}): Snapshot {
       status: "partial",
       totals: { escrows_opened: 3, escrows_released: 1, escrows_refunded: 1, channels_opened: 0, channels_settled: 0 },
       by_account: {},
+      totals_label: "partial",
+      requested_blocks: 101,
+      covered_blocks: 50,
+      reset_detected: null,
+      notes: [],
       pending_unfinalized: 0,
       duplicates_dropped: 0,
       excluded_other_genesis: 0,
@@ -86,8 +91,49 @@ function build(over: Partial<Snapshot> = {}): Snapshot {
   return { ...base, hash: hashSnapshot(base) };
 }
 
+const FAUCET_G = "0x" + "ef".repeat(32);
+const FIN_HASH = "0x" + "aa".repeat(32);
+
+/** A reset scenario: reset true, stale true, conflicts, finalized height and hash, a differing faucet genesis,
+ *  an escrow with empty notes, a complete census with empty gaps, and a drift report with an unknown item. */
+function buildReset(): Snapshot {
+  const b = build();
+  const st = b.status;
+  const census = { ...b.census!, complete: true, status: "complete" as const, totals_label: "complete" as const, covered: [{ from_block: 0, to_block: 100 }], gaps: [], covered_blocks: 101, reset_detected: true, notes: ["page on another genesis ignored"] };
+  const drift = {
+    schema: "flop-observatory/drift@0" as const, observed_at: T, trust: "fixture" as const, genesis: G, finalized_height: 10, runtime_version: 5, spec_source: "spec.yaml", runtime_observed_at: null,
+    items: [
+      { param: "a", runtime_path: "api.consts.a", spec: 5, runtime: 5, status: "match" as const, note: null, mapping: "constant" as const, unit: null, expected: "5" },
+      { param: "b", runtime_path: null, spec: "", runtime: null, status: "unknown" as const, note: "", mapping: "none" as const, unit: null, expected: null },
+    ],
+    matches: 1, mismatches: 0, unknown: 1,
+  };
+  return build({
+    status: {
+      ...st,
+      genesis: { pinned: G, faucet: FAUCET_G, rpc: G },
+      reset_detected: true,
+      conflicts: ["faucet genesis differs from pinned", "second conflict"],
+      finalized_height: 10,
+      finalized_hash: FIN_HASH,
+      best_height: 12,
+      finality_lag: 2,
+      runtime_version: 5,
+      rpc: { ...st.rpc, health: "degraded", http: 200, detail: "stale head", stale: true },
+    },
+    census,
+    drift,
+  });
+}
+
+const made: string[] = [];
+afterAll(() => {
+  for (const d of made) rmSync(d, { recursive: true, force: true });
+});
 function tmp(): string {
-  return mkdtempSync(join(tmpdir(), "obs-store-"));
+  const d = mkdtempSync(join(tmpdir(), "obs-store-"));
+  made.push(d);
+  return d;
 }
 function fresh() {
   const { hash: _h, seq: _s, prev_hash: _p, ...rest } = build();

@@ -2,9 +2,9 @@
 //
 // Every transport (the live RPC and HTTP readers in M1) must call these checks before it
 // sends anything. A refused call is recorded, then thrown, so tests can prove that nothing
-// tried to write. In tests, test/setup.ts also records any fetch or WebSocket attempt.
+// tried to write. In tests, test/setup.ts also records every network and child process attempt.
 
-export type AttemptKind = "network" | "rpc-write" | "http-write" | "sign" | "spend";
+export type AttemptKind = "network" | "process" | "rpc-write" | "http-write" | "sign" | "spend";
 
 export interface Attempt {
   kind: AttemptKind;

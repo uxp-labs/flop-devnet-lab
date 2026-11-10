@@ -1,0 +1,11 @@
+{
+  "scenario": "census-negative-page",
+  "description": "Synthetic, made up for a test. Request 0 to 99. The pinned genesis is the FLOP devnet genesis (DEVNET_GENESIS in src/status.ts); every event and block hash is made up. Clause numbers refer to RULES.md section 3.1. Besides a complete page 0 for blocks 0 to 99, there is a page numbered -1. A negative page number makes the page structurally invalid (clause 12), so the whole census refuses, even though the walk from page 0 would never reach it. Expected: the census refuses; no totals.",
+  "now": "2026-11-10T00:00:00.000Z",
+  "synthetic": true,
+  "census_request": {
+    "from_block": 0,
+    "to_block": 99
+  },
+  "pinned_genesis": "0x99c172c095340ace980631f9123544c6bebd4839f3437e463533422d8be2d631"
+}

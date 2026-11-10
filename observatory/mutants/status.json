@@ -70,5 +70,61 @@
     "replace": "return v;",
     "test": "test/status.test.ts",
     "why": "a malformed genesis is unknown, never a value"
+  },
+  {
+    "id": "status-faucet-http-ignored",
+    "file": "src/status.ts",
+    "find": "    if (r.http === 200) {\n      health = \"ok\";",
+    "replace": "    if (true) {\n      health = \"ok\";",
+    "test": "test/status.test.ts",
+    "why": "a faucet body that says ok on HTTP 503 must not be ok"
+  },
+  {
+    "id": "status-missing-age-counts-as-ok",
+    "file": "src/status.ts",
+    "find": "const health: Health = problems.length > 0 ? \"degraded\" : cannotRun.length > 0 ? \"unknown\" : \"ok\";",
+    "replace": "const health: Health = problems.length > 0 ? \"degraded\" : \"ok\";",
+    "test": "test/status.test.ts",
+    "why": "a head with no observed_at cannot be shown as ok"
+  },
+  {
+    "id": "status-missing-best-ignored",
+    "file": "src/status.ts",
+    "find": "  if (best === null) problems.push(\"no valid best height\");\n",
+    "replace": "",
+    "test": "test/status.test.ts",
+    "why": "a head with no best height cannot be ok"
+  },
+  {
+    "id": "status-future-head-accepted",
+    "file": "src/status.ts",
+    "find": "  } else if (age < 0) {",
+    "replace": "  } else if (false) {",
+    "test": "test/status.test.ts",
+    "why": "a head time later than the snapshot time is a conflict, not fresh"
+  },
+  {
+    "id": "status-read-error-ignored",
+    "file": "src/status.ts",
+    "find": "  if (head.error) problems.push(`read error: ${head.error}`);\n",
+    "replace": "",
+    "test": "test/status.test.ts",
+    "why": "a read error on part of the head cannot be ok"
+  },
+  {
+    "id": "status-missing-genesis-ignored",
+    "file": "src/status.ts",
+    "find": "  if (genesis === null) problems.push(\"no valid genesis hash\");\n",
+    "replace": "",
+    "test": "test/status.test.ts",
+    "why": "a head without a valid genesis cannot be ok"
+  },
+  {
+    "id": "status-stale-limit-exclusive",
+    "file": "src/status.ts",
+    "find": "stale = age > o.staleAfterSeconds;",
+    "replace": "stale = age >= o.staleAfterSeconds;",
+    "test": "test/status.test.ts",
+    "why": "a head exactly at the stale limit is still fresh"
   }
 ]

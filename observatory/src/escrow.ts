@@ -13,6 +13,15 @@
 // - Assumption until M1 reads metadata: EscrowReleased and EscrowRefunded also carry the
 //   escrow id first. chain.ts confirms this only for EscrowOpened.
 //
+// Order of checks
+// 1. An unreadable or structurally invalid page (census clause 12) makes every escrow
+//    unverified. The missing page could hold a conflicting event.
+// 2. All well formed events on the pinned genesis are grouped by (genesis, block_hash, index),
+//    whatever escrow they name. Copies that disagree on section, method, escrow id or block_number make
+//    every escrow any copy names unverified. One chain event is never evidence for two escrows.
+// 3. If any copy in a group is not finalized, the event is pending, never proof (census
+//    clause 9). A missing or non boolean finalized flag means not finalized (census clause 8).
+//
 // How the two "malformed" rules are read together
 // - A malformed event is never evidence. It cannot make an escrow funded, claimed or refunded.
 // - A malformed finalized terminal event on the pinned genesis that could be about this
@@ -66,17 +75,43 @@ function readEscrowId(data: unknown): IdRead {
   return { ok: true, id: (a ?? b) as string };
 }
 
-/** Structural problems other than the escrow id. Null when the event is well formed. */
+/** Structural problems that leave an event without an identity. Null when it has one. */
 function structureProblem(ev: Record<string, unknown>): string | null {
   if (!isHash32(ev["block_hash"])) return "block_hash is not 0x plus 64 hex";
   const index = ev["index"];
   if (typeof index !== "number" || !Number.isInteger(index) || index < 0) return "index is not a whole number";
-  if (typeof ev["finalized"] !== "boolean") return "finalized is not true or false";
   const n = ev["block_number"];
   if (n !== null && n !== undefined && (typeof n !== "number" || !Number.isInteger(n) || n < 0)) {
     return "block_number is not a whole number or null";
   }
   return null;
+}
+
+function isInt(value: unknown): value is number {
+  return typeof value === "number" && Number.isInteger(value);
+}
+
+/** Census clause 12: why a page is structurally invalid, or null when it is valid. */
+export function pageProblem(page: unknown): string | null {
+  if (!isRecord(page)) return "not an object";
+  if (typeof page["genesis"] !== "string") return "genesis is not a string";
+  for (const k of ["from_block", "to_block", "page"]) {
+    if (!isInt(page[k])) return `${k} is missing or not a whole number`;
+  }
+  if (!("next_page" in page) || (page["next_page"] !== null && !isInt(page["next_page"]))) {
+    return "next_page is missing or not a whole number or null";
+  }
+  if ((page["page"] as number) < 0) return "page is negative";
+  if (!Array.isArray(page["events"])) return "events is not a list";
+  if ((page["from_block"] as number) > (page["to_block"] as number)) return "block range is inverted";
+  return null;
+}
+
+function describePage(page: unknown, position: number): string {
+  const where = `page at position ${position}`;
+  if (!isRecord(page)) return where;
+  const show = (v: unknown) => (isInt(v) ? String(v) : "?");
+  return `${where} (blocks ${show(page["from_block"])} to ${show(page["to_block"])}, page ${show(page["page"])})`;
 }
 
 function unverified(
@@ -101,6 +136,18 @@ function plural(n: number, word: string): string {
   return `${n} ${word}${n === 1 ? "" : "s"}`;
 }
 
+interface Copy {
+  section: unknown;
+  method: unknown;
+  /** True when this copy is one of the three hasStation escrow events. */
+  escrowEvent: boolean;
+  id: IdRead;
+  finalized: boolean;
+  block_hash: string;
+  block_number: number | null;
+  index: number;
+}
+
 /**
  * State of one escrow from raw event pages.
  * Only finalized hasStation events on the pinned genesis count. Anything missing,
@@ -121,77 +168,136 @@ export function escrowState(
   }
   const pinned = opts.pinnedGenesis.toLowerCase();
   const height = typeof opts.finalizedHeight === "number" ? opts.finalizedHeight : null;
+  const pageList: readonly unknown[] = Array.isArray(pages) ? pages : [];
+
+  // Unreadable or invalid input: nothing can be verified from the rest.
+  const unreadable = Array.isArray(opts.unreadablePages) ? opts.unreadablePages.map((u) => String(u)) : [];
+  if (unreadable.length > 0) {
+    return unverified(
+      id,
+      unreadable.map((u) => `event page could not be read, so nothing is verified: ${u}`),
+      opts,
+    );
+  }
+  const invalid: string[] = [];
+  pageList.forEach((page, i) => {
+    const problem = pageProblem(page);
+    if (problem !== null) invalid.push(`${describePage(page, i)}: ${problem}`);
+  });
+  if (!Array.isArray(pages)) invalid.push("pages is not a list");
+  if (invalid.length > 0) {
+    return unverified(
+      id,
+      invalid.map((u) => `event page is invalid, so nothing is verified: ${u}`),
+      opts,
+    );
+  }
 
   const notes: string[] = [];
-  const clean = new Map<string, { method: string; evidence: EscrowEvidence }>();
-  let badPages = 0;
+  const groups = new Map<string, Copy[]>();
   let otherGenesis = 0;
-  let pending = 0;
-  let aboveHeight = 0;
-  let duplicates = 0;
-  let identityConflict = false;
   const malformedNotes: string[] = [];
   // Malformed finalized terminal events on the pinned genesis that could be about this escrow.
   const suspectTerminals = new Set<string>();
 
-  for (const page of Array.isArray(pages) ? pages : []) {
-    if (!isRecord(page) || typeof page["genesis"] !== "string" || !Array.isArray(page["events"])) {
-      badPages++;
-      continue;
-    }
-    const pageGenesis = page["genesis"].toLowerCase();
-    const onPinned = pageGenesis === pinned;
-    for (const raw of page["events"] as unknown[]) {
+  for (const page of pageList) {
+    if (pageProblem(page) !== null) continue;
+    const p = page as Record<string, unknown>;
+    const onPinned = (p["genesis"] as string).toLowerCase() === pinned;
+    for (const raw of p["events"] as unknown[]) {
       if (!isRecord(raw)) {
         if (onPinned) malformedNotes.push("an event that is not an object");
         continue;
       }
       const method = raw["method"];
-      // Only the three hasStation escrow events are evidence. Everything else is not looked at.
-      if (raw["section"] !== SECTION || typeof method !== "string" || !METHODS.includes(method)) continue;
-      const name = `${SECTION}.${method}`;
-      const idRead = readEscrowId(raw["data"]);
-      if (idRead.ok && idRead.id !== id) continue; // about another escrow
+      const escrowEvent = raw["section"] === SECTION && typeof method === "string" && METHODS.includes(method);
+      const idRead = escrowEvent ? readEscrowId(raw["data"]) : ({ ok: false, why: "not an escrow event" } as IdRead);
       if (!onPinned) {
-        if (idRead.ok) otherGenesis++;
+        if (escrowEvent && idRead.ok && idRead.id === id) otherGenesis++;
         continue;
       }
-      const problem = idRead.ok ? structureProblem(raw) : idRead.why;
+      const problem = structureProblem(raw);
       if (problem !== null) {
-        malformedNotes.push(`${name} (${problem})`);
-        if (method !== OPENED && raw["finalized"] === true) suspectTerminals.add(method);
+        // No identity, so it cannot be grouped. Only escrow events that could be about
+        // this escrow are noted.
+        if (escrowEvent && !(idRead.ok && idRead.id !== id)) {
+          malformedNotes.push(`${SECTION}.${method as string} (${idRead.ok ? problem : idRead.why})`);
+          if (method !== OPENED && raw["finalized"] === true) suspectTerminals.add(method as string);
+        }
         continue;
       }
       const ev = raw as unknown as RawEvent;
-      if (ev.finalized !== true) {
-        pending++;
-        continue;
-      }
-      if (height !== null && typeof ev.block_number === "number" && ev.block_number > height) {
-        aboveHeight++;
-        continue;
-      }
       const key = `${pinned}|${ev.block_hash.toLowerCase()}|${ev.index}`;
-      const seen = clean.get(key);
-      if (seen) {
-        if (seen.method === method) duplicates++;
-        else identityConflict = true;
-        continue;
-      }
-      clean.set(key, {
+      const copy: Copy = {
+        section: raw["section"],
         method,
-        evidence: {
-          event: name,
-          block_hash: ev.block_hash.toLowerCase(),
-          block_number: typeof ev.block_number === "number" ? ev.block_number : null,
-          event_index: ev.index,
-          genesis: pinned,
-        },
-      });
+        escrowEvent,
+        id: idRead,
+        finalized: raw["finalized"] === true,
+        block_hash: ev.block_hash.toLowerCase(),
+        block_number: typeof ev.block_number === "number" ? ev.block_number : null,
+        index: ev.index,
+      };
+      const list = groups.get(key);
+      if (list) list.push(copy);
+      else groups.set(key, [copy]);
     }
   }
 
-  if (badPages > 0) notes.push(`${plural(badPages, "page")} ignored: not an event page`);
+  const clean: { method: string; evidence: EscrowEvidence }[] = [];
+  const conflicts: string[] = [];
+  let pending = 0;
+  let aboveHeight = 0;
+  let duplicates = 0;
+
+  for (const copies of groups.values()) {
+    const first = copies[0] as Copy;
+    const where = `block ${first.block_hash}, index ${first.index}`;
+    const named = new Set<string>();
+    const signatures = new Set<string>();
+    for (const c of copies) {
+      if (c.escrowEvent && c.id.ok) named.add(c.id.id);
+      const idPart = c.escrowEvent && c.id.ok ? c.id.id : "?";
+      // A block hash fixes the block number, so copies must agree on it. Null against a number disagrees.
+      signatures.add(`${String(c.section)}|${String(c.method)}|${idPart}|${String(c.block_number)}`);
+    }
+    if (signatures.size > 1) {
+      // Copies of one event disagree. Every escrow any copy names is unverified.
+      if (named.has(id)) {
+        conflicts.push(`copies of one event disagree on section, method, escrow id or block number (${where})`);
+      }
+      continue;
+    }
+    if (!first.escrowEvent) continue;
+    const method = first.method as string;
+    const name = `${SECTION}.${method}`;
+    if (!first.id.ok) {
+      malformedNotes.push(`${name} (${first.id.why})`);
+      if (method !== OPENED && copies.some((c) => c.finalized)) suspectTerminals.add(method);
+      continue;
+    }
+    if (first.id.id !== id) continue; // about another escrow
+    duplicates += copies.length - 1;
+    if (copies.some((c) => c.finalized !== true)) {
+      pending++;
+      continue;
+    }
+    if (height !== null && copies.some((c) => c.block_number !== null && c.block_number > height)) {
+      aboveHeight++;
+      continue;
+    }
+    clean.push({
+      method,
+      evidence: {
+        event: name,
+        block_hash: first.block_hash,
+        block_number: first.block_number,
+        event_index: first.index,
+        genesis: pinned,
+      },
+    });
+  }
+
   if (otherGenesis > 0) {
     notes.push(`${plural(otherGenesis, "event")} for this escrow on another genesis excluded`);
   }
@@ -202,17 +308,14 @@ export function escrowState(
   if (duplicates > 0) notes.push(`${plural(duplicates, "duplicate event")} counted once`);
   for (const m of malformedNotes) notes.push(`malformed event ignored: ${m}`);
 
-  const of = (method: string): EscrowEvidence[] =>
-    [...clean.values()].filter((e) => e.method === method).map((e) => e.evidence);
+  const of = (method: string): EscrowEvidence[] => clean.filter((e) => e.method === method).map((e) => e.evidence);
   const opened = of(OPENED);
   const released = of(RELEASED);
   const refunded = of(REFUNDED);
 
   let state: EscrowStateName = "unverified";
   let evidence: EscrowEvidence[] = [];
-  const conflicts: string[] = [];
 
-  if (identityConflict) conflicts.push("two different events share one (genesis, block_hash, index)");
   if (released.length > 0 && refunded.length > 0) {
     conflicts.push("both a finalized release and a finalized refund exist for this escrow");
   }
@@ -249,14 +352,11 @@ export function escrowState(
   }
 
   for (const c of conflicts) notes.push(`conflicting evidence: ${c}`);
-  if (conflicts.length > 0) {
-    state = "unverified";
-    evidence = [];
-  }
 
   return {
     schema: ESCROW_SCHEMA,
     escrow_id: id,
+    // state and evidence are only ever set on a path with no conflict.
     state,
     evidence,
     notes,

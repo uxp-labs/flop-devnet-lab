@@ -2,6 +2,7 @@
 //
 // Rules (RULES.md section 1):
 // - Unknown is null. Health "unknown" is never shown as "ok".
+// - Health is "ok" only when every check ran and passed (section 1.1).
 // - reset_detected is false only when the faucet and the RPC both report the pinned genesis.
 //   Any source with a different genesis makes it true. Not enough evidence makes it null.
 // - Disagreements between sources go in `conflicts`, in plain words.
@@ -59,8 +60,14 @@ export function classifyFaucet(r: HttpResult<FaucetHealthBody>): NetworkStatus["
     health = r.http >= 500 ? "down" : "unknown";
     detail = `http ${r.http} with no readable body`;
   } else if (body.status === "ok" && ready === true) {
-    health = "ok";
-    detail = null;
+    // A body that says ok on an error status is not ok: the HTTP status wins.
+    if (r.http === 200) {
+      health = "ok";
+      detail = null;
+    } else {
+      health = "degraded";
+      detail = `body says ok but http ${r.http}`;
+    }
   } else if (body.status === "degraded" || body.status === "down" || ready === false) {
     health = body.status === "down" ? "down" : "degraded";
     detail = `status ${String(body.status ?? "missing")}, ready ${String(ready)}, http ${r.http}`;
@@ -113,14 +120,22 @@ export function classifyRpc(
       stale: null,
     };
   }
+  // A failed check makes health degraded. A check that could not run makes it unknown,
+  // unless another check failed. Nothing missing is ever counted as passing.
   const problems: string[] = [];
+  const cannotRun: string[] = [];
+  if (head.error) problems.push(`read error: ${head.error}`);
+  if (genesis === null) problems.push("no valid genesis hash");
   let stale: boolean | null = null;
-  if (head.observed_at !== null) {
-    const age = secondsBetween(head.observed_at, o.now);
-    if (age !== null) {
-      stale = age > o.staleAfterSeconds;
-      if (stale) problems.push(`head is ${Math.round(age)}s old`);
-    }
+  const age = typeof head.observed_at === "string" ? secondsBetween(head.observed_at, o.now) : null;
+  if (age === null) {
+    cannotRun.push(head.observed_at === null ? "no observed_at, so the head age is unknown" : "observed_at does not parse, so the head age is unknown");
+  } else if (age < 0) {
+    conflicts.push(`rpc head observed_at ${head.observed_at} is later than the snapshot time ${o.now}`);
+    problems.push("head observed_at is later than the snapshot time");
+  } else {
+    stale = age > o.staleAfterSeconds;
+    if (stale) problems.push(`head is ${Math.round(age)}s old`);
   }
   if (previous && finalized && genesis !== null && previous.genesis === genesis) {
     if (finalized.number < previous.finalized_height) {
@@ -148,10 +163,13 @@ export function classifyRpc(
     }
   }
   if (finalized === null) problems.push("no valid finalized head");
+  if (best === null) problems.push("no valid best height");
+  const health: Health = problems.length > 0 ? "degraded" : cannotRun.length > 0 ? "unknown" : "ok";
+  const notes = [...problems, ...cannotRun];
   return {
-    health: problems.length === 0 ? "ok" : "degraded",
+    health,
     http: null,
-    detail: problems.length ? problems.join("; ") : null,
+    detail: notes.length ? notes.join("; ") : null,
     observed_at: head.observed_at,
     stale,
   };

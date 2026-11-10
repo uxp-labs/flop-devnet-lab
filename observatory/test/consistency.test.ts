@@ -1,6 +1,6 @@
 // One snapshot, three outputs (page, JSON feeds, MCP). They must agree.
-import { describe, expect, it } from "vitest";
-import { mkdtempSync, readFileSync } from "node:fs";
+import { afterAll, describe, expect, it } from "vitest";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { renderPage } from "../src/page.js";
@@ -71,6 +71,11 @@ function build(over: Partial<Snapshot> = {}): Snapshot {
       status: "partial",
       totals: { escrows_opened: 3, escrows_released: 1, escrows_refunded: 1, channels_opened: 0, channels_settled: 0 },
       by_account: {},
+      totals_label: "partial",
+      requested_blocks: 101,
+      covered_blocks: 50,
+      reset_detected: null,
+      notes: [],
       pending_unfinalized: 0,
       duplicates_dropped: 0,
       excluded_other_genesis: 0,
@@ -89,6 +94,41 @@ function build(over: Partial<Snapshot> = {}): Snapshot {
   return { ...base, hash: hashSnapshot(base) };
 }
 
+const FAUCET_G = "0x" + "ef".repeat(32);
+const FIN_HASH = "0x" + "aa".repeat(32);
+
+/** A reset scenario: reset true, stale true, conflicts, finalized height and hash, a differing faucet genesis,
+ *  an escrow with empty notes, a complete census with empty gaps, and a drift report with an unknown item. */
+function buildReset(): Snapshot {
+  const b = build();
+  const st = b.status;
+  const census = { ...b.census!, complete: true, status: "complete" as const, totals_label: "complete" as const, covered: [{ from_block: 0, to_block: 100 }], gaps: [], covered_blocks: 101, reset_detected: true, notes: ["page on another genesis ignored"] };
+  const drift = {
+    schema: "flop-observatory/drift@0" as const, observed_at: T, trust: "fixture" as const, genesis: G, finalized_height: 10, runtime_version: 5, spec_source: "spec.yaml", runtime_observed_at: null,
+    items: [
+      { param: "a", runtime_path: "api.consts.a", spec: 5, runtime: 5, status: "match" as const, note: null, mapping: "constant" as const, unit: null, expected: "5" },
+      { param: "b", runtime_path: null, spec: "", runtime: null, status: "unknown" as const, note: "", mapping: "none" as const, unit: null, expected: null },
+    ],
+    matches: 1, mismatches: 0, unknown: 1,
+  };
+  return build({
+    status: {
+      ...st,
+      genesis: { pinned: G, faucet: FAUCET_G, rpc: G },
+      reset_detected: true,
+      conflicts: ["faucet genesis differs from pinned", "second conflict"],
+      finalized_height: 10,
+      finalized_hash: FIN_HASH,
+      best_height: 12,
+      finality_lag: 2,
+      runtime_version: 5,
+      rpc: { ...st.rpc, health: "degraded", http: 200, detail: "stale head", stale: true },
+    },
+    census,
+    drift,
+  });
+}
+
 function pageCells(html: string): Map<string, string | undefined> {
   const m = new Map<string, string | undefined>();
   for (const x of html.matchAll(/<(?:td|p|span) data-k="([^"]*)"([^>]*)>/g)) {
@@ -98,8 +138,24 @@ function pageCells(html: string): Map<string, string | undefined> {
   return m;
 }
 
+const made: string[] = [];
+afterAll(() => {
+  for (const d of made) rmSync(d, { recursive: true, force: true });
+});
+
+/** Full page cell data: data-v, data-n and the visible text. */
+function pageFull(html: string): Map<string, { v?: string; n?: string; text: string }> {
+  const m = new Map<string, { v?: string; n?: string; text: string }>();
+  for (const x of html.matchAll(/<(?:td|p|span) data-k="([^"]*)"([^>]*)>([^<]*)/g)) {
+    const a = x[2] as string;
+    m.set(x[1] as string, { v: /data-v="([^"]*)"/.exec(a)?.[1], n: /data-n="([^"]*)"/.exec(a)?.[1], text: x[3] as string });
+  }
+  return m;
+}
+
 function setup(s: Snapshot) {
   const d = mkdtempSync(join(tmpdir(), "obs-cons-"));
+  made.push(d);
   writeFeeds(d, s);
   const feed = (n: string) => JSON.parse(readFileSync(join(d, n), "utf8"));
   let i = 0;
@@ -107,7 +163,7 @@ function setup(s: Snapshot) {
     const r = handleMcp({ jsonrpc: "2.0", id: ++i, method: "tools/call", params: { name, arguments: args } }, { snapshot: s });
     return JSON.parse(((r?.result as { content: { text: string }[] }).content[0] as { text: string }).text);
   };
-  return { cells: pageCells(renderPage(s)), feed, mcp };
+  return { cells: pageCells(renderPage(s)), full: pageFull(renderPage(s)), feed, mcp };
 }
 
 describe("page, feeds and MCP agree", () => {
@@ -212,5 +268,96 @@ describe("page, feeds and MCP agree", () => {
     expect(renderPage(sn)).not.toContain("<script");
     expect(o.feed("escrows.json").escrows[0].notes[0]).toBe(evil);
     expect(o.mcp("list_escrows").escrows[0].notes[0]).toBe(evil);
+  });
+});
+
+describe("reset scenario: page, feeds and MCP agree", () => {
+  const s = buildReset();
+  const { cells, full, feed, mcp } = setup(s);
+  const statusFeed = feed("status.json").status;
+  const statusMcp = mcp("get_status").status;
+
+  it("on reset_detected true, rpc.stale true, health and the genesis values", () => {
+    expect(s.status.reset_detected).toBe(true);
+    for (const st of [statusFeed, statusMcp]) {
+      expect(st.reset_detected).toBe(true);
+      expect(st.rpc.stale).toBe(true);
+      expect(st.rpc.health).toBe("degraded");
+      expect(st.genesis).toEqual({ pinned: G, faucet: FAUCET_G, rpc: G });
+    }
+    expect(cells.get("status.reset_detected")).toBe("true");
+    expect(full.get("status.reset_detected")?.text).toBe("true");
+    expect(cells.get("status.rpc.stale")).toBe("true");
+    expect(cells.get("status.rpc.health")).toBe("degraded");
+    expect(cells.get("status.genesis.faucet")).toBe(FAUCET_G);
+    expect(cells.get("status.genesis.pinned")).toBe(G);
+    expect(cells.get("status.genesis.faucet")).not.toBe(cells.get("status.genesis.pinned"));
+  });
+
+  it("on finalized height and hash, best height, lag and runtime version", () => {
+    for (const st of [statusFeed, statusMcp]) {
+      expect([st.finalized_height, st.finalized_hash, st.best_height, st.finality_lag, st.runtime_version]).toEqual([10, FIN_HASH, 12, 2, 5]);
+    }
+    expect(cells.get("status.finalized_height")).toBe("10");
+    expect(cells.get("status.finalized_hash")).toBe(FIN_HASH);
+    expect(cells.get("status.best_height")).toBe("12");
+    expect(cells.get("status.finality_lag")).toBe("2");
+    expect(cells.get("status.runtime_version")).toBe("5");
+  });
+
+  it("on a non-empty conflicts list", () => {
+    for (const st of [statusFeed, statusMcp]) expect(st.conflicts).toEqual(s.status.conflicts);
+    expect(full.get("status.conflicts")?.n).toBe("2");
+    expect(cells.get("status.conflicts")).toBe(s.status.conflicts.join("; "));
+  });
+
+  it("on an escrow with empty notes: known empty, none on the page, [] in JSON and MCP", () => {
+    const e = s.escrows[0]!;
+    expect(e.notes).toEqual([]);
+    expect(feed("escrows.json").escrows[0].notes).toEqual([]);
+    expect(mcp("list_escrows").escrows[0].notes).toEqual([]);
+    expect(mcp("get_escrow_state", { escrow_id: e.escrow_id }).notes).toEqual([]);
+    const c = full.get(`escrow.${e.escrow_id}.notes`);
+    expect(c?.n).toBe("0");
+    expect(c?.text).toBe("none");
+    const u = s.escrows[2]!;
+    expect(full.get(`escrow.${u.escrow_id}.evidence`)?.n).toBe("0");
+    expect(full.get(`escrow.${u.escrow_id}.evidence`)?.text).toBe("none");
+    expect(full.get(`escrow.${e.escrow_id}.evidence`)?.n).toBe("1");
+  });
+
+  it("on a complete census with empty gaps", () => {
+    for (const c of [feed("census.json").census, mcp("get_census").census]) {
+      expect(c.gaps).toEqual([]);
+      expect(c.status).toBe("complete");
+      expect(c.reset_detected).toBe(true);
+      expect(c.notes).toEqual(s.census!.notes);
+    }
+    expect(full.get("census.gaps")?.n).toBe("0");
+    expect(full.get("census.gaps")?.text).toBe("none");
+    expect(cells.get("census.status")).toBe("complete");
+    expect(cells.get("census.reset_detected")).toBe("true");
+    expect(full.get("census.notes")?.n).toBe("1");
+    expect(cells.get("census.covered")).toBe("0-100");
+  });
+
+  it("on drift counts and items", () => {
+    for (const d of [feed("drift.json").drift, mcp("get_drift").drift]) {
+      expect([d.matches, d.mismatches, d.unknown]).toEqual([1, 0, 1]);
+    }
+    expect(cells.get("drift.matches")).toBe("1");
+    expect(cells.get("drift.mismatches")).toBe("0");
+    expect(cells.get("drift.unknown")).toBe("1");
+    expect(cells.get("drift.0.param")).toBe("a");
+    expect(cells.get("drift.1.status")).toBe("unknown");
+    expect(full.get("drift.1.status")?.text).toBe("");
+    expect(cells.get("drift.1.spec")).toBe("");
+    expect(full.get("drift.1.spec")?.text).toBe("(empty)");
+    expect(full.get("drift.1.runtime")?.v).toBeUndefined();
+    expect(full.get("drift.1.runtime")?.text).toBe("");
+  });
+
+  it("the escrow id cell is keyed escrow_id", () => {
+    for (const e of s.escrows) expect(cells.get(`escrow.${e.escrow_id}.escrow_id`)).toBe(e.escrow_id);
   });
 });

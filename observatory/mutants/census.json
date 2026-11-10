@@ -5,7 +5,7 @@
     "find": "const key = JSON.stringify([page.genesis, ev.block_hash, ev.index]);",
     "replace": "const key = JSON.stringify([page.genesis, ev.block_hash, ev.index, groups.size]);",
     "test": "test/census.test.ts",
-    "why": "Every copy gets its own key, so the same event seen twice counts twice and duplicates_dropped stays 0 (rule 9)."
+    "why": "Every copy gets its own key, so the same event seen twice counts twice and duplicates_dropped stays 0 (clause 9)."
   },
   {
     "id": "census-count-unfinalized",
@@ -13,7 +13,7 @@
     "find": "if (group.some((e) => !e.finalized)) {",
     "replace": "if (group.some((e) => !e.finalized && false)) {",
     "test": "test/census.test.ts",
-    "why": "Unfinalized events are counted in totals instead of pending_unfinalized (section 3, rules 8 and 9)."
+    "why": "Unfinalized events are counted in totals instead of pending_unfinalized (section 3, clauses 8 and 9)."
   },
   {
     "id": "census-any-finalized-copy-wins",
@@ -21,7 +21,7 @@
     "find": "if (group.some((e) => !e.finalized)) {",
     "replace": "if (group.every((e) => !e.finalized)) {",
     "test": "test/census.test.ts",
-    "why": "A group with one unfinalized copy is counted as finalized, but rule 9 makes it one pending event."
+    "why": "A group with one unfinalized copy is counted as finalized, but clause 9 makes it one pending event."
   },
   {
     "id": "census-ignore-gaps",
@@ -29,7 +29,7 @@
     "find": "const complete = gaps.length === 0;",
     "replace": "const complete = true;",
     "test": "test/census.test.ts",
-    "why": "A partial census reports complete, so partial counts would be presented as complete (section 3, rule 3)."
+    "why": "A partial census reports complete, so partial counts would be presented as complete (section 3, clause 3)."
   },
   {
     "id": "census-partial-totals-unlabeled",
@@ -45,7 +45,7 @@
     "find": "const onPinned = valid.filter((p) => p.genesis === pinned);",
     "replace": "const onPinned = valid;",
     "test": "test/census.test.ts",
-    "why": "Pages on another genesis are counted and add coverage, so counts mix geneses (rule 6)."
+    "why": "Pages on another genesis are counted and add coverage, so counts mix geneses (clause 6)."
   },
   {
     "id": "census-reset-not-flagged",
@@ -58,18 +58,26 @@
   {
     "id": "census-missing-page-covered",
     "file": "src/census.ts",
-    "find": "if (copies === undefined) return { complete: false, reason: `page ${at} is missing` };",
-    "replace": "if (copies === undefined) return { complete: true, pages };",
+    "find": "if (copies === undefined) return { complete: false, reason: noSuchPage(at, from) };",
+    "replace": "if (copies === undefined) break;",
     "test": "test/census.test.ts",
-    "why": "A chain with a missing page counts as complete, so its range is covered and its events count (rules 1, 2)."
+    "why": "A chain whose next_page names a page that does not exist counts as complete, so its range is covered and its events count (clauses 1 and 2)."
   },
   {
     "id": "census-broken-chain-events-counted",
     "file": "src/census.ts",
-    "find": "notes.push(`${label}: ${w.reason}, so the range is not covered and its ${n} event(s) count nowhere`);",
-    "replace": "notes.push(`${label}: ${w.reason}, so the range is not covered and its ${n} event(s) count nowhere`); counted.push(...all);",
+    "find": "notes.push(`${label}: ${w.reason}, so the chain is broken and its ${events} event(s) count nowhere`);",
+    "replace": "notes.push(`${label}: ${w.reason}, so the chain is broken and its ${events} event(s) count nowhere`); counted.push(...all);",
     "test": "test/census.test.ts",
-    "why": "Events on a broken chain are counted, though rule 1 says they count nowhere."
+    "why": "Events on a broken chain are counted, though clause 1 says they count nowhere."
+  },
+  {
+    "id": "census-outside-chain-counted",
+    "file": "src/census.ts",
+    "find": "if (!intersects) {",
+    "replace": "if (false) {",
+    "test": "test/census.test.ts",
+    "why": "U3: a complete chain that does not intersect the request has its events counted, so a null block_number event outside the request counts (clauses 1 and 4)."
   },
   {
     "id": "census-unreachable-pages-counted",
@@ -77,7 +85,39 @@
     "find": "counted.push(...w.pages);",
     "replace": "counted.push(...all);",
     "test": "test/census.test.ts",
-    "why": "Pages not reachable from page 0 are counted, though rule 2 says they are ignored."
+    "why": "Pages not reachable from page 0 are counted, though clause 2 says they are ignored."
+  },
+  {
+    "id": "census-unreached-disagreement-ignored",
+    "file": "src/census.ts",
+    "find": "for (const n of [...byNumber.keys()].sort((a, b) => a - b)) {",
+    "replace": "for (const n of [...seen].sort((a, b) => a - b)) {",
+    "test": "test/census.test.ts",
+    "why": "U8a: copies that disagree on next_page break the chain only when the walk reaches them, though clause 2 says reached or not."
+  },
+  {
+    "id": "census-negative-next-page-ends-chain",
+    "file": "src/census.ts",
+    "find": "if (next === null) break;",
+    "replace": "if (next === null || next < 0) break;",
+    "test": "test/census.test.ts",
+    "why": "U8b: a negative next_page ends the chain as if it were null, though clause 2 says it names a page that does not exist and breaks the chain."
+  },
+  {
+    "id": "census-negative-page-accepted",
+    "file": "src/census.ts",
+    "find": "if (page < 0) throw new CensusRefused(`${at}: page ${page} is negative`);",
+    "replace": "",
+    "test": "test/census.test.ts",
+    "why": "U8b: a page with a negative page number is accepted, though clause 12 makes the whole census refuse."
+  },
+  {
+    "id": "census-unreadable-pages-ignored",
+    "file": "src/census.ts",
+    "find": "if (unreadable.length > 0) {",
+    "replace": "if (false) {",
+    "test": "test/census.test.ts",
+    "why": "U4: an event page file that could not be read or parsed is dropped silently and the census can report complete, though clause 12 makes it refuse."
   },
   {
     "id": "census-no-adjacent-merge",
@@ -85,7 +125,7 @@
     "find": "if (last !== undefined && r.from_block <= last.to_block + 1) {",
     "replace": "if (last !== undefined && r.from_block <= last.to_block) {",
     "test": "test/census.test.ts",
-    "why": "Adjacent covered ranges stay apart (0-99 and 100-199 instead of 0-199), against rule 3."
+    "why": "Adjacent covered ranges stay apart (0 to 99 and 100 to 199 instead of 0 to 199), against clause 3."
   },
   {
     "id": "census-out-of-range-kept",
@@ -93,7 +133,7 @@
     "find": "if (outOfRange(raw, page, req)) {",
     "replace": "if (false) {",
     "test": "test/census.test.ts",
-    "why": "Events outside the request or their page's range are counted or called malformed instead of skipped (rules 4, 10)."
+    "why": "Events outside the request or their page's range are counted or called malformed instead of skipped (clauses 4 and 10)."
   },
   {
     "id": "census-malformed-fields-accepted",
@@ -101,7 +141,7 @@
     "find": "if (!isText(section) || !isText(method) || !isText(block_hash)) return null;",
     "replace": "if (false) return null;",
     "test": "test/census.test.ts",
-    "why": "Events missing section, method or block hash are no longer counted in malformed_dropped (rule 7)."
+    "why": "Events missing section, method or block hash are no longer counted in malformed_dropped (clause 7)."
   },
   {
     "id": "census-finalized-truthy",
@@ -109,7 +149,7 @@
     "find": "finalized: raw.finalized === true",
     "replace": "finalized: Boolean(raw.finalized)",
     "test": "test/census.test.ts",
-    "why": "A non-boolean finalized such as the string \"true\" counts as finalized, though rule 8 makes it pending."
+    "why": "A finalized value that is not a boolean, such as the string \"true\", counts as finalized, though clause 8 makes it pending."
   },
   {
     "id": "census-disagreeing-group-counted",
@@ -117,7 +157,7 @@
     "find": "if (disagree) {",
     "replace": "if (false) {",
     "test": "test/census.test.ts",
-    "why": "A duplicate group whose copies disagree on section, method or account is counted by its first copy instead of once as malformed (rule 9)."
+    "why": "A duplicate group whose copies disagree on section, method or account is counted by its first copy instead of once as malformed (clause 9)."
   },
   {
     "id": "census-account-order",
@@ -125,7 +165,7 @@
     "find": "const ACCOUNT_FIELDS = [\"who\", \"owner\", \"agent\", \"payer\"] as const;",
     "replace": "const ACCOUNT_FIELDS = [\"owner\", \"who\", \"agent\", \"payer\"] as const;",
     "test": "test/census.test.ts",
-    "why": "by_account takes owner before who, against the order in section 3 and rule 11."
+    "why": "by_account takes owner before who, against the order in section 3 and clause 11."
   },
   {
     "id": "census-missing-next-page-tolerated",
@@ -133,6 +173,22 @@
     "find": "if (next_page !== null && !isInt(next_page)) {",
     "replace": "if (next_page !== null && next_page !== undefined && !isInt(next_page)) {",
     "test": "test/census.test.ts",
-    "why": "A page with no next_page field is accepted instead of refusing the whole census (rule 12)."
+    "why": "A page with no next_page field is accepted instead of refusing the whole census (clause 12)."
+  },
+  {
+    "id": "census-missing-block-number-as-null",
+    "file": "src/census.ts",
+    "find": "if (block_number !== null && !isInt(block_number)) return null;",
+    "replace": "if (block_number !== null && block_number !== undefined && !isInt(block_number)) return null;",
+    "test": "test/census.test.ts",
+    "why": "An event with no block_number key is read as if block_number were null and kept, though clause 7 makes a missing block_number malformed. Only an explicit null is kept."
+  },
+  {
+    "id": "census-fraction-is-integer",
+    "file": "src/census.ts",
+    "find": "return typeof v === \"number\" && Number.isInteger(v);",
+    "replace": "return typeof v === \"number\" && Number.isFinite(v);",
+    "test": "test/census.test.ts",
+    "why": "A number with a fractional part, such as index 1.5, passes as an integer, though clause 14 judges integers by value and 1.5 is not one."
   }
 ]

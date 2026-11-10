@@ -1,11 +1,11 @@
 {
   "scenario": "census-gap",
-  "description": "Synthetic, made up for a test. Request 0-299 on pinned genesis 0xa1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1. Rule numbers refer to RULES.md section 3.1. Range 0-99 has a complete chain. Range 100-199 has pages 0 and 2 but page 1 is missing, so its chain is broken: the range is not covered and its events (a release, a duplicate of it, an open, an unfinalized open, a malformed event and a refund) count nowhere (rule 1). Range 200-299 has no pages at all. The census is partial and every total is labeled partial. Expected: complete false, status partial; covered 0-99; gaps 100-299; totals escrows_opened 2, escrows_released 0, escrows_refunded 0, channels_opened 0, channels_settled 0; pending_unfinalized 0; duplicates_dropped 0; excluded_other_genesis 0; malformed_dropped 0; by_account synthetic-alice (escrows_opened 1), synthetic-bob (escrows_opened 1).",
+  "description": "Synthetic, made up for a test. Request 0 to 299. The pinned genesis is the FLOP devnet genesis (DEVNET_GENESIS in src/status.ts); every event and block hash is made up. Clause numbers refer to RULES.md section 3.1. Blocks 0 to 99 have a complete chain. Blocks 100 to 199 have pages 0 and 2 but page 1 is missing, so that chain is broken: the range is not covered and its events (a release, a duplicate of it, an open, an unfinalized open, a malformed event and a refund) count nowhere (clause 1). Blocks 200 to 299 have no pages at all. The census is partial and every total is labeled partial. Expected: complete false, status partial; covered 0 to 99; gaps 100 to 299; totals escrows_opened 2, escrows_released 0, escrows_refunded 0, channels_opened 0, channels_settled 0; pending_unfinalized 0; duplicates_dropped 0; excluded_other_genesis 0; malformed_dropped 0; by_account synthetic-alice (escrows_opened 1), synthetic-bob (escrows_opened 1).",
   "now": "2026-11-10T00:00:00.000Z",
   "synthetic": true,
   "census_request": {
     "from_block": 0,
     "to_block": 299
   },
-  "pinned_genesis": "0xa1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1"
+  "pinned_genesis": "0x99c172c095340ace980631f9123544c6bebd4839f3437e463533422d8be2d631"
 }

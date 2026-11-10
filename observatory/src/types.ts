@@ -172,6 +172,11 @@ export interface EscrowStateOptions {
   /** When the pages were read (ISO 8601). */
   observedAt: string;
   trust: Trust;
+  /**
+   * Event page files that could not be read or parsed, as "file: reason". When not empty,
+   * every escrow is unverified: the missing page could hold a conflicting event.
+   */
+  unreadablePages?: string[];
 }
 
 // ===== END ESCROW TYPES =====

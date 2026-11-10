@@ -10,8 +10,8 @@
  {
   "id": "page-unknown-health-as-ok-text",
   "file": "src/page.ts",
-  "find": "if (v === null || v === undefined || v === \"\") return",
-  "replace": "if (v === undefined || v === \"\") return",
+  "find": "if (v === null || v === undefined) return `<td data-k",
+  "replace": "if (v === undefined) return `<td data-k",
   "test": "test/page.test.ts",
   "why": "a null value must be a blank cell, not the text null"
  },
@@ -150,5 +150,85 @@
   "replace": "census: s.census ? { ...s.census, status: \"complete\" } : null }",
   "test": "test/consistency.test.ts",
   "why": "partial census must read partial in JSON and MCP as on the page"
+ },
+ {
+  "id": "page-reset-false-when-true",
+  "file": "src/page.ts",
+  "find": "cell(\"status.reset_detected\", st.reset_detected)",
+  "replace": "cell(\"status.reset_detected\", st.reset_detected === null ? null : false)",
+  "test": "test/consistency.test.ts",
+  "why": "the page must show reset_detected true when it is true"
+ },
+ {
+  "id": "feed-flips-reset",
+  "file": "src/feed.ts",
+  "find": "trust: s.status.trust, status: s.status }",
+  "replace": "trust: s.status.trust, status: { ...s.status, reset_detected: s.status.reset_detected === true ? false : s.status.reset_detected } }",
+  "test": "test/consistency.test.ts",
+  "why": "the status feed and MCP must not flip reset_detected"
+ },
+ {
+  "id": "feed-drops-conflicts",
+  "file": "src/feed.ts",
+  "find": "trust: s.status.trust, status: s.status }",
+  "replace": "trust: s.status.trust, status: { ...s.status, conflicts: [] } }",
+  "test": "test/consistency.test.ts",
+  "why": "the status feed and MCP must keep conflicts"
+ },
+ {
+  "id": "page-empty-list-blank",
+  "file": "src/page.ts",
+  "find": "if (items.length === 0) return `<td data-k=\"${esc(k)}\" data-n=\"0\">none</td>`;",
+  "replace": "if (items.length === 0) return `<td data-k=\"${esc(k)}\" data-n=\"0\" class=\"unk\"></td>`;",
+  "test": "test/page.test.ts",
+  "why": "an empty list is known empty and reads none, never blank"
+ },
+ {
+  "id": "page-empty-range-blank",
+  "file": "src/page.ts",
+  "find": "if (rs.length === 0) return `<td data-k=\"${esc(k)}\" data-n=\"0\">none</td>`;",
+  "replace": "if (rs.length === 0) return `<td data-k=\"${esc(k)}\" data-n=\"0\"></td>`;",
+  "test": "test/consistency.test.ts",
+  "why": "empty census gaps read none, never blank"
+ },
+ {
+  "id": "page-data-n-dropped",
+  "file": "src/page.ts",
+  "find": "data-n=\"${items.length}\" data-v",
+  "replace": "data-v",
+  "test": "test/page.test.ts",
+  "why": "every non-empty list cell carries data-n"
+ },
+ {
+  "id": "page-data-n-wrong",
+  "file": "src/page.ts",
+  "find": "data-n=\"${items.length}\" data-v",
+  "replace": "data-n=\"${items.length + 1}\" data-v",
+  "test": "test/consistency.test.ts",
+  "why": "data-n must equal the list length"
+ },
+ {
+  "id": "page-rpc-stale-flipped",
+  "file": "src/page.ts",
+  "find": "cell(\"status.rpc.stale\", st.rpc.stale)",
+  "replace": "cell(\"status.rpc.stale\", st.rpc.stale === null ? null : !st.rpc.stale)",
+  "test": "test/consistency.test.ts",
+  "why": "rpc.stale must agree across page, feed and MCP"
+ },
+ {
+  "id": "page-empty-string-blank",
+  "file": "src/page.ts",
+  "find": "(empty)</td>",
+  "replace": "</td>",
+  "test": "test/page.test.ts",
+  "why": "an empty string reads (empty)"
+ },
+ {
+  "id": "page-escrow-key-id",
+  "file": "src/page.ts",
+  "find": "escrow.${esc(id)}.escrow_id",
+  "replace": "escrow.${esc(id)}.id",
+  "test": "test/page.test.ts",
+  "why": "the escrow id cell is keyed by its snapshot path, escrow_id"
  }
 ]

@@ -1,0 +1,11 @@
+{
+  "scenario": "census-nonstandard-json",
+  "description": "Synthetic, made up for a test. Request 0 to 99. The pinned genesis is the FLOP devnet genesis (DEVNET_GENESIS in src/status.ts); every event and block hash is made up. Clause numbers refer to RULES.md section 3.1. The page files are written by hand. Two files hold page 0 for blocks 0 to 99. The first is standard JSON and holds a release. The second, 01-nan-index.json, holds an event with index NaN. NaN is not standard JSON (RFC 8259), so that file cannot be parsed as JSON and the whole census refuses (clause 12), even though a lenient parser would read it. Expected: the census refuses; no totals.",
+  "now": "2026-11-10T00:00:00.000Z",
+  "synthetic": true,
+  "census_request": {
+    "from_block": 0,
+    "to_block": 99
+  },
+  "pinned_genesis": "0x99c172c095340ace980631f9123544c6bebd4839f3437e463533422d8be2d631"
+}

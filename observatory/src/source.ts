@@ -34,6 +34,11 @@ export interface Source {
   runtimeConstants(): Promise<RuntimeConstants | null>;
   /** Raw event pages, verbatim. Retained so any count can be recomputed from them. */
   eventPages(): Promise<EventPage[]>;
+  /**
+   * Event pages that exist but could not be read or parsed, as "file: reason". Never dropped
+   * silently: a census refuses and every escrow is unverified when this is not empty.
+   */
+  eventPageErrors(): Promise<string[]>;
 }
 
 export interface FixtureMeta {
@@ -63,6 +68,8 @@ export interface FixtureData {
   eventPages?: EventPage[];
   /** Files that existed but could not be parsed. Reported, never silently dropped. */
   loadErrors?: string[];
+  /** The event page files among loadErrors. Census and escrow results consume these. */
+  pageErrors?: string[];
 }
 
 export function unknownHttp<T>(error: string): HttpResult<T> {
@@ -98,13 +105,16 @@ export class FixtureSource implements Source {
   /** Loads a scenario directory. Unparsable files are listed in data.loadErrors, not thrown. */
   static fromDir(dir: string): FixtureSource {
     const loadErrors: string[] = [];
-    const read = <T>(name: string): T | undefined => {
+    const pageErrors: string[] = [];
+    const read = <T>(name: string, errors: string[][] = [loadErrors]): T | undefined => {
       const path = join(dir, name);
       if (!existsSync(path)) return undefined;
       try {
         return JSON.parse(readFileSync(path, "utf8")) as T;
       } catch (e) {
-        loadErrors.push(`${name}: ${(e as Error).message}`);
+        // The parser's own wording changes between Node versions, so outputs say only this.
+        const reason = e instanceof SyntaxError ? "not valid JSON" : (e as Error).message;
+        for (const list of errors) list.push(`${name}: ${reason}`);
         return undefined;
       }
     };
@@ -115,7 +125,7 @@ export class FixtureSource implements Source {
     if (existsSync(pagesDir)) {
       eventPages = [];
       for (const name of readdirSync(pagesDir).filter((n) => n.endsWith(".json")).sort()) {
-        const page = read<EventPage>(join("event-pages", name));
+        const page = read<EventPage>(join("event-pages", name), [loadErrors, pageErrors]);
         if (page !== undefined) eventPages.push(page);
       }
     }
@@ -129,6 +139,7 @@ export class FixtureSource implements Source {
         runtimeConstants: read("runtime-constants.json"),
         eventPages,
         loadErrors,
+        pageErrors,
       },
       `fixture:${meta.scenario}`,
     );
@@ -156,5 +167,9 @@ export class FixtureSource implements Source {
 
   async eventPages(): Promise<EventPage[]> {
     return this.data.eventPages ?? [];
+  }
+
+  async eventPageErrors(): Promise<string[]> {
+    return this.data.pageErrors ?? [];
   }
 }

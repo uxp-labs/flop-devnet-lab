@@ -65,6 +65,11 @@ function build(over: Partial<Snapshot> = {}): Snapshot {
       status: "partial",
       totals: { escrows_opened: 3, escrows_released: 1, escrows_refunded: 1, channels_opened: 0, channels_settled: 0 },
       by_account: {},
+      totals_label: "partial",
+      requested_blocks: 101,
+      covered_blocks: 50,
+      reset_detected: null,
+      notes: [],
       pending_unfinalized: 0,
       duplicates_dropped: 0,
       excluded_other_genesis: 0,
@@ -81,6 +86,41 @@ function build(over: Partial<Snapshot> = {}): Snapshot {
     ...over,
   };
   return { ...base, hash: hashSnapshot(base) };
+}
+
+const FAUCET_G = "0x" + "ef".repeat(32);
+const FIN_HASH = "0x" + "aa".repeat(32);
+
+/** A reset scenario: reset true, stale true, conflicts, finalized height and hash, a differing faucet genesis,
+ *  an escrow with empty notes, a complete census with empty gaps, and a drift report with an unknown item. */
+function buildReset(): Snapshot {
+  const b = build();
+  const st = b.status;
+  const census = { ...b.census!, complete: true, status: "complete" as const, totals_label: "complete" as const, covered: [{ from_block: 0, to_block: 100 }], gaps: [], covered_blocks: 101, reset_detected: true, notes: ["page on another genesis ignored"] };
+  const drift = {
+    schema: "flop-observatory/drift@0" as const, observed_at: T, trust: "fixture" as const, genesis: G, finalized_height: 10, runtime_version: 5, spec_source: "spec.yaml", runtime_observed_at: null,
+    items: [
+      { param: "a", runtime_path: "api.consts.a", spec: 5, runtime: 5, status: "match" as const, note: null, mapping: "constant" as const, unit: null, expected: "5" },
+      { param: "b", runtime_path: null, spec: "", runtime: null, status: "unknown" as const, note: "", mapping: "none" as const, unit: null, expected: null },
+    ],
+    matches: 1, mismatches: 0, unknown: 1,
+  };
+  return build({
+    status: {
+      ...st,
+      genesis: { pinned: G, faucet: FAUCET_G, rpc: G },
+      reset_detected: true,
+      conflicts: ["faucet genesis differs from pinned", "second conflict"],
+      finalized_height: 10,
+      finalized_hash: FIN_HASH,
+      best_height: 12,
+      finality_lag: 2,
+      runtime_version: 5,
+      rpc: { ...st.rpc, health: "degraded", http: 200, detail: "stale head", stale: true },
+    },
+    census,
+    drift,
+  });
 }
 
 /** Reads one data-k cell: returns {present, value (data-v or undefined), text}. */
@@ -169,5 +209,58 @@ describe("page", () => {
     const h = renderPage({ ...base, hash: hashSnapshot(base) });
     expect(h).not.toContain("<script");
     expect(h).not.toContain("x</script>");
+  });
+});
+
+describe("page cell rules", () => {
+  const html = renderPage(build());
+  const rh = renderPage(buildReset());
+  const n = (h: string, k: string) => new RegExp(`data-k="${k.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}"[^>]*data-n="(\\d+)"`).exec(h)?.[1];
+  const nOnly = (h: string, k: string) => new RegExp(`data-k="${k.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}"[^>]*data-n="\\d+">none</td>`).test(h);
+
+  it("empty lists read none with data-n 0, never blank", () => {
+    expect(nOnly(html, "status.conflicts")).toBe(true);
+    expect(cellOf(html, "status.conflicts")?.text).toBe("none");
+    expect(html).not.toContain("none seen");
+    expect(nOnly(html, `escrow.${ID_CLAIMED}.notes`)).toBe(true);
+    expect(nOnly(html, `escrow.${ID_UNVERIFIED}.evidence`)).toBe(true);
+    expect(nOnly(rh, "census.gaps")).toBe(true);
+    expect(nOnly(rh, "census.notes")).toBe(false);
+  });
+  it("non-empty lists carry data-n equal to their length and join with the right separators", () => {
+    expect(n(rh, "status.conflicts")).toBe("2");
+    expect(cellOf(rh, "status.conflicts")?.text).toBe("faucet genesis differs from pinned; second conflict");
+    expect(n(html, "census.gaps")).toBe("1");
+    expect(n(html, "census.covered")).toBe("1");
+    expect(n(rh, `escrow.${ID_CLAIMED}.evidence`)).toBe("1");
+    expect(cellOf(rh, `escrow.${ID_CLAIMED}.evidence`)?.text).toBe(`hasStation.EscrowReleased @ 7 0x${"cd".repeat(32)} #1`);
+    const two = build();
+    const c = { ...two.census!, gaps: [{ from_block: 1, to_block: 2 }, { from_block: 5, to_block: 9 }] };
+    const h2 = renderPage(build({ census: c }));
+    expect(n(h2, "census.gaps")).toBe("2");
+    expect(cellOf(h2, "census.gaps")?.text).toBe("1-2, 5-9");
+  });
+  it("an empty string reads (empty) and keeps data-v empty", () => {
+    expect(cellOf(rh, "drift.1.spec")).toEqual({ value: "", text: "(empty)" });
+    expect(cellOf(rh, "drift.1.note")).toEqual({ value: "", text: "(empty)" });
+  });
+  it("booleans read as words, null stays blank", () => {
+    expect(cellOf(rh, "status.reset_detected")).toEqual({ value: "true", text: "true" });
+    expect(cellOf(rh, "status.rpc.stale")).toEqual({ value: "true", text: "true" });
+    expect(cellOf(html, "status.reset_detected")).toEqual({ value: undefined, text: "" });
+    expect(cellOf(html, "status.rpc.stale")).toEqual({ value: undefined, text: "" });
+  });
+  it("emits the full key set", () => {
+    const keys = new Set([...rh.matchAll(/data-k="([^"]*)"/g)].map((m) => m[1]));
+    for (const k of [
+      "snapshot.hash", "snapshot.observed_at", "snapshot.trust", "status.reset_detected", "status.conflicts", "status.rpc.stale", "status.genesis.faucet",
+      `escrow.${ID_CLAIMED}.escrow_id`, `escrow.${ID_CLAIMED}.state`, `escrow.${ID_CLAIMED}.notes`, `escrow.${ID_CLAIMED}.evidence`, `escrow.${ID_CLAIMED}.scope`,
+      "census.status", "census.requested", "census.covered", "census.gaps", "census.totals.escrows_opened", "census.reset_detected", "census.notes",
+      "drift.matches", "drift.mismatches", "drift.unknown", "drift.0.param", "drift.0.status", "drift.1.status",
+    ]) expect(keys.has(k), k).toBe(true);
+    expect(keys.has(`escrow.${ID_CLAIMED}.id`)).toBe(false);
+  });
+  it("shows the census request as from to to", () => {
+    expect(cellOf(html, "census.requested")?.text).toBe("0 to 100");
   });
 });

@@ -30,5 +30,45 @@
     "replace": "export function refuseSpend(what: string): never {\n  return undefined as never;",
     "test": "test/guard.test.ts",
     "why": "spending must throw"
+  },
+  {
+    "id": "setup-https-unblocked",
+    "file": "test/setup.ts",
+    "find": "block(require(\"node:https\"), [\"request\", \"get\", \"createServer\"], \"network\", \"https\");",
+    "replace": "",
+    "test": "test/guard.test.ts",
+    "why": "an https request in a test must be refused and recorded"
+  },
+  {
+    "id": "setup-named-imports-unsynced",
+    "file": "test/setup.ts",
+    "find": "syncBuiltinESMExports();\n",
+    "replace": "",
+    "test": "test/guard.test.ts",
+    "why": "named imports of node modules must see the block too"
+  },
+  {
+    "id": "setup-child-process-unblocked",
+    "file": "test/setup.ts",
+    "find": "  [\"spawn\", \"spawnSync\", \"exec\", \"execSync\", \"execFile\", \"execFileSync\", \"fork\"],",
+    "replace": "  [],",
+    "test": "test/guard.test.ts",
+    "why": "a child process in a test must be refused and recorded"
+  },
+  {
+    "id": "setup-socket-connect-unblocked",
+    "file": "test/setup.ts",
+    "find": "net.Socket.prototype.connect = blocked(\"network\", \"net.Socket.connect\");\n",
+    "replace": "",
+    "test": "test/guard.test.ts",
+    "why": "a raw socket connection must be refused and recorded"
+  },
+  {
+    "id": "scan-misses-node-imports",
+    "file": "test/guard.test.ts",
+    "find": "    new RegExp(`from\\\\s*[\"'](?:node:)?${NET}[\"']`),\n",
+    "replace": "",
+    "test": "test/guard.test.ts",
+    "why": "the source scan must catch a static import of a network module"
   }
 ]

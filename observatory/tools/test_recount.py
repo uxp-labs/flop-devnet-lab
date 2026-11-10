@@ -179,6 +179,62 @@ class RecountTests(unittest.TestCase):
         code, _, _ = run(os.path.join(DATA, "complete"), 9, 3)
         self.assertEqual(code, 2)
 
+    def test_block_number_key_missing_is_malformed_but_null_is_kept(self):
+        r = census("bnmissing", 1, 10)
+        self.assertEqual(r["malformed_dropped"], 1)
+        self.assertEqual(r["totals"], totals(escrows_opened=2))
+        self.assertEqual(r["by_account"], {"bob": {"escrows_opened": 1}, "carol": {"escrows_opened": 1}})
+        self.assertNotIn("alice", r["by_account"])
+
+    def test_integers_are_judged_by_value(self):
+        # page 0.0, next_page 1.0, block_number 1.0 and index 1.0 are integers; index 1.5 is not.
+        r = census("floatint", 1, 10)
+        self.assertTrue(r["complete"])
+        self.assertEqual(r["duplicates_dropped"], 1)  # index 1.0 and index 1 are one event
+        self.assertEqual(r["malformed_dropped"], 1)   # index 1.5
+        self.assertEqual(r["totals"], totals(escrows_opened=2))
+        self.assertEqual(r["by_account"], {"alice": {"escrows_opened": 1}, "bob": {"escrows_opened": 1}})
+
+    def test_fractional_or_boolean_page_fields_refuse(self):
+        for field, value in (("page", 0.5), ("page", True), ("from_block", 1.5), ("to_block", True)):
+            with tempfile.TemporaryDirectory() as d:
+                os.makedirs(os.path.join(d, "event-pages"))
+                page = {"genesis": G, "from_block": 1, "to_block": 5, "page": 0, "next_page": None, "events": []}
+                page[field] = value
+                with open(os.path.join(d, "event-pages", "x.json"), "w") as f:
+                    json.dump(page, f)
+                self.assertEqual(run(d, 1, 5)[0], 2, (field, value))
+
+    def test_next_page_false_or_fractional_refuses(self):
+        for value in (False, 1.5):
+            with tempfile.TemporaryDirectory() as d:
+                os.makedirs(os.path.join(d, "event-pages"))
+                with open(os.path.join(d, "event-pages", "x.json"), "w") as f:
+                    json.dump({"genesis": G, "from_block": 1, "to_block": 5, "page": 0,
+                               "next_page": value, "events": []}, f)
+                self.assertEqual(run(d, 1, 5)[0], 2, value)
+
+    def test_non_standard_json_constants_refuse(self):
+        event = ('{"block_number": 1, "block_hash": "0x01", "finalized": true, "index": %s,'
+                 ' "section": "hasStation", "method": "EscrowOpened", "data": {}}')
+        texts = {
+            "nan-index": '{"genesis": "%s", "from_block": 1, "to_block": 5, "page": 0, "next_page": null,'
+                         ' "events": [%s]}' % (G, event % "NaN"),
+            "infinity-page-field": '{"genesis": "%s", "from_block": 1, "to_block": Infinity, "page": 0,'
+                                   ' "next_page": null, "events": []}' % G,
+            "neg-infinity": '{"genesis": "%s", "from_block": -Infinity, "to_block": 5, "page": 0,'
+                            ' "next_page": null, "events": []}' % G,
+        }
+        for name, text in texts.items():
+            with tempfile.TemporaryDirectory() as d:
+                os.makedirs(os.path.join(d, "event-pages"))
+                with open(os.path.join(d, "event-pages", "x.json"), "w") as f:
+                    f.write(text)
+                code, out, err = run(d, 1, 5)
+                self.assertEqual(code, 2, name)
+                self.assertEqual(out, "", name)
+                self.assertIn("x.json", err, name)
+
     def test_output_is_deterministic(self):
         a = run(os.path.join(DATA, "gap"), 1, 30)[1]
         b = run(os.path.join(DATA, "gap"), 1, 30)[1]

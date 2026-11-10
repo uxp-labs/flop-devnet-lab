@@ -1,0 +1,11 @@
+{
+  "scenario": "census-block-number-missing",
+  "description": "Synthetic, made up for a test. Request 0 to 99. The pinned genesis is the FLOP devnet genesis (DEVNET_GENESIS in src/status.ts); every event and block hash is made up. Clause numbers refer to RULES.md section 3.1. The page file is written by hand. Two identical EscrowOpened events by synthetic-bob have no block_number key at all: a missing block_number is malformed (clause 7), and malformed events are never deduplicated (clause 9), so they count 2 in malformed_dropped. An EscrowReleased with an explicit block_number null is kept and counts (clause 4), and an ordinary EscrowOpened at block 5 counts. Read as null instead, the two bob events would have counted as one open with one copy dropped. Expected: complete true, status complete; covered 0 to 99; gaps none; totals escrows_opened 1, escrows_released 1, escrows_refunded 0, channels_opened 0, channels_settled 0; pending_unfinalized 0; duplicates_dropped 0; excluded_other_genesis 0; malformed_dropped 2; by_account synthetic-alice (escrows_opened 1, escrows_released 1).",
+  "now": "2026-11-10T00:00:00.000Z",
+  "synthetic": true,
+  "census_request": {
+    "from_block": 0,
+    "to_block": 99
+  },
+  "pinned_genesis": "0x99c172c095340ace980631f9123544c6bebd4839f3437e463533422d8be2d631"
+}

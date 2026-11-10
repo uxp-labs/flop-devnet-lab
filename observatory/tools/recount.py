@@ -26,8 +26,24 @@ class Unreadable(Exception):
     pass
 
 
+def as_int(v):
+    """Integer by value (RULES.md 3.1 clause 14): 1.0 is 1, 1.5 is not, a boolean never is."""
+    if isinstance(v, bool):
+        return None
+    if isinstance(v, int):
+        return v
+    if isinstance(v, float) and v == v and v not in (float("inf"), float("-inf")) and v.is_integer():
+        return int(v)
+    return None
+
+
 def is_int(v):
-    return isinstance(v, int) and not isinstance(v, bool)
+    return as_int(v) is not None
+
+
+def _reject_constant(name):
+    # NaN, Infinity and -Infinity are not JSON (RFC 8259), so the file cannot be parsed.
+    raise ValueError("%s is not valid JSON" % name)
 
 
 def load_pages(scenario_dir):
@@ -38,7 +54,7 @@ def load_pages(scenario_dir):
     for path in sorted(glob.glob(pattern)):
         try:
             with open(path, "r", encoding="utf-8") as fh:
-                page = json.load(fh)
+                page = json.load(fh, parse_constant=_reject_constant)
         except (OSError, ValueError) as exc:
             raise Unreadable("cannot read %s: %s" % (path, exc))
         name = os.path.basename(path)
@@ -53,6 +69,10 @@ def load_pages(scenario_dir):
             raise Unreadable("%s: bad page number or block range" % name)
         if "next_page" not in page or not (page["next_page"] is None or is_int(page["next_page"])):
             raise Unreadable("%s: next_page missing or not an integer or null" % name)
+        for f in ("from_block", "to_block", "page"):
+            page[f] = as_int(page[f])
+        if page["next_page"] is not None:
+            page["next_page"] = as_int(page["next_page"])
         if not isinstance(page.get("events"), list):
             raise Unreadable("%s: events missing or not a list" % name)
         pages.append(page)
@@ -123,11 +143,14 @@ def parse_event(ev):
     for f in ("section", "method", "block_hash"):
         if not isinstance(ev.get(f), str) or ev[f] == "":
             return None
-    if not is_int(ev.get("index")) or ev["index"] < 0:
+    index = as_int(ev.get("index"))
+    if index is None or index < 0:
         return None
-    if ev.get("block_number") is not None and not is_int(ev.get("block_number")):
+    if "block_number" not in ev:
         return None
-    return ev
+    if ev["block_number"] is not None and as_int(ev["block_number"]) is None:
+        return None
+    return dict(ev, index=index)
 
 
 def recount(scenario_dir, genesis, req_lo, req_hi):
@@ -151,9 +174,9 @@ def recount(scenario_dir, genesis, req_lo, req_hi):
         a, b = max(lo, req_lo), min(hi, req_hi)
         for page in chain:
             for raw in page["events"]:
-                if isinstance(raw, dict) and is_int(raw.get("block_number")):
-                    if raw["block_number"] < a or raw["block_number"] > b:
-                        continue
+                bn = as_int(raw.get("block_number")) if isinstance(raw, dict) else None
+                if bn is not None and (bn < a or bn > b):
+                    continue
                 ev = parse_event(raw)
                 if ev is None:
                     malformed += 1

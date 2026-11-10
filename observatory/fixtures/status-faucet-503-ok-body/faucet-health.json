@@ -1,0 +1,71 @@
+{
+  "http": 503,
+  "error": null,
+  "fetched_at": "2026-11-09T23:47:41Z",
+  "body": {
+    "status": "ok",
+    "signer": "5DZsAQuavUAM7A6XvoTkDQgtQdRCMcALdUd6Bx4FSoFMF8ux",
+    "connected": true,
+    "freeBalanceRaw": "85623085100812381897139202",
+    "minBalanceRaw": "10000000000000000000000000",
+    "decimals": 18,
+    "trustProxy": [
+      "uniquelocal"
+    ],
+    "limits": {
+      "ipCooldownMs": 10000,
+      "ipGrantsPerDay": 300,
+      "ipPrefixGrantsPerDay": 10000,
+      "addressCooldownMs": 86400000,
+      "identityCooldownMs": 86400000,
+      "dailyCapFlop": 10000000,
+      "dailyCapExemptionConfigured": true
+    },
+    "image": {
+      "version": "0.1.312",
+      "revision": "ea6ed8f52ad6340a7bad7633399dfa73486d808a"
+    },
+    "live": true,
+    "ready": true,
+    "readinessScope": "dependencies and estimated funding capacity for this client; grant eligibility checked on request",
+    "dependencies": {
+      "signer": {
+        "ok": true
+      },
+      "indexer": {
+        "ok": true,
+        "details": {
+          "indexedHead": 3341575,
+          "chainHead": 3341577,
+          "lagBlocks": 2,
+          "lastProgressAt": 1794268067723,
+          "lastHeadAt": 1794268068171,
+          "head": 3341575,
+          "validUntil": 1794268366000
+        }
+      },
+      "ip_classification": {
+        "ok": true,
+        "details": {
+          "exempt": true
+        }
+      },
+      "funding": {
+        "ok": true,
+        "asOf": "2026-11-09T23:47:41.519Z",
+        "stale": false,
+        "faucet": {
+          "status": "open"
+        },
+        "sponsor": {
+          "miner": {
+            "status": "positions_full"
+          },
+          "validator": {
+            "status": "open"
+          }
+        }
+      }
+    }
+  }
+}

@@ -77,6 +77,7 @@ async function main(): Promise<void> {
         finalizedHeight: null,
         observedAt: one(a, "--now") ?? src.data.meta.now,
         trust: src.trust,
+        unreadablePages: await src.eventPageErrors(),
       }),
     );
     return;
@@ -94,6 +95,7 @@ async function main(): Promise<void> {
         requested: { from_block: from, to_block: to },
         observedAt: one(a, "--now") ?? meta.now,
         trust: src.trust,
+        unreadablePages: await src.eventPageErrors(),
       }),
     );
     return;
@@ -113,28 +115,36 @@ async function main(): Promise<void> {
     const escrowDir = one(a, "--escrows");
     const censusDir = one(a, "--census");
     const driftDir = one(a, "--drift");
+    // A snapshot describes one chain: every part must be pinned to the snapshot's genesis.
+    const samePin = (src: FixtureSource, dir: string): FixtureSource => {
+      const g = src.data.meta.pinned_genesis;
+      if (g !== undefined && g !== pinned) fail(`${dir} is pinned to genesis ${g}, but the snapshot is pinned to ${pinned}`);
+      return src;
+    };
     let escrows = null;
     if (escrowDir) {
-      const src = FixtureSource.fromDir(escrowDir);
+      const src = samePin(FixtureSource.fromDir(escrowDir), escrowDir);
       escrows = { source: src, ids: src.data.meta.escrow_ids ?? fail(`${escrowDir}/meta.json has no escrow_ids`) };
     }
     let censusPart = null;
     if (censusDir) {
-      const src = FixtureSource.fromDir(censusDir);
+      const src = samePin(FixtureSource.fromDir(censusDir), censusDir);
       const req = src.data.meta.census_request ?? fail(`${censusDir}/meta.json has no census_request`);
       censusPart = {
         label: src.label,
         report: runCensus(await src.eventPages(), {
-          pinnedGenesis: src.data.meta.pinned_genesis ?? pinned,
+          pinnedGenesis: pinned,
           requested: req,
           observedAt: now,
           trust: src.trust,
+          unreadablePages: await src.eventPageErrors(),
         }),
       };
     }
     let driftPart = null;
     if (driftDir) {
-      driftPart = { label: `fixture:${FixtureSource.fromDir(driftDir).data.meta.scenario}`, report: await driftFor(driftDir, one(a, "--spec"), now) };
+      const src = samePin(FixtureSource.fromDir(driftDir), driftDir);
+      driftPart = { label: `fixture:${src.data.meta.scenario}`, report: await driftFor(driftDir, one(a, "--spec"), now) };
     }
     const fresh = await buildSnapshot(
       { status, escrows, census: censusPart, drift: driftPart },

@@ -1,0 +1,6 @@
+{
+  "scenario": "status-rpc-no-best",
+  "description": "Synthetic: status-healthy with no best_number on the RPC head, so finality lag cannot be checked. RPC health must be degraded.",
+  "now": "2026-11-09T23:47:41Z",
+  "synthetic": true
+}

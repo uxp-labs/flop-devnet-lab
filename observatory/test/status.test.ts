@@ -159,6 +159,79 @@ describe("injected failures", () => {
   });
 });
 
+describe("health is ok only when every check ran and passed (RULES 1.1)", () => {
+  const healthy = () => fx("status-healthy");
+  const withHead = (edit: Record<string, unknown>) => {
+    const src = healthy();
+    return new FixtureSource({ ...src.data, rpcHead: { ...(src.data.rpcHead as object), ...edit } as never });
+  };
+  const withFaucet = (edit: Record<string, unknown>) => {
+    const src = healthy();
+    return new FixtureSource({ ...src.data, faucetHealth: { ...(src.data.faucetHealth as object), ...edit } as never });
+  };
+  const status = (src: FixtureSource) => networkStatus(src, { pinnedGenesis: DEVNET_GENESIS, now: NOW });
+
+  it("no observed_at on the head: rpc unknown, stale null", async () => {
+    const s = await run("status-rpc-no-observed-at");
+    expect(s.rpc.health).toBe("unknown");
+    expect(s.rpc.stale).toBeNull();
+    expect(s.rpc.detail).toMatch(/no observed_at/);
+    expect(s.conflicts).toEqual([]);
+  });
+
+  it("an unparsable observed_at: rpc unknown, stale null", async () => {
+    const s = await status(withHead({ observed_at: "yesterday" }));
+    expect(s.rpc.health).toBe("unknown");
+    expect(s.rpc.stale).toBeNull();
+    expect(s.rpc.detail).toMatch(/does not parse/);
+  });
+
+  it("no best height: rpc degraded, finality lag null", async () => {
+    const s = await run("status-rpc-no-best");
+    expect(s.rpc.health).toBe("degraded");
+    expect(s.rpc.detail).toMatch(/no valid best height/);
+    expect(s.finality_lag).toBeNull();
+  });
+
+  it("a head time later than the snapshot time: a conflict, rpc degraded, stale null", async () => {
+    const s = await run("status-rpc-future-head");
+    expect(s.rpc.health).toBe("degraded");
+    expect(s.rpc.stale).toBeNull();
+    expect(s.conflicts.join(" ")).toMatch(/later than the snapshot time/);
+  });
+
+  it("a head one second old is fine, and the stale limit is inclusive", async () => {
+    expect((await run("status-healthy")).rpc.stale).toBe(false);
+    const s = await status(withHead({ observed_at: "2026-11-09T23:45:41Z" }));
+    expect(s.rpc.stale).toBe(false);
+    expect(s.rpc.health).toBe("ok");
+  });
+
+  it("a read error alongside a partial head: rpc degraded", async () => {
+    const s = await status(withHead({ error: "chain_getHeader timed out" }));
+    expect(s.rpc.health).toBe("degraded");
+    expect(s.rpc.detail).toMatch(/read error: chain_getHeader timed out/);
+  });
+
+  it("no genesis hash on an otherwise valid head: rpc degraded, reset_detected null", async () => {
+    const s = await status(withHead({ genesis_hash: null }));
+    expect(s.rpc.health).toBe("degraded");
+    expect(s.rpc.detail).toMatch(/no valid genesis hash/);
+    expect(s.reset_detected).toBeNull();
+  });
+
+  it("a faucet answering 503 with an ok body: degraded, never ok", async () => {
+    const s = await run("status-faucet-503-ok-body");
+    expect(s.faucet.health).toBe("degraded");
+    expect(s.faucet.detail).toMatch(/body says ok but http 503/);
+  });
+
+  it("a faucet answering 200 with a degraded body: degraded", async () => {
+    const s = await status(withFaucet({ body: { status: "degraded", ready: false } }));
+    expect(s.faucet.health).toBe("degraded");
+  });
+});
+
 describe("resetDetected", () => {
   const P = DEVNET_GENESIS;
   it.each([

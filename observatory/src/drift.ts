@@ -2,16 +2,16 @@
 // runtime constants read from chain metadata (api.consts). One item per check site.
 //
 // The deployment contract is the YAML file's header:
-// - on_chain.constants names FRAME metadata constants (api.consts). Each one is its own item.
-// - on_chain.storage names scalar storage (api.query). M0 reads no storage, so those items are unknown.
-// - on_chain.source_only is a reason there is no RPC check: one unknown item that carries the reason.
-// - FLOP amounts use meta.decimals. Here a FLOP amount is unit "FLOP" or on_chain.token_units true.
-// - on_chain.multiplier and on_chain.divisor then apply (Perbill parts, days to blocks, per byte).
+//   on_chain.constants names FRAME metadata constants (api.consts). Each one is its own item.
+//   on_chain.storage names scalar storage (api.query). M0 reads no storage, so those items are unknown.
+//   on_chain.source_only is a reason there is no RPC check: one unknown item that carries the reason.
+//   FLOP amounts use meta.decimals. Here a FLOP amount is unit "FLOP" or on_chain.token_units true.
+//   on_chain.multiplier and on_chain.divisor then apply (Perbill parts, days to blocks, per byte).
 //
 // Rules:
-// - unknown when the runtime value is missing, null, or not readable exactly (hex, fractions,
+//   unknown when the runtime value is missing, null, or not readable exactly (hex, fractions,
 //   numbers past 2^53), when the spec value is not a number, or when scaling leaves a fraction.
-// - match or mismatch only from exact integer arithmetic (BigInt). Never match by default.
+//   match or mismatch only from exact integer arithmetic (BigInt). Never match by default.
 //
 // Runtime constants are looked up by their api.consts key (validators.initialMinimumStake) and by
 // their metadata spelling (Validators.InitialMinimumStake). Both present and different is unknown.

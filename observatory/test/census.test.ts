@@ -1,7 +1,7 @@
 // Census tests. Each rule in RULES.md section 3 and each clause of 3.1 has its own test, and every
-// census-* fixture is checked against expectations worked out by hand from the rules (not taken
+// census fixture is checked against expectations worked out by hand from the rules (not taken
 // from census.ts), which must also be the totals its meta.description states.
-import { readdirSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
@@ -10,6 +10,8 @@ import { FixtureSource } from "../src/source.js";
 import type { BlockRange, CensusCounts, CensusReport } from "../src/types.js";
 
 const FIXTURES = fileURLToPath(new URL("../fixtures/", import.meta.url));
+/** The FLOP devnet genesis. Every census fixture pins it, so snapshots can carry the census. */
+const DEVNET = "0x99c172c095340ace980631f9123544c6bebd4839f3437e463533422d8be2d631";
 const KINDS = ["escrows_opened", "escrows_released", "escrows_refunded", "channels_opened", "channels_settled"] as const;
 /** The fields compare-recount.mjs checks against the Python recount. */
 const COMPARED = [
@@ -40,8 +42,9 @@ const counts = (o: Partial<CensusCounts>): CensusCounts => ({
   ...o,
 });
 const r = (from_block: number, to_block: number): BlockRange => ({ from_block, to_block });
+const quiet = { pending_unfinalized: 0, duplicates_dropped: 0, excluded_other_genesis: 0, malformed_dropped: 0 };
 
-/** Worked out by hand from RULES.md 3.1. See each fixture's meta.description for the reasoning. */
+/** Worked out by hand from RULES.md 3.1. Each fixture's meta.description gives the reasoning. */
 const EXPECTED: Record<string, Expected & { reset_detected: boolean }> = {
   "census-complete": {
     complete: true,
@@ -55,10 +58,7 @@ const EXPECTED: Record<string, Expected & { reset_detected: boolean }> = {
       [carol]: { channels_opened: 1, channels_settled: 1 },
       [dave]: { escrows_refunded: 1 },
     },
-    pending_unfinalized: 0,
-    duplicates_dropped: 0,
-    excluded_other_genesis: 0,
-    malformed_dropped: 0,
+    ...quiet,
     reset_detected: false,
   },
   "census-paginated": {
@@ -73,10 +73,8 @@ const EXPECTED: Record<string, Expected & { reset_detected: boolean }> = {
       [carol]: { escrows_opened: 1, escrows_refunded: 1 },
       [dave]: { channels_opened: 1 },
     },
-    pending_unfinalized: 0,
+    ...quiet,
     duplicates_dropped: 6,
-    excluded_other_genesis: 0,
-    malformed_dropped: 0,
     reset_detected: false,
   },
   "census-gap": {
@@ -86,10 +84,7 @@ const EXPECTED: Record<string, Expected & { reset_detected: boolean }> = {
     gaps: [r(100, 299)],
     totals: counts({ escrows_opened: 2 }),
     by_account: { [alice]: { escrows_opened: 1 }, [bob]: { escrows_opened: 1 } },
-    pending_unfinalized: 0,
-    duplicates_dropped: 0,
-    excluded_other_genesis: 0,
-    malformed_dropped: 0,
+    ...quiet,
     reset_detected: false,
   },
   "census-reset": {
@@ -99,10 +94,8 @@ const EXPECTED: Record<string, Expected & { reset_detected: boolean }> = {
     gaps: [r(100, 199)],
     totals: counts({ escrows_opened: 1, escrows_released: 1 }),
     by_account: { [alice]: { escrows_opened: 1, escrows_released: 1 } },
-    pending_unfinalized: 0,
-    duplicates_dropped: 0,
+    ...quiet,
     excluded_other_genesis: 3,
-    malformed_dropped: 0,
     reset_detected: true,
   },
   "census-unfinalized": {
@@ -112,10 +105,9 @@ const EXPECTED: Record<string, Expected & { reset_detected: boolean }> = {
     gaps: [],
     totals: counts({ escrows_opened: 1, escrows_refunded: 1 }),
     by_account: { [alice]: { escrows_opened: 1 }, [bob]: { escrows_refunded: 1 } },
+    ...quiet,
     pending_unfinalized: 4,
     duplicates_dropped: 1,
-    excluded_other_genesis: 0,
-    malformed_dropped: 0,
     reset_detected: false,
   },
   "census-malformed": {
@@ -125,18 +117,92 @@ const EXPECTED: Record<string, Expected & { reset_detected: boolean }> = {
     gaps: [],
     totals: counts({ escrows_opened: 2, escrows_released: 1 }),
     by_account: { [alice]: { escrows_opened: 1, escrows_released: 1 } },
-    pending_unfinalized: 0,
+    ...quiet,
     duplicates_dropped: 2,
-    excluded_other_genesis: 0,
     malformed_dropped: 12,
     reset_detected: false,
   },
+  "census-outside-request": {
+    complete: true,
+    status: "complete",
+    covered: [r(0, 99)],
+    gaps: [],
+    totals: counts({ escrows_opened: 1, escrows_released: 1 }),
+    by_account: { [alice]: { escrows_opened: 1, escrows_released: 1 } },
+    ...quiet,
+    reset_detected: false,
+  },
+  "census-orphan-disagree": {
+    complete: false,
+    status: "partial",
+    covered: [r(100, 199)],
+    gaps: [r(0, 99)],
+    totals: counts({ escrows_released: 1 }),
+    by_account: { [alice]: { escrows_released: 1 } },
+    ...quiet,
+    reset_detected: false,
+  },
+  "census-negative-next-page": {
+    complete: false,
+    status: "partial",
+    covered: [r(100, 199)],
+    gaps: [r(0, 99)],
+    totals: counts({ escrows_opened: 1 }),
+    by_account: { [bob]: { escrows_opened: 1 } },
+    ...quiet,
+    reset_detected: false,
+  },
+  "census-block-number-missing": {
+    complete: true,
+    status: "complete",
+    covered: [r(0, 99)],
+    gaps: [],
+    totals: counts({ escrows_opened: 1, escrows_released: 1 }),
+    by_account: { [alice]: { escrows_opened: 1, escrows_released: 1 } },
+    ...quiet,
+    malformed_dropped: 2,
+    reset_detected: false,
+  },
+  "census-index-written-as-float": {
+    complete: true,
+    status: "complete",
+    covered: [r(0, 99)],
+    gaps: [],
+    totals: counts({ escrows_opened: 1, escrows_released: 1 }),
+    by_account: { [alice]: { escrows_opened: 1, escrows_released: 1 } },
+    ...quiet,
+    duplicates_dropped: 1,
+    malformed_dropped: 1,
+    reset_detected: false,
+  },
+  "census-page-written-as-float": {
+    complete: true,
+    status: "complete",
+    covered: [r(0, 99)],
+    gaps: [],
+    totals: counts({ escrows_opened: 1, escrows_released: 1 }),
+    by_account: { [alice]: { escrows_opened: 1, escrows_released: 1 } },
+    ...quiet,
+    reset_detected: false,
+  },
 };
-const REFUSING = ["census-invalid-page"];
+
+/** Fixtures the census must refuse, with what the refusal must name. */
+const REFUSING: Record<string, RegExp> = {
+  "census-invalid-page": /next_page is missing/,
+  "census-negative-page": /page -1 is negative/,
+  "census-unreadable-page": /unreadable event page file\(s\): event-pages\/01-unreadable\.json: /,
+  "census-nonstandard-json": /unreadable event page file\(s\): event-pages\/01-nan-index\.json: /,
+};
+
+/** The raw text of one fixture page file, exactly as written by hand. */
+function rawPage(name: string, file: string): string {
+  return readFileSync(join(FIXTURES, name, "event-pages", file), "utf8");
+}
 
 /** The sentence each fixture's meta.description must contain, in one fixed format. */
 function sentence(x: Expected): string {
-  const ranges = (rs: BlockRange[]) => (rs.length ? rs.map((b) => `${b.from_block}-${b.to_block}`).join(", ") : "none");
+  const ranges = (rs: BlockRange[]) => (rs.length ? rs.map((b) => `${b.from_block} to ${b.to_block}`).join(", ") : "none");
   const totals = KINDS.map((k) => `${k} ${x.totals[k]}`).join(", ");
   const acc = Object.entries(x.by_account);
   const accounts = acc.length
@@ -149,18 +215,22 @@ function sentence(x: Expected): string {
   );
 }
 
+/** Loads a fixture the way the command line does, unreadable page files included. */
 async function load(name: string) {
   const src = FixtureSource.fromDir(join(FIXTURES, name));
   const meta = src.data.meta;
-  expect(src.data.loadErrors).toEqual([]);
+  const unreadable = await src.eventPageErrors();
+  // Only event page files may fail to load, and those are passed on, never dropped.
+  expect(src.data.loadErrors).toEqual(unreadable);
   expect(meta.synthetic).toBe(true);
   expect(meta.census_request).toBeDefined();
-  expect(meta.pinned_genesis).toBeDefined();
+  expect(meta.pinned_genesis).toBe(DEVNET);
   const opts: CensusOptions = {
     pinnedGenesis: meta.pinned_genesis!,
     requested: meta.census_request!,
     observedAt: meta.now,
     trust: src.trust,
+    unreadablePages: unreadable,
   };
   return { pages: await src.eventPages(), meta, opts };
 }
@@ -170,9 +240,17 @@ function pick(rep: CensusReport): Expected {
 }
 
 describe("census fixtures", () => {
-  it("every census-* fixture has an expectation here", () => {
+  it("every census fixture has an expectation here", () => {
     const dirs = readdirSync(FIXTURES).filter((d) => d.startsWith("census-")).sort();
-    expect(dirs).toEqual([...Object.keys(EXPECTED), ...REFUSING].sort());
+    expect(dirs).toEqual([...Object.keys(EXPECTED), ...Object.keys(REFUSING)].sort());
+  });
+
+  it("all pin the devnet genesis, and only census-reset has pages on another genesis", async () => {
+    for (const name of [...Object.keys(EXPECTED), ...Object.keys(REFUSING)]) {
+      const { pages } = await load(name);
+      const others = pages.filter((p) => p.genesis !== DEVNET);
+      expect(others.length > 0, name).toBe(name === "census-reset");
+    }
   });
 
   for (const [name, want] of Object.entries(EXPECTED)) {
@@ -187,17 +265,51 @@ describe("census fixtures", () => {
       expect(rep.totals_label).toBe(rep.status);
       expect(rep.observed_at).toBe(meta.now);
       expect(rep.trust).toBe("fixture");
-      expect(rep.genesis).toBe(opts.pinnedGenesis);
+      expect(rep.genesis).toBe(DEVNET);
       expect(rep.requested).toEqual(opts.requested);
       expect(JSON.parse(JSON.stringify(rep))).toEqual(rep);
     });
   }
 
-  it("census-invalid-page refuses the whole census", async () => {
-    const { pages, meta, opts } = await load("census-invalid-page");
-    expect(() => census(pages, opts)).toThrow(CensusRefused);
-    expect(() => census(pages, opts)).toThrow(/next_page is missing/);
-    expect(meta.description).toContain("Expected: the census refuses");
+  for (const [name, why] of Object.entries(REFUSING)) {
+    it(`${name} refuses the whole census`, async () => {
+      const { pages, meta, opts } = await load(name);
+      expect(() => census(pages, opts)).toThrow(CensusRefused);
+      expect(() => census(pages, opts)).toThrow(why);
+      expect(meta.description).toContain("Expected: the census refuses; no totals.");
+    });
+  }
+
+  it("census-unreadable-page refuses only because of its unreadable file", async () => {
+    const { pages, opts } = await load("census-unreadable-page");
+    expect(opts.unreadablePages).toHaveLength(1);
+    const blind = census(pages, { ...opts, unreadablePages: [] });
+    expect(blind.complete).toBe(true);
+    expect(blind.totals.escrows_released).toBe(1);
+  });
+
+  it("census-nonstandard-json refuses only because of its file with NaN in it", async () => {
+    const { pages, opts } = await load("census-nonstandard-json");
+    expect(opts.unreadablePages).toHaveLength(1);
+    const blind = census(pages, { ...opts, unreadablePages: [] });
+    expect(blind.complete).toBe(true);
+    expect(blind.totals.escrows_released).toBe(1);
+  });
+
+  it("census-outside-request, census-orphan-disagree and census-negative-next-page say why blocks count nowhere", async () => {
+    const notes = async (name: string) => {
+      const { pages, opts } = await load(name);
+      return census(pages, opts).notes;
+    };
+    expect(await notes("census-outside-request")).toContain(
+      "blocks 200 to 299: the chain is complete but does not intersect the request, so its 5 event(s) count nowhere",
+    );
+    expect(await notes("census-orphan-disagree")).toContain(
+      "blocks 0 to 99: copies of page 7 disagree on next_page, so the chain is broken and its 1 event(s) count nowhere",
+    );
+    expect(await notes("census-negative-next-page")).toContain(
+      "blocks 0 to 99: next_page -1 on page 0 names a page that does not exist, so the chain is broken and its 2 event(s) count nowhere",
+    );
   });
 
   it("page order does not change any count", async () => {
@@ -207,6 +319,37 @@ describe("census fixtures", () => {
       const backward = pick(census([...pages].reverse(), opts));
       expect(backward).toEqual(forward);
     }
+  });
+});
+
+describe("hand written fixtures keep their literal JSON text", () => {
+  it("census-index-written-as-float still holds index 1.0 and index 1.5 as written", () => {
+    const text = rawPage("census-index-written-as-float", "00-page-0.json");
+    expect(text).toMatch(/"index":\s*1\.0\s*,/);
+    expect(text).toMatch(/"index":\s*1\.5\s*,/);
+    expect(text).toMatch(/"index":\s*1\s*,/);
+  });
+
+  it("census-page-written-as-float still holds every page integer field written with .0", () => {
+    const first = rawPage("census-page-written-as-float", "00-page-0.json");
+    for (const literal of [/"from_block":\s*0\.0\s*,/, /"to_block":\s*99\.0\s*,/, /"page":\s*0\.0\s*,/, /"next_page":\s*1\.0\s*,/, /"block_number":\s*5\.0\s*,/]) {
+      expect(first).toMatch(literal);
+    }
+    expect(rawPage("census-page-written-as-float", "01-page-1.json")).toMatch(/"page":\s*1\.0\s*,/);
+  });
+
+  it("census-nonstandard-json still holds the NaN token, and only that file fails to parse", () => {
+    const text = rawPage("census-nonstandard-json", "01-nan-index.json");
+    expect(text).toMatch(/"index":\s*NaN\s*,/);
+    expect(() => JSON.parse(text)).toThrow(SyntaxError);
+    expect(() => JSON.parse(text.replace(/NaN/, "0"))).not.toThrow();
+    expect(() => JSON.parse(rawPage("census-nonstandard-json", "00-page-0.json"))).not.toThrow();
+  });
+
+  it("census-block-number-missing has two events with no block_number key and one with an explicit null", () => {
+    const page = JSON.parse(rawPage("census-block-number-missing", "00-page-0.json")) as { events: Record<string, unknown>[] };
+    expect(page.events.filter((e) => !Object.hasOwn(e, "block_number"))).toHaveLength(2);
+    expect(page.events.filter((e) => Object.hasOwn(e, "block_number") && e.block_number === null)).toHaveLength(1);
   });
 });
 
@@ -252,7 +395,7 @@ describe("a partial census is never presented as complete", () => {
   });
 });
 
-// ---- Inline cases, one block per clause of RULES.md 3.1 ----
+// Inline cases below: one block per clause of RULES.md 3.1.
 
 const G = "0x" + "a1".repeat(32);
 const OTHER = "0x" + "b2".repeat(32);
@@ -279,7 +422,7 @@ function pg(from: number, to: number, page: number, next: number | null, events:
   return { genesis, from_block: from, to_block: to, page, next_page: next, events };
 }
 
-describe("3.1 rule 1: only complete chains inside the request count anywhere", () => {
+describe("3.1 clause 1: only complete chains that intersect the request count", () => {
   it("events on a broken chain count nowhere: not in totals, pending, duplicates or malformed", () => {
     const broken = pg(0, 9, 0, 1, [ev(1, 0), ev(1, 0), ev(2, 0, "EscrowOpened", { finalized: false }), { index: 0 }]);
     const rep = census([broken], opts(0, 9));
@@ -288,11 +431,38 @@ describe("3.1 rule 1: only complete chains inside the request count anywhere", (
     expect(rep.duplicates_dropped).toBe(0);
     expect(rep.malformed_dropped).toBe(0);
     expect(rep.covered).toEqual([]);
-    expect(rep.notes[0]).toBe("range 0-9: page 1 is missing, so the range is not covered and its 4 event(s) count nowhere");
+    expect(rep.notes[0]).toBe(
+      "blocks 0 to 9: next_page 1 on page 0 names a page that does not exist, so the chain is broken and its 4 event(s) count nowhere",
+    );
+  });
+
+  it("a complete chain that does not intersect the request counts nothing, whatever the block_number", () => {
+    const outside = pg(200, 299, 0, null, [
+      ev(null, 0),
+      ev(null, 0),
+      ev(null, 1, "EscrowOpened", { finalized: false }),
+      ev(null, 2, "EscrowOpened", { section: "" }),
+      ev(250, 3),
+    ]);
+    const rep = census([pg(0, 99, 0, null, [ev(5, 0)]), outside], opts(0, 99));
+    expect(rep.totals.escrows_opened).toBe(1);
+    expect([rep.pending_unfinalized, rep.duplicates_dropped, rep.malformed_dropped]).toEqual([0, 0, 0]);
+    expect(rep.covered).toEqual([r(0, 99)]);
+    expect(rep.notes).toContain(
+      "blocks 200 to 299: the chain is complete but does not intersect the request, so its 5 event(s) count nowhere",
+    );
+    expect(rep.notes.some((n) => n.includes("skipped"))).toBe(false);
+  });
+
+  it("a chain that shares one block with the request intersects it, so its null block_number events count", () => {
+    const rep = census([pg(99, 199, 0, null, [ev(null, 0), ev(150, 1)])], opts(0, 99));
+    expect(rep.covered).toEqual([r(99, 99)]);
+    expect(rep.totals.escrows_opened).toBe(1);
+    expect(rep.notes).toContain("1 event(s) outside the request or their page's range were skipped");
   });
 });
 
-describe("3.1 rule 2: chains", () => {
+describe("3.1 clause 2: chains", () => {
   it("are keyed by genesis too: another genesis cannot complete a pinned chain", () => {
     const rep = census([pg(0, 9, 0, 1, [ev(1, 0)]), pg(0, 9, 1, null, [ev(2, 0)], OTHER)], opts(0, 9));
     expect(rep.covered).toEqual([]);
@@ -308,7 +478,7 @@ describe("3.1 rule 2: chains", () => {
   it("must start at page 0", () => {
     const rep = census([pg(0, 9, 1, null, [ev(1, 0)])], opts(0, 9));
     expect(rep.covered).toEqual([]);
-    expect(rep.notes[0]).toContain("page 0 is missing");
+    expect(rep.notes[0]).toContain("there is no page 0");
   });
 
   it("break on a cycle", () => {
@@ -323,10 +493,30 @@ describe("3.1 rule 2: chains", () => {
     expect(rep.covered).toEqual([]);
   });
 
+  it("break when a next_page names a page that does not exist", () => {
+    const rep = census([pg(0, 9, 0, 3, [ev(1, 0)]), pg(0, 9, 1, null, [])], opts(0, 9));
+    expect(rep.covered).toEqual([]);
+    expect(rep.notes[0]).toContain("next_page 3 on page 0 names a page that does not exist");
+  });
+
+  it("break on a negative next_page, which names a page that does not exist instead of ending the chain", () => {
+    const rep = census([pg(0, 9, 0, -1, [ev(1, 0)])], opts(0, 9));
+    expect(rep.covered).toEqual([]);
+    expect(rep.totals.escrows_opened).toBe(0);
+    expect(rep.notes[0]).toContain("next_page -1 on page 0 names a page that does not exist");
+  });
+
   it("break when copies of one page number disagree on next_page", () => {
     const rep = census([pg(0, 9, 0, null, [ev(1, 0)]), pg(0, 9, 0, 1, [ev(1, 0)]), pg(0, 9, 1, null, [])], opts(0, 9));
     expect(rep.covered).toEqual([]);
     expect(rep.notes[0]).toContain("copies of page 0 disagree on next_page");
+  });
+
+  it("break when copies of a page the walk never reaches disagree on next_page", () => {
+    const rep = census([pg(0, 9, 0, null, [ev(1, 0)]), pg(0, 9, 7, null, []), pg(0, 9, 7, 8, [])], opts(0, 9));
+    expect(rep.covered).toEqual([]);
+    expect(rep.totals.escrows_opened).toBe(0);
+    expect(rep.notes[0]).toContain("copies of page 7 disagree on next_page");
   });
 
   it("keep identical copies, and their events dedupe", () => {
@@ -337,16 +527,17 @@ describe("3.1 rule 2: chains", () => {
     expect(rep.duplicates_dropped).toBe(2);
   });
 
-  it("ignore pages not reachable from page 0", () => {
-    const rep = census([pg(0, 9, 0, null, [ev(1, 0)]), pg(0, 9, 3, null, [ev(2, 0), { not: "checked" }])], opts(0, 9));
+  it("ignore pages not reachable from page 0, even when their next_page names no page: only next_page on the walk must exist", () => {
+    const pages = [pg(0, 9, 0, null, [ev(1, 0)]), pg(0, 9, 3, 4, [ev(2, 0), { not: "checked" }]), pg(0, 9, 3, 4, [])];
+    const rep = census(pages, opts(0, 9));
     expect(rep.complete).toBe(true);
     expect(rep.totals.escrows_opened).toBe(1);
     expect(rep.malformed_dropped).toBe(0);
-    expect(rep.notes).toContain("range 0-9: 1 page(s) not reachable from page 0 were ignored");
+    expect(rep.notes).toContain("blocks 0 to 9: 2 page(s) not reachable from page 0 were ignored");
   });
 });
 
-describe("3.1 rule 3: coverage", () => {
+describe("3.1 clause 3: coverage", () => {
   it("clips each complete chain to the request", () => {
     const rep = census([pg(0, 99, 0, null, [])], opts(10, 20));
     expect(rep.covered).toEqual([r(10, 20)]);
@@ -373,7 +564,7 @@ describe("3.1 rule 3: coverage", () => {
   });
 });
 
-describe("3.1 rule 4: events outside the request or their page are skipped, not malformed", () => {
+describe("3.1 clause 4: events outside the request or their page are skipped, not malformed", () => {
   it("skips an integer block_number outside the request", () => {
     const rep = census([pg(0, 99, 0, null, [ev(5, 0), ev(50, 0)])], opts(0, 20));
     expect(rep.totals.escrows_opened).toBe(1);
@@ -386,14 +577,14 @@ describe("3.1 rule 4: events outside the request or their page are skipped, not 
     expect(rep.totals.escrows_opened).toBe(1);
   });
 
-  it("keeps a null block_number", () => {
+  it("keeps a null block_number on a chain that intersects the request", () => {
     const rep = census([pg(0, 9, 0, null, [ev(null, 0)])], opts(0, 9));
     expect(rep.totals.escrows_opened).toBe(1);
   });
 });
 
-describe("3.1 rule 5: genesis is compared exactly as written", () => {
-  it("an upper-case spelling of the pinned genesis is another genesis", () => {
+describe("3.1 clause 5: genesis is compared exactly as written", () => {
+  it("an upper case spelling of the pinned genesis is another genesis", () => {
     const upper = "0x" + "A1".repeat(32);
     const rep = census([pg(0, 9, 0, null, [ev(1, 0)], upper)], opts(0, 9));
     expect(rep.totals.escrows_opened).toBe(0);
@@ -402,7 +593,7 @@ describe("3.1 rule 5: genesis is compared exactly as written", () => {
   });
 });
 
-describe("3.1 rule 6: other geneses", () => {
+describe("3.1 clause 6: other geneses", () => {
   it("count every event on every page of another genesis, whatever chain, finality or shape", () => {
     const pages = [
       pg(0, 9, 0, null, [ev(1, 0)]),
@@ -422,7 +613,7 @@ describe("3.1 rule 6: other geneses", () => {
   });
 });
 
-describe("3.1 rule 7: malformed events", () => {
+describe("3.1 clause 7: malformed events", () => {
   const cases: [string, unknown][] = [
     ["not an object (string)", "x"],
     ["not an object (null)", null],
@@ -453,21 +644,21 @@ describe("3.1 rule 7: malformed events", () => {
     });
   }
 
-  it("a non-object data is not malformed; the event has no account and counts in totals only", () => {
+  it("a data value that is not an object is not malformed; the event has no account and counts in totals only", () => {
     const rep = census([pg(0, 9, 0, null, [ev(1, 0, "EscrowOpened", { data: "x" }), ev(2, 0, "EscrowOpened", { data: [alice] })])], opts(0, 9));
     expect(rep.malformed_dropped).toBe(0);
     expect(rep.totals.escrows_opened).toBe(2);
     expect(rep.by_account).toEqual({});
   });
 
-  it("a short block_hash is not malformed: the rule asks only for a non-empty string", () => {
+  it("a short block_hash is not malformed: the rule asks only for a string that is not empty", () => {
     const rep = census([pg(0, 9, 0, null, [ev(1, 0, "EscrowOpened", { block_hash: "0xabc" })])], opts(0, 9));
     expect(rep.malformed_dropped).toBe(0);
     expect(rep.totals.escrows_opened).toBe(1);
   });
 });
 
-describe("3.1 rule 8: finalized must be exactly true", () => {
+describe("3.1 clause 8: finalized must be exactly true", () => {
   for (const [what, more] of [
     ["false", { finalized: false }],
     ["the string true", { finalized: "true" }],
@@ -490,7 +681,7 @@ describe("3.1 rule 8: finalized must be exactly true", () => {
   });
 });
 
-describe("3.1 rule 9: duplicate groups", () => {
+describe("3.1 clause 9: duplicate groups", () => {
   it("duplicates_dropped adds copies minus one per group, across and within pages", () => {
     const rep = census([pg(0, 9, 0, 1, [ev(1, 0), ev(1, 0), ev(2, 0)]), pg(0, 9, 1, null, [ev(1, 0), ev(2, 0)])], opts(0, 9));
     expect(rep.duplicates_dropped).toBe(3);
@@ -555,7 +746,7 @@ describe("3.1 rule 9: duplicate groups", () => {
   });
 });
 
-describe("3.1 rule 10: order of the filters", () => {
+describe("3.1 clause 10: order of the filters", () => {
   it("the block range filter runs before the malformed check", () => {
     const noSection = ev(50, 0);
     delete noSection.section;
@@ -596,8 +787,8 @@ describe("3.1 rule 10: order of the filters", () => {
   });
 });
 
-describe("3.1 rule 11: by_account", () => {
-  it("uses the first of who, owner, agent, payer that is a non-empty string", () => {
+describe("3.1 clause 11: by_account", () => {
+  it("uses the first of who, owner, agent, payer that is a string and not empty", () => {
     const evs = [
       ev(1, 0, "EscrowOpened", { data: { payer: dave, agent: carol, owner: bob, who: alice } }),
       ev(2, 0, "EscrowOpened", { data: { payer: dave, agent: carol, owner: bob } }),
@@ -616,7 +807,7 @@ describe("3.1 rule 11: by_account", () => {
     expect(rep.totals.escrows_opened).toBe(6);
   });
 
-  it("lists only non-zero kinds", () => {
+  it("lists only kinds with a count", () => {
     const rep = census([pg(0, 9, 0, null, [ev(1, 0, "EscrowReleased")])], opts(0, 9));
     expect(rep.by_account).toEqual({ [alice]: { escrows_released: 1 } });
   });
@@ -635,7 +826,7 @@ describe("3.1 rule 11: by_account", () => {
   });
 });
 
-describe("3.1 rule 12: a structurally invalid page refuses the whole census", () => {
+describe("3.1 clause 12: a structurally invalid page refuses the whole census", () => {
   const good = () => pg(0, 9, 0, null, [ev(1, 0)]);
   const without = (key: string) => {
     const p = good();
@@ -653,6 +844,7 @@ describe("3.1 rule 12: a structurally invalid page refuses the whole census", ()
     ["to_block a fraction", { ...good(), to_block: 9.5 }],
     ["page missing", without("page")],
     ["page a boolean", { ...good(), page: false }],
+    ["page negative", { ...good(), page: -1 }],
     ["next_page missing", without("next_page")],
     ["next_page a string", { ...good(), next_page: "1" }],
     ["events not a list", { ...good(), events: { 0: ev(1, 0) } }],
@@ -668,10 +860,36 @@ describe("3.1 rule 12: a structurally invalid page refuses the whole census", ()
   it("refuses even when the invalid page is on another genesis or unreachable", () => {
     expect(() => census([good(), { ...without("next_page"), genesis: OTHER }], opts(0, 9))).toThrow(CensusRefused);
     expect(() => census([good(), { ...good(), page: 4, events: null }], opts(0, 9))).toThrow(CensusRefused);
+    expect(() => census([good(), { ...good(), page: -3 }], opts(0, 9))).toThrow(/page -3 is negative/);
   });
 });
 
-describe("3.1 rule 13: invalid requests are refused", () => {
+describe("3.1 clause 12: an unreadable event page file refuses the whole census", () => {
+  const readable = [pg(0, 9, 0, null, [ev(1, 0)])];
+
+  it("names every unreadable file", () => {
+    const go = () =>
+      census(readable, {
+        ...opts(0, 9),
+        unreadablePages: ["event-pages/02.json: Unexpected end of JSON input", "event-pages/05.json: Unexpected token"],
+      });
+    expect(go).toThrow(CensusRefused);
+    expect(go).toThrow("unreadable event page file(s): event-pages/02.json: Unexpected end of JSON input; event-pages/05.json: Unexpected token");
+  });
+
+  it("refuses even when no page could be read at all", () => {
+    expect(() => census([], { ...opts(0, 9), unreadablePages: ["event-pages/00.json: bad"] })).toThrow(CensusRefused);
+  });
+
+  it("an empty list, or no list, changes nothing", () => {
+    const a = census(readable, { ...opts(0, 9), unreadablePages: [] });
+    const b = census(readable, opts(0, 9));
+    expect(a).toEqual(b);
+    expect(a.complete).toBe(true);
+  });
+});
+
+describe("3.1 clause 13: invalid requests are refused", () => {
   it("a negative from_block", () => {
     expect(() => census([], opts(-1, 9))).toThrow(CensusRefused);
   });
@@ -681,10 +899,52 @@ describe("3.1 rule 13: invalid requests are refused", () => {
   it("a request that is not integers", () => {
     expect(() => census([], { ...opts(0, 9), requested: { from_block: 0.5, to_block: 9 } })).toThrow(CensusRefused);
   });
-  it("a one-block request is fine", () => {
+  it("a one block request is fine", () => {
     expect(census([pg(5, 5, 0, null, [ev(5, 0)])], opts(5, 5)).totals.escrows_opened).toBe(1);
   });
   it("no pinned genesis is refused", () => {
     expect(() => census([], opts(0, 9, ""))).toThrow(CensusRefused);
+  });
+});
+
+describe("3.1 clause 14: integers are judged by value", () => {
+  // Parsed from JSON text, because a JavaScript literal 1.0 is already just 1.
+  const page = (index: string) =>
+    JSON.parse(
+      `{"genesis":"${G}","from_block":0,"to_block":9,"page":0,"next_page":null,"events":[` +
+        `{"block_number":1,"block_hash":"${hash(1)}","finalized":true,"index":${index},"section":"hasStation","method":"EscrowOpened","data":{"who":"${alice}"}}]}`,
+    ) as unknown;
+
+  it("index written 1.0 is the integer 1 and counts", () => {
+    const rep = census([page("1.0")], opts(0, 9));
+    expect(rep.totals.escrows_opened).toBe(1);
+    expect(rep.malformed_dropped).toBe(0);
+  });
+
+  it("index 1.5 is not an integer, so the event is malformed", () => {
+    const rep = census([page("1.5")], opts(0, 9));
+    expect(rep.malformed_dropped).toBe(1);
+    expect(rep.totals.escrows_opened).toBe(0);
+  });
+
+  it("index 1.0 and index 1 are the same key, so the copies dedupe", () => {
+    const rep = census([page("1.0"), page("1")], opts(0, 9));
+    expect(rep.duplicates_dropped).toBe(1);
+    expect(rep.totals.escrows_opened).toBe(1);
+  });
+
+  it("page fields written with .0 key the chain and walk it by value", () => {
+    const p0 = JSON.parse(`{"genesis":"${G}","from_block":0.0,"to_block":9.0,"page":0.0,"next_page":1.0,"events":[]}`) as unknown;
+    const p1 = JSON.parse(`{"genesis":"${G}","from_block":0,"to_block":9,"page":1.0,"next_page":null,"events":[]}`) as unknown;
+    const rep = census([p0, p1], opts(0, 9));
+    expect(rep.complete).toBe(true);
+    expect(rep.covered).toEqual([r(0, 9)]);
+  });
+
+  it("a fractional page field refuses the census, and a boolean is never an integer", () => {
+    const half = JSON.parse(`{"genesis":"${G}","from_block":0,"to_block":9,"page":0.5,"next_page":null,"events":[]}`) as unknown;
+    expect(() => census([half], opts(0, 9))).toThrow(CensusRefused);
+    expect(census([pg(0, 9, 0, null, [ev(1, 0, "EscrowOpened", { index: true })])], opts(0, 9)).malformed_dropped).toBe(1);
+    expect(census([pg(0, 9, 0, null, [ev(1, 0, "EscrowOpened", { block_number: false })])], opts(0, 9)).malformed_dropped).toBe(1);
   });
 });

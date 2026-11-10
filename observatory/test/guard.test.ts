@@ -1,5 +1,17 @@
+import * as childProcess from "node:child_process";
+import { spawnSync } from "node:child_process";
+import * as dgram from "node:dgram";
+import * as dns from "node:dns";
 import { readdirSync, readFileSync } from "node:fs";
+import * as http from "node:http";
+import * as http2 from "node:http2";
+import * as https from "node:https";
+import { request as httpsRequest } from "node:https";
+import * as net from "node:net";
+import * as tls from "node:tls";
+import { Worker } from "node:worker_threads";
 import { describe, expect, it } from "vitest";
+import { earlyBindings } from "./setup.js";
 import {
   READ_ONLY_RPC_METHODS,
   ReadOnlyViolation,
@@ -58,14 +70,93 @@ describe("read-only guard", () => {
   });
 });
 
+describe("every network and process path is blocked at runtime (RULES section 4)", () => {
+  // Hosts end in .invalid, so even a broken block could never reach FLOP.
+  const cases: [string, () => unknown, string, string][] = [
+    ["http.request", () => http.request("http://canary.invalid/fund"), "network", "http.request"],
+    ["http.get", () => http.get("http://canary.invalid/"), "network", "http.get"],
+    ["https.request", () => https.request("https://canary.invalid/fund"), "network", "https.request"],
+    ["a named https request import", () => httpsRequest("https://canary.invalid/fund"), "network", "https.request"],
+    ["http2.connect", () => http2.connect("https://canary.invalid"), "network", "http2.connect"],
+    ["net.connect", () => net.connect(9, "canary.invalid"), "network", "net.connect"],
+    ["net.Socket connect", () => new net.Socket().connect(9, "canary.invalid"), "network", "net.Socket.connect"],
+    ["net.createServer", () => net.createServer(), "network", "net.createServer"],
+    ["tls.connect", () => tls.connect(443, "canary.invalid"), "network", "tls.connect"],
+    ["dgram.createSocket", () => dgram.createSocket("udp4"), "network", "dgram.createSocket"],
+    ["dns.lookup", () => dns.lookup("canary.invalid", () => undefined), "network", "dns.lookup"],
+    ["dns.promises.resolve4", () => dns.promises.resolve4("canary.invalid"), "network", "dns.promises.resolve4"],
+    ["child_process.spawn", () => childProcess.spawn("true"), "process", "child_process.spawn"],
+    ["a named spawnSync import", () => spawnSync("true"), "process", "child_process.spawnSync"],
+    ["child_process.execSync", () => childProcess.execSync("true"), "process", "child_process.execSync"],
+    ["child_process.fork", () => childProcess.fork("x.js"), "process", "child_process.fork"],
+    ["a worker thread", () => new Worker("x.js"), "process", "worker_threads.Worker"],
+    ["an https binding imported before the block was set", () => earlyBindings.httpsRequest()("https://canary.invalid/"), "network", "https.request"],
+  ];
+  // The label proves the block sits where it claims to, not only at some deeper layer.
+  it.each(cases)("%s throws and is recorded", (_name, call, kind, label) => {
+    expect(call).toThrow(/disabled in tests/);
+    const log = takeAttempts();
+    expect(log.map((a) => a.kind)).toEqual([kind]);
+    expect(log[0]?.what.split(" ")[0]).toBe(label);
+  });
+});
+
 describe("source scan", () => {
   // M0 has no transport at all. This keeps it that way until M1 adds one behind the guard.
-  const forbidden = [/\bfetch\s*\(/, /new\s+WebSocket\b/, /signAndSend/, /author_submit/, /\bKeyring\b/, /mnemonic/i, /\bsecretKey\b/];
+  const NET = "(?:http|https|http2|net|tls|dgram|dns|dns/promises|child_process|worker_threads|cluster|undici|ws|axios|node-fetch)";
+  const forbidden = [
+    /\bfetch\s*\(/,
+    /new\s+WebSocket\b/,
+    new RegExp(`from\\s*["'](?:node:)?${NET}["']`),
+    new RegExp(`import\\s*\\(?\\s*["'](?:node:)?${NET}["']`),
+    new RegExp(`require\\s*\\(\\s*["'](?:node:)?${NET}["']`),
+    /\bprocess\.binding\b/,
+    /internalBinding/,
+    /signAndSend/,
+    /\bsignRaw\b/,
+    /\bsignPayload\b/,
+    /\bsignTransaction\b/,
+    /\bsign\s*\(/,
+    /\bcreateSign\b/,
+    /\bgenerateKeyPair/,
+    /author_submit/,
+    /eth_send(?:Raw)?Transaction/,
+    /\bsendTransaction\b/,
+    /\bwriteContract\b/,
+    /\bapi\.tx\b/,
+    /\bKeyring\b/,
+    /mnemonic/i,
+    /\bsecretKey\b/,
+    /\bprivateKey\b/,
+  ];
   const dir = new URL("../src/", import.meta.url);
   const files = readdirSync(dir).filter((f) => f.endsWith(".ts") && f !== "guard.ts");
 
-  it.each(files)("%s has no network, signing or key handling", (file) => {
+  it.each(files)("%s has no network, process, signing, spending or key handling", (file) => {
     const text = readFileSync(new URL(file, dir), "utf8");
     for (const re of forbidden) expect(text, `${file} matches ${re}`).not.toMatch(re);
+  });
+
+  it("catches each kind of forbidden line it claims to", () => {
+    const samples = [
+      'import { request } from "node:https";',
+      'import net from "net";',
+      'const cp = await import("node:child_process");',
+      'require("node:dgram")',
+      "await api.tx.balances.transferKeepAlive(to, 1).signAndSend(pair);",
+      "const sig = pair.sign(message);",
+      "const keyring = new Keyring();",
+    ];
+    for (const line of samples) expect(forbidden.some((re) => re.test(line)), line).toBe(true);
+  });
+
+  // The independent recount may run its own tests in a subprocess, but recount.py itself
+  // reads files only.
+  it("tools/recount.py imports nothing that reaches the network or starts a process", () => {
+    const text = readFileSync(new URL("../tools/recount.py", import.meta.url), "utf8");
+    const imports = [...text.matchAll(/^\s*(?:import|from)\s+([\w.]+)/gm)].map((m) => m[1]);
+    expect(imports.sort()).toEqual(["argparse", "glob", "json", "os", "sys"]);
+    expect(text).not.toMatch(/\bos\.(?:system|popen|exec|spawn|fork)/);
+    expect(text).not.toMatch(/__import__|importlib/);
   });
 });

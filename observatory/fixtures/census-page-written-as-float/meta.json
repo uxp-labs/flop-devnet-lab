@@ -1,0 +1,11 @@
+{
+  "scenario": "census-page-written-as-float",
+  "description": "Synthetic, made up for a test. Request 0 to 99. The pinned genesis is the FLOP devnet genesis (DEVNET_GENESIS in src/status.ts); every event and block hash is made up. Clause numbers refer to RULES.md section 3.1. The page files are written by hand, so their JSON text literally holds 0.0, 1.0, 99.0 and 5.0 (JSON.stringify would drop the .0). An integer is judged by value (clause 14): page 0 has from_block 0.0, to_block 99.0, page 0.0, next_page 1.0 and an event with block_number 5.0, and page 1 has from_block 0, to_block 99 and page 1.0. By value both pages belong to one chain for blocks 0 to 99, the walk goes from page 0 to page 1 to null, and the open and the release both count. Expected: complete true, status complete; covered 0 to 99; gaps none; totals escrows_opened 1, escrows_released 1, escrows_refunded 0, channels_opened 0, channels_settled 0; pending_unfinalized 0; duplicates_dropped 0; excluded_other_genesis 0; malformed_dropped 0; by_account synthetic-alice (escrows_opened 1, escrows_released 1).",
+  "now": "2026-11-10T00:00:00.000Z",
+  "synthetic": true,
+  "census_request": {
+    "from_block": 0,
+    "to_block": 99
+  },
+  "pinned_genesis": "0x99c172c095340ace980631f9123544c6bebd4839f3437e463533422d8be2d631"
+}

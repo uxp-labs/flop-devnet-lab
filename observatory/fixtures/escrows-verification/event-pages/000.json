@@ -1,7 +1,7 @@
 {
   "genesis": "0x99c172c095340ace980631f9123544c6bebd4839f3437e463533422d8be2d631",
-  "from_block": null,
-  "to_block": null,
+  "from_block": 0,
+  "to_block": 0,
   "page": 0,
   "next_page": null,
   "events": [

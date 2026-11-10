@@ -3,21 +3,34 @@
 //
 // Each mutants/<module>.json is an array of
 //   { "id", "file", "find", "replace", "test", "why" }
-// For every mutant: copy the package to a temp dir (node_modules linked, not copied),
-// apply the one exact replacement (find must occur exactly once), run the named test
-// file, and expect it to FAIL. That is the "failing before the fix" half. Then every
-// named test file runs on the unmutated tree and must PASS: the "passing after" half.
+// with "file" and "test" relative to the observatory package.
+//
+// 1. Copy the repo layout the tests read into one temp directory: the observatory package and
+//    its sibling folders (interfaces/, imd-flop/ and the rest), without .git, node_modules,
+//    check-runs, dist or private builds. node_modules is linked, not copied.
+// 2. Control: run every named test file in that copy, unmutated. Every file must pass. If the
+//    control fails, no kill counts, because a failure could come from the copy, not the mutant.
+// 3. Each mutant: apply the one exact replacement ("find" must occur exactly once), run the named
+//    test file with the JSON reporter, then restore the file. "killed" means at least one test
+//    failed, or the read-only harness failed the file for a leftover attempt. A file that fails
+//    only to load (a syntax error, a missing file) is "load-error", never a kill.
+// 4. Control again, to prove every file was restored.
 //
 // Usage: node scripts/mutate.mjs [mutants/escrow.json ...]   (default: all mutants/*.json)
-// Prints a JSON array of results. Exit 1 if any mutant survives, is invalid, or a baseline fails.
+// Prints one JSON object. Exit 1 if a control fails or any mutant is not killed.
 import { spawnSync } from "node:child_process";
 import { cpSync, existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join, relative, resolve } from "node:path";
+import { basename, dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const pkg = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const skip = new Set(["node_modules", "check-runs", "dist", "out"]);
+const repo = dirname(pkg);
+const pkgName = basename(pkg);
+const SKIP = new Set([".git", "node_modules", "check-runs", "dist", "out"]);
+const HARNESS_ERROR = /unexpected network, write, sign or spend attempts/;
+const TIMEOUT_MS = 180_000;
+
 const args = process.argv.slice(2);
 const files = args.length
   ? args
@@ -26,55 +39,169 @@ const files = args.length
       .sort()
       .map((f) => join("mutants", f));
 
-function runTest(dir, test) {
-  const r = spawnSync("npx", ["vitest", "run", test], {
-    cwd: dir,
+const work = mkdtempSync(join(tmpdir(), "obs-mutate-"));
+const copy = join(work, "repo");
+const copyPkg = join(copy, pkgName);
+const clean = (s) => String(s ?? "").split(copy).join("<copy>").split(work).join("<work>");
+
+/** Runs vitest on the given test files in the copy. Returns a summary built from the JSON report. */
+function runVitest(tests, label) {
+  const out = join(work, `${label}.json`);
+  rmSync(out, { force: true });
+  const r = spawnSync("npx", ["--no-install", "vitest", "run", ...tests, "--reporter=json", `--outputFile=${out}`], {
+    cwd: copyPkg,
     encoding: "utf8",
+    timeout: TIMEOUT_MS,
     env: { ...process.env, OBS_ATTEMPTS_FILE: "" },
   });
-  return { code: r.status, tail: ((r.stdout ?? "") + (r.stderr ?? "")).split("\n").slice(-12).join("\n") };
+  const tail = clean(((r.stdout ?? "") + (r.stderr ?? "")).split("\n").slice(-8).join("\n"));
+  if (r.error && r.error.code === "ETIMEDOUT") return { exit: null, timeout: true, files: [], tail };
+  let report = null;
+  try {
+    report = JSON.parse(readFileSync(out, "utf8"));
+  } catch {
+    report = null;
+  }
+  if (!report) return { exit: r.status, files: [], noReport: true, tail };
+  const perFile = (report.testResults ?? []).map((f) => {
+    const asserts = f.assertionResults ?? [];
+    const failed = asserts.filter((a) => a.status === "failed");
+    return {
+      file: relative(copyPkg, f.name),
+      status: f.status,
+      tests: asserts.length,
+      failed: failed.map((a) => a.fullName ?? a.title),
+      firstFailure: clean((failed[0]?.failureMessages?.[0] ?? "").split("\n")[0]).slice(0, 240),
+      message: clean(f.message ?? "").split("\n")[0].slice(0, 240),
+    };
+  });
+  return { exit: r.status, files: perFile, tail };
 }
 
-const results = [];
-let bad = 0;
+function setup() {
+  cpSync(repo, copy, {
+    recursive: true,
+    filter: (p) => !relative(repo, p).split("/").some((part) => SKIP.has(part) || part.startsWith(".build-")),
+  });
+  symlinkSync(join(pkg, "node_modules"), join(copyPkg, "node_modules"));
+}
 
+function control(tests, label) {
+  const run = runVitest(tests, label);
+  const missing = tests.filter((t) => !run.files.some((f) => f.file === t));
+  const failing = run.files.filter((f) => f.status !== "passed" || f.failed.length > 0 || f.tests === 0);
+  const pass = !run.timeout && !run.noReport && run.exit === 0 && missing.length === 0 && failing.length === 0;
+  return {
+    outcome: pass ? "control-pass" : "control-fail",
+    exit: run.exit,
+    files: run.files.map((f) => ({ file: f.file, status: f.status, tests: f.tests, failed: f.failed.length })),
+    missing,
+    detail: pass ? undefined : failing.map((f) => `${f.file}: ${f.firstFailure || f.message}`).concat(run.timeout ? ["timeout"] : [], run.noReport ? [run.tail] : []),
+  };
+}
+
+const mutants = [];
+const problems = [];
+const ids = new Set();
 for (const f of files) {
-  const mutants = JSON.parse(readFileSync(resolve(pkg, f), "utf8"));
-  for (const m of mutants) {
-    const target = join(pkg, m.file);
-    if (!existsSync(target)) {
-      results.push({ id: m.id, file: m.file, test: m.test, why: m.why, outcome: "invalid", detail: "file not found" });
-      bad++;
-      continue;
-    }
-    const src = readFileSync(target, "utf8");
-    const count = src.split(m.find).length - 1;
-    if (count !== 1) {
-      results.push({ id: m.id, file: m.file, test: m.test, why: m.why, outcome: "invalid", detail: `find matches ${count} times` });
-      bad++;
-      continue;
-    }
-    const tmp = mkdtempSync(join(tmpdir(), "obs-mutant-"));
-    cpSync(pkg, tmp, {
-      recursive: true,
-      filter: (p) => !relative(pkg, p).split("/").some((part) => skip.has(part)),
-    });
-    symlinkSync(join(pkg, "node_modules"), join(tmp, "node_modules"));
-    writeFileSync(join(tmp, m.file), src.replace(m.find, m.replace));
-    const run = runTest(tmp, m.test);
-    rmSync(tmp, { recursive: true, force: true });
-    const outcome = run.code !== 0 ? "killed" : "survived";
-    if (outcome !== "killed") bad++;
-    results.push({ id: m.id, file: m.file, test: m.test, why: m.why, outcome, exit: run.code, tail: outcome === "survived" ? run.tail : undefined });
+  const list = JSON.parse(readFileSync(resolve(pkg, f), "utf8"));
+  for (const m of list) {
+    // "replace" may be empty (a deletion); everything else must be a non-empty string.
+    const bad = ["id", "file", "find", "replace", "test", "why"].filter((k) => typeof m[k] !== "string" || (m[k] === "" && k !== "replace"));
+    if (bad.length) problems.push({ id: m.id ?? null, source: f, outcome: "invalid", detail: `missing ${bad.join(", ")}` });
+    else if (ids.has(m.id)) problems.push({ id: m.id, source: f, outcome: "invalid", detail: "duplicate id" });
+    else mutants.push({ ...m, source: f });
+    if (typeof m.id === "string") ids.add(m.id);
   }
 }
 
-for (const test of [...new Set(results.map((r) => r.test))].sort()) {
-  const run = runTest(pkg, test);
-  const outcome = run.code === 0 ? "baseline-pass" : "baseline-fail";
-  if (outcome !== "baseline-pass") bad++;
-  results.push({ id: `baseline:${test}`, test, outcome, exit: run.code, tail: outcome === "baseline-fail" ? run.tail : undefined });
+const results = [...problems];
+let bad = problems.length;
+let before = null;
+let after = null;
+try {
+  setup();
+  // A mutant naming a test file that does not exist is reported invalid below; the control
+  // runs every named test file that does exist.
+  const tests = [...new Set(mutants.map((m) => m.test))].filter((t) => existsSync(join(copyPkg, t))).sort();
+  before = control(tests, "control-before");
+  if (before.outcome !== "control-pass") bad++;
+  for (const m of mutants) {
+    const base = { id: m.id, source: m.source, file: m.file, test: m.test, why: m.why };
+    const target = join(copyPkg, m.file);
+    if (!existsSync(target)) {
+      results.push({ ...base, outcome: "invalid", detail: "file not found" });
+      bad++;
+      continue;
+    }
+    if (!existsSync(join(copyPkg, m.test))) {
+      results.push({ ...base, outcome: "invalid", detail: "test file not found" });
+      bad++;
+      continue;
+    }
+    const original = readFileSync(target, "utf8");
+    const count = original.split(m.find).length - 1;
+    if (count !== 1) {
+      results.push({ ...base, outcome: "invalid", detail: `find matches ${count} times` });
+      bad++;
+      continue;
+    }
+    let run;
+    try {
+      writeFileSync(target, original.replace(m.find, m.replace));
+      run = runVitest([m.test], "mutant");
+    } finally {
+      writeFileSync(target, original);
+    }
+    const file = run.files.find((x) => x.file === m.test);
+    let outcome;
+    let detail;
+    if (run.timeout) {
+      outcome = "timeout";
+      detail = `no result within ${TIMEOUT_MS / 1000}s`;
+    } else if (!file) {
+      outcome = "error";
+      detail = run.tail;
+    } else if (file.failed.length > 0) {
+      outcome = "killed";
+    } else if (file.status === "failed" && HARNESS_ERROR.test(file.message)) {
+      outcome = "killed";
+      detail = "the read-only harness failed the file for a leftover attempt";
+    } else if (file.status === "failed") {
+      outcome = "load-error";
+      detail = file.message;
+    } else {
+      outcome = "survived";
+    }
+    if (outcome !== "killed") bad++;
+    results.push({
+      ...base,
+      outcome,
+      exit: run.exit,
+      caught_by: outcome === "killed" ? file.failed.slice(0, 3) : undefined,
+      first_failure: outcome === "killed" ? file.firstFailure || undefined : undefined,
+      detail,
+    });
+  }
+  after = control(tests, "control-after");
+  if (after.outcome !== "control-pass") bad++;
+} finally {
+  rmSync(work, { recursive: true, force: true });
 }
 
-console.log(JSON.stringify(results, null, 2));
+const count = (o) => results.filter((r) => r.outcome === o).length;
+const summary = {
+  mutants: results.length,
+  killed: count("killed"),
+  survived: count("survived"),
+  load_error: count("load-error"),
+  invalid: count("invalid"),
+  other: results.length - count("killed") - count("survived") - count("load-error") - count("invalid"),
+  control_before: before?.outcome ?? "not-run",
+  control_after: after?.outcome ?? "not-run",
+};
+const layout = existsSync(repo)
+  ? readdirSync(repo).filter((n) => !SKIP.has(n) && !n.startsWith(".build-")).sort()
+  : [];
+console.log(JSON.stringify({ layout, control_before: before, control_after: after, summary, results }, null, 2));
 process.exit(bad ? 1 : 0);

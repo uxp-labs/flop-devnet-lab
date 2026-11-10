@@ -57,6 +57,12 @@ Known limits (v0):
 - An event with an unparsable escrow id cannot be tied to any escrow. If it is a finalized release or
   refund on the pinned genesis, escrows it could contradict are reported `unverified`. This is strict
   on purpose.
+- One chain event is never evidence for two escrows. If copies of one event (same genesis, block
+  hash and index) disagree on section, method, escrow id or block number, every escrow they name
+  is `unverified`.
+- If any copy of an event is not finalized, the event is pending and is not evidence.
+- If any event page could not be read, or is structurally invalid, every escrow in that result is
+  `unverified`. The missing page could hold a conflicting event.
 - Amount, payee and policy are not checked here. FlopRail's `verifyLock` does that. Use both.
 
 ## NetworkStatus
