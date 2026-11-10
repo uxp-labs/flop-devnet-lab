@@ -383,23 +383,30 @@ Tests fail if any attempt is left in the log.
   `SubtleCrypto`, module loading, signing, key and cipher APIs), any name that starts with an
   underscore (an internal such as a stream's `_handle` or `__proto__`), as an identifier or as a
   string (`x["__proto__"]`, `console["_stdout"]`), the reader's streams `.input` and `.output`, read
-  or destructured, `process` other than `process.version`, `process.argv`, `process.exit`,
-  `process.stdout.write(...)`, `process.stderr.write(...)` and `createInterface({ input:
-  process.stdin })` (so a stream `src` holds is never handed on, read back, listed or asked to
-  connect: under a pipe `process.stdout` is a socket), and any string naming an RPC method that
-  writes or signs. It also fails every computed key that is not a string or number literal, in a
-  member access (`o[k]`, `o?.[k]`, `super[k]`), an object, a pattern or a class: every property
-  `src` reads or writes by name is named in its code, where the rules above read it, so a name only
-  known at run time (read back from a regular expression, decoded, trimmed, listed or parsed) can
-  never be used to reach anything. What `Object.entries` and `Object.values` list without a name is
-  what an object `src` holds holds itself: data, the functions of `src`'s own modules, and an
-  allowed module's functions only by the names `src` imports; `src` holds no module object, no
-  global object and no `process`. `src` reads a data record by a run time key through `own()` in
-  `src/own.ts`, which walks the record's own entries, never reaches an inherited member and never
-  hands back a function. A name list refuses some plain words too (`sign`, `self`, `window`,
-  `binding`, `encrypt` and the others, as identifiers or whole strings); `src` uses none of them.
-  `src` must hold nothing but regular `.ts` files, so every file tsc compiles is read; both scans
-  check that. It proves itself on known bad and good samples, and its file list on a throwaway
+  or destructured, the reader itself other than as `rl.on(event, arrow function)` in a statement of
+  its own, where `rl` is a `const` that is not exported and holds the whole value of
+  `createInterface(...)`, the one place `createInterface` is named but its import from
+  `node:readline` (so the reader, which holds stdin, is never listed, handed on, kept as the value
+  `on` returns or given to a listener as `this`), `process` other than `process.version`,
+  `process.argv`, `process.exit`, `process.stdout.write(...)`, `process.stderr.write(...)` and
+  `createInterface({ input: process.stdin })` (so a stream `src` holds is never handed on, read
+  back, listed or asked to connect: under a pipe `process.stdout` is a socket), and any string
+  naming an RPC method that writes or signs. It also fails every computed key that is not a string
+  or number literal, in a member access (`o[k]`, `o?.[k]`, `super[k]`), an object, a pattern or a
+  class: every property `src` reads or writes by name is named in its code, where the rules above
+  read it, so a name only known at run time (read back from a regular expression, decoded, trimmed,
+  listed or parsed) can never be used to reach anything. What `Object.entries` and `Object.values`
+  list without a name is what an object `src` holds holds itself: data, the functions of `src`'s own
+  modules, an allowed module's functions only by the names `src` imports, and what those functions
+  hand back (a hash object, a parsed yaml document, an error). The reader is the one such object
+  known to hold a stream, so it is held to the form above. The scan does not read what the others
+  hold; the runtime block in the tests covers the network and process paths. `src` holds no module
+  object, no global object and no `process`. `src` reads a data record by a run time key through
+  `own()` in `src/own.ts`, which walks the record's own entries, never reaches an inherited member
+  and never hands back a function. A name list refuses some plain words too (`sign`, `self`,
+  `window`, `binding`, `encrypt` and the others, as identifiers or whole strings); `src` uses none
+  of them. `src` must hold nothing but regular `.ts` files, so every file tsc compiles is read; both
+  scans check that. It proves itself on known bad and good samples, and its file list on a throwaway
   folder, before it scans. What it cannot see is what an allowed module does with the arguments
   `src` passes it; the runtime block in the tests covers that.
 - `tools/recount.py` is read the same two ways: its own tests walk its syntax tree (exactly five

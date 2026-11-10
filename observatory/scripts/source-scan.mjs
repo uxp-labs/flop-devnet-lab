@@ -25,6 +25,10 @@
 // - process only as process.version, argv, exit, process.stdout.write(...),
 //   process.stderr.write(...) and createInterface({ input: process.stdin }), so no stream src holds
 //   can be asked to connect, handed on or read for its handle.
+// - The reader that call hands back holds stdin, so it is named only as rl.on(event, arrow
+//   function) in a statement of its own, rl being a const that is not exported and holds the whole
+//   call, and createInterface is named only there and in its import from node:readline: the reader
+//   is never listed, handed on, kept as the value on returns or given to a listener as this.
 // - No string, template or regular expression names an RPC method that writes or signs.
 // - No computed key that is not a string or number literal, in a member access (o[k], o?.[k],
 //   super[k]), an object, a pattern or a class (round 8 review M1). A name only known at run time,
@@ -197,6 +201,8 @@ function problems(code, file = "sample.ts", scanned = SCANNED) {
   const out = [];
   // Each node's parent and the key it sits under, so a rule can read a node's context.
   const up = new Map();
+  // Every identifier, for the reader rule below, which reads them once the whole tree is known.
+  const ids = [];
   const visit = (n, parent, key) => {
     if (Array.isArray(n)) {
       for (const x of n) visit(x, parent, key);
@@ -245,6 +251,7 @@ function problems(code, file = "sample.ts", scanned = SCANNED) {
         break;
       }
       case "Identifier": {
+        ids.push(n);
         const ownConstructor = key === "key" && parent?.type === "MethodDefinition" && parent.kind === "constructor";
         if (BANNED.has(n.name) && !ownConstructor) out.push(`uses ${n.name}`);
         else if (/mnemonic/i.test(n.name)) out.push(`uses ${n.name}`);
@@ -306,6 +313,38 @@ function problems(code, file = "sample.ts", scanned = SCANNED) {
     for (const k of Object.keys(n)) if (k !== "type") visit(n[k], n, k);
   };
   visit(ast, null, null);
+  // The reader createInterface hands back holds stdin, so listing it (Object.entries(rl)) or
+  // handing it on hands stdin over by no name the rules above read. createInterface is named only
+  // in its import from node:readline and as the whole value of a const that is not exported, and
+  // that const is named only as rl.on(event, arrow function) in a statement of its own: on returns
+  // the reader, and a listener that is not an arrow function gets the reader as this.
+  const readers = new Set();
+  const declared = new Set();
+  for (const id of ids) {
+    if (id.name !== "createInterface") continue;
+    const { parent, key } = up.get(id);
+    const spec = parent?.type === "ImportSpecifier" ? parent : undefined;
+    const from = spec ? up.get(spec)?.parent : undefined;
+    const imported =
+      spec !== undefined && from?.type === "ImportDeclaration" && from.source?.value === "node:readline" &&
+      (spec.imported?.name ?? spec.imported?.value) === "createInterface" && spec.local?.name === "createInterface";
+    const init = parent?.type === "CallExpression" && key === "callee" ? up.get(parent) : undefined;
+    const declarator = init?.key === "init" && init.parent?.type === "VariableDeclarator" && init.parent.id?.type === "Identifier" ? init.parent : undefined;
+    const declaration = declarator ? up.get(declarator)?.parent : undefined;
+    const exported = declaration ? up.get(declaration)?.parent?.type === "ExportNamedDeclaration" : false;
+    if (declaration?.type === "VariableDeclaration" && declaration.kind === "const" && !exported) {
+      readers.add(declarator.id.name);
+      declared.add(declarator.id);
+    } else if (!imported) out.push("names createInterface other than in its import from node:readline and as the whole value of a const that is not exported");
+  }
+  for (const id of ids) {
+    if (!readers.has(id.name) || declared.has(id)) continue;
+    const { parent, key } = up.get(id);
+    const call = parent?.type === "MemberExpression" && key === "object" && !parent.computed && parent.property?.name === "on" ? up.get(parent) : undefined;
+    const statement = call?.key === "callee" && call.parent?.type === "CallExpression" ? up.get(call.parent) : undefined;
+    const ok = statement?.key === "expression" && statement.parent?.type === "ExpressionStatement" && call.parent.arguments[1]?.type === "ArrowFunctionExpression";
+    if (!ok) out.push(`uses the reader ${id.name} other than as ${id.name}.on(event, arrow function) in a statement of its own`);
+  }
   return out;
 }
 
@@ -434,6 +473,17 @@ const BAD = [
   "const s7 = rl.input;",
   'const s8 = rl["output"];',
   "const { input: s9 } = rl;",
+  // Names that newer rules also catch in the samples above, each now in a sample it alone catches,
+  // so every ban is shown to bite on its own.
+  'Object.defineProperty(o, "x", { value: 1 });',
+  "const c9 = sock.connect(443, host);",
+  // The reader listed, its listener given it as this, on's value kept, a stand-in createInterface,
+  // and the reader exported: each hands stdin over by no name.
+  "const rl1 = createInterface({ input: process.stdin }); const all1 = Object.entries(rl1);",
+  'const rl2 = createInterface({ input: process.stdin }); rl2.on("line", function (l) { use(this, l); });',
+  'const rl3 = createInterface({ input: process.stdin }); const again3 = rl3.on("line", (l) => use(l));',
+  "function createInterface(o) { return Object.values(o); } const s10 = createInterface({ input: process.stdin });",
+  "export const rl5 = createInterface({ input: process.stdin });",
   "class A { constructor() {} } const k = Object.getOwnPropertyNames(A.prototype)[0] as string; const C = ((() => 0) as any)[k];",
   'const k = atob("Y29uc3RydWN0b3I="); const C = ((() => 0) as any)[k];',
   String.raw`const k = JSON.parse('"\u0063onstructor"') as string; const C = ((() => 0) as any)[k];`,
@@ -484,7 +534,7 @@ const GOOD = [
   'const note = "a gateway report is not chain proof";',
   'const o = { a: 1, "b-c": 2 }; const w = o["b-c"] + o.a + list[0];',
   'const w2 = own(record, key); const first = list.at(0); const c = text.charAt(i);',
-  "const rl = createInterface({ input: process.stdin });",
+  'import { createInterface } from "node:readline"; const rl = createInterface({ input: process.stdin }); rl.on("line", (line) => use(line));',
   "process.stderr.write(msg);",
   "for (const [k, v] of Object.entries(o)) use(k, v);",
 ];

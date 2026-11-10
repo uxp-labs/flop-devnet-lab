@@ -454,5 +454,45 @@
     "replace": "          if (false) out.push(",
     "test": "scripts/source-scan.mjs",
     "why": "round 10 review L3: const { input } = rl reads the reader's stream too"
+  },
+  {
+    "id": "scan-tree-reader-listed",
+    "file": "scripts/source-scan.mjs",
+    "find": "    if (!ok) out.push(`uses the reader ${id.name} other than as",
+    "replace": "    if (false) out.push(`uses the reader ${id.name} other than as",
+    "test": "scripts/source-scan.mjs",
+    "why": "lead's check after round 10: Object.entries of the reader lists stdin, so the reader is named only as rl.on(event, arrow function)"
+  },
+  {
+    "id": "scan-tree-reader-function-listener",
+    "file": "scripts/source-scan.mjs",
+    "find": " && call.parent.arguments[1]?.type === \"ArrowFunctionExpression\"",
+    "replace": "",
+    "test": "scripts/source-scan.mjs",
+    "why": "lead's check after round 10: a listener that is not an arrow function gets the reader as this"
+  },
+  {
+    "id": "scan-tree-reader-on-value-kept",
+    "file": "scripts/source-scan.mjs",
+    "find": "const ok = statement?.key === \"expression\" && statement.parent?.type === \"ExpressionStatement\" && ",
+    "replace": "const ok = call?.key === \"callee\" && ",
+    "test": "scripts/source-scan.mjs",
+    "why": "lead's check after round 10: on returns the reader, so rl.on(...) is a statement of its own"
+  },
+  {
+    "id": "scan-tree-create-interface-any-name",
+    "file": "scripts/source-scan.mjs",
+    "find": "    } else if (!imported) out.push(\"names createInterface other than",
+    "replace": "    } else if (false) out.push(\"names createInterface other than",
+    "test": "scripts/source-scan.mjs",
+    "why": "lead's check after round 10: a function of src's own named createInterface would take stdin and list it"
+  },
+  {
+    "id": "scan-tree-reader-exported",
+    "file": "scripts/source-scan.mjs",
+    "find": "declaration.kind === \"const\" && !exported) {",
+    "replace": "declaration.kind === \"const\") {",
+    "test": "scripts/source-scan.mjs",
+    "why": "lead's check after round 10: an exported reader is named in another module, where the reader rule does not follow it"
   }
 ]
