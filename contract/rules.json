@@ -187,14 +187,6 @@
       "summary": "Viewer mismatch and disagree rows append a second red 'unknown' chip when the ledger state is timeout_unknown or error."
     },
     {
-      "id": "Q-LINK-BYPASS-TEXT",
-      "status": "current behavior",
-      "parts": [
-        "viewer"
-      ],
-      "summary": "A ledger row with link_bypassed: true shows the link column as grey 'bypassed (mock)' instead of grey 'not checked'. imd-flop never writes that field today."
-    },
-    {
       "id": "R-a",
       "residual": "a",
       "status": "current behavior",
@@ -299,6 +291,19 @@
       "target": "a failed read never releases: the ledger keeps the reservation (state sent, spend null, cap_charge 0.186)",
       "replaces_quirk": "Q-RUN-FRESH",
       "replaced_quirk_summary": "runJob decides identity and settlement from the receipt body without checking http === 200 (run.ts:301); receipt --refresh requires http === 200 (cli.ts:414).",
+      "fix_step": "step 3"
+    },
+    {
+      "id": "KD-4",
+      "source": "Sonar step 1 independent check F2, FIXER rule V-LINK-GREY, relayed by PRODY 2026-11-10",
+      "parts": [
+        "viewer"
+      ],
+      "where": "build-lane.py:91 (link_bypassed: true sets the link column text)",
+      "today": "a ledger row with link_bypassed: true shows the link column as grey 'bypassed (mock)'",
+      "target": "the link column is always grey 'not checked'",
+      "replaces_quirk": "Q-LINK-BYPASS-TEXT",
+      "replaced_quirk_summary": "A ledger row with link_bypassed: true shows the link column as grey 'bypassed (mock)' instead of grey 'not checked'. imd-flop never writes that field today.",
       "fix_step": "step 3"
     }
   ]

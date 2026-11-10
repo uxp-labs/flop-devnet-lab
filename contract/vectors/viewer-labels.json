@@ -776,9 +776,33 @@
      ]
     }
    },
-   "quirks": [
-    "Q-LINK-BYPASS-TEXT"
-   ],
+   "status": "known_defect",
+   "defect": "KD-4",
+   "target": {
+    "viewer": {
+     "chips": [
+      [
+       "grey",
+       "sent"
+      ],
+      [
+       "green",
+       "chain final"
+      ]
+     ],
+     "reservation": "absent",
+     "matches_shown": true,
+     "greens": [
+      "chain final"
+     ],
+     "link": [
+      "grey",
+      "not checked",
+      null
+     ]
+    }
+   },
+   "note": "KNOWN DEFECT KD-4 (was quirk Q-LINK-BYPASS-TEXT): expect is today's output (asserted); target is FIXER's grey 'not checked' (not asserted until step 3)",
    "label_rules": [
     "V-LINK-GREY"
    ]
