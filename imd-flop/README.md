@@ -45,6 +45,8 @@ The process exit code is the `EXIT` value in `src/errors.ts`. `src/bin.ts` assig
 
 Lock-timeout rule: if the ledger lock cannot be taken before the paid call, the CLI exits 10 and nothing is sent. If the lock cannot be taken after the paid call, while writing the result row, the CLI exits 1. Exit 3 stays cap refusals only. Exit 4 stays a broken link. Codes 0–10 are the only values the CLI returns.
 
+Known gap: if the estimate step fails while another process holds the ledger lock, the CLI exits 1, not 10. Exit 10 covers only a lock that could not be taken before the paid call.
+
 ## Mocked vs live
 
 - **Mocked (default):** `run`, receipts and `status` use a local stub shaped like OpenAI's API. It returns
