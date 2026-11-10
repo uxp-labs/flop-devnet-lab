@@ -5,6 +5,7 @@ from fractions import Fraction
 BASE = "https://api.flop.network/v1"
 TEMPLATE_PAD = 20  # measured: Qwen chat wrap 23 tok vs 3 raw for "Be brief.\nHi"
 MAX_TOKEN_COUNT = 10_000_000  # above any model context; a larger count is not a plausible quote
+MIN_CAP = 1e-6  # the padded quote is rounded up to 6 decimals and is > 0, so it is never below 1e-6
 EXIT_REFUSED = 3  # refused_local: nothing sent. 2 is argparse usage, 1 an uncaught error, 0 would_send.
 CAP_RE = re.compile(r"[+-]?(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+)(?:[eE][+-]?[0-9]+)?|[+-]?(?:nan|inf|infinity)", re.ASCII | re.IGNORECASE)
 
@@ -87,8 +88,10 @@ def main():
     prompt = (a.system + "\n" if a.system else "") + a.user
     cap = json_number(a.cap)
     # A negative max-tokens or a cap that is not a finite amount above 0 can never send, whatever the
-    # quote says. Refuse before the estimate so the prompt does not leave the machine for nothing.
-    if a.max_tokens < 0 or cap is None or cap <= 0:
+    # quote says. Neither can max-tokens above MAX_TOKEN_COUNT (the quote's output count must cover it
+    # and stay <= MAX_TOKEN_COUNT) or a cap below MIN_CAP (the padded quote is at least 1e-6).
+    # Refuse before the estimate so the prompt does not leave the machine for nothing.
+    if a.max_tokens < 0 or a.max_tokens > MAX_TOKEN_COUNT or cap is None or cap < MIN_CAP:
         e = None
     else:
         try:
