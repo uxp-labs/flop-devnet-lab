@@ -425,8 +425,25 @@
      "not_applicable": "viewer renders ledger rows; it never writes them"
     }
    },
-   "quirks": [
-    "Q-RUN-FRESH"
+   "status": "known_defect",
+   "defect": "KD-3",
+   "target": {
+    "imd-flop": {
+     "exit": 0,
+     "states": [
+      "sent",
+      "sent"
+     ],
+     "last": {
+      "state": "sent",
+      "spend": null,
+      "cap_charge": 0.186
+     }
+    }
+   },
+   "note": "KNOWN DEFECT KD-3 (was quirk Q-RUN-FRESH): expect is today's output (asserted); target is FIXER's rule, a failed read never releases (not asserted until step 3)",
+   "label_rules": [
+    "V-FAILED-READ"
    ]
   },
   {

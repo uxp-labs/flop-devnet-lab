@@ -170,14 +170,6 @@
       "summary": "'Failed read' differs: imd-flop refresh = not (http === 200 and an object body); spend-guard receipts.py = code != 200; viewer = http not in (None, 200) or a non-empty error, with key_expired routed to its own branch. http null + no error is fresh in the viewer only; http 200 + error text is failed in the viewer only."
     },
     {
-      "id": "Q-RUN-FRESH",
-      "status": "current behavior",
-      "parts": [
-        "imd-flop"
-      ],
-      "summary": "runJob decides identity and settlement from the receipt body without checking http === 200 (run.ts:301); receipt --refresh requires http === 200 (cli.ts:414)."
-    },
-    {
       "id": "Q-IDENTITY-FIELDS",
       "status": "current behavior",
       "parts": [
@@ -295,6 +287,19 @@
       "where": "build-lane.py:139-141 (settled compare ignores the reservation and per-call cap)",
       "today": "a settlement above its reservation (quote_padded) or above the per-call cap renders green 'chain final' and 'matches'",
       "target": "amber 'disagree', reservation held (reservation line shown), chain-final green blocked"
+    },
+    {
+      "id": "KD-3",
+      "source": "Sonar step 1 independent check F1, FIXER rule V-FAILED-READ, relayed by PRODY 2026-11-10",
+      "parts": [
+        "imd-flop"
+      ],
+      "where": "src/run.ts:299-333 (identity and settlement taken from the receipt body without checking http === 200); receipt --refresh requires http 200 (cli.ts:414)",
+      "today": "run's own receipt read that fails (HTTP 503) but carries a settled body books spend 0.05 and lowers cap_charge from the 0.186 reservation to 0.05",
+      "target": "a failed read never releases: the ledger keeps the reservation (state sent, spend null, cap_charge 0.186)",
+      "replaces_quirk": "Q-RUN-FRESH",
+      "replaced_quirk_summary": "runJob decides identity and settlement from the receipt body without checking http === 200 (run.ts:301); receipt --refresh requires http === 200 (cli.ts:414).",
+      "fix_step": "step 3"
     }
   ]
 }
