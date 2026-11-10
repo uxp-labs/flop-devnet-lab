@@ -11,7 +11,7 @@
 // If any canary passes, the harness is broken.
 // Hosts end in .invalid and the process is `true`, so even a broken harness reaches nothing.
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -75,7 +75,7 @@ const results = [];
 let bad = 0;
 for (const [label, body] of Object.entries(canaries)) {
   const name = label === WITHOUT_CHECK ? "zz-canary-late-timer.test.ts" : label;
-  const tmp = mkdtempSync(join(tmpdir(), "obs-canary-"));
+  const tmp = realpathSync(mkdtempSync(join(tmpdir(), "obs-canary-")));
   try {
     copyTracked(pkg, tmp);
     symlinkSync(join(pkg, "node_modules"), join(tmp, "node_modules"));

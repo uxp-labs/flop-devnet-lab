@@ -1,0 +1,11 @@
+{
+  "scenario": "census-deep-nesting",
+  "description": "Synthetic, made up for a test. Request 0 to 99. The pinned genesis is the FLOP devnet genesis (DEVNET_GENESIS in src/status.ts); every event and block hash is made up. Clause numbers refer to RULES.md section 3.1. 00-page-0.json holds page 0 for blocks 0 to 99 with an EscrowOpened whose data holds a value nested 100 arrays deep. A page file whose JSON nests deeper than 64 levels cannot be read (clause 12), checked before parsing so no parser's stack limit decides: the whole census refuses, in TypeScript and Python alike. Expected: the census refuses; no totals.",
+  "now": "2026-11-10T00:00:00.000Z",
+  "synthetic": true,
+  "census_request": {
+    "from_block": 0,
+    "to_block": 99
+  },
+  "pinned_genesis": "0x99c172c095340ace980631f9123544c6bebd4839f3437e463533422d8be2d631"
+}

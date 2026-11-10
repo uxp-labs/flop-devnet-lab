@@ -75,6 +75,15 @@ Known limits (v0):
   escrow it names `unverified`.
 - A page file that is not strict UTF-8 JSON, a page whose block range starts below 0, and an
   `event-pages` that is not a real folder each leave every escrow `unverified`.
+- So do a page file name that is not UTF-8, a key repeated in one JSON object, JSON nested deeper
+  than 64 levels, and a broken page chain on the pinned genesis (census clause 2). An event on a
+  page that the walk from page 0 never reaches is not evidence.
+- An event with no `block_number` key is malformed. One whose `block_number` is `null` is kept,
+  with a note that the finalized height cannot bound it.
+- A malformed finalized release or refund that could be about an escrow leaves it `unverified`,
+  whatever state the clean evidence would give: it could be a second release or refund.
+- `finalized_height` bounds the evidence only when it comes from a usable RPC head on the pinned
+  genesis (no read error, fresh, not later than the snapshot). Otherwise it is `null`.
 - Amount, payee and policy are not checked here. FlopRail's `verifyLock` does that. Use both.
 
 ## NetworkStatus
@@ -85,7 +94,7 @@ What it answers: is this still the chain we pinned, how far is finality, and are
 |---|---|
 | `schema` | Always `flop-observatory/network-status@0`. |
 | `genesis.pinned`, `.faucet`, `.rpc` | The pinned genesis and what each source reported. `null` means unread. |
-| `reset_detected` | `true`: some source reports another genesis. `false`: faucet and RPC both report the pinned one. `null`: not enough evidence. |
+| `reset_detected` | `true`: a usable reading reports another genesis. `false`: a usable faucet `/chain` reading and a usable RPC head both report the pinned one. `null`: not enough evidence. A reading with an error, a stale one or one later than the snapshot counts for neither. |
 | `conflicts` | Disagreements between sources, in words. |
 | `finalized_height`, `finalized_hash`, `best_height`, `finality_lag` | Chain head as read. `null` when unknown. |
 | `runtime_version` | Runtime spec version, or `null`. |

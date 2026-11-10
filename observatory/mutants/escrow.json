@@ -178,16 +178,16 @@
   {
     "id": "escrow-refund-ignores-malformed-release",
     "file": "src/escrow.ts",
-    "find": "if (suspectTerminals.has(RELEASED)) {",
-    "replace": "if (false) {",
+    "find": "    } else if (refunded.length === 1) {\n      if (suspectTerminals.size > 0) {",
+    "replace": "    } else if (refunded.length === 1) {\n      if (suspectTerminals.has(REFUNDED)) {",
     "test": "test/escrow.test.ts",
     "why": "A malformed finalized release contradicts refunded (U-new-2)."
   },
   {
     "id": "escrow-claim-ignores-malformed-refund",
     "file": "src/escrow.ts",
-    "find": "if (suspectTerminals.has(REFUNDED)) {",
-    "replace": "if (false) {",
+    "find": "      // it outright: either one leaves the escrow unverified.\n      if (suspectTerminals.size > 0) {",
+    "replace": "      // it outright: either one leaves the escrow unverified.\n      if (suspectTerminals.has(RELEASED)) {",
     "test": "test/escrow.test.ts",
     "why": "A malformed finalized refund contradicts claimed."
   },
@@ -242,16 +242,16 @@
   {
     "id": "escrow-outside-range-terminal-not-suspect",
     "file": "src/escrow.ts",
-    "find": "if (method !== OPENED && copies.some((c) => c.finalized)) {\n        const what",
-    "replace": "if (false) {\n        const what",
+    "find": "      outsideRange++;\n      if (method !== OPENED && copies.some((c) => c.finalized)) {\n        const what",
+    "replace": "      outsideRange++;\n      if (false) {\n        const what",
     "test": "test/escrow.test.ts",
     "why": "An out of range finalized release or refund that names an escrow leaves it unverified."
   },
   {
     "id": "escrow-outside-range-open-conflicts",
     "file": "src/escrow.ts",
-    "find": "if (method !== OPENED && copies.some((c) => c.finalized)) {\n        const what",
-    "replace": "if (copies.some((c) => c.finalized)) {\n        const what",
+    "find": "      outsideRange++;\n      if (method !== OPENED && copies.some((c) => c.finalized)) {\n        const what",
+    "replace": "      outsideRange++;\n      if (copies.some((c) => c.finalized)) {\n        const what",
     "test": "test/escrow.test.ts",
     "why": "Only an out of range release or refund is conflicting evidence; an out of range open is ignored with a note."
   },
@@ -266,8 +266,8 @@
   {
     "id": "escrow-unsafe-block-number-accepted",
     "file": "src/escrow.ts",
-    "find": "if (n !== null && n !== undefined && !isSafeInt(n)) {",
-    "replace": "if (n !== null && n !== undefined && !(typeof n === \"number\" && Number.isInteger(n))) {",
+    "find": "  if (n !== null && !isSafeInt(n)) {",
+    "replace": "  if (n !== null && !(typeof n === \"number\" && Number.isInteger(n))) {",
     "test": "test/escrow.test.ts",
     "why": "An unsafe integer block_number makes the event malformed."
   },
@@ -314,8 +314,8 @@
   {
     "id": "escrow-negative-block-number-malformed",
     "file": "src/escrow.ts",
-    "find": "if (n !== null && n !== undefined && !isSafeInt(n)) {",
-    "replace": "if (n !== null && n !== undefined && (!isSafeInt(n) || n < 0)) {",
+    "find": "  if (n !== null && !isSafeInt(n)) {",
+    "replace": "  if (n !== null && (!isSafeInt(n) || n < 0)) {",
     "test": "test/escrow.test.ts",
     "why": "A negative block_number is an integer; the page range rule handles it, it is not malformed (IMD audit finding 14)."
   },
@@ -326,5 +326,61 @@
     "replace": "",
     "test": "test/escrow.test.ts",
     "why": "a page whose range starts below block 0 is invalid, so nothing in it is evidence"
+  },
+  {
+    "id": "escrow-missing-block-number-accepted",
+    "file": "src/escrow.ts",
+    "find": "  if (!Object.hasOwn(ev, \"block_number\")) return \"block_number is missing\";\n",
+    "replace": "",
+    "test": "test/escrow.test.ts",
+    "why": "an event with no block_number key is malformed (census clause 7), never evidence"
+  },
+  {
+    "id": "escrow-broken-chain-ignored",
+    "file": "src/escrow.ts",
+    "find": "  if (broken.length > 0) return unverified(id, broken, opts);\n",
+    "replace": "",
+    "test": "test/escrow.test.ts",
+    "why": "a broken chain means a missing page that could hold a conflicting event"
+  },
+  {
+    "id": "escrow-off-chain-evidence-accepted",
+    "file": "src/escrow.ts",
+    "find": "    const onChain = !onPinned || reachable.has(page);",
+    "replace": "    const onChain = true;",
+    "test": "test/escrow.test.ts",
+    "why": "an event on a page not reachable from page 0 is never evidence"
+  },
+  {
+    "id": "escrow-off-chain-terminal-not-suspect",
+    "file": "src/escrow.ts",
+    "find": "        conflicts.push(`a finalized ${what} on a page not reachable from page 0 names this escrow (${where})`);\n",
+    "replace": "",
+    "test": "test/escrow.test.ts",
+    "why": "a finalized release or refund off the chain still names the escrow"
+  },
+  {
+    "id": "escrow-unbounded-evidence-not-noted",
+    "file": "src/escrow.ts",
+    "find": "  if (height !== null && unbounded > 0) {",
+    "replace": "  if (false) {",
+    "test": "test/escrow.test.ts",
+    "why": "evidence the finalized height cannot bound must say so"
+  },
+  {
+    "id": "escrow-claimed-ignores-malformed-release",
+    "file": "src/escrow.ts",
+    "find": "      // it outright: either one leaves the escrow unverified.\n      if (suspectTerminals.size > 0) {",
+    "replace": "      // it outright: either one leaves the escrow unverified.\n      if (suspectTerminals.has(REFUNDED)) {",
+    "test": "test/escrow.test.ts",
+    "why": "a malformed finalized release could be a second distinct release"
+  },
+  {
+    "id": "escrow-refunded-ignores-malformed-refund",
+    "file": "src/escrow.ts",
+    "find": "    } else if (refunded.length === 1) {\n      if (suspectTerminals.size > 0) {",
+    "replace": "    } else if (refunded.length === 1) {\n      if (suspectTerminals.has(RELEASED)) {",
+    "test": "test/escrow.test.ts",
+    "why": "a malformed finalized refund could be a second distinct refund"
   }
 ]

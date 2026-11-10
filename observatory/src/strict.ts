@@ -1,6 +1,7 @@
 // Strict readings shared by every module, so a rule cannot hold in one place and miss another.
-// RULES.md 3.1 clause 14 (integers) and section 1.1 (times). Escrow, census and status all use
-// these; the Python recount implements the same rules independently.
+// RULES.md 3.1 clause 14 (integers), clause 12 (one value per key) and section 1.1 (times).
+// Escrow, census and status all use these; the Python recount implements the same rules
+// independently.
 
 /** An integer judged by value that is also safe, |v| <= 2^53 - 1. A boolean is never one. */
 export function isSafeInt(v: unknown): v is number {
@@ -52,3 +53,68 @@ export function secondsBetween(earlier: unknown, later: unknown): number | null 
   const b = parseZoned(later);
   return a !== null && b !== null ? (b - a) / 1000 : null;
 }
+
+/**
+ * The first key that appears twice in one object of a JSON text, or null. JSON.parse keeps the
+ * last copy without a word and other parsers keep the first, so a file with a repeated key has
+ * no one meaning (RULES.md 3.1 clause 12). Keys compare after their escapes are read, so "a" and
+ * "\u0061" are the same key. Call it only on text that JSON.parse accepted.
+ */
+export function duplicateKey(text: string): string | null {
+  const stack: ({ keys: Set<string>; expectKey: boolean } | null)[] = [];
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (c === '"') {
+      let j = i + 1;
+      while (text[j] !== '"') j += text[j] === "\\" ? 2 : 1;
+      const top = stack.at(-1);
+      if (top && top.expectKey) {
+        const key = JSON.parse(text.slice(i, j + 1)) as string;
+        if (top.keys.has(key)) return key;
+        top.keys.add(key);
+        top.expectKey = false;
+      }
+      i = j;
+    } else if (c === "{") {
+      stack.push({ keys: new Set(), expectKey: true });
+    } else if (c === "[") {
+      stack.push(null);
+    } else if (c === "}" || c === "]") {
+      stack.pop();
+    } else if (c === ",") {
+      const top = stack.at(-1);
+      if (top) top.expectKey = true;
+    }
+  }
+  return null;
+}
+
+/** The deepest a page file's JSON may nest (RULES.md 3.1 clause 12). Real pages nest about 5 deep. */
+export const MAX_NESTING = 64;
+
+/**
+ * How deep the arrays and objects of a text nest, reading strings so a bracket inside one does not
+ * count. It works on any text, valid JSON or not, so it can run before the parser: parsers differ
+ * on how deep they go, and one that runs out of stack must never be the judge.
+ */
+export function nestingDepth(text: string): number {
+  let depth = 0;
+  let deepest = 0;
+  let inString = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (inString) {
+      if (c === "\\") i++;
+      else if (c === '"') inString = false;
+    } else if (c === '"') {
+      inString = true;
+    } else if (c === "[" || c === "{") {
+      depth++;
+      if (depth > deepest) deepest = depth;
+    } else if (c === "]" || c === "}") {
+      depth--;
+    }
+  }
+  return deepest;
+}
+

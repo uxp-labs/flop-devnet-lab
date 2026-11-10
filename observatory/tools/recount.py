@@ -25,7 +25,12 @@ ACCOUNT_FIELDS = ("who", "owner", "agent", "payer")
 
 
 class Unreadable(Exception):
-    pass
+    """The input cannot give a census. kind names why (clause 16), as the TypeScript census does:
+    request, page-file, page-structure or input."""
+
+    def __init__(self, kind, message):
+        super().__init__(message)
+        self.kind = kind
 
 
 MAX_SAFE = 2 ** 53 - 1
@@ -51,6 +56,57 @@ def _reject_constant(name):
     raise ValueError("%s is not valid JSON" % name)
 
 
+MAX_NESTING = 64
+
+
+def _shown(raw):
+    # A file name byte for byte: printable ASCII as itself, every other byte (and %) as %XX, the
+    # same way the TypeScript loader shows it.
+    return "".join(chr(b) if 0x20 <= b < 0x7F and b != 0x25 else "%%%02X" % b for b in raw)
+
+
+def _nesting(text):
+    # How deep the arrays and objects nest, reading strings so a bracket inside one does not count.
+    # Checked before parsing (clause 12), so Python's own recursion limit never decides.
+    depth = deepest = 0
+    in_string = escaped = False
+    for ch in text:
+        if in_string:
+            if escaped:
+                escaped = False
+            elif ch == "\\":
+                escaped = True
+            elif ch == '"':
+                in_string = False
+        elif ch == '"':
+            in_string = True
+        elif ch in "[{":
+            depth += 1
+            deepest = max(deepest, depth)
+        elif ch in "]}":
+            depth -= 1
+    return deepest
+
+
+def _parse_int(text):
+    # A JSON integer far past 2^53 is no safe integer whatever its exact value (clause 14), and
+    # Python refuses to convert one longer than 4300 digits. JSON.parse reads one this long as
+    # Infinity, so both call it unsafe.
+    if len(text.lstrip("-")) > 400:
+        return float("-inf") if text.startswith("-") else float("inf")
+    return int(text)
+
+
+def _one_value_per_key(pairs):
+    # A key that appears twice in one object has no one meaning: parsers differ on which copy
+    # wins, so the file cannot be read (clause 12). Keys compare after their escapes are read.
+    keys = [k for k, _ in pairs]
+    for k in keys:
+        if keys.count(k) > 1:
+            raise ValueError("the key %s appears twice in one object" % json.dumps(k))
+    return dict(pairs)
+
+
 def is_regular_file(path):
     # lstat does not follow links, so a symlink is never a regular file.
     try:
@@ -61,7 +117,7 @@ def is_regular_file(path):
 
 def load_pages(scenario_dir):
     if not os.path.isdir(scenario_dir):
-        raise Unreadable("scenario dir not found: %s" % scenario_dir)
+        raise Unreadable("input", "scenario dir not found: %s" % scenario_dir)
     pages = []
     pages_dir = os.path.join(scenario_dir, "event-pages")
     names = []
@@ -70,44 +126,59 @@ def load_pages(scenario_dir):
     except FileNotFoundError:
         mode = None  # no event-pages folder means no pages
     except OSError as exc:
-        raise Unreadable("cannot stat %s: %s" % (pages_dir, exc))
+        raise Unreadable("page-file", "event-pages: cannot stat: %s" % exc)
     if mode is not None:
         # event-pages must be a real folder, not a file or a link (lstat does not follow links).
         if not stat.S_ISDIR(mode):
-            raise Unreadable("event-pages is not a folder: %s" % pages_dir)
+            raise Unreadable("page-file", "event-pages: not a folder (%s)" % pages_dir)
         try:
-            names = sorted(os.listdir(pages_dir))
+            # Sorted by bytes, as the TypeScript census sorts them (clause 16 names the first).
+            names = sorted(os.listdir(pages_dir), key=os.fsencode)
         except OSError as exc:
-            raise Unreadable("cannot list %s: %s" % (pages_dir, exc))
+            raise Unreadable("page-file", "event-pages: cannot list: %s" % exc)
+    # Clause 16: every page file problem is found before any page structure problem, so the
+    # reason named is the same as the TypeScript census names. The first entry in name order with
+    # a problem is the one named.
+    loaded = []
     for entry in names:
         path = os.path.join(pages_dir, entry)
+        raw = os.fsencode(entry)
+        try:
+            raw.decode("utf-8")
+        except UnicodeDecodeError:
+            raise Unreadable("page-file", "event-pages/%s: not a page file (its name is not valid UTF-8)" % _shown(raw))
         # Every entry must be a page file: regular, ends in .json, no leading dot.
         if entry.startswith(".") or not entry.endswith(".json") or not is_regular_file(path):
-            raise Unreadable("event-pages entry is not a page file: %s" % entry)
+            raise Unreadable("page-file", "event-pages/%s: not a page file" % entry)
         try:
             with open(path, "r", encoding="utf-8") as fh:
-                page = json.load(fh, parse_constant=_reject_constant)
-        except (OSError, ValueError) as exc:
-            raise Unreadable("cannot read %s: %s" % (path, exc))
-        name = os.path.basename(path)
+                text = fh.read()
+            if _nesting(text) > MAX_NESTING:
+                raise ValueError("nested deeper than %d levels" % MAX_NESTING)
+            page = json.loads(text, parse_constant=_reject_constant, parse_int=_parse_int,
+                              object_pairs_hook=_one_value_per_key)
+        except (OSError, ValueError, RecursionError) as exc:
+            raise Unreadable("page-file", "event-pages/%s: cannot read: %s" % (entry, exc))
+        loaded.append((entry, page))
+    for name, page in loaded:
         if not isinstance(page, dict):
-            raise Unreadable("%s: page is not an object" % name)
+            raise Unreadable("page-structure", "%s: page is not an object" % name)
         if not isinstance(page.get("genesis"), str):
-            raise Unreadable("%s: genesis missing or not a string" % name)
+            raise Unreadable("page-structure", "%s: genesis missing or not a string" % name)
         for f in ("from_block", "to_block", "page"):
             if not is_int(page.get(f)):
-                raise Unreadable("%s: %s missing or not an integer" % (name, f))
+                raise Unreadable("page-structure", "%s: %s missing or not an integer" % (name, f))
         # Block numbers start at 0: a range that starts below 0 describes no real blocks.
         if page["page"] < 0 or page["from_block"] < 0 or page["from_block"] > page["to_block"]:
-            raise Unreadable("%s: bad page number or block range" % name)
+            raise Unreadable("page-structure", "%s: bad page number or block range" % name)
         if "next_page" not in page or not (page["next_page"] is None or is_int(page["next_page"])):
-            raise Unreadable("%s: next_page missing or not an integer or null" % name)
+            raise Unreadable("page-structure", "%s: next_page missing or not an integer or null" % name)
         for f in ("from_block", "to_block", "page"):
             page[f] = as_int(page[f])
         if page["next_page"] is not None:
             page["next_page"] = as_int(page["next_page"])
         if not isinstance(page.get("events"), list):
-            raise Unreadable("%s: events missing or not a list" % name)
+            raise Unreadable("page-structure", "%s: events missing or not a list" % name)
         pages.append(page)
     return pages
 
@@ -278,10 +349,10 @@ def main(argv=None):
         return 2 if exc.code else 0
     try:
         if as_int(args.lo) is None or as_int(args.hi) is None or args.lo < 0 or args.lo > args.hi:
-            raise Unreadable("bad requested range %d..%d" % (args.lo, args.hi))
+            raise Unreadable("request", "bad requested range %d..%d" % (args.lo, args.hi))
         result = recount(args.dir, args.genesis, args.lo, args.hi)
     except Unreadable as exc:
-        print(str(exc), file=sys.stderr)
+        print("census refused (%s): %s" % (exc.kind, exc), file=sys.stderr)
         return 2
     print(json.dumps(result, indent=2))
     return 0

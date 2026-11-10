@@ -121,6 +121,61 @@ describe("injected failures", () => {
     expect(s.rpc.detail).toMatch(/stuck/);
   });
 
+  describe("every earlier snapshot on the same genesis counts, not only the last (IMD follow-up audit)", () => {
+    const head = (finalized_height: number, observed_at = NOW, finalized_hash = "0x" + "5e".repeat(32), genesis: string = DEVNET_GENESIS) => ({
+      genesis,
+      finalized_height,
+      finalized_hash,
+      observed_at,
+    });
+    it("a later snapshot on another genesis cannot hide a rollback against an earlier one on this genesis", async () => {
+      const s = await run("status-healthy", { previous: [head(3341600, "2026-11-09T23:46:00Z"), head(10, "2026-11-09T23:47:00Z", "0x" + "11".repeat(32), OTHER)] });
+      expect(s.conflicts.join(" ")).toMatch(/went backwards from 3341600 to 3341575/);
+      expect(s.rpc.health).toBe("degraded");
+    });
+    it("the floor is the highest finalized height ever seen on this genesis, not the latest", async () => {
+      const s = await run("status-healthy", { previous: [head(3341600, "2026-11-09T23:46:00Z"), head(3341570, "2026-11-09T23:47:00Z")] });
+      expect(s.conflicts.join(" ")).toMatch(/went backwards from 3341600 to 3341575/);
+    });
+    it("a changed hash at this height in any earlier snapshot is a conflict", async () => {
+      const s = await run("status-healthy", { previous: [head(3341575, "2026-11-09T23:46:00Z", "0x" + "77".repeat(32)), head(3341570, "2026-11-09T23:47:00Z")] });
+      expect(s.conflicts.join(" ")).toMatch(/changed hash/);
+    });
+    it("stuck counts from the oldest of the latest run of snapshots at this height", async () => {
+      const run2 = (prev: ReturnType<typeof head>[]) => run("status-healthy", { previous: prev });
+      const stuck = await run2([head(3341575, "2026-11-09T23:30:00Z"), head(3341575, "2026-11-09T23:46:53Z")]);
+      expect(stuck.rpc.stale).toBe(true);
+      expect(stuck.rpc.detail).toMatch(/stuck at 3341575 for 1073s/);
+      const recent = await run2([head(3341575, "2026-11-09T23:46:53Z")]);
+      expect(recent.rpc.stale).toBe(false);
+      const moved = await run2([head(3341575, "2026-11-09T23:30:00Z"), head(3341574, "2026-11-09T23:40:00Z"), head(3341575, "2026-11-09T23:46:53Z")]);
+      expect(moved.rpc.stale).toBe(false);
+    });
+    it("earlier heads on another genesis alone change nothing", async () => {
+      const s = await run("status-healthy", { previous: [head(3341600, NOW, "0x" + "11".repeat(32), OTHER)] });
+      expect(s.conflicts).toEqual([]);
+      expect(s.rpc.health).toBe("ok");
+    });
+  });
+
+  it("a finalized height or best height past 2^53 - 1 is no valid head: degraded, and the height is null (IMD follow-up audit)", async () => {
+    const src = fx("status-healthy");
+    const head = { ...(src.data.rpcHead as object), finalized: { number: JSON.parse("9007199254740993"), hash: "0x" + "5e".repeat(32) }, best_number: JSON.parse("9007199254740995") };
+    const s = await networkStatus(new FixtureSource({ ...src.data, rpcHead: head as never }), { pinnedGenesis: DEVNET_GENESIS, now: NOW });
+    expect(s.rpc.health).toBe("degraded");
+    expect(s.finalized_height).toBeNull();
+    expect(s.best_height).toBeNull();
+    expect(s.rpc.detail).toMatch(/no valid finalized head/);
+  });
+
+  it("an earlier snapshot at this height whose head time does not parse leaves stuck unknown, never ok (IMD follow-up audit)", async () => {
+    const s = await run("status-healthy", {
+      previous: [{ genesis: DEVNET_GENESIS, finalized_height: 3341575, finalized_hash: "0x" + "5e".repeat(32), observed_at: "2026-11-09T23:47:40" }],
+    });
+    expect(s.rpc.health).toBe("unknown");
+    expect(s.rpc.detail).toMatch(/whether the height is stuck is unknown/);
+  });
+
   it("malformed responses become unknown or null, never ok", async () => {
     const src = fx("status-malformed");
     expect(src.data.loadErrors?.join(" ")).toMatch(/faucet-health\.json/);
@@ -347,6 +402,47 @@ describe("the faucet genesis comes only from a usable /chain reading (RULES 1.1)
     expect(s.conflicts.join(" ")).toMatch(/faucet \/chain reading time .* is later than the snapshot time/);
     expect(s.genesis.faucet).toBeNull();
     expect(s.reset_detected).toBeNull();
+  });
+});
+
+describe("the RPC genesis counts toward reset_detected only from a usable head reading (RULES 1.1)", () => {
+  const headWith = (patch: Record<string, unknown>) => {
+    const src = fx("status-healthy");
+    return networkStatus(new FixtureSource({ ...src.data, rpcHead: { ...(src.data.rpcHead as object), ...patch } as never }), { pinnedGenesis: DEVNET_GENESIS, now: NOW });
+  };
+
+  it("a fresh head with no error counts: the healthy devnet has reset_detected false", async () => {
+    expect((await headWith({})).reset_detected).toBe(false);
+  });
+
+  it.each([
+    ["a read error", { error: "websocket closed: read timed out" }],
+    ["a reading two days old", { observed_at: "2026-11-07T23:47:40Z" }],
+    ["a reading 121 s old", { observed_at: "2026-11-09T23:45:52Z" }],
+    ["no observed_at", { observed_at: null }],
+    ["an observed_at without a zone", { observed_at: "2026-11-09T23:47:40" }],
+    ["an observed_at later than the snapshot time", { observed_at: "2026-11-10T00:00:00Z" }],
+    ["the IMD audit's failed, two day old reading", { finalized: null, best_number: null, observed_at: "2026-11-07T23:47:40Z", error: "websocket closed: read timed out" }],
+  ])("%s does not count: reset_detected null, and genesis.rpc still shows what the head said", async (_name, patch) => {
+    const s = await headWith(patch);
+    expect(s.reset_detected).toBeNull();
+    expect(s.genesis.rpc).toBe(DEVNET_GENESIS);
+    expect(s.rpc.health).not.toBe("ok");
+  });
+
+  it("a reading 120 s old still counts", async () => {
+    expect((await headWith({ observed_at: "2026-11-09T23:45:53Z" })).reset_detected).toBe(false);
+  });
+
+  it("an unusable reading of another genesis does not count either way: reset_detected null, never false", async () => {
+    const s = await headWith({ genesis_hash: OTHER, observed_at: "2026-11-07T23:47:40Z" });
+    expect(s.reset_detected).toBeNull();
+    expect(s.genesis.rpc).toBe(OTHER);
+    expect(s.conflicts.join(" ")).toMatch(/differs from rpc genesis/);
+  });
+
+  it.each(["status-stale-rpc", "status-rpc-no-observed-at", "status-rpc-future-head"])("fixture %s: reset_detected null", async (name) => {
+    expect((await run(name)).reset_detected).toBeNull();
   });
 });
 

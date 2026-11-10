@@ -12,6 +12,7 @@
 //   event-pages/*.json      EventPage, one page per file, read in file-name order
 import { existsSync, lstatSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
+import { MAX_NESTING, duplicateKey, nestingDepth } from "./strict.js";
 import type {
   EventPage,
   FaucetChainBody,
@@ -91,6 +92,26 @@ export function unknownHead(): RpcHead {
   };
 }
 
+/**
+ * A file name shown byte for byte: printable ASCII as itself, every other byte (and %) as %XX.
+ * The recount shows such a name the same way, so the two can name the same file.
+ */
+function shownName(raw: Uint8Array): string {
+  return [...raw].map((b) => (b >= 0x20 && b < 0x7f && b !== 0x25 ? String.fromCharCode(b) : `%${b.toString(16).toUpperCase().padStart(2, "0")}`)).join("");
+}
+
+/** A JSON file whose arrays and objects nest deeper than MAX_NESTING. */
+class TooDeep extends Error {}
+
+/** A JSON file that parses, but holds one key twice in one object. */
+class DuplicateKey extends Error {
+  readonly key: string;
+  constructor(key: string) {
+    super(`duplicate key ${key}`);
+    this.key = key;
+  }
+}
+
 export class FixtureSource implements Source {
   readonly kind = "fixture" as const;
   readonly trust: Trust = "fixture";
@@ -106,17 +127,34 @@ export class FixtureSource implements Source {
   static fromDir(dir: string): FixtureSource {
     const loadErrors: string[] = [];
     const pageErrors: string[] = [];
-    const read = <T>(name: string, errors: string[][] = [loadErrors]): T | undefined => {
+    const read = <T>(name: string, errors: string[][] = [loadErrors], listed = false): T | undefined => {
       const path = join(dir, name);
-      if (!existsSync(path)) return undefined;
+      if (!existsSync(path)) {
+        // An entry the folder listing produced is never dropped without a word.
+        if (listed) for (const list of errors) list.push(`${name}: listed in the folder but cannot be opened`);
+        return undefined;
+      }
       try {
         // RFC 8259 JSON text is UTF-8: decode strictly, so an invalid byte refuses instead of
         // turning into U+FFFD, and keep a byte order mark so JSON.parse refuses it as Python does.
         const text = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(readFileSync(path));
-        return JSON.parse(text) as T;
+        // Checked before parsing, so no parser's own stack limit ever decides (clause 12).
+        if (nestingDepth(text) > MAX_NESTING) throw new TooDeep();
+        const value = JSON.parse(text) as T;
+        // A key that appears twice in one object has no one meaning (RULES.md 3.1 clause 12).
+        const twice = duplicateKey(text);
+        if (twice !== null) throw new DuplicateKey(twice);
+        return value;
       } catch (e) {
         // The parser's own wording changes between Node versions, so outputs say only this.
-        const reason = e instanceof SyntaxError || e instanceof TypeError ? "not valid JSON" : (e as Error).message;
+        const reason =
+          e instanceof TooDeep
+            ? `nested deeper than ${MAX_NESTING} levels`
+            : e instanceof DuplicateKey
+            ? `the key ${JSON.stringify(e.key)} appears twice in one object`
+            : e instanceof SyntaxError || e instanceof TypeError
+              ? "not valid JSON"
+              : (e as Error).message;
         for (const list of errors) list.push(`${name}: ${reason}`);
         return undefined;
       }
@@ -139,9 +177,20 @@ export class FixtureSource implements Source {
       eventPages = [];
     } else if (pagesStat) {
       eventPages = [];
-      const entries = readdirSync(pagesDir, { withFileTypes: true }).sort((x, y) => (x.name < y.name ? -1 : x.name > y.name ? 1 : 0));
+      // Names are read as bytes and sorted by bytes, as the recount does. A name that is not strict
+      // UTF-8 would otherwise be decoded to U+FFFD and name a file that does not exist (clause 15).
+      const entries = readdirSync(pagesDir, { withFileTypes: true, encoding: "buffer" }).sort((x, y) => Buffer.compare(x.name, y.name));
+      const strictName = new TextDecoder("utf-8", { fatal: true });
       for (const entry of entries) {
-        const name = entry.name;
+        let name: string;
+        try {
+          name = strictName.decode(entry.name);
+        } catch {
+          const why = `event-pages/${shownName(entry.name)}: not a page file (its name is not valid UTF-8)`;
+          loadErrors.push(why);
+          pageErrors.push(why);
+          continue;
+        }
         // RULES.md 3.1 clause 15: anything else in event-pages may be a page meant to count, so it
         // is reported, never skipped.
         if (!entry.isFile() || name.startsWith(".") || !name.endsWith(".json")) {
@@ -150,7 +199,7 @@ export class FixtureSource implements Source {
           pageErrors.push(why);
           continue;
         }
-        const page = read<EventPage>(join("event-pages", name), [loadErrors, pageErrors]);
+        const page = read<EventPage>(join("event-pages", name), [loadErrors, pageErrors], true);
         if (page !== undefined) eventPages.push(page);
       }
     }

@@ -137,6 +137,11 @@ describe("source scan", () => {
     /\bglobalThis\b/,
     /\bglobal\s*(?:\?\.)?\s*[.[]/,
     /\b(?:self|window)\s*(?:\?\.)?\s*[.[]/,
+    // process only through the members src needs, so no computed, cast or reflected access, and
+    // the Function constructor never reached by .constructor.
+    /\bprocess\b(?!\.(?:version|argv|exit|stdout|stderr|stdin)\b)/,
+    /\bReflect\b/,
+    /\.\s*constructor\b/,
     new RegExp(`from\\s*["'](?:node:)?${NET}["']`),
     new RegExp(`import\\s*\\(?\\s*["'](?:node:)?${NET}["']`),
     new RegExp(`require\\s*\\(\\s*["'](?:node:)?${NET}["']`),
@@ -167,7 +172,8 @@ describe("source scan", () => {
     /\bprivateKey\b/,
   ];
   const dir = new URL("../src/", import.meta.url);
-  const files = readdirSync(dir).filter((f) => f.endsWith(".ts") && f !== "guard.ts");
+  // Every module under src, in subfolders too, since tsconfig compiles all of src.
+  const files = (readdirSync(dir, { recursive: true }) as string[]).filter((f) => f.endsWith(".ts") && f !== "guard.ts").sort();
 
   it.each(files)("%s has no network, process, signing, spending or key handling", (file) => {
     const text = readFileSync(new URL(file, dir), "utf8");
@@ -180,6 +186,9 @@ describe("source scan", () => {
       "const fetchedAt = reading.fetched_at;",
       "// One self-contained HTML page.",
       "const evaluated = evaluate(x);",
+      "process.stdout.write(out);",
+      "const node = process.version;",
+      "// every child processes test",
     ]) {
       expect(forbidden.some((re) => re.test(line)), line).toBe(false);
     }
@@ -212,12 +221,28 @@ describe("source scan", () => {
       "const y = self.fetch;",
       "const z = (0, eval)(code);",
       'const g = Function("return this")();',
+      'const m = (process as any)["getBuiltin" + "Module"]("node:" + "https");',
+      'const gb = Reflect.get(process, "getBuiltin" + "Module");',
+      "const F = [].constructor.constructor;",
+      "const AF = Object.getPrototypeOf(async () => {}).constructor;",
+      'const b = (process as any)["bind" + "ing"];',
+      'const c = process?.["dlopen"];',
+      "const p = process;",
+      "process.env.HOME;",
     ];
     for (const line of samples) expect(forbidden.some((re) => re.test(line)), line).toBe(true);
   });
 
   // The independent recount may run its own tests in a subprocess, but recount.py itself
   // reads files only.
+  it("lists every module under src, subfolders included, and the list is not empty", () => {
+    expect(files.length).toBeGreaterThan(10);
+    expect(files).toContain("status.ts");
+    expect(files.every((f) => !f.endsWith("guard.ts") || f.includes("/"))).toBe(true);
+    // A class constructor declaration is not a .constructor access.
+    expect(forbidden.some((re) => re.test("  constructor(reason: string) {"))).toBe(false);
+  });
+
   it("tools/recount.py imports nothing that reaches the network or starts a process", () => {
     const text = readFileSync(new URL("../tools/recount.py", import.meta.url), "utf8");
     const imports = [...text.matchAll(/^\s*(?:import|from)\s+([\w.]+)/gm)].map((m) => m[1]);

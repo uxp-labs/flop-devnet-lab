@@ -8,7 +8,7 @@
 // - Disagreements between sources go in `conflicts`, in plain words.
 import type { FaucetHealthBody, Health, HttpResult, NetworkStatus, RpcHead, ServiceStatus } from "./types.js";
 import type { Source } from "./source.js";
-import { parseZoned, secondsBetween } from "./strict.js";
+import { isSafeInt, parseZoned, secondsBetween } from "./strict.js";
 
 /**
  * FLOP devnet genesis, as pinned by imd-flop (imd-flop/src/networks.ts) and read from
@@ -26,8 +26,19 @@ export interface StatusOptions {
   staleAfterSeconds?: number;
   /** A finalized head this many blocks behind best is degraded. Default 30. */
   maxFinalityLag?: number;
-  /** The previous snapshot's finalized head on the same chain, to catch rollbacks and stalls. */
-  previous?: { genesis: string; finalized_height: number; finalized_hash: string; observed_at: string } | null;
+  /**
+   * Finalized heads from earlier snapshots, oldest first, to catch rollbacks, changed hashes and
+   * stalls. Only those on the same genesis as this reading count (RULES.md 1.1). One head or a list.
+   */
+  previous?: PreviousHead | readonly PreviousHead[] | null;
+}
+
+/** One earlier snapshot's finalized head, as its status recorded it. */
+export interface PreviousHead {
+  genesis: string;
+  finalized_height: number;
+  finalized_hash: string;
+  observed_at: string;
 }
 
 /** A 0x + 64 hex hash in lower case, or null when absent or malformed. */
@@ -37,8 +48,9 @@ export function normalizeHash(value: unknown): string | null {
   return HASH_RE.test(v) ? v : null;
 }
 
+/** A safe integer (clause 14, src/strict.ts) that is not negative, or null. */
 function nonNegativeInt(value: unknown): number | null {
-  return typeof value === "number" && Number.isInteger(value) && value >= 0 ? value : null;
+  return isSafeInt(value) && value >= 0 ? value : null;
 }
 
 // Times and their ages: shared strict parsing (src/strict.ts), RULES.md 1.1.
@@ -130,6 +142,10 @@ export function classifyRpc(
   previous: StatusOptions["previous"],
   genesis: string | null,
 ): NetworkStatus["rpc"] {
+  // Every earlier head on this genesis counts, in log order, so a snapshot in between with no RPC
+  // reading (or one on another genesis) cannot hide a rollback.
+  const earlier = (previous === null || previous === undefined ? [] : Array.isArray(previous) ? previous : [previous]) as readonly PreviousHead[];
+  const sameGenesis = genesis === null ? [] : earlier.filter((p) => p.genesis === genesis);
   const finalized = head.finalized && nonNegativeInt(head.finalized.number) !== null && normalizeHash(head.finalized.hash)
     ? { number: head.finalized.number, hash: normalizeHash(head.finalized.hash) as string }
     : null;
@@ -161,21 +177,30 @@ export function classifyRpc(
     stale = age > o.staleAfterSeconds;
     if (stale) problems.push(`head is ${Math.round(age)}s old`);
   }
-  if (previous && finalized && genesis !== null && previous.genesis === genesis) {
-    if (finalized.number < previous.finalized_height) {
-      conflicts.push(
-        `finalized height went backwards from ${previous.finalized_height} to ${finalized.number} on the same genesis`,
-      );
+  if (finalized && sameGenesis.length > 0) {
+    // Finality never goes back: the highest finalized height any earlier snapshot saw on this
+    // genesis is the floor.
+    const highest = Math.max(...sameGenesis.map((p) => p.finalized_height));
+    const changed = sameGenesis.find((p) => p.finalized_height === finalized.number && p.finalized_hash !== finalized.hash);
+    // Stuck since the oldest of the latest run of snapshots at this same height. A time there that
+    // does not parse means the check cannot run.
+    let since: number | null = null;
+    let sinceUnknown = false;
+    for (let i = sameGenesis.length - 1; i >= 0 && (sameGenesis[i] as PreviousHead).finalized_height === finalized.number; i--) {
+      since = secondsBetween((sameGenesis[i] as PreviousHead).observed_at, o.now);
+      if (since === null) sinceUnknown = true;
+    }
+    if (finalized.number < highest) {
+      conflicts.push(`finalized height went backwards from ${highest} to ${finalized.number} on the same genesis`);
       problems.push("finalized height went backwards");
-    } else if (finalized.number === previous.finalized_height && finalized.hash !== previous.finalized_hash) {
+    } else if (changed) {
       conflicts.push(`finalized block ${finalized.number} changed hash since the previous snapshot`);
       problems.push("finalized block changed");
-    } else if (finalized.number === previous.finalized_height) {
-      const since = secondsBetween(previous.observed_at, o.now);
-      if (since !== null && since > o.staleAfterSeconds) {
-        stale = true;
-        problems.push(`finalized height stuck at ${finalized.number} for ${Math.round(since)}s`);
-      }
+    } else if (sinceUnknown) {
+      cannotRun.push("an earlier snapshot at this finalized height has a head time that does not parse, so whether the height is stuck is unknown");
+    } else if (since !== null && since > o.staleAfterSeconds) {
+      stale = true;
+      problems.push(`finalized height stuck at ${finalized.number} for ${Math.round(since)}s`);
     }
   }
   if (finalized && best !== null) {
@@ -208,6 +233,16 @@ export function resetDetected(pinned: string, faucet: string | null, rpc: string
   if (known.some((g) => g !== pinned)) return true;
   if (faucet !== null && rpc !== null) return false;
   return null;
+}
+
+/**
+ * A head reading fit to count toward reset_detected and to bound escrow evidence: no read error,
+ * and a reading time that parses, is not later than the snapshot time and is at most the stale
+ * limit old (RULES.md 1.1 and section 2).
+ */
+export function rpcHeadUsable(head: RpcHead, now: string, staleAfterSeconds = 120): boolean {
+  const age = secondsBetween(head.observed_at, now);
+  return !head.error && age !== null && age >= 0 && age <= staleAfterSeconds;
 }
 
 export async function networkStatus(source: Source, opts: StatusOptions): Promise<NetworkStatus> {
@@ -244,6 +279,9 @@ export async function networkStatus(source: Source, opts: StatusOptions): Promis
   if (head.genesis_hash !== null && rpcGenesis === null) {
     conflicts.push("rpc genesis hash is malformed");
   }
+  // RULES.md 1.1: the RPC genesis counts toward reset_detected only from a usable head reading,
+  // the same gate as the faucet /chain. genesis.rpc still shows what the head said.
+  const rpcUsable = rpcHeadUsable(head, o.now, o.staleAfterSeconds);
   if (faucetGenesis !== null && rpcGenesis !== null && faucetGenesis !== rpcGenesis) {
     conflicts.push(`faucet genesis ${faucetGenesis} differs from rpc genesis ${rpcGenesis}`);
   }
@@ -262,7 +300,7 @@ export async function networkStatus(source: Source, opts: StatusOptions): Promis
     observed_at: opts.now,
     trust: source.trust,
     genesis: { pinned, faucet: faucetGenesis, rpc: rpcGenesis },
-    reset_detected: resetDetected(pinned, faucetGenesis, rpcGenesis),
+    reset_detected: resetDetected(pinned, faucetGenesis, rpcUsable ? rpcGenesis : null),
     conflicts,
     finalized_height: finalizedHeight,
     finalized_hash: finalizedHash,

@@ -9,7 +9,7 @@
 // the feed itself, not the MCP comparison, has to be what catches them.
 // Exit 0 only when the control passes and every tamper is caught.
 import { spawnSync } from "node:child_process";
-import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -333,6 +333,61 @@ const tampers = [
     run: (d) =>
       editHtml(d, (h) => h.replace('<th data-col="note">note</th>', "").replace(/<td data-k="drift\.\d+\.note"[^>]*>[^<]*<\/td>/g, "")),
   },
+  // The IMD follow-up audit: text that states a value outside every compared cell.
+  {
+    name: "a-fabricated-label-row-of-two-th-cells",
+    expect: /a row holds a td|every th is a row label/,
+    applies: (d) => snap(d).status.reset_detected === true,
+    run: (d) => editHtml(d, (h) => h.replace(rowOf(h, "status.reset_detected"), (r) => `<tr><th scope="row">reset detected</th><th>false</th></tr>${r}`)),
+  },
+  {
+    name: "a-th-only-row-dressed-as-a-drift-column-in-the-status-table",
+    expect: /every drift column header sits in the drift item table|no drift column headers/,
+    applies: (d) => snap(d).status.reset_detected === true,
+    run: (d) => editHtml(d, (h) => h.replace(rowOf(h, "status.reset_detected"), (r) => `<tr><th data-col="note">reset detected = false</th></tr>${r}`)),
+  },
+  {
+    name: "a-free-paragraph-says-safe-to-spend",
+    expect: /fixed words/,
+    applies: () => true,
+    run: (d) => editHtml(d, (h) => h.replace("<h2>Network status</h2>", '<h2>Network status</h2><p class="note">reset detected: false. Chain is the pinned genesis; safe to spend.</p>')),
+  },
+  {
+    name: "a-second-h1",
+    expect: /fixed words/,
+    applies: () => true,
+    run: (d) => editHtml(d, (h) => h.replace("<h1>FLOP Observatory</h1>", "<h1>FLOP Observatory</h1><h1>No reset detected</h1>")),
+  },
+  {
+    name: "the-title-states-a-value",
+    expect: /the page title/,
+    applies: () => true,
+    run: (d) => editHtml(d, (h) => h.replace("<title>FLOP Observatory</title>", "<title>FLOP Observatory reset_detected=true</title>")),
+  },
+  {
+    name: "code-outside-every-cell",
+    expect: /fixed words/,
+    applies: () => true,
+    run: (d) => editHtml(d, (h) => h.replace("<h2>Escrows</h2>", "<h2>Escrows</h2><code>reset_detected=false</code>")),
+  },
+  {
+    name: "the-intro-seq-changed",
+    expect: /fixed words/,
+    applies: () => true,
+    run: (d) => editHtml(d, (h) => h.replace(`, seq ${snap(d).seq}, observed_at`, `, seq ${snap(d).seq + 7}, observed_at`)),
+  },
+  {
+    name: "aria-label-reads-false-on-the-reset-cell",
+    expect: /aria-label only on a blank unknown cell/,
+    applies: (d) => snap(d).status.reset_detected === true,
+    run: (d) => editCell(d, "status.reset_detected", (a, t) => [`${a} aria-label="false"`, t]),
+  },
+  {
+    name: "a-true-reset-cell-painted-unknown-grey",
+    expect: /status\.reset_detected class/,
+    applies: (d) => snap(d).status.reset_detected === true,
+    run: (d) => editCell(d, "status.reset_detected", (a, t) => [`${a} class="unk"`, t]),
+  },
   {
     // Everything agrees, but the snapshot was changed after it was hashed: only the hash and
     // the log can catch this.
@@ -363,7 +418,7 @@ function check(dir) {
 const results = [];
 let bad = 0;
 for (const src of dirs) {
-  const tmp = mkdtempSync(join(tmpdir(), "obs-consistency-"));
+  const tmp = realpathSync(mkdtempSync(join(tmpdir(), "obs-consistency-")));
   cpSync(src, tmp, { recursive: true });
   const r = check(tmp);
   rmSync(tmp, { recursive: true, force: true });
@@ -384,7 +439,7 @@ for (const t of tampers) {
     results.push({ tamper: t.name, outputs: null, outcome: "not-applicable", failures: [] });
     continue;
   }
-  const tmp = mkdtempSync(join(tmpdir(), "obs-consistency-"));
+  const tmp = realpathSync(mkdtempSync(join(tmpdir(), "obs-consistency-")));
   cpSync(src, tmp, { recursive: true });
   let outcome;
   let failures = [];

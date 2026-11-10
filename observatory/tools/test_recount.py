@@ -260,6 +260,54 @@ class RecountTests(unittest.TestCase):
             self.assertEqual(run(d, 1, 2 ** 53)[0], 2)
             self.assertEqual(run(d, 2 ** 53, 2 ** 53 + 1)[0], 2)
 
+    def test_duplicate_key_refuses(self):
+        ev = '{"block_number": 2, "block_hash": "0x%s", "finalized": true, "index": 0, "section": "hasStation", ' \
+             '"method": "EscrowOpened", "method": "EscrowReleased", "data": {"who": "a"}}' % ("01" * 32)
+        page = '{"genesis": "%s", "from_block": 1, "to_block": 5, "page": 0, "next_page": null, "events": [%s]}' % (G, ev)
+        with tempfile.TemporaryDirectory() as d:
+            self._page_dir(d, text=page)
+            code, _, err = run(d, 1, 5)
+            self.assertEqual(code, 2)
+            self.assertIn('the key "method" appears twice in one object', err)
+        # The same key in two sibling objects is fine, and so is an escaped key that differs.
+        evs = '{"index": 0, "a": 1}, {"index": 1, "\\u0062": 2, "a": 3}'
+        with tempfile.TemporaryDirectory() as d:
+            self._page_dir(d, text='{"genesis": "%s", "from_block": 1, "to_block": 5, "page": 0, "next_page": null, "events": [%s]}' % (G, evs))
+            self.assertEqual(run(d, 1, 5)[0], 0)
+        # An escaped copy of a key is the same key.
+        with tempfile.TemporaryDirectory() as d:
+            self._page_dir(d, text='{"genesis": "%s", "from_block": 1, "to_block": 5, "page": 0, "\\u0070age": 0, "next_page": null, "events": []}' % G)
+            self.assertEqual(run(d, 1, 5)[0], 2)
+
+    def test_page_name_not_utf8_refuses(self):
+        with tempfile.TemporaryDirectory() as d:
+            self._page_dir(d, name="00.json")
+            try:
+                with open(os.path.join(os.fsencode(d), b"event-pages", b"01-\xff.json"), "w") as f:
+                    f.write("{}")
+            except OSError:
+                self.skipTest("this filesystem refuses names that are not UTF-8")
+            code, _, err = run(d, 1, 5)
+            self.assertEqual(code, 2)
+            self.assertTrue(err.startswith("census refused (page-file): event-pages/01-%FF.json: not a page file (its name is not valid UTF-8)"), err)
+
+    def test_refusal_names_its_reason_file_problems_first(self):
+        # Clause 16: a page file problem is named before a page structure problem, whatever the order.
+        with tempfile.TemporaryDirectory() as d:
+            self._page_dir(d, name="00.json", page=-1)
+            self._page_dir(d, name="01.json", text='{"genesis": ')
+            code, _, err = run(d, 1, 5)
+            self.assertEqual(code, 2)
+            self.assertTrue(err.startswith("census refused (page-file): event-pages/01.json: cannot read"), err)
+        with tempfile.TemporaryDirectory() as d:
+            self._page_dir(d, name="00.json", page=-1)
+            code, _, err = run(d, 1, 5)
+            self.assertTrue(err.startswith("census refused (page-structure): 00.json"), err)
+        with tempfile.TemporaryDirectory() as d:
+            self._page_dir(d, name="00.json", text='{"genesis": ')
+            code, _, err = run(d, 5, 1)
+            self.assertTrue(err.startswith("census refused (request): "), err)
+
     def test_negative_from_block_refuses(self):
         ev = {"block_number": -5, "block_hash": "0x" + "01" * 32, "finalized": True, "index": 0,
               "section": "hasStation", "method": "EscrowOpened", "data": {"who": "a"}}

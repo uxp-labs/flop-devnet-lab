@@ -18,8 +18,8 @@
   {
     "id": "source-parser-wording-leaks",
     "file": "src/source.ts",
-    "find": "const reason = e instanceof SyntaxError || e instanceof TypeError ? \"not valid JSON\" : (e as Error).message;",
-    "replace": "const reason = (e as Error).message;",
+    "find": "            : e instanceof SyntaxError || e instanceof TypeError\n              ? \"not valid JSON\"\n              : (e as Error).message;",
+    "replace": "            : (e as Error).message;",
     "test": "test/snapshot.test.ts",
     "why": "outputs must not carry the parser's wording, which changes between Node versions"
   },
@@ -34,8 +34,8 @@
   {
     "id": "snapshot-escrows-ignore-finalized-height",
     "file": "src/snapshot.ts",
-    "find": "      finalizedHeight: status.genesis.rpc !== null && status.genesis.rpc === status.genesis.pinned ? status.finalized_height : null,",
-    "replace": "      finalizedHeight: null,",
+    "find": "    status.genesis.rpc !== null && status.genesis.rpc === status.genesis.pinned && rpcHeadUsable(head, o.now) ? status.finalized_height : null;",
+    "replace": "    null;",
     "test": "test/snapshot.test.ts",
     "why": "escrow evidence is bounded by the finalized height the status read on the pinned genesis"
   },
@@ -50,8 +50,8 @@
   {
     "id": "snapshot-other-chain-height",
     "file": "src/snapshot.ts",
-    "find": "      finalizedHeight: status.genesis.rpc !== null && status.genesis.rpc === status.genesis.pinned ? status.finalized_height : null,",
-    "replace": "      finalizedHeight: status.finalized_height,",
+    "find": "    status.genesis.rpc !== null && status.genesis.rpc === status.genesis.pinned && rpcHeadUsable(head, o.now) ? status.finalized_height : null;",
+    "replace": "    rpcHeadUsable(head, o.now) ? status.finalized_height : null;",
     "test": "test/snapshot.test.ts",
     "why": "another chain's finalized height must never bound pinned genesis escrows"
   },
@@ -102,5 +102,37 @@
     "replace": "    if (false) {",
     "test": "test/snapshot.test.ts",
     "why": "event-pages that is not a real folder must refuse"
+  },
+  {
+    "id": "source-duplicate-key-accepted",
+    "file": "src/source.ts",
+    "find": "        if (twice !== null) throw new DuplicateKey(twice);\n",
+    "replace": "",
+    "test": "test/snapshot.test.ts",
+    "why": "a page file with a key repeated in one object must refuse"
+  },
+  {
+    "id": "source-deep-nesting-accepted",
+    "file": "src/source.ts",
+    "find": "        if (nestingDepth(text) > MAX_NESTING) throw new TooDeep();\n",
+    "replace": "",
+    "test": "test/snapshot.test.ts",
+    "why": "a page file nested deeper than 64 levels must refuse before any parser decides"
+  },
+  {
+    "id": "snapshot-unusable-head-bounds",
+    "file": "src/snapshot.ts",
+    "find": "    status.genesis.rpc !== null && status.genesis.rpc === status.genesis.pinned && rpcHeadUsable(head, o.now) ? status.finalized_height : null;",
+    "replace": "    status.genesis.rpc !== null && status.genesis.rpc === status.genesis.pinned ? status.finalized_height : null;",
+    "test": "test/snapshot.test.ts",
+    "why": "a stale or failed RPC head must never bound escrow evidence"
+  },
+  {
+    "id": "source-bad-name-decoded-lossily",
+    "file": "src/source.ts",
+    "find": "          name = strictName.decode(entry.name);",
+    "replace": "          name = entry.name.toString(\"utf8\");",
+    "test": "test/snapshot.test.ts",
+    "why": "a name that is not UTF-8 must be named as it is, never decoded around"
   }
 ]

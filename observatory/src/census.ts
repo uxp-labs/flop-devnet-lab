@@ -23,11 +23,19 @@
 import { isSafeInt } from "./strict.js";
 import type { BlockRange, CensusCounts, CensusReport, Trust } from "./types.js";
 
+/**
+ * Why a census refused (RULES.md 3.1 clause 16): the request, a page file that cannot be used, a
+ * page whose structure is invalid, or other input. The Python recount names the same reason.
+ */
+export type RefusalKind = "request" | "page-file" | "page-structure" | "input";
+
 /** Thrown when the input cannot give a census at all. Never turned into a partial count. */
 export class CensusRefused extends Error {
-  constructor(reason: string) {
-    super(`census refused: ${reason}`);
+  readonly kind: RefusalKind;
+  constructor(kind: RefusalKind, reason: string) {
+    super(`census refused (${kind}): ${reason}`);
     this.name = "CensusRefused";
+    this.kind = kind;
   }
 }
 
@@ -102,7 +110,8 @@ interface Chain {
   byNumber: Map<number, Page[]>;
 }
 
-type Walk = { complete: true; pages: Page[] } | { complete: false; reason: string };
+/** The walk of one chain (clause 2): its pages in walk order, or why it is broken. */
+export type ChainWalk<P> = { complete: true; pages: P[] } | { complete: false; reason: string };
 
 function isObject(v: unknown): v is Record<string, unknown> {
   return typeof v === "object" && v !== null && !Array.isArray(v);
@@ -119,33 +128,33 @@ function isBlockHash(v: unknown): v is string {
 
 /** Clause 13: a negative start or an inverted request is refused. */
 function checkRequest(r: unknown): BlockRange {
-  if (!isObject(r)) throw new CensusRefused("no requested block range");
+  if (!isObject(r)) throw new CensusRefused("request", "no requested block range");
   const { from_block, to_block } = r;
   if (!isSafeInt(from_block) || !isSafeInt(to_block)) {
-    throw new CensusRefused("the requested range needs safe integer from_block and to_block");
+    throw new CensusRefused("request", "the requested range needs safe integer from_block and to_block");
   }
-  if (from_block < 0) throw new CensusRefused(`the requested range starts below block 0 (${from_block})`);
-  if (from_block > to_block) throw new CensusRefused(`the requested range is inverted (${from_block} > ${to_block})`);
+  if (from_block < 0) throw new CensusRefused("request", `the requested range starts below block 0 (${from_block})`);
+  if (from_block > to_block) throw new CensusRefused("request", `the requested range is inverted (${from_block} > ${to_block})`);
   return { from_block, to_block };
 }
 
 /** Clause 12: any structural fault in any page refuses the whole census. */
 function checkPage(raw: unknown, n: number): Page {
   const at = `event page ${n}`;
-  if (!isObject(raw)) throw new CensusRefused(`${at} is not an object`);
+  if (!isObject(raw)) throw new CensusRefused("page-structure", `${at} is not an object`);
   const { genesis, from_block, to_block, page, next_page, events } = raw;
-  if (typeof genesis !== "string") throw new CensusRefused(`${at}: genesis is not a string`);
-  if (!isSafeInt(from_block)) throw new CensusRefused(`${at}: from_block is missing or not a safe integer`);
-  if (!isSafeInt(to_block)) throw new CensusRefused(`${at}: to_block is missing or not a safe integer`);
-  if (!isSafeInt(page)) throw new CensusRefused(`${at}: page is missing or not a safe integer`);
-  if (page < 0) throw new CensusRefused(`${at}: page ${page} is negative`);
+  if (typeof genesis !== "string") throw new CensusRefused("page-structure", `${at}: genesis is not a string`);
+  if (!isSafeInt(from_block)) throw new CensusRefused("page-structure", `${at}: from_block is missing or not a safe integer`);
+  if (!isSafeInt(to_block)) throw new CensusRefused("page-structure", `${at}: to_block is missing or not a safe integer`);
+  if (!isSafeInt(page)) throw new CensusRefused("page-structure", `${at}: page is missing or not a safe integer`);
+  if (page < 0) throw new CensusRefused("page-structure", `${at}: page ${page} is negative`);
   // Block numbers start at 0, so a page whose range starts below 0 describes no real blocks.
-  if (from_block < 0) throw new CensusRefused(`${at}: from_block ${from_block} is negative`);
+  if (from_block < 0) throw new CensusRefused("page-structure", `${at}: from_block ${from_block} is negative`);
   if (next_page !== null && !isSafeInt(next_page)) {
-    throw new CensusRefused(`${at}: next_page is missing or neither a safe integer nor null`);
+    throw new CensusRefused("page-structure", `${at}: next_page is missing or neither a safe integer nor null`);
   }
-  if (!Array.isArray(events)) throw new CensusRefused(`${at}: events is not a list`);
-  if (from_block > to_block) throw new CensusRefused(`${at}: inverted range ${from_block} to ${to_block}`);
+  if (!Array.isArray(events)) throw new CensusRefused("page-structure", `${at}: events is not a list`);
+  if (from_block > to_block) throw new CensusRefused("page-structure", `${at}: inverted range ${from_block} to ${to_block}`);
   return { genesis, from_block, to_block, page, next_page, events };
 }
 
@@ -159,9 +168,9 @@ function noSuchPage(at: number, from: number | null): string {
  * that disagree on next_page break it too, whether or not the walk reaches that page number.
  * Identical copies are all kept.
  */
-function walk(byNumber: Map<number, Page[]>): Walk {
+export function walkChain<P extends { next_page: number | null }>(byNumber: Map<number, P[]>): ChainWalk<P> {
   const seen = new Set<number>();
-  const pages: Page[] = [];
+  const pages: P[] = [];
   let at = 0;
   let from: number | null = null;
   for (;;) {
@@ -279,14 +288,14 @@ function eventNames(): CensusReport["event_names"] {
 export function census(pages: readonly unknown[], opts: CensusOptions): CensusReport {
   const req = checkRequest(opts.requested);
   const pinned = opts.pinnedGenesis;
-  if (!isText(pinned)) throw new CensusRefused("no pinned genesis");
+  if (!isText(pinned)) throw new CensusRefused("input", "no pinned genesis");
   // Clauses 12 and 15: a page file that cannot be read or parsed, or an entry in event-pages that
   // is not a page file, refuses the census.
   const unreadable = opts.unreadablePages ?? [];
   if (unreadable.length > 0) {
-    throw new CensusRefused(`unusable event page file(s): ${unreadable.join("; ")}`);
+    throw new CensusRefused("page-file", `unusable event page file(s): ${unreadable.join("; ")}`);
   }
-  if (!Array.isArray(pages)) throw new CensusRefused("the event pages are not a list");
+  if (!Array.isArray(pages)) throw new CensusRefused("input", "the event pages are not a list");
   const valid = pages.map((p, n) => checkPage(p, n));
   const notes: string[] = [];
 
@@ -325,7 +334,7 @@ export function census(pages: readonly unknown[], opts: CensusOptions): CensusRe
     const label = `blocks ${chain.range.from_block} to ${chain.range.to_block}`;
     const all = [...chain.byNumber.values()].flat();
     const events = all.reduce((sum, p) => sum + p.events.length, 0);
-    const w = walk(chain.byNumber);
+    const w = walkChain(chain.byNumber);
     if (!w.complete) {
       notes.push(`${label}: ${w.reason}, so the chain is broken and its ${events} event(s) count nowhere`);
       continue;

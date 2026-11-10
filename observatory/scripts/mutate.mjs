@@ -3,7 +3,10 @@
 //
 // Each mutants/<module>.json is an array of
 //   { "id", "file", "find", "replace", "test", "why" }
-// with "file" and "test" relative to the observatory package.
+// with "file" and "test" relative to the observatory package. "test" is a vitest file, or an
+// end to end check script (scripts/*.mjs that prints a JSON array of {check, outcome}), which the
+// runner runs on a fresh build of the copy: the command line and the MCP binary are mutated
+// that way, since no unit test drives them.
 //
 // 1. Copy the repo layout the tests read into one temp directory: every file git tracks, in the
 //    observatory package and its sibling folders (interfaces/, imd-flop/ and the rest), and
@@ -20,7 +23,7 @@
 // Usage: node scripts/mutate.mjs [mutants/escrow.json ...]   (default: all mutants/*.json)
 // Prints one JSON object. Exit 1 if a control fails or any mutant is not killed.
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -40,7 +43,9 @@ const files = args.length
       .sort()
       .map((f) => join("mutants", f));
 
-const work = mkdtempSync(join(tmpdir(), "obs-mutate-"));
+// By its real path: vitest reports test files by real path, so a temp folder reached through a
+// link (stock macOS) would otherwise turn every file name into a path that matches nothing.
+const work = realpathSync(mkdtempSync(join(tmpdir(), "obs-mutate-")));
 const copy = join(work, "repo");
 const copyPkg = join(copy, pkgName);
 const clean = (s) => String(s ?? "").split(copy).join("<copy>").split(work).join("<work>");
@@ -79,6 +84,55 @@ function runVitest(tests, label) {
   return { exit: r.status, files: perFile, tail };
 }
 
+const isScript = (t) => t.startsWith("scripts/") && t.endsWith(".mjs");
+
+/** Builds the copy and runs one end to end check script. Same summary shape as runVitest. */
+function runScript(test) {
+  const build = spawnSync("npx", ["--no-install", "tsc", "-p", "tsconfig.json"], { cwd: copyPkg, encoding: "utf8", timeout: TIMEOUT_MS });
+  if (build.status !== 0) {
+    const tail = clean(((build.stdout ?? "") + (build.stderr ?? "")).split("\n").slice(-8).join("\n"));
+    return { exit: build.status, files: [{ file: test, status: "failed", tests: 0, failed: [], firstFailure: "", message: `build failed: ${tail}` }], tail };
+  }
+  const r = spawnSync("node", [test], { cwd: copyPkg, encoding: "utf8", timeout: TIMEOUT_MS });
+  const tail = clean(((r.stdout ?? "") + (r.stderr ?? "")).split("\n").slice(-8).join("\n"));
+  if (r.error && r.error.code === "ETIMEDOUT") return { exit: null, timeout: true, files: [], tail };
+  let checks = null;
+  try {
+    checks = JSON.parse(r.stdout);
+  } catch {
+    checks = null;
+  }
+  if (!Array.isArray(checks) || checks.length === 0) return { exit: r.status, files: [], noReport: true, tail };
+  const failed = checks.filter((c) => c.outcome !== "pass");
+  return {
+    exit: r.status,
+    files: [
+      {
+        file: test,
+        status: failed.length === 0 && r.status === 0 ? "passed" : "failed",
+        tests: checks.length,
+        failed: failed.map((c) => c.check),
+        firstFailure: clean(String(failed[0]?.stderr ?? "")).slice(0, 240),
+        message: "",
+      },
+    ],
+    tail,
+  };
+}
+
+/** Runs vitest on the vitest files and each script on its own, and merges the per-file results. */
+function runTests(tests, label) {
+  const unit = tests.filter((t) => !isScript(t));
+  const runs = [...(unit.length ? [runVitest(unit, label)] : []), ...tests.filter(isScript).map((t) => runScript(t))];
+  return {
+    exit: runs.every((x) => x.exit === 0) ? 0 : (runs.find((x) => x.exit !== 0)?.exit ?? null),
+    timeout: runs.some((x) => x.timeout),
+    noReport: runs.some((x) => x.noReport),
+    files: runs.flatMap((x) => x.files),
+    tail: runs.map((x) => x.tail).join("\n"),
+  };
+}
+
 function setup() {
   const copied = copyTracked(repo, copy);
   symlinkSync(join(pkg, "node_modules"), join(copyPkg, "node_modules"));
@@ -86,7 +140,7 @@ function setup() {
 }
 
 function control(tests, label) {
-  const run = runVitest(tests, label);
+  const run = runTests(tests, label);
   const missing = tests.filter((t) => !run.files.some((f) => f.file === t));
   const failing = run.files.filter((f) => f.status !== "passed" || f.failed.length > 0 || f.tests === 0);
   const pass = !run.timeout && !run.noReport && run.exit === 0 && missing.length === 0 && failing.length === 0;
@@ -157,8 +211,9 @@ try {
     }
     let run;
     try {
-      writeFileSync(target, original.replace(m.find, m.replace));
-      run = runVitest([m.test], "mutant");
+      // A function replacer, so "$&" and its kin in a mutant are written as they are, never substituted.
+      writeFileSync(target, original.replace(m.find, () => m.replace));
+      run = runTests([m.test], "mutant");
     } finally {
       writeFileSync(target, original);
     }

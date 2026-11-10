@@ -1,6 +1,6 @@
 // The shared strict readings (src/strict.ts): RULES.md 3.1 clause 14 and section 1.1.
 import { describe, expect, it } from "vitest";
-import { isSafeInt, parseZoned, secondsBetween } from "../src/strict.js";
+import { MAX_NESTING, duplicateKey, isSafeInt, nestingDepth, parseZoned, secondsBetween } from "../src/strict.js";
 
 describe("isSafeInt (clause 14)", () => {
   it.each([
@@ -78,3 +78,52 @@ describe("parseZoned (RULES 1.1)", () => {
     expect(secondsBetween("2026-11-09T23:47:53Z", "2026-11-09T23:47:52Z")).toBe(-1);
   });
 });
+
+describe("duplicateKey (clause 12: one value per key)", () => {
+  it.each([
+    ['{"a": 1, "a": 2}', "a"],
+    ['{"a": 1, "b": {"c": 1, "c": 2}}', "c"],
+    ['[{"x": 1}, {"y": 1, "y": 2}]', "y"],
+    ['{"a": 1, "\\u0061": 2}', "a"],
+    ['{"page": 0, "events": [], "page": 1}', "page"],
+    ['{"q\\"": 1, "q\\"": 2}', 'q"'],
+  ])("finds the repeated key in %s", (text, key) => {
+    expect(() => JSON.parse(text)).not.toThrow();
+    expect(duplicateKey(text)).toBe(key);
+  });
+
+  it.each([
+    '{"a": 1, "b": 2}',
+    '[{"a": 1}, {"a": 2}]',
+    '{"a": {"b": 1}, "b": 2}',
+    '{"a": "a", "b": ["a", "b", {"a": 1}]}',
+    '{"a": "}, \\"a\\": {", "b": 1}',
+    '{"a": 1, "\\u0062": 2}',
+    "[]",
+    "{}",
+    '"a"',
+    "7",
+  ])("finds none in %s: the same key in sibling or nested objects, as a value, or inside a string", (text) => {
+    expect(() => JSON.parse(text)).not.toThrow();
+    expect(duplicateKey(text)).toBeNull();
+  });
+});
+
+describe("nestingDepth (clause 12: at most 64 levels, checked before parsing)", () => {
+  it.each([
+    ["7", 0],
+    ["[]", 1],
+    ["{}", 1],
+    ['{"a": [{"b": 1}]}', 3],
+    ['["[[[", "{{{"]', 1],
+    ['["\\"[[", 1]', 1],
+    ["[[[", 3],
+    ["[".repeat(65) + "]".repeat(65), 65],
+  ])("%s nests %s deep, brackets inside strings not counted", (text, depth) => {
+    expect(nestingDepth(text)).toBe(depth);
+  });
+  it("the limit is 64", () => {
+    expect(MAX_NESTING).toBe(64);
+  });
+});
+

@@ -104,6 +104,69 @@ describe("fixture source: unreadable event pages are reported, never dropped", (
     }
   });
 
+  it("refuses a page file that holds one key twice in an object, naming the key", async () => {
+    const twice = page.replace('"page":0,', '"page":0,"page":1,');
+    expect(twice).not.toBe(page);
+    expect(() => JSON.parse(twice)).not.toThrow();
+    const dir = scenario((d) => {
+      mkdirSync(join(d, "event-pages"));
+      writeFileSync(join(d, "event-pages", "00.json"), twice);
+    });
+    try {
+      const src = FixtureSource.fromDir(dir);
+      expect(await src.eventPages()).toEqual([]);
+      expect(await src.eventPageErrors()).toEqual(['event-pages/00.json: the key "page" appears twice in one object']);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("refuses a page file nested deeper than 64 levels before parsing it, and reads one at 64", async () => {
+    const nested = (n: number) => page.replace('"events":[]', `"events":[],"x":${"[".repeat(n - 1)}${"]".repeat(n - 1)}`);
+    for (const [n, ok] of [[64, true], [65, false]] as const) {
+      const dir = scenario((d) => {
+        mkdirSync(join(d, "event-pages"));
+        writeFileSync(join(d, "event-pages", "00.json"), nested(n));
+      });
+      try {
+        const src = FixtureSource.fromDir(dir);
+        expect(await src.eventPageErrors()).toEqual(ok ? [] : ["event-pages/00.json: nested deeper than 64 levels"]);
+        expect(await src.eventPages()).toHaveLength(ok ? 1 : 0);
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    }
+  });
+
+  // A file name that is not UTF-8 cannot be committed to git safely (macOS refuses such names),
+  // so it is made here, where the filesystem allows it.
+  const badName = Buffer.from([0x30, 0x31, 0x2d, 0xff, 0x2e, 0x6a, 0x73, 0x6f, 0x6e]); // 01-\xff.json
+  const canMakeBadName = (() => {
+    const d = mkdtempSync(join(tmpdir(), "obs-name-"));
+    try {
+      writeFileSync(Buffer.concat([Buffer.from(d + "/"), badName]), "{}");
+      return true;
+    } catch {
+      return false;
+    } finally {
+      rmSync(d, { recursive: true, force: true });
+    }
+  })();
+  it.skipIf(!canMakeBadName)("a page file whose name is not valid UTF-8 is a page error, shown byte for byte, never dropped (IMD follow-up audit)", async () => {
+    const dir = scenario((d) => {
+      mkdirSync(join(d, "event-pages"));
+      writeFileSync(join(d, "event-pages", "00.json"), page);
+      writeFileSync(Buffer.concat([Buffer.from(join(d, "event-pages") + "/"), badName]), page);
+    });
+    try {
+      const src = FixtureSource.fromDir(dir);
+      expect(await src.eventPageErrors()).toEqual(["event-pages/01-%FF.json: not a page file (its name is not valid UTF-8)"]);
+      expect(await src.eventPages()).toHaveLength(1);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it("does not count other unreadable files as page errors", async () => {
     const src = fx("status-malformed");
     expect(src.data.loadErrors?.join(" ")).toMatch(/faucet-health\.json/);
@@ -154,6 +217,15 @@ describe("buildSnapshot", () => {
     expect(reset.escrows.every((e) => e.finalized_height === null)).toBe(true);
     const same = await buildSnapshot(parts("status-healthy"), opts);
     expect(same.escrows.every((e) => e.finalized_height === 3341575)).toBe(true);
+  });
+
+  it("a stale or failed RPC head on the pinned genesis never bounds the escrows (IMD follow-up audit)", async () => {
+    const escrows = fx("escrows-verification");
+    const s = await buildSnapshot({ status: fx("status-stale-rpc"), escrows: { source: escrows, ids: escrows.data.meta.escrow_ids ?? [] } }, opts);
+    expect(s.status.genesis.rpc).toBe(DEVNET_GENESIS);
+    expect(s.status.finalized_height).not.toBeNull();
+    expect(s.escrows.every((e) => e.finalized_height === null)).toBe(true);
+    expect(s.escrows.filter((e) => e.evidence.length > 0).every((e) => e.notes.join(" ").includes("not bounded by a finalized height"))).toBe(true);
   });
 
   it("passes the previous snapshot to the status checks: a rollback on the same genesis is a conflict", async () => {

@@ -26,6 +26,12 @@
 //    that section's cells and sits under that section's heading, the headings come in order, and
 //    the drift item table names each column once, reads it, and every item row holds its cells
 //    in that order.
+// 9. No text states a value the check does not compare (IMD follow-up audit): every th is a row
+//    label (data-for) or a drift column (data-col), every row but the drift header holds a td,
+//    the title is fixed, and every piece of text outside a marked cell and a th is one of the
+//    page's fixed words, in order, built here from the snapshot (the intro's seq included).
+//    aria-label appears only as "unknown" on a blank unknown cell, and each cell's class is the
+//    one its value calls for.
 // Prints {"dir", "checks", "keys", "failures"}; exit 1 on any failure.
 import { readFileSync } from "node:fs";
 import { basename, join, resolve } from "node:path";
@@ -130,9 +136,11 @@ for (const m of html.matchAll(/<([a-z][a-z0-9]*)\b([^>]*\bdata-k="[^"]*"[^>]*)>/
   const k = attr(m[2], "data-k");
   if (cells.has(k)) fail(`page key ${k} appears once`, "duplicate data-k");
   cells.set(k, {
+    tag,
     v: attr(m[2], "data-v"),
     n: attr(m[2], "data-n"),
     cls: attr(m[2], "class") ?? "",
+    aria: attr(m[2], "aria-label"),
     text: unescape(inner.replace(/<[^>]*>/g, "")),
   });
 }
@@ -178,7 +186,14 @@ for (const m of html.matchAll(/<([a-z][a-z0-9]*)\b([^>]*\bdata-k="[^"]*"[^>]*)>/
     }
     const ths = [...body.matchAll(/<th\b([^>]*)>([\s\S]*?)<\/th>/g)];
     const tds = [...body.matchAll(/<td\b([^>]*)>/g)];
-    if (tds.length === 0) continue; // a header row
+    if (tds.length === 0) {
+      // Only the drift item table's header row holds no td, and its cells are all columns.
+      checks++;
+      if (ths.length === 0 || ths.some((t) => attr(t[1], "data-col") === null)) {
+        failures.push({ what: "a row holds a td, unless it is the drift header of data-col columns", detail: body.replace(/\s+/g, " ").slice(0, 160) });
+      }
+      continue;
+    }
     if (ths.length !== 1 || tds.length !== 1) {
       fail("a labeled row is one th and one td", body.replace(/\s+/g, " ").slice(0, 160));
       continue;
@@ -249,7 +264,21 @@ function joinList(list) {
 }
 const isUnknownWord = (key) => /^status\.(rpc|gateway|faucet)\.health$/.test(key) || /^drift\.\d+\.status$/.test(key);
 
+/** The class the renderer gives a cell for its value (src/page.ts); anything else fails. */
+function classFor(key, value) {
+  if (key === "census.status") return value === "complete" && snapshot.census?.complete === true ? "note" : "partial";
+  if (value === null || value === undefined) return "unk";
+  if (isUnknownWord(key) && value === "unknown") return "unk";
+  if (/^status\.(rpc|gateway|faucet)\.health$/.test(key)) return `h-${value}`;
+  if (/^escrow\..+\.state$/.test(key)) return `s-${value}`;
+  return "";
+}
+
 function checkCell(key, cell, value) {
+  expectEq(`page ${key} class`, cell.cls, classFor(key, value));
+  // aria-label replaces a cell's words for a screen reader, so it may only say unknown, on a
+  // blank unknown cell.
+  if (cell.aria !== null) expectEq(`page ${key} aria-label only on a blank unknown cell`, `${cell.aria}|${cell.v}|${cell.text}`, "unknown|unknown|");
   if (key === "census.status") {
     // A banner, not a cell: its value is in data-v and its words must say partial or complete.
     expectEq(`page ${key}`, cell.v, value);
@@ -409,6 +438,10 @@ for (const k of required) {
     checks++;
     if (!inSection.has(k)) failures.push({ what: `cell ${k} sits in a section table`, detail: "outside every data-section table" });
   }
+  // A data-col column header exists only in the drift item table's header row, which is checked
+  // below; anywhere else its words would escape every check.
+  const colHeaders = [...html.matchAll(/<th\b[^>]*\bdata-col="/g)].length;
+  if (snapshot.drift === null) expectEq("no drift column headers without a drift report", colHeaders, 0);
   if (snapshot.drift !== null) {
     const itemTables = tables.filter((t) => /<th\b[^>]*\bdata-col="/.test(t[2]));
     expectEq("the page has one drift item table", itemTables.length, 1);
@@ -420,6 +453,7 @@ for (const k of required) {
       for (const c of cols) expectEq(`drift column ${c.col} reads its field`, c.text, String(c.col).replace(/_/g, " "));
       const names = cols.map((c) => c.col);
       expectEq("each drift column is named once", new Set(names).size, names.length);
+      expectEq("every drift column header sits in the drift item table's header row", colHeaders, cols.length);
       snapshot.drift.items.forEach((item, i) => {
         expectSame(`drift item ${i} shows every field as a column`, Object.keys(item).sort(), [...names].sort());
         const row = new RegExp(`<tr\\b[^>]*\\bdata-row="drift\\.${i}"[^>]*>([\\s\\S]*?)<\\/tr>`).exec(t[2]);
@@ -431,6 +465,53 @@ for (const k of required) {
       });
     }
   }
+}
+
+// 9. No text states a value the check does not compare.
+{
+  for (const th of html.matchAll(/<th\b([^>]*)>/g)) {
+    checks++;
+    if (attr(th[1], "data-for") === null && attr(th[1], "data-col") === null) {
+      failures.push({ what: "every th is a row label (data-for) or a drift column (data-col)", detail: th[0].slice(0, 120) });
+    }
+  }
+  for (const a of html.matchAll(/<([a-z][a-z0-9]*)\b([^>]*\baria-label="[^"]*"[^>]*)>/g)) {
+    checks++;
+    if (a[1] !== "td" || attr(a[2], "data-k") === null) failures.push({ what: "aria-label only on a marked cell", detail: a[0].slice(0, 120) });
+  }
+  const title = /<title>([\s\S]*?)<\/title>/.exec(html);
+  expectEq("the page title", title ? unescape(title[1]) : null, "FLOP Observatory");
+  // The text outside every marked element and every th, in order.
+  let body = html.replace(/^[\s\S]*?<body>/, "").replace(/<\/body>[\s\S]*$/, "");
+  for (const m of [...body.matchAll(/<th\b[^>]*>[\s\S]*?<\/th>/g)]) body = body.replace(m[0], "<th></th>");
+  let free = "";
+  let at = 0;
+  for (const m of body.matchAll(/<([a-z][a-z0-9]*)\b[^>]*\bdata-k="[^"]*"[^>]*>/g)) {
+    if (m.index < at) continue;
+    const end = body.indexOf(`</${m[1]}>`, m.index + m[0].length);
+    free += body.slice(at, m.index) + "<marked>";
+    at = end === -1 ? body.length : end + `</${m[1]}>`.length;
+  }
+  free += body.slice(at);
+  const words = free
+    .split(/<[^>]*>/)
+    .map((t) => unescape(t).replace(/\s+/g, " ").trim())
+    .filter((t) => t !== "");
+  const expected = [
+    "FLOP Observatory",
+    "Read only. Snapshot",
+    `, seq ${snapshot.seq}, observed_at`,
+    ", trust",
+    ". Blank grey cells mean unknown; none means known empty.",
+    "Escrow state is settlement only. It says nothing about output quality.",
+    "Network status",
+    "Escrows",
+    "Settlement only; says nothing about output quality. Only finalized events on the pinned genesis count. A gateway report is not chain proof.",
+    ...(snapshot.escrows.length === 0 ? ["No escrows in this snapshot."] : []),
+    "Census",
+    "Spec drift",
+  ];
+  expectSame("the page's text outside the marked cells is its fixed words, in order", words, expected);
 }
 
 // 6. Census internal consistency.

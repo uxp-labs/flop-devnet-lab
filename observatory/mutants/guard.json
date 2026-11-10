@@ -222,5 +222,29 @@
     "replace": "    let r = runs.get(\"all\");\n    if (!r) {\n      r = { file: e.file, pending: [], checked: false };\n      runs.set(\"all\", r);",
     "test": "test/attempts-check.test.ts",
     "why": "one file's reset must never clear another file's attempt"
+  },
+  {
+    "id": "scan-not-recursive",
+    "file": "test/guard.test.ts",
+    "find": "(readdirSync(dir, { recursive: true }) as string[])",
+    "replace": "(readdirSync(dir) as string[])",
+    "test": "test/guard.test.ts",
+    "why": "a module in a src subfolder must be scanned too"
+  },
+  {
+    "id": "scan-misses-computed-process",
+    "file": "test/guard.test.ts",
+    "find": "    /\\bprocess\\b(?!\\.(?:version|argv|exit|stdout|stderr|stdin)\\b)/,\n",
+    "replace": "",
+    "test": "test/guard.test.ts",
+    "why": "process reached by a computed, cast or reflected name reaches any module"
+  },
+  {
+    "id": "scan-misses-constructor-reach",
+    "file": "test/guard.test.ts",
+    "find": "    /\\.\\s*constructor\\b/,\n",
+    "replace": "",
+    "test": "test/guard.test.ts",
+    "why": "[].constructor.constructor is the Function constructor"
   }
 ]

@@ -106,7 +106,7 @@
   {
     "id": "census-negative-page-accepted",
     "file": "src/census.ts",
-    "find": "if (page < 0) throw new CensusRefused(`${at}: page ${page} is negative`);",
+    "find": "if (page < 0) throw new CensusRefused(\"page-structure\", `${at}: page ${page} is negative`);",
     "replace": "",
     "test": "test/census.test.ts",
     "why": "U8b: a page with a negative page number is accepted, though clause 12 makes the whole census refuse."
@@ -226,8 +226,8 @@
   {
     "id": "census-unsafe-integer-accepted",
     "file": "src/census.ts",
-    "find": "if (!isSafeInt(to_block)) throw new CensusRefused(`${at}: to_block is missing or not a safe integer`);",
-    "replace": "if (!Number.isInteger(to_block)) throw new CensusRefused(`${at}: to_block is missing or not a safe integer`);",
+    "find": "if (!isSafeInt(to_block)) throw new CensusRefused(\"page-structure\", `${at}: to_block is missing or not a safe integer`);",
+    "replace": "if (!Number.isInteger(to_block)) throw new CensusRefused(\"page-structure\", `${at}: to_block is missing or not a safe integer`);",
     "test": "test/census.test.ts",
     "why": "An integer past 2^53 less 1 is accepted, though clause 14 says it is not an integer: JSON.parse rounds 2^53 plus 1 to 2^53, so a page could cover or count blocks it does not name, and coverage arithmetic loses precision."
   },
@@ -242,9 +242,25 @@
   {
     "id": "census-negative-from-block-accepted",
     "file": "src/census.ts",
-    "find": "  if (from_block < 0) throw new CensusRefused(`${at}: from_block ${from_block} is negative`);\n",
+    "find": "  if (from_block < 0) throw new CensusRefused(\"page-structure\", `${at}: from_block ${from_block} is negative`);\n",
     "replace": "",
     "test": "test/census.test.ts",
     "why": "a page whose range starts below block 0 must refuse the census"
+  },
+  {
+    "id": "census-refusal-kind-swapped",
+    "file": "src/census.ts",
+    "find": "throw new CensusRefused(\"page-file\", `unusable event page file(s)",
+    "replace": "throw new CensusRefused(\"page-structure\", `unusable event page file(s)",
+    "test": "test/census.test.ts",
+    "why": "an unusable page file is a page file problem (clause 16), the reason the recount names too"
+  },
+  {
+    "id": "census-structure-before-files",
+    "file": "src/census.ts",
+    "find": "  const unreadable = opts.unreadablePages ?? [];\n  if (unreadable.length > 0) {",
+    "replace": "  if (Array.isArray(pages)) pages.forEach((p, n) => checkPage(p, n));\n  const unreadable = opts.unreadablePages ?? [];\n  if (unreadable.length > 0) {",
+    "test": "test/census.test.ts",
+    "why": "a page file problem is named before a page structure problem (clause 16)"
   }
 ]

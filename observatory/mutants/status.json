@@ -50,8 +50,8 @@
   {
     "id": "status-rollback-ignored",
     "file": "src/status.ts",
-    "find": "if (finalized.number < previous.finalized_height) {",
-    "replace": "if (false) {",
+    "find": "    if (finalized.number < highest) {",
+    "replace": "    if (false) {",
     "test": "test/status.test.ts",
     "why": "a finalized height going backwards is a conflict"
   },
@@ -254,5 +254,93 @@
     "replace": "  const chainUsable = chain.http === 200 && !chain.error && (chainAge === null || (chainAge >= 0 && chainAge <= o.staleAfterSeconds));",
     "test": "test/status.test.ts",
     "why": "a /chain reading with no time cannot be shown as current"
+  },
+  {
+    "id": "status-rpc-error-counts-for-reset",
+    "file": "src/status.ts",
+    "find": "  return !head.error && age !== null && age >= 0 && age <= staleAfterSeconds;",
+    "replace": "  return age !== null && age >= 0 && age <= staleAfterSeconds;",
+    "test": "test/status.test.ts",
+    "why": "an RPC head with a read error must not count toward reset_detected"
+  },
+  {
+    "id": "status-rpc-freshness-ignored-for-reset",
+    "file": "src/status.ts",
+    "find": "  return !head.error && age !== null && age >= 0 && age <= staleAfterSeconds;",
+    "replace": "  return !head.error && age !== null && age >= 0;",
+    "test": "test/status.test.ts",
+    "why": "an old RPC head must not count toward reset_detected"
+  },
+  {
+    "id": "status-rpc-future-counts-for-reset",
+    "file": "src/status.ts",
+    "find": "  return !head.error && age !== null && age >= 0 && age <= staleAfterSeconds;",
+    "replace": "  return !head.error && age !== null && age <= staleAfterSeconds;",
+    "test": "test/status.test.ts",
+    "why": "an RPC head time later than the snapshot must not count toward reset_detected"
+  },
+  {
+    "id": "status-rpc-time-not-needed-for-reset",
+    "file": "src/status.ts",
+    "find": "  return !head.error && age !== null && age >= 0 && age <= staleAfterSeconds;",
+    "replace": "  return !head.error && (age === null || (age >= 0 && age <= staleAfterSeconds));",
+    "test": "test/status.test.ts",
+    "why": "an RPC head with no usable time must not count toward reset_detected"
+  },
+  {
+    "id": "status-rpc-gate-dropped",
+    "file": "src/status.ts",
+    "find": "resetDetected(pinned, faucetGenesis, rpcUsable ? rpcGenesis : null)",
+    "replace": "resetDetected(pinned, faucetGenesis, rpcGenesis)",
+    "test": "test/status.test.ts",
+    "why": "reset_detected false needs a usable RPC reading of the pinned genesis"
+  },
+  {
+    "id": "status-previous-last-only",
+    "file": "src/status.ts",
+    "find": "  const sameGenesis = genesis === null ? [] : earlier.filter((p) => p.genesis === genesis);",
+    "replace": "  const sameGenesis = genesis === null ? [] : earlier.slice(-1).filter((p) => p.genesis === genesis);",
+    "test": "test/status.test.ts",
+    "why": "a later snapshot without this genesis must not hide a rollback against an earlier one"
+  },
+  {
+    "id": "status-rollback-against-latest-only",
+    "file": "src/status.ts",
+    "find": "    const highest = Math.max(...sameGenesis.map((p) => p.finalized_height));",
+    "replace": "    const highest = (sameGenesis.at(-1) as PreviousHead).finalized_height;",
+    "test": "test/status.test.ts",
+    "why": "finality never goes back below the highest height ever seen on the genesis"
+  },
+  {
+    "id": "status-changed-hash-latest-only",
+    "file": "src/status.ts",
+    "find": "    const changed = sameGenesis.find((p) =>",
+    "replace": "    const changed = sameGenesis.slice(-1).find((p) =>",
+    "test": "test/status.test.ts",
+    "why": "a changed hash at this height in any earlier snapshot is a conflict"
+  },
+  {
+    "id": "status-stuck-latest-only",
+    "file": "src/status.ts",
+    "find": "    for (let i = sameGenesis.length - 1; i >= 0 &&",
+    "replace": "    for (let i = sameGenesis.length - 1; i >= sameGenesis.length - 1 &&",
+    "test": "test/status.test.ts",
+    "why": "stuck counts from the oldest of the latest run at this height"
+  },
+  {
+    "id": "status-unsafe-height-accepted",
+    "file": "src/status.ts",
+    "find": "  return isSafeInt(value) && value >= 0 ? value : null;",
+    "replace": "  return typeof value === \"number\" && Number.isInteger(value) && value >= 0 ? value : null;",
+    "test": "test/status.test.ts",
+    "why": "a height past 2^53 - 1 was already rounded by JSON.parse, so it is no valid head"
+  },
+  {
+    "id": "status-stuck-unknown-time-ignored",
+    "file": "src/status.ts",
+    "find": "      if (since === null) sinceUnknown = true;\n",
+    "replace": "",
+    "test": "test/status.test.ts",
+    "why": "an earlier head time that does not parse means the stuck check cannot run"
   }
 ]

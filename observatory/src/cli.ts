@@ -19,7 +19,7 @@ import { writeFeeds } from "./feed.js";
 import { renderPage } from "./page.js";
 import { buildSnapshot } from "./snapshot.js";
 import { FixtureSource } from "./source.js";
-import { DEVNET_GENESIS, networkStatus, type StatusOptions } from "./status.js";
+import { DEVNET_GENESIS, networkStatus, type PreviousHead } from "./status.js";
 import { appendSnapshot, hashSnapshot, readSnapshots, verifyChain } from "./store.js";
 import type { Snapshot } from "./types.js";
 
@@ -147,20 +147,23 @@ async function main(): Promise<void> {
       driftPart = { label: `fixture:${src.data.meta.scenario}`, report: await driftFor(driftDir, one(a, "--spec"), now) };
     }
     const log = one(a, "--log");
-    // RULES.md 1.1: the rollback, changed hash and stuck height checks need the previous snapshot.
-    // It comes from the log, and only after the log's whole hash chain verifies.
-    let previous: StatusOptions["previous"] = null;
+    // RULES.md 1.1: the rollback, changed hash and stuck height checks need the earlier snapshots.
+    // They come from the log, and only after the log's whole hash chain verifies. Every snapshot
+    // that recorded a finalized head counts, oldest first, so one in between with no RPC reading
+    // cannot hide a rollback; the status checks use those on the same genesis.
+    const previous: PreviousHead[] = [];
     if (log && existsSync(log)) {
       const broken = verifyChain(log);
       if (broken !== null) fail(`snapshot log ${log} is broken at line ${broken}; it is never extended or trusted`);
-      const st = readSnapshots(log).at(-1)?.status;
-      if (st && st.genesis.rpc !== null && st.finalized_height !== null && st.finalized_hash !== null && st.rpc.observed_at !== null) {
-        previous = {
-          genesis: st.genesis.rpc,
-          finalized_height: st.finalized_height,
-          finalized_hash: st.finalized_hash,
-          observed_at: st.rpc.observed_at,
-        };
+      for (const { status: st } of readSnapshots(log)) {
+        if (st.genesis.rpc !== null && st.finalized_height !== null && st.finalized_hash !== null && st.rpc.observed_at !== null) {
+          previous.push({
+            genesis: st.genesis.rpc,
+            finalized_height: st.finalized_height,
+            finalized_hash: st.finalized_hash,
+            observed_at: st.rpc.observed_at,
+          });
+        }
       }
     }
     const fresh = await buildSnapshot(

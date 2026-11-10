@@ -47,6 +47,7 @@ import type {
   EventPage,
   RawEvent,
 } from "./types.js";
+import { walkChain } from "./census.js";
 import { isSafeInt } from "./strict.js";
 
 export const ESCROW_SCOPE = "settlement only; says nothing about output quality" as const;
@@ -100,9 +101,11 @@ function structureProblem(ev: Record<string, unknown>): string | null {
   // Integers follow census clause 14: an unsafe integer (beyond 2^53 - 1) is not trusted,
   // because JSON parsing has already rounded it.
   if (!isSafeInt(index) || index < 0) return "index is not a safe whole number";
+  // Census clause 7: a missing block_number key is malformed, while an explicit null is kept.
+  if (!Object.hasOwn(ev, "block_number")) return "block_number is missing";
   const n = ev["block_number"];
   // A negative block_number is an integer. The page range rule deals with it, not this one.
-  if (n !== null && n !== undefined && !isSafeInt(n)) {
+  if (n !== null && !isSafeInt(n)) {
     return "block_number is not a safe integer or null";
   }
   return null;
@@ -167,6 +170,8 @@ interface Copy {
   index: number;
   /** False when an integer block_number is outside the block range of the page it came from. */
   inRange: boolean;
+  /** False when the page it came from is not reachable from page 0 of its chain. */
+  onChain: boolean;
 }
 
 /**
@@ -214,10 +219,37 @@ export function escrowState(
     );
   }
 
+  // Census clause 2 on the pinned genesis. A broken chain means a page is missing, and the
+  // missing page could hold a conflicting event, so nothing is verified. A page that is not
+  // reachable from page 0 of a complete chain is never evidence (the census ignores it too).
+  type Linked = { next_page: number | null; raw: unknown };
+  const chains = new Map<string, { from: number; to: number; byNumber: Map<number, Linked[]> }>();
+  for (const page of pageList) {
+    const p = page as Record<string, unknown>;
+    if (p["genesis"] !== pinned) continue;
+    const from = p["from_block"] as number;
+    const to = p["to_block"] as number;
+    const key = `${from}|${to}`;
+    const chain = chains.get(key) ?? { from, to, byNumber: new Map<number, Linked[]>() };
+    chains.set(key, chain);
+    const copies = chain.byNumber.get(p["page"] as number) ?? [];
+    copies.push({ next_page: p["next_page"] as number | null, raw: page });
+    chain.byNumber.set(p["page"] as number, copies);
+  }
+  const reachable = new Set<unknown>();
+  const broken: string[] = [];
+  for (const chain of [...chains.values()].sort((a, b) => a.from - b.from || a.to - b.to)) {
+    const w = walkChain(chain.byNumber);
+    if (w.complete) for (const l of w.pages) reachable.add(l.raw);
+    else broken.push(`the page chain for blocks ${chain.from} to ${chain.to} is broken (${w.reason}), so nothing is verified: a missing page could hold a conflicting event`);
+  }
+  if (broken.length > 0) return unverified(id, broken, opts);
+
   const notes: string[] = [];
   const groups = new Map<string, Copy[]>();
   let otherGenesis = 0;
   let outsideRange = 0;
+  let offChain = 0;
   const malformedNotes: string[] = [];
   // Malformed finalized terminal events on the pinned genesis that could be about this escrow.
   const suspectTerminals = new Set<string>();
@@ -229,6 +261,7 @@ export function escrowState(
     const onPinned = p["genesis"] === pinned;
     const fromBlock = p["from_block"] as number;
     const toBlock = p["to_block"] as number;
+    const onChain = !onPinned || reachable.has(page);
     for (const raw of p["events"] as unknown[]) {
       if (!isRecord(raw)) {
         if (onPinned) malformedNotes.push("an event that is not an object");
@@ -266,6 +299,7 @@ export function escrowState(
         block_number: typeof ev.block_number === "number" ? ev.block_number : null,
         index: ev.index,
         inRange,
+        onChain,
       };
       const list = groups.get(key);
       if (list) list.push(copy);
@@ -322,6 +356,15 @@ export function escrowState(
       }
       continue;
     }
+    if (copies.some((c) => !c.onChain)) {
+      // On a page the walk from page 0 never reaches: never evidence, and suspect, as above.
+      offChain++;
+      if (method !== OPENED && copies.some((c) => c.finalized)) {
+        const what = method === RELEASED ? "release" : "refund";
+        conflicts.push(`a finalized ${what} on a page not reachable from page 0 names this escrow (${where})`);
+      }
+      continue;
+    }
     duplicates += copies.length - 1;
     if (copies.some((c) => c.finalized !== true)) {
       pending++;
@@ -359,6 +402,9 @@ export function escrowState(
   if (outsideRange > 0) {
     notes.push(`${plural(outsideRange, "event")} outside its page's block range: never evidence`);
   }
+  if (offChain > 0) {
+    notes.push(`${plural(offChain, "event")} on a page not reachable from page 0: never evidence`);
+  }
   if (duplicates > 0) notes.push(`${plural(duplicates, "duplicate event")} counted once`);
   for (const m of malformedNotes) notes.push(`malformed event ignored: ${m}`);
 
@@ -380,15 +426,17 @@ export function escrowState(
 
   if (conflicts.length === 0) {
     if (released.length === 1) {
-      if (suspectTerminals.has(REFUNDED)) {
-        conflicts.push("a malformed finalized refund could be about this escrow");
+      // A malformed finalized release could be a second distinct release, and a refund contradicts
+      // it outright: either one leaves the escrow unverified.
+      if (suspectTerminals.size > 0) {
+        conflicts.push(`a malformed finalized ${[...suspectTerminals].sort().map((m) => (m === RELEASED ? "release" : "refund")).join(" and ")} could be about this escrow`);
       } else {
         state = "claimed";
         evidence = [...(opened.length === 1 ? opened : []), ...released];
       }
     } else if (refunded.length === 1) {
-      if (suspectTerminals.has(RELEASED)) {
-        conflicts.push("a malformed finalized release could be about this escrow");
+      if (suspectTerminals.size > 0) {
+        conflicts.push(`a malformed finalized ${[...suspectTerminals].sort().map((m) => (m === RELEASED ? "release" : "refund")).join(" and ")} could be about this escrow`);
       } else {
         state = "refunded";
         evidence = [...(opened.length === 1 ? opened : []), ...refunded];
@@ -408,6 +456,10 @@ export function escrowState(
   for (const c of conflicts) notes.push(`conflicting evidence: ${c}`);
   if (height === null && evidence.length > 0) {
     notes.push("evidence is not bounded by a finalized height: no finalized height from an RPC head on the pinned genesis");
+  }
+  const unbounded = evidence.filter((e) => e.block_number === null).length;
+  if (height !== null && unbounded > 0) {
+    notes.push(`${plural(unbounded, "evidence event")} with no block number, so the finalized height cannot bound it`);
   }
 
   return {

@@ -7,7 +7,8 @@
 #
 # Every run writes a new evidence directory and leaves earlier runs in place:
 #   check-runs/<source-sha>/<timestamp>-<runner>-<random>/
-#     report.txt          pin (revision, branch, dirty tree, tool versions), command, steps, exits
+#     report.txt          pin (revision, branch, dirty tree, tool versions), command, steps, exits,
+#                         and the outputs digest, which the last line of the log prints too
 #     steps.tsv           one line per step: name, command, exit code
 #     *.log               full output of each step
 #     vitest.json         machine-readable test results
@@ -80,8 +81,10 @@ step() {
 }
 
 finalize() {
-  local ended
+  local ended digest
   ended="$(utc)"
+  # One digest over every output file, the same command a rerun uses to compare outputs/.
+  digest="$(cd "$evidence/outputs" 2>/dev/null && find . -type f | LC_ALL=C sort | xargs -r sha256sum | sha256sum | cut -d' ' -f1)"
   {
     echo "source_sha: $source_sha"
     echo "git_branch: $git_branch"
@@ -98,6 +101,7 @@ finalize() {
     echo "ended_utc: $ended"
     echo "evidence_dir: check-runs/$source_sha/$run_id"
     echo "overall_exit: $overall"
+    echo "outputs_digest: ${digest:-none} (node $(node -v 2>/dev/null || echo missing); it holds for this Node version only)"
     for pin in "$evidence"/outputs/*/pin.json; do
       [ -f "$pin" ] || continue
       echo
@@ -110,16 +114,14 @@ finalize() {
     echo
     echo "checksum_note: SHA256SUMS hashes every other file in this directory. A match shows the bytes were not changed after the sums were written. It does not prove the commands ran, that the logs are complete, or that an exit of 0 means the tests passed truthfully. Rerun on the same revision in a fresh clone and compare outputs/."
   } >"$evidence/report.txt"
-  # Sums are written outside the directory first, so the sums file never lists itself.
+  # The sums are computed before the file exists, so the sums file never lists itself. No temp
+  # file, so a sandbox without mktemp still gets its sums.
   local sums
-  sums="$(mktemp)"
-  (
-    cd "$evidence" || exit 1
-    find . -type f ! -name SHA256SUMS -print0 | LC_ALL=C sort -z | xargs -0 -r sha256sum
-  ) >"$sums"
-  mv "$sums" "$evidence/SHA256SUMS"
+  sums="$(cd "$evidence" && find . -type f ! -name SHA256SUMS -print0 | LC_ALL=C sort -z | xargs -0 -r sha256sum)"
+  printf '%s\n' "$sums" >"$evidence/SHA256SUMS"
   chmod 644 "$evidence/SHA256SUMS"
   echo "evidence: check-runs/$source_sha/$run_id (overall exit $overall)"
+  echo "outputs digest: ${digest:-none} (node $(node -v 2>/dev/null || echo missing))"
 }
 trap finalize EXIT
 

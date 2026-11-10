@@ -54,5 +54,53 @@
     "replace": "  return Date.UTC(year, month - 1, day, hour, minute, second, millis) - offsetMinutes * 60_000;",
     "test": "test/strict.test.ts",
     "why": "a year below 100 must be read as written"
+  },
+  {
+    "id": "strict-duplicate-key-ignored",
+    "file": "src/strict.ts",
+    "find": "        if (top.keys.has(key)) return key;\n",
+    "replace": "",
+    "test": "test/strict.test.ts",
+    "why": "a key repeated in one object must be found"
+  },
+  {
+    "id": "strict-escaped-key-not-read",
+    "file": "src/strict.ts",
+    "find": "        const key = JSON.parse(text.slice(i, j + 1)) as string;",
+    "replace": "        const key = text.slice(i + 1, j);",
+    "test": "test/strict.test.ts",
+    "why": "\"a\" and \"\\u0061\" are the same key"
+  },
+  {
+    "id": "strict-closed-object-kept",
+    "file": "src/strict.ts",
+    "find": "    } else if (c === \"}\" || c === \"]\") {\n      stack.pop();",
+    "replace": "    } else if (c === \"]\") {\n      stack.pop();",
+    "test": "test/strict.test.ts",
+    "why": "a closed object's keys must not count against its parent"
+  },
+  {
+    "id": "strict-value-taken-as-key",
+    "file": "src/strict.ts",
+    "find": "        top.expectKey = false;\n",
+    "replace": "",
+    "test": "test/strict.test.ts",
+    "why": "a string value equal to a key is not a repeated key"
+  },
+  {
+    "id": "strict-nesting-counts-strings",
+    "file": "src/strict.ts",
+    "find": "    } else if (c === '\"') {\n      inString = true;\n    } else if (c === \"[\" || c === \"{\") {",
+    "replace": "    } else if (c === \"[\" || c === \"{\") {",
+    "test": "test/strict.test.ts",
+    "why": "a bracket inside a string is not nesting"
+  },
+  {
+    "id": "strict-nesting-escape-ignored",
+    "file": "src/strict.ts",
+    "find": "      if (c === \"\\\\\") i++;\n      else if (c === '\"') inString = false;",
+    "replace": "      if (c === '\"') inString = false;",
+    "test": "test/strict.test.ts",
+    "why": "an escaped quote does not end a string"
   }
 ]

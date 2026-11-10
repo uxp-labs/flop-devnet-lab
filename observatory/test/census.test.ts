@@ -5,7 +5,7 @@ import { lstatSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { census, CensusRefused, type CensusOptions } from "../src/census.js";
+import { census, CensusRefused, type CensusOptions, type RefusalKind } from "../src/census.js";
 import { FixtureSource } from "../src/source.js";
 import type { BlockRange, CensusCounts, CensusReport } from "../src/types.js";
 
@@ -175,6 +175,17 @@ const EXPECTED: Record<string, Expected & { reset_detected: boolean }> = {
     malformed_dropped: 1,
     reset_detected: false,
   },
+  "census-huge-integer": {
+    complete: true,
+    status: "complete",
+    covered: [r(0, 99)],
+    gaps: [],
+    totals: counts({ escrows_opened: 1 }),
+    by_account: { [alice]: { escrows_opened: 1 } },
+    ...quiet,
+    malformed_dropped: 1,
+    reset_detected: false,
+  },
   "census-page-written-as-float": {
     complete: true,
     status: "complete",
@@ -224,6 +235,28 @@ const REFUSING: Record<string, RegExp> = {
   "census-event-pages-link": /unusable event page file\(s\): event-pages: not a folder/,
   "census-byte-order-mark": /unusable event page file\(s\): event-pages\/00-page-0\.json: not valid JSON/,
   "census-negative-from-block": /event page 0: from_block -10 is negative/,
+  "census-duplicate-key": /unusable event page file\(s\): event-pages\/00-page-0\.json: the key "method" appears twice in one object/,
+  "census-file-before-structure": /unusable event page file\(s\): event-pages\/01-cut-off\.json: not valid JSON/,
+  "census-deep-nesting": /unusable event page file\(s\): event-pages\/00-page-0\.json: nested deeper than 64 levels/,
+};
+
+/** The reason each refusing fixture must name (clause 16); the recount must name the same one. */
+const REFUSAL_KIND: Record<string, RefusalKind> = {
+  "census-invalid-page": "page-structure",
+  "census-negative-page": "page-structure",
+  "census-unreadable-page": "page-file",
+  "census-nonstandard-json": "page-file",
+  "census-dotfile-page": "page-file",
+  "census-symlink-page": "page-file",
+  "census-unsafe-integer": "page-structure",
+  "census-invalid-utf8": "page-file",
+  "census-event-pages-file": "page-file",
+  "census-event-pages-link": "page-file",
+  "census-byte-order-mark": "page-file",
+  "census-negative-from-block": "page-structure",
+  "census-duplicate-key": "page-file",
+  "census-file-before-structure": "page-file",
+  "census-deep-nesting": "page-file",
 };
 
 /** The raw text of one fixture page file, exactly as written by hand. */
@@ -303,13 +336,25 @@ describe("census fixtures", () => {
   }
 
   for (const [name, why] of Object.entries(REFUSING)) {
-    it(`${name} refuses the whole census`, async () => {
+    it(`${name} refuses the whole census, naming its reason`, async () => {
       const { pages, meta, opts } = await load(name);
       expect(() => census(pages, opts)).toThrow(CensusRefused);
       expect(() => census(pages, opts)).toThrow(why);
+      let kind: RefusalKind | null = null;
+      try {
+        census(pages, opts);
+      } catch (e) {
+        kind = (e as CensusRefused).kind;
+        expect((e as Error).message.startsWith(`census refused (${kind}): `)).toBe(true);
+      }
+      expect(kind).toBe(REFUSAL_KIND[name]);
       expect(meta.description).toContain("Expected: the census refuses; no totals.");
     });
   }
+
+  it("every refusing fixture has a reason here", () => {
+    expect(Object.keys(REFUSAL_KIND).sort()).toEqual(Object.keys(REFUSING).sort());
+  });
 
   it("census-unreadable-page refuses only because of its unreadable file", async () => {
     const { pages, opts } = await load("census-unreadable-page");
@@ -468,6 +513,24 @@ describe("hand written fixtures keep their literal JSON text", () => {
     expect([...bytes.subarray(0, 3)]).toEqual([0xef, 0xbb, 0xbf]);
     expect(bytes.subarray(3).includes(0xef)).toBe(false);
     expect((JSON.parse(bytes.subarray(3).toString("utf8")) as { events: unknown[] }).events).toHaveLength(1);
+  });
+
+  it("census-huge-integer still holds an index literal 5000 digits long", () => {
+    const text = rawPage("census-huge-integer", "00-page-0.json");
+    expect(text).toMatch(/"index": 1(0{4999}),/);
+    expect((JSON.parse(text) as { events: { index: number }[] }).events[1]!.index).toBe(Number.POSITIVE_INFINITY);
+  });
+
+  it("census-deep-nesting still nests 100 arrays deep inside one event's data", () => {
+    const text = rawPage("census-deep-nesting", "00-page-0.json");
+    expect(text).toContain("[".repeat(100) + "1" + "]".repeat(100));
+  });
+
+  it("census-duplicate-key still holds the key method twice in one event, and JSON.parse keeps the last", () => {
+    const text = rawPage("census-duplicate-key", "00-page-0.json");
+    expect(text.match(/"method":/g)).toHaveLength(2);
+    expect(text).toMatch(/"method": "EscrowOpened",\s*"method": "EscrowReleased"/);
+    expect((JSON.parse(text) as { events: { method: string }[] }).events[0]!.method).toBe("EscrowReleased");
   });
 
   it("census-event-pages-file: event-pages really is a regular file that holds a valid page", () => {
@@ -1114,6 +1177,34 @@ describe("3.1 clause 13: invalid requests are refused", () => {
   });
   it("no pinned genesis is refused", () => {
     expect(() => census([], opts(0, 9, ""))).toThrow(CensusRefused);
+  });
+});
+
+describe("3.1 clause 16: a refusal names its reason, request first, then page files, then page structure", () => {
+  const kindOf = (f: () => unknown) => {
+    try {
+      f();
+    } catch (e) {
+      return e instanceof CensusRefused ? e.kind : "not a refusal";
+    }
+    return "no refusal";
+  };
+  const broken = { ...pg(0, 9, 0, null, []), page: -1 };
+
+  it("an invalid request is named before an unreadable page file and a broken page", () => {
+    expect(kindOf(() => census([broken], { ...opts(10, 9), unreadablePages: ["event-pages/x.json: not valid JSON"] }))).toBe("request");
+  });
+  it("an unreadable page file is named before a broken page", () => {
+    expect(kindOf(() => census([broken], { ...opts(0, 9), unreadablePages: ["event-pages/x.json: not valid JSON"] }))).toBe("page-file");
+  });
+  it("a broken page alone is a page structure problem", () => {
+    expect(kindOf(() => census([broken], opts(0, 9)))).toBe("page-structure");
+  });
+  it("no pinned genesis is an input problem", () => {
+    expect(kindOf(() => census([], opts(0, 9, "")))).toBe("input");
+  });
+  it("the message starts with the reason, the line the cross-check reads", () => {
+    expect(() => census([broken], opts(0, 9))).toThrow(/^census refused \(page-structure\): event page 0: page -1 is negative$/);
   });
 });
 

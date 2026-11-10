@@ -1,0 +1,58 @@
+[
+  {
+    "id": "cli-escrow-unreadable-pages-dropped",
+    "file": "src/cli.ts",
+    "find": "        unreadablePages: await src.eventPageErrors(),\n      }),\n    );\n    return;\n  }\n\n  if (cmd === \"census\") {",
+    "replace": "        unreadablePages: [],\n      }),\n    );\n    return;\n  }\n\n  if (cmd === \"census\") {",
+    "test": "scripts/cli-checks.mjs",
+    "why": "the escrow command must pass unreadable pages on, or an escrow is judged without them"
+  },
+  {
+    "id": "cli-census-unreadable-pages-dropped",
+    "file": "src/cli.ts",
+    "find": "        observedAt: one(a, \"--now\") ?? meta.now,\n        trust: src.trust,\n        unreadablePages: await src.eventPageErrors(),",
+    "replace": "        observedAt: one(a, \"--now\") ?? meta.now,\n        trust: src.trust,\n        unreadablePages: [],",
+    "test": "scripts/cli-checks.mjs",
+    "why": "the census command must refuse a scenario with an unreadable page file"
+  },
+  {
+    "id": "cli-snapshot-census-unreadable-pages-dropped",
+    "file": "src/cli.ts",
+    "find": "          observedAt: now,\n          trust: src.trust,\n          unreadablePages: await src.eventPageErrors(),",
+    "replace": "          observedAt: now,\n          trust: src.trust,\n          unreadablePages: [],",
+    "test": "scripts/cli-checks.mjs",
+    "why": "a snapshot must refuse a census with an unreadable page file"
+  },
+  {
+    "id": "cli-other-pin-accepted",
+    "file": "src/cli.ts",
+    "find": "      if (g !== undefined && g !== pinned) fail(`${dir} is pinned to genesis ${g}, but the snapshot is pinned to ${pinned}`);",
+    "replace": "",
+    "test": "scripts/cli-checks.mjs",
+    "why": "a snapshot describes one chain: a part pinned to another genesis is refused"
+  },
+  {
+    "id": "cli-broken-log-trusted",
+    "file": "src/cli.ts",
+    "find": "      if (broken !== null) fail(`snapshot log ${log} is broken at line ${broken}; it is never extended or trusted`);",
+    "replace": "",
+    "test": "scripts/cli-checks.mjs",
+    "why": "a log whose hash chain is broken is never extended or trusted"
+  },
+  {
+    "id": "cli-previous-last-line-only",
+    "file": "src/cli.ts",
+    "find": "      for (const { status: st } of readSnapshots(log)) {",
+    "replace": "      for (const { status: st } of readSnapshots(log).slice(-1)) {",
+    "test": "scripts/cli-checks.mjs",
+    "why": "a snapshot with no RPC reading in between must not hide a rollback"
+  },
+  {
+    "id": "mcp-bin-hash-not-checked",
+    "file": "src/mcp-bin.ts",
+    "find": "if (snapshot.hash !== hashSnapshot(snapshot)) {",
+    "replace": "if (false) {",
+    "test": "scripts/cli-checks.mjs",
+    "why": "the MCP binary must refuse a snapshot whose hash fails"
+  }
+]

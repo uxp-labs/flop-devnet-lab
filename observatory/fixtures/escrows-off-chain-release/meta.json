@@ -1,0 +1,11 @@
+{
+  "scenario": "escrows-off-chain-release",
+  "description": "Synthetic: escrow ids, block hashes, block numbers and indexes are made up. Only the genesis hash is real (faucet GET /chain and tclk/flop/VERIFICATION.md). Page 0 for blocks 100 to 199 is a complete chain on its own (next_page null) with finalized opens for a1 and b2. Page 3 for the same blocks is not reachable from page 0, so the census ignores it, and it holds a finalized release for a1. An event on such a page is never evidence and is suspect: a1 is unverified, not claimed, with a note. b2 is funded.",
+  "now": "2026-11-10T00:00:00Z",
+  "synthetic": true,
+  "escrow_ids": [
+    "0xa1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+    "0xb2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2"
+  ],
+  "pinned_genesis": "0x99c172c095340ace980631f9123544c6bebd4839f3437e463533422d8be2d631"
+}

@@ -6,9 +6,12 @@ These rules are the spec. Code and tests follow them, and the independent recoun
 ## 1. Unknown is never good news
 
 - A value we could not read is `null`, shown blank. It is never `ok`, never `0`, never "complete".
-- `reset_detected` is `false` only when both the faucet and the RPC report the pinned genesis.
-  If either disagrees it is `true`. If neither can be read it is `null`, and callers treat `null`
-  like `true` before spending.
+- `reset_detected` is `false` only when both a usable faucet `/chain` reading and a usable RPC
+  head report the pinned genesis (1.1 says what usable means). If a usable reading reports
+  another genesis it is `true`. Otherwise it is `null`, and callers treat `null` like `true`
+  before spending. An unusable reading counts for neither: it never makes the value `false`, and
+  never `true` either, though its genesis still shows in `genesis` and a disagreement with the
+  other source is still a conflict.
 
 ### 1.1 Health
 
@@ -24,6 +27,12 @@ check below to run and pass.
   a reading time that parses, is at most the stale limit old, and is not later than the snapshot
   time. Otherwise the faucet genesis is `null`, so `reset_detected` cannot be `false`. A `/chain`
   reading time later than the snapshot time is also a conflict.
+- The RPC genesis counts toward `reset_detected` only from a usable head: no read error, and an
+  `observed_at` that parses, is at most the stale limit old and is not later than the snapshot
+  time. `genesis.rpc` still shows what the head said. The same usable head is the only one whose
+  finalized height may bound escrow evidence (section 2).
+- Heights and the runtime version are safe integers (census clause 14). A finalized or best
+  height past 2^53 - 1 was already rounded by the JSON parser, so it is not a valid one.
 - A reading time later than the snapshot time is a conflict, noted in `conflicts`, whatever that
   reading's health.
 
@@ -46,10 +55,14 @@ check below to run and pass.
     ahead of it (30 blocks by default)
   - `observed_at` parses, is not later than the snapshot time, and is at most the stale limit old
     (120 seconds by default)
-  - when there is a previous snapshot on the same genesis: no rollback, no changed finalized hash,
-    and no finalized height stuck for longer than the stale limit. The snapshot command reads the
-    previous snapshot from its log, after verifying the log's hash chain (a broken log refuses),
-    and passes its RPC genesis, finalized head and RPC reading time to these checks.
+  - when earlier snapshots recorded a finalized head on the same genesis: no rollback below the
+    highest finalized height any of them saw, no changed hash at this height in any of them, and
+    no finalized height stuck for longer than the stale limit, counted from the oldest of the
+    latest run of snapshots at this same height. If a head time in that run does not parse, the
+    stuck check cannot run. The snapshot command reads the earlier snapshots from its log, after
+    verifying the log's hash chain (a broken log refuses), and passes every one that recorded a
+    finalized head, oldest first, so a snapshot in between with no RPC reading, or one on another
+    genesis, hides nothing.
 - Any failed check makes RPC health `degraded`. A missing or invalid genesis hash, finalized head
   or best height is a failed check. A missing or unparsable `observed_at` means the age check
   cannot run: health is `unknown` when nothing else failed.
@@ -77,7 +90,9 @@ check below to run and pass.
   note. One chain event is never evidence for two escrows.
 - A finalized `hasStation.EscrowReleased` or `hasStation.EscrowRefunded` on the pinned genesis
   whose escrow id does not parse cannot be tied to one escrow, so it could contradict any of them:
-  every escrow in the result that it could contradict is `unverified` with a note. This holds for
+  every escrow in the result that it could contradict is `unverified` with a note. A release
+  could be a second distinct release, so it contradicts a claimed escrow as surely as a refund
+  does, and the same holds for a refund against a refunded escrow. This holds for
   every such copy, whether the other copies of that event agree with it, disagree with it, or are
   well formed. More conflicting evidence never gives a more confident answer.
 - An event whose integer `block_number` is outside its page's block range is never evidence, and
@@ -94,9 +109,20 @@ check below to run and pass.
 - A finalized release or refund that names an escrow but lies above the finalized height leaves
   the escrow `unverified` with a note: the page calls it final, but our finalized head does not
   reach it yet.
-- A finalized height bounds the evidence only when it comes from an RPC head on the pinned
-  genesis. Otherwise (the RPC was not read, or reports another genesis) `finalized_height` is
-  `null`, and a result with evidence notes that its evidence is not bounded by a finalized height.
+- A finalized height bounds the evidence only when it comes from a usable RPC head on the pinned
+  genesis: no read error, and a head time that parses, is not later than the snapshot time and is
+  at most the stale limit old. Otherwise (the RPC was not read, the reading is not usable, or it
+  reports another genesis) `finalized_height` is `null`, and a result with evidence notes that its
+  evidence is not bounded by a finalized height.
+- An event with no `block_number` key is malformed (census clause 7). One whose `block_number`
+  is `null` is kept, but no finalized height can bound it, and a result whose evidence includes
+  one says so.
+- Escrow evidence follows census clause 2 on the pinned genesis. If any chain there is broken (no
+  page 0, a `next_page` that names a page that does not exist, a cycle, or copies of one page
+  number that disagree on `next_page`), every escrow is `unverified` with a note: the missing
+  page could hold a conflicting event. An event on a page that is not reachable from page 0 is
+  never evidence, and a finalized release or refund there that names an escrow leaves it
+  `unverified`, as for an event outside its page's range.
 - If any copy of an event is not finalized, the event is pending, never proof. This is the same
   rule as census clause 9.
 - If any event page in the input could not be read or parsed, or is structurally invalid (census
@@ -181,7 +207,11 @@ check below to run and pass.
     (block numbers start at 0), `events` not a list, or an inverted range) makes the whole census refuse with an error. So does an event page file that
     cannot be read, decoded as strict UTF-8, or parsed as standard JSON (RFC 8259: the text is
     UTF-8 with no byte order mark, and `NaN` and `Infinity` are not JSON). A byte that is not
-    valid UTF-8 refuses; it is never replaced and read around.
+    valid UTF-8 refuses; it is never replaced and read around. So does a key that appears twice
+    in one object, after its escapes are read: parsers differ on which copy wins, so the file has
+    no one meaning. So does a file whose arrays and objects nest deeper than 64 levels, checked
+    before parsing, so no parser's own stack limit decides. An integer literal too long to be a
+    safe integer is just that, an unsafe integer (clause 14), however many digits it has.
     Neither is ever turned into a partial count.
 13. A request with a negative `from_block` or `from_block` greater than `to_block` is refused.
 14. An integer is a JSON number with no fractional part, judged by value: `1.0` is the integer 1,
@@ -196,6 +226,15 @@ check below to run and pass.
     A symbolic link is not a regular file, even when it points to one. `event-pages` itself must
     be a folder, not a file or a link; otherwise the census refuses and every escrow is
     `unverified`.
+16. A refusal names its reason, and the Python recount names the same one:
+    - `request`: the request is invalid (clause 13);
+    - `page-file`: an event page file cannot be read, decoded or parsed, an entry in
+      `event-pages/` is not a page file, or `event-pages` is not a real folder (clauses 12 and
+      15). The refusal names the first such entry in name order, or `event-pages` itself;
+    - `page-structure`: a page file parses, but the page is structurally invalid (clause 12);
+    - `input`: anything else the census cannot start from, such as no pinned genesis.
+    A request problem is named before any page problem, and a page file problem before any page
+    structure problem, so both implementations name the same reason for the same input.
 
 ## 4. Read only
 
@@ -252,7 +291,14 @@ blank on the page and `null` in JSON and MCP.
   census banner sit outside a section table.
 - The drift item table's header cells carry `data-col` with the field each column shows and read
   that field's name, with underscores as spaces. Each field of a drift item is a column, named
-  once, and every drift row's cells follow the header's order.
+  once, and every drift row's cells follow the header's order. A `data-col` header exists only
+  there.
+- No text states a value the check does not compare: every `th` is a row label (`data-for`) or a
+  drift column (`data-col`); every row but the drift header holds a `td`; the title is
+  "FLOP Observatory"; and every piece of text outside a marked cell and a `th` is one of the
+  page's fixed words, in order, with the intro's `seq` equal to the snapshot's. `aria-label`
+  appears only as `unknown` on a blank unknown cell, and each cell's `class` is the one its value
+  calls for (`unk` for unknown, `h-<health>`, `s-<state>`, none otherwise).
 - Every `td` on the page carries `data-k`; a cell without one fails the check. The visible text of
   every marked element, nested tags included, must match its value as rendered below.
 - Every value sits where a person reads it:

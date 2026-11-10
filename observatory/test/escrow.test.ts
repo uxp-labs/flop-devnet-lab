@@ -101,9 +101,10 @@ function validate(schema: Schema, v: unknown, path = "$"): string[] {
 }
 
 describe("fixture scenarios", () => {
-  it("has all twenty-five escrow scenarios", () => {
+  it("has all twenty-eight escrow scenarios", () => {
     expect(scenarios).toEqual([
       "escrows-block-number-disagrees",
+      "escrows-broken-chain",
       "escrows-conflicting",
       "escrows-duplicate",
       "escrows-finality-disagrees",
@@ -112,6 +113,8 @@ describe("fixture scenarios", () => {
       "escrows-invalid-page",
       "escrows-malformed",
       "escrows-negative-block-number",
+      "escrows-no-block-number",
+      "escrows-off-chain-release",
       "escrows-one-event-two-escrows",
       "escrows-opened-only",
       "escrows-other-genesis",
@@ -563,8 +566,12 @@ describe("unreadable or invalid pages verify nothing", () => {
     const errors = await src.eventPageErrors();
     expect(errors.length).toBe(1);
     expect(errors[0]).toContain("001.json");
-    // The readable page alone would say claimed. That is the bug this rule closes.
-    expect(escrowState(A, pages, { ...o, unreadablePages: [] }).state).toBe("claimed");
+    // The readable page alone, as a complete chain, would say claimed. That is the bug this rule
+    // closes. With its own next_page 1 the chain is broken without the missing page as well.
+    expect(escrowState(A, pages.map((p) => ({ ...p, next_page: null })), { ...o, unreadablePages: [] }).state).toBe("claimed");
+    const blind = escrowState(A, pages, { ...o, unreadablePages: [] });
+    expect(blind.state).toBe("unverified");
+    expect(blind.notes.join(" ")).toContain("next_page 1 on page 0 names a page that does not exist");
     const got = escrowStates(expected.escrows.map((e) => e.id), pages, o);
     for (const s of got) {
       expect(s.state).toBe("unverified");
@@ -605,7 +612,8 @@ describe("unreadable or invalid pages verify nothing", () => {
   it("fixture: a page without to_block makes every escrow unverified", async () => {
     const { expected, pages, o } = await loadScenario("escrows-invalid-page");
     expect(pages.length).toBe(2);
-    expect(escrowState(A, pages.slice(0, 1), o).state).toBe("claimed");
+    expect(escrowState(A, [{ ...pages[0]!, next_page: null }], o).state).toBe("claimed");
+    expect(escrowState(A, pages.slice(0, 1), o).state).toBe("unverified");
     const got = escrowStates(expected.escrows.map((e) => e.id), pages, o);
     for (const s of got) {
       expect(s.state).toBe("unverified");
@@ -721,9 +729,21 @@ describe("conflict rules for distinct events", () => {
     expect(s.state).toBe("unverified");
     expect(s.notes).toContain("conflicting evidence: a malformed finalized refund could be about this escrow");
   });
-  it("control: a refund plus a malformed finalized refund stays refunded", () => {
+  it("a refund plus a malformed finalized refund is unverified: the malformed one could be a second refund", () => {
     const pages = [page([ev("EscrowRefunded", A, 3), { ...ev("EscrowRefunded", A, 4), index: "0" }])];
-    expect(escrowState(A, pages, opts).state).toBe("refunded");
+    const s = escrowState(A, pages, opts);
+    expect(s.state).toBe("unverified");
+    expect(s.notes).toContain("conflicting evidence: a malformed finalized refund could be about this escrow");
+  });
+  it("an open and a release plus a finalized release whose id does not parse is unverified, as two distinct releases are (IMD follow-up audit)", () => {
+    const bad = { ...ev("EscrowReleased", A, 5), data: { "0": "not-an-id" } };
+    const s = escrowState(A, [page([ev("EscrowOpened", A, 1), ev("EscrowReleased", A, 2), bad])], opts);
+    expect(s.state).toBe("unverified");
+    expect(s.notes).toContain("conflicting evidence: a malformed finalized release could be about this escrow");
+    const two = escrowState(A, [page([ev("EscrowOpened", A, 1), ev("EscrowReleased", A, 2), ev("EscrowReleased", A, 5)])], opts);
+    expect(two.state).toBe("unverified");
+    const refundBad = { ...ev("EscrowRefunded", A, 6), data: { "0": "not-an-id" } };
+    expect(escrowState(A, [page([ev("EscrowRefunded", A, 3), refundBad])], opts).state).toBe("unverified");
   });
 });
 
@@ -975,3 +995,73 @@ describe("a negative block_number is an integer, handled by the page range rule"
     expect(a.notes.some((n) => n.startsWith("malformed event ignored"))).toBe(false);
   });
 });
+
+describe("IMD follow-up audit: an event with no block_number key is malformed (census clause 7)", () => {
+  const noNumber = (method: string, n: number) => {
+    const { block_number: _b, ...rest } = ev(method, A, n);
+    return rest;
+  };
+  it("an open and a release with no block_number key are ignored with a note, never claimed", () => {
+    const s = escrowState(A, [page([noNumber("EscrowOpened", 1), noNumber("EscrowReleased", 2)])], opts);
+    expect(s.state).toBe("unverified");
+    expect(s.evidence).toEqual([]);
+    expect(s.notes).toContain("malformed event ignored: hasStation.EscrowReleased (block_number is missing)");
+  });
+  it("a finalized release with no block_number key leaves a funded escrow unverified, as any malformed terminal does", () => {
+    const s = escrowState(A, [page([ev("EscrowOpened", A, 1), noNumber("EscrowReleased", 2)])], { ...opts, finalizedHeight: 1000 });
+    expect(s.state).toBe("unverified");
+    expect(s.notes.join(" ")).toContain("a malformed finalized terminal event could be about this escrow");
+  });
+  it("an explicit null block_number is kept, and the result says the finalized height cannot bound it", () => {
+    const s = escrowState(A, [page([ev("EscrowOpened", A, 1, { block_number: null })])], { ...opts, finalizedHeight: 1000 });
+    expect(s.state).toBe("funded");
+    expect(s.notes).toContain("1 evidence event with no block number, so the finalized height cannot bound it");
+    expect(escrowState(A, [page([ev("EscrowOpened", A, 1)])], { ...opts, finalizedHeight: 1000 }).notes.join(" ")).not.toContain("no block number");
+  });
+  it("fixture: a1 unverified, b2 funded with the note", async () => {
+    const { expected, pages, o } = await loadScenario("escrows-no-block-number");
+    const [a, b] = escrowStates(expected.escrows.map((e) => e.id), pages, o) as [EscrowState, EscrowState];
+    expect([a.state, b.state]).toEqual(["unverified", "funded"]);
+    expect(a.notes.join(" ")).toContain("block_number is missing");
+    expect(b.notes.join(" ")).toContain("finalized height cannot bound it");
+  });
+});
+
+describe("IMD follow-up audit: escrow pages follow census clause 2", () => {
+  const p = (events: unknown[], n: number, next: number | null, over: Partial<EventPage> = {}) => ({ ...page(events), page: n, next_page: next, ...over });
+  it("a complete two page chain counts both pages", () => {
+    expect(escrowState(A, [p([ev("EscrowOpened", A, 1)], 0, 1), p([ev("EscrowReleased", A, 2)], 1, null)], opts).state).toBe("claimed");
+  });
+  it.each([
+    ["a next_page that names a missing page", [p([ev("EscrowOpened", A, 1)], 0, 1)], "next_page 1 on page 0 names a page that does not exist"],
+    ["no page 0", [p([ev("EscrowOpened", A, 1)], 1, null)], "there is no page 0"],
+    ["a cycle", [p([ev("EscrowOpened", A, 1)], 0, 1), p([], 1, 0)], "makes a cycle"],
+    ["copies of one page that disagree on next_page", [p([ev("EscrowOpened", A, 1)], 0, null), p([], 0, 2), p([], 2, null)], "copies of page 0 disagree on next_page"],
+  ])("%s on the pinned genesis verifies nothing, with a note naming the chain", (_name, pages, why) => {
+    const s = escrowState(A, pages as EventPage[], opts);
+    expect(s.state).toBe("unverified");
+    expect(s.evidence).toEqual([]);
+    expect(s.notes.join(" ")).toContain("the page chain for blocks 100 to 199 is broken");
+    expect(s.notes.join(" ")).toContain(why);
+  });
+  it("a broken chain on another genesis does not matter: those pages never count", () => {
+    const other = "0x" + "cd".repeat(32);
+    expect(escrowState(A, [p([ev("EscrowOpened", A, 1)], 0, null), p([], 0, 1, { genesis: other })], opts).state).toBe("funded");
+  });
+  it("an event on a page not reachable from page 0 is never evidence, and a finalized release there leaves the escrow unverified", () => {
+    const s = escrowState(A, [p([ev("EscrowOpened", A, 1)], 0, null), p([ev("EscrowReleased", A, 2)], 3, null)], opts);
+    expect(s.state).toBe("unverified");
+    expect(s.notes).toContain("1 event on a page not reachable from page 0: never evidence");
+    expect(s.notes.join(" ")).toContain("a finalized release on a page not reachable from page 0 names this escrow");
+    const openOnly = escrowState(A, [p([ev("EscrowOpened", A, 1)], 0, null), p([ev("EscrowOpened", A, 2)], 3, null)], opts);
+    expect(openOnly.state).toBe("funded");
+    expect(openOnly.evidence.map((e) => e.block_hash)).toEqual([bh(1)]);
+  });
+  it("fixtures: the broken chain verifies nothing, the off chain release leaves a1 unverified and b2 funded", async () => {
+    for (const [name, want] of [["escrows-broken-chain", ["unverified", "unverified"]], ["escrows-off-chain-release", ["unverified", "funded"]]] as const) {
+      const { expected, pages, o } = await loadScenario(name);
+      expect(escrowStates(expected.escrows.map((e) => e.id), pages, o).map((s) => s.state)).toEqual(want);
+    }
+  });
+});
+

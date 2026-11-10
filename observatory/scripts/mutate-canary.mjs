@@ -1,18 +1,24 @@
 #!/usr/bin/env node
 // Proves the mutation runner itself classifies correctly, so its "killed" can be trusted.
-// Four throwaway mutants go through scripts/mutate.mjs:
+// Seven throwaway mutants go through scripts/mutate.mjs:
 //   a real bug               must be "killed"
 //   an equivalent change     must be "survived" (an untyped cast changes nothing at run time)
 //   a syntax error           must be "load-error", never a kill
 //   a missing test file      must be "invalid"
-// The runner must also exit 1, because three of the four are not kills.
+//   a "$$" in a replacement  must be written as it is, so the bug it makes is "killed"; were it
+//                            substituted to "$", the change would be a no-op and survive
+//   a command line bug       checked by scripts/cli-checks.mjs on a fresh build: "killed"
+//   a command line no-op     the same way: "survived", so a script test is not always a kill
+// The runner must also exit 1, because four of the seven are not kills.
 // Two more checks prove the copy the runner works in:
 //   in a throwaway git repo, the copy holds exactly the tracked files: an untracked file is left
 //   out, a tracked file deleted from the working tree is listed as missing, a link stays a link
 //   when git cannot list the files, the runner reports "setup-failed" as JSON and exits 1
+// And one more: with the temp folder reached through a symbolic link (as on stock macOS), the
+// runner still maps vitest's real file names back, so its controls pass and the real bug is killed.
 // Exit 0 only when every outcome is the expected one.
 import { spawnSync } from "node:child_process";
-import { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readlinkSync, readdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, readlinkSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -48,6 +54,33 @@ const mutants = [
     why: "breaks loading only",
   },
   {
+    id: "canary-dollar-pattern",
+    expect: "killed",
+    file: "src/guard.ts",
+    find: "if (!READ_ONLY_RPC_METHODS.has(method)) {",
+    replace: 'if (!READ_ONLY_RPC_METHODS.has(method) && "$$" === "$") {',
+    test: "test/guard.test.ts",
+    why: "written as is, the condition is never true and every RPC write passes",
+  },
+  {
+    id: "canary-script-real-bug",
+    expect: "killed",
+    file: "src/cli.ts",
+    find: "      if (broken !== null) fail(`snapshot log ${log} is broken at line ${broken}; it is never extended or trusted`);",
+    replace: "",
+    test: "scripts/cli-checks.mjs",
+    why: "a broken log would be extended and trusted",
+  },
+  {
+    id: "canary-script-equivalent",
+    expect: "survived",
+    file: "src/cli.ts",
+    find: "      if (broken !== null) fail(`snapshot log ${log} is broken at line ${broken}; it is never extended or trusted`);",
+    replace: "      if (broken !== null) fail(`snapshot log ${log} is broken at line ${broken}; it is never extended or trusted`); // unchanged",
+    test: "scripts/cli-checks.mjs",
+    why: "a comment changes nothing",
+  },
+  {
     id: "canary-missing-test",
     expect: "invalid",
     file: "src/guard.ts",
@@ -58,7 +91,7 @@ const mutants = [
   },
 ];
 
-const work = mkdtempSync(join(tmpdir(), "obs-mutate-canary-"));
+const work = realpathSync(mkdtempSync(join(tmpdir(), "obs-mutate-canary-")));
 const file = join(work, "mutants.json");
 writeFileSync(file, JSON.stringify(mutants.map(({ expect: _e, ...m }) => m), null, 2));
 const r = spawnSync("node", [join(pkg, "scripts", "mutate.mjs"), file], { cwd: pkg, encoding: "utf8" });
@@ -79,7 +112,7 @@ const controls = { control_before: report?.control_before?.outcome ?? "missing",
 
 // The copy: exactly the tracked files, in a throwaway repo with one of each kind of entry.
 function copyCheck() {
-  const box = mkdtempSync(join(tmpdir(), "obs-copy-canary-"));
+  const box = realpathSync(mkdtempSync(join(tmpdir(), "obs-copy-canary-")));
   try {
     const src = join(box, "repo");
     mkdirSync(join(src, "sub"), { recursive: true });
@@ -113,7 +146,7 @@ function copyCheck() {
 const copy = copyCheck();
 
 // A copy that cannot be made is a structured setup failure, never a crash or a result.
-const box = mkdtempSync(join(tmpdir(), "obs-setup-canary-"));
+const box = realpathSync(mkdtempSync(join(tmpdir(), "obs-setup-canary-")));
 const one = join(box, "mutants.json");
 writeFileSync(one, JSON.stringify([{ ...mutants[0], expect: undefined }].map(({ expect: _e, ...m }) => m)));
 const f = spawnSync("node", [join(pkg, "scripts", "mutate.mjs"), one], { cwd: pkg, encoding: "utf8", env: { ...process.env, GIT_DIR: join(box, "no-such-git") } });
@@ -133,12 +166,40 @@ const setupFailure = {
       : "reported-wrong",
 };
 
+// The temp folder through a link: TMPDIR names a link to a real folder.
+const linkBox = realpathSync(mkdtempSync(join(tmpdir(), "obs-link-canary-")));
+const realTmp = join(linkBox, "real");
+mkdirSync(realTmp);
+symlinkSync(realTmp, join(linkBox, "link"));
+const viaLink = spawnSync("node", [join(pkg, "scripts", "mutate.mjs"), one2()], { cwd: pkg, encoding: "utf8", env: { ...process.env, TMPDIR: join(linkBox, "link") } });
+function one2() {
+  const f2 = join(linkBox, "real-bug.json");
+  writeFileSync(f2, JSON.stringify([mutants[0]].map(({ expect: _e, ...m }) => m)));
+  return f2;
+}
+let linked = null;
+try {
+  linked = JSON.parse(viaLink.stdout);
+} catch {
+  linked = null;
+}
+rmSync(linkBox, { recursive: true, force: true });
+const throughLink = {
+  check: "with the temp folder reached through a link, the controls pass and the real bug is killed",
+  exit: viaLink.status,
+  outcome:
+    viaLink.status === 0 && linked?.summary?.control_before === "control-pass" && linked?.summary?.control_after === "control-pass" && linked?.results?.[0]?.outcome === "killed"
+      ? "mapped-right"
+      : "mapped-wrong",
+};
+
 const ok =
   results.every((x) => x.outcome === "classified-right") &&
   r.status === 1 &&
   controls.control_before === "control-pass" &&
   controls.control_after === "control-pass" &&
   copy.outcome === "copied-right" &&
-  setupFailure.outcome === "reported-right";
-console.log(JSON.stringify({ results, runner_exit: runnerExit, ...controls, copy, setup_failure: setupFailure }, null, 2));
+  setupFailure.outcome === "reported-right" &&
+  throughLink.outcome === "mapped-right";
+console.log(JSON.stringify({ results, runner_exit: runnerExit, ...controls, copy, setup_failure: setupFailure, through_link: throughLink }, null, 2));
 process.exit(ok ? 0 : 1);
