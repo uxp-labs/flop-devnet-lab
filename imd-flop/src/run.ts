@@ -16,7 +16,7 @@ import { classifyReceipt, type Classified } from "./receipts.js";
 import { holdCharge, isFreshRead, nextBooking, receiptIdentity } from "./settlement.js";
 import { receiptPath, writeReceipt } from "./receipt-store.js";
 import type { Provider } from "./providers.js";
-import { assertPaidNetwork, checkImdJob, PreSendError, readVerifiedSeatOwner, type Fetch } from "./gateway.js";
+import { assertPaidNetwork, checkImdJob, PaidGateError, PreSendError, readVerifiedSeatOwner, type Fetch } from "./gateway.js";
 import { FlopHTTPError } from "@flop-labs/client";
 import { matchReceipt } from "./match.js";
 import { latestAttempts } from "./ledger.js";
@@ -208,7 +208,8 @@ export async function runJob(h: string, provider: Provider, o: RunOpts, deps: { 
     if (timedOut) {
       throw new CliError(`no answer within ${o.timeoutMs} ms. Spend is UNKNOWN (recorded as null). Not retried. Check later with \`imd-flop receipt ${requestId}\`.`, EXIT.TIMEOUT_UNKNOWN);
     }
-    if (preSend) throw new CliError(preSendWithheld ? reason : `nothing sent: ${err.message}`, EXIT.ERROR);
+    // The gate refusing at its pre-mint recheck is the same rule refusal as at the first check above.
+    if (preSend) throw new CliError(preSendWithheld ? reason : `nothing sent: ${err.message}`, e instanceof PaidGateError ? EXIT.REFUSED_RULE : EXIT.ERROR);
     throw new CliError(`gateway refused the call (HTTP ${http}); spend recorded as unknown`, EXIT.ERROR);
   } finally {
     clearTimeout(timer);

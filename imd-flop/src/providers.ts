@@ -142,11 +142,8 @@ export class FlopProvider implements Provider {
       if (req.signal.aborted) throw new PreSendError(`aborted before send (${stage}): ${(req.signal.reason as Error | undefined)?.message ?? "aborted"}`);
     };
     notAborted("before the network check");
-    try {
-      await assertPaidNetwork(this.net, this.ethRpc, this.f);
-    } catch (e) {
-      throw new PreSendError((e as Error).message);
-    }
+    // Throws PaidGateError, a PreSendError: the gate runs before the mint, so nothing was sent.
+    await assertPaidNetwork(this.net, this.ethRpc, this.f);
     notAborted("after the network check");
     this.calls++;
     // Spend-guard rule 3: the broad key only mints a single-use child capped at this call's quote.

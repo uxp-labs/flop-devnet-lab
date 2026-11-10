@@ -468,7 +468,8 @@ describe("FlopProvider.complete refuses before the child-key mint", () => {
     (globalThis as { WebSocket: unknown }).WebSocket = SeqWS;
     try {
       const r = await cli(h, RUN, { fetch: fetchImpl, env: { IMD_FLOP_HOME: h, ETH_RPC_URL: ETH } });
-      expect(r.code).toBe(1);
+      // The same refusal as at the first gate, so the same exit code (audit ba164ffa finding 6; was 1).
+      expect(r.code).toBe(5);
       expect(r.err).toMatch(/nothing sent/);
       expect(r.err).toMatch(/genesis mismatch/);
       expect(r.err).toContain(PIN);

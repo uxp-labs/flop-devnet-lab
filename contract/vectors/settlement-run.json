@@ -271,6 +271,84 @@
    "note": "[fix: TS-M1 + residual-a] a receipt for another request_id no longer moves the ledger state; was states [sent, settled], last {settled, null, 0.186}"
   },
   {
+   "id": "run-estimated-with-settled-amount",
+   "rule": "settlement.run",
+   "input": {
+    "read": {
+     "http": 200,
+     "error": null,
+     "receipt": {
+      "request_id": "$rid",
+      "correlation_id": "imd-job-j1",
+      "model": "m",
+      "reserved_spend": 0.186,
+      "settled_spend": 0.01,
+      "state": "estimated"
+     }
+    }
+   },
+   "expect": {
+    "imd-flop": {
+     "exit": 0,
+     "states": [
+      "sent",
+      "estimated"
+     ],
+     "last": {
+      "state": "estimated",
+      "spend": null,
+      "cap_charge": 0.186
+     }
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard is a dry run: it writes spend 0 and keeps no reservation or settlement"
+    },
+    "viewer": {
+     "not_applicable": "viewer renders ledger rows; it never writes them"
+    }
+   },
+   "note": "[audit ba164ffa finding 2] a settled amount on a receipt that is still estimated settles nothing: the reservation stays"
+  },
+  {
+   "id": "run-reserved-with-settled-amount",
+   "rule": "settlement.run",
+   "input": {
+    "read": {
+     "http": 200,
+     "error": null,
+     "receipt": {
+      "request_id": "$rid",
+      "correlation_id": "imd-job-j1",
+      "model": "m",
+      "reserved_spend": 0.186,
+      "settled_spend": 0.01,
+      "state": "reserved"
+     }
+    }
+   },
+   "expect": {
+    "imd-flop": {
+     "exit": 0,
+     "states": [
+      "sent",
+      "reserved"
+     ],
+     "last": {
+      "state": "reserved",
+      "spend": null,
+      "cap_charge": 0.186
+     }
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard is a dry run: it writes spend 0 and keeps no reservation or settlement"
+    },
+    "viewer": {
+     "not_applicable": "viewer renders ledger rows; it never writes them"
+    }
+   },
+   "note": "[audit ba164ffa finding 2] a settled amount on a receipt that is still reserved settles nothing: the reservation stays"
+  },
+  {
    "id": "run-unknown-state",
    "rule": "settlement.run",
    "input": {

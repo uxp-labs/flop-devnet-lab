@@ -14,6 +14,15 @@ export class PreSendError extends Error {
   override name = "PreSendError";
 }
 
+/**
+ * The paid-run gate refused: a wrong chain, a reset, or a source it could not read. The gate runs
+ * before any quote, mint or send, so its refusal is a PreSendError wherever it is raised, and a rule
+ * refusal (exit 5) at the pre-mint recheck exactly as at the first check.
+ */
+export class PaidGateError extends PreSendError {
+  override name = "PaidGateError";
+}
+
 export function uaFetch(base: Fetch = globalThis.fetch): Fetch {
   return (input, init = {}) => {
     const headers = new Headers(init.headers);
@@ -200,6 +209,35 @@ export async function checkImdJob(jobId: string, f: Fetch = globalThis.fetch): P
 }
 
 const CHAIN_ID_RE = /^0x[0-9a-f]+$/i;
+/** Stands in for the caller's Ethereum RPC URL wherever a message would have repeated it. */
+const ETH_RPC_URL_MARK = "[ETH_RPC_URL]";
+
+/**
+ * One read-only POST to the caller's Ethereum JSON-RPC URL: the single place that URL is used.
+ * The URL often carries a key (userinfo or a path token), so no message from here quotes it. It is
+ * parsed before fetch, because fetch's own parse error repeats the whole URL, and a transport error
+ * that repeats it has it replaced.
+ */
+async function postEthRpc(rpcUrl: string, call: { method: string; params: unknown[] }, f: Fetch, timeoutMs: number): Promise<Response> {
+  let href: string;
+  try {
+    const url = new URL(rpcUrl);
+    if (url.protocol !== "http:" && url.protocol !== "https:") throw new Error("not http(s)");
+    href = url.href;
+  } catch {
+    throw new Error("the Ethereum RPC URL is not a valid http(s) URL");
+  }
+  try {
+    return await uaFetch(f)(rpcUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: call.method, params: call.params }),
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+  } catch (e) {
+    throw new Error((e as Error).message.split(rpcUrl).join(ETH_RPC_URL_MARK).split(href).join(ETH_RPC_URL_MARK));
+  }
+}
 
 /**
  * eth_chainId on a caller-supplied Ethereum JSON-RPC URL (read only).
@@ -208,12 +246,7 @@ const CHAIN_ID_RE = /^0x[0-9a-f]+$/i;
 export async function readEthereumChainId(rpcUrl: string, f: Fetch = globalThis.fetch, timeoutMs = 15000): Promise<bigint> {
   let res: Response;
   try {
-    res = await uaFetch(f)(rpcUrl, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Accept: "application/json" },
-      body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "eth_chainId", params: [] }),
-      signal: AbortSignal.timeout(timeoutMs),
-    });
+    res = await postEthRpc(rpcUrl, { method: "eth_chainId", params: [] }, f, timeoutMs);
   } catch (e) {
     throw new Error(`eth_chainId unavailable: ${(e as Error).message}`);
   }
@@ -249,9 +282,17 @@ export async function readVerifiedSeatOwner(rpcUrl: string, collection: string, 
 /**
  * Preconditions for a paid FLOP call: Ethereum chain id of the seat collection,
  * and live faucet + RPC genesis both equal to the pinned devnet hash.
- * Throws on a wrong chain, a reset, or any unavailable or malformed response.
+ * Throws PaidGateError on a wrong chain, a reset, or any unavailable or malformed response.
  */
 export async function assertPaidNetwork(net: NetworkInfo, ethRpc: string | undefined, f: Fetch = globalThis.fetch): Promise<void> {
+  try {
+    await checkPaidNetwork(net, ethRpc, f);
+  } catch (e) {
+    throw new PaidGateError((e as Error).message);
+  }
+}
+
+async function checkPaidNetwork(net: NetworkInfo, ethRpc: string | undefined, f: Fetch): Promise<void> {
   if (!ethRpc || ethRpc.trim() === "") {
     throw new Error(`paid FLOP calls need ETH_RPC_URL (an Ethereum JSON-RPC URL whose eth_chainId is ${SEAT_CHAIN_ID})`);
   }
@@ -274,12 +315,7 @@ export async function assertPaidNetwork(net: NetworkInfo, ethRpc: string | undef
  */
 export async function readSeatOwner(rpcUrl: string, collection: string, tokenId: string, f: Fetch = globalThis.fetch, timeoutMs = 15000): Promise<string | null> {
   const data = "0x6352211e" + BigInt(tokenId).toString(16).padStart(64, "0");
-  const res = await uaFetch(f)(rpcUrl, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Accept: "application/json" },
-    body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "eth_call", params: [{ to: collection, data }, "latest"] }),
-    signal: AbortSignal.timeout(timeoutMs),
-  });
+  const res = await postEthRpc(rpcUrl, { method: "eth_call", params: [{ to: collection, data }, "latest"] }, f, timeoutMs);
   if (!res.ok) throw new Error(`eth_call HTTP ${res.status}`);
   const j = (await res.json()) as { result?: string; error?: { message?: string } };
   if (j.error) return null;
