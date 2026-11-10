@@ -3,7 +3,9 @@
 // the escrows, a snapshot refuses parts pinned to another chain, and the status health rules
 // show up in the command's output. The MCP binary (dist/mcp-bin.js) serves a snapshot whose hash
 // verifies and refuses one whose hash fails, one read lossily or with a key twice, and an object
-// that hashes to itself but is no snapshot. Unit tests cover the modules; this covers the plumbing.
+// that hashes to itself but is no snapshot, naming the checks a refused snapshot breaks (each
+// check is tested on its own in test/snapshot-check.test.ts). Unit tests cover the modules; this
+// covers the plumbing.
 // Prints a JSON array; exit 1 on any failed expectation.
 import { spawnSync } from "node:child_process";
 import { cpSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
@@ -401,198 +403,59 @@ const cases = [
       writeFileSync(bad, feedText({ hash: hashSnapshot({}) }));
       return mcp(bad);
     },
-    ok: (r) => r.exit === 2 && r.stdout === "" && /is not an observatory snapshot; refusing to serve it/.test(r.stderr),
+    ok: (r) => r.exit === 2 && r.stdout === "" && r.stderr.endsWith("is not an observatory snapshot; refusing to serve it (it breaks snapshot.fields)"),
   },
   {
     name: "the MCP binary refuses a hashed snapshot whose parts are empty shells",
     run: () => {
-      // Only the status is an empty shell. The pin agreements refuse it too (a pin genesis of none
-      // against a status with no genesis); the variants case below proves the status check alone.
+      // Only the status is an empty shell, so it is the one check broken: the agreements are read
+      // only once every shape holds.
       const pin = { source_sha: null, source: "fixture:none", genesis: null, finalized_height: null, finalized_hash: null, node: "v22.23.4" };
       const s = { schema: "flop-observatory/snapshot@0", observed_at: "2026-11-10T00:00:00Z", trust: "fixture", pin, status: {}, escrows: [], census: null, drift: null, seq: 0, prev_hash: null };
       const bad = join(work, "mcp-empty-parts.json");
       writeFileSync(bad, feedText({ ...s, hash: hashSnapshot(s) }));
       return mcp(bad);
     },
-    ok: (r) => r.exit === 2 && r.stdout === "" && /is not an observatory snapshot; refusing to serve it/.test(r.stderr),
+    ok: (r) => r.exit === 2 && r.stdout === "" && r.stderr.endsWith("is not an observatory snapshot; refusing to serve it (it breaks status.fields)"),
   },
   {
-    name: "the MCP binary refuses a hashed snapshot that lacks a field, holds one its schema does not or one of the wrong type, at any level, or whose settlement values do not agree",
+    // Every check and its case live in src/snapshot-check.ts and test/snapshot-check.test.ts. This
+    // shows the binary refuses on the module's verdict and names what it found, end to end.
+    name: "the MCP binary serves a hashed snapshot every check passes, and refuses one that breaks a check, naming the checks it breaks",
     run: () => {
       const out = join(work, "mcp-snap-escrows");
       const made = cli("snapshot", "--status", fx("status-healthy"), "--escrows", fx("escrows-verification"), "--out", out);
       if (made.exit !== 0) return { ...made, runs: [] };
       const s0 = JSON.parse(readFileSync(join(out, "snapshot.json"), "utf8"));
-      const variant = (name, edit) => {
+      const variant = (name, edit, breaks) => {
         const { hash: _hash, ...s } = structuredClone(s0);
         edit(s);
-        const p = join(work, `mcp-${name.replace(":", "-")}.json`);
+        const p = join(work, `mcp-${name}.json`);
         writeFileSync(p, feedText({ ...s, hash: hashSnapshot(s) }));
-        return { name, ...mcp(p) };
+        return { name, breaks, ...mcp(p) };
       };
       const runs = [
-        variant("honest", () => {}),
-        variant("schema-shell", (s) => {
-          s.status = { schema: s.status.schema };
-          s.escrows = [{ schema: "flop-observatory/escrow-state@0", escrow_id: s.escrows[0].escrow_id, state: "claimed" }];
-        }),
-        variant("escrow-extra-field", (s) => (s.escrows[0].approved = true)),
-        variant("status-reset-a-word", (s) => (s.status.reset_detected = "no")),
-        variant("escrow-state-invented", (s) => (s.escrows[0].state = "settled")),
-        // Round 9 review L6: ids get_escrow_state cannot answer for, and a status that says nothing.
-        variant("escrow-id-not-hex", (s) => (s.escrows[0].escrow_id = "x")),
-        // The refunded escrow under the claimed one's id: one id with two states, each on its own events.
-        variant("escrow-listed-twice", (s) => (s.escrows[1].escrow_id = s.escrows[0].escrow_id)),
-        variant("genesis-extra-field", (s) => (s.status.genesis.approved = s.status.genesis.pinned)),
-        variant("rpc-health-a-word", (s) => (s.status.rpc.health = "great")),
-        // Round 10 review I3: values their own fields contradict.
-        variant("claimed-with-no-evidence", (s) => {
-          s.escrows[0].state = "claimed";
-          s.escrows[0].evidence = [];
-        }),
-        variant("reset-false-with-no-rpc-genesis", (s) => {
-          s.status.genesis.rpc = null;
-          s.pin.genesis = null;
-          // No head on the pinned genesis bounds anything, so the bound rules have nothing to refuse.
-          for (const e of s.escrows) e.finalized_height = null;
-        }),
-        variant("snapshot-trust-a-word", (s) => {
-          s.status.trust = "trusted RPC";
-          for (const e of s.escrows) e.trust = "trusted RPC";
-          s.trust = "certified";
-        }),
-        // Round 10 review I3, the two rules its proof left out (sixth rerun U2).
-        variant("reset-true-on-the-pinned-genesis", (s) => (s.status.reset_detected = true)),
-        variant("unverified-with-evidence", (s) => {
-          const u = s.escrows.find((e) => e.state === "unverified");
-          if (!u) throw new Error("no unverified escrow to give evidence to");
-          // An event of its own, so the rule that an event is evidence once has nothing to refuse.
-          u.evidence = [{ ...structuredClone(s.escrows[0].evidence[0]), event_index: s.escrows[0].evidence[0].event_index + 7 }];
-        }),
-        // Sixth rerun U1: every field of every object has its type, and the settlement values agree.
-        // Each edit breaks one rule and leaves every other one met.
-        variant("gateway-extra-field", (s) => (s.status.gateway.approved = true)),
-        variant("gateway-http-a-word", (s) => (s.status.gateway.http = "200")),
-        variant("rpc-stale-a-word", (s) => (s.status.rpc.stale = "no")),
-        variant("faucet-ready-a-word", (s) => (s.status.faucet.ready = "yes")),
-        variant("faucet-limits-a-word", (s) => (s.status.faucet.limits = "none")),
-        variant("pin-node-a-number", (s) => (s.pin.node = 22)),
-        variant("evidence-extra-field", (s) => (s.escrows[0].evidence[0].approved = true)),
-        variant("pin-extra-field", (s) => (s.pin.approved = true)),
-        variant("seq-a-string", (s) => {
-          s.seq = "1";
-          s.prev_hash = "ab".repeat(32);
-        }),
-        variant("first-line-names-a-line-before", (s) => (s.prev_hash = "ab".repeat(32))),
-        variant("observed-at-a-word", (s) => (s.observed_at = "yesterday")),
-        variant("conflicts-not-text", (s) => (s.status.conflicts = [1, null])),
-        variant("reset-false-with-no-heights", (s) => {
-          Object.assign(s.status, { finalized_height: null, finalized_hash: null, best_height: null, finality_lag: null });
-          Object.assign(s.pin, { finalized_height: null, finalized_hash: null });
-          for (const e of s.escrows) e.finalized_height = null;
-        }),
-        variant("lag-that-does-not-add-up", (s) => (s.status.finality_lag = 99)),
-        variant("claimed-on-an-open-only", (s) => {
-          if (s.escrows[0].state !== "claimed" || s.escrows[0].evidence.length !== 1) throw new Error("escrow 0 is not claimed on one event");
-          s.escrows[0].evidence[0].event = "hasStation.EscrowOpened";
-        }),
-        variant("evidence-from-another-genesis", (s) => (s.escrows[0].evidence[0].genesis = "0x" + "ab".repeat(32))),
-        variant("bound-other-than-the-status-height", (s) => (s.escrows[0].finalized_height = 5)),
-        variant("evidence-above-the-bound", (s) => (s.escrows[0].evidence[0].block_number = s.status.finalized_height + 1)),
-        variant("pin-genesis-other", (s) => (s.pin.genesis = "0x" + "cd".repeat(32))),
-        variant("pin-height-other", (s) => (s.pin.finalized_height = 7)),
-        variant("pin-hash-other", (s) => (s.pin.finalized_hash = "0x" + "ef".repeat(32))),
-        variant("trusted-with-fixture-parts", (s) => (s.trust = "trusted RPC")),
-        // Seventh rerun U1: values the snapshot command writes, which the binary must serve.
-        variant("served:pin-source-sha-unknown", (s) => (s.pin.source_sha = "unknown")),
-        variant("served:pin-source-sha-short", (s) => (s.pin.source_sha = s.pin.source_sha === null ? "979298d" : s.pin.source_sha.slice(0, 7))),
-        variant("served:gateway-http-negative", (s) => (s.status.gateway.http = -1)),
-        variant("served:faucet-http-negative", (s) => (s.status.faucet.http = -1)),
-        // Seventh rerun U2: each stated check with a snapshot that only it refuses.
-        variant("status-schema-other", (s) => (s.status.schema = "flop-observatory/network-status@1")),
-        variant("status-extra-field", (s) => (s.status.approved = true)),
-        variant("status-time-a-word", (s) => (s.status.observed_at = "yesterday")),
-        variant("status-trust-a-word", (s) => (s.status.trust = "approved")),
-        variant("best-height-text", (s) => {
-          s.status.best_height = String(s.status.best_height);
-          s.status.finality_lag = null;
-        }),
-        variant("runtime-version-text", (s) => (s.status.runtime_version = String(s.status.runtime_version))),
-        variant("pinned-genesis-no-hash", (s) => {
-          s.status.genesis.pinned = "x";
-          s.status.reset_detected = null;
-          s.escrows = [];
-        }),
-        variant("faucet-genesis-no-hash", (s) => {
-          s.status.genesis.faucet = "x";
-          s.status.reset_detected = null;
-        }),
-        variant("faucet-extra-field", (s) => (s.status.faucet.approved = true)),
-        variant("evidence-event-unknown", (s) => s.escrows[0].evidence.push({ ...s.escrows[0].evidence[0], event: "hasStation.EscrowSettled", event_index: s.escrows[0].evidence[0].event_index + 1 })),
-        variant("evidence-block-hash-upper-case", (s) => (s.escrows[0].evidence[0].block_hash = "0x" + "AB".repeat(32))),
-        variant("evidence-block-number-text", (s) => (s.escrows[0].evidence[0].block_number = "5")),
-        variant("evidence-index-text", (s) => (s.escrows[0].evidence[0].event_index = "0")),
-        variant("escrow-schema-other", (s) => (s.escrows[0].schema = "flop-observatory/escrow-state@1")),
-        variant("escrow-notes-not-text", (s) => (s.escrows[0].notes = [5])),
-        variant("escrow-time-a-word", (s) => (s.escrows[0].observed_at = "yesterday")),
-        variant("escrow-trust-a-word", (s) => (s.escrows[0].trust = "approved")),
-        variant("escrow-scope-other", (s) => (s.escrows[0].scope = "everything")),
-        variant("snapshot-extra-field", (s) => (s.approved = true)),
-        variant("snapshot-schema-other", (s) => (s.schema = "flop-observatory/snapshot@1")),
-        variant("pin-source-sha-a-number", (s) => (s.pin.source_sha = 5)),
-        variant("pin-source-a-number", (s) => (s.pin.source = 5)),
-        variant("census-schema-other", (s) => (s.census = { schema: "flop-observatory/census@1" })),
-        variant("drift-schema-other", (s) => (s.drift = { schema: "flop-observatory/drift@1" })),
-        // Seventh rerun U7: a bound from a head on another genesis, and one event as evidence twice.
-        variant("bound-from-another-genesis", (s) => {
-          s.status.genesis.rpc = "0x" + "ab".repeat(32);
-          s.pin.genesis = s.status.genesis.rpc;
-          s.status.reset_detected = true;
-        }),
-        variant("one-release-for-two-escrows", (s) => {
-          s.escrows[1].state = "claimed";
-          s.escrows[1].evidence = [structuredClone(s.escrows[0].evidence[0])];
-        }),
-        // Eighth rerun U1: each condition with a snapshot that only it refuses.
-        variant("one-event-as-open-and-release", (s) => s.escrows[0].evidence.unshift({ ...s.escrows[0].evidence[0], event: "hasStation.EscrowOpened" })),
-        variant("bound-with-no-rpc-genesis", (s) => {
-          s.status.genesis.rpc = null;
-          s.pin.genesis = null;
-          s.status.reset_detected = null;
-        }),
-        variant("seq-negative", (s) => {
-          s.seq = -1;
-          s.prev_hash = "ab".repeat(32);
-        }),
-        variant("later-line-names-no-line-before", (s) => (s.seq = 1)),
-        variant("funded-on-no-evidence", (s) => {
-          s.escrows[0].state = "funded";
-          s.escrows[0].evidence = [];
-        }),
-        variant("refunded-on-no-evidence", (s) => (s.escrows[1].evidence = [])),
-        variant("claimed-with-two-opens", (s) => {
-          const r = s.escrows[0].evidence[0];
-          s.escrows[0].evidence = [{ ...r, event: "hasStation.EscrowOpened", event_index: r.event_index + 1 }, { ...r, event: "hasStation.EscrowOpened", event_index: r.event_index + 2 }, r];
-        }),
-        variant("claimed-with-a-refund-too", (s) => {
-          const r = s.escrows[0].evidence[0];
-          s.escrows[0].evidence = [r, { ...r, event: "hasStation.EscrowRefunded", event_index: r.event_index + 1 }];
-        }),
-        variant("gateway-detail-a-number", (s) => (s.status.gateway.detail = 5)),
-        variant("gateway-time-a-number", (s) => (s.status.gateway.observed_at = 5)),
-        variant("faucet-limits-value-a-word", (s) => (s.status.faucet.limits = { a: "x" })),
-        variant("evidence-index-a-fraction", (s) => (s.escrows[0].evidence[0].event_index = 1.5)),
-        variant("evidence-index-negative", (s) => (s.escrows[0].evidence[0].event_index = -1)),
+        variant("honest", () => {}, null),
+        // A value the snapshot command writes (seventh rerun U1).
+        variant("gateway-http-negative", (s) => (s.status.gateway.http = -1), null),
+        variant("escrow-extra-field", (s) => (s.escrows[0].approved = true), "escrow.fields"),
+        variant("lag-that-does-not-add-up", (s) => (s.status.finality_lag = 99), "status.lag-adds-up"),
+        variant("two-shapes", (s) => ((s.status.rpc.health = "great"), (s.escrows[0].trust = "approved")), "status.rpc.health, escrow.trust"),
+        variant(
+          "every-status-field-a-word",
+          (s) => (s.status = Object.fromEntries(Object.keys(s.status).map((k) => [k, "x"]))),
+          "status.schema, status.observed_at, status.trust, status.genesis, status.reset_detected and 9 more",
+        ),
       ];
       // Each snapshot by name with its exit, so a failure says which one was served.
-      return { exit: runs.map((x) => x.exit).join(","), stderr: runs.map((x) => `${x.name}: exit ${x.exit}`).join("; "), runs };
+      return { exit: runs.map((x) => x.exit).join(","), stderr: runs.map((x) => `${x.name}: exit ${x.exit} ${x.stderr}`).join("; "), runs };
     },
     ok: (r) =>
-      r.runs.length === 79 &&
+      r.runs.length === 6 &&
       r.runs.every((x) =>
-        x.name === "honest" || x.name.startsWith("served:")
-          ? x.exit === 0
-          : x.exit === 2 && x.stdout === "" && /is not an observatory snapshot; refusing to serve it/.test(x.stderr),
+        x.breaks === null
+          ? x.exit === 0 && JSON.parse(x.stdout).id === 1
+          : x.exit === 2 && x.stdout === "" && x.stderr.endsWith(`is not an observatory snapshot; refusing to serve it (it breaks ${x.breaks})`),
       ),
   },
   {
