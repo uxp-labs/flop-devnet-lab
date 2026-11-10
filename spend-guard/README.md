@@ -12,4 +12,6 @@ python3 guard.py --system "Be brief." --user Hi --max-tokens 16 --cap 0.05
 python3 receipts.py --key-file path/to/key.json
 ```
 
+`guard.py` exit status: `0` would_send, `3` refused_local (nothing sent), `2` bad arguments. Gate on the status, not on the printed text: `python3 guard.py ... && next-step`. Every dry-run row has `spend: 0`, since nothing is sent.
+
 See `SPEC.md` for the design and the known gateway gaps.

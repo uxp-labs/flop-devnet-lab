@@ -115,8 +115,9 @@ class GuardEntrypointTests(unittest.TestCase):
     def run_case(self, body, cap="1", extra_args=None, urlopen=1):
         proc, ledger_text, counts = run_guard(body, cap, extra_args)
         self.tally(counts, urlopen)
-        self.assertEqual(proc.returncode, 0, proc.stderr)
         stdout = strict_load(proc.stdout)
+        # IMD 355a3703 info #12: refused_local exits 3, would_send exits 0.
+        self.assertEqual(proc.returncode, 3 if stdout["decision"] == "refused_local" else 0, proc.stderr)
         self.assertTrue(ledger_text.endswith("\n") and ledger_text.count("\n") == 1)
         ledger = strict_load(ledger_text)
         self.assertEqual(list(stdout), KEYS)
@@ -135,7 +136,7 @@ class GuardEntrypointTests(unittest.TestCase):
     def test_finite_under_cap_would_send(self):
         rec = self.run_case({"estimated_cost_flop": 0.066, "estimated_input_tokens": 3, "estimated_output_tokens": 8}, "1")
         self.assertEqual(rec["decision"], "would_send")
-        self.assertEqual(rec["spend"], "not_sent")
+        self.assertEqual(rec["spend"], 0)
         self.assertEqual(rec["quote_raw"], 0.066)
         self.assertEqual(rec["quote_padded"], 0.186)
         self.assertEqual(rec["cap"], 1.0)
@@ -255,7 +256,7 @@ class GuardEntrypointTests(unittest.TestCase):
         )
         self.assertEqual(rec["max_tokens"], 0)
         self.assertEqual(rec["decision"], "would_send")
-        self.assertEqual(rec["spend"], "not_sent")
+        self.assertEqual(rec["spend"], 0)
         self.assertEqual(rec["quote_padded"], 0.186)
 
     # IMD 355a3703 finding 6: a non-empty prompt cannot cost 0 input tokens. These two cases used to
@@ -271,7 +272,7 @@ class GuardEntrypointTests(unittest.TestCase):
     def test_integer_valued_float_counts_would_send(self):
         rec = self.run_case({"estimated_cost_flop": 0.066, "estimated_input_tokens": 3.0, "estimated_output_tokens": 8.0})
         self.assertEqual(rec["decision"], "would_send")
-        self.assertEqual(rec["spend"], "not_sent")
+        self.assertEqual(rec["spend"], 0)
         self.assertEqual(rec["quote_raw"], 0.066)
         self.assertEqual(rec["quote_padded"], 0.186)
 

@@ -99,7 +99,7 @@ class GuardAuditTests(unittest.TestCase):
         )
         self.assertEqual(counts.get("urlopen"), 1)
         self.assertEqual(counts.get("socket_connect"), 0)
-        self.assertEqual(proc.returncode, 0, proc.stderr)
+        self.assertEqual(proc.returncode, 3, proc.stderr)
         rec = strict_load(proc.stdout)
         self.assertEqual(strict_load(ledger), rec)
         self.assertEqual(rec["decision"], "refused_local")
@@ -108,7 +108,7 @@ class GuardAuditTests(unittest.TestCase):
             {"estimated_cost_flop": 0.0660001, "estimated_input_tokens": 3, "estimated_output_tokens": 8},
             "0.186",
         )
-        self.assertEqual(nudged.returncode, 0, nudged.stderr)
+        self.assertEqual(nudged.returncode, 3, nudged.stderr)
         nudged_rec = strict_load(nudged.stdout)
         self.assertEqual(strict_load(nudged_ledger), nudged_rec)
         self.assertEqual(nudged_rec["decision"], "refused_local")
@@ -120,7 +120,7 @@ class GuardAuditTests(unittest.TestCase):
             "0.05",
         )
         self.assertEqual(counts.get("urlopen"), 1)
-        self.assertEqual(proc.returncode, 0, proc.stderr)
+        self.assertEqual(proc.returncode, 3, proc.stderr)
         rec = strict_load(proc.stdout)
         self.assertEqual(rec["decision"], "refused_local")
         self.assertEqual(rec["quote_padded"], 0.186)
@@ -135,7 +135,7 @@ class GuardAuditTests(unittest.TestCase):
             self.assertEqual(counts.get("urlopen"), 1)
             self.assertEqual(counts.get("create_connection"), 0)
             self.assertEqual(counts.get("socket_connect"), 0)
-            self.assertEqual(proc.returncode, 0, proc.stderr)
+            self.assertEqual(proc.returncode, 3, proc.stderr)
             self.assertNotIn("OverflowError", proc.stderr)
             self.assertTrue(ledger.endswith("\n"), "refusal must write ledger.jsonl")
             rec = strict_load(ledger)
@@ -154,7 +154,7 @@ class GuardAuditTests(unittest.TestCase):
         self.assertEqual(proc.returncode, 0, proc.stderr)
         rec = strict_load(ledger)
         self.assertEqual(rec["decision"], "would_send")
-        self.assertEqual(rec["spend"], "not_sent")
+        self.assertEqual(rec["spend"], 0)
         self.assertEqual(rec["quote_padded"], 0.186)
 
 

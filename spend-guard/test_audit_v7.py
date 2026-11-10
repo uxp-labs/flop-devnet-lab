@@ -30,7 +30,7 @@ Q = {"estimated_cost_flop": 0.066, "estimated_input_tokens": 3, "estimated_outpu
 def guard(body, *args):
     """Run guard.py with explicit CLI args. Returns (proc, record or None, ledger text, urlopen count)."""
     proc, ledger, counts = run_guard(body, "1", list(args))
-    rec = strict_load(proc.stdout) if proc.returncode == 0 and proc.stdout.strip() else None
+    rec = strict_load(proc.stdout) if proc.returncode in (0, 3) and proc.stdout.strip() else None  # 3 = refused_local
     return proc, rec, ledger, counts.get("urlopen", 0)
 
 
@@ -82,7 +82,7 @@ class SpendGuardAuditV7(unittest.TestCase):
         for body, mt, cap in cases:
             with self.subTest(body=body, max_tokens=mt):
                 proc, rec, _ledger, n = guard(body, "--user", "Hi", "--max-tokens", mt, "--cap", cap)
-                self.assertEqual(proc.returncode, 0, proc.stderr)
+                self.assertEqual(proc.returncode, 3, proc.stderr)  # refused_local exits 3 (info #12)
                 self.assertEqual(rec["decision"], "refused_local")
 
     def test_PY_M1_control_quote_covering_max_tokens_still_sends(self):
@@ -99,7 +99,7 @@ class SpendGuardAuditV7(unittest.TestCase):
         for body, cap in cases:
             with self.subTest(cap=cap):
                 proc, rec, _l, _n = guard(body, "--user", "Hi", "--max-tokens", "8", "--cap", cap)
-                self.assertEqual(proc.returncode, 0, proc.stderr)
+                self.assertEqual(proc.returncode, 3, proc.stderr)  # refused_local exits 3 (info #12)
                 self.assertEqual(rec["decision"], "refused_local")
 
     def test_PY_L3_huge_token_counts_cannot_erase_the_pad(self):
@@ -111,7 +111,7 @@ class SpendGuardAuditV7(unittest.TestCase):
         for body, cap in cases:
             with self.subTest(body=str(body)[:80]):
                 proc, rec, _l, _n = guard(body, "--user", "Hi", "--max-tokens", "8", "--cap", cap)
-                self.assertEqual(proc.returncode, 0, proc.stderr)
+                self.assertEqual(proc.returncode, 3, proc.stderr)  # refused_local exits 3 (info #12)
                 self.assertEqual(rec["decision"], "refused_local")
 
     def test_PY_L4_would_send_row_never_records_quote_padded_above_cap(self):
@@ -122,7 +122,7 @@ class SpendGuardAuditV7(unittest.TestCase):
         for body, cap in cases:
             with self.subTest(cap=cap):
                 proc, rec, ledger, _n = guard(body, "--user", "Hi", "--max-tokens", "8", "--cap", cap)
-                self.assertEqual(proc.returncode, 0, proc.stderr)
+                self.assertEqual(proc.returncode, 3 if rec["decision"] == "refused_local" else 0, proc.stderr)
                 self.assertEqual(strict_load(ledger), rec)
                 if rec["decision"] == "would_send":
                     self.assertLessEqual(rec["quote_padded"], rec["cap"])
@@ -138,7 +138,7 @@ class SpendGuardAuditV7(unittest.TestCase):
     def test_PY_L6_zero_input_tokens_for_a_nonempty_prompt_refuses(self):
         body = {"estimated_cost_flop": 0.004, "estimated_input_tokens": 0, "estimated_output_tokens": 1}
         proc, rec, _l, _n = guard(body, "--system", "x " * 5000, "--user", "Hi", "--max-tokens", "1", "--cap", "0.1")
-        self.assertEqual(proc.returncode, 0, proc.stderr)
+        self.assertEqual(proc.returncode, 3, proc.stderr)  # refused_local exits 3 (info #12)
         self.assertEqual(rec["decision"], "refused_local")
 
     def test_PY_L7_cap_spellings_outside_ascii_decimal_exit_2_without_estimate(self):

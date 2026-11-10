@@ -5,6 +5,7 @@ from fractions import Fraction
 BASE = "https://api.flop.network/v1"
 TEMPLATE_PAD = 20  # measured: Qwen chat wrap 23 tok vs 3 raw for "Be brief.\nHi"
 MAX_TOKEN_COUNT = 10_000_000  # above any model context; a larger count is not a plausible quote
+EXIT_REFUSED = 3  # refused_local: nothing sent. 2 is argparse usage, 1 an uncaught error, 0 would_send.
 CAP_RE = re.compile(r"[+-]?(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+)(?:[eE][+-]?[0-9]+)?|[+-]?(?:nan|inf|infinity)", re.ASCII | re.IGNORECASE)
 
 def estimate(model, prompt, max_tokens):
@@ -136,10 +137,11 @@ def main():
     decision = "would_send" if a.max_tokens >= 0 and cap is not None and cap > 0 and padded is not None and unrounded is not None and unrounded <= cap and padded <= cap and raw_within_cap else "refused_local"
     rec = {"ts": int(time.time()), "model": a.model, "max_tokens": a.max_tokens,
            "quote_raw": raw, "quote_padded": padded, "cap": cap,
-           "decision": decision, "mode": "dry_run", "spend": 0 if decision == "refused_local" else "not_sent"}
+           "decision": decision, "mode": "dry_run", "spend": 0}  # dry run: nothing is sent, so spend is 0 on every row
     line = json.dumps(rec, allow_nan=False)
     with open("ledger.jsonl", "a") as f: f.write(line + "\n")
     print(json.dumps(rec, indent=1, allow_nan=False))
+    return EXIT_REFUSED if decision == "refused_local" else 0
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())
