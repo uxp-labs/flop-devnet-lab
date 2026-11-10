@@ -122,7 +122,7 @@
    }
   },
   {
-   "id": "refresh-settled-then-fresh-pending-nulls-spend",
+   "id": "refresh-settled-then-fresh-pending-keeps-booking",
    "rule": "settlement.refresh",
    "input": {
     "run_read": {
@@ -149,10 +149,10 @@
    "expect": {
     "imd-flop": {
      "exit": 0,
-     "appended": 1,
+     "appended": 0,
      "last": {
-      "state": "estimated",
-      "spend": null,
+      "state": "settled",
+      "spend": 0.05,
       "cap_charge": 0.05
      },
      "stderr_disagree": false
@@ -166,10 +166,11 @@
    },
    "quirks": [
     "R-a"
-   ]
+   ],
+   "note": "[fix: TS-M1 + residual-a] renamed from refresh-settled-then-fresh-pending-nulls-spend; was appended 1, last {estimated, null, 0.05}"
   },
   {
-   "id": "refresh-settled-then-fresh-wrong-identity-nulls-spend",
+   "id": "refresh-settled-then-fresh-wrong-identity-keeps-booking",
    "rule": "settlement.refresh",
    "input": {
     "run_read": {
@@ -196,10 +197,10 @@
    "expect": {
     "imd-flop": {
      "exit": 0,
-     "appended": 1,
+     "appended": 0,
      "last": {
       "state": "settled",
-      "spend": null,
+      "spend": 0.05,
       "cap_charge": 0.05
      },
      "stderr_disagree": false
@@ -213,7 +214,8 @@
    },
    "quirks": [
     "R-a"
-   ]
+   ],
+   "note": "[fix: TS-M1 + residual-a] renamed from refresh-settled-then-fresh-wrong-identity-nulls-spend; was appended 1, last {settled, null, 0.05}"
   },
   {
    "id": "refresh-pending-to-released-zero",

@@ -51,12 +51,16 @@ export function holdCharge(padded: number, costReported: number | null): number 
 }
 
 /**
- * The next booking after a read. A known settlement replaces the hold; otherwise `hold` stays charged.
- * The state follows the read when it names one. Spend follows a fresh read; a failed read keeps the booked spend.
+ * The next booking after a read. A known settlement replaces the hold and the booked spend; otherwise `hold`
+ * stays charged and the booked spend stays. Only a fresh, identity-matched read moves the state, and never
+ * from a settling state back to a non-settling one. A read that proves nothing changes nothing.
  */
 export function nextBooking(prev: { state: string; spend: number | null }, o: ReadOutcome, hold: number): Booking {
   const settled = settledSpend(o);
-  return { state: o.state ?? prev.state, spend: o.fresh ? settled : prev.spend, cap_charge: settled ?? hold };
+  const trusted = o.fresh && o.identityOk;
+  const regresses = SETTLES.has(prev.state) && !(o.state !== null && SETTLES.has(o.state));
+  const state = trusted && o.state !== null && !regresses ? o.state : prev.state;
+  return { state, spend: settled ?? prev.spend, cap_charge: settled ?? hold };
 }
 
 export type RefreshBooking = { kind: "append"; booking: Booking } | { kind: "unchanged" } | { kind: "disagree" };

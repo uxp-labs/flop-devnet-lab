@@ -253,10 +253,10 @@
      "exit": 0,
      "states": [
       "sent",
-      "settled"
+      "sent"
      ],
      "last": {
-      "state": "settled",
+      "state": "sent",
       "spend": null,
       "cap_charge": 0.186
      }
@@ -267,7 +267,8 @@
     "viewer": {
      "not_applicable": "viewer renders ledger rows; it never writes them"
     }
-   }
+   },
+   "note": "[fix: TS-M1 + residual-a] a receipt for another request_id no longer moves the ledger state; was states [sent, settled], last {settled, null, 0.186}"
   },
   {
    "id": "run-unknown-state",

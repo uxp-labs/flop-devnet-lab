@@ -189,11 +189,12 @@
     {
       "id": "R-a",
       "residual": "a",
-      "status": "current behavior",
+      "status": "fixed: [fix: TS-M1 + residual-a]",
       "parts": [
         "imd-flop"
       ],
-      "summary": "A fresh refresh that is unusable (no settling state, or wrong identity) writes spend null over a previously booked spend; cap_charge stays."
+      "summary": "A fresh refresh that is unusable (no settling state, or wrong identity) writes spend null over a previously booked spend; cap_charge stays.",
+      "fixed_behavior": "A read that is not a fresh, identity-matched settlement leaves the booked spend, cap_charge and state alone; only a trusted read moves the state, never from settled/released back to pending (settlement.ts nextBooking). Same root as IMD TS M1 (cli.ts:451)."
     },
     {
       "id": "R-b",
