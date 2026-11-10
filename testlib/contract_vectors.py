@@ -1,5 +1,6 @@
-"""Test-only loader for contract/rules.json and contract/vectors/*.json (shared by the spend-guard and viewer
-contract tests; imd-flop has the same loader in test/contract.test.ts). Not imported by any tool.
+"""The Python loader for contract/rules.json and contract/vectors/*.json: test infrastructure, shared by the
+spend-guard and viewer contract tests. imd-flop's one TS loader is imd-flop/test/lib/contract-vectors.ts.
+Not imported by any tool. The file format is specified in contract/README.md.
 
 Every vector names all three parts under "expect". A part either has an expectation or
 {"not_applicable": "<why>"}; nothing is skipped silently. {"$float": "nan"|"inf"|"-inf"} encodes
@@ -9,7 +10,7 @@ import json
 import math
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent
+ROOT = Path(__file__).resolve().parent.parent / "contract"
 PARTS = ("imd-flop", "spend-guard", "viewer")
 FLOATS = {"nan": math.nan, "inf": math.inf, "-inf": -math.inf}
 

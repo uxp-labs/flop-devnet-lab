@@ -5,13 +5,13 @@
 This is a behavior lock for the refactor, not a specification: quirks and residuals (a)-(e) are listed
 in `rules.json` as `current behavior`, not as fixes.
 
-Each part loads these same files:
+This folder holds data and its format only; the loaders are test code outside it. Each part loads these same files:
 
 | Part | Test | Loader |
 |---|---|---|
 | imd-flop | `imd-flop/test/contract.test.ts` | inline in that test |
-| spend-guard | `spend-guard/test_contract_vectors.py` | `contract/contract_vectors.py` |
-| viewer | `viewer/test_contract_vectors.py` | `contract/contract_vectors.py` |
+| spend-guard | `spend-guard/test_contract_vectors.py` | `testlib/contract_vectors.py` |
+| viewer | `viewer/test_contract_vectors.py` | `testlib/contract_vectors.py` |
 
 ## Vector shape
 

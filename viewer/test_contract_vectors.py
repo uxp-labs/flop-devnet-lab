@@ -9,7 +9,7 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
-sys.path.insert(0, str(HERE.parent / "contract"))
+sys.path.insert(0, str(HERE.parent / "testlib"))
 import contract_vectors as cv  # noqa: E402
 from lane_harness import LED, REC, greens, lane, load_lane, visible  # noqa: E402
 
