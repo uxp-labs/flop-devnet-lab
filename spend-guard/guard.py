@@ -1,12 +1,27 @@
 #!/usr/bin/env python3
 """FLOP spend guard v0, dry run only. Calls just the free estimate endpoint."""
-import argparse, json, math, re, sys, time, urllib.request
+import argparse, json, math, os, re, sys, time, urllib.request
 from fractions import Fraction
 BASE = "https://api.flop.network/v1"
-TEMPLATE_PAD = 20  # measured: Qwen chat wrap 23 tok vs 3 raw for "Be brief.\nHi"
-MAX_TOKEN_COUNT = 10_000_000  # above any model context; a larger count is not a plausible quote
-MIN_CAP = 1e-6  # the padded quote is rounded up to 6 decimals and is > 0, so it is never below 1e-6
-EXIT_REFUSED = 3  # refused_local: nothing sent. 2 is argparse usage, 1 an uncaught error, 0 would_send.
+
+def load_rules(start=__file__):
+    """contract/rules.json from the nearest ancestor folder of this file (symlinks resolved), so the guard
+    works from any cwd. Fails closed: no rules file means no guard, never built-in defaults."""
+    d = os.path.dirname(os.path.realpath(start))
+    while True:
+        p = os.path.join(d, "contract", "rules.json")
+        if os.path.isfile(p):
+            with open(p) as fh: return json.load(fh)
+        up = os.path.dirname(d)
+        if up == d: raise RuntimeError(f"contract/rules.json not found in any parent of {os.path.realpath(start)}; refusing to run without the shared rules")
+        d = up
+
+_C = load_rules()["constants"]
+TEMPLATE_PAD = _C["TEMPLATE_PAD"]["value"]  # measured: Qwen chat wrap 23 tok vs 3 raw for "Be brief.\nHi"
+MAX_TOKEN_COUNT = _C["MAX_TOKEN_COUNT"]["value"]  # above any model context; a larger count is not a plausible quote
+MIN_CAP = _C["MIN_CAP"]["value"]  # the padded quote is rounded up to 6 decimals and is > 0, so it is never below 1e-6
+EXIT_REFUSED = _C["EXIT"]["spend-guard"]["refused_local"]  # nothing sent. 2 is argparse usage, 1 an uncaught error, 0 would_send.
+STAGE_GATEWAY = _C["STAGE_GATEWAY"]["value"]
 CAP_RE = re.compile(r"[+-]?(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+)(?:[eE][+-]?[0-9]+)?|[+-]?(?:nan|inf|infinity)", re.ASCII | re.IGNORECASE)
 
 def estimate(model, prompt, max_tokens):
@@ -63,13 +78,13 @@ def spend_amount(value):
 def classify_receipt(r):
     """Report the receipt state as given. A null or invalid spend stays null (blank), never 0."""
     if not isinstance(r, dict):
-        return {"request_id": None, "state": None, "reserved": None, "settled": None, "stage": "gateway observed",
+        return {"request_id": None, "state": None, "reserved": None, "settled": None, "stage": STAGE_GATEWAY,
                 "chain_final": False, "terminal_event": None, "error": "receipt is not an object"}
     s, rs = r.get("settled_spend"), r.get("reserved_spend")
     out = {"request_id": r.get("request_id"), "state": r.get("state"),
            "reserved": spend_amount(rs),
            "settled": spend_amount(s),  # None stays None: blank, never 0
-           "stage": "gateway observed",
+           "stage": STAGE_GATEWAY,
            "chain_final": False,  # terminal_event may be pooled; not proof of finality
            "terminal_event": r.get("terminal_event")}
     invalid = [k for k, v in (("settled_spend", s), ("reserved_spend", rs)) if v is not None and spend_amount(v) is None]
