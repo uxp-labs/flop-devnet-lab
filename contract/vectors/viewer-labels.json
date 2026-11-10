@@ -684,7 +684,7 @@
        "unknown"
       ]
      ],
-     "reservation": "absent",
+     "reservation": 0.186,
      "matches_shown": false,
      "greens": [],
      "link": [
@@ -699,7 +699,8 @@
    ],
    "label_rules": [
     "V-PRECEDENCE"
-   ]
+   ],
+   "note": "[fix: residual-d] the no-file row now shows its reservation line; was reservation \"absent\""
   },
   {
    "id": "label-green-row-link-still-grey",

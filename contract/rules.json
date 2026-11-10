@@ -218,11 +218,12 @@
     {
       "id": "R-d",
       "residual": "d",
-      "status": "current behavior",
+      "status": "fixed: [fix: residual-d]",
       "parts": [
         "viewer"
       ],
-      "summary": "A row with no receipt file shows no reservation line."
+      "summary": "A row with no receipt file shows no reservation line.",
+      "fixed_behavior": "A row with no receipt file shows its reservation line (cap_charge, else quote_padded)."
     },
     {
       "id": "R-e",
@@ -317,7 +318,7 @@
         "viewer"
       ],
       "where": "build-lane.py build_row: the flop ['reservation', amount] entries rendered by render() as <span class=\"k\">reservation</span>",
-      "today": "a held-reservation row reads 'reservation <amount>'; a row with no receipt file has no reservation line (residual R-d)",
+      "today": "a held-reservation row reads 'reservation <amount>' (a row with no receipt file too, since [fix: residual-d])",
       "target": "every held-reservation row reads 'reservation held <amount>'",
       "conflicts_with": "viewer/test_audit_v8.py lines 90-91 and 110-111 assert the exact pair ['reservation', amount] and the markup <span class=\"k\">reservation</span> <span class=\"mono\">amount</span>; the fix needs FIXER/Chief to approve a labelled edit of those lines or another wording",
       "fix_step": "step 3"

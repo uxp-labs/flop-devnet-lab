@@ -130,7 +130,8 @@ def row_refused(row, e, r, reservation):
 
 def row_no_receipt(row, e, r, reservation):
     row["chips"] = [["grey", "sent"], ["red", "unknown"]]; row["bad"] = True
-    row["flop"] = [["last seen", "sent"], ["observed spend", None]]
+    # No receipt file yet (a timeout): the reservation is still held, so it is shown (residual d).
+    row["flop"] = [["last seen", "sent"], ["reservation", reservation], ["observed spend", None]]
     row["flags"] = [unresolved_flag(e)]
 
 def row_unreadable(row, e, r, reservation):

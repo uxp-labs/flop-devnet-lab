@@ -361,7 +361,7 @@
      "not_applicable": "spend-guard does not render the viewer lane"
     },
     "viewer": {
-     "line": "absent"
+     "line": "reservation 0.186"
     }
    },
    "quirks": [
@@ -374,7 +374,7 @@
      "line": "reservation held 0.186"
     }
    },
-   "note": "KNOWN DEFECT KD-5 (timeout_unknown with no receipt file (residual d: no line today)): expect is today's wording (asserted); target is FIXER's 'reservation held <amount>' (not asserted until step 3)",
+   "note": "KNOWN DEFECT KD-5 (timeout_unknown with no receipt file; [fix: residual-d] moved expect from \"absent\" to \"reservation 0.186\"; the wording is still KD-5): expect is today's wording (asserted); target is FIXER's 'reservation held <amount>' (not asserted until step 3)",
    "label_rules": [
     "V-UNKNOWN-SETTLED"
    ]
