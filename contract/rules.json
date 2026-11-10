@@ -273,7 +273,8 @@
       ],
       "where": "build-lane.py:113 (failed-read test skips key_expired) and the green path at :155-163",
       "today": "a key_expired (401) receipt row renders 'match matches' with no reservation line",
-      "target": "red 'unknown', reservation held (reservation line shown), chain-final green blocked, never 'matches'"
+      "target": "red 'unknown', reservation held (reservation line shown), chain-final green blocked, never 'matches'",
+      "status": "fixed: [fix: KD-1]"
     },
     {
       "id": "KD-2",

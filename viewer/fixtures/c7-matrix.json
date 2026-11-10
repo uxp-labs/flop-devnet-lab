@@ -455,33 +455,17 @@
    "snapshot": "snapshots/c7-matrix/19-G6.html",
    "status": "known_defect",
    "defects": [
-    "KD-1",
     "KD-5"
+   ],
+   "fixed": [
+    "KD-1"
    ],
    "target": {
     "viewer": {
-     "chips": [
-      [
-       "grey",
-       "sent"
-      ],
-      [
-       "red",
-       "unknown"
-      ]
-     ],
-     "reservation": 0.186,
-     "matches_shown": false,
-     "greens": [],
-     "link": [
-      "grey",
-      "not checked",
-      null
-     ],
      "reservation_line": "reservation held 0.186"
     }
    },
-   "note": "KNOWN DEFECT KD-1: the snapshot pins today's wrong output ('match matches', no reservation line). Also KD-5 (no reservation line; target 'reservation held 0.186'). Fixing either regenerates it; target is not asserted."
+   "note": "KNOWN DEFECT KD-5: the snapshot pins today's wording 'reservation 0.186'; FIXER's target is 'reservation held 0.186', not asserted. [fix: KD-1] the key-expired row is a failed read (red unknown, reservation line, no 'matches')."
   },
   {
    "id": "20-G7",

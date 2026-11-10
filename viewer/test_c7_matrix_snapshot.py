@@ -43,14 +43,14 @@ class C7MatrixSnapshot(unittest.TestCase):
 
     def test_known_defect_snapshots_are_labelled(self):
         """A snapshot that pins a known defect says so: status known_defect, known defect ids, and a target.
-        Every key_expired case pins KD-1 (build-lane.py's failed-read test skips key_expired), and every snapshot
+        Every key_expired case names KD-1 (pinned in defects, or closed in fixed by [fix: KD-1]), and every snapshot
         with today's 'reservation <amount>' line pins KD-5 (FIXER's wording is 'reservation held <amount>')."""
         defect_ids = {d["id"] for d in cv.rules()["known_defects"]}
         for case in load()["cases"]:
             with self.subTest(case["id"]):
                 rf = case["receipt_file"]
                 if rf is not None and "merge" in rf and rf["merge"].get("flag") == "key_expired":
-                    self.assertIn("KD-1", case.get("defects", []), f"{case['id']} pins KD-1's output but is not labelled")
+                    self.assertIn("KD-1", case.get("defects", []) + case.get("fixed", []), f"{case['id']} pins KD-1's output but is not labelled")
                 if '<span class="k">reservation</span>' in (HERE / case["snapshot"]).read_text():
                     self.assertIn("KD-5", case.get("defects", []), f"{case['id']} pins KD-5's wording but is not labelled")
                 self.assertTrue(set(case.get("fixed", [])) <= defect_ids, case.get("fixed"))  # defects a fix commit closed

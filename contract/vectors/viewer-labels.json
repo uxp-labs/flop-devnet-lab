@@ -837,7 +837,7 @@
    ]
   },
   {
-   "id": "label-kd1-key-expired-shows-matches",
+   "id": "label-kd1-key-expired-is-a-failed-read",
    "rule": "viewer.label",
    "input": {
     "ledger": {
@@ -888,31 +888,6 @@
        "unknown"
       ]
      ],
-     "reservation": "absent",
-     "matches_shown": true,
-     "greens": [],
-     "link": [
-      "grey",
-      "not checked",
-      null
-     ]
-    }
-   },
-   "note": "KNOWN DEFECT KD-1: expect is today's output (asserted); target is FIXER's label (not asserted until the fix step)",
-   "status": "known_defect",
-   "defect": "KD-1",
-   "target": {
-    "viewer": {
-     "chips": [
-      [
-       "grey",
-       "sent"
-      ],
-      [
-       "red",
-       "unknown"
-      ]
-     ],
      "reservation": 0.186,
      "matches_shown": false,
      "greens": [],
@@ -923,6 +898,9 @@
      ]
     }
    },
+   "note": "[fix: KD-1] a key-expired read is a failed read: red unknown, reservation line kept, never 'matches'; was (known_defect) reservation absent, matches_shown true",
+   "status": "fixed",
+   "defect": "KD-1",
    "label_rules": [
     "V-FAILED-READ"
    ]
@@ -979,31 +957,6 @@
        "unknown"
       ]
      ],
-     "reservation": "absent",
-     "matches_shown": true,
-     "greens": [],
-     "link": [
-      "grey",
-      "not checked",
-      null
-     ]
-    }
-   },
-   "note": "KNOWN DEFECT KD-1: expect is today's output (asserted); target is FIXER's label (not asserted until the fix step)",
-   "status": "known_defect",
-   "defect": "KD-1",
-   "target": {
-    "viewer": {
-     "chips": [
-      [
-       "grey",
-       "sent"
-      ],
-      [
-       "red",
-       "unknown"
-      ]
-     ],
      "reservation": 0.05,
      "matches_shown": false,
      "greens": [],
@@ -1014,6 +967,9 @@
      ]
     }
    },
+   "note": "[fix: KD-1] a key-expired read is a failed read: red unknown, reservation line kept, never 'matches'; was (known_defect) reservation absent, matches_shown true",
+   "status": "fixed",
+   "defect": "KD-1",
    "label_rules": [
     "V-FAILED-READ",
     "V-UNKNOWN-SETTLED"
