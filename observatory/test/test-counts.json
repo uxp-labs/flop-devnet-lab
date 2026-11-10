@@ -31,6 +31,10 @@
     "tests": 40,
     "names": "c1629a5c9e7fa1134a7e062494c93ae5e762fbe1cc26328108e74d808eb49693"
   },
+  "snapshot-check-grid.test.ts": {
+    "tests": 43,
+    "names": "5a272b240add649be9d418c419bfdc6a65b76e7db13154803460d63bc7cb4b41"
+  },
   "snapshot-check.test.ts": {
     "tests": 196,
     "names": "4fd541e474efe735b93b6c10aa7d4806c73711845dae66ef634d9ead6123d844"
@@ -48,8 +52,8 @@
     "names": "de59fc974e7a9ef6ac6ebea8086881c36f93b210d7ada69de6aceadcd5650d81"
   },
   "status.test.ts": {
-    "tests": 118,
-    "names": "870754fcc8b7c06245b1f2eeae8b90989c673e743531c7be0660f258b3a11036"
+    "tests": 120,
+    "names": "587c43fd19c8936f07be12ed61be7333f6c57b11abbe00369fa62c49725275a7"
   },
   "store.test.ts": {
     "tests": 16,

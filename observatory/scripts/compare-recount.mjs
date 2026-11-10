@@ -9,7 +9,7 @@
 // Prints a JSON array; exit 1 on any disagreement, a run that printed no census, or a scenario
 // without census_request.
 import { spawnSync } from "node:child_process";
-import { lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -103,6 +103,8 @@ function refusal(stderr, names) {
 // name is not UTF-8 (macOS refuses such names). Each is skipped, and says so, only where the
 // filesystem refuses to make it.
 const generatedRoot = realpathSync(mkdtempSync(join(tmpdir(), "obs-recount-gen-")));
+/** Files made past the path limit, as [folder, name]: removed from inside their folder at the end. */
+const pastTheLimit = [];
 const generated = [];
 {
   const dir = join(generatedRoot, "generated-page-name-not-utf8");
@@ -193,6 +195,25 @@ const generated = [];
       generated.push(dir);
     } catch (e) {
       generated.push({ skipped: name, why: `this system will not make the folder: ${e.code ?? e.message}` });
+    }
+    // A folder whose event-pages can be listed while its one page file is past the limit (eleventh
+    // rerun): both sides must refuse it as a page file problem naming that file. The file is made
+    // from inside event-pages, by a name the system takes, since its whole path is too long to give.
+    const name2 = "generated-page-files-past-the-path-limit";
+    const file = `page-${"f".repeat(55)}.json`;
+    const pages = join(pathOf(hi - 40 - "/event-pages".length - name2.length - 1), name2, "event-pages");
+    const here = process.cwd();
+    try {
+      mkdirSync(pages, { recursive: true });
+      writeFileSync(join(pages, "..", "meta.json"), JSON.stringify({ scenario: name2, description: "made at run time", now: "2026-11-10T00:00:00.000Z", synthetic: true, census_request: { from_block: 0, to_block: 99 }, pinned_genesis: DEVNET }));
+      process.chdir(pages);
+      writeFileSync(file, JSON.stringify({ genesis: DEVNET, from_block: 0, to_block: 99, page: 0, next_page: null, events: [] }));
+      pastTheLimit.push([pages, file]);
+      generated.push(join(pages, ".."));
+    } catch (e) {
+      generated.push({ skipped: name2, why: `this system will not make the file: ${e.code ?? e.message}` });
+    } finally {
+      process.chdir(here);
     }
   }
 }
@@ -333,6 +354,12 @@ function compare(d, ts, py, mustRefuse, names) {
     totals: ts.json?.totals,
     diffs,
   });
+}
+for (const [folder, name] of pastTheLimit) {
+  const here = process.cwd();
+  process.chdir(folder);
+  unlinkSync(name);
+  process.chdir(here);
 }
 rmSync(generatedRoot, { recursive: true, force: true });
 // The canary must nudge at least one counted scenario and at least one refusal, or it proves

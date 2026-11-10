@@ -606,5 +606,37 @@
     "replace": "",
     "test": "test/status.test.ts",
     "why": "tenth rerun U2: when the stuck check cannot run, a fresh head is no longer known not to be stale, so rpc.stale is null (RULES 1.1)"
+  },
+  {
+    "id": "status-stuck-check-skipped-after-a-contradiction",
+    "file": "src/status.ts",
+    "find": "      flags.contradicted = true;\n    }\n    // Whether the height is stuck is asked of every head, one that rolled back or changed hash too\n    // (eleventh rerun): rpc.stale says how long the run at this height has held, whatever else the\n    // head contradicts.\n    if (sinceUnknown) {",
+    "replace": "      flags.contradicted = true;\n    } else if (sinceUnknown) {",
+    "test": "test/status.test.ts",
+    "why": "eleventh rerun: the stuck check runs on a head that rolled back or changed hash too, so its stale says how long its height has held (test: the stuck check runs after a rollback or a changed hash too)"
+  },
+  {
+    "id": "status-server-error-past-599",
+    "file": "src/status.ts",
+    "find": "const serverError = (http: number): boolean => http >= 500 && http <= 599;",
+    "replace": "const serverError = (http: number): boolean => http >= 500;",
+    "test": "test/status.test.ts",
+    "why": "eleventh rerun: only a 5xx status is a server's own failure, so 600 and up read as any other status (test: only a 5xx status is a server's own failure)"
+  },
+  {
+    "id": "status-faucet-no-body-any-500-up",
+    "file": "src/status.ts",
+    "find": "    health = serverError(http) ? \"down\" : \"unknown\";",
+    "replace": "    health = http >= 500 ? \"down\" : \"unknown\";",
+    "test": "test/status.test.ts",
+    "why": "eleventh rerun: a faucet body that cannot be read is down on a 5xx status alone (test: only a 5xx status is a server's own failure)"
+  },
+  {
+    "id": "status-gateway-any-500-up",
+    "file": "src/status.ts",
+    "find": "  } else if (serverError(http)) {",
+    "replace": "  } else if (http >= 500) {",
+    "test": "test/status.test.ts",
+    "why": "eleventh rerun: a gateway status from 600 up is degraded, not down (test: only a 5xx status is a server's own failure)"
   }
 ]

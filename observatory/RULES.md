@@ -102,20 +102,21 @@ check below to run and pass.
     (120 seconds by default)
   - when earlier snapshots recorded a finalized head on the same genesis: no rollback below the
     highest finalized height any of them saw (for the best height too, even when this head has no
-    valid finalized head), no changed hash at this height in any of them, and
-    no finalized height stuck for longer than the stale limit, counted from the oldest of the
-    latest run of snapshots at this same height. If a head time in that run does not parse, the
-    stuck check cannot run. The snapshot command reads the earlier snapshots from its log, after
-    verifying the log's hash chain (a broken log refuses), and passes every one that recorded a
-    finalized head, oldest first, so a snapshot in between with no RPC reading, or one on another
-    genesis, hides nothing. An earlier snapshot that recorded no head time still sets the
-    floor; only the stuck check needs the time. So does one whose head came with a read error:
-    the floor fails closed, and a reading that later proves wrong keeps every later snapshot on
-    that log degraded until the operator starts a new log (README.md says how). The command
-    also passes every earlier snapshot's own time, whatever it read: an earlier snapshot taken,
-    or its head read, later than this snapshot time is a conflict, and this head is not usable.
-    The floor is only as durable as the log: an absent log means no earlier snapshot, and a log
-    cut short or removed cannot be detected from the log itself.
+    valid finalized head), no changed hash at this height in any of them, and no finalized height
+    stuck for longer than the stale limit, counted from the oldest of the latest run of snapshots at
+    this same height. If a head time in that run does not parse, the stuck check cannot run. The
+    stuck check runs on a head found to roll back or change its hash too, so its `rpc.stale` still
+    says how long its height has held. The snapshot command reads the earlier snapshots from its
+    log, after verifying the log's hash chain (a broken log refuses), and passes every one that
+    recorded a finalized head, oldest first, so a snapshot in between with no RPC reading, or one on
+    another genesis, hides nothing. An earlier snapshot that recorded no head time still sets the
+    floor; only the stuck check needs the time. So does one whose head came with a read error: the
+    floor fails closed, and a reading that later proves wrong keeps every later snapshot on that log
+    degraded until the operator starts a new log (README.md says how). The command also passes every
+    earlier snapshot's own time, whatever it read: an earlier snapshot taken, or its head read,
+    later than this snapshot time is a conflict, and this head is not usable. The floor is only as
+    durable as the log: an absent log means no earlier snapshot, and a log cut short or removed
+    cannot be detected from the log itself.
   - every earlier snapshot's best height on the same genesis is a floor too, less the lag limit,
     whether or not either head read a finalized head: a best height more than the lag limit below
     the highest of them is a conflict, and this head is not usable. A reorganisation undoes only
@@ -367,21 +368,23 @@ check below to run and pass.
     command can neither name nor open such a folder as the recount can. Such a folder is outside
     what the two sides compare. Near the system's path limit the two agree: a scenario path whose
     `event-pages` is past the limit while its `meta.json` is not is a page file problem on both
-    sides, naming `event-pages`, and the cross-check makes one at run time; a folder path past the
-    limit itself is an input problem on both. An `event-pages` folder they may not read or list is a
-    page file problem on both sides too; the cross-check cannot make one when it runs as root, where
-    every folder opens, so each side's own tests make the call fail instead. The TypeScript command
-    also reads the folder's `meta.json` and refuses as an input problem when it cannot, a scenario
-    folder it may not search and one whose `meta.json` path alone is past the limit included. The
-    recount does not read `meta.json`, so that one input problem is the command's alone; the recount
-    names `event-pages` as a page file problem there, since it cannot read that either. So is a
-    `meta.json` whose `now` is missing or no time when no `--now` is given (section 1.1): the
-    recount reads no clock. Last, Node takes `.` and `..` segments and doubled slashes out of a path
-    before the system sees it, while the recount hands the path to the system as given. So the
-    command counts the folder a padded path names whenever that folder can be read, while the
-    recount refuses a padded path past the limit, as a page file problem when only its `event-pages`
-    is past it and as an input problem when the folder path is; and a `..` after a link names
-    another folder on each side. Such a path is outside what the two sides compare.
+    sides, naming `event-pages`, and the cross-check makes one at run time; one whose page files
+    alone are past it is a page file problem on both, naming the first such file, and the
+    cross-check makes one too; a folder path past the limit itself is an input problem on both. An
+    `event-pages` folder they may not read or list is a page file problem on both sides too; the
+    cross-check cannot make one when it runs as root, where every folder opens, so each side's own
+    tests make the call fail instead. The TypeScript command also reads the folder's `meta.json` and
+    refuses as an input problem when it cannot, a scenario folder it may not search and one whose
+    `meta.json` path alone is past the limit included. The recount does not read `meta.json`, so
+    that one input problem is the command's alone; the recount names `event-pages` as a page file
+    problem there, since it cannot read that either. So is a `meta.json` whose `now` is missing or
+    no time when no `--now` is given (section 1.1): the recount reads no clock. Last, Node takes `.`
+    and `..` segments and doubled slashes out of a path before the system sees it, while the recount
+    hands the path to the system as given. So the command counts the folder a padded path names
+    whenever that folder can be read, while the recount refuses a padded path once any part of it is
+    past the limit: as an input problem when the folder path is, and otherwise as a page file
+    problem naming the first part past it, `event-pages` or a page file; and a `..` after a link
+    names another folder on each side. Such a path is outside what the two sides compare.
 
 ## 4. Read only
 

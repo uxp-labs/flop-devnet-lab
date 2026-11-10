@@ -131,6 +131,9 @@ function nonNegativeInt(value: unknown): number | null {
 // Times and their ages: shared strict parsing (src/strict.ts), RULES.md 1.1.
 export { parseZoned } from "./strict.js";
 
+/** A 5xx status, the server's own failure (RULES.md 1.1); 600 and up are no such thing. */
+const serverError = (http: number): boolean => http >= 500 && http <= 599;
+
 export function classifyFaucet(r: HttpResult<FaucetHealthBody>): NetworkStatus["faucet"] {
   const body = r.body && typeof r.body === "object" ? r.body : null;
   const ready = body && typeof body.ready === "boolean" ? body.ready : null;
@@ -145,7 +148,7 @@ export function classifyFaucet(r: HttpResult<FaucetHealthBody>): NetworkStatus["
     health = "unknown";
     detail = noStatus(r);
   } else if (!body) {
-    health = http >= 500 ? "down" : "unknown";
+    health = serverError(http) ? "down" : "unknown";
     detail = `http ${http} with no readable body`;
   } else if (body.status === "ok" && ready === true) {
     // A body that says ok on an error status is not ok: the HTTP status wins.
@@ -183,7 +186,7 @@ export function classifyGateway(r: HttpResult<unknown>): ServiceStatus {
   } else if (http === 429 || http === 503) {
     health = "degraded";
     detail = `http ${http}`;
-  } else if (http >= 500) {
+  } else if (serverError(http)) {
     health = "down";
     detail = `http ${http}`;
   } else {
@@ -353,7 +356,11 @@ export function classifyRpc(
       conflicts.push(`finalized block ${finalized.number} changed hash since the previous snapshot`);
       problems.push("finalized block changed");
       flags.contradicted = true;
-    } else if (sinceUnknown) {
+    }
+    // Whether the height is stuck is asked of every head, one that rolled back or changed hash too
+    // (eleventh rerun): rpc.stale says how long the run at this height has held, whatever else the
+    // head contradicts.
+    if (sinceUnknown) {
       flags.stuck = null;
       // Whether the height is stuck is unknown, so a fresh head is no longer known not to be stale
       // (RULES.md 1.1, tenth rerun U2): a gate that waits for stale false waits here too.

@@ -1805,7 +1805,7 @@
     "find": "(s) => s.pin.genesis === s.status.genesis.rpc]",
     "replace": "(s) => s.pin.genesis === s.status.genesis.rpc || s.pin.genesis === s.status.genesis.pinned]",
     "test": "test/snapshot-check.test.ts",
-    "why": "round 15 sweep, weaker: a pin naming the pinned genesis while the rpc read another served (case: a pin naming a genesis though the status read none)"
+    "why": "round 15 sweep, weaker: a pin naming the pinned genesis while the rpc read another served (case: a pin naming the pinned genesis though the rpc read another)"
   },
   {
     "id": "snapshot-check-pin-height-status-none",

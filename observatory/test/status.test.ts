@@ -521,6 +521,13 @@ describe("the classifiers on their own, before freshness is applied", () => {
     expect(classifyGateway(unknownHttp("no response")).health).toBe("unknown");
     expect(classifyFaucet(unknownHttp("no response")).health).toBe("unknown");
   });
+
+  it("only a 5xx status is a server's own failure: 600 and up read as any other status (eleventh rerun)", () => {
+    const reading = (http: number) => ({ http, body: null, error: null, fetched_at: NOW });
+    expect([500, 599, 600, 1000].map((h) => classifyGateway(reading(h)).health)).toEqual(["down", "down", "degraded", "degraded"]);
+    // A faucet body that cannot be read is down on a 5xx status and unknown on any other.
+    expect([500, 599, 600, 1000].map((h) => classifyFaucet(reading(h)).health)).toEqual(["down", "down", "unknown", "unknown"]);
+  });
 });
 
 describe("faucet and gateway freshness (RULES 1.1)", () => {
@@ -837,6 +844,28 @@ describe("third IMD audit: a head with keys left out, a /chain status that is no
     // Not stuck: the earlier snapshot at this height was read less than the stale limit ago.
     const held = await assess({}, earlierAt("2026-11-09T23:46:53Z"));
     expect([held.status.rpc.stale, held.status.reset_detected]).toEqual([false, false]);
+  });
+
+  it("eleventh rerun: the stuck check runs after a rollback or a changed hash too, so a fresh head's stale says how long its height has held", async () => {
+    const F = head.finalized.number;
+    const at = (finalized_height: number, finalized_hash: string, observed_at: string) => ({ genesis: DEVNET_GENESIS, finalized_height, finalized_hash, observed_at });
+    const higher = at(F + 5, "0x" + "5f".repeat(32), "2026-11-09T23:40:00Z");
+    const changed = "0x" + "77".repeat(32);
+    // A rollback (a higher finalized height first) and a changed hash (this height, another hash),
+    // each with the run at this height held for a time that does not parse, past the stale limit
+    // (273 s) and within it (53 s).
+    for (const [what, earlier] of [
+      ["rollback", (t: string) => [higher, at(F, head.finalized.hash, t)]],
+      ["changed hash", (t: string) => [at(F, changed, t)]],
+    ] as const) {
+      const stale = [];
+      for (const t of ["2026-11-09T23:47:40", "2026-11-09T23:43:20Z", "2026-11-09T23:47:00Z"]) {
+        const s = await assess({}, earlier(t));
+        expect([what, s.status.rpc.health, s.status.reset_detected, s.rpcUsable]).toEqual([what, "degraded", null, false]);
+        stale.push(s.status.rpc.stale);
+      }
+      expect([what, ...stale]).toEqual([what, null, true, false]);
+    }
   });
 
   it("J11: a stuck head on another genesis still shows the reset", async () => {
