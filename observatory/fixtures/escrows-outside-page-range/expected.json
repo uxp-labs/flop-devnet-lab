@@ -1,0 +1,18 @@
+{
+  "pinned_genesis": "0x99c172c095340ace980631f9123544c6bebd4839f3437e463533422d8be2d631",
+  "finalized_height": 1000,
+  "escrows": [
+    {
+      "id": "0xa1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+      "state": "unverified"
+    },
+    {
+      "id": "0xb2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2",
+      "state": "unverified"
+    },
+    {
+      "id": "0xc3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3",
+      "state": "unverified"
+    }
+  ]
+}

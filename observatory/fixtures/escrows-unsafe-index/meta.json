@@ -1,0 +1,11 @@
+{
+  "scenario": "escrows-unsafe-index",
+  "description": "Synthetic: escrow ids, block hashes, block numbers and indexes are made up. Only the genesis hash is real (faucet GET /chain and tclk/flop/VERIFICATION.md). The page file is written by hand. Escrow a1 has a finalized open whose index is the literal 9007199254740993, which is beyond 2^53 - 1 and is rounded by JSON parsing. An unsafe integer makes the event malformed, so a1 is unverified, not funded. Escrow b2 has a clean finalized open on the same page and stays funded.",
+  "now": "2026-11-10T00:00:00Z",
+  "synthetic": true,
+  "escrow_ids": [
+    "0xa1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+    "0xb2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2"
+  ],
+  "pinned_genesis": "0x99c172c095340ace980631f9123544c6bebd4839f3437e463533422d8be2d631"
+}

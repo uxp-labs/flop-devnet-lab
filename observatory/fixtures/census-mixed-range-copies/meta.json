@@ -1,0 +1,11 @@
+{
+  "scenario": "census-mixed-range-copies",
+  "description": "Synthetic, made up for a test. Request 0 to 149. The pinned genesis is the FLOP devnet genesis (DEVNET_GENESIS in src/status.ts); every event and block hash is made up. Clause numbers refer to RULES.md section 3.1. Two complete chains, blocks 0 to 99 and blocks 100 to 199, cover the request together. Copies of one event (one key, clause 9) are judged together (clause 4): the EscrowReleased at block 50 appears on both pages, inside the first page's range and outside the second's, so the copies are inconsistent and the group counts once as malformed, with 1 copy dropped, and nowhere else. An EscrowRefunded is copied once with block_number null, which is kept, and once with block_number 160, outside the request: inconsistent too, malformed once, 1 copy dropped. Two identical copies of an EscrowOpened at block 120 both lie outside their page's range (0 to 99), so that group is skipped and counts nowhere, not even in duplicates_dropped. An event at block 130 with no section is malformed and outside its page's range, so it is skipped, not malformed (clause 10). The opens at blocks 10 and 110 count. Expected: complete true, status complete; covered 0 to 149; gaps none; totals escrows_opened 2, escrows_released 0, escrows_refunded 0, channels_opened 0, channels_settled 0; pending_unfinalized 0; duplicates_dropped 2; excluded_other_genesis 0; malformed_dropped 2; by_account synthetic-alice (escrows_opened 1), synthetic-dave (escrows_opened 1).",
+  "now": "2026-11-10T00:00:00.000Z",
+  "synthetic": true,
+  "census_request": {
+    "from_block": 0,
+    "to_block": 149
+  },
+  "pinned_genesis": "0x99c172c095340ace980631f9123544c6bebd4839f3437e463533422d8be2d631"
+}

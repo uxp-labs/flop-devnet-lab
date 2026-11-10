@@ -1,0 +1,6 @@
+{
+  "scenario": "status-rpc-no-observed-at",
+  "description": "Synthetic: status-healthy with no observed_at on the RPC head, so its age cannot be known. RPC health must be unknown, stale null.",
+  "now": "2026-11-09T23:47:53Z",
+  "synthetic": true
+}

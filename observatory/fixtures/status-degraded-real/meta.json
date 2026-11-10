@@ -1,0 +1,6 @@
+{
+  "scenario": "status-degraded-real",
+  "description": "Real responses only: faucet.flop.network GET /health (HTTP 503, degraded, ready false) and GET /chain, read 2026-11-09 about 23:47 UTC. Gateway and RPC were not read, so they are absent and must show as unknown.",
+  "now": "2026-11-09T23:47:53Z",
+  "synthetic": false
+}

@@ -1,0 +1,12 @@
+{
+  "scenario": "escrows-malformed",
+  "description": "Synthetic: escrow ids, block hashes, block numbers and indexes are made up. Only the genesis hash is real (faucet GET /chain and tclk/flop/VERIFICATION.md). Escrow c3: clean open and release. Escrow b2: clean open only. Escrow a1: only malformed events (index as a string, short block hash, finalized as a string). Also events whose escrow id does not parse (short id on a finalized release, missing data, a number as id) and one entry that is not an object. Expected: c3, a1 and b2 all unverified. a1 has no well formed event. A finalized release with an unparsable id could be about any escrow: it could be a second distinct release of c3, which is a conflict just as two well formed releases are, and it could be the release of b2.",
+  "now": "2026-11-10T00:00:00Z",
+  "synthetic": true,
+  "escrow_ids": [
+    "0xc3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3",
+    "0xa1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+    "0xb2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2"
+  ],
+  "pinned_genesis": "0x99c172c095340ace980631f9123544c6bebd4839f3437e463533422d8be2d631"
+}

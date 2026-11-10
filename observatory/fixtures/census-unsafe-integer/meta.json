@@ -1,0 +1,11 @@
+{
+  "scenario": "census-unsafe-integer",
+  "description": "Synthetic, made up for a test. Request 0 to 9007199254740991, the largest safe range (2^53 less 1 is the largest safe integer). The pinned genesis is the FLOP devnet genesis (DEVNET_GENESIS in src/status.ts); every event and block hash is made up. Clause numbers refer to RULES.md section 3.1. The page file is written by hand, so its JSON text literally holds 9007199254740993 (2^53 plus 1), which a JavaScript number cannot hold: JSON.parse reads it as 9007199254740992. The page claims blocks 0 to 9007199254740993 and holds an open at block 9007199254740993. An integer must be safe (clause 14), so the page's to_block is not an integer and the whole census refuses (clause 12), instead of counting an event that lies outside the request. Expected: the census refuses; no totals.",
+  "now": "2026-11-10T00:00:00.000Z",
+  "synthetic": true,
+  "census_request": {
+    "from_block": 0,
+    "to_block": 9007199254740991
+  },
+  "pinned_genesis": "0x99c172c095340ace980631f9123544c6bebd4839f3437e463533422d8be2d631"
+}

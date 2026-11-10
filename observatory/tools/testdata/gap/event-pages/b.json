@@ -1,0 +1,21 @@
+{
+ "events": [
+  {
+   "block_hash": "0x000000000000000000000000000000000000000000000000000000000000000c",
+   "block_number": 12,
+   "data": {
+    "escrow_id": "0x1111111111111111111111111111111111111111111111111111111111111111",
+    "who": "bob"
+   },
+   "finalized": true,
+   "index": 0,
+   "method": "EscrowOpened",
+   "section": "hasStation"
+  }
+ ],
+ "from_block": 11,
+ "genesis": "0xa1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+ "next_page": 1,
+ "page": 0,
+ "to_block": 20
+}

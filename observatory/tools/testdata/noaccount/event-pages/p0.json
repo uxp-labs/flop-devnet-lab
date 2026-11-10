@@ -1,0 +1,41 @@
+{
+ "events": [
+  {
+   "block_hash": "0x0000000000000000000000000000000000000000000000000000000000000001",
+   "block_number": 1,
+   "data": {},
+   "finalized": true,
+   "index": 0,
+   "method": "ChannelSettled",
+   "section": "computeChannel"
+  },
+  {
+   "block_hash": "0x0000000000000000000000000000000000000000000000000000000000000002",
+   "block_number": 2,
+   "data": {
+    "escrow_id": "0x3333333333333333333333333333333333333333333333333333333333333333"
+   },
+   "finalized": true,
+   "index": 0,
+   "method": "EscrowOpened",
+   "section": "hasStation"
+  },
+  {
+   "block_hash": "0x0000000000000000000000000000000000000000000000000000000000000003",
+   "block_number": 3,
+   "data": {
+    "owner": "o",
+    "who": "w"
+   },
+   "finalized": true,
+   "index": 0,
+   "method": "EscrowOpened",
+   "section": "hasStation"
+  }
+ ],
+ "from_block": 1,
+ "genesis": "0xa1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+ "next_page": null,
+ "page": 0,
+ "to_block": 10
+}

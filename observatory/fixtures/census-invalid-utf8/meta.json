@@ -1,0 +1,11 @@
+{
+  "scenario": "census-invalid-utf8",
+  "description": "Synthetic, made up for a test. Request 0 to 199. The pinned genesis is the FLOP devnet genesis (DEVNET_GENESIS in src/status.ts); every event and block hash is made up. Clause numbers refer to RULES.md section 3.1. 00-page-0.json holds page 0 for blocks 0 to 99, with a release. 01-invalid-utf8.json holds page 0 for blocks 100 to 199, with a refund, but the who string of the refund holds the byte 0xff, which is not valid UTF-8. Decoded lossily, the byte would become U+FFFD and the page would parse, so the census would come out complete with the refund counted. Page files are read as strict UTF-8 (clause 12), so the file cannot be read and refuses the whole census. Expected: the census refuses; no totals.",
+  "now": "2026-11-10T00:00:00.000Z",
+  "synthetic": true,
+  "census_request": {
+    "from_block": 0,
+    "to_block": 199
+  },
+  "pinned_genesis": "0x99c172c095340ace980631f9123544c6bebd4839f3437e463533422d8be2d631"
+}

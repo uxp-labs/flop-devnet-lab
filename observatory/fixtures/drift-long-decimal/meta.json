@@ -1,0 +1,7 @@
+{
+  "scenario": "drift-long-decimal",
+  "description": "Synthetic, made up for a test, after IMD audit finding 10: the spec (spec.yaml in this folder, not from upstream) writes FLOP amounts with more significant digits than a JS number keeps, and the runtime constants were written by hand; none was read from a chain. Each decimal is read from its source text, so nothing rounds. p_short_decimal, 0.05 FLOP, is 50000000000000000 base units and matches. p_exact_long, 1.000000000000000001 FLOP, is 1000000000000000001 base units and matches exactly (read through a JS number it would be 1 FLOP and mismatch). p_mismatch, 1200000.000000000000001 FLOP, is 1200000000000000000001000 base units, so the runtime value 1200000000000000000000000 is a mismatch (read through a JS number it would match). p_tiny_fraction, 1.0000000000000000001 FLOP, is not a whole number of base units, so it is unknown (read through a JS number it would match). Expected: items 4; matches 2; mismatches 1; unknown 1.",
+  "now": "2026-11-10T00:00:00.000Z",
+  "synthetic": true,
+  "params_spec": "spec.yaml"
+}

@@ -1,0 +1,20 @@
+{
+ "events": [
+  {
+   "block_hash": "0x0000000000000000000000000000000000000000000000000000000000000003",
+   "block_number": 3,
+   "data": {
+    "who": "bob"
+   },
+   "finalized": true,
+   "index": 2.0,
+   "method": "EscrowOpened",
+   "section": "hasStation"
+  }
+ ],
+ "from_block": 1,
+ "genesis": "0xa1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+ "next_page": null,
+ "page": 1,
+ "to_block": 10
+}

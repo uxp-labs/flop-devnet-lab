@@ -1,0 +1,17 @@
+{
+  "observed_at": "2026-11-10T00:00:00.000Z",
+  "runtime_spec_version": null,
+  "values": {
+    "validators.initialMinimumStake": "1200000000000000000000000",
+    "blockRewards.initialRewardPerBlock": "96000000000000000000",
+    "blockRewards.halvingIntervalBlocks": 63072000,
+    "minerStaking.capacityStakePerGflop": "10000000000000000",
+    "hasStation.finalityFreezeThreshold": 120,
+    "computeChannel.finalityFreezeThreshold": 120,
+    "hasStation.htlcBurnShare": 0,
+    "validators.extendedDowntimeSlash": 50000000,
+    "computeChannel.minForceOpenEscrowForFailedAck": "50000000000000000",
+    "daRegistry.depositPerByte": "200000000000",
+    "flopSessionKeys.maxSessionDuration": 864000
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "scenario": "escrows-unparsable-copy-disagrees",
+  "description": "Synthetic: escrow ids, block hashes, block numbers and indexes are made up. Only the genesis hash is real (faucet GET /chain and tclk/flop/VERIFICATION.md). Escrow b2 has a clean finalized open. One event (block 0x09 repeated, index 0) is read twice: a finalized release whose escrow id is 0x12 and does not parse, and a well formed copy naming a1. The copies disagree, so a1 is unverified. The unparsable finalized release could still be about b2, whatever the other copy says, so b2 is unverified too.",
+  "now": "2026-11-10T00:00:00Z",
+  "synthetic": true,
+  "escrow_ids": [
+    "0xa1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+    "0xb2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2"
+  ],
+  "pinned_genesis": "0x99c172c095340ace980631f9123544c6bebd4839f3437e463533422d8be2d631"
+}

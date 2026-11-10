@@ -1,0 +1,11 @@
+{
+  "scenario": "escrows-unreadable-page",
+  "description": "Synthetic: escrow ids, block hashes, block numbers and indexes are made up. Only the genesis hash is real (faucet GET /chain and tclk/flop/VERIFICATION.md). Page 000.json holds a finalized open and release for escrow a1. Page 001.json is cut off in the middle and is not valid JSON; before the cut it held a finalized refund for the same escrow. An unreadable page makes every escrow unverified.",
+  "now": "2026-11-10T00:00:00Z",
+  "synthetic": true,
+  "escrow_ids": [
+    "0xa1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+    "0xb2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2"
+  ],
+  "pinned_genesis": "0x99c172c095340ace980631f9123544c6bebd4839f3437e463533422d8be2d631"
+}

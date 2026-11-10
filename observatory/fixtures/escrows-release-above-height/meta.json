@@ -1,0 +1,12 @@
+{
+  "scenario": "escrows-release-above-height",
+  "description": "Synthetic: escrow ids, block hashes, block numbers and indexes are made up. Only the genesis hash is real (faucet GET /chain and tclk/flop/VERIFICATION.md). The finalized height is 150. Escrow a1 has a finalized open at block 110 and a release at block 160 that the page calls finalized. Our finalized head does not reach block 160, so the release is not evidence, but it names a1: a1 is unverified, not funded. Escrow b2 has a finalized open at 120 and a finalized refund at 150, exactly at the height, and is refunded. Escrow c3 has only an open at block 170, above the height, which is ignored with a note.",
+  "now": "2026-11-10T00:00:00Z",
+  "synthetic": true,
+  "escrow_ids": [
+    "0xa1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+    "0xb2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2",
+    "0xc3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3"
+  ],
+  "pinned_genesis": "0x99c172c095340ace980631f9123544c6bebd4839f3437e463533422d8be2d631"
+}

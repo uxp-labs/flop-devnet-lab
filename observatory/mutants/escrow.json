@@ -1,0 +1,418 @@
+[
+  {
+    "id": "escrow-unfinalized-counts",
+    "file": "src/escrow.ts",
+    "find": "finalized: raw[\"finalized\"] === true,",
+    "replace": "finalized: true,",
+    "test": "test/escrow.test.ts",
+    "why": "Unfinalized events must be pending, never proof."
+  },
+  {
+    "id": "escrow-any-finalized-copy-wins",
+    "file": "src/escrow.ts",
+    "find": "if (copies.some((c) => c.finalized !== true)) {",
+    "replace": "if (copies.every((c) => c.finalized !== true)) {",
+    "test": "test/escrow.test.ts",
+    "why": "If any copy of an event is not finalized, the event is pending (U9)."
+  },
+  {
+    "id": "escrow-split-event-claims-two",
+    "file": "src/escrow.ts",
+    "find": "if (signatures.size > 1) {",
+    "replace": "if (false) {",
+    "test": "test/escrow.test.ts",
+    "why": "Copies of one event that disagree must leave every named escrow unverified (U5)."
+  },
+  {
+    "id": "escrow-split-event-first-copy-wins",
+    "file": "src/escrow.ts",
+    "find": "if (named.has(id)) {\n        conflicts.push(",
+    "replace": "if (first.id.ok && first.id.id !== id) {\n        conflicts.push(",
+    "test": "test/escrow.test.ts",
+    "why": "Every escrow any copy names is unverified, not only the ones named by later copies (U5)."
+  },
+  {
+    "id": "escrow-block-number-disagreement-ignored",
+    "file": "src/escrow.ts",
+    "find": "String(c.method), idPart, String(c.block_number), c.account]));",
+    "replace": "String(c.method), idPart, c.account]));",
+    "test": "test/escrow.test.ts",
+    "why": "Copies of one event must agree on block_number; null against a number disagrees."
+  },
+  {
+    "id": "escrow-unreadable-page-ignored",
+    "file": "src/escrow.ts",
+    "find": "if (unreadable.length > 0) {",
+    "replace": "if (false) {",
+    "test": "test/escrow.test.ts",
+    "why": "An unreadable event page makes every escrow unverified (U4)."
+  },
+  {
+    "id": "escrow-invalid-page-skipped",
+    "file": "src/escrow.ts",
+    "find": "if (invalid.length > 0) {",
+    "replace": "if (false) {",
+    "test": "test/escrow.test.ts",
+    "why": "A structurally invalid page makes every escrow unverified, it is not skipped (U4)."
+  },
+  {
+    "id": "escrow-inverted-range-accepted",
+    "file": "src/escrow.ts",
+    "find": "if ((page[\"from_block\"] as number) > (page[\"to_block\"] as number)) return \"block range is inverted\";",
+    "replace": "",
+    "test": "test/escrow.test.ts",
+    "why": "An inverted block range is a structurally invalid page (census clause 12)."
+  },
+  {
+    "id": "escrow-other-genesis-counts",
+    "file": "src/escrow.ts",
+    "find": "const onPinned = p[\"genesis\"] === pinned;",
+    "replace": "const onPinned = true;",
+    "test": "test/escrow.test.ts",
+    "why": "Events from another genesis must be excluded."
+  },
+  {
+    "id": "escrow-no-dedupe",
+    "file": "src/escrow.ts",
+    "find": "const key = `${pinned}|${ev.block_hash}|${ev.index}`;",
+    "replace": "const key = `${pinned}|${ev.block_hash}|${ev.index}|${groups.size}`;",
+    "test": "test/escrow.test.ts",
+    "why": "The same event seen twice must count once."
+  },
+  {
+    "id": "escrow-conflict-picks-claimed",
+    "file": "src/escrow.ts",
+    "find": "if (released.length > 0 && refunded.length > 0) {",
+    "replace": "if (false) {",
+    "test": "test/escrow.test.ts",
+    "why": "A finalized release plus a finalized refund must stay unverified."
+  },
+  {
+    "id": "escrow-loose-id",
+    "file": "src/escrow.ts",
+    "find": "const HASH_RE = /^0x[0-9a-fA-F]{64}$/;",
+    "replace": "const HASH_RE = /^0x[0-9a-fA-F]+$/;",
+    "test": "test/escrow.test.ts",
+    "why": "An escrow id that is not 0x plus 64 hex is malformed."
+  },
+  {
+    "id": "escrow-any-section",
+    "file": "src/escrow.ts",
+    "find": "const escrowEvent = raw[\"section\"] === SECTION && typeof method",
+    "replace": "const escrowEvent = typeof method",
+    "test": "test/escrow.test.ts",
+    "why": "Only hasStation events are evidence; a gateway event with the same method name is not."
+  },
+  {
+    "id": "escrow-scope-changed",
+    "file": "src/escrow.ts",
+    "find": "export const ESCROW_SCOPE = \"settlement only; says nothing about output quality\" as const;",
+    "replace": "export const ESCROW_SCOPE = \"settlement and output quality\" as unknown as \"settlement only; says nothing about output quality\";",
+    "test": "test/escrow.test.ts",
+    "why": "Every result must carry the fixed scope string."
+  },
+  {
+    "id": "escrow-malformed-structure-accepted",
+    "file": "src/escrow.ts",
+    "find": "if (!isSafeInt(index) || index < 0) return \"index is not a safe whole number\";",
+    "replace": "if (typeof index !== \"number\" && typeof index !== \"string\") return \"index is not a safe whole number\";",
+    "test": "test/escrow.test.ts",
+    "why": "Events with wrong field types must be ignored."
+  },
+  {
+    "id": "escrow-malformed-terminal-no-conflict",
+    "file": "src/escrow.ts",
+    "find": "if (m !== OPENED && copies.some((x) => x.finalized)) suspectTerminals.add(m);",
+    "replace": "",
+    "test": "test/escrow.test.ts",
+    "why": "A finalized terminal event whose id does not parse is conflicting evidence."
+  },
+  {
+    "id": "escrow-funded-ignores-terminal",
+    "file": "src/escrow.ts",
+    "find": "if (released.length === 1) {",
+    "replace": "if (released.length === 1 && opened.length === 0) {",
+    "test": "test/escrow.test.ts",
+    "why": "Funded needs no finalized terminal event; a release must win over an open."
+  },
+  {
+    "id": "escrow-above-height-counts",
+    "file": "src/escrow.ts",
+    "find": "c.block_number > height)) {",
+    "replace": "c.block_number > height && false)) {",
+    "test": "test/escrow.test.ts",
+    "why": "An event above the finalized height is not finalized evidence."
+  },
+  {
+    "id": "escrow-unparsable-copy-hidden-by-disagreement",
+    "file": "src/escrow.ts",
+    "find": "    for (const c of copies) {\n      if (!c.escrowEvent || c.id.ok) continue;",
+    "replace": "    for (const c of signatures.size > 1 ? [] : copies) {\n      if (!c.escrowEvent || c.id.ok) continue;",
+    "test": "test/escrow.test.ts",
+    "why": "An unparsable finalized terminal copy counts whatever the other copies say (U-new-1)."
+  },
+  {
+    "id": "escrow-two-refunds-no-conflict",
+    "file": "src/escrow.ts",
+    "find": "if (refunded.length > 1) conflicts.push(",
+    "replace": "if (refunded.length > 2) conflicts.push(",
+    "test": "test/escrow.test.ts",
+    "why": "Two distinct finalized refunds are conflicting evidence (U-new-2)."
+  },
+  {
+    "id": "escrow-two-releases-no-conflict",
+    "file": "src/escrow.ts",
+    "find": "if (released.length > 1) conflicts.push(",
+    "replace": "if (released.length > 2) conflicts.push(",
+    "test": "test/escrow.test.ts",
+    "why": "Two distinct finalized releases are conflicting evidence."
+  },
+  {
+    "id": "escrow-two-opens-no-conflict",
+    "file": "src/escrow.ts",
+    "find": "if (opened.length > 1) conflicts.push(",
+    "replace": "if (opened.length > 2) conflicts.push(",
+    "test": "test/escrow.test.ts",
+    "why": "Two distinct finalized opens are conflicting evidence and the note must say so (U-new-2)."
+  },
+  {
+    "id": "escrow-refund-ignores-malformed-release",
+    "file": "src/escrow.ts",
+    "find": "    } else if (refunded.length === 1) {\n      if (suspectTerminals.size > 0) {",
+    "replace": "    } else if (refunded.length === 1) {\n      if (suspectTerminals.has(REFUNDED)) {",
+    "test": "test/escrow.test.ts",
+    "why": "A malformed finalized release contradicts refunded (U-new-2)."
+  },
+  {
+    "id": "escrow-claim-ignores-malformed-refund",
+    "file": "src/escrow.ts",
+    "find": "      // it outright: either one leaves the escrow unverified.\n      if (suspectTerminals.size > 0) {",
+    "replace": "      // it outright: either one leaves the escrow unverified.\n      if (suspectTerminals.has(RELEASED)) {",
+    "test": "test/escrow.test.ts",
+    "why": "A malformed finalized refund contradicts claimed."
+  },
+  {
+    "id": "escrow-outside-page-range-counts",
+    "file": "src/escrow.ts",
+    "find": "(ev.block_number < fromBlock || ev.block_number > toBlock));",
+    "replace": "(false));",
+    "test": "test/escrow.test.ts",
+    "why": "An event outside its page's block range is not evidence (U-new-4)."
+  },
+  {
+    "id": "escrow-below-page-range-counts",
+    "file": "src/escrow.ts",
+    "find": "(ev.block_number < fromBlock || ev.block_number > toBlock));",
+    "replace": "(ev.block_number > toBlock));",
+    "test": "test/escrow.test.ts",
+    "why": "The page range bounds evidence from below as well as above."
+  },
+  {
+    "id": "escrow-genesis-case-folded",
+    "file": "src/escrow.ts",
+    "find": "const onPinned = p[\"genesis\"] === pinned;",
+    "replace": "const onPinned = (p[\"genesis\"] as string).toLowerCase() === pinned;",
+    "test": "test/escrow.test.ts",
+    "why": "Genesis values are compared exactly as written (U-new-4)."
+  },
+  {
+    "id": "escrow-block-hash-case-accepted",
+    "file": "src/escrow.ts",
+    "find": "const LOWER_HASH_RE = /^0x[0-9a-f]{64}$/;",
+    "replace": "const LOWER_HASH_RE = /^0x[0-9a-fA-F]{64}$/;",
+    "test": "test/escrow.test.ts",
+    "why": "Block hashes and the pinned genesis have one accepted spelling, lower case hex."
+  },
+  {
+    "id": "escrow-unbounded-note-dropped",
+    "file": "src/escrow.ts",
+    "find": "if (height === null && evidence.length > 0) {",
+    "replace": "if (false) {",
+    "test": "test/escrow.test.ts",
+    "why": "Evidence with no finalized height must say it is not bounded (U-new-3)."
+  },
+  {
+    "id": "escrow-outside-range-dropped-before-grouping",
+    "file": "src/escrow.ts",
+    "find": "      const list = groups.get(key);",
+    "replace": "      if (!copy.inRange) continue;\n      const list = groups.get(key);",
+    "test": "test/escrow.test.ts",
+    "why": "Out of range copies are grouped before the range check, so the copy agreement and unparsable id rules still see them (r3 item 3, x10 and x11)."
+  },
+  {
+    "id": "escrow-outside-range-terminal-not-suspect",
+    "file": "src/escrow.ts",
+    "find": "      outsideRange++;\n      if (method !== OPENED && copies.some((c) => c.finalized)) {\n        const what",
+    "replace": "      outsideRange++;\n      if (false) {\n        const what",
+    "test": "test/escrow.test.ts",
+    "why": "An out of range finalized release or refund that names an escrow leaves it unverified."
+  },
+  {
+    "id": "escrow-outside-range-open-conflicts",
+    "file": "src/escrow.ts",
+    "find": "      outsideRange++;\n      if (method !== OPENED && copies.some((c) => c.finalized)) {\n        const what",
+    "replace": "      outsideRange++;\n      if (copies.some((c) => c.finalized)) {\n        const what",
+    "test": "test/escrow.test.ts",
+    "why": "Only an out of range release or refund is conflicting evidence; an out of range open is ignored with a note."
+  },
+  {
+    "id": "escrow-unsafe-index-accepted",
+    "file": "src/escrow.ts",
+    "find": "if (!isSafeInt(index) || index < 0) return \"index is not a safe whole number\";",
+    "replace": "if (typeof index !== \"number\" || !Number.isInteger(index) || index < 0) return \"index is not a safe whole number\";",
+    "test": "test/escrow.test.ts",
+    "why": "An unsafe integer index makes the event malformed (IMD audit finding 1)."
+  },
+  {
+    "id": "escrow-unsafe-block-number-accepted",
+    "file": "src/escrow.ts",
+    "find": "  if (n !== null && !isSafeInt(n)) {",
+    "replace": "  if (n !== null && !(typeof n === \"number\" && Number.isInteger(n))) {",
+    "test": "test/escrow.test.ts",
+    "why": "An unsafe integer block_number makes the event malformed."
+  },
+  {
+    "id": "escrow-unsafe-page-field-accepted",
+    "file": "src/escrow.ts",
+    "find": "if (!isSafeInt(own(page, k))) return",
+    "replace": "if (!(typeof own(page, k) === \"number\" && Number.isInteger(own(page, k)))) return",
+    "test": "test/escrow.test.ts",
+    "why": "An unsafe integer in a page field makes the page invalid (IMD audit finding 2)."
+  },
+  {
+    "id": "escrow-unsafe-next-page-accepted",
+    "file": "src/escrow.ts",
+    "find": "(page[\"next_page\"] !== null && !isSafeInt(page[\"next_page\"]))) {",
+    "replace": "(page[\"next_page\"] !== null && !Number.isInteger(page[\"next_page\"]))) {",
+    "test": "test/escrow.test.ts",
+    "why": "An unsafe next_page makes the page invalid."
+  },
+  {
+    "id": "escrow-two-opens-ignored-with-terminal",
+    "file": "src/escrow.ts",
+    "find": "if (opened.length > 1) conflicts.push(",
+    "replace": "if (opened.length > 1 && released.length + refunded.length === 0) conflicts.push(",
+    "test": "test/escrow.test.ts",
+    "why": "Two distinct finalized opens conflict whether or not a release or refund exists (IMD audit finding 7)."
+  },
+  {
+    "id": "escrow-above-height-terminal-ignored",
+    "file": "src/escrow.ts",
+    "find": "      aboveHeight++;\n      if (method !== OPENED) {",
+    "replace": "      aboveHeight++;\n      if (false) {",
+    "test": "test/escrow.test.ts",
+    "why": "A finalized release or refund above the finalized height leaves the escrow unverified (IMD audit finding 11)."
+  },
+  {
+    "id": "escrow-above-height-open-conflicts",
+    "file": "src/escrow.ts",
+    "find": "      aboveHeight++;\n      if (method !== OPENED) {",
+    "replace": "      aboveHeight++;\n      if (true) {",
+    "test": "test/escrow.test.ts",
+    "why": "Only a release or refund above the height is conflicting evidence; an open there is ignored with a note."
+  },
+  {
+    "id": "escrow-negative-block-number-malformed",
+    "file": "src/escrow.ts",
+    "find": "  if (n !== null && !isSafeInt(n)) {",
+    "replace": "  if (n !== null && (!isSafeInt(n) || n < 0)) {",
+    "test": "test/escrow.test.ts",
+    "why": "A negative block_number is an integer; the page range rule handles it, it is not malformed (IMD audit finding 14)."
+  },
+  {
+    "id": "escrow-negative-from-block-accepted",
+    "file": "src/escrow.ts",
+    "find": "  if ((page[\"from_block\"] as number) < 0) return \"from_block is negative\";\n",
+    "replace": "",
+    "test": "test/escrow.test.ts",
+    "why": "a page whose range starts below block 0 is invalid, so nothing in it is evidence"
+  },
+  {
+    "id": "escrow-missing-block-number-accepted",
+    "file": "src/escrow.ts",
+    "find": "  if (!Object.hasOwn(ev, \"block_number\")) return \"block_number is missing\";\n",
+    "replace": "",
+    "test": "test/escrow.test.ts",
+    "why": "an event with no block_number key is malformed (census clause 7), never evidence"
+  },
+  {
+    "id": "escrow-broken-chain-ignored",
+    "file": "src/escrow.ts",
+    "find": "  if (broken.length > 0) return unverified(id, broken, opts);\n",
+    "replace": "",
+    "test": "test/escrow.test.ts",
+    "why": "a broken chain means a missing page that could hold a conflicting event"
+  },
+  {
+    "id": "escrow-off-chain-evidence-accepted",
+    "file": "src/escrow.ts",
+    "find": "    const onChain = !onPinned || reachable.has(page);",
+    "replace": "    const onChain = true;",
+    "test": "test/escrow.test.ts",
+    "why": "an event on a page not reachable from page 0 is never evidence"
+  },
+  {
+    "id": "escrow-off-chain-terminal-not-suspect",
+    "file": "src/escrow.ts",
+    "find": "        conflicts.push(`a finalized ${what} on a page not reachable from page 0 names this escrow (${where})`);\n",
+    "replace": "",
+    "test": "test/escrow.test.ts",
+    "why": "a finalized release or refund off the chain still names the escrow"
+  },
+  {
+    "id": "escrow-unbounded-evidence-not-noted",
+    "file": "src/escrow.ts",
+    "find": "  if (height !== null && unbounded > 0) {",
+    "replace": "  if (false) {",
+    "test": "test/escrow.test.ts",
+    "why": "evidence the finalized height cannot bound must say so"
+  },
+  {
+    "id": "escrow-claimed-ignores-malformed-release",
+    "file": "src/escrow.ts",
+    "find": "      // it outright: either one leaves the escrow unverified.\n      if (suspectTerminals.size > 0) {",
+    "replace": "      // it outright: either one leaves the escrow unverified.\n      if (suspectTerminals.has(REFUNDED)) {",
+    "test": "test/escrow.test.ts",
+    "why": "a malformed finalized release could be a second distinct release"
+  },
+  {
+    "id": "escrow-refunded-ignores-malformed-refund",
+    "file": "src/escrow.ts",
+    "find": "    } else if (refunded.length === 1) {\n      if (suspectTerminals.size > 0) {",
+    "replace": "    } else if (refunded.length === 1) {\n      if (suspectTerminals.has(RELEASED)) {",
+    "test": "test/escrow.test.ts",
+    "why": "a malformed finalized refund could be a second distinct refund"
+  },
+  {
+    "id": "escrow-copies-ignore-account",
+    "file": "src/escrow.ts",
+    "find": "String(c.block_number), c.account]));",
+    "replace": "String(c.block_number)]));",
+    "test": "test/escrow.test.ts",
+    "why": "copies that disagree on the account are malformed in the census, so never escrow evidence"
+  },
+  {
+    "id": "escrow-broken-kind-not-suspect",
+    "file": "src/escrow.ts",
+    "find": "          if (raw[\"finalized\"] === true) suspectTerminals.add(UNKNOWN_KIND);\n",
+    "replace": "",
+    "test": "test/escrow.test.ts",
+    "why": "a finalized event naming the escrow with a broken kind could be its release or refund"
+  },
+  {
+    "id": "escrow-bound-any-number",
+    "file": "src/escrow.ts",
+    "find": "  return isSafeInt(h) && h >= 0 ? h : null;",
+    "replace": "  return typeof h === \"number\" ? h : null;",
+    "test": "test/escrow.test.ts",
+    "why": "third IMD audit J6: NaN, Infinity or 1.5 bounds nothing; it reads as no height, with the not bounded note"
+  },
+  {
+    "id": "escrow-bound-negative",
+    "file": "src/escrow.ts",
+    "find": "  return isSafeInt(h) && h >= 0 ? h : null;",
+    "replace": "  return isSafeInt(h) ? h : null;",
+    "test": "test/escrow.test.ts",
+    "why": "third IMD audit J6: a negative height bounds nothing"
+  }
+]

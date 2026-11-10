@@ -1,0 +1,11 @@
+{
+  "scenario": "census-outside-request",
+  "description": "Synthetic, made up for a test. Request 0 to 99. The pinned genesis is the FLOP devnet genesis (DEVNET_GENESIS in src/status.ts); every event and block hash is made up. Clause numbers refer to RULES.md section 3.1. Blocks 0 to 99 have a complete chain with an open and a release. Blocks 200 to 299 have a complete chain too, but it does not intersect the request, so none of its events counts anywhere, whatever their block_number (clause 1): a finalized EscrowOpened with block_number null and an identical copy of it, an unfinalized EscrowRefunded with block_number null, an event with no section, and an EscrowOpened at block 250. Counted, they would have added an open, a duplicate, a pending event and a malformed event. Expected: complete true, status complete; covered 0 to 99; gaps none; totals escrows_opened 1, escrows_released 1, escrows_refunded 0, channels_opened 0, channels_settled 0; pending_unfinalized 0; duplicates_dropped 0; excluded_other_genesis 0; malformed_dropped 0; by_account synthetic-alice (escrows_opened 1, escrows_released 1).",
+  "now": "2026-11-10T00:00:00.000Z",
+  "synthetic": true,
+  "census_request": {
+    "from_block": 0,
+    "to_block": 99
+  },
+  "pinned_genesis": "0x99c172c095340ace980631f9123544c6bebd4839f3437e463533422d8be2d631"
+}

@@ -1,0 +1,138 @@
+[
+  {
+    "id": "strict-unsafe-integer-accepted",
+    "file": "src/strict.ts",
+    "find": "  return typeof v === \"number\" && Number.isSafeInteger(v);",
+    "replace": "  return typeof v === \"number\" && Number.isInteger(v);",
+    "test": "test/strict.test.ts",
+    "why": "an integer beyond 2^53 - 1 must not count (clause 14)"
+  },
+  {
+    "id": "strict-impossible-day-rolls-over",
+    "file": "src/strict.ts",
+    "find": "  if (month < 1 || month > 12 || day < 1 || day > daysInMonth(year, month)) return null;",
+    "replace": "  if (month < 1 || month > 12 || day < 1 || day > 31) return null;",
+    "test": "test/strict.test.ts",
+    "why": "2026-11-31 must not roll over to December 1"
+  },
+  {
+    "id": "strict-leap-rule-wrong",
+    "file": "src/strict.ts",
+    "find": "  const leap = (year % 4 === 0 && year % 100 !== 0) || year % 400 === 0;",
+    "replace": "  const leap = year % 4 === 0;",
+    "test": "test/strict.test.ts",
+    "why": "1900 was not a leap year"
+  },
+  {
+    "id": "strict-hour-24-accepted",
+    "file": "src/strict.ts",
+    "find": "  if (hour > 23 || minute > 59 || second > 59) return null;",
+    "replace": "  if (hour > 24 || minute > 59 || second > 59) return null;",
+    "test": "test/strict.test.ts",
+    "why": "an hour of 24 is not a real clock time here"
+  },
+  {
+    "id": "strict-offset-sign-flipped",
+    "file": "src/strict.ts",
+    "find": "    offsetMinutes = (m[9] === \"+\" ? 1 : -1) * (oh * 60 + om);",
+    "replace": "    offsetMinutes = (m[9] === \"+\" ? -1 : 1) * (oh * 60 + om);",
+    "test": "test/strict.test.ts",
+    "why": "an offset time must name the same instant as its Z form"
+  },
+  {
+    "id": "strict-zoneless-accepted",
+    "file": "src/strict.ts",
+    "find": "(?::(\\d{2})(?:\\.(\\d+))?)?(?:(Z)|([+-])(\\d{2}):(\\d{2}))$/;",
+    "replace": "(?::(\\d{2})(?:\\.(\\d+))?)?(?:(Z)|([+-])(\\d{2}):(\\d{2}))?$/;",
+    "test": "test/strict.test.ts",
+    "why": "a time without a zone must not parse"
+  },
+  {
+    "id": "strict-two-digit-year-shifted",
+    "file": "src/strict.ts",
+    "find": "  d.setUTCFullYear(year, month - 1, day);\n  d.setUTCHours(hour, minute, second, millis);\n  return d.getTime() - offsetMinutes * 60_000;",
+    "replace": "  return Date.UTC(year, month - 1, day, hour, minute, second, millis) - offsetMinutes * 60_000;",
+    "test": "test/strict.test.ts",
+    "why": "a year below 100 must be read as written"
+  },
+  {
+    "id": "strict-duplicate-key-ignored",
+    "file": "src/strict.ts",
+    "find": "        if (top.keys.has(key)) return key;\n",
+    "replace": "",
+    "test": "test/strict.test.ts",
+    "why": "a key repeated in one object must be found"
+  },
+  {
+    "id": "strict-escaped-key-not-read",
+    "file": "src/strict.ts",
+    "find": "        const key = JSON.parse(text.slice(i, j + 1)) as string;",
+    "replace": "        const key = text.slice(i + 1, j);",
+    "test": "test/strict.test.ts",
+    "why": "\"a\" and \"\\u0061\" are the same key"
+  },
+  {
+    "id": "strict-closed-object-kept",
+    "file": "src/strict.ts",
+    "find": "    } else if (c === \"}\" || c === \"]\") {\n      stack.pop();",
+    "replace": "    } else if (c === \"]\") {\n      stack.pop();",
+    "test": "test/strict.test.ts",
+    "why": "a closed object's keys must not count against its parent"
+  },
+  {
+    "id": "strict-value-taken-as-key",
+    "file": "src/strict.ts",
+    "find": "        top.expectKey = false;\n",
+    "replace": "",
+    "test": "test/strict.test.ts",
+    "why": "a string value equal to a key is not a repeated key"
+  },
+  {
+    "id": "strict-nesting-counts-strings",
+    "file": "src/strict.ts",
+    "find": "    } else if (c === '\"') {\n      inString = true;\n    } else if (c === \"[\" || c === \"{\") {",
+    "replace": "    } else if (c === \"[\" || c === \"{\") {",
+    "test": "test/strict.test.ts",
+    "why": "a bracket inside a string is not nesting"
+  },
+  {
+    "id": "strict-nesting-escape-ignored",
+    "file": "src/strict.ts",
+    "find": "      if (c === \"\\\\\") i++;\n      else if (c === '\"') inString = false;",
+    "replace": "      if (c === '\"') inString = false;",
+    "test": "test/strict.test.ts",
+    "why": "an escaped quote does not end a string"
+  },
+  {
+    "id": "strict-time-fraction-rounded",
+    "file": "src/strict.ts",
+    "find": "  const millis = m[7] === undefined ? 0 : Number(m[7].slice(0, 3).padEnd(3, \"0\"));",
+    "replace": "  const millis = m[7] === undefined ? 0 : Math.round(Number(`0.${m[7]}`) * 1000);",
+    "test": "test/strict.test.ts",
+    "why": "round 7 review I1: a fraction is cut to whole milliseconds, never rounded into the next second"
+  },
+  {
+    "id": "own-reads-inherited",
+    "file": "src/own.ts",
+    "find": "  for (const [key, v] of Object.entries(o)) {\n    if (key !== k) continue;",
+    "replace": "  if (!Object.hasOwn(o, k)) return (o as { constructor?: unknown }).constructor;\n  for (const [key, v] of Object.entries(o)) {\n    if (key !== k) continue;",
+    "test": "test/strict.test.ts",
+    "why": "round 8 review M1: own() reads only a record's own data, never an inherited member such as constructor"
+  },
+  {
+    "id": "own-hands-back-functions",
+    "file": "src/own.ts",
+    "find": "    if (typeof v === \"function\") throw new TypeError(`own: ${JSON.stringify(k)} holds a function, not data`);\n",
+    "replace": "",
+    "test": "test/strict.test.ts",
+    "why": "round 8 review M1: own() never hands back a function, so a run time key never reaches code"
+  },
+  {
+    "id": "strict-duplicate-key-reads-past-the-end",
+    "file": "src/strict.ts",
+    "find": "      if (j >= text.length) return null;\n",
+    "replace": "",
+    "test": "test/strict.test.ts",
+    "why": "round 8 review L3: a string that never closes returns null instead of handing JSON.parse a slice past the end, which throws. The loop's own bound (j < text.length) has no mutant: without it the loop never ends, and the runner counts a time out as no kill (round 9 review I6)"
+  }
+]

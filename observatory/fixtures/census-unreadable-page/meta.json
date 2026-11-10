@@ -1,0 +1,11 @@
+{
+  "scenario": "census-unreadable-page",
+  "description": "Synthetic, made up for a test. Request 0 to 99. The pinned genesis is the FLOP devnet genesis (DEVNET_GENESIS in src/status.ts); every event and block hash is made up. Clause numbers refer to RULES.md section 3.1. Two files hold page 0 for blocks 0 to 99. The first is readable and holds a release. The second, 01-unreadable.json, is cut off before its end, so it is not valid JSON. A page file that cannot be read or parsed refuses the whole census (clause 12): the lost page could hold any event, here a refund. Expected: the census refuses; no totals.",
+  "now": "2026-11-10T00:00:00.000Z",
+  "synthetic": true,
+  "census_request": {
+    "from_block": 0,
+    "to_block": 99
+  },
+  "pinned_genesis": "0x99c172c095340ace980631f9123544c6bebd4839f3437e463533422d8be2d631"
+}

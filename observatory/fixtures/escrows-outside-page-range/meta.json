@@ -1,0 +1,12 @@
+{
+  "scenario": "escrows-outside-page-range",
+  "description": "Synthetic: escrow ids, block hashes, block numbers and indexes are made up. Only the genesis hash is real (faucet GET /chain and tclk/flop/VERIFICATION.md). The page covers blocks 100 to 199. Escrow a1 has a finalized open at block 110 and a finalized release at block 500, outside the page range. Escrow b2 has only a finalized release at block 500. An event outside its page's range is never evidence and it is suspect: a finalized release out of range that names an escrow leaves it unverified. Both are unverified. Escrow c3 has a finalized open at block 500 only, which is ignored with a note.",
+  "now": "2026-11-10T00:00:00Z",
+  "synthetic": true,
+  "escrow_ids": [
+    "0xa1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+    "0xb2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2",
+    "0xc3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3"
+  ],
+  "pinned_genesis": "0x99c172c095340ace980631f9123544c6bebd4839f3437e463533422d8be2d631"
+}

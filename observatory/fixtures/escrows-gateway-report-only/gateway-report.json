@@ -1,0 +1,8 @@
+{
+  "request_id": "gen_synthetic_0001",
+  "state": "settled",
+  "settled_spend": 0.001,
+  "terminal_event": "settled",
+  "escrow_id": "0xa1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+  "chain_final": true
+}

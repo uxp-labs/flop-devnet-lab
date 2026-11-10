@@ -1,0 +1,162 @@
+[
+  {
+    "id": "snapshot-unreadable-escrow-pages-dropped",
+    "file": "src/snapshot.ts",
+    "find": "      unreadablePages: await parts.escrows.source.eventPageErrors(),\n",
+    "replace": "",
+    "test": "test/snapshot.test.ts",
+    "why": "an unreadable escrow page must reach the escrow module, never be dropped"
+  },
+  {
+    "id": "source-page-errors-not-recorded",
+    "file": "src/source.ts",
+    "find": "const page = read<EventPage>(join(\"event-pages\", name), [loadErrors, pageErrors], true);",
+    "replace": "const page = read<EventPage>(join(\"event-pages\", name), [loadErrors], true);",
+    "test": "test/snapshot.test.ts",
+    "why": "an unreadable event page must be listed as a page error"
+  },
+  {
+    "id": "source-parser-wording-leaks",
+    "file": "src/source.ts",
+    "find": "              : e instanceof SyntaxError || e instanceof TypeError\n                ? \"not valid JSON\"\n                : errorCode(e) !== null",
+    "replace": "              : errorCode(e) !== null",
+    "test": "test/snapshot.test.ts",
+    "why": "outputs must not carry the parser's wording, which changes between Node versions"
+  },
+  {
+    "id": "snapshot-trust-strongest",
+    "file": "src/snapshot.ts",
+    "find": "return trusts.includes(\"fixture\") ? \"fixture\" : \"trusted RPC\";",
+    "replace": "return \"trusted RPC\";",
+    "test": "test/snapshot.test.ts",
+    "why": "one fixture input makes the whole snapshot a fixture, never trusted RPC"
+  },
+  {
+    "id": "snapshot-escrows-ignore-finalized-height",
+    "file": "src/snapshot.ts",
+    "find": "  const bound = status.genesis.rpc !== null && status.genesis.rpc === status.genesis.pinned && rpcUsable ? status.finalized_height : null;",
+    "replace": "  const bound = null;",
+    "test": "test/snapshot.test.ts",
+    "why": "escrow evidence is bounded by the finalized height the status read on the pinned genesis"
+  },
+  {
+    "id": "snapshot-pin-mixes-sources",
+    "file": "src/snapshot.ts",
+    "find": "    genesis: status.genesis.rpc,\n",
+    "replace": "    genesis: status.genesis.rpc ?? status.genesis.faucet,\n",
+    "test": "test/snapshot.test.ts",
+    "why": "the pin's genesis must come from the same source as its finalized head"
+  },
+  {
+    "id": "snapshot-other-chain-height",
+    "file": "src/snapshot.ts",
+    "find": "  const bound = status.genesis.rpc !== null && status.genesis.rpc === status.genesis.pinned && rpcUsable ? status.finalized_height : null;",
+    "replace": "  const bound = rpcUsable ? status.finalized_height : null;",
+    "test": "test/snapshot.test.ts",
+    "why": "another chain's finalized height must never bound pinned genesis escrows"
+  },
+  {
+    "id": "source-dotfile-page-read",
+    "file": "src/source.ts",
+    "find": "if (!entry.isFile() || name.startsWith(\".\") || !name.endsWith(\".json\")) {",
+    "replace": "if (!entry.isFile() || !name.endsWith(\".json\")) {",
+    "test": "test/snapshot.test.ts",
+    "why": "a dotfile in event-pages must be reported, not read or skipped"
+  },
+  {
+    "id": "source-other-files-skipped",
+    "file": "src/source.ts",
+    "find": "          pageProblem(`event-pages/${shownText(name)}: not a page file (a regular file named *.json, not starting with a dot)`);\n          continue;",
+    "replace": "          continue;",
+    "test": "test/snapshot.test.ts",
+    "why": "an entry that is not a page file must be reported, never skipped silently"
+  },
+  {
+    "id": "snapshot-previous-dropped",
+    "file": "src/snapshot.ts",
+    "find": "    previous: o.previous ?? null,",
+    "replace": "    previous: null,",
+    "test": "test/snapshot.test.ts",
+    "why": "the previous snapshot must reach the rollback and stuck height checks"
+  },
+  {
+    "id": "source-lossy-utf8",
+    "file": "src/source.ts",
+    "find": "        const text = new TextDecoder(\"utf-8\", { fatal: true, ignoreBOM: true }).decode(readRegularFile(path));",
+    "replace": "        const text = readRegularFile(path).toString(\"utf8\");",
+    "test": "test/snapshot.test.ts",
+    "why": "an invalid UTF-8 byte must refuse, never become U+FFFD"
+  },
+  {
+    "id": "source-bom-stripped",
+    "file": "src/source.ts",
+    "find": "{ fatal: true, ignoreBOM: true }",
+    "replace": "{ fatal: true, ignoreBOM: false }",
+    "test": "test/snapshot.test.ts",
+    "why": "a byte order mark must refuse, as the recount does"
+  },
+  {
+    "id": "source-event-pages-file-accepted",
+    "file": "src/source.ts",
+    "find": "    } else if (pagesStat && !pagesStat.isDirectory()) {",
+    "replace": "    } else if (false) {",
+    "test": "test/snapshot.test.ts",
+    "why": "event-pages that is not a real folder must refuse"
+  },
+  {
+    "id": "source-duplicate-key-accepted",
+    "file": "src/source.ts",
+    "find": "        if (twice !== null) throw new DuplicateKey(twice);\n",
+    "replace": "",
+    "test": "test/snapshot.test.ts",
+    "why": "a page file with a key repeated in one object must refuse"
+  },
+  {
+    "id": "source-deep-nesting-accepted",
+    "file": "src/source.ts",
+    "find": "        if (nestingDepth(text) > MAX_NESTING) throw new TooDeep();\n",
+    "replace": "",
+    "test": "test/snapshot.test.ts",
+    "why": "a page file nested deeper than 64 levels must refuse before any parser decides"
+  },
+  {
+    "id": "snapshot-unusable-head-bounds",
+    "file": "src/snapshot.ts",
+    "find": "  const bound = status.genesis.rpc !== null && status.genesis.rpc === status.genesis.pinned && rpcUsable ? status.finalized_height : null;",
+    "replace": "  const bound = status.genesis.rpc !== null && status.genesis.rpc === status.genesis.pinned ? status.finalized_height : null;",
+    "test": "test/snapshot.test.ts",
+    "why": "a stale or failed RPC head must never bound escrow evidence"
+  },
+  {
+    "id": "source-bad-name-decoded-lossily",
+    "file": "src/source.ts",
+    "find": "          name = strictName.decode(entry.name);",
+    "replace": "          name = entry.name.toString(\"utf8\");",
+    "test": "test/snapshot.test.ts",
+    "why": "a name that is not UTF-8 must be named as it is, never decoded around"
+  },
+  {
+    "id": "source-shown-text-keeps-paragraph-separator",
+    "file": "src/source.ts",
+    "find": "\\u2028\\u2029]/g",
+    "replace": "\\u2028]/g",
+    "test": "test/snapshot.test.ts",
+    "why": "sixth rerun U3: a page file name's paragraph separator is shown as %E2%80%A9, not as itself"
+  },
+  {
+    "id": "source-shown-text-keeps-del",
+    "file": "src/source.ts",
+    "find": "\\u007f-\\u009f\\u2028",
+    "replace": "\\u0080-\\u009f\\u2028",
+    "test": "test/snapshot.test.ts",
+    "why": "sixth rerun U3: a page file name's DEL is shown as %7F, not as itself"
+  },
+  {
+    "id": "source-shown-text-keeps-unit-separator",
+    "file": "src/source.ts",
+    "find": "[%\\u0000-\\u001f\\u007f",
+    "replace": "[%\\u0000-\\u001e\\u007f",
+    "test": "test/snapshot.test.ts",
+    "why": "sixth rerun U3: the last C0 control, U+001F, is shown as %1F, not as itself"
+  }
+]

@@ -1,0 +1,10 @@
+{
+  "scenario": "escrows-unparsable-copies-disagree",
+  "description": "Synthetic: escrow ids, block hashes, block numbers and indexes are made up. Only the genesis hash is real (faucet GET /chain and tclk/flop/VERIFICATION.md). Escrow b2 has a clean finalized open. One event identity is read twice with escrow ids that do not parse: once as a finalized release, once as a finalized refund. Both could be about b2, so b2 is unverified.",
+  "now": "2026-11-10T00:00:00Z",
+  "synthetic": true,
+  "escrow_ids": [
+    "0xb2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2"
+  ],
+  "pinned_genesis": "0x99c172c095340ace980631f9123544c6bebd4839f3437e463533422d8be2d631"
+}

@@ -1,0 +1,67 @@
+{
+  "genesis": "0x99c172c095340ace980631f9123544c6bebd4839f3437e463533422d8be2d631",
+  "from_block": 200,
+  "to_block": 299,
+  "page": 0,
+  "next_page": null,
+  "events": [
+    {
+      "block_number": null,
+      "block_hash": "0xa1000000000000000000000000000000000000000000000000000000000000fb",
+      "finalized": true,
+      "index": 0,
+      "section": "hasStation",
+      "method": "EscrowOpened",
+      "data": {
+        "escrow_id": "0xe500000000000000000000000000000000000000000000000000000000000002",
+        "who": "synthetic-bob"
+      }
+    },
+    {
+      "block_number": null,
+      "block_hash": "0xa1000000000000000000000000000000000000000000000000000000000000fb",
+      "finalized": true,
+      "index": 0,
+      "section": "hasStation",
+      "method": "EscrowOpened",
+      "data": {
+        "escrow_id": "0xe500000000000000000000000000000000000000000000000000000000000002",
+        "who": "synthetic-bob"
+      }
+    },
+    {
+      "block_number": null,
+      "block_hash": "0xa1000000000000000000000000000000000000000000000000000000000000fc",
+      "finalized": false,
+      "index": 0,
+      "section": "hasStation",
+      "method": "EscrowRefunded",
+      "data": {
+        "escrow_id": "0xe500000000000000000000000000000000000000000000000000000000000002",
+        "who": "synthetic-bob"
+      }
+    },
+    {
+      "block_number": null,
+      "block_hash": "0xa1000000000000000000000000000000000000000000000000000000000000fd",
+      "finalized": true,
+      "index": 0,
+      "method": "EscrowOpened",
+      "data": {
+        "escrow_id": "0xe500000000000000000000000000000000000000000000000000000000000003"
+      }
+    },
+    {
+      "block_number": 250,
+      "block_hash": "0xa1000000000000000000000000000000000000000000000000000000000000fa",
+      "finalized": true,
+      "index": 0,
+      "section": "hasStation",
+      "method": "EscrowOpened",
+      "data": {
+        "escrow_id": "0xe500000000000000000000000000000000000000000000000000000000000004",
+        "who": "synthetic-carol"
+      }
+    }
+  ]
+}

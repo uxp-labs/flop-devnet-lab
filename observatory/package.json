@@ -1,0 +1,29 @@
+{
+  "name": "flop-observatory",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Read-only observatory for FLOP devnet: status, reset detection, spec drift, census and finalized escrow checks. M0 runs on saved fixtures only.",
+  "type": "module",
+  "bin": {
+    "flop-observatory": "./dist/cli.js",
+    "flop-observatory-mcp": "./dist/mcp-bin.js"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "check": "bash ./scripts/check.sh"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "yaml": "^2.6.0"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.6",
+    "typescript": "^7.0.2",
+    "vitest": "^5.1.0"
+  }
+}

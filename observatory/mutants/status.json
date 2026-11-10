@@ -1,0 +1,642 @@
+[
+  {
+    "id": "status-reset-ignores-mismatch",
+    "file": "src/status.ts",
+    "find": "if (known.some((g) => g !== pinned)) return true;",
+    "replace": "if (false) return true;",
+    "test": "test/status.test.ts",
+    "why": "a different genesis on any source must raise the reset flag"
+  },
+  {
+    "id": "status-unknown-becomes-clean",
+    "file": "src/status.ts",
+    "find": "  if (faucet !== null && rpc !== null) return false;\n  return null;",
+    "replace": "  if (faucet !== null && rpc !== null) return false;\n  return false;",
+    "test": "test/status.test.ts",
+    "why": "one or zero matching sources is not enough evidence for reset_detected false"
+  },
+  {
+    "id": "status-stale-ignored",
+    "file": "src/status.ts",
+    "find": "stale = age > o.staleAfterSeconds;",
+    "replace": "stale = false;",
+    "test": "test/status.test.ts",
+    "why": "an old RPC head must be stale"
+  },
+  {
+    "id": "status-degraded-faucet-shown-ok",
+    "file": "src/status.ts",
+    "find": "} else if (body.status === \"ok\" && ready === true) {",
+    "replace": "} else if (true) {",
+    "test": "test/status.test.ts",
+    "why": "the real degraded faucet must never show as ok"
+  },
+  {
+    "id": "status-conflict-dropped",
+    "file": "src/status.ts",
+    "find": "conflicts.push(`faucet genesis ${shownFaucetGenesis} differs from rpc genesis ${rpcGenesis}`);",
+    "replace": "",
+    "test": "test/status.test.ts",
+    "why": "conflicting genesis answers must be reported"
+  },
+  {
+    "id": "status-unknown-gateway-ok",
+    "file": "src/status.ts",
+    "find": "    health = \"unknown\";\n    detail = noStatus(r);\n  } else if (http === 200) {",
+    "replace": "    health = \"ok\";\n    detail = noStatus(r);\n  } else if (http === 200) {",
+    "test": "test/status.test.ts",
+    "why": "a gateway we did not read is unknown, never ok"
+  },
+  {
+    "id": "status-rollback-ignored",
+    "file": "src/status.ts",
+    "find": "    if (finalized.number < highest) {",
+    "replace": "    if (false) {",
+    "test": "test/status.test.ts",
+    "why": "a finalized height going backwards is a conflict"
+  },
+  {
+    "id": "status-lag-ignored",
+    "file": "src/status.ts",
+    "find": "} else if (best - finalized.number > o.maxFinalityLag) {",
+    "replace": "} else if (false) {",
+    "test": "test/status.test.ts",
+    "why": "a large finality lag is degraded"
+  },
+  {
+    "id": "status-malformed-genesis-accepted",
+    "file": "src/status.ts",
+    "find": "  return typeof value === \"string\" && HASH_RE.test(value) ? value : null;",
+    "replace": "  return typeof value === \"string\" ? value : null;",
+    "test": "test/status.test.ts",
+    "why": "a malformed genesis is unknown, never a value"
+  },
+  {
+    "id": "status-faucet-http-ignored",
+    "file": "src/status.ts",
+    "find": "    if (http === 200) {\n      health = \"ok\";",
+    "replace": "    if (true) {\n      health = \"ok\";",
+    "test": "test/status.test.ts",
+    "why": "a faucet body that says ok on HTTP 503 must not be ok"
+  },
+  {
+    "id": "status-missing-age-counts-as-ok",
+    "file": "src/status.ts",
+    "find": "const health: Health = problems.length > 0 ? \"degraded\" : cannotRun.length > 0 ? \"unknown\" : \"ok\";",
+    "replace": "const health: Health = problems.length > 0 ? \"degraded\" : \"ok\";",
+    "test": "test/status.test.ts",
+    "why": "a head with no observed_at cannot be shown as ok"
+  },
+  {
+    "id": "status-missing-best-ignored",
+    "file": "src/status.ts",
+    "find": "  if (best === null) problems.push(\"no valid best height\");\n",
+    "replace": "",
+    "test": "test/status.test.ts",
+    "why": "a head with no best height cannot be ok"
+  },
+  {
+    "id": "status-future-head-accepted",
+    "file": "src/status.ts",
+    "find": "  } else if (age < 0) {",
+    "replace": "  } else if (false) {",
+    "test": "test/status.test.ts",
+    "why": "a head time later than the snapshot time is a conflict, not fresh"
+  },
+  {
+    "id": "status-read-error-ignored",
+    "file": "src/status.ts",
+    "find": "  if (hasError(error)) problems.push(`read error: ${String(error)}`);\n",
+    "replace": "",
+    "test": "test/status.test.ts",
+    "why": "a read error on part of the head cannot be ok"
+  },
+  {
+    "id": "status-missing-genesis-ignored",
+    "file": "src/status.ts",
+    "find": "  if (genesis === null) problems.push(\"no valid genesis hash\");\n",
+    "replace": "",
+    "test": "test/status.test.ts",
+    "why": "a head without a valid genesis cannot be ok"
+  },
+  {
+    "id": "status-stale-limit-exclusive",
+    "file": "src/status.ts",
+    "find": "stale = age > o.staleAfterSeconds;",
+    "replace": "stale = age >= o.staleAfterSeconds;",
+    "test": "test/status.test.ts",
+    "why": "a head exactly at the stale limit is still fresh"
+  },
+  {
+    "id": "v-faucet-any-2xx-ok",
+    "file": "src/status.ts",
+    "find": "    if (http === 200) {\n      health = \"ok\";",
+    "replace": "    if (http >= 200 && http < 300) {\n      health = \"ok\";",
+    "test": "test/status.test.ts",
+    "why": "a faucet ok body on 204 is ok (verifier probe, round 2)"
+  },
+  {
+    "id": "v-gateway-any-2xx-ok",
+    "file": "src/status.ts",
+    "find": "  } else if (http === 200) {",
+    "replace": "  } else if (http >= 200 && http < 300) {",
+    "test": "test/status.test.ts",
+    "why": "a gateway 204 is ok (verifier probe, round 2)"
+  },
+  {
+    "id": "v-lag-limit-plus-one",
+    "file": "src/status.ts",
+    "find": "} else if (best - finalized.number > o.maxFinalityLag) {",
+    "replace": "} else if (best - finalized.number > o.maxFinalityLag + 1) {",
+    "test": "test/status.test.ts",
+    "why": "a lag of 31 blocks is ok (verifier probe, round 2)"
+  },
+  {
+    "id": "v-stale-limit-plus-one",
+    "file": "src/status.ts",
+    "find": "stale = age > o.staleAfterSeconds;",
+    "replace": "stale = age > o.staleAfterSeconds + 1;",
+    "test": "test/status.test.ts",
+    "why": "a head 121 s old is fresh (verifier probe, round 2)"
+  },
+  {
+    "id": "v-future-head-60s-tolerated",
+    "file": "src/status.ts",
+    "find": "} else if (age < 0) {",
+    "replace": "} else if (age < -60) {",
+    "test": "test/status.test.ts",
+    "why": "a head up to 60 s in the future is fresh (verifier probe, round 2)"
+  },
+  {
+    "id": "status-faucet-freshness-ignored",
+    "file": "src/status.ts",
+    "find": "    faucet: withChainNote(applyFreshness(classifyFaucet(health), \"faucet\", o, conflicts), chainNote),",
+    "replace": "    faucet: withChainNote(classifyFaucet(health), chainNote),",
+    "test": "test/status.test.ts",
+    "why": "an eight day old faucet reading must not be ok"
+  },
+  {
+    "id": "status-gateway-freshness-ignored",
+    "file": "src/status.ts",
+    "find": "    gateway: applyFreshness(classifyGateway(gateway), \"gateway\", o, conflicts),",
+    "replace": "    gateway: classifyGateway(gateway),",
+    "test": "test/status.test.ts",
+    "why": "an eight day old gateway reading must not be ok"
+  },
+  {
+    "id": "status-freshness-missing-time-ok",
+    "file": "src/status.ts",
+    "find": "  if (age === null) {\n    return { ...svc, health: \"unknown\",",
+    "replace": "  if (false) {\n    return { ...svc, health: \"unknown\",",
+    "test": "test/status.test.ts",
+    "why": "an ok reading with no time cannot be ok"
+  },
+  {
+    "id": "status-freshness-future-ok",
+    "file": "src/status.ts",
+    "find": "  if (age !== null && age < 0) {\n    conflicts.push(`${name} reading time",
+    "replace": "  if (false) {\n    conflicts.push(`${name} reading time",
+    "test": "test/status.test.ts",
+    "why": "a reading time later than the snapshot time is a conflict"
+  },
+  {
+    "id": "status-snapshot-time-without-zone-accepted",
+    "file": "src/status.ts",
+    "find": "  if (parseZoned(opts.now) === null) throw new Error(",
+    "replace": "  if (false) throw new Error(",
+    "test": "test/status.test.ts",
+    "why": "a snapshot time without a zone must be refused"
+  },
+  {
+    "id": "status-future-conflict-only-when-ok",
+    "file": "src/status.ts",
+    "find": "  if (age !== null && age < 0) {\n    conflicts.push(`${name} reading time",
+    "replace": "  if (svc.health === \"ok\" && age !== null && age < 0) {\n    conflicts.push(`${name} reading time",
+    "test": "test/status.test.ts",
+    "why": "a future reading time is a conflict whatever the reading's health"
+  },
+  {
+    "id": "status-chain-http-ignored",
+    "file": "src/status.ts",
+    "find": "    (chain.http !== 200\n      ? `http ${String(chain.http)}`",
+    "replace": "    (false\n      ? `http ${String(chain.http)}`",
+    "test": "test/status.test.ts",
+    "why": "a /chain body on HTTP 500 must not report the faucet genesis"
+  },
+  {
+    "id": "status-chain-error-ignored",
+    "file": "src/status.ts",
+    "find": "      : hasError(chainError)\n        ? `read error: ${String(chainError)}`",
+    "replace": "      : false\n        ? `read error: ${String(chainError)}`",
+    "test": "test/status.test.ts",
+    "why": "a /chain reading with an error must not report the faucet genesis"
+  },
+  {
+    "id": "status-chain-freshness-ignored",
+    "file": "src/status.ts",
+    "find": "            : chainAge > o.staleAfterSeconds\n",
+    "replace": "            : false\n",
+    "test": "test/status.test.ts",
+    "why": "a 39 day old /chain reading must not report the faucet genesis"
+  },
+  {
+    "id": "status-chain-future-no-conflict",
+    "file": "src/status.ts",
+    "find": "  if (chainAge !== null && chainAge < 0) {\n    conflicts.push(`faucet /chain reading time",
+    "replace": "  if (false) {\n    conflicts.push(`faucet /chain reading time",
+    "test": "test/status.test.ts",
+    "why": "a future /chain reading time is a conflict"
+  },
+  {
+    "id": "status-chain-time-not-needed",
+    "file": "src/status.ts",
+    "find": "        : chainAge === null\n          ? \"no parsable reading time\"",
+    "replace": "        : false\n          ? \"no parsable reading time\"",
+    "test": "test/status.test.ts",
+    "why": "a /chain reading with no time cannot be shown as current"
+  },
+  {
+    "id": "status-rpc-error-counts-for-reset",
+    "file": "src/status.ts",
+    "find": "  return !hasError(errorOf(head)) && age !== null && age >= 0 && age <= staleAfterSeconds;",
+    "replace": "  return age !== null && age >= 0 && age <= staleAfterSeconds;",
+    "test": "test/status.test.ts",
+    "why": "an RPC head with a read error must not count toward reset_detected"
+  },
+  {
+    "id": "status-rpc-freshness-ignored-for-reset",
+    "file": "src/status.ts",
+    "find": "  return !hasError(errorOf(head)) && age !== null && age >= 0 && age <= staleAfterSeconds;",
+    "replace": "  return !hasError(errorOf(head)) && age !== null && age >= 0;",
+    "test": "test/status.test.ts",
+    "why": "an old RPC head must not count toward reset_detected"
+  },
+  {
+    "id": "status-rpc-future-counts-for-reset",
+    "file": "src/status.ts",
+    "find": "  return !hasError(errorOf(head)) && age !== null && age >= 0 && age <= staleAfterSeconds;",
+    "replace": "  return !hasError(errorOf(head)) && age !== null && age <= staleAfterSeconds;",
+    "test": "test/status.test.ts",
+    "why": "an RPC head time later than the snapshot must not count toward reset_detected"
+  },
+  {
+    "id": "status-rpc-time-not-needed-for-reset",
+    "file": "src/status.ts",
+    "find": "  return !hasError(errorOf(head)) && age !== null && age >= 0 && age <= staleAfterSeconds;",
+    "replace": "  return !hasError(errorOf(head)) && (age === null || (age >= 0 && age <= staleAfterSeconds));",
+    "test": "test/status.test.ts",
+    "why": "an RPC head with no usable time must not count toward reset_detected"
+  },
+  {
+    "id": "status-rpc-gate-dropped",
+    "file": "src/status.ts",
+    "find": "  const rpcForReset = rpcUsable && (flags.stuck === false || rpcGenesis !== pinned) ? rpcGenesis : null;",
+    "replace": "  const rpcForReset = rpcGenesis;",
+    "test": "test/status.test.ts",
+    "why": "reset_detected false needs a usable RPC reading of the pinned genesis"
+  },
+  {
+    "id": "status-previous-last-only",
+    "file": "src/status.ts",
+    "find": "  const sameGenesis = genesis === null ? [] : earlier.filter((p) => p.genesis === genesis);",
+    "replace": "  const sameGenesis = genesis === null ? [] : earlier.slice(-1).filter((p) => p.genesis === genesis);",
+    "test": "test/status.test.ts",
+    "why": "a later snapshot without this genesis must not hide a rollback against an earlier one"
+  },
+  {
+    "id": "status-rollback-against-latest-only",
+    "file": "src/status.ts",
+    "find": "  const highest = sameGenesis.length > 0 ? Math.max(...sameGenesis.map((p) => p.finalized_height)) : null;",
+    "replace": "  const highest = sameGenesis.length > 0 ? (sameGenesis.at(-1) as PreviousHead).finalized_height : null;",
+    "test": "test/status.test.ts",
+    "why": "finality never goes back below the highest height ever seen on the genesis"
+  },
+  {
+    "id": "status-changed-hash-latest-only",
+    "file": "src/status.ts",
+    "find": "    const changed = sameGenesis.find((p) =>",
+    "replace": "    const changed = sameGenesis.slice(-1).find((p) =>",
+    "test": "test/status.test.ts",
+    "why": "a changed hash at this height in any earlier snapshot is a conflict"
+  },
+  {
+    "id": "status-stuck-latest-only",
+    "file": "src/status.ts",
+    "find": "    for (let i = sameGenesis.length - 1; i >= 0 &&",
+    "replace": "    for (let i = sameGenesis.length - 1; i >= sameGenesis.length - 1 &&",
+    "test": "test/status.test.ts",
+    "why": "stuck counts from the oldest of the latest run at this height"
+  },
+  {
+    "id": "status-unsafe-height-accepted",
+    "file": "src/status.ts",
+    "find": "  return isSafeInt(value) && value >= 0 ? value : null;",
+    "replace": "  return typeof value === \"number\" && Number.isInteger(value) && value >= 0 ? value : null;",
+    "test": "test/status.test.ts",
+    "why": "a height past 2^53 - 1 was already rounded by JSON.parse, so it is no valid head"
+  },
+  {
+    "id": "status-stuck-unknown-time-ignored",
+    "file": "src/status.ts",
+    "find": "      if (since === null) sinceUnknown = true;\n",
+    "replace": "",
+    "test": "test/status.test.ts",
+    "why": "an earlier head time that does not parse means the stuck check cannot run"
+  },
+  {
+    "id": "status-faucet-error-ignored",
+    "file": "src/status.ts",
+    "find": "    if (health === \"ok\") health = \"degraded\";\n    detail = [detail, `read error: ${String(errorOf(r))}`].filter((d) => d !== null).join(\"; \");\n  }\n  return { health, http, detail, observed_at: timeField(r.fetched_at), ready, limits };",
+    "replace": "    detail = [detail, `read error: ${String(errorOf(r))}`].filter((d) => d !== null).join(\"; \");\n  }\n  return { health, http, detail, observed_at: timeField(r.fetched_at), ready, limits };",
+    "test": "test/status.test.ts",
+    "why": "a faucet reading that came with an error is never ok"
+  },
+  {
+    "id": "status-gateway-error-ignored",
+    "file": "src/status.ts",
+    "find": "    if (health === \"ok\") health = \"degraded\";\n    detail = [detail, `read error: ${String(errorOf(r))}`].filter((d) => d !== null).join(\"; \");\n  }\n  return { health, http, detail, observed_at: timeField(r.fetched_at) };",
+    "replace": "    detail = [detail, `read error: ${String(errorOf(r))}`].filter((d) => d !== null).join(\"; \");\n  }\n  return { health, http, detail, observed_at: timeField(r.fetched_at) };",
+    "test": "test/status.test.ts",
+    "why": "a gateway reading that came with an error is never ok"
+  },
+  {
+    "id": "status-empty-error-ignored",
+    "file": "src/status.ts",
+    "find": "  return e !== null && e !== undefined;",
+    "replace": "  return e !== null && e !== undefined && e !== \"\";",
+    "test": "test/status.test.ts",
+    "why": "an empty error string is still an error"
+  },
+  {
+    "id": "status-contradicted-head-usable",
+    "file": "src/status.ts",
+    "find": "  const rpcUsable = fresh && !flags.contradicted && finalizedHeight !== null && bestHeight !== null;",
+    "replace": "  const rpcUsable = fresh && finalizedHeight !== null && bestHeight !== null;",
+    "test": "test/status.test.ts",
+    "why": "a head that contradicts itself or history must not count toward reset_detected"
+  },
+  {
+    "id": "status-earlier-later-ignored",
+    "file": "src/status.ts",
+    "find": "      if (t !== null && t < 0) {\n        conflicts.push(`an earlier snapshot read",
+    "replace": "      if (false) {\n        conflicts.push(`an earlier snapshot read",
+    "test": "test/status.test.ts",
+    "why": "a log that runs backwards in time is a conflict"
+  },
+  {
+    "id": "status-nothing-future-no-conflict",
+    "file": "src/status.ts",
+    "find": "  if (age !== null && age < 0) {\n    // A reading time later than the snapshot time is a conflict whatever the reading holds.",
+    "replace": "  if (false) {\n    // A reading time later than the snapshot time is a conflict whatever the reading holds.",
+    "test": "test/status.test.ts",
+    "why": "a future head time is a conflict even when the head read nothing"
+  },
+  {
+    "id": "status-uppercase-hash-accepted",
+    "file": "src/status.ts",
+    "find": "  return typeof value === \"string\" && HASH_RE.test(value) ? value : null;",
+    "replace": "  return typeof value === \"string\" && HASH_RE.test(value.toLowerCase()) ? value.toLowerCase() : null;",
+    "test": "test/status.test.ts",
+    "why": "hashes compare exactly as written, as in the census"
+  },
+  {
+    "id": "status-http-type-unchecked",
+    "file": "src/status.ts",
+    "find": "  return isSafeInt(h) ? h : null;",
+    "replace": "  return h as number | null;",
+    "test": "test/status.test.ts",
+    "why": "a status that is not a whole number never reaches the interface"
+  },
+  {
+    "id": "status-time-type-unchecked",
+    "file": "src/status.ts",
+    "find": "  return typeof t === \"string\" ? t : null;",
+    "replace": "  return t as string | null;",
+    "test": "test/status.test.ts",
+    "why": "a time that is not a string never reaches the interface"
+  },
+  {
+    "id": "status-limits-type-unchecked",
+    "file": "src/status.ts",
+    "find": "    rawLimits && Object.values(rawLimits).every((v) => typeof v === \"boolean\" || (typeof v === \"number\" && Number.isFinite(v))) ? rawLimits : null;",
+    "replace": "    rawLimits;",
+    "test": "test/status.test.ts",
+    "why": "faucet limits carry numbers and booleans only"
+  },
+  {
+    "id": "source-unreadable-head-dropped",
+    "file": "src/source.ts",
+    "find": "return r ?? (unreadable.has(name) ? { ...unknownHead(), unreadable: unreadable.get(name)! } : undefined);",
+    "replace": "return r;",
+    "test": "test/status.test.ts",
+    "why": "Fable review M5: an RPC head file that cannot be read is named in the RPC detail, not reported as no head"
+  },
+  {
+    "id": "source-unreadable-http-dropped",
+    "file": "src/source.ts",
+    "find": "return r ?? (unreadable.has(name) ? unknownHttp<T>(unreadable.get(name)!) : undefined);",
+    "replace": "return r;",
+    "test": "test/status.test.ts",
+    "why": "Fable review M5: a faucet or gateway file that cannot be read is named in its detail"
+  },
+  {
+    "id": "status-unreadable-detail-dropped",
+    "file": "src/status.ts",
+    "find": "typeof head.unreadable === \"string\" ? head.unreadable : \"no rpc head\"",
+    "replace": "\"no rpc head\"",
+    "test": "test/status.test.ts",
+    "why": "the reason a saved RPC head could not be read shows as the RPC detail"
+  },
+  {
+    "id": "status-best-floor-ignored",
+    "file": "src/status.ts",
+    "find": "  if (highest !== null && best !== null && best < highest && finalized === null) {",
+    "replace": "  if (false) {",
+    "test": "test/status.test.ts",
+    "why": "round 7 review M1: a best height below an earlier finalized height is a restart, even with no finalized head"
+  },
+  {
+    "id": "status-usable-without-finalized-or-best",
+    "file": "src/status.ts",
+    "find": "  const rpcUsable = fresh && !flags.contradicted && finalizedHeight !== null && bestHeight !== null;",
+    "replace": "  const rpcUsable = fresh && !flags.contradicted;",
+    "test": "test/status.test.ts",
+    "why": "round 7 review M1: a head whose checks against its finalized head and best height could not run does not count"
+  },
+  {
+    "id": "status-earlier-snapshot-time-ignored",
+    "file": "src/status.ts",
+    "find": "  for (const t of earlierTimes ?? []) {",
+    "replace": "  for (const t of (earlierTimes ?? []).slice(0, 0)) {",
+    "test": "test/status.test.ts",
+    "why": "round 7 review L1: an earlier snapshot taken later than this one is a conflict, whatever it read"
+  },
+  {
+    "id": "status-missing-error-key-ok",
+    "file": "src/status.ts",
+    "find": "  return r !== null && typeof r === \"object\" && \"error\" in r ? (r as { error: unknown }).error : \"the reading has no error field\";",
+    "replace": "  return r !== null && typeof r === \"object\" ? (r as { error: unknown }).error : null;",
+    "test": "test/status.test.ts",
+    "why": "round 7 review L2: a reading with no error key does not say it did not fail"
+  },
+  {
+    "id": "status-unusable-chain-genesis-silent",
+    "file": "src/status.ts",
+    "find": "  if (!chainUsable && shownFaucetGenesis !== null && shownFaucetGenesis !== pinned) {",
+    "replace": "  if (false) {",
+    "test": "test/status.test.ts",
+    "why": "round 7 review L3: a /chain reading that does not count but names another genesis is a conflict"
+  },
+  {
+    "id": "status-chain-note-dropped",
+    "file": "src/status.ts",
+    "find": "  if (why === null) return faucet;",
+    "replace": "  if (why === null || why !== null) return faucet;",
+    "test": "test/status.test.ts",
+    "why": "round 7 review L3: the faucet detail says why its /chain reading does not count"
+  },
+  {
+    "id": "status-unusable-chain-counted",
+    "file": "src/status.ts",
+    "find": "  const faucetGenesis = chainUsable ? shownFaucetGenesis : null;",
+    "replace": "  const faucetGenesis = shownFaucetGenesis;",
+    "test": "test/status.test.ts",
+    "why": "a /chain reading that does not count must not count toward reset_detected, though genesis.faucet shows it"
+  },
+  {
+    "id": "status-earlier-best-ignored",
+    "file": "src/status.ts",
+    "find": "  if (highestBest !== null && best !== null && best < highestBest - o.maxFinalityLag) {",
+    "replace": "  if (highestBest !== null && best !== null && best < highestBest - o.maxFinalityLag - 1e12) {",
+    "test": "test/status.test.ts",
+    "why": "round 8 review L1: a best height that falls further than the lag limit on the same genesis contradicts history"
+  },
+  {
+    "id": "status-earlier-best-no-margin",
+    "file": "src/status.ts",
+    "find": "  if (highestBest !== null && best !== null && best < highestBest - o.maxFinalityLag) {",
+    "replace": "  if (highestBest !== null && best !== null && best <= highestBest - o.maxFinalityLag) {",
+    "test": "test/status.test.ts",
+    "why": "round 8 review L1: a fall of exactly the lag limit is still a reorganisation, not a contradiction"
+  },
+  {
+    "id": "status-earlier-best-any-genesis",
+    "file": "src/status.ts",
+    "find": "(earlierBest ?? []).filter((p) => p.genesis === genesis).map((p) => p.best_height)",
+    "replace": "(earlierBest ?? []).map((p) => p.best_height)",
+    "test": "test/status.test.ts",
+    "why": "round 8 review L1: only best heights read on this genesis are a floor"
+  },
+  {
+    "id": "status-chain-no-genesis-silent",
+    "file": "src/status.ts",
+    "find": "    faucet: withChainNote(applyFreshness(classifyFaucet(health), \"faucet\", o, conflicts), chainNote),",
+    "replace": "    faucet: withChainNote(applyFreshness(classifyFaucet(health), \"faucet\", o, conflicts), chainUnusable),",
+    "test": "test/status.test.ts",
+    "why": "round 8 review L2: a usable /chain reading that names no genesis says so in the faucet's detail"
+  },
+  {
+    "id": "status-head-genesis-key-not-filled",
+    "file": "src/status.ts",
+    "find": "    genesis_hash: r.genesis_hash ?? null,\n",
+    "replace": "    genesis_hash: r.genesis_hash as never,\n",
+    "test": "test/status.test.ts",
+    "why": "third IMD audit J5: a head that left out its genesis reads as one that wrote null, so no malformed genesis conflict is made up"
+  },
+  {
+    "id": "status-head-finalized-key-not-filled",
+    "file": "src/status.ts",
+    "find": "    finalized: r.finalized ?? null,\n",
+    "replace": "    finalized: r.finalized as never,\n",
+    "test": "test/status.test.ts",
+    "why": "third IMD audit J5: a head that left out its finalized head reads as one that read nothing, so a failed read is down with its error, not degraded"
+  },
+  {
+    "id": "status-head-not-an-object-read",
+    "file": "src/status.ts",
+    "find": "  if (raw === null || typeof raw !== \"object\" || Array.isArray(raw)) {",
+    "replace": "  if (raw === null) {",
+    "test": "test/status.test.ts",
+    "why": "third IMD audit J5: a head that is not a JSON object read nothing, and the rpc detail says so"
+  },
+  {
+    "id": "status-chain-status-as-its-value",
+    "file": "src/status.ts",
+    "find": "    noStatus(chain) ??\n",
+    "replace": "    (chain.http === null ? noStatus(chain) : null) ??\n",
+    "test": "test/status.test.ts",
+    "why": "third IMD audit J9: a /chain status that is no whole number is said as such, never as the http value it holds"
+  },
+  {
+    "id": "status-reset-false-on-a-stuck-head",
+    "file": "src/status.ts",
+    "find": "(flags.stuck === false || rpcGenesis !== pinned)",
+    "replace": "(true || rpcGenesis !== pinned)",
+    "test": "test/status.test.ts",
+    "why": "third IMD audit J11: reset_detected false needs the finalized height known not to be stuck"
+  },
+  {
+    "id": "status-stuck-head-hides-another-genesis",
+    "file": "src/status.ts",
+    "find": "(flags.stuck === false || rpcGenesis !== pinned)",
+    "replace": "(flags.stuck === false)",
+    "test": "test/status.test.ts",
+    "why": "third IMD audit J11: a stuck head that names another genesis still shows the reset"
+  },
+  {
+    "id": "status-unsure-stuck-check-counts",
+    "file": "src/status.ts",
+    "find": "      flags.stuck = null;\n",
+    "replace": "",
+    "test": "test/status.test.ts",
+    "why": "third IMD audit J11: a stuck check that cannot run leaves reset_detected open, as a stuck height does"
+  },
+  {
+    "id": "status-stuck-not-flagged",
+    "file": "src/status.ts",
+    "find": "      flags.stuck = true;\n",
+    "replace": "",
+    "test": "test/status.test.ts",
+    "why": "third IMD audit J11: a finalized height stuck past the stale limit is flagged, so it cannot count toward reset_detected false"
+  },
+  {
+    "id": "status-stale-false-when-stuck-unknown",
+    "file": "src/status.ts",
+    "find": "      if (stale === false) stale = null;\n",
+    "replace": "",
+    "test": "test/status.test.ts",
+    "why": "tenth rerun U2: when the stuck check cannot run, a fresh head is no longer known not to be stale, so rpc.stale is null (RULES 1.1)"
+  },
+  {
+    "id": "status-stuck-check-skipped-after-a-contradiction",
+    "file": "src/status.ts",
+    "find": "      flags.contradicted = true;\n    }\n    // Whether the height is stuck is asked of every head, one that rolled back or changed hash too\n    // (eleventh rerun): rpc.stale says how long the run at this height has held, whatever else the\n    // head contradicts.\n    if (sinceUnknown) {",
+    "replace": "      flags.contradicted = true;\n    } else if (sinceUnknown) {",
+    "test": "test/status.test.ts",
+    "why": "eleventh rerun: the stuck check runs on a head that rolled back or changed hash too, so its stale says how long its height has held (test: the stuck check runs after a rollback or a changed hash too)"
+  },
+  {
+    "id": "status-server-error-past-599",
+    "file": "src/status.ts",
+    "find": "const serverError = (http: number): boolean => http >= 500 && http <= 599;",
+    "replace": "const serverError = (http: number): boolean => http >= 500;",
+    "test": "test/status.test.ts",
+    "why": "eleventh rerun: only a 5xx status is a server's own failure, so 600 and up read as any other status (test: only a 5xx status is a server's own failure)"
+  },
+  {
+    "id": "status-faucet-no-body-any-500-up",
+    "file": "src/status.ts",
+    "find": "    health = serverError(http) ? \"down\" : \"unknown\";",
+    "replace": "    health = http >= 500 ? \"down\" : \"unknown\";",
+    "test": "test/status.test.ts",
+    "why": "eleventh rerun: a faucet body that cannot be read is down on a 5xx status alone (test: only a 5xx status is a server's own failure)"
+  },
+  {
+    "id": "status-gateway-any-500-up",
+    "file": "src/status.ts",
+    "find": "  } else if (serverError(http)) {",
+    "replace": "  } else if (http >= 500) {",
+    "test": "test/status.test.ts",
+    "why": "eleventh rerun: a gateway status from 600 up is degraded, not down (test: only a 5xx status is a server's own failure)"
+  }
+]

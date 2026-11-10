@@ -1,0 +1,10 @@
+{
+  "scenario": "escrows-negative-block-number",
+  "description": "Synthetic: escrow ids, block hashes, block numbers and indexes are made up. Only the genesis hash is real (faucet GET /chain and tclk/flop/VERIFICATION.md). Escrow a1 has a finalized open at block 110 and a finalized release whose block_number is -5. A negative integer is an integer, not a malformed value: it is outside the page's range (100 to 199), so it is never evidence, and because it is a finalized release naming a1, a1 is unverified.",
+  "now": "2026-11-10T00:00:00Z",
+  "synthetic": true,
+  "escrow_ids": [
+    "0xa1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1"
+  ],
+  "pinned_genesis": "0x99c172c095340ace980631f9123544c6bebd4839f3437e463533422d8be2d631"
+}

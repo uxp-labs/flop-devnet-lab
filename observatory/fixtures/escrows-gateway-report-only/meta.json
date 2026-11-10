@@ -1,0 +1,10 @@
+{
+  "scenario": "escrows-gateway-report-only",
+  "description": "Synthetic: escrow ids, block hashes, block numbers and indexes are made up. Only the genesis hash is real (faucet GET /chain and tclk/flop/VERIFICATION.md). gateway-report.json is a made-up gateway receipt that says settled and names the escrow. The only chain page holds a made-up gateway.Settled event, which is not a hasStation escrow event. Neither is chain proof.",
+  "now": "2026-11-10T00:00:00Z",
+  "synthetic": true,
+  "escrow_ids": [
+    "0xa1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1"
+  ],
+  "pinned_genesis": "0x99c172c095340ace980631f9123544c6bebd4839f3437e463533422d8be2d631"
+}

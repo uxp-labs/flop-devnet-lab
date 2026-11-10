@@ -1,0 +1,11 @@
+{
+  "scenario": "census-complete",
+  "description": "Synthetic, made up for a test. Request 0 to 199. The pinned genesis is the FLOP devnet genesis (DEVNET_GENESIS in src/status.ts); every event and block hash is made up. Clause numbers refer to RULES.md section 3.1. Two complete page chains, blocks 0 to 99 (pages 0 and 1) and blocks 100 to 199 (page 0), which touch and merge into one covered range. Account picks follow clause 11: an empty who falls through to payer, a who that is not a string falls through to owner, who beats owner, and an event with no account field counts in totals only. A balances.Transfer is finalized but not a counted kind, so it counts nowhere. Expected: complete true, status complete; covered 0 to 199; gaps none; totals escrows_opened 4, escrows_released 1, escrows_refunded 1, channels_opened 1, channels_settled 1; pending_unfinalized 0; duplicates_dropped 0; excluded_other_genesis 0; malformed_dropped 0; by_account synthetic-alice (escrows_opened 1, escrows_released 1), synthetic-bob (escrows_opened 2), synthetic-carol (channels_opened 1, channels_settled 1), synthetic-dave (escrows_refunded 1).",
+  "now": "2026-11-10T00:00:00.000Z",
+  "synthetic": true,
+  "census_request": {
+    "from_block": 0,
+    "to_block": 199
+  },
+  "pinned_genesis": "0x99c172c095340ace980631f9123544c6bebd4839f3437e463533422d8be2d631"
+}

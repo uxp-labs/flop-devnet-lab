@@ -1,0 +1,290 @@
+[
+  {
+    "id": "cli-escrow-unreadable-pages-dropped",
+    "file": "src/cli.ts",
+    "find": "        unreadablePages: await src.eventPageErrors(),\n      }),\n    );\n    return;\n  }\n\n  if (cmd === \"census\") {",
+    "replace": "        unreadablePages: [],\n      }),\n    );\n    return;\n  }\n\n  if (cmd === \"census\") {",
+    "test": "scripts/cli-checks.mjs",
+    "why": "the escrow command must pass unreadable pages on, or an escrow is judged without them"
+  },
+  {
+    "id": "cli-census-unreadable-pages-dropped",
+    "file": "src/cli.ts",
+    "find": "        observedAt,\n        trust: src.trust,\n        unreadablePages: await src.eventPageErrors(),",
+    "replace": "        observedAt,\n        trust: src.trust,\n        unreadablePages: [],",
+    "test": "scripts/cli-checks.mjs",
+    "why": "the census command must refuse a scenario with an unreadable page file"
+  },
+  {
+    "id": "cli-snapshot-census-unreadable-pages-dropped",
+    "file": "src/cli.ts",
+    "find": "          observedAt: now,\n          trust: src.trust,\n          unreadablePages: await src.eventPageErrors(),",
+    "replace": "          observedAt: now,\n          trust: src.trust,\n          unreadablePages: [],",
+    "test": "scripts/cli-checks.mjs",
+    "why": "a snapshot must refuse a census with an unreadable page file"
+  },
+  {
+    "id": "cli-other-pin-accepted",
+    "file": "src/cli.ts",
+    "find": "      if (g !== undefined && g !== pinned) fail(`${dir} is pinned to genesis ${g}, but the snapshot is pinned to ${pinned}`);",
+    "replace": "",
+    "test": "scripts/cli-checks.mjs",
+    "why": "a snapshot describes one chain: a part pinned to another genesis is refused"
+  },
+  {
+    "id": "cli-broken-log-trusted",
+    "file": "src/cli.ts",
+    "find": "      if (broken !== null) fail(`snapshot log ${log} is broken at line ${broken}; it is never extended or trusted`);",
+    "replace": "",
+    "test": "scripts/cli-checks.mjs",
+    "why": "a log whose hash chain is broken is never extended or trusted"
+  },
+  {
+    "id": "cli-previous-last-line-only",
+    "file": "src/cli.ts",
+    "find": "      for (const { status: st, observed_at: taken } of readSnapshots(log)) {",
+    "replace": "      for (const { status: st, observed_at: taken } of readSnapshots(log).slice(-1)) {",
+    "test": "scripts/cli-checks.mjs",
+    "why": "a snapshot with no RPC reading in between must not hide a rollback"
+  },
+  {
+    "id": "mcp-bin-hash-not-checked",
+    "file": "src/mcp-bin.ts",
+    "find": "if (snapshot.hash !== hashSnapshot(snapshot)) {",
+    "replace": "if (false) {",
+    "test": "scripts/cli-checks.mjs",
+    "why": "the MCP binary must refuse a snapshot whose hash fails"
+  },
+  {
+    "id": "cli-previous-needs-a-head-time",
+    "file": "src/cli.ts",
+    "find": "if (st.genesis.rpc !== null && st.finalized_height !== null && st.finalized_hash !== null) {",
+    "replace": "if (st.genesis.rpc !== null && st.finalized_height !== null && st.finalized_hash !== null && st.rpc.observed_at !== null) {",
+    "test": "scripts/cli-checks.mjs",
+    "why": "Fable review M4: an earlier snapshot with no head time still sets the rollback floor; only the stuck check needs its time"
+  },
+  {
+    "id": "mcp-bin-repeated-key-served",
+    "file": "src/mcp-bin.ts",
+    "find": "  if (twice !== null) throw new Error(`it holds the key ${JSON.stringify(twice)} twice in one object`);",
+    "replace": "",
+    "test": "scripts/cli-checks.mjs",
+    "why": "a snapshot with a key twice is refused, and the refusal names the repeated key. The written form check refuses such a file too, so this kill shows the reason given, not that the refusal stands on this check (round 9 review I6)"
+  },
+  {
+    "id": "mcp-bin-lossy-utf8",
+    "file": "src/mcp-bin.ts",
+    "find": "    text = new TextDecoder(\"utf-8\", { fatal: true, ignoreBOM: true }).decode(readRegularFile(path));",
+    "replace": "    text = readRegularFile(path).toString(\"utf8\");",
+    "test": "scripts/cli-checks.mjs",
+    "why": "the MCP binary must read the snapshot as strict UTF-8, not turn a bad byte into U+FFFD"
+  },
+  {
+    "id": "mcp-bin-any-hashed-object-served",
+    "file": "src/mcp-bin.ts",
+    "find": "const broken = checkSnapshot(snapshot);",
+    "replace": "const broken: string[] = [];",
+    "test": "scripts/cli-checks.mjs",
+    "why": "the MCP binary serves only what src/snapshot-check.ts passes, not any object that hashes to its own hash field"
+  },
+  {
+    "id": "cli-duplicate-escrow-id-accepted",
+    "file": "src/cli.ts",
+    "find": "    if (seen.has(k)) fail(`${where}: escrow id ${id} is listed twice`);\n",
+    "replace": "",
+    "test": "scripts/cli-checks.mjs",
+    "why": "Fable review L8: the same escrow listed twice would give two cards with one key"
+  },
+  {
+    "id": "cli-earlier-times-not-passed",
+    "file": "src/cli.ts",
+    "find": "        earlierTimes.push(typeof taken === \"string\" ? taken : null);\n",
+    "replace": "",
+    "test": "scripts/cli-checks.mjs",
+    "why": "round 7 review L1: every earlier snapshot's own time reaches the status, so a log that runs backwards shows"
+  },
+  {
+    "id": "cli-census-folder-error-not-input",
+    "file": "src/cli.ts",
+    "find": "      fail(`census refused (input): ${(e as Error).message}`);",
+    "replace": "      throw e;",
+    "test": "scripts/cli-checks.mjs",
+    "why": "round 7 review L4: a scenario folder that cannot be read is an input problem, as in the recount"
+  },
+  {
+    "id": "cli-request-checked-after-folder",
+    "file": "src/cli.ts",
+    "find": "    if (fromFlag !== undefined && toFlag !== undefined) {",
+    "replace": "    if (fromFlag !== undefined && toFlag !== undefined && process.argv.length < 0) {",
+    "test": "scripts/cli-checks.mjs",
+    "why": "clause 16: a range given on the command line is a request problem before any folder problem"
+  },
+  {
+    "id": "cli-pin-json-unsorted",
+    "file": "src/cli.ts",
+    "find": "    writeFileSync(join(out, \"pin.json\"), feedText(snap.pin));",
+    "replace": "    writeFileSync(join(out, \"pin.json\"), JSON.stringify(snap.pin, null, 2) + \"\\n\");",
+    "test": "scripts/cli-checks.mjs",
+    "why": "round 7 review L7: pin.json has one spelling, the feed format"
+  },
+  {
+    "id": "mcp-bin-written-form-not-required",
+    "file": "src/mcp-bin.ts",
+    "find": "  if (feedText(snapshot) !== text) throw new Error(\"it is not in the written form (keys sorted, two-space indent, one trailing newline)\");",
+    "replace": "",
+    "test": "scripts/cli-checks.mjs",
+    "why": "round 7 review L6: the served file is byte for byte what the snapshot command wrote, so an integer the parser rounds is refused"
+  },
+  {
+    "id": "mcp-bin-bom-dropped",
+    "file": "src/mcp-bin.ts",
+    "find": "    text = new TextDecoder(\"utf-8\", { fatal: true, ignoreBOM: true }).decode(readRegularFile(path));",
+    "replace": "    text = new TextDecoder(\"utf-8\", { fatal: true }).decode(readRegularFile(path));",
+    "test": "scripts/cli-checks.mjs",
+    "why": "round 7 review L6: a byte order mark is refused, never dropped silently"
+  },
+  {
+    "id": "mcp-bin-nesting-unchecked",
+    "file": "src/mcp-bin.ts",
+    "find": "  if (nestingDepth(text) > MAX_NESTING) throw new Error(`it nests deeper than ${MAX_NESTING} levels`);",
+    "replace": "",
+    "test": "scripts/cli-checks.mjs",
+    "why": "deep nesting is refused before parsing, with the binary's own words. Without the check the parser's stack overflow still refuses the file, so this kill shows the reason given, not that the refusal stands on it (round 9 review I6)"
+  },
+  {
+    "id": "mcp-bin-refusal-names-nothing",
+    "file": "src/mcp-bin.ts",
+    "find": "refusing to serve it (it breaks ${named})\\n",
+    "replace": "refusing to serve it\\n",
+    "test": "scripts/cli-checks.mjs",
+    "why": "a refused snapshot is told which checks it breaks, by the names src/snapshot-check.ts gives them"
+  },
+  {
+    "id": "mcp-bin-refusal-drops-the-count",
+    "file": "src/mcp-bin.ts",
+    "find": "broken.length > 5 ? `${broken.slice(0, 5).join(\", \")} and ${broken.length - 5} more` : broken.join(\", \")",
+    "replace": "broken.slice(0, 5).join(\", \")",
+    "test": "scripts/cli-checks.mjs",
+    "why": "a refusal of more than five checks names the first five and how many more it breaks"
+  },
+  {
+    "id": "cli-earlier-best-not-read",
+    "file": "src/cli.ts",
+    "find": "        if (st.genesis.rpc !== null && st.best_height !== null) earlierBest.push({ genesis: st.genesis.rpc, best_height: st.best_height });\n",
+    "replace": "",
+    "test": "scripts/cli-checks.mjs",
+    "why": "round 8 review L1: every earlier snapshot's best height reaches the floor, with or without a finalized head"
+  },
+  {
+    "id": "cli-unknown-flag-ignored",
+    "file": "src/cli.ts",
+    "find": "    if (!known.one.includes(a) && !known.many.includes(a)) refuse(`${a} is not a flag ${cmd} reads`);\n",
+    "replace": "",
+    "test": "scripts/cli-checks.mjs",
+    "why": "round 8 review L7: a flag the command does not read is refused, never ignored"
+  },
+  {
+    "id": "cli-flag-equals-value-read",
+    "file": "src/cli.ts",
+    "find": "    if (a.includes(\"=\")) refuse(`${JSON.stringify(a)}: give a flag's value as the next argument, not after =`);\n",
+    "replace": "",
+    "test": "scripts/cli-checks.mjs",
+    "why": "round 8 review L7: --name=value is refused on both sides, as the recount reads it"
+  },
+  {
+    "id": "cli-flag-twice-last-wins",
+    "file": "src/cli.ts",
+    "find": "    if (flags.has(a) && !known.many.includes(a)) refuse(`${a} is given twice`);\n",
+    "replace": "",
+    "test": "scripts/cli-checks.mjs",
+    "why": "round 8 review L7: a flag given twice has no one meaning, so it is refused"
+  },
+  {
+    "id": "cli-stray-argument-ignored",
+    "file": "src/cli.ts",
+    "find": "    if (!a.startsWith(\"--\")) refuse(`${JSON.stringify(a)} is no flag's value; every argument is --name followed by its value`);\n",
+    "replace": "",
+    "test": "scripts/cli-checks.mjs",
+    "why": "round 8 review L7: an argument that is no flag's value is refused"
+  },
+  {
+    "id": "cli-escrow-id-any-text",
+    "file": "src/cli.ts",
+    "find": "    if (!isHash32(id)) fail(`${where}: escrow id ${JSON.stringify(id)} is not 0x plus 64 hex`);\n",
+    "replace": "",
+    "test": "scripts/cli-checks.mjs",
+    "why": "round 8 review I2: an escrow id the MCP server cannot look up never reaches the page or the feeds"
+  },
+  {
+    "id": "cli-empty-value-read",
+    "file": "src/cli.ts",
+    "find": "    if (v === undefined || v === \"\" || v.startsWith(\"--\")) refuse(`${a} needs a value`);",
+    "replace": "    if (v === undefined || v.startsWith(\"--\")) refuse(`${a} needs a value`);",
+    "test": "scripts/cli-checks.mjs",
+    "why": "round 9 review L3: an empty value, as an unset shell variable gives, would read as the flag left out"
+  },
+  {
+    "id": "cli-now-any-text",
+    "file": "src/cli.ts",
+    "find": "    if (a === \"--now\" && parseZoned(v) === null) refuse(`--now must be an ISO 8601 time with a zone, such as 2026-11-09T23:47:41Z`);\n",
+    "replace": "",
+    "test": "scripts/cli-checks.mjs",
+    "why": "round 9 review I1: --now must be a time with a zone, or every result is stamped with it unread"
+  },
+  {
+    "id": "cli-census-missing-folder-unlabeled",
+    "file": "src/cli.ts",
+    "find": "    const dir = one(a, \"--fixtures\") ?? fail(\"census refused (request): missing --fixtures\");",
+    "replace": "    const dir = need(a, \"--fixtures\");",
+    "test": "scripts/cli-checks.mjs",
+    "why": "round 9 review I1: census without its folder flag is a request refusal, as the recount's missing --dir is"
+  },
+  {
+    "id": "cli-census-no-range-kindless",
+    "file": "src/cli.ts",
+    "find": "fail(\"census refused (request): no --from/--to and no census_request in meta.json\")",
+    "replace": "fail(\"no --from/--to and no census_request in meta.json\")",
+    "test": "scripts/cli-checks.mjs",
+    "why": "sixth rerun U8: a census with no range given and none in meta.json is refused as a request problem, named as one"
+  },
+  {
+    "id": "source-folder-name-shown-raw",
+    "file": "src/source.ts",
+    "find": "`fixture ${shownText(dir)} has no readable meta.json`",
+    "replace": "`fixture ${dir} has no readable meta.json`",
+    "test": "scripts/cli-checks.mjs",
+    "why": "sixth rerun U8: a scenario folder is named as a page file is, so a line break in its name cannot break the refusal's line"
+  },
+  {
+    "id": "cli-reading-time-unchecked",
+    "file": "src/cli.ts",
+    "find": "  if (typeof now !== \"string\" || parseZoned(now) === null) refuse(",
+    "replace": "  if (false) refuse(",
+    "test": "scripts/cli-checks.mjs",
+    "why": "third IMD audit J3: a meta.json now that is missing or no time is refused by every command, never printed as the reading time"
+  },
+  {
+    "id": "cli-census-time-not-an-input-problem",
+    "file": "src/cli.ts",
+    "find": "    const observedAt = readingTime(a, meta, (why) => fail(`census refused (input): ${why}`));",
+    "replace": "    const observedAt = readingTime(a, meta);",
+    "test": "scripts/cli-checks.mjs",
+    "why": "third IMD audit J3: census refuses a scenario with no time as an input problem, its kind named as clause 16 asks"
+  },
+  {
+    "id": "cli-escrow-time-from-meta-unchecked",
+    "file": "src/cli.ts",
+    "find": "        observedAt: readingTime(a, src.data.meta),",
+    "replace": "        observedAt: one(a, \"--now\") ?? src.data.meta.now,",
+    "test": "scripts/cli-checks.mjs",
+    "why": "third IMD audit J3: the escrow command takes its time from the one checked resolver"
+  },
+  {
+    "id": "cli-drift-time-from-meta-unchecked",
+    "file": "src/cli.ts",
+    "find": "    print(await driftFor(src, dir, one(a, \"--spec\"), readingTime(a, src.data.meta)));",
+    "replace": "    print(await driftFor(src, dir, one(a, \"--spec\"), one(a, \"--now\") ?? src.data.meta.now));",
+    "test": "scripts/cli-checks.mjs",
+    "why": "third IMD audit J3: the drift command takes its time from the one checked resolver"
+  }
+]

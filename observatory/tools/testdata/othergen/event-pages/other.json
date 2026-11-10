@@ -1,0 +1,33 @@
+{
+ "events": [
+  {
+   "block_hash": "0x0000000000000000000000000000000000000000000000000000000000000001",
+   "block_number": 1,
+   "data": {
+    "escrow_id": "0x1111111111111111111111111111111111111111111111111111111111111111",
+    "who": "mallory"
+   },
+   "finalized": true,
+   "index": 0,
+   "method": "EscrowOpened",
+   "section": "hasStation"
+  },
+  {
+   "block_hash": "0x0000000000000000000000000000000000000000000000000000000000000002",
+   "block_number": 2,
+   "data": {
+    "escrow_id": "0x1111111111111111111111111111111111111111111111111111111111111111",
+    "owner": "mallory"
+   },
+   "finalized": true,
+   "index": 0,
+   "method": "EscrowReleased",
+   "section": "hasStation"
+  }
+ ],
+ "from_block": 1,
+ "genesis": "0xb2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2",
+ "next_page": null,
+ "page": 0,
+ "to_block": 10
+}

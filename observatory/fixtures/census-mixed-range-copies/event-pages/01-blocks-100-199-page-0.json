@@ -1,0 +1,57 @@
+{
+  "genesis": "0x99c172c095340ace980631f9123544c6bebd4839f3437e463533422d8be2d631",
+  "from_block": 100,
+  "to_block": 199,
+  "page": 0,
+  "next_page": null,
+  "events": [
+    {
+      "block_number": 50,
+      "block_hash": "0xa100000000000000000000000000000000000000000000000000000000000032",
+      "finalized": true,
+      "index": 0,
+      "section": "hasStation",
+      "method": "EscrowReleased",
+      "data": {
+        "escrow_id": "0xe500000000000000000000000000000000000000000000000000000000000001",
+        "who": "synthetic-alice"
+      }
+    },
+    {
+      "block_number": null,
+      "block_hash": "0xa10000000000000000000000000000000000000000000000000000000000008c",
+      "finalized": true,
+      "index": 0,
+      "section": "hasStation",
+      "method": "EscrowRefunded",
+      "data": {
+        "escrow_id": "0xe500000000000000000000000000000000000000000000000000000000000002",
+        "who": "synthetic-bob"
+      }
+    },
+    {
+      "block_number": 160,
+      "block_hash": "0xa10000000000000000000000000000000000000000000000000000000000008c",
+      "finalized": true,
+      "index": 0,
+      "section": "hasStation",
+      "method": "EscrowRefunded",
+      "data": {
+        "escrow_id": "0xe500000000000000000000000000000000000000000000000000000000000002",
+        "who": "synthetic-bob"
+      }
+    },
+    {
+      "block_number": 110,
+      "block_hash": "0xa10000000000000000000000000000000000000000000000000000000000006e",
+      "finalized": true,
+      "index": 0,
+      "section": "hasStation",
+      "method": "EscrowOpened",
+      "data": {
+        "escrow_id": "0xe500000000000000000000000000000000000000000000000000000000000003",
+        "who": "synthetic-dave"
+      }
+    }
+  ]
+}

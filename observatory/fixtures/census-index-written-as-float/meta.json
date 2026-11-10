@@ -1,0 +1,11 @@
+{
+  "scenario": "census-index-written-as-float",
+  "description": "Synthetic, made up for a test. Request 0 to 99. The pinned genesis is the FLOP devnet genesis (DEVNET_GENESIS in src/status.ts); every event and block hash is made up. Clause numbers refer to RULES.md section 3.1. The page file is written by hand, so its JSON text literally holds index 1.0 and index 1.5 (JSON.stringify would write 1.0 as 1). An integer is judged by value (clause 14): index 1.0 is the integer 1, so the EscrowOpened at block 10 with index 1.0 and its copy written with index 1 are one event, with 1 copy dropped (clause 9). An EscrowReleased with index 1.5 is not an integer, so it is malformed (clause 7). An ordinary EscrowReleased at block 12 counts. Expected: complete true, status complete; covered 0 to 99; gaps none; totals escrows_opened 1, escrows_released 1, escrows_refunded 0, channels_opened 0, channels_settled 0; pending_unfinalized 0; duplicates_dropped 1; excluded_other_genesis 0; malformed_dropped 1; by_account synthetic-alice (escrows_opened 1, escrows_released 1).",
+  "now": "2026-11-10T00:00:00.000Z",
+  "synthetic": true,
+  "census_request": {
+    "from_block": 0,
+    "to_block": 99
+  },
+  "pinned_genesis": "0x99c172c095340ace980631f9123544c6bebd4839f3437e463533422d8be2d631"
+}

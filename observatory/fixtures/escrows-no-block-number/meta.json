@@ -1,0 +1,11 @@
+{
+  "scenario": "escrows-no-block-number",
+  "description": "Synthetic: escrow ids, block hashes, block numbers and indexes are made up. Only the genesis hash is real (faucet GET /chain and tclk/flop/VERIFICATION.md). Escrow a1 has a finalized open and a finalized release, neither with a block_number key. Census clause 7 makes an event with no block_number key malformed, and the escrow rules read events the same way, so both are ignored with a note and a1 is unverified, not claimed. Escrow b2 has a finalized open whose block_number is an explicit null: it is kept, so b2 is funded, and the result notes that the finalized height cannot bound that evidence.",
+  "now": "2026-11-10T00:00:00Z",
+  "synthetic": true,
+  "escrow_ids": [
+    "0xa1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+    "0xb2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2"
+  ],
+  "pinned_genesis": "0x99c172c095340ace980631f9123544c6bebd4839f3437e463533422d8be2d631"
+}

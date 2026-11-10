@@ -1,0 +1,41 @@
+{
+ "events": [
+  {
+   "block_hash": "0x0000000000000000000000000000000000000000000000000000000000000001",
+   "data": {
+    "who": "alice"
+   },
+   "finalized": true,
+   "index": 0,
+   "method": "EscrowOpened",
+   "section": "hasStation"
+  },
+  {
+   "block_hash": "0x0000000000000000000000000000000000000000000000000000000000000002",
+   "block_number": 2,
+   "data": {
+    "who": "bob"
+   },
+   "finalized": true,
+   "index": 0,
+   "method": "EscrowOpened",
+   "section": "hasStation"
+  },
+  {
+   "block_hash": "0x0000000000000000000000000000000000000000000000000000000000000003",
+   "block_number": null,
+   "data": {
+    "who": "carol"
+   },
+   "finalized": true,
+   "index": 0,
+   "method": "EscrowOpened",
+   "section": "hasStation"
+  }
+ ],
+ "from_block": 1,
+ "genesis": "0xa1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+ "next_page": null,
+ "page": 0,
+ "to_block": 10
+}

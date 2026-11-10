@@ -1,0 +1,6 @@
+{
+  "scenario": "status-rpc-future-head",
+  "description": "Synthetic: status-healthy with the RPC head observed one hour after the snapshot time. That is a conflict: RPC health degraded, stale null.",
+  "now": "2026-11-09T23:47:53Z",
+  "synthetic": true
+}

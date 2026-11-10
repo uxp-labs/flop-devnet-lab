@@ -1,0 +1,23 @@
+# Synthetic spec, made up for a test of exact decimal reading (IMD audit job a24f9aa1, finding 10).
+# It is not from flop-labs/yellowpaper. Each FLOP amount except the first is written with more
+# significant digits than a JS number keeps, so reading it through a JS number would round it.
+meta:
+  version: 1
+  decimals: 18
+parameters:
+  - name: p_short_decimal
+    on_chain: {constants: [Pal.Short]}
+    value: 0.05
+    unit: FLOP
+  - name: p_exact_long
+    on_chain: {constants: [Pal.Exact]}
+    value: 1.000000000000000001
+    unit: FLOP
+  - name: p_mismatch
+    on_chain: {constants: [Pal.B]}
+    value: 1200000.000000000000001
+    unit: FLOP
+  - name: p_tiny_fraction
+    on_chain: {constants: [Pal.A]}
+    value: 1.0000000000000000001
+    unit: FLOP

@@ -1,0 +1,11 @@
+{
+  "scenario": "census-odd-accounts",
+  "description": "Synthetic, made up for a test. Request 0 to 99. The pinned genesis is the FLOP devnet genesis (DEVNET_GENESIS in src/status.ts); every event and block hash is made up. Clause numbers refer to RULES.md section 3.1. One complete page. Accounts are named after properties every JavaScript object inherits (__proto__, constructor, hasOwnProperty, toString, valueOf), so a writer that assigns keys one by one would set the prototype or shadow a method instead of adding the account. Two more accounts differ only in their last character: U+FF41 (fullwidth small a) and U+1D400 (mathematical bold capital A, written in JavaScript as two UTF-16 units starting 0xD835). Clause 11 sorts by code point, so U+FF41 comes first; sorting by UTF-16 unit would put U+1D400 first. toString is an owner, every other account a who. Expected: complete true, status complete; covered 0 to 99; gaps none; totals escrows_opened 6, escrows_released 1, escrows_refunded 1, channels_opened 0, channels_settled 0; pending_unfinalized 0; duplicates_dropped 0; excluded_other_genesis 0; malformed_dropped 0; by_account __proto__ (escrows_opened 1, escrows_released 1), constructor (escrows_opened 1), hasOwnProperty (escrows_refunded 1), synthetic-ａ (escrows_opened 1), synthetic-𝐀 (escrows_opened 1), toString (escrows_opened 1), valueOf (escrows_opened 1).",
+  "now": "2026-11-10T00:00:00.000Z",
+  "synthetic": true,
+  "census_request": {
+    "from_block": 0,
+    "to_block": 99
+  },
+  "pinned_genesis": "0x99c172c095340ace980631f9123544c6bebd4839f3437e463533422d8be2d631"
+}

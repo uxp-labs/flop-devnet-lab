@@ -1,0 +1,11 @@
+{
+  "scenario": "census-symlink-page",
+  "description": "Synthetic, made up for a test. Request 0 to 99. The pinned genesis is the FLOP devnet genesis (DEVNET_GENESIS in src/status.ts); every event and block hash is made up. Clause numbers refer to RULES.md section 3.1. The page files are written by hand. event-pages holds 00.json, an ordinary complete page 0 for blocks 0 to 99 with one open, and 01.json, a relative symbolic link to ../link-target/extra-page-0.json in this fixture folder: a second copy of page 0 with one more open. A symbolic link is not a regular file, even when it points to one (clause 15), so the link refuses the whole census: it may be a page that was meant to count. Followed as a page, it would have added an open and a duplicate. link-target/ sits outside event-pages, so it is not a page itself. Expected: the census refuses; no totals.",
+  "now": "2026-11-10T00:00:00.000Z",
+  "synthetic": true,
+  "census_request": {
+    "from_block": 0,
+    "to_block": 99
+  },
+  "pinned_genesis": "0x99c172c095340ace980631f9123544c6bebd4839f3437e463533422d8be2d631"
+}

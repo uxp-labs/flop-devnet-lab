@@ -1,0 +1,45 @@
+{
+  "genesis": "0xb2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2",
+  "from_block": 100,
+  "to_block": 199,
+  "page": 0,
+  "next_page": null,
+  "events": [
+    {
+      "block_number": 110,
+      "block_hash": "0xb20000000000000000000000000000000000000000000000000000000000006e",
+      "finalized": true,
+      "index": 0,
+      "section": "hasStation",
+      "method": "EscrowOpened",
+      "data": {
+        "escrow_id": "0xe500000000000000000000000000000000000000000000000000000000000002",
+        "who": "synthetic-bob"
+      }
+    },
+    {
+      "block_number": 120,
+      "block_hash": "0xb200000000000000000000000000000000000000000000000000000000000078",
+      "finalized": true,
+      "index": 0,
+      "section": "hasStation",
+      "method": "EscrowRefunded",
+      "data": {
+        "escrow_id": "0xe500000000000000000000000000000000000000000000000000000000000002",
+        "who": "synthetic-bob"
+      }
+    },
+    {
+      "block_number": 130,
+      "block_hash": "0xb200000000000000000000000000000000000000000000000000000000000082",
+      "finalized": false,
+      "index": 0,
+      "section": "hasStation",
+      "method": "EscrowOpened",
+      "data": {
+        "escrow_id": "0xe500000000000000000000000000000000000000000000000000000000000003",
+        "who": "synthetic-carol"
+      }
+    }
+  ]
+}

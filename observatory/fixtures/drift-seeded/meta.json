@@ -1,0 +1,7 @@
+{
+  "scenario": "drift-seeded",
+  "description": "Synthetic, made up for a test: these runtime constants were written by hand to sit against fixtures/params/flop-protocol-params.excerpt.yaml (11 spec entries, 13 check sites); none was read from a chain. Keys use the api.consts spelling (pallet.constant in camel case). Large values are decimal strings, small ones numbers. One seeded mismatch: computeChannel.finalityFreezeThreshold holds 100 where the spec asks for 120, while the hasStation copy of the same parameter holds 120 and matches. hasStation.htlcBurnShare is left out on purpose: its spec value is 0, and a missing value must stay unknown, never match. Expected: items 13; matches 8; mismatches 1; unknown 4 (htlc_burn_share_ppt with no runtime value, miner_capacity_stake_per_gflop whose spec value VFY / 100 is an expression, the daRegistry.depositPerByteValue storage site, and agent_identity_min_stake, which is source only).",
+  "now": "2026-11-10T00:00:00.000Z",
+  "synthetic": true,
+  "params_spec": "../params/flop-protocol-params.excerpt.yaml"
+}

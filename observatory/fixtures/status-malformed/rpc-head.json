@@ -1,0 +1,11 @@
+{
+  "genesis_hash": "0x1234",
+  "finalized": {
+    "number": -5,
+    "hash": "nothex"
+  },
+  "best_number": "3341577",
+  "runtime_spec_version": 1014002,
+  "observed_at": "2026-11-09T23:47:40Z",
+  "error": null
+}

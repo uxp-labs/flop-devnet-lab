@@ -1,0 +1,16 @@
+{
+  "http": 200,
+  "error": null,
+  "fetched_at": "2026-11-09T23:47:52Z",
+  "body": {
+    "network": "devnet",
+    "chain": "FLOP Devnet",
+    "genesisHash": "0x99c172c095340ace980631f9123544c6bebd4839f3437e463533422d8be2d631",
+    "caip2": "polkadot:99c172c095340ace980631f9123544c6",
+    "ss58Format": 42,
+    "decimals": 18,
+    "tokenSymbol": "FLOP",
+    "rpc": "wss://rpc.devnet.flop.network",
+    "walletConnect": false
+  }
+}

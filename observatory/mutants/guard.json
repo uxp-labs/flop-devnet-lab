@@ -1,0 +1,538 @@
+[
+  {
+    "id": "guard-allows-submit",
+    "file": "src/guard.ts",
+    "find": "  \"chain_getBlockHash\",",
+    "replace": "  \"chain_getBlockHash\",\n  \"author_submitExtrinsic\",",
+    "test": "test/guard.test.ts",
+    "why": "submitting an extrinsic is a write and must be refused"
+  },
+  {
+    "id": "guard-allows-post",
+    "file": "src/guard.ts",
+    "find": "if (m !== \"GET\" && m !== \"HEAD\") {",
+    "replace": "if (false) {",
+    "test": "test/guard.test.ts",
+    "why": "the faucet's POST /fund must be refused"
+  },
+  {
+    "id": "guard-sign-not-recorded",
+    "file": "src/guard.ts",
+    "find": "throw new ReadOnlyViolation(recordAttempt(\"sign\", what));",
+    "replace": "throw new ReadOnlyViolation({ kind: \"sign\", what, at: \"\" });",
+    "test": "test/guard.test.ts",
+    "why": "a refused signing attempt must be recorded"
+  },
+  {
+    "id": "guard-spend-allowed",
+    "file": "src/guard.ts",
+    "find": "export function refuseSpend(what: string): never {\n  throw new ReadOnlyViolation(recordAttempt(\"spend\", what));",
+    "replace": "export function refuseSpend(what: string): never {\n  return undefined as never;",
+    "test": "test/guard.test.ts",
+    "why": "spending must throw"
+  },
+  {
+    "id": "setup-https-unblocked",
+    "file": "test/setup.ts",
+    "find": "block(require(\"node:https\"), [\"request\", \"get\", \"createServer\"], \"network\", \"https\");",
+    "replace": "",
+    "test": "test/guard.test.ts",
+    "why": "an https request in a test must be refused and recorded"
+  },
+  {
+    "id": "setup-named-imports-unsynced",
+    "file": "test/setup.ts",
+    "find": "syncBuiltinESMExports();\n",
+    "replace": "",
+    "test": "test/guard.test.ts",
+    "why": "named imports of node modules must see the block too"
+  },
+  {
+    "id": "setup-child-process-unblocked",
+    "file": "test/setup.ts",
+    "find": "  [\"spawn\", \"spawnSync\", \"exec\", \"execSync\", \"execFile\", \"execFileSync\", \"fork\"],",
+    "replace": "  [],",
+    "test": "test/guard.test.ts",
+    "why": "a child process in a test must be refused and recorded"
+  },
+  {
+    "id": "setup-socket-connect-unblocked",
+    "file": "test/setup.ts",
+    "find": "net.Socket.prototype.connect = blocked(\"network\", \"net.Socket.connect\");\n",
+    "replace": "",
+    "test": "test/guard.test.ts",
+    "why": "a raw socket connection must be refused and recorded"
+  },
+  {
+    "id": "scan-misses-node-imports",
+    "file": "test/guard.test.ts",
+    "find": "    new RegExp(`from\\\\s*[\"'](?:node:)?${NET}[\"']`),\n",
+    "replace": "",
+    "test": "test/guard.test.ts",
+    "why": "the source scan must catch a static import of a network module"
+  },
+  {
+    "id": "setup-dgram-socket-unblocked",
+    "file": "test/setup.ts",
+    "find": "for (const name of [\"send\", \"bind\", \"connect\"]) dgramSocket[name] = blocked(\"network\", `dgram.Socket.${name}`);\n",
+    "replace": "",
+    "test": "test/guard.test.ts",
+    "why": "a dgram socket made directly must still be refused"
+  },
+  {
+    "id": "setup-dns-resolver-unblocked",
+    "file": "test/setup.ts",
+    "find": "    (proto as Record<string, unknown>)[name] = blocked(\"network\", `${prefix}.${name}`);\n",
+    "replace": "",
+    "test": "test/guard.test.ts",
+    "why": "a dns.Resolver query must be refused"
+  },
+  {
+    "id": "setup-childprocess-prototype-unblocked",
+    "file": "test/setup.ts",
+    "find": "require(\"node:child_process\").ChildProcess.prototype.spawn = blocked(\"process\", \"child_process.ChildProcess.spawn\");\n",
+    "replace": "",
+    "test": "test/guard.test.ts",
+    "why": "ChildProcess.prototype.spawn must be refused"
+  },
+  {
+    "id": "setup-binding-unblocked",
+    "file": "test/setup.ts",
+    "find": "  NATIVE.has(name) ? blocked(\"process\", \"process.binding\")(name) : realBinding(name);",
+    "replace": "  realBinding(name);",
+    "test": "test/guard.test.ts",
+    "why": "process.binding must not reach the native spawn layer"
+  },
+  {
+    "id": "setup-inspector-unblocked",
+    "file": "test/setup.ts",
+    "find": "block(require(\"node:inspector\"), [\"open\"], \"network\", \"inspector\");\n",
+    "replace": "",
+    "test": "test/guard.test.ts",
+    "why": "inspector.open opens a listener and must be refused"
+  },
+  {
+    "id": "scan-misses-computed-import",
+    "file": "test/guard.test.ts",
+    "find": "    /\\bimport\\s*\\((?!\\s*([\"'])[^\"'`]*\\1\\s*\\))/,\n",
+    "replace": "",
+    "test": "test/guard.test.ts",
+    "why": "the scan must catch an import() with a computed argument"
+  },
+  {
+    "id": "scan-misses-getbuiltinmodule",
+    "file": "test/guard.test.ts",
+    "find": "    /\\bgetBuiltinModule\\b/,\n",
+    "replace": "",
+    "test": "test/guard.test.ts",
+    "why": "the scan must catch process.getBuiltinModule"
+  },
+  {
+    "id": "scan-misses-bare-fetch",
+    "file": "test/guard.test.ts",
+    "find": "    /\\bfetch\\b/,\n",
+    "replace": "    /\\bfetch\\s*\\(/,\n",
+    "test": "test/guard.test.ts",
+    "why": "fetch.call(...) and const f = fetch must fail the scan, not only fetch("
+  },
+  {
+    "id": "scan-misses-bare-websocket",
+    "file": "test/guard.test.ts",
+    "find": "    /\\bWebSocket\\b/,\n",
+    "replace": "    /new\\s+WebSocket\\b/,\n",
+    "test": "test/guard.test.ts",
+    "why": "a WebSocket taken by name must fail the scan, not only new WebSocket"
+  },
+  {
+    "id": "scan-misses-global-object",
+    "file": "test/guard.test.ts",
+    "find": "    /\\bglobalThis\\b/,\n",
+    "replace": "",
+    "test": "test/guard.test.ts",
+    "why": "globalThis reaches every global by a computed name"
+  },
+  {
+    "id": "guard-attempt-not-notified",
+    "file": "src/guard.ts",
+    "find": "  notify({ type: \"attempt\", attempt });\n",
+    "replace": "",
+    "test": "test/attempts-check.test.ts",
+    "why": "an attempt must reach the journal the moment it is recorded"
+  },
+  {
+    "id": "guard-reset-not-notified",
+    "file": "src/guard.ts",
+    "find": "  notify({ type: \"reset\", cleared });\n",
+    "replace": "",
+    "test": "test/attempts-check.test.ts",
+    "why": "a reset must reach the journal too, or a cleared attempt looks unchecked"
+  },
+  {
+    "id": "setup-journal-not-written",
+    "file": "test/setup.ts",
+    "find": "  if (journal) appendFileSync(journal,",
+    "replace": "  if (false) appendFileSync(journal,",
+    "test": "test/attempts-check.test.ts",
+    "why": "the journal is the only record of an attempt made after the last check"
+  },
+  {
+    "id": "check-late-events-ignored",
+    "file": "scripts/attempts-check.mjs",
+    "find": "    if (r.checked) {",
+    "replace": "    if (false) {",
+    "test": "test/attempts-check.test.ts",
+    "why": "an attempt or reset after a file's final check must fail the run"
+  },
+  {
+    "id": "check-left-attempts-ignored",
+    "file": "scripts/attempts-check.mjs",
+    "find": "      for (const a of r.pending) problems.push({ ...at, file: e.file, problem: \"attempt left in the log at the final check\", attempt: a });\n",
+    "replace": "",
+    "test": "test/attempts-check.test.ts",
+    "why": "an attempt still in the log at the final check must fail"
+  },
+  {
+    "id": "check-reset-count-ignored",
+    "file": "scripts/attempts-check.mjs",
+    "find": "      if (e.cleared !== r.pending.length) {",
+    "replace": "      if (false) {",
+    "test": "test/attempts-check.test.ts",
+    "why": "a reset that cleared more than the journal holds means a lost attempt"
+  },
+  {
+    "id": "check-unchecked-file-ignored",
+    "file": "scripts/attempts-check.mjs",
+    "find": "    if (!r.checked) for (const a of r.pending)",
+    "replace": "    if (false) for (const a of r.pending)",
+    "test": "test/attempts-check.test.ts",
+    "why": "an attempt in a file that never reached its final check must fail"
+  },
+  {
+    "id": "check-expect-files-ignored",
+    "file": "scripts/attempts-check.mjs",
+    "find": "  if (expectFiles !== null && filesChecked !== expectFiles) {",
+    "replace": "  if (false) {",
+    "test": "test/attempts-check.test.ts",
+    "why": "every test file must reach its final check"
+  },
+  {
+    "id": "check-runs-merged",
+    "file": "scripts/attempts-check.mjs",
+    "find": "    let r = runs.get(e.run);\n    if (!r) {\n      r = { file: e.file, pending: [], checked: false };\n      runs.set(e.run, r);",
+    "replace": "    let r = runs.get(\"all\");\n    if (!r) {\n      r = { file: e.file, pending: [], checked: false };\n      runs.set(\"all\", r);",
+    "test": "test/attempts-check.test.ts",
+    "why": "one file's reset must never clear another file's attempt"
+  },
+  {
+    "id": "scan-not-recursive",
+    "file": "test/guard.test.ts",
+    "find": "(readdirSync(d, { recursive: true }) as string[])",
+    "replace": "(readdirSync(d) as string[])",
+    "test": "test/guard.test.ts",
+    "why": "a module in a src subfolder must be scanned too"
+  },
+  {
+    "id": "scan-misses-computed-process",
+    "file": "test/guard.test.ts",
+    "find": "    /\\bprocess\\b(?!\\.(?:version|argv|exit|stdout|stderr|stdin)\\b)/,\n",
+    "replace": "",
+    "test": "test/guard.test.ts",
+    "why": "process reached by a computed, cast or reflected name reaches any module"
+  },
+  {
+    "id": "scan-misses-constructor-reach",
+    "file": "test/guard.test.ts",
+    "find": "    /\\.\\s*constructor\\b/,\n",
+    "replace": "",
+    "test": "test/guard.test.ts",
+    "why": "[].constructor.constructor is the Function constructor"
+  },
+  {
+    "id": "scan-tree-any-module-allowed",
+    "file": "scripts/source-scan.mjs",
+    "find": "  return ALLOWED_MODULES.has(name) ? null : `imports ${JSON.stringify(name)}, which is not on the allow-list`;",
+    "replace": "  return null;",
+    "test": "scripts/source-scan.mjs",
+    "why": "imports are checked against an allow-list, so an escaped, legacy or third party module fails"
+  },
+  {
+    "id": "scan-tree-any-crypto-name",
+    "file": "scripts/source-scan.mjs",
+    "find": "CRYPTO_NAMES.has(s.imported.name ?? s.imported.value)",
+    "replace": "true",
+    "test": "scripts/source-scan.mjs",
+    "why": "only createHash may come from node:crypto, not a key or cipher API"
+  },
+  {
+    "id": "scan-tree-any-process-member",
+    "file": "scripts/source-scan.mjs",
+    "find": "          let allowed = PROCESS_MEMBERS.has(member);",
+    "replace": "          let allowed = true;",
+    "test": "scripts/source-scan.mjs",
+    "why": "process is used only through its allowed members, never env, binding or a computed key"
+  },
+  {
+    "id": "scan-tree-class-constructor-exemption-everywhere",
+    "file": "scripts/source-scan.mjs",
+    "find": "const ownConstructor = key === \"key\" && parent?.type === \"MethodDefinition\" && parent.kind === \"constructor\";",
+    "replace": "const ownConstructor = n.name === \"constructor\";",
+    "test": "scripts/source-scan.mjs",
+    "why": "only a class's own constructor method is exempt; .constructor reaches Function"
+  },
+  {
+    "id": "scan-tree-strings-unchecked",
+    "file": "scripts/source-scan.mjs",
+    "find": "        if (bannedText(n.value)) out.push(`names ${n.value} in a string`);",
+    "replace": "",
+    "test": "scripts/source-scan.mjs",
+    "why": "round 7 review M3: a banned name as a string key or argument reaches the same thing"
+  },
+  {
+    "id": "scan-tree-templates-unchecked",
+    "file": "scripts/source-scan.mjs",
+    "find": "        if (bannedText(cooked)) out.push(`names ${cooked} in a template`);",
+    "replace": "",
+    "test": "scripts/source-scan.mjs",
+    "why": "round 7 review M3: a template with no substitution is a string key too"
+  },
+  {
+    "id": "scan-tree-import-equals-allowed",
+    "file": "scripts/source-scan.mjs",
+    "find": "        out.push(\"uses an import-equals declaration (import x = require(...))\");",
+    "replace": "",
+    "test": "scripts/source-scan.mjs",
+    "why": "round 7 review M4: tsc writes a require for an import-equals"
+  },
+  {
+    "id": "scan-tree-relative-unscanned",
+    "file": "scripts/source-scan.mjs",
+    "find": "    return scanned.has(ts.split(sep).join(\"/\")) ? null : `imports ${JSON.stringify(name)}, which is no scanned module in src`;",
+    "replace": "    return null;",
+    "test": "scripts/source-scan.mjs",
+    "why": "round 7 review M4: a relative import must land on a module the scans read"
+  },
+  {
+    "id": "scan-tree-file-list-any-file",
+    "file": "scripts/source-scan.mjs",
+    "find": "    if (st.isFile() && name.endsWith(\".ts\")) modules.push(name);",
+    "replace": "    if (!st.isDirectory()) modules.push(name);",
+    "test": "scripts/source-scan.mjs",
+    "why": "round 7 review M4: a .mts module or a link in src is named, never read as a .ts module"
+  },
+  {
+    "id": "scan-tree-define-property-allowed",
+    "file": "scripts/source-scan.mjs",
+    "find": "  \"defineProperty\",\n",
+    "replace": "",
+    "test": "scripts/source-scan.mjs",
+    "why": "round 7 review M3: a getter defined on a prototype reaches the global object under another name"
+  },
+  {
+    "id": "scan-tree-crypto-global-allowed",
+    "file": "scripts/source-scan.mjs",
+    "find": "  \"crypto\",\n",
+    "replace": "",
+    "test": "scripts/source-scan.mjs",
+    "why": "round 7 review M3: the Web Crypto global holds the key and signing API"
+  },
+  {
+    "id": "scan-tree-computed-keys-unread",
+    "file": "scripts/source-scan.mjs",
+    "find": "      if (!literalKey(k)) out.push(",
+    "replace": "      if (false) out.push(",
+    "test": "scripts/source-scan.mjs",
+    "why": "round 8 review M1: a computed key the scan cannot read could name anything at run time"
+  },
+  {
+    "id": "scan-tree-stdout-any-member",
+    "file": "scripts/source-scan.mjs",
+    "find": "            allowed = write?.key === \"object\" &&",
+    "replace": "            allowed = true || write?.key === \"object\" &&",
+    "test": "scripts/source-scan.mjs",
+    "why": "round 8 review M1: process.stdout and stderr only as .write(...), so a stream src holds is never handed on or listed"
+  },
+  {
+    "id": "scan-tree-stdin-any-use",
+    "file": "scripts/source-scan.mjs",
+    "find": "              prop?.key === \"value\" && prop.parent?.type === \"Property\"",
+    "replace": "              true || prop?.key === \"value\" && prop.parent?.type === \"Property\"",
+    "test": "scripts/source-scan.mjs",
+    "why": "round 8 review M1: process.stdin only as the input of a reader"
+  },
+  {
+    "id": "scan-tree-regex-unread",
+    "file": "scripts/source-scan.mjs",
+    "find": "        if (n.regex && (bannedText(n.regex.pattern) || WRITE_RPC.test(n.regex.pattern))) out.push(",
+    "replace": "        if (false) out.push(",
+    "test": "scripts/source-scan.mjs",
+    "why": "round 8 review M1: a regular expression's pattern can be read back as a string"
+  },
+  {
+    "id": "scan-tree-internal-names-allowed",
+    "file": "scripts/source-scan.mjs",
+    "find": "        else if (INTERNAL.test(n.name)) out.push(`uses the internal ${n.name}`);\n",
+    "replace": "",
+    "test": "scripts/source-scan.mjs",
+    "why": "round 8 review M1: an underscore name is an internal, such as a stream's _handle"
+  },
+  {
+    "id": "scan-tree-connect-allowed",
+    "file": "scripts/source-scan.mjs",
+    "find": "  \"connect\",\n",
+    "replace": "",
+    "test": "scripts/source-scan.mjs",
+    "why": "round 8 review M1: process.stdout is a socket under a pipe, and connect opens a new connection on it"
+  },
+  {
+    "id": "scan-tree-dynamic-import-allowed",
+    "file": "scripts/source-scan.mjs",
+    "find": "        out.push(\"uses a dynamic import(); src imports every module statically, by name\");\n",
+    "replace": "",
+    "test": "scripts/source-scan.mjs",
+    "why": "round 9 review M1: a dynamic import hands back a module object, node:crypto's included, whose exports Object.entries lists"
+  },
+  {
+    "id": "scan-tree-module-object-import-allowed",
+    "file": "scripts/source-scan.mjs",
+    "find": "        if (n.type === \"ImportDeclaration\" && n.specifiers.some((s) => s.type !== \"ImportSpecifier\")) out.push(",
+    "replace": "        if (false) out.push(",
+    "test": "scripts/source-scan.mjs",
+    "why": "round 9 review M1: a default or namespace import hands over a whole module object"
+  },
+  {
+    "id": "scan-tree-export-all-allowed",
+    "file": "scripts/source-scan.mjs",
+    "find": "        if (n.type === \"ExportAllDeclaration\") out.push(`re-exports the whole of ${JSON.stringify(name)} (export *)`);\n",
+    "replace": "",
+    "test": "scripts/source-scan.mjs",
+    "why": "round 9 review M1: export * puts a whole module's exports in another module's namespace"
+  },
+  {
+    "id": "scan-tree-stdin-any-call",
+    "file": "scripts/source-scan.mjs",
+    "find": "call.parent.callee?.type === \"Identifier\" && call.parent.callee.name === \"createInterface\"",
+    "replace": "true",
+    "test": "scripts/source-scan.mjs",
+    "why": "round 9 review I7: stdin goes only into createInterface, never into an object it can be read back from"
+  },
+  {
+    "id": "scan-tree-web-crypto-classes-allowed",
+    "file": "scripts/source-scan.mjs",
+    "find": "  \"SubtleCrypto\",\n",
+    "replace": "",
+    "test": "scripts/source-scan.mjs",
+    "why": "round 9 review M1: the SubtleCrypto prototype lists the key and signing methods"
+  },
+  {
+    "id": "scan-tree-underscore-strings-allowed",
+    "file": "scripts/source-scan.mjs",
+    "find": " || INTERNAL.test(v));",
+    "replace": ");",
+    "test": "scripts/source-scan.mjs",
+    "why": "round 10 review L1: an underscore name as a string key reads an internal, x[\"__proto__\"] or console[\"_stdout\"]"
+  },
+  {
+    "id": "scan-tree-default-by-name-allowed",
+    "file": "scripts/source-scan.mjs",
+    "find": "        if (names.includes(\"default\")) out.push(",
+    "replace": "        if (false) out.push(",
+    "test": "scripts/source-scan.mjs",
+    "why": "round 10 review L2: import { default as m } is the module object by another spelling"
+  },
+  {
+    "id": "scan-tree-reader-streams-allowed",
+    "file": "scripts/source-scan.mjs",
+    "find": "        if (READER_STREAMS.has(member)) out.push(",
+    "replace": "        if (false) out.push(",
+    "test": "scripts/source-scan.mjs",
+    "why": "round 10 review L3: the reader hands stdin back as .input"
+  },
+  {
+    "id": "scan-tree-reader-streams-destructured",
+    "file": "scripts/source-scan.mjs",
+    "find": "          if (READER_STREAMS.has(name)) out.push(",
+    "replace": "          if (false) out.push(",
+    "test": "scripts/source-scan.mjs",
+    "why": "round 10 review L3: const { input } = rl reads the reader's stream too"
+  },
+  {
+    "id": "scan-tree-reader-listed",
+    "file": "scripts/source-scan.mjs",
+    "find": "    if (!ok) out.push(`uses the reader ${id.name} other than as",
+    "replace": "    if (false) out.push(`uses the reader ${id.name} other than as",
+    "test": "scripts/source-scan.mjs",
+    "why": "lead's check after round 10: Object.entries of the reader lists stdin, so the reader is named only as rl.on(event, arrow function)"
+  },
+  {
+    "id": "scan-tree-reader-function-listener",
+    "file": "scripts/source-scan.mjs",
+    "find": " && call.parent.arguments[1]?.type === \"ArrowFunctionExpression\"",
+    "replace": "",
+    "test": "scripts/source-scan.mjs",
+    "why": "lead's check after round 10: a listener that is not an arrow function gets the reader as this"
+  },
+  {
+    "id": "scan-tree-reader-on-value-kept",
+    "file": "scripts/source-scan.mjs",
+    "find": "const ok = statement?.key === \"expression\" && statement.parent?.type === \"ExpressionStatement\" && ",
+    "replace": "const ok = call?.key === \"callee\" && ",
+    "test": "scripts/source-scan.mjs",
+    "why": "lead's check after round 10: on returns the reader, so rl.on(...) is a statement of its own"
+  },
+  {
+    "id": "scan-tree-create-interface-any-name",
+    "file": "scripts/source-scan.mjs",
+    "find": "    } else if (!imported) out.push(\"names createInterface other than",
+    "replace": "    } else if (false) out.push(\"names createInterface other than",
+    "test": "scripts/source-scan.mjs",
+    "why": "lead's check after round 10: a function of src's own named createInterface would take stdin and list it"
+  },
+  {
+    "id": "scan-tree-reader-exported",
+    "file": "scripts/source-scan.mjs",
+    "find": "declaration.kind === \"const\" && !exported) {",
+    "replace": "declaration.kind === \"const\") {",
+    "test": "scripts/source-scan.mjs",
+    "why": "lead's check after round 10: an exported reader is named in another module, where the reader rule does not follow it"
+  },
+  {
+    "id": "setup-module-register-unblocked",
+    "file": "test/setup.ts",
+    "find": "nodeModule.register = blocked(\"process\", \"module.register\", \"module hooks\");\n",
+    "replace": "",
+    "test": "test/guard.test.ts",
+    "why": "third IMD audit J1: module.register starts a loader thread whose modules hold none of the patches, so it is refused and recorded itself"
+  },
+  {
+    "id": "setup-module-register-hooks-unblocked",
+    "file": "test/setup.ts",
+    "find": "nodeModule.registerHooks = blocked(\"process\", \"module.registerHooks\", \"module hooks\");\n",
+    "replace": "",
+    "test": "test/guard.test.ts",
+    "why": "third IMD audit J1: module.registerHooks rewires how every later module loads, so it is refused and recorded"
+  },
+  {
+    "id": "setup-listen2-unblocked",
+    "file": "test/setup.ts",
+    "find": "net.Server.prototype._listen2 = blocked(\"network\", \"net.Server._listen2\");\n",
+    "replace": "",
+    "test": "test/guard.test.ts",
+    "why": "third IMD audit J2: _listen2 makes the listening handle under listen, so a test calling it directly is refused and recorded"
+  },
+  {
+    "id": "setup-dgram-constructor-unblocked",
+    "file": "test/setup.ts",
+    "find": "dgram.Socket = function Socket(...args: unknown[]) {\n  blocked(\"network\", \"dgram.Socket\")(...args);\n};\ndgram.Socket.prototype = dgramSocket;\n",
+    "replace": "",
+    "test": "test/guard.test.ts",
+    "why": "third IMD audit J2: a dgram.Socket made directly holds a native handle that binds without the prototype's bind, so the constructor is refused and recorded"
+  },
+  {
+    "id": "setup-dgram-prototype-constructor-real",
+    "file": "test/setup.ts",
+    "find": "dgramSocket.constructor = dgram.Socket;\n",
+    "replace": "",
+    "test": "test/guard.test.ts",
+    "why": "tenth rerun note: the real prototype's constructor property names the refused stand in, so a socket made from it is refused and recorded"
+  }
+]

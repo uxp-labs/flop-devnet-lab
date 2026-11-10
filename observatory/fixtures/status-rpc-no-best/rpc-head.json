@@ -1,0 +1,11 @@
+{
+  "genesis_hash": "0x99c172c095340ace980631f9123544c6bebd4839f3437e463533422d8be2d631",
+  "finalized": {
+    "number": 3341575,
+    "hash": "0x5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e"
+  },
+  "best_number": null,
+  "runtime_spec_version": 1014002,
+  "observed_at": "2026-11-09T23:47:40Z",
+  "error": null
+}

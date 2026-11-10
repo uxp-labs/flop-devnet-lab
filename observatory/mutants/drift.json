@@ -1,0 +1,162 @@
+[
+  {
+    "id": "drift-missing-runtime-is-match",
+    "file": "src/drift.ts",
+    "find": "if (!hit.found) return unknown(null, hit.why);",
+    "replace": "if (!hit.found) return item(base, { runtime_path, mapping: \"constant\", runtime: null, expected: exp, status: \"match\", note: null });",
+    "test": "test/drift.test.ts",
+    "why": "A missing runtime value reports match. Unknown must never be match."
+  },
+  {
+    "id": "drift-missing-runtime-reads-as-zero",
+    "file": "src/drift.ts",
+    "find": "if (keys.length === 0) return { found: false, why: \"the runtime value is missing\" };",
+    "replace": "if (keys.length === 0) return { found: true, raw: 0 };",
+    "test": "test/drift.test.ts",
+    "why": "A missing runtime value is read as 0, so htlc_burn_share_ppt (spec 0) would match with nothing read."
+  },
+  {
+    "id": "drift-source-only-is-match",
+    "file": "src/drift.ts",
+    "find": "status: \"unknown\", note: `source only: ${reason}`",
+    "replace": "status: \"match\", note: `source only: ${reason}`",
+    "test": "test/drift.test.ts",
+    "why": "A source_only parameter, which has no RPC check, reports match."
+  },
+  {
+    "id": "drift-skip-multiplier",
+    "file": "src/drift.ts",
+    "find": "const num = value.num * scale * multiplier;",
+    "replace": "const num = value.num * scale;",
+    "test": "test/drift.test.ts",
+    "why": "on_chain.multiplier is ignored, so Perbill and days to blocks values compare in the wrong units."
+  },
+  {
+    "id": "drift-skip-decimals",
+    "file": "src/drift.ts",
+    "find": "const scale = flopAmount && decimals !== null ? 10n ** decimals : 1n;",
+    "replace": "const scale = 1n;",
+    "test": "test/drift.test.ts",
+    "why": "meta.decimals is ignored, so FLOP amounts compare as whole FLOP instead of base units."
+  },
+  {
+    "id": "drift-skip-divisor",
+    "file": "src/drift.ts",
+    "find": "const den = value.den * divisor;",
+    "replace": "const den = value.den;",
+    "test": "test/drift.test.ts",
+    "why": "on_chain.divisor is ignored, so the per byte deposit is expected 10^9 times too large."
+  },
+  {
+    "id": "drift-ignore-token-units",
+    "file": "src/drift.ts",
+    "find": "const flopAmount = entry.unit === \"FLOP\" || onChain.token_units === true;",
+    "replace": "const flopAmount = entry.unit === \"FLOP\";",
+    "test": "test/drift.test.ts",
+    "why": "on_chain.token_units is ignored, so the per byte deposit (unit FLOP per 10^9 bytes) is not scaled by meta.decimals."
+  },
+  {
+    "id": "drift-yaml-1-2",
+    "file": "src/drift.ts",
+    "find": "version: \"1.1\", intAsBigInt: true,",
+    "replace": "intAsBigInt: true,",
+    "test": "test/drift.test.ts",
+    "why": "Parsing as YAML 1.2 reads 63_072_000 as a string, unlike upstream PyYAML, so real matches turn unknown."
+  },
+  {
+    "id": "drift-decimal-rounded",
+    "file": "src/drift.ts",
+    "find": "if (v instanceof SpecDecimal) return decimalText(v.source);",
+    "replace": "if (v instanceof SpecDecimal) return decimalText(String(v.approx));",
+    "test": "test/drift.test.ts",
+    "why": "IMD finding 10: a spec decimal is read from its rounded JS number, so 1200000.000000000000001 FLOP matches 1200000 FLOP and 1.0000000000000000001 FLOP matches instead of being unknown."
+  },
+  {
+    "id": "drift-decimal-source-dropped",
+    "file": "src/drift.ts",
+    "find": "customTags: keepSource",
+    "replace": "customTags: (tags) => tags",
+    "test": "test/drift.test.ts",
+    "why": "The YAML parser no longer keeps the source text of decimals, so every decimal is a rounded JS number before the exact comparison."
+  },
+  {
+    "id": "drift-decimal-scalar-not-unwrapped",
+    "file": "src/drift.ts",
+    "find": "const n = isScalar(v) ? v.value : v;",
+    "replace": "const n = v;",
+    "test": "test/drift.test.ts",
+    "why": "The YAML 1.1 float tag resolves to a Scalar node, so without unwrapping it no decimal keeps its source text and every decimal silently rounds."
+  },
+  {
+    "id": "drift-decimal-shown-rounded",
+    "file": "src/drift.ts",
+    "find": "if (v instanceof SpecDecimal) return exactNumber(v) ?? v.source;",
+    "replace": "if (v instanceof SpecDecimal) return v.approx;",
+    "test": "test/drift.test.ts",
+    "why": "The report's spec field shows the rounded JS number, so 1.0000000000000000001 is shown as 1."
+  },
+  {
+    "id": "drift-compare-as-float",
+    "file": "src/drift.ts",
+    "find": "const same = actual.value === expected.value;",
+    "replace": "const same = Number(actual.value) === Number(expected.value);",
+    "test": "test/drift.test.ts",
+    "why": "Comparing through JS numbers rounds past 2^53, so a value one base unit off reports match."
+  },
+  {
+    "id": "drift-unsafe-number-accepted",
+    "file": "src/drift.ts",
+    "find": "if (Number.isSafeInteger(v)) return { ok: true, value: BigInt(v) };",
+    "replace": "if (Number.isInteger(v)) return { ok: true, value: BigInt(v) };",
+    "test": "test/drift.test.ts",
+    "why": "A JS number past 2^53, whose exact value is lost, is compared instead of reported unknown."
+  },
+  {
+    "id": "drift-hex-accepted",
+    "file": "src/drift.ts",
+    "find": "if (/^0x[0-9a-fA-F]*$/.test(v)) {",
+    "replace": "if (/^0x[0-9a-fA-F]*$/.test(v)) return { ok: true, value: BigInt(v) }; if (false) {",
+    "test": "test/drift.test.ts",
+    "why": "Hex runtime values are read as big endian, though SCALE bytes are little endian, so the value is a guess."
+  },
+  {
+    "id": "drift-fraction-rounded",
+    "file": "src/drift.ts",
+    "find": "if (num % den !== 0n) {",
+    "replace": "if (false) {",
+    "test": "test/drift.test.ts",
+    "why": "A scaled value that is not a whole number is silently floored and can match, though the spec gives no rounding rule."
+  },
+  {
+    "id": "drift-key-conflict-ignored",
+    "file": "src/drift.ts",
+    "find": "if (!same) return { found: false, why: `two key spellings hold different runtime values (${keys.join(\", \")})` };",
+    "replace": "",
+    "test": "test/drift.test.ts",
+    "why": "Two key spellings with different runtime values are not a conflict, so one is picked silently."
+  },
+  {
+    "id": "drift-empty-spec-accepted",
+    "file": "src/drift.ts",
+    "find": "if (entries.length === 0) throw new DriftSpecError(\"no parameters or reference entries\");",
+    "replace": "",
+    "test": "test/drift.test.ts",
+    "why": "A spec with no entries gives a report with 0 mismatches, which reads as no drift."
+  },
+  {
+    "id": "drift-runtime-version-unsafe",
+    "file": "src/drift.ts",
+    "find": "runtime_version: isSafeInt(version) && version >= 0 ? version : null,",
+    "replace": "runtime_version: typeof version === \"number\" && Number.isInteger(version) ? version : null,",
+    "test": "test/drift.test.ts",
+    "why": "Fable review L15: a runtime version past 2^53 was already rounded, so it reads as unknown"
+  },
+  {
+    "id": "drift-runtime-time-unparsed",
+    "file": "src/drift.ts",
+    "find": "runtime_observed_at: parseZoned(readAt) !== null ? (readAt as string) : null,",
+    "replace": "runtime_observed_at: typeof readAt === \"string\" ? readAt : null,",
+    "test": "test/drift.test.ts",
+    "why": "Fable review L15: the runtime reading time shows only when it is a real zoned time"
+  }
+]

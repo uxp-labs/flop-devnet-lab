@@ -1,0 +1,11 @@
+{
+  "scenario": "census-block-hash-form",
+  "description": "Synthetic, made up for a test. Request 0 to 99. The pinned genesis is the FLOP devnet genesis (DEVNET_GENESIS in src/status.ts); every event and block hash is made up. Clause numbers refer to RULES.md section 3.1. The page file is written by hand. A block hash must be 0x followed by 64 lower case hex digits (clause 7), the form the escrow rules read too. The EscrowOpened at block 7 with a valid hash counts. A second copy of it with the same hash written in upper case (0xA1...) is malformed, so it neither counts nor dedupes with the first. An EscrowOpened by synthetic-bob with the short hash 0xabc is malformed. An EscrowReleased with a valid hash at block 9 counts. Expected: complete true, status complete; covered 0 to 99; gaps none; totals escrows_opened 1, escrows_released 1, escrows_refunded 0, channels_opened 0, channels_settled 0; pending_unfinalized 0; duplicates_dropped 0; excluded_other_genesis 0; malformed_dropped 2; by_account synthetic-alice (escrows_opened 1, escrows_released 1).",
+  "now": "2026-11-10T00:00:00.000Z",
+  "synthetic": true,
+  "census_request": {
+    "from_block": 0,
+    "to_block": 99
+  },
+  "pinned_genesis": "0x99c172c095340ace980631f9123544c6bebd4839f3437e463533422d8be2d631"
+}
