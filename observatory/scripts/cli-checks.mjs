@@ -453,6 +453,8 @@ const cases = [
         variant("reset-false-with-no-rpc-genesis", (s) => {
           s.status.genesis.rpc = null;
           s.pin.genesis = null;
+          // No head on the pinned genesis bounds anything, so the bound rules have nothing to refuse.
+          for (const e of s.escrows) e.finalized_height = null;
         }),
         variant("snapshot-trust-a-word", (s) => {
           s.status.trust = "trusted RPC";
@@ -464,7 +466,8 @@ const cases = [
         variant("unverified-with-evidence", (s) => {
           const u = s.escrows.find((e) => e.state === "unverified");
           if (!u) throw new Error("no unverified escrow to give evidence to");
-          u.evidence = [structuredClone(s.escrows[0].evidence[0])];
+          // An event of its own, so the rule that an event is evidence once has nothing to refuse.
+          u.evidence = [{ ...structuredClone(s.escrows[0].evidence[0]), event_index: s.escrows[0].evidence[0].event_index + 7 }];
         }),
         // Sixth rerun U1: every field of every object has its type, and the settlement values agree.
         // Each edit breaks one rule and leaves every other one met.
