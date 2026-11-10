@@ -65,4 +65,11 @@ The two interfaces other teams import are in [../interfaces](../interfaces).
 | `tools/recount.py` | independent census recount, written from RULES.md alone |
 | `fixtures/` | saved scenarios; `meta.json` says which values are real and which are made up |
 | `mutants/` | the injected bugs and the tests that must catch them |
+| `test/setup.ts` | the runtime block on every network and process path, and the leftover attempt check |
 | `scripts/check.sh` | the check |
+| `scripts/mutate.mjs`, `scripts/mutate-canary.mjs` | the mutation runner and its self-test |
+| `scripts/canary.mjs` | the harness canary |
+| `scripts/compare-recount.mjs` | TypeScript census against the Python recount, per fixture |
+| `scripts/cli-checks.mjs` | the command line wiring, end to end |
+| `scripts/consistency.mjs`, `scripts/consistency-canary.mjs` | page, feeds and MCP against the snapshot, and the tampers that prove it bites |
+| `scripts/mcp-transcript.mjs` | drives the real MCP binary over stdio |
