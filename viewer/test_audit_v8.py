@@ -63,6 +63,57 @@ class ViewerAuditV8(unittest.TestCase):
         self.assertIn("key expired, can't re-check", visible(page))
         self.assertNotIn("read failed", visible(page))
 
+    def test_V8_M1_broken_receipt_file_pins_red_unreadable_not_unknown(self):
+        """Red 'unreadable' is only for a broken receipt file (build-lane.py _unreadable branch)."""
+        cases = {
+            "broken-json": "{not json",
+            "receipt-is-a-list": "[1, 2]",
+            "broken-json-beside-ledger-settled": ("settled", "{not json"),
+        }
+        for name, spec in cases.items():
+            with self.subTest(name):
+                if isinstance(spec, tuple):
+                    led, rec = dict(LED, state="settled", spend=0.198, cap_charge=0.198), spec[1]
+                else:
+                    led, rec = dict(LED), spec
+                reservation = led["cap_charge"]
+                rows, page = lane([led], {"req-1": rec})
+                text = visible(page)
+                self.assertEqual(len(rows), 1)
+                self.assertTrue(rows[0]["bad"])
+                self.assertIn('class="row bad"', page)
+                self.assertEqual(rows[0]["chips"], [["grey", "sent"], ["red", "unreadable"]])
+                self.assertIn('<span class="chip c-grey">sent</span> <span class="chip c-red">unreadable</span>', page)
+                self.assertNotIn('<span class="chip c-red">unknown</span>', page)
+                self.assertIn("receipt file unreadable: not shown as OK", text)
+                self.assertNotIn("receipt read failed, can't re-check", text)
+                self.assertIn(["reservation", reservation], rows[0]["flop"])
+                self.assertIn(f'<span class="k">reservation</span> <span class="mono">{reservation}</span>', page)
+                self.assertIn('<span class="k">observed spend</span> <span class="unk blank" title="unknown spend">&nbsp;</span>', page)
+                self.assertEqual(greens(page), [])
+                self.assertNotIn("matches", text)
+                self.assertNotIn("mismatch", text)
+                self.assertNotIn("disagree", text)
+
+    def test_V8_M1_failed_read_beside_settled_keeps_reservation_and_blocks_green(self):
+        """FIXER follow-up: a failed refresh never drops the reservation or goes chain-final green."""
+        for name in ("failed-read-beside-ledger-settled", "judge-case2-settled-503"):
+            with self.subTest(name):
+                led, rec, why = FAILED[name]
+                reservation = led["cap_charge"]
+                rows, page = lane([led], {"req-1": rec})
+                text = visible(page)
+                self.assertTrue(rows[0]["bad"])
+                self.assertEqual(rows[0]["chips"], [["grey", "sent"], ["red", "unknown"]])
+                self.assertIn(UNKNOWN_CHIPS, page)
+                self.assertNotIn('<span class="chip c-red">unreadable</span>', page)
+                self.assertIn(["reservation", reservation], rows[0]["flop"])
+                self.assertIn(f'<span class="k">reservation</span> <span class="mono">{reservation}</span>', page)
+                self.assertIn(f"unreadable: {why}", text)
+                self.assertEqual(greens(page), [])
+                self.assertNotIn('c-green">chain final', page)
+                self.assertNotIn("chain final", greens(page))
+
 
 if __name__ == "__main__":
     unittest.main()

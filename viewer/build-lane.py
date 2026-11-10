@@ -117,7 +117,8 @@ def build_row(e, r):
         err = r.get("error") if present(r.get("error")) else ""
         why = esc(err) if err.startswith("HTTP ") else esc(f"HTTP {r.get('http')} {err}".strip())
         row["chips"] = [["grey", "sent"], ["red", "unknown"]]; row["bad"] = True
-        row["flop"] = [["last seen", esc(r.get("state") or "unknown")], ["now", f'unreadable: <span class="mono">{why}</span>'], ["observed spend", None]]
+        # Keep the reservation label, as the unreadable-file branch does: a failed read must not drop it.
+        row["flop"] = [["last seen", esc(r.get("state") or "unknown")], ["now", f'unreadable: <span class="mono">{why}</span>'], ["reservation", reservation], ["observed spend", None]]
         row["flags"] = ["receipt read failed, can't re-check"] + ([unresolved_flag] if unresolved else [])
         return row
     chips = [["grey", "sent"]]
