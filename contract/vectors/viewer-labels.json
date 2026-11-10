@@ -1019,10 +1019,10 @@
      "chips": [
       [
        "amber",
-       "over the daily cap"
+       "over the reservation"
       ]
      ],
-     "reservation": 0.2,
+     "reservation": 0.186,
      "matches_shown": false,
      "greens": [],
      "link": [
@@ -1032,7 +1032,7 @@
      ]
     }
    },
-   "note": "[fix: KD-2] + [fix: KD-2 follow-up] FIXER's form: amber 'over the daily cap', reservation line 'reservation <cap_charge> (held)' then a separate 'settled <amount>' line, chain-final green blocked, never 'matches'. was (known_defect) grey sent + green chain final, matches. FIXER's ruling says 0.186 for this fixture; its cap_charge is 0.2, so the stated rule (cap_charge, else quote_padded) gives that - open question.",
+   "note": "[fix: KD-2] + [fix: FIXER-viewer-rulings]: amber 'over the reservation' (first of per-call cap, daily cap, reservation), reservation line 'reservation <quote_padded, else cap_charge> (held)' = 0.186, then a separate 'settled <amount>' line; chain-final green blocked, never 'matches'. was (known_defect) grey sent + green chain final, matches",
    "status": "fixed",
    "defect": "KD-2",
    "label_rules": [
@@ -1086,7 +1086,7 @@
        "over the per-call cap"
       ]
      ],
-     "reservation": 1.5,
+     "reservation": 0.186,
      "matches_shown": false,
      "greens": [],
      "link": [
@@ -1096,7 +1096,7 @@
      ]
     }
    },
-   "note": "[fix: KD-2] + [fix: KD-2 follow-up] FIXER's form: amber 'over the per-call cap', reservation line 'reservation <cap_charge> (held)' then a separate 'settled <amount>' line, chain-final green blocked, never 'matches'. was (known_defect) grey sent + green chain final, matches. FIXER's ruling says 0.186 for this fixture; its cap_charge is 1.5, so the stated rule (cap_charge, else quote_padded) gives that - open question.",
+   "note": "[fix: KD-2] + [fix: FIXER-viewer-rulings]: amber 'over the per-call cap' (first of per-call cap, daily cap, reservation), reservation line 'reservation <quote_padded, else cap_charge> (held)' = 0.186, then a separate 'settled <amount>' line; chain-final green blocked, never 'matches'. was (known_defect) grey sent + green chain final, matches",
    "status": "fixed",
    "defect": "KD-2",
    "label_rules": [

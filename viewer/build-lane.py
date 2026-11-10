@@ -95,14 +95,21 @@ def from_files():
 
 def unresolved(e): return e.get("state") in ("timeout_unknown", "error")
 
+def daily_left(e):
+    """Daily cap left after this row's cap_charge, or None when any input is unknown (cap math uses cap_charge)."""
+    spent_before, cap_charge, daily = amount(e.get("spent_before")), amount(e.get("cap_charge")), amount(e.get("daily_cap"))
+    if e.get("daily_cap") is not None and daily is None: raise ValueError("daily_cap is not a number")
+    return r6(daily - spent_before - cap_charge) if None not in (daily, spent_before, cap_charge) else None
+
 def over_limit(e, r):
-    """Which limit a settlement breaks, or None (KD-2). Above the per-call cap first; above the reservation
-    (quote_padded, the amount the daily cap was charged) reads as over the daily cap."""
+    """The first limit a settled receipt breaks, or None (KD-2, FIXER's order): the per-call cap, then the daily
+    cap (daily cap left below 0), then the reservation (quote_padded)."""
     settled = amount(r.get("settled"))
     if settled is None or r.get("state") not in SETTLES: return None
-    per_call, quote = amount(e.get("per_call_cap")), amount(e.get("quote_padded"))
+    per_call, quote, left = amount(e.get("per_call_cap")), amount(e.get("quote_padded")), daily_left(e)
     if per_call is not None and settled > per_call: return "over the per-call cap"
-    if quote is not None and settled > quote: return "over the daily cap"
+    if left is not None and left < 0: return "over the daily cap"
+    if quote is not None and settled > quote: return "over the reservation"
     return None
 
 def disagrees(e, r):
@@ -187,8 +194,10 @@ def row_disagree(row, e, r, reservation):
 
 def row_over_limit(row, e, r, reservation):
     # Receipt and ledger agree, but the settlement breaks a limit: amber, the hold stays, never green (KD-2).
+    # Here cap_charge is the settled amount, so the held reservation shown is quote_padded first (FIXER).
+    quote = amount(e.get("quote_padded"))
     row["chips"] = [["amber", over_limit(e, r)]]; row["bad"] = True
-    row["flop"] += [["reservation", reservation], ["settled", amount(r.get("settled"))]]
+    row["flop"] += [["reservation", reservation if quote is None else quote], ["settled", amount(r.get("settled"))]]
 
 def row_matches(row, e, r, reservation):
     chain_final = r.get("chain_final") is True
@@ -216,10 +225,9 @@ def build_row(e, r):
     row = dict(label=esc(e.get("job")), sub=sub, payer=esc(e.get("payer") or "holder"), flags=[], spend_flags=[], flop=[],
                est=amount(e.get("quote_padded")), per_call=amount(e.get("per_call_cap")),
                outcome=["grey", "not read", "mock job, no imd lookup"], link=["grey", "not checked", None], bad=False)
-    spent_before, cap_charge, daily = amount(e.get("spent_before")), amount(e.get("cap_charge")), amount(e.get("daily_cap"))
-    if e.get("daily_cap") is not None and daily is None: raise ValueError("daily_cap is not a number")
-    row["daily_left"] = r6(daily - spent_before - cap_charge) if None not in (daily, spent_before, cap_charge) else None
+    row["daily_left"] = daily_left(e)
     if row["daily_left"] is not None and row["daily_left"] < 0: row["spend_flags"].append("over the daily cap")
+    cap_charge = amount(e.get("cap_charge"))
     reservation = cap_charge if cap_charge is not None else amount(e.get("quote_padded"))
     ROW_KINDS[classify(e, r)](row, e, r, reservation)
     return row
