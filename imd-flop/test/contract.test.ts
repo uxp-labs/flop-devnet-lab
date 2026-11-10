@@ -16,6 +16,7 @@ import { ledgerFile, receiptsDir } from "../src/paths.js";
 import type { CompleteReq, CompleteRes, Provider } from "../src/providers.js";
 import { classifyReceipt, knownSettledSpend, RECEIPT_STATES, STAGE_GATEWAY, type GatewayReceipt } from "../src/receipts.js";
 import { padQuote, TEMPLATE_PAD } from "../src/run.js";
+import { DISAGREE, SETTLES } from "../src/settlement.js";
 import { cli, readLines, readySeat, tmpHome } from "./helpers.js";
 import { decode, forPart, rules, unreferencedLabelRules, unreferencedQuirks, vectors, type Json } from "./lib/contract-vectors.js";
 
@@ -155,6 +156,10 @@ describe("contract files", () => {
     expect(RECEIPT_IDENTITY_STATUS).toBe(c.IDENTITY.value);
     expect(STAGE_GATEWAY).toBe(c.STAGE_GATEWAY.value);
     expect(EXIT).toEqual(c.EXIT[PART]);
+  });
+  it("settlement.ts SETTLES and DISAGREE match rules.json", () => {
+    expect([...SETTLES]).toEqual(rules.constants.SETTLES.value);
+    expect(DISAGREE).toBe(rules.constants.DISAGREE.value);
   });
   it("every vector is checked here or tagged not_applicable for imd-flop", () => {
     expect(applicable.length).toBeGreaterThan(0);

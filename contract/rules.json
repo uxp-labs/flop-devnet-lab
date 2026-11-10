@@ -9,20 +9,20 @@
   "constants": {
     "TEMPLATE_PAD": {
       "value": 20,
-      "imd-flop": "src/run.ts TEMPLATE_PAD",
-      "spend-guard": "guard.py TEMPLATE_PAD",
+      "imd-flop": "src/policy.ts TEMPLATE_PAD",
+      "spend-guard": "guard.py TEMPLATE_PAD (read from this file)",
       "viewer": null
     },
     "MAX_TOKEN_COUNT": {
       "value": 10000000,
       "imd-flop": null,
-      "spend-guard": "guard.py MAX_TOKEN_COUNT",
+      "spend-guard": "guard.py MAX_TOKEN_COUNT (read from this file)",
       "viewer": null
     },
     "MIN_CAP": {
       "value": 1e-06,
       "imd-flop": null,
-      "spend-guard": "guard.py MIN_CAP",
+      "spend-guard": "guard.py MIN_CAP (read from this file)",
       "viewer": null
     },
     "RECEIPT_STATES": {
@@ -41,27 +41,27 @@
         "settled",
         "released"
       ],
-      "imd-flop": "literal in run.ts:329 and cli.ts:440",
+      "imd-flop": "src/settlement.ts SETTLES",
       "spend-guard": null,
-      "viewer": "build-lane.py SETTLES"
+      "viewer": "build-lane.py SETTLES (read from this file)"
     },
     "STAGE_GATEWAY": {
       "value": "gateway observed",
       "imd-flop": "src/receipts.ts STAGE_GATEWAY",
-      "spend-guard": "literal in guard.py classify_receipt",
-      "viewer": "receipt field read by build-lane.py"
+      "spend-guard": "guard.py STAGE_GATEWAY (read from this file)",
+      "viewer": "build-lane.py STAGE_GATEWAY (read from this file)"
     },
     "DISAGREE": {
       "value": "receipt and ledger disagree; reservation held, chain-final green blocked",
-      "imd-flop": "literal in cli.ts:442 (receipt --refresh stderr)",
+      "imd-flop": "src/settlement.ts DISAGREE (receipt --refresh stderr)",
       "spend-guard": null,
-      "viewer": "build-lane.py DISAGREE"
+      "viewer": "build-lane.py DISAGREE (read from this file)"
     },
     "IDENTITY": {
       "value": "receipt identity mismatch; chain-final green blocked",
       "imd-flop": "src/match.ts RECEIPT_IDENTITY_STATUS",
       "spend-guard": null,
-      "viewer": "build-lane.py IDENTITY"
+      "viewer": "build-lane.py IDENTITY (read from this file)"
     },
     "MAX_TOKENS_RANGE": {
       "value": null,
