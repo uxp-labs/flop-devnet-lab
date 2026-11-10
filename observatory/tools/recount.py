@@ -8,6 +8,7 @@ Standard library only.
 import argparse
 import json
 import re
+import stat
 import os
 import sys
 
@@ -50,6 +51,14 @@ def _reject_constant(name):
     raise ValueError("%s is not valid JSON" % name)
 
 
+def is_regular_file(path):
+    # lstat does not follow links, so a symlink is never a regular file.
+    try:
+        return stat.S_ISREG(os.lstat(path).st_mode)
+    except OSError:
+        return False
+
+
 def load_pages(scenario_dir):
     if not os.path.isdir(scenario_dir):
         raise Unreadable("scenario dir not found: %s" % scenario_dir)
@@ -64,7 +73,7 @@ def load_pages(scenario_dir):
     for entry in names:
         path = os.path.join(pages_dir, entry)
         # Every entry must be a page file: regular, ends in .json, no leading dot.
-        if entry.startswith(".") or not entry.endswith(".json") or not os.path.isfile(path):
+        if entry.startswith(".") or not entry.endswith(".json") or not is_regular_file(path):
             raise Unreadable("event-pages entry is not a page file: %s" % entry)
         try:
             with open(path, "r", encoding="utf-8") as fh:

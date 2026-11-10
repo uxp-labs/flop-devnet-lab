@@ -304,6 +304,24 @@ class RecountTests(unittest.TestCase):
             self.assertEqual(r["malformed_dropped"], 5)
             self.assertEqual(r["totals"]["escrows_opened"], 1)
 
+    def test_symlinks_in_event_pages_refuse(self):
+        with tempfile.TemporaryDirectory() as d, tempfile.TemporaryDirectory() as other:
+            self._page_dir(other, name="real.json")
+            os.makedirs(os.path.join(d, "event-pages"))
+            os.symlink(os.path.join(other, "event-pages", "real.json"),
+                       os.path.join(d, "event-pages", "link.json"))
+            code, out, err = run(d, 1, 5)
+            self.assertEqual(code, 2)
+            self.assertIn("link.json", err)
+        with tempfile.TemporaryDirectory() as d, tempfile.TemporaryDirectory() as other:
+            self._page_dir(d)
+            os.symlink(other, os.path.join(d, "event-pages", "dirlink.json"))
+            self.assertEqual(run(d, 1, 5)[0], 2)
+        with tempfile.TemporaryDirectory() as d, tempfile.TemporaryDirectory() as other:
+            self._page_dir(d)
+            os.symlink(other, os.path.join(d, "event-pages", "dirlink"))
+            self.assertEqual(run(d, 1, 5)[0], 2)
+
     def test_output_is_deterministic(self):
         a = run(os.path.join(DATA, "gap"), 1, 30)[1]
         b = run(os.path.join(DATA, "gap"), 1, 30)[1]

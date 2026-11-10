@@ -15,7 +15,9 @@
 //    the rules in RULES.md section 5, in data-v and in its whole visible text, nested tags
 //    included. A key that does not resolve fails, a missing required key fails, and a td or span
 //    without data-k outside a marked element fails, so a value cannot escape the comparison.
-// 5. The census is internally consistent: complete only with no gaps, and totals labeled the same.
+// 5. Every value sits where a person reads it: labeled rows bind th to td by data-for and read the
+//    key's label, escrow cards and drift rows hold only their own cells.
+// 6. The census is internally consistent: complete only with no gaps, and totals labeled the same.
 // Prints {"dir", "checks", "keys", "failures"}; exit 1 on any failure.
 import { readFileSync } from "node:fs";
 import { basename, join, resolve } from "node:path";
@@ -138,6 +140,64 @@ for (const m of html.matchAll(/<([a-z][a-z0-9]*)\b([^>]*\bdata-k="[^"]*"[^>]*)>/
   for (const m of masked.matchAll(/<(td|span)\b([^>]*)>/g)) {
     checks++;
     if (!/\bdata-k="/.test(m[2])) failures.push({ what: `every ${m[1]} carries data-k`, detail: m[0].slice(0, 120) });
+  }
+}
+
+// Where each value sits (RULES.md section 5): a labeled row binds its th to its td and reads the
+// key's label, an escrow card holds only that escrow's cells, and a drift item row holds only that
+// item's cells. A correct value in the wrong row or card is still a wrong page.
+{
+  const partialCensus = snapshot.census !== null && (snapshot.census.status !== "complete" || snapshot.census.complete !== true);
+  const labelFor = (key) => {
+    if (key === "census" || key === "drift") return key;
+    const rest = key.startsWith("escrow.") ? key.slice(key.lastIndexOf(".") + 1) : key.slice(key.indexOf(".") + 1);
+    const label = rest.replace(/[._]/g, " ");
+    return partialCensus && key.startsWith("census.totals.") ? `partial ${label}` : label;
+  };
+  const keysIn = (fragment) => [...fragment.matchAll(/\bdata-k="([^"]*)"/g)].map((m) => unescape(m[1]));
+  const inRow = new Set();
+  for (const row of html.matchAll(/<tr\b([^>]*)>([\s\S]*?)<\/tr>/g)) {
+    const body = row[2];
+    const dataRow = attr(row[1], "data-row");
+    if (dataRow !== null) {
+      for (const k of keysIn(body)) {
+        checks++;
+        inRow.add(k);
+        if (!k.startsWith(`${dataRow}.`)) failures.push({ what: `row ${dataRow} holds only its own cells`, detail: k });
+      }
+      continue;
+    }
+    const ths = [...body.matchAll(/<th\b([^>]*)>([\s\S]*?)<\/th>/g)];
+    const tds = [...body.matchAll(/<td\b([^>]*)>/g)];
+    if (tds.length === 0) continue; // a header row
+    if (ths.length !== 1 || tds.length !== 1) {
+      fail("a labeled row is one th and one td", body.replace(/\s+/g, " ").slice(0, 160));
+      continue;
+    }
+    const tdKey = attr(tds[0][1], "data-k");
+    expectEq(`row label for ${tdKey} names its cell (data-for)`, attr(ths[0][1], "data-for"), tdKey);
+    if (tdKey !== null) expectEq(`row label for ${tdKey} reads its field`, unescape(ths[0][2].replace(/<[^>]*>/g, "")), labelFor(tdKey));
+  }
+  for (const k of cells.keys()) {
+    if (/^drift\.\d+\./.test(k)) {
+      checks++;
+      if (!inRow.has(k)) failures.push({ what: `drift cell ${k} sits in its item row`, detail: "not inside a data-row row" });
+    }
+  }
+  const inCard = new Set();
+  for (const card of html.matchAll(/<div\b([^>]*\bdata-escrow="[^"]*"[^>]*)>([\s\S]*?)<\/div>/g)) {
+    const id = attr(card[1], "data-escrow");
+    for (const k of keysIn(card[2])) {
+      checks++;
+      inCard.add(k);
+      if (!k.startsWith(`escrow.${id}.`)) failures.push({ what: `escrow card ${id} holds only its own cells`, detail: k });
+    }
+  }
+  for (const k of cells.keys()) {
+    if (k.startsWith("escrow.")) {
+      checks++;
+      if (!inCard.has(k)) failures.push({ what: `escrow cell ${k} sits in its own card`, detail: "not inside a data-escrow card" });
+    }
   }
 }
 
@@ -279,7 +339,7 @@ for (const k of required) {
   if (!cells.has(k)) failures.push({ what: `page shows ${k}`, detail: "required key missing" });
 }
 
-// 5. Census internal consistency.
+// 6. Census internal consistency.
 if (snapshot.census) {
   const c = snapshot.census;
   expectEq("census complete only when no gaps", c.complete, c.gaps.length === 0);

@@ -197,7 +197,7 @@ describe("source scan", () => {
   it("tools/recount.py imports nothing that reaches the network or starts a process", () => {
     const text = readFileSync(new URL("../tools/recount.py", import.meta.url), "utf8");
     const imports = [...text.matchAll(/^\s*(?:import|from)\s+([\w.]+)/gm)].map((m) => m[1]);
-    expect(imports.sort()).toEqual(["argparse", "json", "os", "re", "sys"]);
+    expect(imports.sort()).toEqual(["argparse", "json", "os", "re", "stat", "sys"]);
     expect(text).not.toMatch(/\bos\.(?:system|popen|exec|spawn|fork)/);
     expect(text).not.toMatch(/__import__|importlib/);
   });

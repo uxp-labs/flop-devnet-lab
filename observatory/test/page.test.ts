@@ -157,7 +157,7 @@ describe("page", () => {
   });
   it("labels partial census totals as partial, never complete", () => {
     expect(html).toContain("PARTIAL");
-    expect(html).toContain("partial escrows_opened");
+    expect(html).toContain("partial totals escrows opened");
     expect(html).not.toContain("Complete: the whole");
     expect(html).toMatch(/data-k="census.status" data-v="partial"/);
   });
@@ -262,5 +262,63 @@ describe("page cell rules", () => {
   });
   it("shows the census request as from to to", () => {
     expect(cellOf(html, "census.requested")?.text).toBe("0 to 100");
+  });
+});
+
+/** The rule for a key's label, written out again here on purpose (RULES section 5). */
+function labelFor(key: string, partial: boolean): string {
+  let rest = key;
+  const m = /^(status\.|census\.|drift\.|escrow\.0x[0-9a-f]{64}\.)/.exec(key);
+  if (m) rest = key.slice(m[1]!.length);
+  const base = rest.replace(/[._]/g, " ");
+  return key.startsWith("census.totals.") && partial ? "partial " + base : base;
+}
+
+describe("page rows and cards", () => {
+  for (const [name, snap] of [["default", build()], ["reset", buildReset()], ["no census or drift", build({ census: null, drift: null })]] as const) {
+    const h = renderPage(snap);
+    const partial = snap.census !== null && snap.census.status !== "complete";
+    it(`${name}: every labeled row is one th and one td, data-for equals the td key, label follows the rule`, () => {
+      const rows = [...h.matchAll(/<tr><th scope="row" data-for="([^"]*)">([^<]*)<\/th><td data-k="([^"]*)"/g)];
+      expect(rows.length).toBeGreaterThan(10);
+      // every row with a th in a row position is accounted for
+      expect((h.match(/<th scope="row"/g) ?? []).length).toBe(rows.length);
+      for (const r of rows) {
+        expect(r[3], r[2]).toBe(r[1]);
+        expect(r[2], r[1]).toBe(labelFor(r[1]!, partial));
+      }
+    });
+    it(`${name}: every td carries data-k`, () => {
+      expect((h.match(/<td\b/g) ?? []).length).toBe((h.match(/<td data-k="/g) ?? []).length);
+    });
+    it(`${name}: each escrow card holds only its own cells`, () => {
+      const cards = [...h.matchAll(/<div class="card" data-escrow="([^"]*)">(.*?)<\/table><\/div>/gs)];
+      expect(cards.map((c) => c[1])).toEqual(snap.escrows.map((e) => e.escrow_id));
+      for (const c of cards) {
+        const keys = [...(c[2] as string).matchAll(/data-k="([^"]*)"/g)].map((k) => k[1] as string);
+        expect(keys.length).toBeGreaterThan(5);
+        for (const k of keys) expect(k.startsWith(`escrow.${c[1]}.`), `${k} in card ${c[1]}`).toBe(true);
+        expect(keys).toContain(`escrow.${c[1]}.state`);
+      }
+    });
+    it(`${name}: each drift row holds only its own cells`, () => {
+      const rows = [...h.matchAll(/<tr data-row="([^"]*)">(.*?)<\/tr>/gs)];
+      expect(rows.map((r) => r[1])).toEqual((snap.drift?.items ?? []).map((_, i) => `drift.${i}`));
+      for (const r of rows) {
+        const keys = [...(r[2] as string).matchAll(/data-k="([^"]*)"/g)].map((k) => k[1] as string);
+        expect(keys.length).toBeGreaterThan(5);
+        for (const k of keys) expect(k.startsWith(`${r[1]}.`), `${k} in ${r[1]}`).toBe(true);
+      }
+    });
+  }
+  it("the drift header row stays plain th cells", () => {
+    expect(renderPage(buildReset())).toContain("<tr><th>param</th><th>spec</th>");
+  });
+  it("a card's state cell is the card's own escrow state", () => {
+    const h = renderPage(buildReset());
+    for (const e of buildReset().escrows) {
+      const card = new RegExp(`data-escrow="${e.escrow_id}">(.*?)</table></div>`, "s").exec(h)![1]!;
+      expect(card).toContain(`data-k="escrow.${e.escrow_id}.state" data-v="${e.state}"`);
+    }
   });
 });

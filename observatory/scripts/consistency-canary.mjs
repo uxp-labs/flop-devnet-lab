@@ -61,6 +61,24 @@ function editCell(dir, key, edit) {
   writeFileSync(p, out);
 }
 
+/** Swaps two whole td cells, found by their data-k, so each shows up in the other's place. */
+function swapCells(dir, keyA, keyB) {
+  const p = join(dir, "index.html");
+  const html = readFileSync(p, "utf8");
+  const find = (key) => {
+    const k = key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const m = new RegExp(`<td\\b[^>]*\\bdata-k="${k}"[^>]*>[\\s\\S]*?</td>`).exec(html);
+    if (!m) throw new Error(`page has no ${key} cell`);
+    return m;
+  };
+  const a = find(keyA);
+  const b = find(keyB);
+  const [first, second] = a.index < b.index ? [a, b] : [b, a];
+  const out =
+    html.slice(0, first.index) + second[0] + html.slice(first.index + first[0].length, second.index) + first[0] + html.slice(second.index + second[0].length);
+  writeFileSync(p, out);
+}
+
 const hasEmptyListCell = (dir) => /data-k="[^"]*" data-n="0"/.test(readFileSync(join(dir, "index.html"), "utf8"));
 
 const tampers = [
@@ -194,6 +212,33 @@ const tampers = [
     run: (d) => {
       const p = join(d, "index.html");
       writeFileSync(p, readFileSync(p, "utf8").replace("</h1>", "</h1><p>reset detected: <span>false</span></p>"));
+    },
+  },
+  // The round 3 rerun's placement tampers: right values in the wrong row or card.
+  {
+    name: "reset-and-stale-value-cells-swapped",
+    applies: (d) => snap(d).status.reset_detected !== null && snap(d).status.rpc.stale !== null,
+    run: (d) => swapCells(d, "status.reset_detected", "status.rpc.stale"),
+  },
+  {
+    name: "escrow-state-cells-swapped-between-cards",
+    applies: (d) => new Set(snap(d).escrows.map((e) => e.state)).size > 1,
+    run: (d) => {
+      const es = snap(d).escrows;
+      const a = es[0];
+      const b = es.find((e) => e.state !== a.state);
+      swapCells(d, `escrow.${a.escrow_id}.state`, `escrow.${b.escrow_id}.state`);
+    },
+  },
+  {
+    name: "row-label-renamed",
+    applies: () => true,
+    run: (d) => {
+      const p = join(d, "index.html");
+      const html = readFileSync(p, "utf8");
+      const out = html.replace(/(<th[^>]*data-for="status\.reset_detected"[^>]*>)[^<]*/, "$1rpc stale");
+      if (out === html) throw new Error("page has no reset row label");
+      writeFileSync(p, out);
     },
   },
   {

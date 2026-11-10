@@ -81,6 +81,8 @@ function runVitest(tests, label) {
 function setup() {
   cpSync(repo, copy, {
     recursive: true,
+    // Keep symbolic links exactly as committed (relative), so the copy is the repo, not a view of it.
+    verbatimSymlinks: true,
     filter: (p) => !relative(repo, p).split("/").some((part) => SKIP.has(part) || part.startsWith(".build-")),
   });
   symlinkSync(join(pkg, "node_modules"), join(copyPkg, "node_modules"));

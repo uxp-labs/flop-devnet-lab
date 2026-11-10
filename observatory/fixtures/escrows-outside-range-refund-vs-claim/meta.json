@@ -1,0 +1,11 @@
+{
+  "scenario": "escrows-outside-range-refund-vs-claim",
+  "description": "Synthetic: escrow ids, block hashes, block numbers and indexes are made up. Only the genesis hash is real (faucet GET /chain and tclk/flop/VERIFICATION.md). Escrow a1 has a clean finalized open and release. A finalized refund naming a1 sits at block 500 on a page for blocks 100 to 199. It is never evidence of a refund, but it names the escrow, so a1 is unverified, not claimed. Escrow c3 has a clean release and is not named by it, so it stays claimed.",
+  "now": "2026-11-10T00:00:00Z",
+  "synthetic": true,
+  "escrow_ids": [
+    "0xa1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+    "0xc3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3"
+  ],
+  "pinned_genesis": "0x99c172c095340ace980631f9123544c6bebd4839f3437e463533422d8be2d631"
+}

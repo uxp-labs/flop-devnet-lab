@@ -1,7 +1,7 @@
 // Census tests. Each rule in RULES.md section 3 and each clause of 3.1 has its own test, and every
 // census fixture is checked against expectations worked out by hand from the rules (not taken
 // from census.ts), which must also be the totals its meta.description states.
-import { readdirSync, readFileSync } from "node:fs";
+import { lstatSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
@@ -205,6 +205,7 @@ const REFUSING: Record<string, RegExp> = {
   "census-unreadable-page": /unusable event page file\(s\): event-pages\/01-unreadable\.json: /,
   "census-nonstandard-json": /unusable event page file\(s\): event-pages\/01-nan-index\.json: /,
   "census-dotfile-page": /unusable event page file\(s\): event-pages\/\.01\.json: not a page file/,
+  "census-symlink-page": /unusable event page file\(s\): event-pages\/01\.json: not a page file/,
   "census-unsafe-integer": /event page 0: to_block is missing or not a safe integer/,
 };
 
@@ -310,6 +311,15 @@ describe("census fixtures", () => {
     expect(blind.duplicates_dropped).toBe(0);
   });
 
+  it("census-symlink-page refuses only because of its symbolic link", async () => {
+    const { pages, opts } = await load("census-symlink-page");
+    expect(opts.unreadablePages).toEqual([expect.stringMatching(/^event-pages\/01\.json: not a page file/)]);
+    const blind = census(pages, { ...opts, unreadablePages: [] });
+    expect(blind.complete).toBe(true);
+    expect(blind.totals.escrows_opened).toBe(1);
+    expect(blind.duplicates_dropped).toBe(0);
+  });
+
   it("census-nonstandard-json refuses only because of its file with NaN in it", async () => {
     const { pages, opts } = await load("census-nonstandard-json");
     expect(opts.unreadablePages).toHaveLength(1);
@@ -390,6 +400,17 @@ describe("hand written fixtures keep their literal JSON text", () => {
     expect(hashes).toContain("0xabc");
     expect(hashes.filter((h) => /^0x[0-9A-F]{64}$/.test(h) && /[A-F]/.test(h))).toHaveLength(1);
     expect(hashes[1]!.toLowerCase()).toBe(hashes[0]);
+  });
+
+  it("census-symlink-page: 01.json really is a symbolic link, and it resolves to a page file", () => {
+    // Only facts that also hold in a copied tree: a copy may rewrite where the link points.
+    const dir = join(FIXTURES, "census-symlink-page", "event-pages");
+    expect(readdirSync(dir).sort()).toEqual(["00.json", "01.json"]);
+    expect(lstatSync(join(dir, "01.json")).isSymbolicLink()).toBe(true);
+    expect(statSync(join(dir, "01.json")).isFile()).toBe(true);
+    expect(lstatSync(join(dir, "00.json")).isFile()).toBe(true);
+    const followed = JSON.parse(readFileSync(join(dir, "01.json"), "utf8")) as { page: number; events: unknown[] };
+    expect([followed.page, followed.events.length]).toEqual([0, 2]);
   });
 
   it("census-dotfile-page still holds a page file whose name starts with a dot, beside a normal one", () => {

@@ -227,3 +227,14 @@ describe("mcp on a reset snapshot", () => {
     expect(o.genesis.faucet).not.toBe(o.genesis.pinned);
   });
 });
+
+describe("mcp fallback for an unseen escrow", () => {
+  it("has finalized_height null even when the snapshot status has a finalized height", () => {
+    const s = buildReset();
+    expect(s.status.finalized_height).toBe(10);
+    const r = handleMcp({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: "get_escrow_state", arguments: { escrow_id: "0x" + "77".repeat(32) } } }, { snapshot: s });
+    const o = JSON.parse(text(r));
+    expect(o.state).toBe("unverified");
+    expect(o.finalized_height).toBeNull();
+  });
+});

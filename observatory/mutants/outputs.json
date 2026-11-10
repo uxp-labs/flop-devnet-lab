@@ -42,8 +42,8 @@
  {
   "id": "page-census-null-zero",
   "file": "src/page.ts",
-  "find": "if (c === null) {",
-  "replace": "if (c === null && false) {",
+  "find": "cell(\"census\", null)",
+  "replace": "cell(\"census\", 0)",
   "test": "test/page.test.ts",
   "why": "a null census must not render as totals"
  },
@@ -230,5 +230,37 @@
   "replace": "escrow.${esc(id)}.id",
   "test": "test/page.test.ts",
   "why": "the escrow id cell is keyed by its snapshot path, escrow_id"
+ },
+ {
+  "id": "page-row-cells-swapped",
+  "file": "src/page.ts",
+  "find": "cell(\"status.reset_detected\", st.reset_detected)",
+  "replace": "cell(\"status.rpc.stale\", st.rpc.stale)",
+  "test": "test/page.test.ts",
+  "why": "the reset detected row must hold the reset value, not the stale value"
+ },
+ {
+  "id": "page-escrow-cards-rotated",
+  "file": "src/page.ts",
+  "find": "<td data-k=\"escrow.${esc(id)}.state\" data-v=\"${esc(e.state)}\" class=\"s-${esc(e.state)}\">${esc(e.state)}</td>`, ep));",
+  "replace": "<td data-k=\"escrow.${esc(s.escrows[(s.escrows.indexOf(e) + 1) % s.escrows.length]!.escrow_id)}.state\" data-v=\"${esc(s.escrows[(s.escrows.indexOf(e) + 1) % s.escrows.length]!.state)}\" class=\"s-${esc(e.state)}\">${esc(s.escrows[(s.escrows.indexOf(e) + 1) % s.escrows.length]!.state)}</td>`, ep));",
+  "test": "test/page.test.ts",
+  "why": "each card shows its own escrow state cell"
+ },
+ {
+  "id": "page-label-wrong",
+  "file": "src/page.ts",
+  "find": "const label = (partial ? \"partial \" : \"\") + key.slice(prefix.length).replace(/[._]/g, \" \");",
+  "replace": "const label = (partial ? \"partial \" : \"\") + key.slice(prefix.length).replace(/[._]/g, \" \").replace(\"stale\", \"ready\");",
+  "test": "test/page.test.ts",
+  "why": "a row label must follow the key"
+ },
+ {
+  "id": "mcp-fallback-uses-status-height",
+  "file": "src/mcp.ts",
+  "find": "    finalized_height: null,\n    observed_at: s.observed_at,",
+  "replace": "    finalized_height: s.status.finalized_height,\n    observed_at: s.observed_at,",
+  "test": "test/mcp.test.ts",
+  "why": "an unseen escrow must not borrow the status height"
  }
 ]

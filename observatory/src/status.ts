@@ -40,10 +40,22 @@ function nonNegativeInt(value: unknown): number | null {
   return typeof value === "number" && Number.isInteger(value) && value >= 0 ? value : null;
 }
 
-function secondsBetween(earlier: string, later: string): number | null {
-  const a = Date.parse(earlier);
-  const b = Date.parse(later);
-  return Number.isFinite(a) && Number.isFinite(b) ? (b - a) / 1000 : null;
+// RULES.md 1.1: a time must carry its zone (Z or an offset). Date.parse would read a time without
+// one in the machine's own zone, so the same input could be fresh on one machine and stale on
+// another.
+const ZONED = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:\d{2})$/;
+
+/** Milliseconds since the epoch for an ISO 8601 time with a zone, or null. */
+export function parseZoned(t: unknown): number | null {
+  if (typeof t !== "string" || !ZONED.test(t)) return null;
+  const v = Date.parse(t);
+  return Number.isFinite(v) ? v : null;
+}
+
+function secondsBetween(earlier: unknown, later: unknown): number | null {
+  const a = parseZoned(earlier);
+  const b = parseZoned(later);
+  return a !== null && b !== null ? (b - a) / 1000 : null;
 }
 
 export function classifyFaucet(r: HttpResult<FaucetHealthBody>): NetworkStatus["faucet"] {
@@ -109,14 +121,15 @@ export function applyFreshness<T extends ServiceStatus>(
   o: { now: string; staleAfterSeconds: number },
   conflicts: string[],
 ): T {
+  const age = secondsBetween(svc.observed_at, o.now);
+  // A reading from the future is a conflict whatever its health; it only lowers an ok.
+  if (age !== null && age < 0) {
+    conflicts.push(`${name} reading time ${String(svc.observed_at)} is later than the snapshot time ${o.now}`);
+    return svc.health === "ok" ? { ...svc, health: "degraded", detail: `${name} reading time is later than the snapshot time` } : svc;
+  }
   if (svc.health !== "ok") return svc;
-  const age = typeof svc.observed_at === "string" ? secondsBetween(svc.observed_at, o.now) : null;
   if (age === null) {
     return { ...svc, health: "unknown", detail: `no parsable reading time, so the ${name} reading's age is unknown` };
-  }
-  if (age < 0) {
-    conflicts.push(`${name} reading time ${String(svc.observed_at)} is later than the snapshot time ${o.now}`);
-    return { ...svc, health: "degraded", detail: `${name} reading time is later than the snapshot time` };
   }
   if (age > o.staleAfterSeconds) {
     return { ...svc, health: "degraded", detail: `${name} reading is ${Math.round(age)}s old` };
@@ -152,9 +165,9 @@ export function classifyRpc(
   if (head.error) problems.push(`read error: ${head.error}`);
   if (genesis === null) problems.push("no valid genesis hash");
   let stale: boolean | null = null;
-  const age = typeof head.observed_at === "string" ? secondsBetween(head.observed_at, o.now) : null;
+  const age = secondsBetween(head.observed_at, o.now);
   if (age === null) {
-    cannotRun.push(head.observed_at === null ? "no observed_at, so the head age is unknown" : "observed_at does not parse, so the head age is unknown");
+    cannotRun.push(head.observed_at === null ? "no observed_at, so the head age is unknown" : "observed_at does not parse as a time with a zone, so the head age is unknown");
   } else if (age < 0) {
     conflicts.push(`rpc head observed_at ${head.observed_at} is later than the snapshot time ${o.now}`);
     problems.push("head observed_at is later than the snapshot time");
@@ -214,6 +227,7 @@ export function resetDetected(pinned: string, faucet: string | null, rpc: string
 export async function networkStatus(source: Source, opts: StatusOptions): Promise<NetworkStatus> {
   const pinned = normalizeHash(opts.pinnedGenesis);
   if (pinned === null) throw new Error("pinnedGenesis must be 0x followed by 64 hex characters");
+  if (parseZoned(opts.now) === null) throw new Error("now must be an ISO 8601 time with a zone, such as 2026-11-09T23:47:41Z");
   const o = {
     now: opts.now,
     staleAfterSeconds: opts.staleAfterSeconds ?? 120,

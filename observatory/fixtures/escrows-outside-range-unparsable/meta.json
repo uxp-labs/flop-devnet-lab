@@ -1,0 +1,10 @@
+{
+  "scenario": "escrows-outside-range-unparsable",
+  "description": "Synthetic: escrow ids, block hashes, block numbers and indexes are made up. Only the genesis hash is real (faucet GET /chain and tclk/flop/VERIFICATION.md). Escrow b2 has a clean finalized open at block 110. A finalized release whose escrow id (0x12) does not parse sits at block 500 on a page for blocks 100 to 199. Out of range does not switch off the unparsable id rule, so b2 is unverified.",
+  "now": "2026-11-10T00:00:00Z",
+  "synthetic": true,
+  "escrow_ids": [
+    "0xb2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2"
+  ],
+  "pinned_genesis": "0x99c172c095340ace980631f9123544c6bebd4839f3437e463533422d8be2d631"
+}

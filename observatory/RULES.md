@@ -15,6 +15,12 @@ These rules are the spec. Code and tests follow them, and the independent recoun
 Each service has one health value: `ok`, `degraded`, `down` or `unknown`. `ok` needs every
 check below to run and pass.
 
+- Times are ISO 8601 with an explicit zone: `Z` or an offset such as `+00:00`. A time without a
+  zone does not parse, because its meaning would depend on the machine's time zone. The snapshot
+  time must have a zone too, or the status refuses.
+- A reading time later than the snapshot time is a conflict, noted in `conflicts`, whatever that
+  reading's health.
+
 - Faucet: `ok` needs HTTP 200 and a body with `status` "ok" and `ready` true. A body that says ok
   with any other HTTP status is `degraded`. A body with `status` "degraded", or `ready` false, is
   `degraded`; `status` "down" is `down`. No response, or a body we cannot read on a non 5xx status,
@@ -66,8 +72,11 @@ check below to run and pass.
   every escrow in the result that it could contradict is `unverified` with a note. This holds for
   every such copy, whether the other copies of that event agree with it, disagree with it, or are
   well formed. More conflicting evidence never gives a more confident answer.
-- An event whose integer `block_number` is outside its page's block range is not evidence. It is
-  ignored with a note, as census clause 4 skips it.
+- An event whose integer `block_number` is outside its page's block range is never evidence, and
+  it is suspect. Copies are grouped before the range check, so an out-of-range copy still counts
+  for the copy agreement rule and the unparsable id rule, and an out-of-range finalized release or
+  refund that names an escrow leaves that escrow `unverified` with a note. The census skips such
+  an event (clause 4), so neither reads it as a release or refund.
 - Genesis values and block hashes are compared exactly as written, as in census clause 5.
 - A finalized height bounds the evidence only when it comes from an RPC head on the pinned
   genesis. Otherwise (the RPC was not read, or reports another genesis) `finalized_height` is
@@ -159,6 +168,7 @@ check below to run and pass.
 15. Every entry in `event-pages/` must be a page file: a regular file whose name ends in `.json` and
     does not start with a dot. Any other entry (a dotfile, another extension, a folder) refuses the
     census and leaves every escrow `unverified`, because it may be a page that was meant to count.
+    A symbolic link is not a regular file, even when it points to one.
 
 ## 4. Read only
 
@@ -191,6 +201,19 @@ blank on the page and `null` in JSON and MCP.
   `snapshot.json` equals the last line of the snapshot log, and its hash verifies.
 - Every `td` on the page carries `data-k`; a cell without one fails the check. The visible text of
   every marked element, nested tags included, must match its value as rendered below.
+- Every value sits where a person reads it:
+  - A table row with a label is one `th` and one `td`. The `th` carries `data-for`, equal to the
+    `td`'s `data-k`, and its text is the label for that key.
+  - The label for a key is the rest of the key after its prefix (`status.`, `census.`, `drift.`,
+    or `escrow.<id>.`), with dots and underscores read as spaces: `status.rpc.stale` reads
+    `rpc stale`, `status.genesis.faucet` reads `genesis faucet` and
+    `escrow.<id>.finalized_height` reads `finalized height`. Census totals read
+    `partial ` first when the census is partial. A bare `census` or `drift` cell reads its key.
+  - Each escrow card carries `data-escrow` with its id and holds only that escrow's cells.
+  - Each drift item row carries `data-row` with its `drift.<index>` path and holds only that
+    item's cells.
+- An escrow id asked for over MCP that is not in the snapshot is `unverified`, with
+  `finalized_height` null.
 - Every value cell on the page carries `data-k`, the path of the value in the snapshot:
   `status.<field>` with nested fields joined by dots (`status.rpc.stale`, `status.genesis.faucet`),
   `escrow.<escrow_id>.<field>`, `census.<field>` and `census.totals.<kind>`, and

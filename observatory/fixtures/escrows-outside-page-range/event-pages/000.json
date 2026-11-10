@@ -37,6 +37,17 @@
       "data": {
         "0": "0xb2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2"
       }
+    },
+    {
+      "block_number": 500,
+      "block_hash": "0x0404040404040404040404040404040404040404040404040404040404040404",
+      "finalized": true,
+      "index": 0,
+      "section": "hasStation",
+      "method": "EscrowOpened",
+      "data": {
+        "0": "0xc3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3"
+      }
     }
   ]
 }

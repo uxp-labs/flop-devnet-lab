@@ -65,7 +65,8 @@ Known limits (v0):
   `unverified`. The missing page could hold a conflicting event.
 - Genesis and block hashes are compared exactly as written and must be lower case hex. A page whose
   genesis is spelled differently is another genesis. Escrow ids are matched without regard to case.
-- An event whose block number is outside its page's block range is not evidence.
+- An event whose block number is outside its page's block range is never evidence, and it is
+  suspect: a finalized release or refund out of range that names an escrow leaves it `unverified`.
 - When `finalized_height` is `null` and there is evidence, a note says the evidence is not bounded
   by a finalized height. Treat such a result as weaker. Do not act on it for a real spend.
 - Amount, payee and policy are not checked here. FlopRail's `verifyLock` does that. Use both.

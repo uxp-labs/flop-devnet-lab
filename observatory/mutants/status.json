@@ -194,9 +194,33 @@
   {
     "id": "status-freshness-future-ok",
     "file": "src/status.ts",
-    "find": "  if (age < 0) {\n    conflicts.push(`${name} reading time",
+    "find": "  if (age !== null && age < 0) {\n    conflicts.push(`${name} reading time",
     "replace": "  if (false) {\n    conflicts.push(`${name} reading time",
     "test": "test/status.test.ts",
     "why": "a reading time later than the snapshot time is a conflict"
+  },
+  {
+    "id": "status-zoneless-time-parses",
+    "file": "src/status.ts",
+    "find": "  if (typeof t !== \"string\" || !ZONED.test(t)) return null;",
+    "replace": "  if (typeof t !== \"string\") return null;",
+    "test": "test/status.test.ts",
+    "why": "a time without a zone must not parse, or health depends on the machine's time zone"
+  },
+  {
+    "id": "status-snapshot-time-without-zone-accepted",
+    "file": "src/status.ts",
+    "find": "  if (parseZoned(opts.now) === null) throw new Error(",
+    "replace": "  if (false) throw new Error(",
+    "test": "test/status.test.ts",
+    "why": "a snapshot time without a zone must be refused"
+  },
+  {
+    "id": "status-future-conflict-only-when-ok",
+    "file": "src/status.ts",
+    "find": "  if (age !== null && age < 0) {\n    conflicts.push(`${name} reading time",
+    "replace": "  if (svc.health === \"ok\" && age !== null && age < 0) {\n    conflicts.push(`${name} reading time",
+    "test": "test/status.test.ts",
+    "why": "a future reading time is a conflict whatever the reading's health"
   }
 ]

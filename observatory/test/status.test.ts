@@ -262,6 +262,54 @@ describe("health is ok only when every check ran and passed (RULES 1.1)", () => 
   });
 });
 
+describe("times must carry a zone (RULES 1.1)", () => {
+  const healthy = () => fx("status-healthy");
+  const zoneless = () => {
+    const src = healthy();
+    const strip = (t: unknown) => String(t).replace(/Z$/, "");
+    return new FixtureSource({
+      ...src.data,
+      rpcHead: { ...(src.data.rpcHead as object), observed_at: strip(src.data.rpcHead?.observed_at) } as never,
+      faucetHealth: { ...(src.data.faucetHealth as object), fetched_at: strip(src.data.faucetHealth?.fetched_at) } as never,
+      gatewayModels: { ...(src.data.gatewayModels as object), fetched_at: strip(src.data.gatewayModels?.fetched_at) } as never,
+    });
+  };
+
+  it("reading times without a zone are unknown on every machine, whatever its time zone", async () => {
+    const before = process.env.TZ;
+    try {
+      for (const tz of ["UTC", "America/New_York", "Asia/Tokyo"]) {
+        process.env.TZ = tz;
+        const s = await networkStatus(zoneless(), { pinnedGenesis: DEVNET_GENESIS, now: NOW });
+        expect([s.rpc.health, s.faucet.health, s.gateway.health], tz).toEqual(["unknown", "unknown", "unknown"]);
+        expect(s.rpc.stale, tz).toBeNull();
+        expect(s.conflicts, tz).toEqual([]);
+      }
+    } finally {
+      if (before === undefined) delete process.env.TZ;
+      else process.env.TZ = before;
+    }
+  });
+
+  it("an offset is accepted and means the same instant", async () => {
+    const src = healthy();
+    const shifted = new FixtureSource({ ...src.data, rpcHead: { ...(src.data.rpcHead as object), observed_at: "2026-11-09T18:47:40-05:00" } as never });
+    const s = await networkStatus(shifted, { pinnedGenesis: DEVNET_GENESIS, now: NOW });
+    expect(s.rpc.health).toBe("ok");
+    expect(s.rpc.stale).toBe(false);
+  });
+
+  it("refuses a snapshot time without a zone", async () => {
+    await expect(networkStatus(healthy(), { pinnedGenesis: DEVNET_GENESIS, now: "2026-11-09T23:47:41" })).rejects.toThrow(/with a zone/);
+  });
+
+  it("a future reading time is a conflict even on a degraded faucet", async () => {
+    const s = await networkStatus(fx("status-degraded-real"), { pinnedGenesis: DEVNET_GENESIS, now: "2026-11-09T22:47:41Z" });
+    expect(s.faucet.health).toBe("degraded");
+    expect(s.conflicts.join(" ")).toMatch(/faucet reading time .* is later than the snapshot time/);
+  });
+});
+
 describe("the classifiers on their own, before freshness is applied", () => {
   it("a faucet or gateway that gave no response is unknown, never ok", () => {
     expect(classifyGateway(unknownHttp("no response")).health).toBe("unknown");

@@ -42,7 +42,7 @@ const results = [];
 let bad = 0;
 for (const [name, body] of Object.entries(canaries)) {
   const tmp = mkdtempSync(join(tmpdir(), "obs-canary-"));
-  cpSync(pkg, tmp, { recursive: true, filter: (p) => !relative(pkg, p).split("/").some((x) => skip.has(x) || x.startsWith(".build-")) });
+  cpSync(pkg, tmp, { recursive: true, verbatimSymlinks: true, filter: (p) => !relative(pkg, p).split("/").some((x) => skip.has(x) || x.startsWith(".build-")) });
   symlinkSync(join(pkg, "node_modules"), join(tmp, "node_modules"));
   writeFileSync(join(tmp, "test", name), body);
   const r = spawnSync("npx", ["vitest", "run", `test/${name}`], {

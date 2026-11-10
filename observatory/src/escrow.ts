@@ -25,7 +25,10 @@
 // 4. Genesis and block hashes are compared exactly as written and must be lower case hex.
 //    A page genesis in another spelling is another genesis. A block hash in another spelling
 //    is a malformed event. Escrow ids are matched without regard to case.
-// 5. An event whose block_number is outside its page's block range is not evidence.
+// 5. An event whose block_number is outside its page's block range is never evidence, and it
+//    is suspect. It is grouped like any other copy, so rules 2 and the unparsable id rule
+//    still see it. A finalized release or refund out of range that names this escrow leaves
+//    it unverified.
 // 6. A null finalizedHeight means the evidence is not bounded by a finalized height, and
 //    a result with evidence says so in its notes.
 //
@@ -160,6 +163,8 @@ interface Copy {
   block_hash: string;
   block_number: number | null;
   index: number;
+  /** False when an integer block_number is outside the block range of the page it came from. */
+  inRange: boolean;
 }
 
 /**
@@ -245,11 +250,9 @@ export function escrowState(
         continue;
       }
       const ev = raw as unknown as RawEvent;
-      // An event outside its page's block range is not evidence (census clause 4).
-      if (typeof ev.block_number === "number" && (ev.block_number < fromBlock || ev.block_number > toBlock)) {
-        if (escrowEvent && !(idRead.ok && idRead.id !== id)) outsideRange++;
-        continue;
-      }
+      // An event outside its page's block range is never evidence, and it is suspect. It is
+      // still grouped, so the copy agreement and unparsable id rules see it.
+      const inRange = !(typeof ev.block_number === "number" && (ev.block_number < fromBlock || ev.block_number > toBlock));
       const key = `${pinned}|${ev.block_hash}|${ev.index}`;
       const copy: Copy = {
         section: raw["section"],
@@ -260,6 +263,7 @@ export function escrowState(
         block_hash: ev.block_hash,
         block_number: typeof ev.block_number === "number" ? ev.block_number : null,
         index: ev.index,
+        inRange,
       };
       const list = groups.get(key);
       if (list) list.push(copy);
@@ -306,6 +310,16 @@ export function escrowState(
     const name = `${SECTION}.${method}`;
     if (!first.id.ok) continue; // noted above, never evidence
     if (first.id.id !== id) continue; // about another escrow
+    if (copies.some((c) => !c.inRange)) {
+      // Never evidence. A finalized release or refund out of range still names this escrow,
+      // so it leaves the escrow unverified.
+      outsideRange++;
+      if (method !== OPENED && copies.some((c) => c.finalized)) {
+        const what = method === RELEASED ? "release" : "refund";
+        conflicts.push(`a finalized ${what} outside its page's block range names this escrow (${where})`);
+      }
+      continue;
+    }
     duplicates += copies.length - 1;
     if (copies.some((c) => c.finalized !== true)) {
       pending++;
@@ -335,7 +349,7 @@ export function escrowState(
     notes.push(`${plural(aboveHeight, "event")} above the finalized height ignored`);
   }
   if (outsideRange > 0) {
-    notes.push(`${plural(outsideRange, "event")} outside its page's block range ignored`);
+    notes.push(`${plural(outsideRange, "event")} outside its page's block range: never evidence`);
   }
   if (duplicates > 0) notes.push(`${plural(duplicates, "duplicate event")} counted once`);
   for (const m of malformedNotes) notes.push(`malformed event ignored: ${m}`);

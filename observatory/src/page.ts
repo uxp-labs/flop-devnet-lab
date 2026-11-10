@@ -40,8 +40,13 @@ function jsonValue(x: unknown): unknown {
   return x === null || x === undefined ? null : typeof x === "string" || typeof x === "boolean" || typeof x === "number" ? x : JSON.stringify(x);
 }
 
-function row(label: string, td: string): string {
-  return `<tr><th scope="row">${esc(label)}</th>${td}</tr>`;
+/**
+ * A labeled row: one th and one td. The th carries data-for, equal to the td's data-k, and its text is the
+ * key without its prefix, dots and underscores read as spaces (RULES section 5). A bare key reads as itself.
+ */
+function row(key: string, td: string, prefix = "", partial = false): string {
+  const label = (partial ? "partial " : "") + key.slice(prefix.length).replace(/[._]/g, " ");
+  return `<tr><th scope="row" data-for="${esc(key)}">${esc(label)}</th>${td}</tr>`;
 }
 
 const CSS = `
@@ -69,27 +74,27 @@ export function renderPage(s: Snapshot): string {
 
   // Status
   out.push(`<h2>Network status</h2><div class="card"><table>`);
-  out.push(row("observed_at", cell("status.observed_at", st.observed_at)));
-  out.push(row("trust", cell("status.trust", st.trust)));
-  out.push(row("pinned genesis", cell("status.genesis.pinned", st.genesis.pinned)));
-  out.push(row("faucet genesis", cell("status.genesis.faucet", st.genesis.faucet)));
-  out.push(row("rpc genesis", cell("status.genesis.rpc", st.genesis.rpc)));
-  out.push(row("reset detected", cell("status.reset_detected", st.reset_detected)));
-  out.push(row("conflicts", listCell("status.conflicts", st.conflicts)));
-  out.push(row("finalized height", cell("status.finalized_height", st.finalized_height)));
-  out.push(row("finalized hash", cell("status.finalized_hash", st.finalized_hash)));
-  out.push(row("best height", cell("status.best_height", st.best_height)));
-  out.push(row("finality lag", cell("status.finality_lag", st.finality_lag)));
-  out.push(row("runtime version", cell("status.runtime_version", st.runtime_version)));
+  out.push(row("status.observed_at", cell("status.observed_at", st.observed_at), "status."));
+  out.push(row("status.trust", cell("status.trust", st.trust), "status."));
+  out.push(row("status.genesis.pinned", cell("status.genesis.pinned", st.genesis.pinned), "status."));
+  out.push(row("status.genesis.faucet", cell("status.genesis.faucet", st.genesis.faucet), "status."));
+  out.push(row("status.genesis.rpc", cell("status.genesis.rpc", st.genesis.rpc), "status."));
+  out.push(row("status.reset_detected", cell("status.reset_detected", st.reset_detected), "status."));
+  out.push(row("status.conflicts", listCell("status.conflicts", st.conflicts), "status."));
+  out.push(row("status.finalized_height", cell("status.finalized_height", st.finalized_height), "status."));
+  out.push(row("status.finalized_hash", cell("status.finalized_hash", st.finalized_hash), "status."));
+  out.push(row("status.best_height", cell("status.best_height", st.best_height), "status."));
+  out.push(row("status.finality_lag", cell("status.finality_lag", st.finality_lag), "status."));
+  out.push(row("status.runtime_version", cell("status.runtime_version", st.runtime_version), "status."));
   for (const svc of ["rpc", "gateway", "faucet"] as const) {
     const x = st[svc];
-    out.push(row(`${svc} health`, healthCell(`status.${svc}.health`, x.health)));
-    out.push(row(`${svc} http`, cell(`status.${svc}.http`, x.http)));
-    out.push(row(`${svc} detail`, cell(`status.${svc}.detail`, x.detail)));
-    out.push(row(`${svc} observed_at`, cell(`status.${svc}.observed_at`, x.observed_at)));
+    out.push(row(`status.${svc}.health`, healthCell(`status.${svc}.health`, x.health), "status."));
+    out.push(row(`status.${svc}.http`, cell(`status.${svc}.http`, x.http), "status."));
+    out.push(row(`status.${svc}.detail`, cell(`status.${svc}.detail`, x.detail), "status."));
+    out.push(row(`status.${svc}.observed_at`, cell(`status.${svc}.observed_at`, x.observed_at), "status."));
   }
-  out.push(row("rpc stale", cell("status.rpc.stale", st.rpc.stale)));
-  out.push(row("faucet ready", cell("status.faucet.ready", st.faucet.ready)));
+  out.push(row("status.rpc.stale", cell("status.rpc.stale", st.rpc.stale), "status."));
+  out.push(row("status.faucet.ready", cell("status.faucet.ready", st.faucet.ready), "status."));
   out.push(`</table></div>`);
 
   // Escrows
@@ -97,15 +102,16 @@ export function renderPage(s: Snapshot): string {
   if (s.escrows.length === 0) out.push(`<p class="note">No escrows in this snapshot.</p>`);
   for (const e of s.escrows) {
     const id = e.escrow_id;
-    out.push(`<div class="card"><table>`);
-    out.push(row("escrow id", `<td data-k="escrow.${esc(id)}.escrow_id" data-v="${esc(id)}"><code>${esc(id)}</code></td>`));
-    out.push(row("state", `<td data-k="escrow.${esc(id)}.state" data-v="${esc(e.state)}" class="s-${esc(e.state)}">${esc(e.state)}</td>`));
-    out.push(row("observed_at", cell(`escrow.${id}.observed_at`, e.observed_at)));
-    out.push(row("trust", cell(`escrow.${id}.trust`, e.trust)));
-    out.push(row("finalized height", cell(`escrow.${id}.finalized_height`, e.finalized_height)));
-    out.push(row("evidence", listCell(`escrow.${id}.evidence`, e.evidence.map((v) => `${v.event} @ ${v.block_number ?? "?"} ${v.block_hash} #${v.event_index}`))));
-    out.push(row("notes", listCell(`escrow.${id}.notes`, e.notes)));
-    out.push(row("scope", cell(`escrow.${id}.scope`, e.scope)));
+    const ep = `escrow.${id}.`;
+    out.push(`<div class="card" data-escrow="${esc(id)}"><table>`);
+    out.push(row(`escrow.${id}.escrow_id`, `<td data-k="escrow.${esc(id)}.escrow_id" data-v="${esc(id)}"><code>${esc(id)}</code></td>`, ep));
+    out.push(row(`escrow.${id}.state`, `<td data-k="escrow.${esc(id)}.state" data-v="${esc(e.state)}" class="s-${esc(e.state)}">${esc(e.state)}</td>`, ep));
+    out.push(row(`escrow.${id}.observed_at`, cell(`escrow.${id}.observed_at`, e.observed_at), ep));
+    out.push(row(`escrow.${id}.trust`, cell(`escrow.${id}.trust`, e.trust), ep));
+    out.push(row(`escrow.${id}.finalized_height`, cell(`escrow.${id}.finalized_height`, e.finalized_height), ep));
+    out.push(row(`escrow.${id}.evidence`, listCell(`escrow.${id}.evidence`, e.evidence.map((v) => `${v.event} @ ${v.block_number ?? "?"} ${v.block_hash} #${v.event_index}`)), ep));
+    out.push(row(`escrow.${id}.notes`, listCell(`escrow.${id}.notes`, e.notes), ep));
+    out.push(row(`escrow.${id}.scope`, cell(`escrow.${id}.scope`, e.scope), ep));
     out.push(`</table></div>`);
   }
 
@@ -118,23 +124,23 @@ export function renderPage(s: Snapshot): string {
     const partial = c.status !== "complete" || !c.complete;
     out.push(`<p data-k="census.status" data-v="${esc(c.status)}" class="${partial ? "partial" : "note"}">${partial ? "PARTIAL: these totals cover only part of the requested range and are not complete." : "Complete: the whole requested range is covered."}</p>`);
     out.push(`<div class="card"><table>`);
-    out.push(row("observed_at", cell("census.observed_at", c.observed_at)));
-    out.push(row("trust", cell("census.trust", c.trust)));
-    out.push(row("requested", cell("census.requested", `${c.requested.from_block} to ${c.requested.to_block}`)));
-    out.push(row("covered", rangeCell("census.covered", c.covered)));
-    out.push(row("gaps", rangeCell("census.gaps", c.gaps)));
+    out.push(row("census.observed_at", cell("census.observed_at", c.observed_at), "census."));
+    out.push(row("census.trust", cell("census.trust", c.trust), "census."));
+    out.push(row("census.requested", cell("census.requested", `${c.requested.from_block} to ${c.requested.to_block}`), "census."));
+    out.push(row("census.covered", rangeCell("census.covered", c.covered), "census."));
+    out.push(row("census.gaps", rangeCell("census.gaps", c.gaps), "census."));
     for (const k of COUNT_KEYS) {
-      out.push(row(`${partial ? "partial " : ""}${k}`, cell(`census.totals.${k}`, c.totals[k] ?? null)));
+      out.push(row(`census.totals.${k}`, cell(`census.totals.${k}`, c.totals[k] ?? null), "census.", partial));
     }
-    out.push(row("totals label", cell("census.totals_label", c.totals_label)));
-    out.push(row("requested blocks", cell("census.requested_blocks", c.requested_blocks)));
-    out.push(row("covered blocks", cell("census.covered_blocks", c.covered_blocks)));
-    out.push(row("census reset detected", cell("census.reset_detected", c.reset_detected)));
-    out.push(row("census notes", listCell("census.notes", c.notes ?? [])));
-    out.push(row("pending unfinalized", cell("census.pending_unfinalized", c.pending_unfinalized)));
-    out.push(row("duplicates dropped", cell("census.duplicates_dropped", c.duplicates_dropped)));
-    out.push(row("excluded other genesis", cell("census.excluded_other_genesis", c.excluded_other_genesis)));
-    out.push(row("malformed dropped", cell("census.malformed_dropped", c.malformed_dropped)));
+    out.push(row("census.totals_label", cell("census.totals_label", c.totals_label), "census."));
+    out.push(row("census.requested_blocks", cell("census.requested_blocks", c.requested_blocks), "census."));
+    out.push(row("census.covered_blocks", cell("census.covered_blocks", c.covered_blocks), "census."));
+    out.push(row("census.reset_detected", cell("census.reset_detected", c.reset_detected), "census."));
+    out.push(row("census.notes", listCell("census.notes", c.notes ?? []), "census."));
+    out.push(row("census.pending_unfinalized", cell("census.pending_unfinalized", c.pending_unfinalized), "census."));
+    out.push(row("census.duplicates_dropped", cell("census.duplicates_dropped", c.duplicates_dropped), "census."));
+    out.push(row("census.excluded_other_genesis", cell("census.excluded_other_genesis", c.excluded_other_genesis), "census."));
+    out.push(row("census.malformed_dropped", cell("census.malformed_dropped", c.malformed_dropped), "census."));
     out.push(`</table></div>`);
   }
 
@@ -145,21 +151,21 @@ export function renderPage(s: Snapshot): string {
     out.push(`<div class="card"><table>${row("drift", cell("drift", null))}</table></div>`);
   } else {
     out.push(`<div class="card"><table>`);
-    out.push(row("observed_at", cell("drift.observed_at", d.observed_at)));
-    out.push(row("trust", cell("drift.trust", d.trust)));
-    out.push(row("genesis", cell("drift.genesis", d.genesis)));
-    out.push(row("finalized height", cell("drift.finalized_height", d.finalized_height)));
-    out.push(row("runtime version", cell("drift.runtime_version", d.runtime_version)));
-    out.push(row("spec source", cell("drift.spec_source", d.spec_source)));
-    out.push(row("runtime observed_at", cell("drift.runtime_observed_at", d.runtime_observed_at)));
-    out.push(row("matches", cell("drift.matches", d.matches)));
-    out.push(row("mismatches", cell("drift.mismatches", d.mismatches)));
-    out.push(row("unknown", cell("drift.unknown", d.unknown)));
+    out.push(row("drift.observed_at", cell("drift.observed_at", d.observed_at), "drift."));
+    out.push(row("drift.trust", cell("drift.trust", d.trust), "drift."));
+    out.push(row("drift.genesis", cell("drift.genesis", d.genesis), "drift."));
+    out.push(row("drift.finalized_height", cell("drift.finalized_height", d.finalized_height), "drift."));
+    out.push(row("drift.runtime_version", cell("drift.runtime_version", d.runtime_version), "drift."));
+    out.push(row("drift.spec_source", cell("drift.spec_source", d.spec_source), "drift."));
+    out.push(row("drift.runtime_observed_at", cell("drift.runtime_observed_at", d.runtime_observed_at), "drift."));
+    out.push(row("drift.matches", cell("drift.matches", d.matches), "drift."));
+    out.push(row("drift.mismatches", cell("drift.mismatches", d.mismatches), "drift."));
+    out.push(row("drift.unknown", cell("drift.unknown", d.unknown), "drift."));
     out.push(`</table></div>`);
     out.push(`<div class="card"><table><tr><th>param</th><th>spec</th><th>runtime</th><th>status</th><th>note</th><th>mapping</th><th>unit</th><th>expected</th><th>runtime path</th></tr>`);
     d.items.forEach((it, i) => {
       const st2 = it.status === "unknown" ? `<td data-k="drift.${i}.status" data-v="unknown" class="unk" aria-label="unknown"></td>` : cell(`drift.${i}.status`, it.status);
-      out.push(`<tr>${cell(`drift.${i}.param`, it.param)}${cell(`drift.${i}.spec`, jsonValue(it.spec))}${cell(`drift.${i}.runtime`, jsonValue(it.runtime))}${st2}${cell(`drift.${i}.note`, it.note)}${cell(`drift.${i}.mapping`, it.mapping)}${cell(`drift.${i}.unit`, it.unit)}${cell(`drift.${i}.expected`, it.expected)}${cell(`drift.${i}.runtime_path`, it.runtime_path)}</tr>`);
+      out.push(`<tr data-row="drift.${i}">${cell(`drift.${i}.param`, it.param)}${cell(`drift.${i}.spec`, jsonValue(it.spec))}${cell(`drift.${i}.runtime`, jsonValue(it.runtime))}${st2}${cell(`drift.${i}.note`, it.note)}${cell(`drift.${i}.mapping`, it.mapping)}${cell(`drift.${i}.unit`, it.unit)}${cell(`drift.${i}.expected`, it.expected)}${cell(`drift.${i}.runtime_path`, it.runtime_path)}</tr>`);
     });
     out.push(`</table></div>`);
   }

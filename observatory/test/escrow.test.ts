@@ -101,7 +101,7 @@ function validate(schema: Schema, v: unknown, path = "$"): string[] {
 }
 
 describe("fixture scenarios", () => {
-  it("has all seventeen escrow scenarios", () => {
+  it("has all twenty escrow scenarios", () => {
     expect(scenarios).toEqual([
       "escrows-block-number-disagrees",
       "escrows-conflicting",
@@ -115,6 +115,9 @@ describe("fixture scenarios", () => {
       "escrows-opened-only",
       "escrows-other-genesis",
       "escrows-outside-page-range",
+      "escrows-outside-range-copy-disagrees",
+      "escrows-outside-range-refund-vs-claim",
+      "escrows-outside-range-unparsable",
       "escrows-unfinalized-only",
       "escrows-unparsable-copies-disagree",
       "escrows-unparsable-copy-disagrees",
@@ -150,7 +153,7 @@ describe("fixture scenarios", () => {
         checked++;
       }
     }
-    expect(checked).toBeGreaterThanOrEqual(30);
+    expect(checked).toBeGreaterThanOrEqual(36);
   });
 
   it("the schema check itself rejects bad objects", () => {
@@ -719,18 +722,58 @@ describe("conflict rules for distinct events", () => {
   });
 });
 
-describe("an event outside its page's block range is not evidence", () => {
-  it("a release above the page range does not claim, and is noted", () => {
+describe("an event outside its page's block range is never evidence, and it is suspect", () => {
+  const C = "0x" + "c3".repeat(32);
+  const noted = "1 event outside its page's block range: never evidence";
+  it("a finalized release above the page range does not claim, and leaves the escrow unverified", () => {
     const pages = [page([ev("EscrowOpened", A, 1), ev("EscrowReleased", A, 2, { block_number: 500 })])];
     const s = escrowState(A, pages, opts);
-    expect(s.state).toBe("funded");
-    expect(s.evidence.map((e) => e.event)).toEqual(["hasStation.EscrowOpened"]);
-    expect(s.notes).toContain("1 event outside its page's block range ignored");
+    expect(s.state).toBe("unverified");
+    expect(s.evidence).toEqual([]);
+    expect(s.notes).toContain(noted);
+    expect(s.notes.join(" ")).toContain("a finalized release outside its page's block range names this escrow");
   });
-  it("a release below the page range does not claim either", () => {
+  it("a finalized release below the page range does not claim either", () => {
     const s = escrowState(A, [page([ev("EscrowReleased", A, 2, { block_number: 99 })])], opts);
     expect(s.state).toBe("unverified");
-    expect(s.notes).toContain("1 event outside its page's block range ignored");
+    expect(s.notes).toContain(noted);
+  });
+  it("a finalized refund out of range overrides a clean claim, but only for the escrow it names", () => {
+    const pages = [page([ev("EscrowOpened", A, 1), ev("EscrowReleased", A, 2), ev("EscrowRefunded", A, 3, { block_number: 500 }), ev("EscrowReleased", C, 4)])];
+    const a = escrowState(A, pages, opts);
+    expect(a.state).toBe("unverified");
+    expect(a.evidence).toEqual([]);
+    expect(a.notes.join(" ")).toContain("a finalized refund outside its page's block range names this escrow");
+    const c = escrowState(C, pages, opts);
+    expect(c.state).toBe("claimed");
+    expect(c.notes).toEqual([]);
+  });
+  it("control: without the out of range refund the escrow is claimed", () => {
+    expect(escrowState(A, [page([ev("EscrowOpened", A, 1), ev("EscrowReleased", A, 2)])], opts).state).toBe("claimed");
+  });
+  it("an out of range open is ignored with a note and funds nothing", () => {
+    const s = escrowState(A, [page([ev("EscrowOpened", A, 1, { block_number: 500 })])], opts);
+    expect(s.state).toBe("unverified");
+    expect(s.notes).toContain(noted);
+    expect(s.notes.join(" ")).not.toContain("conflicting evidence");
+  });
+  it("an out of range unfinalized release does not conflict with funded", () => {
+    const pages = [page([ev("EscrowOpened", A, 1), ev("EscrowReleased", A, 2, { block_number: 500, finalized: false })])];
+    expect(escrowState(A, pages, opts).state).toBe("funded");
+  });
+  it("an out of range copy still counts for the copy agreement rule (x10)", () => {
+    const pages = [page([ev("EscrowReleased", A, 9, { block_number: 150 })]), page([ev("EscrowReleased", B, 9, { block_number: 250 })])];
+    const [a, b] = escrowStates([A, B], pages, opts) as [EscrowState, EscrowState];
+    expect(a.state).toBe("unverified");
+    expect(a.evidence).toEqual([]);
+    expect(a.notes.join(" ")).toContain("copies of one event disagree");
+    expect(b.state).toBe("unverified");
+  });
+  it("an out of range unparsable finalized release still contradicts funded (x11)", () => {
+    const pages = [page([ev("EscrowOpened", B, 1), ev("EscrowReleased", "0x12", 9, { block_number: 500 })])];
+    const s = escrowState(B, pages, opts);
+    expect(s.state).toBe("unverified");
+    expect(s.notes.join(" ")).toContain("a malformed finalized terminal event could be about this escrow");
   });
   it("the edges of the range are inside", () => {
     expect(escrowState(A, [page([ev("EscrowReleased", A, 2, { block_number: 100 })])], opts).state).toBe("claimed");
@@ -739,12 +782,18 @@ describe("an event outside its page's block range is not evidence", () => {
   it("a null block number is kept", () => {
     expect(escrowState(A, [page([ev("EscrowReleased", A, 2, { block_number: null })])], opts).state).toBe("claimed");
   });
-  it("fixture: a1 funded with a note, b2 unverified", async () => {
-    const { expected, pages, o } = await loadScenario("escrows-outside-page-range");
-    const [a, b] = escrowStates(expected.escrows.map((e) => e.id), pages, o) as [EscrowState, EscrowState];
-    expect(a.state).toBe("funded");
-    expect(a.notes.join(" ")).toContain("outside its page's block range");
-    expect(b.state).toBe("unverified");
+  it("fixtures: out of range events never give funded, claimed or refunded to the escrows they touch", async () => {
+    const want: Record<string, string[]> = {
+      "escrows-outside-page-range": ["unverified", "unverified", "unverified"],
+      "escrows-outside-range-copy-disagrees": ["unverified", "unverified"],
+      "escrows-outside-range-unparsable": ["unverified"],
+      "escrows-outside-range-refund-vs-claim": ["unverified", "claimed"],
+    };
+    for (const [name, states] of Object.entries(want)) {
+      const { expected, pages, o } = await loadScenario(name);
+      const got = escrowStates(expected.escrows.map((e) => e.id), pages, o);
+      expect(got.map((g) => g.state), name).toEqual(states);
+    }
   });
 });
 

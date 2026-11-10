@@ -52,7 +52,7 @@ function escrowFor(s: Snapshot, id: string): EscrowState {
     state: "unverified",
     evidence: [],
     notes: ["escrow id not present in this snapshot; no finalized evidence seen"],
-    finalized_height: s.status.finalized_height,
+    finalized_height: null,
     observed_at: s.observed_at,
     trust: s.trust,
     scope: "settlement only; says nothing about output quality",
