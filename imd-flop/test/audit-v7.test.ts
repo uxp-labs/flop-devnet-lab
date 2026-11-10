@@ -280,12 +280,19 @@ describe("TS-I13 a 64-hex job id is a usage error, not a secret-scan exit", () =
 });
 
 describe("TS-I14 a ledger lock timeout before the call is a local refusal", () => {
-  it("TS-I14 lock held by a live owner: exit 3 'refused locally, nothing sent', nothing sent", async () => {
+  it("TS-I14 lock held by a live owner: exit 10 'refused locally, nothing sent', nothing sent", async () => {
     const home = tmpHome();
     await readySeat(home, SEAT, "5");
     writeFileSync(join(home, "ledger.jsonl.lock"), JSON.stringify({ pid: process.pid, host: hostname(), token: "other" }));
     const p = new P();
     const r = await cliP(home, runArgs("o1", false), p);
-    expect({ code: r.code, calls: p.calls, refused: r.err.includes("refused locally, nothing sent") }).toEqual({ code: 3, calls: 0, refused: true });
+    expect({ code: r.code, calls: p.calls, refused: r.err.includes("refused locally, nothing sent") }).toEqual({ code: 10, calls: 0, refused: true });
+  });
+
+  it("TS-I14 the pre-call lock refusal has its own exit code, shared with no other EXIT value", async () => {
+    const { EXIT } = await import("../src/errors.js");
+    const values = Object.values(EXIT) as number[];
+    expect((EXIT as Record<string, number>).REFUSED_LOCK).toBe(10);
+    expect(new Set(values).size).toBe(values.length);
   });
 });

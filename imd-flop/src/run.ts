@@ -228,7 +228,7 @@ export async function runJob(h: string, provider: Provider, o: RunOpts, deps: { 
     sent = withLedgerLock(h, lockedCheck);
   } catch (e) {
     // The lock was never taken, so no cap check ran and nothing was sent.
-    if (e instanceof LedgerLockError) throw new CliError(`refused locally, nothing sent: ${e.message}`, EXIT.REFUSED_CAP);
+    if (e instanceof LedgerLockError) throw new CliError(`refused locally, nothing sent: ${e.message}`, EXIT.REFUSED_LOCK);
     throw e;
   }
 

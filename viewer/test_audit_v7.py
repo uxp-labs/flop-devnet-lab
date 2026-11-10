@@ -185,5 +185,15 @@ class ViewerAuditV7(unittest.TestCase):
             self.assertIn(IDENTITY, r["flags"])
 
 
+    def test_V_I13b_example_rows_never_show_a_green_linked_chip(self):
+        ex = {r["label"]: r for r in json.loads((ROOT / "lane-examples.json").read_text())["rows"]}
+        for label in ("Example happy path", "Example stuck", "Example key expired", "Example cap hit"):
+            with self.subTest(label=label):
+                self.assertEqual(ex[label]["link"], ["grey", "not checked", None])
+        self.assertFalse([l for l, r in ex.items() if r["link"][:2] == ["green", "linked"]])
+        committed = (ROOT / "settlement-viewer-2026-11-09.html").read_text()
+        self.assertNotIn('c-green">linked', committed)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

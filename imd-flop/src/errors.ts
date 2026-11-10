@@ -10,6 +10,7 @@ export const EXIT = {
   ESTIMATE_FAILED: 7, // fail closed: no quote, no send
   VERIFY_FAILED: 8, // link verify found a bad signature or mismatch
   FAUCET_REFUSED: 9, // team rule: no faucets
+  REFUSED_LOCK: 10, // ledger lock timeout or contested before the paid call; nothing sent
 } as const;
 
 export class CliError extends Error {

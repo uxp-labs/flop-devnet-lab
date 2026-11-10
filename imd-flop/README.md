@@ -23,9 +23,27 @@ no network and no spend.
 | `faucet [--dry-run]` | Refuses with exit code 9, because our team doesn't use faucets. `--dry-run` prints the request it would have made. |
 | `enroll [--dry-run \| --live]` | Dry run by default: prints the challenge and enroll calls it would make. `--live` does real devnet enrollment and is meant for a human on the holder's machine. |
 
-Data lives in `~/.imd-flop/`, or in `$IMD_FLOP_HOME` if that's set. Exit codes: 0 ok, 2 usage,
-3 refused by a cap, 4 link broken, 5 rule, 6 timeout (spend unknown), 7 estimate failed, 8 verify failed,
-9 faucet refused.
+Data lives in `~/.imd-flop/`, or in `$IMD_FLOP_HOME` if that's set. Exit codes are listed below.
+
+## Exit codes
+
+The process exit code is the `EXIT` value in `src/errors.ts`. `src/bin.ts` assigns it to `process.exitCode`. These numbers are stable so a script can branch on them.
+
+| Code | Name | Meaning |
+|---|---|---|
+| 0 | `OK` | The command finished successfully. |
+| 1 | `ERROR` | A general failure. Used for a failed `init --check-genesis`, a failed `enroll --live`, a pre-mint provider refusal (`nothing sent`), a gateway HTTP error after the call was sent, and any unexpected error that is not a `CliError`. A ledger lock timeout *after* the paid call also exits 1: `appendLedger` takes the lock itself, and a `LedgerLockError` is not a `CliError`. |
+| 2 | `USAGE` | Bad arguments, a missing seat or key, or a value the command will not accept. |
+| 3 | `REFUSED_CAP` | Refused locally, nothing sent. Used when there is no usable cap, the padded quote is over the per-call, daily, or job budget, or a ledger `cap_charge` is unusable. |
+| 4 | `REFUSED_LINK` | The seat-to-DID link is missing or does not verify, or `--no-link` was used with a non-mock provider. |
+| 5 | `REFUSED_RULE` | A section E rule (including a second key for a seat, a secret scan hit, a missing job id, or a live-run gate) or a paid-run chain/genesis refusal. |
+| 6 | `TIMEOUT_UNKNOWN` | The paid call timed out. Spend is recorded as unknown and is not retried. |
+| 7 | `ESTIMATE_FAILED` | The cost estimate failed or returned no usable cost. Nothing was sent. |
+| 8 | `VERIFY_FAILED` | `link verify` found a bad signature, a mismatch, or a failed owner check. |
+| 9 | `FAUCET_REFUSED` | `faucet` without `--dry-run` always refuses (team rule). `--dry-run` exits 0 and does not send. |
+| 10 | `REFUSED_LOCK` | The ledger lock could not be taken *before* the paid call (`LedgerLockError`: timeout or contested). Nothing was sent. This code is not shared with cap refusals (3) or a broken link (4). |
+
+Lock-timeout rule: if the ledger lock cannot be taken before the paid call, the CLI exits 10 and nothing is sent. If the lock cannot be taken after the paid call, while writing the result row, the CLI exits 1. Exit 3 stays cap refusals only. Exit 4 stays a broken link. Codes 0–10 are the only values the CLI returns.
 
 ## Mocked vs live
 
