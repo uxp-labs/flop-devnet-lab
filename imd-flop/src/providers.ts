@@ -136,15 +136,23 @@ export class FlopProvider implements Provider {
   }
 
   async complete(req: CompleteReq): Promise<CompleteRes> {
+    // run's timer may fire during the pre-flight. Until the completion request starts nothing is sent,
+    // so an abort before then is a pre-send refusal (refused_local, reservation released), not a timeout.
+    const notAborted = (stage: string) => {
+      if (req.signal.aborted) throw new PreSendError(`aborted before send (${stage}): ${(req.signal.reason as Error | undefined)?.message ?? "aborted"}`);
+    };
+    notAborted("before the network check");
     try {
       await assertPaidNetwork(this.net, this.ethRpc, this.f);
     } catch (e) {
       throw new PreSendError((e as Error).message);
     }
+    notAborted("after the network check");
     this.calls++;
     // Spend-guard rule 3: the broad key only mints a single-use child capped at this call's quote.
-    const child = await mintChildKey(this.net, this.parent, { model: req.model, maxSpend: req.maxCostFlop }, this.f);
+    const child = await mintChildKey(this.net, this.parent, { model: req.model, maxSpend: req.maxCostFlop }, this.f, req.signal);
     registerSecret(child.token);
+    notAborted("after the child-key mint");
     const client = new FlopClient({ baseURL: this.net.gateway, apiKey: child.token, fetch: uaFetch(this.f) });
     const res = await client.createChatCompletion(
       { model: req.model, messages: req.messages, max_tokens: req.max_tokens, max_cost_flop: req.maxCostFlop } as Parameters<FlopClient["createChatCompletion"]>[0],
