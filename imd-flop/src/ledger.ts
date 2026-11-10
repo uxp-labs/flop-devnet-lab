@@ -139,18 +139,30 @@ function releaseLock(path: string, token: string): void {
   try { unlinkSync(path); } catch { /* already released */ }
 }
 
-/** Exclusive lock from a cap check through its ledger append. Re-enters in this process. */
+/**
+ * The lock is released when fn returns, so fn must be synchronous. A promise-returning body would run
+ * its awaited part after the release, outside the lock; it is refused (after its lock is released).
+ */
+function syncResult<T>(r: T): T {
+  if (r !== null && (typeof r === "object" || typeof r === "function") && typeof (r as { then?: unknown }).then === "function") {
+    (r as unknown as PromiseLike<unknown>).then(undefined, () => { /* the body's own failure is moot: it was refused */ });
+    throw new TypeError("withLedgerLock body must be synchronous: an async body would run its awaited part after the lock is released");
+  }
+  return r;
+}
+
+/** Exclusive lock from a cap check through its ledger append. Re-enters in this process. Synchronous bodies only. */
 export function withLedgerLock<T>(h: string, fn: () => T): T {
   const key = ledgerFile(h);
   const depth = lockDepth.get(key) ?? 0;
   if (depth > 0) {
     lockDepth.set(key, depth + 1);
-    try { return fn(); }
+    try { return syncResult(fn()); }
     finally { lockDepth.set(key, depth); }
   }
   const { fd, token } = takeLock(`${key}.lock`);
   lockDepth.set(key, 1);
-  try { return fn(); }
+  try { return syncResult(fn()); }
   finally {
     lockDepth.set(key, 0);
     try { closeSync(fd); } catch { /* already closed */ }

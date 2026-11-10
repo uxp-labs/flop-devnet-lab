@@ -269,31 +269,40 @@ process.exit(code ?? 1);
   });
 
   it("does not let a second cap check run before the first reservation is appended", async () => {
-    const { withLedgerLock, spentToday, appendLedger } = await import("../src/ledger.js");
+    // IMD e99a2cf1 info #12: this used to pass two async bodies in one process, which never exercised the
+    // lock (it was released when each body returned its promise). Now a second process holds the real lock
+    // across a delay before it appends, and this process's cap check must wait for that append.
+    execFileSync("npx", ["tsc", "-p", "tsconfig.json"], { cwd: join(import.meta.dirname, "..") });
+    const { withLedgerLock, spentToday } = await import("../src/ledger.js");
     const home = tmpHome();
     await readySeat(home, SEAT, "0.186");
-    let release: () => void = () => {};
-    const hold = new Promise<void>((resolve) => { release = resolve; });
-    const first = withLedgerLock(home, async () => {
-      const spent = spentToday(home, SEAT, "mock");
-      if (spent + 0.186 <= 0.186) {
-        appendLedger(home, {
-          ts: new Date().toISOString(), day: utcDay(), request_id: "lock-a", seat: SEAT, did: null,
-          job: "lock-a", provider: "mock", network: "devnet", payer: "holder", model: "m", max_tokens: 8,
-          prompt_sha256: "ab".repeat(32), quote_raw: 0.066, quote_padded: 0.186, per_call_cap: 0.186,
-          daily_cap: 0.186, job_budget: null, spent_before: spent, state: "sent", reason: null, spend: null,
-          cost_reported: null, cap_charge: 0.186, http: null, mock: true,
-        });
-      }
-      await hold;
+    const dist = join(import.meta.dirname, "..", "dist", "ledger.js");
+    const holder = join(home, "lock-holder.mjs");
+    const row = {
+      ts: new Date().toISOString(), day: utcDay(), request_id: "lock-a", seat: SEAT, did: null,
+      job: "lock-a", provider: "mock", network: "devnet", payer: "holder", model: "m", max_tokens: 8,
+      prompt_sha256: "ab".repeat(32), quote_raw: 0.066, quote_padded: 0.186, per_call_cap: 0.186,
+      daily_cap: 0.186, job_budget: null, spent_before: 0, state: "sent", reason: null, spend: null,
+      cost_reported: null, cap_charge: 0.186, http: null, mock: true,
+    };
+    writeFileSync(holder, `
+import { withLedgerLock, spentToday, appendLedger } from ${JSON.stringify(dist)};
+const home = ${JSON.stringify(home)};
+withLedgerLock(home, () => {
+  const spent = spentToday(home, ${JSON.stringify(SEAT)}, "mock");
+  process.stdout.write("HOLDING\\n");
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 700);
+  if (spent + 0.186 <= 0.186) appendLedger(home, ${JSON.stringify(row)});
+});
+`);
+    const child = spawn(process.execPath, [holder], { env: { ...process.env, IMD_FLOP_HOME: home } });
+    const exited = new Promise<number>((resolve) => child.on("exit", (c) => resolve(c ?? 1)));
+    await new Promise<void>((resolve, reject) => {
+      child.stdout.on("data", (d) => { if (String(d).includes("HOLDING")) resolve(); });
+      child.on("exit", (c) => reject(new Error("holder exited before holding the lock: " + c)));
     });
-    let secondSpent = -1;
-    const second = withLedgerLock(home, async () => {
-      secondSpent = spentToday(home, SEAT, "mock");
-    });
-    release();
-    await first;
-    await second;
+    const secondSpent = withLedgerLock(home, () => spentToday(home, SEAT, "mock"));
+    expect(await exited).toBe(0);
     expect(secondSpent).toBe(0.186);
-  });
+  }, 30_000);
 });
