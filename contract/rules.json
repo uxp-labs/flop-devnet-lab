@@ -310,7 +310,8 @@
       "target": "the link column is always grey 'not checked'",
       "replaces_quirk": "Q-LINK-BYPASS-TEXT",
       "replaced_quirk_summary": "A ledger row with link_bypassed: true shows the link column as grey 'bypassed (mock)' instead of grey 'not checked'. imd-flop never writes that field today.",
-      "fix_step": "step 3"
+      "fix_step": "step 3",
+      "status": "fixed: [fix: link-not-checked]"
     },
     {
       "id": "KD-5",

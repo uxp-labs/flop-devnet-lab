@@ -195,11 +195,10 @@ def build_row(e, r):
     rid_label = f'<span title="{esc(rid)}">{esc(short(rid, 14))}</span>' if present(rid) else "none"
     sub = [f"req {rid_label}", f"seat #{esc(e.get('seat'))} · node {BLANK_NODE}",
            f"{esc(e.get('provider'))} · {esc(e.get('network'))} · {esc(when(e['ts']))}"]
-    # Link column: no link evidence is recorded in the ledger, so it is never shown green here.
+    # Link column: no link evidence is recorded in the ledger, so it is always grey "not checked" (link_bypassed too).
     row = dict(label=esc(e.get("job")), sub=sub, payer=esc(e.get("payer") or "holder"), flags=[], spend_flags=[], flop=[],
                est=amount(e.get("quote_padded")), per_call=amount(e.get("per_call_cap")),
                outcome=["grey", "not read", "mock job, no imd lookup"], link=["grey", "not checked", None], bad=False)
-    if e.get("link_bypassed") is True: row["link"] = ["grey", "bypassed (mock)", None]
     spent_before, cap_charge, daily = amount(e.get("spent_before")), amount(e.get("cap_charge")), amount(e.get("daily_cap"))
     if e.get("daily_cap") is not None and daily is None: raise ValueError("daily_cap is not a number")
     row["daily_left"] = r6(daily - spent_before - cap_charge) if None not in (daily, spent_before, cap_charge) else None
