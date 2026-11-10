@@ -1,0 +1,138 @@
+[
+  {
+    "id": "census-drop-dedupe",
+    "file": "src/census.ts",
+    "find": "const key = JSON.stringify([page.genesis, ev.block_hash, ev.index]);",
+    "replace": "const key = JSON.stringify([page.genesis, ev.block_hash, ev.index, groups.size]);",
+    "test": "test/census.test.ts",
+    "why": "Every copy gets its own key, so the same event seen twice counts twice and duplicates_dropped stays 0 (rule 9)."
+  },
+  {
+    "id": "census-count-unfinalized",
+    "file": "src/census.ts",
+    "find": "if (group.some((e) => !e.finalized)) {",
+    "replace": "if (group.some((e) => !e.finalized && false)) {",
+    "test": "test/census.test.ts",
+    "why": "Unfinalized events are counted in totals instead of pending_unfinalized (section 3, rules 8 and 9)."
+  },
+  {
+    "id": "census-any-finalized-copy-wins",
+    "file": "src/census.ts",
+    "find": "if (group.some((e) => !e.finalized)) {",
+    "replace": "if (group.every((e) => !e.finalized)) {",
+    "test": "test/census.test.ts",
+    "why": "A group with one unfinalized copy is counted as finalized, but rule 9 makes it one pending event."
+  },
+  {
+    "id": "census-ignore-gaps",
+    "file": "src/census.ts",
+    "find": "const complete = gaps.length === 0;",
+    "replace": "const complete = true;",
+    "test": "test/census.test.ts",
+    "why": "A partial census reports complete, so partial counts would be presented as complete (section 3, rule 3)."
+  },
+  {
+    "id": "census-partial-totals-unlabeled",
+    "file": "src/census.ts",
+    "find": "totals_label: status,",
+    "replace": "totals_label: \"complete\" as const,",
+    "test": "test/census.test.ts",
+    "why": "The totals of a partial census are no longer labeled partial."
+  },
+  {
+    "id": "census-mix-geneses",
+    "file": "src/census.ts",
+    "find": "const onPinned = valid.filter((p) => p.genesis === pinned);",
+    "replace": "const onPinned = valid;",
+    "test": "test/census.test.ts",
+    "why": "Pages on another genesis are counted and add coverage, so counts mix geneses (rule 6)."
+  },
+  {
+    "id": "census-reset-not-flagged",
+    "file": "src/census.ts",
+    "find": "reset_detected: valid.length === 0 ? null : otherPages.size > 0,",
+    "replace": "reset_detected: valid.length === 0 ? null : false,",
+    "test": "test/census.test.ts",
+    "why": "Pages on another genesis no longer set reset_detected (section 3)."
+  },
+  {
+    "id": "census-missing-page-covered",
+    "file": "src/census.ts",
+    "find": "if (copies === undefined) return { complete: false, reason: `page ${at} is missing` };",
+    "replace": "if (copies === undefined) return { complete: true, pages };",
+    "test": "test/census.test.ts",
+    "why": "A chain with a missing page counts as complete, so its range is covered and its events count (rules 1, 2)."
+  },
+  {
+    "id": "census-broken-chain-events-counted",
+    "file": "src/census.ts",
+    "find": "notes.push(`${label}: ${w.reason}, so the range is not covered and its ${n} event(s) count nowhere`);",
+    "replace": "notes.push(`${label}: ${w.reason}, so the range is not covered and its ${n} event(s) count nowhere`); counted.push(...all);",
+    "test": "test/census.test.ts",
+    "why": "Events on a broken chain are counted, though rule 1 says they count nowhere."
+  },
+  {
+    "id": "census-unreachable-pages-counted",
+    "file": "src/census.ts",
+    "find": "counted.push(...w.pages);",
+    "replace": "counted.push(...all);",
+    "test": "test/census.test.ts",
+    "why": "Pages not reachable from page 0 are counted, though rule 2 says they are ignored."
+  },
+  {
+    "id": "census-no-adjacent-merge",
+    "file": "src/census.ts",
+    "find": "if (last !== undefined && r.from_block <= last.to_block + 1) {",
+    "replace": "if (last !== undefined && r.from_block <= last.to_block) {",
+    "test": "test/census.test.ts",
+    "why": "Adjacent covered ranges stay apart (0-99 and 100-199 instead of 0-199), against rule 3."
+  },
+  {
+    "id": "census-out-of-range-kept",
+    "file": "src/census.ts",
+    "find": "if (outOfRange(raw, page, req)) {",
+    "replace": "if (false) {",
+    "test": "test/census.test.ts",
+    "why": "Events outside the request or their page's range are counted or called malformed instead of skipped (rules 4, 10)."
+  },
+  {
+    "id": "census-malformed-fields-accepted",
+    "file": "src/census.ts",
+    "find": "if (!isText(section) || !isText(method) || !isText(block_hash)) return null;",
+    "replace": "if (false) return null;",
+    "test": "test/census.test.ts",
+    "why": "Events missing section, method or block hash are no longer counted in malformed_dropped (rule 7)."
+  },
+  {
+    "id": "census-finalized-truthy",
+    "file": "src/census.ts",
+    "find": "finalized: raw.finalized === true",
+    "replace": "finalized: Boolean(raw.finalized)",
+    "test": "test/census.test.ts",
+    "why": "A non-boolean finalized such as the string \"true\" counts as finalized, though rule 8 makes it pending."
+  },
+  {
+    "id": "census-disagreeing-group-counted",
+    "file": "src/census.ts",
+    "find": "if (disagree) {",
+    "replace": "if (false) {",
+    "test": "test/census.test.ts",
+    "why": "A duplicate group whose copies disagree on section, method or account is counted by its first copy instead of once as malformed (rule 9)."
+  },
+  {
+    "id": "census-account-order",
+    "file": "src/census.ts",
+    "find": "const ACCOUNT_FIELDS = [\"who\", \"owner\", \"agent\", \"payer\"] as const;",
+    "replace": "const ACCOUNT_FIELDS = [\"owner\", \"who\", \"agent\", \"payer\"] as const;",
+    "test": "test/census.test.ts",
+    "why": "by_account takes owner before who, against the order in section 3 and rule 11."
+  },
+  {
+    "id": "census-missing-next-page-tolerated",
+    "file": "src/census.ts",
+    "find": "if (next_page !== null && !isInt(next_page)) {",
+    "replace": "if (next_page !== null && next_page !== undefined && !isInt(next_page)) {",
+    "test": "test/census.test.ts",
+    "why": "A page with no next_page field is accepted instead of refusing the whole census (rule 12)."
+  }
+]

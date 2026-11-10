@@ -22,9 +22,9 @@ and `SHA256SUMS`:
 | test | unit, boundary and consistency tests; any network, write, sign or spend attempt fails its file |
 | canary | the harness itself fails a test that leaves a forbidden attempt behind |
 | mutants | every injected bug (reset ignored, stale RPC, conflicts dropped, malformed escrow accepted, partial census shown complete, ...) makes its test fail, and the clean tree passes |
-| recount | the TypeScript census and an independent Python recount agree on every census fixture |
+| recount | the TypeScript census and an independent Python recount agree on every census fixture, and a nudged total is caught in every one |
 | snapshot, mcp | one snapshot rendered as feeds, page, snapshot log and a real MCP stdio transcript |
-| consistency | page, feeds and MCP agree on state, observed_at and trust labels; nulls are blank |
+| consistency | page, feeds and MCP agree on state, observed_at and trust labels; nulls are blank; tampered copies are caught |
 
 `SHA256SUMS` shows files were not changed after the run. It does not prove the run was honest.
 For that, rerun on the same revision in a fresh clone (or read the CI artifact) and compare

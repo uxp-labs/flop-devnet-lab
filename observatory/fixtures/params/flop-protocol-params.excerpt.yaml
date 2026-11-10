@@ -1,0 +1,102 @@
+# Excerpt for FLOP Observatory drift fixtures. This is not the canonical file.
+#
+# Attribution: from params/flop-protocol-params.yaml in FLOP Labs, "FLOP Network Yellow Paper",
+# 0.5.0 (draft), 2026, https://github.com/flop-labs/yellowpaper, mirror commit
+# 2a2cc8218048a2933071bb2f45d75335560e39d8. Copyright (c) 2026 FLOP Labs.
+# Licensed under CC BY 4.0: https://creativecommons.org/licenses/by/4.0/
+#
+# Changes made: kept 11 of the 160 entries (10 with on_chain.constants and 1 source_only) and the
+# meta block. Kept only the name, mutability, on_chain, value, unit, decision, rust, governance and
+# note fields. Dropped descriptions, implementations, lean and quint fields and the upstream
+# comments, and added this header. No value, unit or mapping was changed.
+#
+# The upstream header's deployment contract, in short: on_chain.constants names FRAME metadata
+# constants (api.consts), on_chain.storage names scalar storage (api.query), source_only gives a
+# reason for no RPC check, FLOP amounts use meta.decimals, and multiplier and divisor handle
+# Perbill and per byte encodings. Upstream reads this file as YAML 1.1 (PyYAML).
+
+meta:
+  version: 1
+  decimals: 18              # 1 FLOP = 10^18 base units
+  block_time_seconds: 1
+  blocks_per_day: 86_400
+  halving_interval_days: 730
+
+parameters:
+
+  - name: validator_min_stake
+    mutability: runtime-upgrade-only
+    on_chain: {constants: [Validators.InitialMinimumStake]}
+    effective_mutability: governance-settable (Validators.force_set_minimum_stake); effective stake also grows with time, so only the initial constant is diffed
+    value: 1_200_000
+    unit: FLOP
+    decision: D-0440
+    rust: ValidatorInitialMinimumStake
+
+  - name: initial_block_reward
+    mutability: runtime-upgrade-only
+    on_chain: {constants: [BlockRewards.InitialRewardPerBlock]}
+    value: 96
+    unit: FLOP
+    decision: D-008
+    rust: RewardInitialPerBlock
+
+  - name: halving_interval_blocks
+    mutability: runtime-upgrade-only
+    on_chain: {constants: [BlockRewards.HalvingIntervalBlocks]}
+    value: 63_072_000
+    unit: blocks
+
+  - name: miner_capacity_stake_per_gflop
+    mutability: runtime-upgrade-only
+    on_chain: {constants: [MinerStaking.CapacityStakePerGflop]}
+    value: "VFY / 100"
+    unit: "(= 0.01 FLOP per GFLOP/s)"
+
+  - name: finality_freeze_threshold
+    mutability: runtime-upgrade-only
+    on_chain: {constants: [HasStation.FinalityFreezeThreshold, ComputeChannel.FinalityFreezeThreshold]}
+    value: 120
+    unit: blocks
+
+  - name: htlc_burn_share_ppt
+    mutability: runtime-upgrade-only
+    on_chain: {constants: [HasStation.HtlcBurnShare]}
+    value: 0
+    unit: ppt
+
+  - name: validator_extended_downtime_slash_percent
+    mutability: runtime-upgrade-only
+    on_chain: {constants: [Validators.ExtendedDowntimeSlash], multiplier: 10000000}
+    value: 5
+    unit: percent
+    decision: D-0409
+    rust: ValidatorExtendedDowntimeSlash
+
+  - name: min_force_open_escrow_for_failed_ack
+    mutability: runtime-upgrade-only
+    on_chain: {constants: [ComputeChannel.MinForceOpenEscrowForFailedAck]}
+    value: 0.05
+    unit: FLOP
+    decision: D-0423
+    rust: MinForceOpenEscrowForFailedAck
+
+  - name: da_lease_deposit_per_byte
+    mutability: governance-settable
+    on_chain: {constants: [DaRegistry.DepositPerByte], divisor: 1000000000, storage: [DaRegistry.DepositPerByteValue], token_units: true}
+    governance_setter: DaRegistry.set_deposit_per_byte
+    default_mutability: runtime-upgrade-only
+    value: 200
+    unit: "FLOP per 10^9 bytes (= 2e-7 FLOP/byte)"
+    decision: D-0412
+    rust: DaDepositPerByte
+
+  - name: agent_identity_min_stake
+    mutability: runtime-upgrade-only
+    on_chain: {source_only: Not exported as a FRAME constant; verified against source only.}
+    value: 10
+    unit: FLOP
+    rust: AgentIdentityMinStake
+
+reference:
+  - { name: session_key_expiry_days, value: 10, unit: days, note: "Target-cadence conversion of the 864,000-block session-key limit (yellowpaper §6.2): approximately 10 d at uninterrupted 1 s blocks, not a wall-clock upper bound; checked against the runtime and blocks_per_day. Owner can revoke anytime. pallet_session_keys / pallet_agent_wallet.", mutability: runtime-upgrade-only, on_chain: {constants: [FlopSessionKeys.MaxSessionDuration], multiplier: 86400} }

@@ -49,6 +49,8 @@ export interface FixtureMeta {
   pinned_genesis?: string;
   /** Escrow scenarios: the escrow ids to look up. */
   escrow_ids?: string[];
+  /** Drift scenarios: the params YAML to compare against, relative to the scenario directory. */
+  params_spec?: string;
 }
 
 export interface FixtureData {

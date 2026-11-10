@@ -1,0 +1,11 @@
+{
+  "scenario": "census-unfinalized",
+  "description": "Synthetic, made up for a test. Request 0-99 on pinned genesis 0xa1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1. Rule numbers refer to RULES.md section 3.1. One complete chain for 0-99. Pending, never counted: block 11 (finalized false); the group for block 12 index 0, whose copy on page 0 has no finalized field and whose copy on page 1 is finalized (any unfinalized copy makes the group one pending event, rule 9; 1 copy dropped); block 13 (finalized is the string \"true\", not a boolean, rule 8); and block 14, a balances.Transfer with finalized false (pending is decided before kind, rule 10). Blocks 10 and 15 are finalized and count. Expected: complete true, status complete; covered 0-99; gaps none; totals escrows_opened 1, escrows_released 0, escrows_refunded 1, channels_opened 0, channels_settled 0; pending_unfinalized 4; duplicates_dropped 1; excluded_other_genesis 0; malformed_dropped 0; by_account synthetic-alice (escrows_opened 1), synthetic-bob (escrows_refunded 1).",
+  "now": "2026-11-10T00:00:00.000Z",
+  "synthetic": true,
+  "census_request": {
+    "from_block": 0,
+    "to_block": 99
+  },
+  "pinned_genesis": "0xa1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1"
+}

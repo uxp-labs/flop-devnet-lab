@@ -13,8 +13,10 @@
 #     attempts.jsonl      any network, write, sign or spend attempt left by a test (should be absent)
 #     mutants.json        each injected bug, the test that must catch it, and the outcome
 #     recount.json        TypeScript census against the independent Python recount, per fixture
+#     recount-canary.json the cross-check catching a deliberately nudged total in every scenario
 #     outputs/            one snapshot rendered as feeds, page and an MCP transcript
 #     consistency.json    page, feeds and MCP compared field by field
+#     consistency-canary.json  tampered copies of the outputs, each of which must fail the comparison
 #     SHA256SUMS          hashes of every other file in this directory
 #
 # SHA256SUMS shows the files were not changed after the sums were written. It does not prove the
@@ -126,6 +128,8 @@ step mutants sh -c "node scripts/mutate.mjs > '$evidence/mutants.json'"
 # 5. Independent recount: the Python recount's own tests, then TypeScript against Python per fixture.
 step recount-tests python3 -I tools/test_recount.py
 step recount sh -c "node scripts/compare-recount.mjs > '$evidence/recount.json'"
+# The cross-check itself: with one TypeScript total nudged by one, every scenario must disagree.
+step recount-canary sh -c "node scripts/compare-recount.mjs --perturb > '$evidence/recount-canary.json'"
 
 # 6. One snapshot through every output: feeds, page, snapshot log, and an MCP transcript.
 step snapshot node dist/cli.js snapshot \
@@ -138,5 +142,7 @@ step snapshot node dist/cli.js snapshot \
   --source-sha "$source_sha"
 step mcp sh -c "node scripts/mcp-transcript.mjs '$evidence/outputs' > '$evidence/outputs/mcp-transcript.jsonl'"
 step consistency sh -c "node scripts/consistency.mjs '$evidence/outputs' > '$evidence/consistency.json'"
+# The consistency check itself: tampered copies (feed, page, MCP) must each fail it.
+step consistency-canary sh -c "node scripts/consistency-canary.mjs '$evidence/outputs' > '$evidence/consistency-canary.json'"
 
 exit "$overall"

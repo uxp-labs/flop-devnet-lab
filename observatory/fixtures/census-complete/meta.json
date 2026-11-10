@@ -1,0 +1,11 @@
+{
+  "scenario": "census-complete",
+  "description": "Synthetic, made up for a test. Request 0-199 on pinned genesis 0xa1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1. Rule numbers refer to RULES.md section 3.1. Two complete page chains on the pinned genesis, 0-99 (pages 0 and 1) and 100-199 (page 0), which touch and merge into one covered range. Account picks follow rule 11: an empty who falls through to payer, a non-string who falls through to owner, who beats owner, and an event with no account field counts in totals only. A balances.Transfer is finalized but not a counted kind, so it counts nowhere. Expected: complete true, status complete; covered 0-199; gaps none; totals escrows_opened 4, escrows_released 1, escrows_refunded 1, channels_opened 1, channels_settled 1; pending_unfinalized 0; duplicates_dropped 0; excluded_other_genesis 0; malformed_dropped 0; by_account synthetic-alice (escrows_opened 1, escrows_released 1), synthetic-bob (escrows_opened 2), synthetic-carol (channels_opened 1, channels_settled 1), synthetic-dave (escrows_refunded 1).",
+  "now": "2026-11-10T00:00:00.000Z",
+  "synthetic": true,
+  "census_request": {
+    "from_block": 0,
+    "to_block": 199
+  },
+  "pinned_genesis": "0xa1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1"
+}

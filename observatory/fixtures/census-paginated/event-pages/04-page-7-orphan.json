@@ -1,0 +1,21 @@
+{
+  "genesis": "0xa1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+  "from_block": 0,
+  "to_block": 99,
+  "page": 7,
+  "next_page": null,
+  "events": [
+    {
+      "block_number": 8,
+      "block_hash": "0xa100000000000000000000000000000000000000000000000000000000000008",
+      "finalized": true,
+      "index": 0,
+      "section": "hasStation",
+      "method": "EscrowOpened",
+      "data": {
+        "escrow_id": "0xe500000000000000000000000000000000000000000000000000000000000009",
+        "who": "synthetic-alice"
+      }
+    }
+  ]
+}

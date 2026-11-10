@@ -26,11 +26,14 @@ const transcript = read("mcp-transcript.jsonl")
 const unescape = (s) =>
   s.replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&");
 const page = new Map();
-for (const m of html.matchAll(/<td\b([^>]*)>/g)) {
+// A marked element carries its value in data-v, or (for inline elements) as its text.
+// No data-v and no text means blank: the page's rendering of null.
+for (const m of html.matchAll(/<[a-z][a-z0-9]*\b([^>]*\bdata-k="[^"]*"[^>]*)>([^<]*)/g)) {
   const k = /data-k="([^"]*)"/.exec(m[1]);
   if (!k) continue;
   const v = /data-v="([^"]*)"/.exec(m[1]);
-  page.set(unescape(k[1]), v ? unescape(v[1]) : null);
+  const text = m[2] ?? "";
+  page.set(unescape(k[1]), v ? unescape(v[1]) : text ? unescape(text) : null);
 }
 
 const mcpText = new Map();

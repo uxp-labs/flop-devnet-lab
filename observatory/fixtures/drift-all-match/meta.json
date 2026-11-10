@@ -1,0 +1,7 @@
+{
+  "scenario": "drift-all-match",
+  "description": "Synthetic, made up for a test: these runtime constants were written by hand to sit against fixtures/params/flop-protocol-params.excerpt.yaml (11 spec entries, 13 check sites); none was read from a chain. Keys use the api.consts spelling (pallet.constant in camel case). Large values are decimal strings, small ones numbers. Every constant whose spec value is a number holds exactly the value the spec asks for after meta.decimals, multiplier and divisor. Expected: items 13; matches 10; mismatches 0; unknown 3 (miner_capacity_stake_per_gflop whose spec value VFY / 100 is an expression, the daRegistry.depositPerByteValue storage site, and agent_identity_min_stake, which is source only). Those three stay unknown even here: unknown is never counted as a match.",
+  "now": "2026-11-10T00:00:00.000Z",
+  "synthetic": true,
+  "params_spec": "../params/flop-protocol-params.excerpt.yaml"
+}

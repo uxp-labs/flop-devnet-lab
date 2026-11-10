@@ -211,6 +211,21 @@ export interface CensusReport {
   malformed_dropped: number;
   /** "section.method" counted for each kind, with whether the name is confirmed from metadata. */
   event_names: Record<keyof CensusCounts, { event: string; confirmed: boolean }>;
+  /**
+   * The label every total carries, for totals and by_account alike. Always equal to status:
+   * "partial" whenever any part of the request is a gap. Partial counts are never presented as complete.
+   */
+  totals_label: "complete" | "partial";
+  /** Blocks in the request, and how many of them complete page chains cover. */
+  requested_blocks: number;
+  covered_blocks: number;
+  /**
+   * true: some page is on a genesis other than the pinned one (a possible chain reset).
+   * false: every page is on the pinned genesis. null: there were no pages, so nothing to say.
+   */
+  reset_detected: boolean | null;
+  /** Why the census looks as it does: broken chains, ignored pages, skipped events, other geneses, gaps. */
+  notes: string[];
 }
 
 // ===== END CENSUS TYPES =====
@@ -222,10 +237,21 @@ export interface DriftItem {
   param: string;
   /** Where the runtime value is read, e.g. "api.consts.balances.existentialDeposit". */
   runtime_path: string | null;
+  /** The canonical value as written in the spec, JSON safe (an integer past 2^53 is a decimal string). */
   spec: unknown;
+  /** The runtime value as read, or null when it was not read. */
   runtime: unknown;
   status: "match" | "mismatch" | "unknown";
   note: string | null;
+  /** The kind of check site: an api.consts constant, api.query storage, source only, or no mapping. */
+  mapping: "constant" | "storage" | "source_only" | "none";
+  /** unit as written in the spec, or null. */
+  unit: string | null;
+  /**
+   * The value the runtime should hold, in base units after meta.decimals, multiplier and divisor,
+   * as a decimal string. null when it cannot be worked out exactly.
+   */
+  expected: string | null;
 }
 
 export interface DriftReport {
@@ -236,7 +262,10 @@ export interface DriftReport {
   finalized_height: number | null;
   runtime_version: number | null;
   spec_source: string;
+  /** When the runtime constants were read, or null when unknown. */
+  runtime_observed_at: string | null;
   items: DriftItem[];
+  matches: number;
   mismatches: number;
   unknown: number;
 }

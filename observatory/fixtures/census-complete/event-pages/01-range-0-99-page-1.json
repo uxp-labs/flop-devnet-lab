@@ -1,0 +1,33 @@
+{
+  "genesis": "0xa1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+  "from_block": 0,
+  "to_block": 99,
+  "page": 1,
+  "next_page": null,
+  "events": [
+    {
+      "block_number": 50,
+      "block_hash": "0xa100000000000000000000000000000000000000000000000000000000000032",
+      "finalized": true,
+      "index": 0,
+      "section": "hasStation",
+      "method": "EscrowReleased",
+      "data": {
+        "escrow_id": "0xe500000000000000000000000000000000000000000000000000000000000001",
+        "who": "synthetic-alice"
+      }
+    },
+    {
+      "block_number": 55,
+      "block_hash": "0xa100000000000000000000000000000000000000000000000000000000000037",
+      "finalized": true,
+      "index": 2,
+      "section": "computeChannel",
+      "method": "ChannelOpened",
+      "data": {
+        "channel_id": "0xc400000000000000000000000000000000000000000000000000000000000001",
+        "agent": "synthetic-carol"
+      }
+    }
+  ]
+}

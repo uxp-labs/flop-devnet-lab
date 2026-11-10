@@ -1,0 +1,44 @@
+{
+  "genesis": "0xa1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+  "from_block": 0,
+  "to_block": 99,
+  "page": 0,
+  "next_page": 1,
+  "events": [
+    {
+      "block_number": 10,
+      "block_hash": "0xa10000000000000000000000000000000000000000000000000000000000000a",
+      "finalized": true,
+      "index": 0,
+      "section": "hasStation",
+      "method": "EscrowOpened",
+      "data": {
+        "escrow_id": "0xe500000000000000000000000000000000000000000000000000000000000001",
+        "who": "synthetic-alice"
+      }
+    },
+    {
+      "block_number": 11,
+      "block_hash": "0xa10000000000000000000000000000000000000000000000000000000000000b",
+      "finalized": false,
+      "index": 0,
+      "section": "hasStation",
+      "method": "EscrowOpened",
+      "data": {
+        "escrow_id": "0xe500000000000000000000000000000000000000000000000000000000000002",
+        "who": "synthetic-bob"
+      }
+    },
+    {
+      "block_number": 12,
+      "block_hash": "0xa10000000000000000000000000000000000000000000000000000000000000c",
+      "index": 0,
+      "section": "hasStation",
+      "method": "EscrowReleased",
+      "data": {
+        "escrow_id": "0xe500000000000000000000000000000000000000000000000000000000000001",
+        "who": "synthetic-alice"
+      }
+    }
+  ]
+}

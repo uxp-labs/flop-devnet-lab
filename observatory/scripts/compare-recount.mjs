@@ -9,6 +9,9 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const pkg = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+// --perturb is the self-test: add one to one TypeScript total before comparing. Every scenario
+// that produced a report must then disagree; exit 0 only if the comparison caught them all.
+const perturb = process.argv.includes("--perturb");
 const DEVNET = "0x99c172c095340ace980631f9123544c6bebd4839f3437e463533422d8be2d631";
 const KEYS = [
   "complete",
@@ -70,8 +73,9 @@ for (const d of dirs) {
     results.push({ scenario: d, outcome: agree ? "both-refused" : "disagree-on-refusal", ts_exit: ts.exit, py_exit: py.exit, ts_err: ts.stderr, py_err: py.stderr });
     continue;
   }
+  if (perturb && ts.json?.totals) ts.json.totals.escrows_opened += 1;
   const diffs = KEYS.filter((k) => canon(ts.json?.[k]) !== canon(py.json?.[k])).map((k) => ({ key: k, ts: ts.json?.[k], py: py.json?.[k] }));
-  if (diffs.length) bad++;
+  if (perturb ? diffs.length === 0 : diffs.length > 0) bad++;
   results.push({
     scenario: d,
     outcome: diffs.length ? "disagree" : "agree",
