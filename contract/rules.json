@@ -167,7 +167,7 @@
         "spend-guard",
         "viewer"
       ],
-      "summary": "'Failed read' differs: imd-flop refresh = not (http === 200 and an object body); spend-guard receipts.py = code != 200; viewer = http not in (None, 200) or a non-empty error, with key_expired routed to its own branch. http null + no error is fresh in the viewer only; http 200 + error text is failed in the viewer only."
+      "summary": "'Failed read' differs: imd-flop refresh = not (http === 200 and an object body); spend-guard receipts.py = code != 200; viewer = http not in (None, 200) or a non-empty error, or flag key_expired (since [fix: KD-1] a failed read with its own 'key expired' wording, not the 'receipt read failed' flag). http null + no error is fresh in the viewer only; http 200 + error text is failed in the viewer only."
     },
     {
       "id": "Q-IDENTITY-FIELDS",
@@ -284,7 +284,7 @@
       ],
       "where": "build-lane.py:139-141 (settled compare ignores the reservation and per-call cap)",
       "today": "a settlement above its reservation (quote_padded) or above the per-call cap renders green 'chain final' and 'matches'",
-      "target": "amber 'disagree', reservation held (reservation line shown), chain-final green blocked",
+      "target": "one amber chip naming the first limit broken ('over the per-call cap', 'over the daily cap', 'over the reservation'), reservation held (line shown, quote_padded first on these rows), chain-final green blocked",
       "status": "fixed: [fix: KD-2], [fix: KD-2 follow-up], [fix: FIXER-viewer-rulings]",
       "fixed_behavior": "own row kind over_limit after disagree; one amber chip naming the first limit broken, in order 'over the per-call cap' (settled > per_call_cap), 'over the daily cap' (daily cap left < 0, cap math on cap_charge), 'over the reservation' (settled > quote_padded); reservation line 'reservation <quote_padded, else cap_charge> (held)' then a separate 'settled <amount>' line; never 'matches', no green"
     },

@@ -95,6 +95,8 @@ def from_files():
 
 def unresolved(e): return e.get("state") in ("timeout_unknown", "error")
 
+OVER_DAILY = "over the daily cap"
+
 def daily_left(e):
     """Daily cap left after this row's cap_charge, or None when any input is unknown (cap math uses cap_charge)."""
     spent_before, cap_charge, daily = amount(e.get("spent_before")), amount(e.get("cap_charge")), amount(e.get("daily_cap"))
@@ -108,7 +110,7 @@ def over_limit(e, r):
     if settled is None or r.get("state") not in SETTLES: return None
     per_call, quote, left = amount(e.get("per_call_cap")), amount(e.get("quote_padded")), daily_left(e)
     if per_call is not None and settled > per_call: return "over the per-call cap"
-    if left is not None and left < 0: return "over the daily cap"
+    if left is not None and left < 0: return OVER_DAILY
     if quote is not None and settled > quote: return "over the reservation"
     return None
 
@@ -226,10 +228,12 @@ def build_row(e, r):
                est=amount(e.get("quote_padded")), per_call=amount(e.get("per_call_cap")),
                outcome=["grey", "not read", "mock job, no imd lookup"], link=["grey", "not checked", None], bad=False)
     row["daily_left"] = daily_left(e)
-    if row["daily_left"] is not None and row["daily_left"] < 0: row["spend_flags"].append("over the daily cap")
     cap_charge = amount(e.get("cap_charge"))
     reservation = cap_charge if cap_charge is not None else amount(e.get("quote_padded"))
     ROW_KINDS[classify(e, r)](row, e, r, reservation)
+    # Say it once per row: when the row's chip already reads 'over the daily cap', no spend flag repeats it.
+    if row["daily_left"] is not None and row["daily_left"] < 0 and ["amber", OVER_DAILY] not in (row["chips"] or []):
+        row["spend_flags"].append(OVER_DAILY)
     return row
 BLANK_NODE = '<span class="unk">unknown</span>'
 HELD_NOTE = '<span class="note">(held)</span>'
