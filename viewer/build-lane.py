@@ -110,6 +110,16 @@ def build_row(e, r):
         row["flags"] = ["receipt file unreadable: not shown as OK"]
         row["flop"] = [["reservation", reservation], ["observed spend", None]]
         return row
+    if r.get("flag") != "key_expired" and (r.get("http") not in (None, 200) or present(r.get("error"))):
+        # The last receipt read failed (HTTP error, or http 0 for a dropped connection). The file holds the last
+        # known state, not a fresh read, so it can't be compared: runs before the identity and disagree checks.
+        # Same labels and markup as the key-expired row; the link column stays grey "not checked".
+        err = r.get("error") if present(r.get("error")) else ""
+        why = esc(err) if err.startswith("HTTP ") else esc(f"HTTP {r.get('http')} {err}".strip())
+        row["chips"] = [["grey", "sent"], ["red", "unknown"]]; row["bad"] = True
+        row["flop"] = [["last seen", esc(r.get("state") or "unknown")], ["now", f'unreadable: <span class="mono">{why}</span>'], ["observed spend", None]]
+        row["flags"] = ["receipt read failed, can't re-check"] + ([unresolved_flag] if unresolved else [])
+        return row
     chips = [["grey", "sent"]]
     if not identity_ok(r, e):
         chips.append(["red", "mismatch"]); row["bad"] = True
