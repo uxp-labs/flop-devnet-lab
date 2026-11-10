@@ -59,6 +59,62 @@
    ]
   },
   {
+   "id": "label-unreadable-beats-unknown",
+   "rule": "viewer.label",
+   "input": {
+    "ledger": {
+     "ts": "2026-11-10T15:00:00Z",
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zSONAR",
+     "provider": "mock",
+     "network": "devnet",
+     "payer": "holder",
+     "state": "timeout_unknown",
+     "spend": null,
+     "cap_charge": 0.186,
+     "quote_padded": 0.186,
+     "per_call_cap": 1,
+     "daily_cap": 5,
+     "spent_before": 0
+    },
+    "receipt": "{not json"
+   },
+   "expect": {
+    "imd-flop": {
+     "not_applicable": "imd-flop does not render the viewer lane"
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard does not render the viewer lane"
+    },
+    "viewer": {
+     "chips": [
+      [
+       "grey",
+       "sent"
+      ],
+      [
+       "red",
+       "unreadable"
+      ]
+     ],
+     "reservation": 0.186,
+     "matches_shown": false,
+     "greens": [],
+     "link": [
+      "grey",
+      "not checked",
+      null
+     ]
+    }
+   },
+   "note": "Unreadable and unknown on one row: a timeout_unknown ledger row whose receipt file is broken JSON. Only the red 'unreadable' chip shows (no red 'unknown'); reservation kept, no matches, no greens.",
+   "label_rules": [
+    "V-PRECEDENCE"
+   ]
+  },
+  {
    "id": "label-failed-read",
    "rule": "viewer.label",
    "input": {
