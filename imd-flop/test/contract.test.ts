@@ -4,9 +4,8 @@
  * Every vector names all three parts; a part is either checked here or tagged not_applicable with a reason.
  * Vectors with status "known_defect" assert `expect` (today's output); `target` is recorded, not asserted.
  */
-import { existsSync, readdirSync, readFileSync, writeFileSync, appendFileSync } from "node:fs";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { existsSync, readFileSync, writeFileSync, appendFileSync } from "node:fs";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { FlopHTTPError } from "@flop-labs/client";
 import { EXIT } from "../src/errors.js";
@@ -18,30 +17,10 @@ import type { CompleteReq, CompleteRes, Provider } from "../src/providers.js";
 import { classifyReceipt, knownSettledSpend, RECEIPT_STATES, STAGE_GATEWAY, type GatewayReceipt } from "../src/receipts.js";
 import { padQuote, TEMPLATE_PAD } from "../src/run.js";
 import { cli, readLines, readySeat, tmpHome } from "./helpers.js";
+import { decode, forPart, rules, unreferencedQuirks, vectors, type Json } from "./lib/contract-vectors.js";
 
 const PART = "imd-flop";
-const PARTS = ["imd-flop", "spend-guard", "viewer"];
-const CONTRACT = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "contract");
-type Json = any; // eslint-disable-line @typescript-eslint/no-explicit-any
-interface Vector { id: string; rule: string; input: Json; expect: Record<string, Json>; status?: string; target?: Record<string, Json>; quirks?: string[]; file: string }
-
-const FLOATS: Record<string, number> = { nan: NaN, inf: Infinity, "-inf": -Infinity };
-const decode = (v: Json): Json => {
-  if (Array.isArray(v)) return v.map(decode);
-  if (v !== null && typeof v === "object") {
-    const keys = Object.keys(v);
-    if (keys.length === 1 && keys[0] === "$float") return FLOATS[v.$float];
-    return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, decode(x)]));
-  }
-  return v;
-};
-const rules: Json = JSON.parse(readFileSync(join(CONTRACT, "rules.json"), "utf8"));
-const vectors: Vector[] = readdirSync(join(CONTRACT, "vectors"))
-  .filter((f) => f.endsWith(".json"))
-  .sort()
-  .flatMap((f) => (JSON.parse(readFileSync(join(CONTRACT, "vectors", f), "utf8")).vectors as Vector[]).map((v) => ({ ...v, file: f })));
-const na = (e: Json) => e !== null && typeof e === "object" && "not_applicable" in e;
-const applicable = vectors.filter((v) => !na(v.expect[PART]));
+const applicable = forPart(PART);
 
 // ---- adapters: one per rule; each returns the part's observed outcome in the vector's vocabulary ----
 const SEAT = "9001";
@@ -162,21 +141,9 @@ const adapters: Record<string, (i: Json, want: Json) => Promise<Json> | Json> = 
 
 describe("contract files", () => {
   it("are well formed: unique ids, all three parts named, reasons for not_applicable, known quirks", () => {
-    const quirks = new Set((rules.quirks as Json[]).map((q) => q.id));
-    const defects = new Set((rules.known_defects as Json[]).map((d) => d.id));
-    expect(new Set(vectors.map((v) => v.id)).size).toBe(vectors.length);
-    for (const v of vectors) {
-      expect(Object.keys(v.expect).sort(), v.id).toEqual([...PARTS].sort());
-      for (const p of PARTS) if (na(v.expect[p])) expect(Object.keys(v.expect[p]).length === 1 && typeof v.expect[p].not_applicable === "string" && v.expect[p].not_applicable.length > 0, v.id).toBe(true);
-      for (const q of v.quirks ?? []) expect(quirks.has(q), `${v.id}: ${q}`).toBe(true);
-      if (v.status !== undefined) {
-        expect(v.status, v.id).toBe("known_defect");
-        expect(defects.has((v as Json).defect), v.id).toBe(true);
-        expect(typeof v.target === "object" && v.target !== null, v.id).toBe(true);
-      }
-    }
-    const used = new Set(vectors.flatMap((v) => v.quirks ?? []));
-    expect([...quirks].filter((q) => !used.has(q))).toEqual([]);
+    // lib/contract-vectors.ts throws on load for any malformed vector; here every quirk must also be pinned.
+    expect(vectors.length).toBeGreaterThan(0);
+    expect(unreferencedQuirks()).toEqual([]);
   });
   it("constants match imd-flop's source", () => {
     const c = rules.constants;

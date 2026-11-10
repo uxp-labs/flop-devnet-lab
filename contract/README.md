@@ -9,7 +9,7 @@ This folder holds data and its format only; the loaders are test code outside it
 
 | Part | Test | Loader |
 |---|---|---|
-| imd-flop | `imd-flop/test/contract.test.ts` | inline in that test |
+| imd-flop | `imd-flop/test/contract.test.ts` | `imd-flop/test/lib/contract-vectors.ts` |
 | spend-guard | `spend-guard/test_contract_vectors.py` | `testlib/contract_vectors.py` |
 | viewer | `viewer/test_contract_vectors.py` | `testlib/contract_vectors.py` |
 
