@@ -1,6 +1,6 @@
 {
   "scenario": "status-conflict",
   "description": "Synthetic conflict: faucet reports the pinned genesis, RPC reports another.",
-  "now": "2026-11-09T23:47:41Z",
+  "now": "2026-11-09T23:47:53Z",
   "synthetic": true
 }

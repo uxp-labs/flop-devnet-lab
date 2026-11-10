@@ -1,0 +1,11 @@
+{
+  "scenario": "census-event-pages-link",
+  "description": "Synthetic, made up for a test. Request 0 to 199. The pinned genesis is the FLOP devnet genesis (DEVNET_GENESIS in src/status.ts); every event and block hash is made up. Clause numbers refer to RULES.md section 3.1. event-pages is a symbolic link to the folder link-target, which holds one valid page, page 0 for blocks 0 to 199 with a release. event-pages must be a real folder, not a link (clause 15), so nothing behind it is read and the whole census refuses. Expected: the census refuses; no totals.",
+  "now": "2026-11-10T00:00:00.000Z",
+  "synthetic": true,
+  "census_request": {
+    "from_block": 0,
+    "to_block": 199
+  },
+  "pinned_genesis": "0x99c172c095340ace980631f9123544c6bebd4839f3437e463533422d8be2d631"
+}

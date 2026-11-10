@@ -1,0 +1,11 @@
+{
+  "scenario": "census-byte-order-mark",
+  "description": "Synthetic, made up for a test. Request 0 to 99. The pinned genesis is the FLOP devnet genesis (DEVNET_GENESIS in src/status.ts); every event and block hash is made up. Clause numbers refer to RULES.md section 3.1. 00-page-0.json holds page 0 for blocks 0 to 99 with a release, and is valid JSON after its first three bytes, a UTF-8 byte order mark. RFC 8259 JSON text carries no byte order mark, and a page file is read as strict UTF-8 standard JSON (clause 12), so the file cannot be parsed and refuses the whole census. Expected: the census refuses; no totals.",
+  "now": "2026-11-10T00:00:00.000Z",
+  "synthetic": true,
+  "census_request": {
+    "from_block": 0,
+    "to_block": 99
+  },
+  "pinned_genesis": "0x99c172c095340ace980631f9123544c6bebd4839f3437e463533422d8be2d631"
+}

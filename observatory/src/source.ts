@@ -10,7 +10,7 @@
 //   rpc-head.json           RpcHead
 //   runtime-constants.json  RuntimeConstants
 //   event-pages/*.json      EventPage, one page per file, read in file-name order
-import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { existsSync, lstatSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import type {
   EventPage,
@@ -110,10 +110,13 @@ export class FixtureSource implements Source {
       const path = join(dir, name);
       if (!existsSync(path)) return undefined;
       try {
-        return JSON.parse(readFileSync(path, "utf8")) as T;
+        // RFC 8259 JSON text is UTF-8: decode strictly, so an invalid byte refuses instead of
+        // turning into U+FFFD, and keep a byte order mark so JSON.parse refuses it as Python does.
+        const text = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(readFileSync(path));
+        return JSON.parse(text) as T;
       } catch (e) {
         // The parser's own wording changes between Node versions, so outputs say only this.
-        const reason = e instanceof SyntaxError ? "not valid JSON" : (e as Error).message;
+        const reason = e instanceof SyntaxError || e instanceof TypeError ? "not valid JSON" : (e as Error).message;
         for (const list of errors) list.push(`${name}: ${reason}`);
         return undefined;
       }
@@ -122,7 +125,19 @@ export class FixtureSource implements Source {
     if (!meta) throw new Error(`fixture ${dir} has no readable meta.json`);
     const pagesDir = join(dir, "event-pages");
     let eventPages: EventPage[] | undefined;
-    if (existsSync(pagesDir)) {
+    let pagesStat: ReturnType<typeof lstatSync> | null = null;
+    try {
+      pagesStat = lstatSync(pagesDir);
+    } catch {
+      pagesStat = null;
+    }
+    if (pagesStat && !pagesStat.isDirectory()) {
+      // RULES.md 3.1 clause 15: event-pages must be a real folder. A file or a link refuses.
+      const why = "event-pages: not a folder (it must be a real folder, not a file or a link)";
+      loadErrors.push(why);
+      pageErrors.push(why);
+      eventPages = [];
+    } else if (pagesStat) {
       eventPages = [];
       const entries = readdirSync(pagesDir, { withFileTypes: true }).sort((x, y) => (x.name < y.name ? -1 : x.name > y.name ? 1 : 0));
       for (const entry of entries) {

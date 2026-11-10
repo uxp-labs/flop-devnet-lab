@@ -5,9 +5,10 @@
 //   { "id", "file", "find", "replace", "test", "why" }
 // with "file" and "test" relative to the observatory package.
 //
-// 1. Copy the repo layout the tests read into one temp directory: the observatory package and
-//    its sibling folders (interfaces/, imd-flop/ and the rest), without .git, node_modules,
-//    check-runs, dist or private builds. node_modules is linked, not copied.
+// 1. Copy the repo layout the tests read into one temp directory: every file git tracks, in the
+//    observatory package and its sibling folders (interfaces/, imd-flop/ and the rest), and
+//    nothing untracked (scripts/tracked.mjs). node_modules is linked, not copied. If the copy
+//    cannot be made, the report says "setup-failed" and nothing else runs.
 // 2. Control: run every named test file in that copy, unmutated. Every file must pass. If the
 //    control fails, no kill counts, because a failure could come from the copy, not the mutant.
 // 3. Each mutant: apply the one exact replacement ("find" must occur exactly once), run the named
@@ -19,15 +20,15 @@
 // Usage: node scripts/mutate.mjs [mutants/escrow.json ...]   (default: all mutants/*.json)
 // Prints one JSON object. Exit 1 if a control fails or any mutant is not killed.
 import { spawnSync } from "node:child_process";
-import { cpSync, existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { copyTracked } from "./tracked.mjs";
 
 const pkg = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const repo = dirname(pkg);
 const pkgName = basename(pkg);
-const SKIP = new Set([".git", "node_modules", "check-runs", "dist", "out"]);
 const HARNESS_ERROR = /unexpected network, write, sign or spend attempts/;
 const TIMEOUT_MS = 180_000;
 
@@ -79,13 +80,9 @@ function runVitest(tests, label) {
 }
 
 function setup() {
-  cpSync(repo, copy, {
-    recursive: true,
-    // Keep symbolic links exactly as committed (relative), so the copy is the repo, not a view of it.
-    verbatimSymlinks: true,
-    filter: (p) => !relative(repo, p).split("/").some((part) => SKIP.has(part) || part.startsWith(".build-")),
-  });
+  const copied = copyTracked(repo, copy);
   symlinkSync(join(pkg, "node_modules"), join(copyPkg, "node_modules"));
+  return copied;
 }
 
 function control(tests, label) {
@@ -121,8 +118,18 @@ const results = [...problems];
 let bad = problems.length;
 let before = null;
 let after = null;
+let copied = null;
+let setupFailure = null;
 try {
-  setup();
+  try {
+    copied = setup();
+  } catch (e) {
+    setupFailure = e instanceof Error ? e.message : String(e);
+  }
+  if (setupFailure !== null) {
+    bad++;
+    throw new Error("setup failed");
+  }
   // A mutant naming a test file that does not exist is reported invalid below; the control
   // runs every named test file that does exist.
   const tests = [...new Set(mutants.map((m) => m.test))].filter((t) => existsSync(join(copyPkg, t))).sort();
@@ -187,6 +194,8 @@ try {
   }
   after = control(tests, "control-after");
   if (after.outcome !== "control-pass") bad++;
+} catch (e) {
+  if (setupFailure === null) throw e;
 } finally {
   rmSync(work, { recursive: true, force: true });
 }
@@ -199,11 +208,10 @@ const summary = {
   load_error: count("load-error"),
   invalid: count("invalid"),
   other: results.length - count("killed") - count("survived") - count("load-error") - count("invalid"),
+  setup: setupFailure === null ? "setup-pass" : "setup-failed",
   control_before: before?.outcome ?? "not-run",
   control_after: after?.outcome ?? "not-run",
 };
-const layout = existsSync(repo)
-  ? readdirSync(repo).filter((n) => !SKIP.has(n) && !n.startsWith(".build-")).sort()
-  : [];
-console.log(JSON.stringify({ layout, control_before: before, control_after: after, summary, results }, null, 2));
+const copyReport = setupFailure === null ? { outcome: "setup-pass", ...copied } : { outcome: "setup-failed", detail: clean(setupFailure) };
+console.log(JSON.stringify({ copy: copyReport, control_before: before, control_after: after, summary, results }, null, 2));
 process.exit(bad ? 1 : 0);

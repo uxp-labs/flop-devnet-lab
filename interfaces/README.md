@@ -69,6 +69,12 @@ Known limits (v0):
   suspect: a finalized release or refund out of range that names an escrow leaves it `unverified`.
 - When `finalized_height` is `null` and there is evidence, a note says the evidence is not bounded
   by a finalized height. Treat such a result as weaker. Do not act on it for a real spend.
+- Integers beyond 2^53 - 1 are not trusted: such an event is malformed and such a page is invalid.
+- Two distinct finalized opens for one escrow are conflicting evidence, whatever else exists.
+- A finalized release or refund above the finalized height is not evidence yet, and it leaves the
+  escrow it names `unverified`.
+- A page file that is not strict UTF-8 JSON, a page whose block range starts below 0, and an
+  `event-pages` that is not a real folder each leave every escrow `unverified`.
 - Amount, payee and policy are not checked here. FlopRail's `verifyLock` does that. Use both.
 
 ## NetworkStatus

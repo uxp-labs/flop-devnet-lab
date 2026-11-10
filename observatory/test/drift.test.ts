@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { drift, DriftSpecError, parseSpec, type DriftOptions } from "../src/drift.js";
+import { drift, DriftSpecError, parseSpec, SpecDecimal, type DriftOptions } from "../src/drift.js";
 import { FixtureSource } from "../src/source.js";
 import type { DriftItem, DriftReport, RuntimeConstants } from "../src/types.js";
 
@@ -114,6 +114,28 @@ describe("drift fixtures", () => {
     expect([report.matches, report.mismatches, report.unknown]).toEqual([10, 0, 3]);
     expect(meta.description).toContain("Expected: items 13; matches 10; mismatches 0; unknown 3");
     checkInvariants(report);
+  });
+
+  it("drift-long-decimal: decimals longer than a JS number keeps are read exactly, never matched from a rounded value", async () => {
+    const { meta, report } = await loadFixture("drift-long-decimal");
+    expect(report.items.map((i) => [i.param, i.status, i.expected, i.spec])).toEqual([
+      ["p_short_decimal", "match", "50000000000000000", 0.05],
+      ["p_exact_long", "match", "1000000000000000001", "1.000000000000000001"],
+      ["p_mismatch", "mismatch", "1200000000000000000001000", "1200000.000000000000001"],
+      ["p_tiny_fraction", "unknown", null, "1.0000000000000000001"],
+    ]);
+    expect([report.matches, report.mismatches, report.unknown]).toEqual([2, 1, 1]);
+    expect(meta.description).toContain("Expected: items 4; matches 2; mismatches 1; unknown 1.");
+    expect(site(report, "p_tiny_fraction").note).toContain("does not say how it rounds");
+    checkInvariants(report);
+  });
+
+  it("drift-long-decimal's spec still holds the long literals, which a JS number cannot hold", () => {
+    const text = readFileSync(join(FIXTURES, "drift-long-decimal", "spec.yaml"), "utf8");
+    for (const literal of ["1.000000000000000001", "1200000.000000000000001", "1.0000000000000000001"]) {
+      expect(text).toContain(`value: ${literal}\n`);
+      expect(String(Number(literal))).not.toBe(literal);
+    }
   });
 
   it("reports carry observed_at, trust, the spec source and what the runtime constants say about themselves", async () => {
@@ -302,6 +324,64 @@ describe("reading runtime values exactly", () => {
     expect(site(differ, "halving_interval_blocks").note).toContain("two key spellings");
     const same = drift(EXCERPT, rc({ ...allMatch(), "BlockRewards.HalvingIntervalBlocks": "63072000" }), OPTS);
     expect(site(same, "halving_interval_blocks").status).toBe("match");
+  });
+});
+
+describe("reading spec decimals exactly", () => {
+  it("keeps every number that is not an integer with its source text, so no spec value is a bare JS number", () => {
+    const parsed = parseSpec(EXCERPT);
+    const values = parsed.entries.map((e) => (e as { value?: unknown }).value);
+    expect(values.filter((v) => typeof v === "number")).toEqual([]);
+    const ack = parsed.entries.find((e) => (e as { name?: string }).name === "min_force_open_escrow_for_failed_ack") as { value: unknown };
+    expect(ack.value).toBeInstanceOf(SpecDecimal);
+    expect((ack.value as SpecDecimal).source).toBe("0.05");
+  });
+
+  it("reads underscores, exponents and a leading or trailing point exactly", () => {
+    const text = spec(
+      entry("u", "{constants: [P.U], multiplier: 2}", "1_000.5") +
+        entry("e", "{constants: [P.E]}", "2e-7", "FLOP") +
+        entry("l", "{constants: [P.L], multiplier: 4}", ".5") +
+        entry("t", "{constants: [P.T]}", "3."),
+    );
+    const rep = drift(text, rc({ "p.u": 2001, "p.e": "200000000000", "p.l": 2, "p.t": 3 }), OPTS);
+    expect(rep.items.map((i) => [i.param, i.status, i.expected])).toEqual([
+      ["u", "match", "2001"],
+      ["e", "match", "200000000000"],
+      ["l", "match", "2"],
+      ["t", "match", "3"],
+    ]);
+  });
+
+  it("a decimal that is whole works as an integer for meta.decimals and multiplier", () => {
+    const text = spec(entry("p", "{constants: [P.C], multiplier: 1.0e7}", "5", "percent") + entry("f", "{constants: [P.F]}", "2", "FLOP"), "meta:\n  decimals: 18.0\n");
+    const rep = drift(text, rc({ "p.c": 50000000, "p.f": "2000000000000000000" }), OPTS);
+    expect(rep.items.map((i) => i.status)).toEqual(["match", "match"]);
+  });
+
+  it("infinity, not a number and sexagesimal decimals are unknown, never a number", () => {
+    const text = spec(entry("i", "{constants: [P.I]}", ".inf") + entry("n", "{constants: [P.N]}", ".nan") + entry("s", "{constants: [P.S]}", "1:30.5"));
+    const rep = drift(text, rc({ "p.i": 1, "p.n": 1, "p.s": 90 }), OPTS);
+    expect(rep.items.map((i) => i.status)).toEqual(["unknown", "unknown", "unknown"]);
+    expect(rep.items.every((i) => i.note?.includes("is not a number"))).toBe(true);
+  });
+
+  it("the spec field is the source text whenever a JS number would round the value", () => {
+    const text = spec(entry("short", "{constants: [P.A]}", "0.1") + entry("long", "{constants: [P.B]}", "0.10000000000000000001"));
+    const rep = drift(text, null, OPTS);
+    expect(rep.items.map((i) => i.spec)).toEqual([0.1, "0.10000000000000000001"]);
+    expect(JSON.parse(JSON.stringify(rep))).toEqual(rep);
+  });
+
+  it("a long decimal that is a whole number of base units matches exactly, one base unit off does not", () => {
+    const text = spec(entry("x", "{constants: [P.X]}", "1.000000000000000001", "FLOP"));
+    expect(drift(text, rc({ "p.x": "1000000000000000001" }), OPTS).items[0]!.status).toBe("match");
+    expect(drift(text, rc({ "p.x": "1000000000000000000" }), OPTS).items[0]!.status).toBe("mismatch");
+  });
+
+  it("a plain JS number in a spec built in code reads from its shortest decimal form", () => {
+    const built = { decimals: 18n, entries: [{ name: "x", value: 0.05, unit: "FLOP", on_chain: { constants: ["P.X"] } }] };
+    expect(drift(built, rc({ "p.x": "50000000000000000" }), OPTS).items[0]!.status).toBe("match");
   });
 });
 

@@ -18,9 +18,18 @@
 // 5. Every value sits where a person reads it: labeled rows bind th to td by data-for and read the
 //    key's label, escrow cards and drift rows hold only their own cells.
 // 6. The census is internally consistent: complete only with no gaps, and totals labeled the same.
+// 7. Nothing on the page is hidden (IMD audit finding 12): no comment and no other <! markup but
+//    the doctype, only the elements and attributes the renderer writes, and only its one
+//    stylesheet (PAGE_CSS in src/page.ts, which test/page.test.ts reviews), so no value can sit
+//    in a comment, a hidden element or a rule that hides it.
+// 8. Every value sits in its own section: each table names its section (data-section), holds only
+//    that section's cells and sits under that section's heading, the headings come in order, and
+//    the drift item table names each column once, reads it, and every item row holds its cells
+//    in that order.
 // Prints {"dir", "checks", "keys", "failures"}; exit 1 on any failure.
 import { readFileSync } from "node:fs";
 import { basename, join, resolve } from "node:path";
+import { PAGE_CSS } from "../dist/page.js";
 import { canonicalJson, hashSnapshot } from "../dist/store.js";
 
 const dir = resolve(process.argv[2] ?? "out");
@@ -107,6 +116,7 @@ const attr = (attrs, name) => {
   const m = new RegExp(`\\b${name}="([^"]*)"`).exec(attrs);
   return m ? unescape(m[1]) : null;
 };
+const keysIn = (fragment) => [...fragment.matchAll(/\bdata-k="([^"]*)"/g)].map((m) => unescape(m[1]));
 const cells = new Map();
 const marked = [];
 // Each marked element's visible text runs to its closing tag, nested tags included, so a value
@@ -154,7 +164,6 @@ for (const m of html.matchAll(/<([a-z][a-z0-9]*)\b([^>]*\bdata-k="[^"]*"[^>]*)>/
     const label = rest.replace(/[._]/g, " ");
     return partialCensus && key.startsWith("census.totals.") ? `partial ${label}` : label;
   };
-  const keysIn = (fragment) => [...fragment.matchAll(/\bdata-k="([^"]*)"/g)].map((m) => unescape(m[1]));
   const inRow = new Set();
   for (const row of html.matchAll(/<tr\b([^>]*)>([\s\S]*?)<\/tr>/g)) {
     const body = row[2];
@@ -337,6 +346,91 @@ else required.push("drift.observed_at", "drift.trust", "drift.mismatches", "drif
 for (const k of required) {
   checks++;
   if (!cells.has(k)) failures.push({ what: `page shows ${k}`, detail: "required key missing" });
+}
+
+// 7. Nothing on the page is hidden.
+{
+  const bangs = [...html.matchAll(/<!/g)].map((m) => m.index);
+  expectSame("the page holds no comment or other <! markup but the doctype", bangs, [0]);
+  expectEq("the page starts with the doctype", html.slice(0, 15).toLowerCase(), "<!doctype html>");
+  const styles = [...html.matchAll(/<style\b[^>]*>([\s\S]*?)<\/style>/g)];
+  expectEq("the page has one stylesheet", styles.length, 1);
+  if (styles.length === 1) expectEq("the stylesheet is the renderer's own, which hides nothing", styles[0][1], PAGE_CSS);
+  const TAGS = new Set(["html", "head", "meta", "title", "style", "body", "h1", "h2", "p", "code", "span", "div", "table", "tr", "th", "td"]);
+  const ATTRS = new Set(["lang", "charset", "name", "content", "class", "scope", "aria-label", "data-k", "data-v", "data-n", "data-for", "data-row", "data-section", "data-col", "data-escrow"]);
+  const markup = html.replace(/<style\b[^>]*>[\s\S]*?<\/style>/g, "<style></style>");
+  for (const m of markup.matchAll(/<(\/?)([a-zA-Z][^\s/>]*)([^>]*)>/g)) {
+    checks++;
+    const tag = m[2].toLowerCase();
+    if (!TAGS.has(tag)) {
+      failures.push({ what: "the page uses only the elements the renderer writes", detail: m[0].slice(0, 120) });
+      continue;
+    }
+    if (m[1] === "/") continue;
+    const rest = m[3].replace(/\s+([a-z][a-z-]*)="[^"]*"/g, (_all, name) => {
+      if (!ATTRS.has(name)) failures.push({ what: "the page uses only the attributes the renderer writes", detail: `${name} on <${tag}>` });
+      return "";
+    });
+    if (rest.trim() !== "") failures.push({ what: "the page uses only the attributes the renderer writes", detail: `<${tag}> ${rest.trim().slice(0, 80)}` });
+  }
+}
+
+// 8. Every value sits in its own section.
+{
+  const HEADINGS = [
+    ["status", "Network status"],
+    ["escrow", "Escrows"],
+    ["census", "Census"],
+    ["drift", "Spec drift"],
+  ];
+  const headingOf = Object.fromEntries(HEADINGS);
+  const h2s = [...html.matchAll(/<h2\b[^>]*>([\s\S]*?)<\/h2>/g)].map((m) => ({ at: m.index, text: unescape(m[1].replace(/<[^>]*>/g, "")) }));
+  expectSame("the section headings, in order", h2s.map((h) => h.text), HEADINGS.map(([, t]) => t));
+  // The intro line and the census banner are the only values outside a section table.
+  const OUTSIDE = new Set(["snapshot.hash", "snapshot.observed_at", "snapshot.trust", "census.status"]);
+  const inSection = new Set();
+  const tables = [...html.matchAll(/<table\b([^>]*)>([\s\S]*?)<\/table>/g)];
+  for (const t of tables) {
+    const section = attr(t[1], "data-section");
+    if (section === null || !(section in headingOf)) {
+      fail("every table names its section (data-section)", t[0].slice(0, 120));
+      continue;
+    }
+    const heading = h2s.filter((h) => h.at < t.index).at(-1)?.text ?? null;
+    expectEq(`a ${section} table sits under the ${headingOf[section]} heading`, heading, headingOf[section]);
+    for (const k of keysIn(t[2])) {
+      checks++;
+      inSection.add(k);
+      if (k !== section && !k.startsWith(`${section}.`)) failures.push({ what: `a ${section} table holds only ${section} cells`, detail: k });
+    }
+  }
+  for (const k of cells.keys()) {
+    if (OUTSIDE.has(k)) continue;
+    checks++;
+    if (!inSection.has(k)) failures.push({ what: `cell ${k} sits in a section table`, detail: "outside every data-section table" });
+  }
+  if (snapshot.drift !== null) {
+    const itemTables = tables.filter((t) => /<th\b[^>]*\bdata-col="/.test(t[2]));
+    expectEq("the page has one drift item table", itemTables.length, 1);
+    const t = itemTables[0];
+    if (t) {
+      expectEq("the drift item table is in the drift section", attr(t[1], "data-section"), "drift");
+      const header = /<tr\b[^>]*>([\s\S]*?)<\/tr>/.exec(t[2]);
+      const cols = [...(header?.[1] ?? "").matchAll(/<th\b([^>]*)>([\s\S]*?)<\/th>/g)].map((m) => ({ col: attr(m[1], "data-col"), text: unescape(m[2].replace(/<[^>]*>/g, "")) }));
+      for (const c of cols) expectEq(`drift column ${c.col} reads its field`, c.text, String(c.col).replace(/_/g, " "));
+      const names = cols.map((c) => c.col);
+      expectEq("each drift column is named once", new Set(names).size, names.length);
+      snapshot.drift.items.forEach((item, i) => {
+        expectSame(`drift item ${i} shows every field as a column`, Object.keys(item).sort(), [...names].sort());
+        const row = new RegExp(`<tr\\b[^>]*\\bdata-row="drift\\.${i}"[^>]*>([\\s\\S]*?)<\\/tr>`).exec(t[2]);
+        if (!row) {
+          fail(`drift item ${i} has its row in the item table`, "no row");
+          return;
+        }
+        expectSame(`drift row ${i} holds its cells in the header's column order`, keysIn(row[1]).map((k) => k.slice(`drift.${i}.`.length)), names);
+      });
+    }
+  }
 }
 
 // 6. Census internal consistency.

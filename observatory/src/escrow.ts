@@ -47,6 +47,7 @@ import type {
   EventPage,
   RawEvent,
 } from "./types.js";
+import { isSafeInt } from "./strict.js";
 
 export const ESCROW_SCOPE = "settlement only; says nothing about output quality" as const;
 export const ESCROW_SCHEMA = "flop-observatory/escrow-state@0" as const;
@@ -96,16 +97,15 @@ function readEscrowId(data: unknown): IdRead {
 function structureProblem(ev: Record<string, unknown>): string | null {
   if (!isLowerHash32(ev["block_hash"])) return "block_hash is not 0x plus 64 lower case hex";
   const index = ev["index"];
-  if (typeof index !== "number" || !Number.isInteger(index) || index < 0) return "index is not a whole number";
+  // Integers follow census clause 14: an unsafe integer (beyond 2^53 - 1) is not trusted,
+  // because JSON parsing has already rounded it.
+  if (!isSafeInt(index) || index < 0) return "index is not a safe whole number";
   const n = ev["block_number"];
-  if (n !== null && n !== undefined && (typeof n !== "number" || !Number.isInteger(n) || n < 0)) {
-    return "block_number is not a whole number or null";
+  // A negative block_number is an integer. The page range rule deals with it, not this one.
+  if (n !== null && n !== undefined && !isSafeInt(n)) {
+    return "block_number is not a safe integer or null";
   }
   return null;
-}
-
-function isInt(value: unknown): value is number {
-  return typeof value === "number" && Number.isInteger(value);
 }
 
 /** Census clause 12: why a page is structurally invalid, or null when it is valid. */
@@ -113,12 +113,14 @@ export function pageProblem(page: unknown): string | null {
   if (!isRecord(page)) return "not an object";
   if (typeof page["genesis"] !== "string") return "genesis is not a string";
   for (const k of ["from_block", "to_block", "page"]) {
-    if (!isInt(page[k])) return `${k} is missing or not a whole number`;
+    if (!isSafeInt(page[k])) return `${k} is missing or not a safe whole number`;
   }
-  if (!("next_page" in page) || (page["next_page"] !== null && !isInt(page["next_page"]))) {
-    return "next_page is missing or not a whole number or null";
+  if (!("next_page" in page) || (page["next_page"] !== null && !isSafeInt(page["next_page"]))) {
+    return "next_page is missing or not a safe whole number or null";
   }
   if ((page["page"] as number) < 0) return "page is negative";
+  // Block numbers start at 0, so a page whose range starts below 0 describes no real blocks.
+  if ((page["from_block"] as number) < 0) return "from_block is negative";
   if (!Array.isArray(page["events"])) return "events is not a list";
   if ((page["from_block"] as number) > (page["to_block"] as number)) return "block range is inverted";
   return null;
@@ -127,7 +129,7 @@ export function pageProblem(page: unknown): string | null {
 function describePage(page: unknown, position: number): string {
   const where = `page at position ${position}`;
   if (!isRecord(page)) return where;
-  const show = (v: unknown) => (isInt(v) ? String(v) : "?");
+  const show = (v: unknown) => (isSafeInt(v) ? String(v) : "?");
   return `${where} (blocks ${show(page["from_block"])} to ${show(page["to_block"])}, page ${show(page["page"])})`;
 }
 
@@ -326,7 +328,13 @@ export function escrowState(
       continue;
     }
     if (height !== null && copies.some((c) => c.block_number !== null && c.block_number > height)) {
+      // The page calls it final, but our finalized head does not reach it yet. Never evidence.
+      // A release or refund there still names this escrow, so it leaves the escrow unverified.
       aboveHeight++;
+      if (method !== OPENED) {
+        const what = method === RELEASED ? "release" : "refund";
+        conflicts.push(`a finalized ${what} above the finalized height names this escrow (${where})`);
+      }
       continue;
     }
     clean.push({
@@ -346,7 +354,7 @@ export function escrowState(
   }
   if (pending > 0) notes.push(`${plural(pending, "event")} for this escrow not finalized: pending, not proof`);
   if (aboveHeight > 0) {
-    notes.push(`${plural(aboveHeight, "event")} above the finalized height ignored`);
+    notes.push(`${plural(aboveHeight, "event")} above the finalized height: not evidence`);
   }
   if (outsideRange > 0) {
     notes.push(`${plural(outsideRange, "event")} outside its page's block range: never evidence`);
@@ -367,6 +375,8 @@ export function escrowState(
   }
   if (released.length > 1) conflicts.push("more than one distinct finalized release for this escrow");
   if (refunded.length > 1) conflicts.push("more than one distinct finalized refund for this escrow");
+  // Two distinct opens conflict whether or not a release or refund exists.
+  if (opened.length > 1) conflicts.push("more than one distinct finalized open for this escrow");
 
   if (conflicts.length === 0) {
     if (released.length === 1) {
@@ -383,8 +393,6 @@ export function escrowState(
         state = "refunded";
         evidence = [...(opened.length === 1 ? opened : []), ...refunded];
       }
-    } else if (opened.length > 1) {
-      conflicts.push("more than one distinct finalized open for this escrow");
     } else if (opened.length === 1) {
       if (suspectTerminals.size > 0) {
         conflicts.push("a malformed finalized terminal event could be about this escrow");

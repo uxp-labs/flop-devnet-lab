@@ -260,6 +260,18 @@ class RecountTests(unittest.TestCase):
             self.assertEqual(run(d, 1, 2 ** 53)[0], 2)
             self.assertEqual(run(d, 2 ** 53, 2 ** 53 + 1)[0], 2)
 
+    def test_negative_from_block_refuses(self):
+        ev = {"block_number": -5, "block_hash": "0x" + "01" * 32, "finalized": True, "index": 0,
+              "section": "hasStation", "method": "EscrowOpened", "data": {"who": "a"}}
+        with tempfile.TemporaryDirectory() as d:
+            self._page_dir(d, from_block=-10, events=[ev])
+            code, _, err = run(d, 0, 5)
+            self.assertEqual(code, 2)
+            self.assertIn("bad page number or block range", err)
+        with tempfile.TemporaryDirectory() as d:
+            self._page_dir(d, from_block=0)
+            self.assertEqual(run(d, 0, 5)[0], 0)
+
     def test_unsafe_event_integers_are_malformed(self):
         base = {"block_number": 2, "block_hash": "0x" + "01" * 32, "finalized": True, "index": 0,
                 "section": "hasStation", "method": "EscrowOpened", "data": {"who": "a"}}
@@ -321,6 +333,60 @@ class RecountTests(unittest.TestCase):
             self._page_dir(d)
             os.symlink(other, os.path.join(d, "event-pages", "dirlink"))
             self.assertEqual(run(d, 1, 5)[0], 2)
+
+    def _ev(self, bn, idx=0, h="ab", **kw):
+        e = {"block_number": bn, "block_hash": "0x" + h * 32, "finalized": True, "index": idx,
+             "section": "hasStation", "method": "EscrowOpened", "data": {"who": "a"}}
+        e.update(kw)
+        return e
+
+    def test_mixed_copies_are_malformed_all_outside_skipped(self):
+        # Page covers 1..10, request 1..10. Copies of one key: block 5 (inside) and 50 (outside).
+        mixed1 = [self._ev(5), self._ev(50)]
+        mixed2 = [self._ev(5, idx=1, h="cd"), self._ev(50, idx=1, h="cd"), self._ev(60, idx=1, h="cd")]
+        outside = [self._ev(70, idx=2, h="ef"), self._ev(71, idx=2, h="ef")]
+        fine = [self._ev(3, idx=3, h="12")]
+        with tempfile.TemporaryDirectory() as d:
+            self._page_dir(d, to_block=10, events=mixed1 + mixed2 + outside + fine)
+            r = json.loads(run(d, 1, 10)[1])
+            self.assertEqual(r["malformed_dropped"], 2)
+            self.assertEqual(r["duplicates_dropped"], 1 + 2)
+            self.assertEqual(r["totals"]["escrows_opened"], 1)
+            self.assertEqual(r["pending_unfinalized"], 0)
+
+    def test_mixed_by_request_range(self):
+        # Page covers 1..10 but the request is 1..4; copies at 3 and 8 straddle the request.
+        with tempfile.TemporaryDirectory() as d:
+            self._page_dir(d, to_block=10, events=[self._ev(3), self._ev(8)])
+            r = json.loads(run(d, 1, 4)[1])
+            self.assertEqual((r["malformed_dropped"], r["duplicates_dropped"]), (1, 1))
+            self.assertEqual(r["totals"]["escrows_opened"], 0)
+
+    def test_malformed_and_out_of_range_is_skipped(self):
+        bad = self._ev(50)
+        del bad["section"]
+        inside_bad = self._ev(5, idx=1)
+        del inside_bad["section"]
+        with tempfile.TemporaryDirectory() as d:
+            self._page_dir(d, to_block=10, events=[bad, inside_bad])
+            r = json.loads(run(d, 1, 10)[1])
+            self.assertEqual(r["malformed_dropped"], 1)
+
+    def test_event_pages_must_be_a_folder(self):
+        with tempfile.TemporaryDirectory() as d:  # regular file
+            with open(os.path.join(d, "event-pages"), "w") as f:
+                f.write("x")
+            code, out, err = run(d, 1, 5)
+            self.assertEqual(code, 2)
+            self.assertIn("event-pages", err)
+        with tempfile.TemporaryDirectory() as d, tempfile.TemporaryDirectory() as other:  # link to a folder
+            self._page_dir(other)
+            os.symlink(os.path.join(other, "event-pages"), os.path.join(d, "event-pages"))
+            self.assertEqual(run(d, 1, 5)[0], 2)
+        with tempfile.TemporaryDirectory() as d:  # missing folder is still just no pages
+            code, out, _ = run(d, 1, 5)
+            self.assertEqual(code, 0)
+            self.assertFalse(json.loads(out)["complete"])
 
     def test_output_is_deterministic(self):
         a = run(os.path.join(DATA, "gap"), 1, 30)[1]

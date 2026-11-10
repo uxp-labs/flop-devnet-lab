@@ -1,5 +1,5 @@
 // The snapshot builder and the fixture source: the plumbing between the modules.
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -9,7 +9,7 @@ import { FixtureSource } from "../src/source.js";
 import { DEVNET_GENESIS } from "../src/status.js";
 
 const fx = (name: string) => FixtureSource.fromDir(fileURLToPath(new URL(`../fixtures/${name}`, import.meta.url)));
-const NOW = "2026-11-09T23:47:41Z";
+const NOW = "2026-11-09T23:47:53Z";
 const opts = { pinnedGenesis: DEVNET_GENESIS, now: NOW, sourceSha: "test" };
 
 describe("fixture source: unreadable event pages are reported, never dropped", () => {
@@ -43,6 +43,62 @@ describe("fixture source: unreadable event pages are reported, never dropped", (
         "event-pages/sub.json",
       ]);
       expect(errors.every((e) => /not a page file/.test(e))).toBe(true);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  const scenario = (setup: (dir: string) => void) => {
+    const dir = mkdtempSync(join(tmpdir(), "obs-source-"));
+    writeFileSync(join(dir, "meta.json"), JSON.stringify({ scenario: "x", description: "synthetic", now: NOW, synthetic: true }));
+    setup(dir);
+    return dir;
+  };
+  const page = JSON.stringify({ genesis: DEVNET_GENESIS, from_block: 0, to_block: 9, page: 0, next_page: null, events: [] });
+
+  // The bad byte sits inside a string, where a lossy decoder would turn it into U+FFFD and the
+  // page would still parse: only a strict decoder refuses it.
+  const withName = JSON.stringify({
+    genesis: DEVNET_GENESIS, from_block: 0, to_block: 9, page: 0, next_page: null,
+    events: [{ block_number: 5, block_hash: "0x" + "09".repeat(32), finalized: true, index: 0, section: "hasStation", method: "EscrowReleased", data: { who: "alXXice" } }],
+  });
+  const [before, after] = withName.split("XX") as [string, string];
+
+  it("the invalid byte page would parse if decoded lossily, so the test below means something", () => {
+    const lossy = Buffer.concat([Buffer.from(before), Buffer.from([0xff]), Buffer.from(after)]).toString("utf8");
+    expect(() => JSON.parse(lossy)).not.toThrow();
+  });
+
+  it.each([
+    ["an invalid UTF-8 byte inside a string", Buffer.concat([Buffer.from(before), Buffer.from([0xff]), Buffer.from(after)])],
+    ["a byte order mark", Buffer.concat([Buffer.from([0xef, 0xbb, 0xbf]), Buffer.from(page)])],
+  ])("refuses a page file with %s instead of decoding around it", async (_name, bytes) => {
+    const dir = scenario((d) => {
+      mkdirSync(join(d, "event-pages"));
+      writeFileSync(join(d, "event-pages", "00.json"), bytes);
+    });
+    try {
+      const src = FixtureSource.fromDir(dir);
+      expect(await src.eventPages()).toEqual([]);
+      expect(await src.eventPageErrors()).toEqual(["event-pages/00.json: not valid JSON"]);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it.each([
+    ["a regular file", (d: string) => writeFileSync(join(d, "event-pages"), page)],
+    ["a link to a folder", (d: string) => {
+      mkdirSync(join(d, "real-pages"));
+      writeFileSync(join(d, "real-pages", "00.json"), page);
+      symlinkSync("real-pages", join(d, "event-pages"));
+    }],
+  ])("refuses event-pages that is %s (clause 15)", async (_name, make) => {
+    const dir = scenario(make);
+    try {
+      const src = FixtureSource.fromDir(dir);
+      expect(await src.eventPages()).toEqual([]);
+      expect((await src.eventPageErrors())[0]).toMatch(/^event-pages: not a folder/);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
@@ -98,6 +154,15 @@ describe("buildSnapshot", () => {
     expect(reset.escrows.every((e) => e.finalized_height === null)).toBe(true);
     const same = await buildSnapshot(parts("status-healthy"), opts);
     expect(same.escrows.every((e) => e.finalized_height === 3341575)).toBe(true);
+  });
+
+  it("passes the previous snapshot to the status checks: a rollback on the same genesis is a conflict", async () => {
+    const s = await buildSnapshot(
+      { status: fx("status-healthy") },
+      { ...opts, previous: { genesis: DEVNET_GENESIS, finalized_height: 3341600, finalized_hash: "0x" + "5e".repeat(32), observed_at: NOW } },
+    );
+    expect(s.status.rpc.health).toBe("degraded");
+    expect(s.status.conflicts.join(" ")).toMatch(/went backwards from 3341600 to 3341575/);
   });
 
   it("takes the pin's genesis from the RPC that gave the finalized head, never from the faucet", async () => {

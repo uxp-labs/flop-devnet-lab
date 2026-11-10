@@ -1,18 +1,24 @@
 #!/usr/bin/env node
 // Harness canary: proves the read-only harness itself bites.
-// In a temp copy of the package, throwaway tests each leave one forbidden attempt in the log:
-// a fetch, an https request, a net connection, a child process, a refused author_submitExtrinsic,
-// a refused signature and a refused spend. Each must make vitest fail with the
-// "unexpected ... attempts" error from test/setup.ts. If any passes, the harness is broken.
+// In a temp copy of the package's tracked files, throwaway tests each leave one forbidden attempt
+// in the log: a fetch, an https request, a net connection, a child process, a refused
+// author_submitExtrinsic, a refused signature and a refused spend. Each must make vitest fail
+// with the "unexpected ... attempts" error from test/setup.ts. Two more make their attempt from a
+// timer that fires after the file's final check (one also resets the log there); each must fail
+// the run from the journal check in test/global-setup.ts, and must prove its timer really fired.
+// The late timer runs once more with that journal check taken out of vitest.config.ts, where it
+// must pass: so the journal check, and nothing else, is what catches it.
+// If any canary passes, the harness is broken.
 // Hosts end in .invalid and the process is `true`, so even a broken harness reaches nothing.
 import { spawnSync } from "node:child_process";
-import { cpSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join, relative, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { copyTracked } from "./tracked.mjs";
 
 const pkg = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const skip = new Set(["node_modules", "check-runs", "dist", "out"]);
+const LATE_MARK = "LATE CANARY CALLBACK RAN";
 
 const leave = (imports, call) => `import { expect, it } from "vitest";
 ${imports}
@@ -29,6 +35,29 @@ const canaries = {
   "zz-canary-sign.test.ts": leave(`import { refuseSigning } from "../src/guard.js";`, `refuseSigning("escrow open")`),
   "zz-canary-spend.test.ts": leave(`import { refuseSpend } from "../src/guard.js";`, `refuseSpend("0.001 FLOP")`),
 };
+// An attempt after the file's final check: the file's own afterAll runs before the one in
+// test/setup.ts, so a timer it sets fires once every hook is done, out of reach of any afterAll.
+const late = (schedule, extra) => `import { afterAll, expect, it } from "vitest";
+import { resetAttempts } from "../src/guard.js";
+it("passes", () => {
+  expect(1).toBe(1);
+});
+afterAll(() => {
+  ${schedule}(() => {
+    try {
+      fetch("https://canary.invalid/fund");
+    } catch {
+      // swallowed on purpose: only the journal can still see this attempt
+    }
+    ${extra}
+    process.stderr.write("${LATE_MARK}\\n");
+  }${schedule === "setTimeout" ? ", 0" : ""});
+});
+`;
+const LATE = new Set(["zz-canary-late-timer.test.ts", "zz-canary-late-reset.test.ts"]);
+canaries["zz-canary-late-timer.test.ts"] = late("setTimeout", "");
+canaries["zz-canary-late-reset.test.ts"] = late("setImmediate", "resetAttempts();");
+
 // The control leaves nothing behind and must pass in the same kind of copy, so a caught canary
 // cannot be explained by a broken copy.
 const CONTROL = "zz-canary-control.test.ts";
@@ -38,12 +67,30 @@ it("leaves nothing in the log", () => {
 });
 `;
 
+const WITHOUT_CHECK = "zz-canary-late-timer.test.ts, journal check taken out";
+canaries[WITHOUT_CHECK] = canaries["zz-canary-late-timer.test.ts"];
+const GLOBAL_SETUP = '    globalSetup: ["test/global-setup.ts"],\n';
+
 const results = [];
 let bad = 0;
-for (const [name, body] of Object.entries(canaries)) {
+for (const [label, body] of Object.entries(canaries)) {
+  const name = label === WITHOUT_CHECK ? "zz-canary-late-timer.test.ts" : label;
   const tmp = mkdtempSync(join(tmpdir(), "obs-canary-"));
-  cpSync(pkg, tmp, { recursive: true, verbatimSymlinks: true, filter: (p) => !relative(pkg, p).split("/").some((x) => skip.has(x) || x.startsWith(".build-")) });
-  symlinkSync(join(pkg, "node_modules"), join(tmp, "node_modules"));
+  try {
+    copyTracked(pkg, tmp);
+    symlinkSync(join(pkg, "node_modules"), join(tmp, "node_modules"));
+    if (label === WITHOUT_CHECK) {
+      const config = join(tmp, "vitest.config.ts");
+      const text = readFileSync(config, "utf8");
+      if (text.split(GLOBAL_SETUP).length !== 2) throw new Error("vitest.config.ts does not hold the globalSetup line exactly once");
+      writeFileSync(config, text.replace(GLOBAL_SETUP, ""));
+    }
+  } catch (e) {
+    rmSync(tmp, { recursive: true, force: true });
+    bad++;
+    results.push({ canary: label, outcome: "setup-failed", detail: e instanceof Error ? e.message : String(e) });
+    continue;
+  }
   writeFileSync(join(tmp, "test", name), body);
   const r = spawnSync("npx", ["vitest", "run", `test/${name}`], {
     cwd: tmp,
@@ -56,6 +103,22 @@ for (const [name, body] of Object.entries(canaries)) {
     const pass = r.status === 0;
     if (!pass) bad++;
     results.push({ canary: name, exit: r.status, outcome: pass ? "control-pass" : "control-fail" });
+    continue;
+  }
+  if (label === WITHOUT_CHECK) {
+    const fired = out.includes(LATE_MARK);
+    const outcome = !fired ? "late-callback-never-ran" : r.status === 0 ? "missed-without-the-journal-check" : "failed-for-another-reason";
+    if (outcome !== "missed-without-the-journal-check") bad++;
+    results.push({ canary: label, exit: r.status, outcome });
+    continue;
+  }
+  if (LATE.has(name)) {
+    // The late attempt must really have happened, and the journal check must be what caught it.
+    const fired = out.includes(LATE_MARK);
+    const caught = r.status !== 0 && /unexpected network, write, sign or spend attempts after the last check/.test(out);
+    const outcome = !fired ? "late-callback-never-ran" : caught ? "harness-caught-it" : "harness-missed-it";
+    if (outcome !== "harness-caught-it") bad++;
+    results.push({ canary: name, exit: r.status, outcome });
     continue;
   }
   const caught = r.status !== 0 && /unexpected network, write, sign or spend attempts/.test(out);

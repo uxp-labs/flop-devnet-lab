@@ -1,6 +1,6 @@
 {
   "scenario": "status-faucet-503-ok-body",
   "description": "Synthetic: status-healthy with the faucet answering HTTP 503 while its body says status ok and ready true. Faucet health must be degraded.",
-  "now": "2026-11-09T23:47:41Z",
+  "now": "2026-11-09T23:47:53Z",
   "synthetic": true
 }

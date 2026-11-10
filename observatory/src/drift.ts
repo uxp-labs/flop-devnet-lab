@@ -18,7 +18,11 @@
 //
 // The YAML is parsed as YAML 1.1, the dialect of PyYAML that upstream uses. Under YAML 1.2 rules
 // a value written 63_072_000 is the string "63_072_000", not a number.
-import { parse } from "yaml";
+//
+// Numbers are read exactly: integers as BigInt, and every other number from the text it was
+// written as (SpecDecimal), because a JS number keeps only about 17 significant digits. A value
+// that cannot be read exactly is unknown, never a match from a rounded number.
+import { isScalar, parse, type ScalarTag, type Tags } from "yaml";
 import type { DriftItem, DriftReport, RuntimeConstants, Trust } from "./types.js";
 
 /** Thrown when the spec itself is unusable. A report with no items would look like no drift. */
@@ -54,18 +58,71 @@ function isObject(v: unknown): v is Record<string, unknown> {
   return typeof v === "object" && v !== null && !Array.isArray(v);
 }
 
-/** Integer from the parsed YAML (bigint) or from JSON (a safe integer), else null. */
+/**
+ * A YAML number that is not an integer, with the exact text it was written as. `approx` is the JS
+ * number, which may be rounded: 1.0000000000000000001 reads as 1. Nothing compares `approx`.
+ */
+export class SpecDecimal {
+  constructor(
+    readonly source: string,
+    readonly approx: number,
+  ) {}
+}
+
+/**
+ * Wraps every scalar tag so that a value read as a JS number keeps its source text. Some tags
+ * (the YAML 1.1 float) resolve to a Scalar node holding the number, so that is unwrapped first.
+ */
+function keepSource(tags: Tags): Tags {
+  return tags.map((t) => {
+    if (typeof t === "string" || t.collection !== undefined) return t;
+    const tag = t as ScalarTag;
+    const resolve = tag.resolve.bind(tag);
+    const wrapped: ScalarTag = {
+      ...tag,
+      resolve: (str, onError, options) => {
+        const v = resolve(str, onError, options);
+        const n = isScalar(v) ? v.value : v;
+        return typeof n === "number" ? new SpecDecimal(str, n) : v;
+      },
+    };
+    return wrapped;
+  });
+}
+
+/**
+ * An exact fraction from a decimal literal such as 0.05, 1_000.5, 2e-7 or .5, or null. A
+ * literal that is not plain decimal (.inf, .nan, sexagesimal 1:20.5) or has a huge exponent is null.
+ */
+function decimalText(text: string): Rational | null {
+  const m = /^([-+]?)(\d*)(?:\.(\d*))?(?:[eE]([-+]?\d+))?$/.exec(text.replace(/_/g, ""));
+  if (m === null) return null;
+  const whole = m[2] ?? "";
+  const fraction = m[3] ?? "";
+  if (whole === "" && fraction === "") return null;
+  const shift = Number(m[4] ?? "0") - fraction.length;
+  if (!Number.isSafeInteger(shift) || Math.abs(shift) > 400) return null;
+  const digits = BigInt(whole + fraction);
+  const signed = m[1] === "-" ? -digits : digits;
+  return shift >= 0 ? { num: signed * 10n ** BigInt(shift), den: 1n } : { num: signed, den: 10n ** BigInt(-shift) };
+}
+
+/** Integer from the parsed YAML (bigint, or a decimal that is whole) or from JSON (a safe integer). */
 function exactInt(v: unknown): bigint | null {
   if (typeof v === "bigint") return v;
   if (typeof v === "number" && Number.isSafeInteger(v)) return BigInt(v);
+  if (v instanceof SpecDecimal) {
+    const r = decimalText(v.source);
+    return r !== null && r.num % r.den === 0n ? r.num / r.den : null;
+  }
   return null;
 }
 
-/** Parses the params YAML with YAML 1.1 rules and integers as BigInt, so nothing rounds. */
+/** Parses the params YAML with YAML 1.1 rules, integers as BigInt and decimals as their text. */
 export function parseSpec(text: string): ParsedSpec {
   let doc: unknown;
   try {
-    doc = parse(text, { version: "1.1", intAsBigInt: true });
+    doc = parse(text, { version: "1.1", intAsBigInt: true, customTags: keepSource });
   } catch (e) {
     throw new DriftSpecError(`the YAML does not parse: ${(e as Error).message}`);
   }
@@ -82,17 +139,24 @@ export function parseSpec(text: string): ParsedSpec {
   return { decimals: decimals !== null && decimals >= 0n ? decimals : null, entries };
 }
 
-/** A spec value as an exact fraction. Floats go through their shortest decimal form (0.05 is 5/100). */
+/**
+ * A spec value as an exact fraction. A YAML decimal is read from its source text (0.05 is 5/100,
+ * 1.0000000000000000001 stays exact). A plain JS number, which only a spec built in code holds,
+ * is read from its shortest decimal form.
+ */
 function toRational(v: unknown): Rational | null {
   const whole = exactInt(v);
   if (whole !== null) return { num: whole, den: 1n };
-  if (typeof v !== "number" || !Number.isFinite(v)) return null;
-  const m = /^(-?)(\d+)(?:\.(\d+))?(?:e([+-]?\d+))?$/i.exec(String(v));
-  if (m === null) return null;
-  const digits = BigInt(`${m[2]}${m[3] ?? ""}`);
-  const exp = Number(m[4] ?? "0") - (m[3] ?? "").length;
-  const signed = m[1] === "-" ? -digits : digits;
-  return exp >= 0 ? { num: signed * 10n ** BigInt(exp), den: 1n } : { num: signed, den: 10n ** BigInt(-exp) };
+  if (v instanceof SpecDecimal) return decimalText(v.source);
+  if (typeof v === "number" && Number.isFinite(v)) return decimalText(String(v));
+  return null;
+}
+
+/** The decimal as a JS number when that number's shortest form is exactly the same value, else null. */
+function exactNumber(d: SpecDecimal): number | null {
+  const exact = decimalText(d.source);
+  const shown = Number.isFinite(d.approx) ? decimalText(String(d.approx)) : null;
+  return exact !== null && shown !== null && exact.num * shown.den === shown.num * exact.den ? d.approx : null;
 }
 
 /** multiplier and divisor: absent means 1, otherwise a positive integer, else null. */
@@ -139,8 +203,12 @@ function runtimeValue(v: unknown): Outcome {
   return { ok: false, why: `the runtime value is ${v === null ? "null" : Array.isArray(v) ? "a list" : typeof v}` };
 }
 
-/** For JSON output: BigInt becomes a number when safe, otherwise a decimal string. */
+/**
+ * For JSON output: BigInt becomes a number when safe, otherwise a decimal string. A SpecDecimal
+ * becomes a number only when that number is exactly its value, otherwise its source text.
+ */
 function jsonSafe(v: unknown): unknown {
+  if (v instanceof SpecDecimal) return exactNumber(v) ?? v.source;
   if (typeof v === "bigint") return v >= BigInt(Number.MIN_SAFE_INTEGER) && v <= BigInt(Number.MAX_SAFE_INTEGER) ? Number(v) : v.toString();
   if (Array.isArray(v)) return v.map(jsonSafe);
   if (isObject(v)) return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, jsonSafe(x)]));

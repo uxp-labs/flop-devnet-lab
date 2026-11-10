@@ -49,7 +49,8 @@ function row(key: string, td: string, prefix = "", partial = false): string {
   return `<tr><th scope="row" data-for="${esc(key)}">${esc(label)}</th>${td}</tr>`;
 }
 
-const CSS = `
+/** The one stylesheet. scripts/consistency.mjs fails a page that carries any other. */
+export const PAGE_CSS = `
 :root{--bg:#fbfbf8;--fg:#1c1d1f;--mut:#62666d;--line:#d9d9d2;--card:#fff;--ok:#1b7f4b;--bad:#b42318;--warn:#9a6700;--unk:#e9e9e4}
 @media (prefers-color-scheme:dark){:root{--bg:#141517;--fg:#e8e8e6;--mut:#9a9fa8;--line:#34363b;--card:#1c1e21;--ok:#4cc38a;--bad:#ff7b72;--warn:#e3b341;--unk:#2a2c30}}
 *{box-sizing:border-box}body{margin:0;padding:16px;background:var(--bg);color:var(--fg);font:15px/1.5 system-ui,sans-serif;max-width:980px;margin-inline:auto}
@@ -67,13 +68,13 @@ const COUNT_KEYS: (keyof CensusCounts)[] = ["escrows_opened", "escrows_released"
 export function renderPage(s: Snapshot): string {
   const st = s.status;
   const out: string[] = [];
-  out.push(`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light dark"><title>FLOP Observatory</title><style>${CSS}</style></head><body>`);
+  out.push(`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light dark"><title>FLOP Observatory</title><style>${PAGE_CSS}</style></head><body>`);
   out.push(`<h1>FLOP Observatory</h1>`);
   out.push(`<p class="note">Read only. Snapshot <code data-k="snapshot.hash">${esc(s.hash)}</code>, seq ${esc(s.seq)}, observed_at <span data-k="snapshot.observed_at">${esc(s.observed_at)}</span>, trust <span data-k="snapshot.trust">${esc(s.trust)}</span>. Blank grey cells mean unknown; none means known empty.</p>`);
   out.push(`<p class="banner">Escrow state is settlement only. It says nothing about output quality.</p>`);
 
   // Status
-  out.push(`<h2>Network status</h2><div class="card"><table>`);
+  out.push(`<h2>Network status</h2><div class="card"><table data-section="status">`);
   out.push(row("status.observed_at", cell("status.observed_at", st.observed_at), "status."));
   out.push(row("status.trust", cell("status.trust", st.trust), "status."));
   out.push(row("status.genesis.pinned", cell("status.genesis.pinned", st.genesis.pinned), "status."));
@@ -103,7 +104,7 @@ export function renderPage(s: Snapshot): string {
   for (const e of s.escrows) {
     const id = e.escrow_id;
     const ep = `escrow.${id}.`;
-    out.push(`<div class="card" data-escrow="${esc(id)}"><table>`);
+    out.push(`<div class="card" data-escrow="${esc(id)}"><table data-section="escrow">`);
     out.push(row(`escrow.${id}.escrow_id`, `<td data-k="escrow.${esc(id)}.escrow_id" data-v="${esc(id)}"><code>${esc(id)}</code></td>`, ep));
     out.push(row(`escrow.${id}.state`, `<td data-k="escrow.${esc(id)}.state" data-v="${esc(e.state)}" class="s-${esc(e.state)}">${esc(e.state)}</td>`, ep));
     out.push(row(`escrow.${id}.observed_at`, cell(`escrow.${id}.observed_at`, e.observed_at), ep));
@@ -119,11 +120,11 @@ export function renderPage(s: Snapshot): string {
   out.push(`<h2>Census</h2>`);
   const c = s.census;
   if (c === null) {
-    out.push(`<div class="card"><table>${row("census", cell("census", null))}</table></div>`);
+    out.push(`<div class="card"><table data-section="census">${row("census", cell("census", null))}</table></div>`);
   } else {
     const partial = c.status !== "complete" || !c.complete;
     out.push(`<p data-k="census.status" data-v="${esc(c.status)}" class="${partial ? "partial" : "note"}">${partial ? "PARTIAL: these totals cover only part of the requested range and are not complete." : "Complete: the whole requested range is covered."}</p>`);
-    out.push(`<div class="card"><table>`);
+    out.push(`<div class="card"><table data-section="census">`);
     out.push(row("census.observed_at", cell("census.observed_at", c.observed_at), "census."));
     out.push(row("census.trust", cell("census.trust", c.trust), "census."));
     out.push(row("census.requested", cell("census.requested", `${c.requested.from_block} to ${c.requested.to_block}`), "census."));
@@ -148,9 +149,9 @@ export function renderPage(s: Snapshot): string {
   out.push(`<h2>Spec drift</h2>`);
   const d = s.drift;
   if (d === null) {
-    out.push(`<div class="card"><table>${row("drift", cell("drift", null))}</table></div>`);
+    out.push(`<div class="card"><table data-section="drift">${row("drift", cell("drift", null))}</table></div>`);
   } else {
-    out.push(`<div class="card"><table>`);
+    out.push(`<div class="card"><table data-section="drift">`);
     out.push(row("drift.observed_at", cell("drift.observed_at", d.observed_at), "drift."));
     out.push(row("drift.trust", cell("drift.trust", d.trust), "drift."));
     out.push(row("drift.genesis", cell("drift.genesis", d.genesis), "drift."));
@@ -162,7 +163,7 @@ export function renderPage(s: Snapshot): string {
     out.push(row("drift.mismatches", cell("drift.mismatches", d.mismatches), "drift."));
     out.push(row("drift.unknown", cell("drift.unknown", d.unknown), "drift."));
     out.push(`</table></div>`);
-    out.push(`<div class="card"><table><tr><th>param</th><th>spec</th><th>runtime</th><th>status</th><th>note</th><th>mapping</th><th>unit</th><th>expected</th><th>runtime path</th></tr>`);
+    out.push(`<div class="card"><table data-section="drift"><tr><th data-col="param">param</th><th data-col="spec">spec</th><th data-col="runtime">runtime</th><th data-col="status">status</th><th data-col="note">note</th><th data-col="mapping">mapping</th><th data-col="unit">unit</th><th data-col="expected">expected</th><th data-col="runtime_path">runtime path</th></tr>`);
     d.items.forEach((it, i) => {
       const st2 = it.status === "unknown" ? `<td data-k="drift.${i}.status" data-v="unknown" class="unk" aria-label="unknown"></td>` : cell(`drift.${i}.status`, it.status);
       out.push(`<tr data-row="drift.${i}">${cell(`drift.${i}.param`, it.param)}${cell(`drift.${i}.spec`, jsonValue(it.spec))}${cell(`drift.${i}.runtime`, jsonValue(it.runtime))}${st2}${cell(`drift.${i}.note`, it.note)}${cell(`drift.${i}.mapping`, it.mapping)}${cell(`drift.${i}.unit`, it.unit)}${cell(`drift.${i}.expected`, it.expected)}${cell(`drift.${i}.runtime_path`, it.runtime_path)}</tr>`);

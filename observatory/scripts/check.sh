@@ -11,11 +11,16 @@
 #     steps.tsv           one line per step: name, command, exit code
 #     *.log               full output of each step
 #     vitest.json         machine-readable test results
-#     attempts.jsonl      any network, write, sign or spend attempt left by a test (should be absent)
-#     canary.json         throwaway tests that each leave one forbidden attempt, all caught
+#     attempts-journal.jsonl  every attempt, reset and final check, written by test/setup.ts the
+#                         moment it happened (the attempts tests provoke on purpose and clear)
+#     attempts-check.json the journal checked again once vitest has exited
+#     attempts.jsonl      the journal's problems, if any (should be absent)
+#     canary.json         throwaway tests that each leave one forbidden attempt, all caught, two of
+#                         them from a timer that fires after the file's final check
 #     mutants.json        each injected bug, the test that caught it, and both controls
 #     mutants-canary.json the mutation runner classifying a real bug, an equivalent change, a
-#                         syntax error and a missing test correctly
+#                         syntax error and a missing test correctly, copying exactly the tracked
+#                         files, and reporting a copy it cannot make as setup-failed
 #     recount.json        TypeScript census against the independent Python recount, per fixture
 #     recount-canary.json the cross-check catching a deliberately nudged total in every scenario
 #     cli-checks.json     the command line wiring for unreadable pages, pins and health rules
@@ -125,16 +130,21 @@ step typecheck npx --no-install tsc -p tsconfig.json --noEmit
 step build npx --no-install tsc -p tsconfig.json
 
 # 2. Unit, boundary and consistency tests. Any network, write, sign or spend attempt left in the
-#    log fails the test file and is copied to attempts.jsonl.
-step test env OBS_ATTEMPTS_FILE="$evidence/attempts.jsonl" npx --no-install vitest run \
+#    log fails the test file. Every attempt, reset and final check also goes to the journal the
+#    moment it happens, and vitest checks the journal once every file has ended.
+step test env OBS_ATTEMPTS_FILE="$evidence/attempts-journal.jsonl" npx --no-install vitest run \
   --reporter=default --reporter=json --outputFile.json="$evidence/vitest.json"
+# The journal again, after vitest has exited: no attempt left in a file's log, nothing at all
+# after a file's final check, and every test file reached that check.
+test_files="$(find test -maxdepth 1 -name '*.test.ts' | wc -l | tr -d ' ')"
+step attempts sh -c "node scripts/attempts-check.mjs '$evidence/attempts-journal.jsonl' --unexpected '$evidence/attempts.jsonl' --expect-files $test_files > '$evidence/attempts-check.json'"
 
 # 3. The harness itself: a test that leaves any forbidden attempt in the log must fail.
 step canary sh -c "node scripts/canary.mjs > '$evidence/canary.json'"
 
-# 4. Injected bugs, in a full copy of the repo layout: an unmutated control must pass, then every
-#    mutant must make at least one test in its named file fail. The runner proves its own
-#    classification on four throwaway mutants.
+# 4. Injected bugs, in a copy of every tracked file in the repo: an unmutated control must pass,
+#    then every mutant must make at least one test in its named file fail. The runner proves its
+#    own classification on four throwaway mutants, and its copy on a throwaway repo.
 step mutants sh -c "node scripts/mutate.mjs > '$evidence/mutants.json'"
 step mutants-canary sh -c "node scripts/mutate-canary.mjs > '$evidence/mutants-canary.json'"
 

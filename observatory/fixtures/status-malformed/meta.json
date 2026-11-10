@@ -1,6 +1,6 @@
 {
   "scenario": "status-malformed",
   "description": "Synthetic malformed responses: faucet health is not JSON, the RPC genesis is too short, the finalized head is invalid, best is a string.",
-  "now": "2026-11-09T23:47:41Z",
+  "now": "2026-11-09T23:47:53Z",
   "synthetic": true
 }

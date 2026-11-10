@@ -185,6 +185,18 @@ const EXPECTED: Record<string, Expected & { reset_detected: boolean }> = {
     ...quiet,
     reset_detected: false,
   },
+  "census-mixed-range-copies": {
+    complete: true,
+    status: "complete",
+    covered: [r(0, 149)],
+    gaps: [],
+    totals: counts({ escrows_opened: 2 }),
+    by_account: { [alice]: { escrows_opened: 1 }, [dave]: { escrows_opened: 1 } },
+    ...quiet,
+    duplicates_dropped: 2,
+    malformed_dropped: 2,
+    reset_detected: false,
+  },
   "census-block-hash-form": {
     complete: true,
     status: "complete",
@@ -207,6 +219,11 @@ const REFUSING: Record<string, RegExp> = {
   "census-dotfile-page": /unusable event page file\(s\): event-pages\/\.01\.json: not a page file/,
   "census-symlink-page": /unusable event page file\(s\): event-pages\/01\.json: not a page file/,
   "census-unsafe-integer": /event page 0: to_block is missing or not a safe integer/,
+  "census-invalid-utf8": /unusable event page file\(s\): event-pages\/01-invalid-utf8\.json: not valid JSON/,
+  "census-event-pages-file": /unusable event page file\(s\): event-pages: not a folder/,
+  "census-event-pages-link": /unusable event page file\(s\): event-pages: not a folder/,
+  "census-byte-order-mark": /unusable event page file\(s\): event-pages\/00-page-0\.json: not valid JSON/,
+  "census-negative-from-block": /event page 0: from_block -10 is negative/,
 };
 
 /** The raw text of one fixture page file, exactly as written by hand. */
@@ -320,6 +337,22 @@ describe("census fixtures", () => {
     expect(blind.duplicates_dropped).toBe(0);
   });
 
+  it("census-invalid-utf8 would be a complete census with the refund counted if decoded lossily", async () => {
+    const { pages, opts } = await load("census-invalid-utf8");
+    expect(opts.unreadablePages).toEqual(["event-pages/01-invalid-utf8.json: not valid JSON"]);
+    const lossy = JSON.parse(readFileSync(join(FIXTURES, "census-invalid-utf8", "event-pages", "01-invalid-utf8.json")).toString("utf8")) as (typeof pages)[number];
+    const blind = census([...pages, lossy], { ...opts, unreadablePages: [] });
+    expect(blind.complete).toBe(true);
+    expect(blind.totals.escrows_refunded).toBe(1);
+    expect(Object.keys(blind.by_account)).toContain("synthetic-d\uFFFDve");
+  });
+
+  it.each(["census-event-pages-file", "census-event-pages-link"])("%s reads no page at all and names the folder rule", async (name) => {
+    const { pages, opts } = await load(name);
+    expect(pages).toEqual([]);
+    expect(opts.unreadablePages).toEqual(["event-pages: not a folder (it must be a real folder, not a file or a link)"]);
+  });
+
   it("census-nonstandard-json refuses only because of its file with NaN in it", async () => {
     const { pages, opts } = await load("census-nonstandard-json");
     expect(opts.unreadablePages).toHaveLength(1);
@@ -341,6 +374,15 @@ describe("census fixtures", () => {
     );
     expect(await notes("census-negative-next-page")).toContain(
       "blocks 0 to 99: next_page -1 on page 0 names a page that does not exist, so the chain is broken and its 2 event(s) count nowhere",
+    );
+  });
+
+  it("census-mixed-range-copies says which copies were skipped and which groups were inconsistent", async () => {
+    const { pages, opts } = await load("census-mixed-range-copies");
+    const notes = census(pages, opts).notes;
+    expect(notes).toContain("3 event(s) outside the request or their page's range were skipped");
+    expect(notes).toContain(
+      "2 event(s) had copies both inside and outside the request or their page's range, so each counts once as malformed",
     );
   });
 
@@ -411,6 +453,37 @@ describe("hand written fixtures keep their literal JSON text", () => {
     expect(lstatSync(join(dir, "00.json")).isFile()).toBe(true);
     const followed = JSON.parse(readFileSync(join(dir, "01.json"), "utf8")) as { page: number; events: unknown[] };
     expect([followed.page, followed.events.length]).toEqual([0, 2]);
+  });
+
+  it("census-invalid-utf8 still holds the byte 0xff inside a string, and nowhere else", () => {
+    const bytes = readFileSync(join(FIXTURES, "census-invalid-utf8", "event-pages", "01-invalid-utf8.json"));
+    expect(bytes.filter((b) => b === 0xff)).toHaveLength(1);
+    expect(bytes.filter((b) => b > 0x7f)).toHaveLength(1);
+    expect(bytes.toString("latin1")).toMatch(/"who": "synthetic-d\xffve"/);
+    expect(() => new TextDecoder("utf-8", { fatal: true }).decode(bytes)).toThrow(TypeError);
+  });
+
+  it("census-byte-order-mark starts with a byte order mark and is valid JSON after it", () => {
+    const bytes = readFileSync(join(FIXTURES, "census-byte-order-mark", "event-pages", "00-page-0.json"));
+    expect([...bytes.subarray(0, 3)]).toEqual([0xef, 0xbb, 0xbf]);
+    expect(bytes.subarray(3).includes(0xef)).toBe(false);
+    expect((JSON.parse(bytes.subarray(3).toString("utf8")) as { events: unknown[] }).events).toHaveLength(1);
+  });
+
+  it("census-event-pages-file: event-pages really is a regular file that holds a valid page", () => {
+    const path = join(FIXTURES, "census-event-pages-file", "event-pages");
+    expect(lstatSync(path).isFile()).toBe(true);
+    const page = JSON.parse(readFileSync(path, "utf8")) as { page: number; events: unknown[] };
+    expect([page.page, page.events.length]).toEqual([0, 1]);
+  });
+
+  it("census-event-pages-link: event-pages really is a symbolic link to a folder that holds a valid page", () => {
+    const path = join(FIXTURES, "census-event-pages-link", "event-pages");
+    expect(lstatSync(path).isSymbolicLink()).toBe(true);
+    expect(statSync(path).isDirectory()).toBe(true);
+    expect(readdirSync(path)).toEqual(["00.json"]);
+    const page = JSON.parse(readFileSync(join(path, "00.json"), "utf8")) as { page: number; events: unknown[] };
+    expect([page.page, page.events.length]).toEqual([0, 1]);
   });
 
   it("census-dotfile-page still holds a page file whose name starts with a dot, beside a normal one", () => {
@@ -657,6 +730,49 @@ describe("3.1 clause 4: events outside the request or their page are skipped, no
     expect(rep.totals.escrows_opened).toBe(2);
   });
 
+  it("copies inside and outside their own page's range are inconsistent: malformed once, duplicates as usual, nowhere else", () => {
+    // The audit case: one release at block 50 on a page for 0 to 99 and on a page for 100 to 199.
+    const release = ev(50, 0, "EscrowReleased");
+    const rep = census([pg(0, 99, 0, null, [release]), pg(100, 199, 0, null, [structuredClone(release)])], opts(0, 199));
+    expect(rep.totals).toEqual(counts({}));
+    expect(rep.malformed_dropped).toBe(1);
+    expect(rep.duplicates_dropped).toBe(1);
+    expect(rep.pending_unfinalized).toBe(0);
+    expect(rep.by_account).toEqual({});
+  });
+
+  it("copies inside and outside the request are inconsistent, a null block_number counting as inside", () => {
+    const kept = ev(null, 0, "EscrowRefunded", { block_hash: hash(140) });
+    const late = ev(160, 0, "EscrowRefunded", { block_hash: hash(140) });
+    const rep = census([pg(100, 199, 0, null, [kept, late, structuredClone(late)])], opts(0, 149));
+    expect(rep.totals.escrows_refunded).toBe(0);
+    expect(rep.malformed_dropped).toBe(1);
+    expect(rep.duplicates_dropped).toBe(2);
+  });
+
+  it("a group whose copies all lie outside is skipped and counts nowhere, not even in duplicates", () => {
+    const rep = census([pg(0, 99, 0, null, [ev(120, 0), ev(120, 0), ev(120, 0)])], opts(0, 199));
+    expect(rep.totals.escrows_opened).toBe(0);
+    expect([rep.duplicates_dropped, rep.malformed_dropped, rep.pending_unfinalized]).toEqual([0, 0, 0]);
+    expect(rep.notes).toContain("3 event(s) outside the request or their page's range were skipped");
+  });
+
+  it("a mixed group is malformed even when its copies also disagree or one is unfinalized", () => {
+    const inside = ev(50, 0, "EscrowReleased", { finalized: false });
+    const outside = ev(50, 0, "EscrowRefunded");
+    const rep = census([pg(0, 99, 0, null, [inside]), pg(100, 199, 0, null, [outside])], opts(0, 199));
+    expect(rep.malformed_dropped).toBe(1);
+    expect(rep.pending_unfinalized).toBe(0);
+    expect(rep.duplicates_dropped).toBe(1);
+  });
+
+  it("copies that all lie inside still dedupe, and an inside copy alone counts", () => {
+    const rep = census([pg(0, 99, 0, null, [ev(50, 0)]), pg(0, 199, 0, null, [ev(50, 0)])], opts(0, 199));
+    expect(rep.totals.escrows_opened).toBe(1);
+    expect(rep.duplicates_dropped).toBe(1);
+    expect(rep.malformed_dropped).toBe(0);
+  });
+
   it("keeps a null block_number on a chain that intersects the request", () => {
     const rep = census([pg(0, 9, 0, null, [ev(null, 0)])], opts(0, 9));
     expect(rep.totals.escrows_opened).toBe(1);
@@ -841,7 +957,7 @@ describe("3.1 clause 9: duplicate groups", () => {
 });
 
 describe("3.1 clause 10: order of the filters", () => {
-  it("the block range filter runs before the malformed check", () => {
+  it("a malformed event with an integer block_number outside its page's range is skipped, not malformed", () => {
     const noSection = ev(50, 0);
     delete noSection.section;
     const rep = census([pg(0, 9, 0, null, [noSection])], opts(0, 9));

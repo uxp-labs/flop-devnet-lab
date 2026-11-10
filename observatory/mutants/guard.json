@@ -126,5 +126,101 @@
     "replace": "",
     "test": "test/guard.test.ts",
     "why": "the scan must catch process.getBuiltinModule"
+  },
+  {
+    "id": "scan-misses-bare-fetch",
+    "file": "test/guard.test.ts",
+    "find": "    /\\bfetch\\b/,\n",
+    "replace": "    /\\bfetch\\s*\\(/,\n",
+    "test": "test/guard.test.ts",
+    "why": "fetch.call(...) and const f = fetch must fail the scan, not only fetch("
+  },
+  {
+    "id": "scan-misses-bare-websocket",
+    "file": "test/guard.test.ts",
+    "find": "    /\\bWebSocket\\b/,\n",
+    "replace": "    /new\\s+WebSocket\\b/,\n",
+    "test": "test/guard.test.ts",
+    "why": "a WebSocket taken by name must fail the scan, not only new WebSocket"
+  },
+  {
+    "id": "scan-misses-global-object",
+    "file": "test/guard.test.ts",
+    "find": "    /\\bglobalThis\\b/,\n",
+    "replace": "",
+    "test": "test/guard.test.ts",
+    "why": "globalThis reaches every global by a computed name"
+  },
+  {
+    "id": "guard-attempt-not-notified",
+    "file": "src/guard.ts",
+    "find": "  notify({ type: \"attempt\", attempt });\n",
+    "replace": "",
+    "test": "test/attempts-check.test.ts",
+    "why": "an attempt must reach the journal the moment it is recorded"
+  },
+  {
+    "id": "guard-reset-not-notified",
+    "file": "src/guard.ts",
+    "find": "  notify({ type: \"reset\", cleared });\n",
+    "replace": "",
+    "test": "test/attempts-check.test.ts",
+    "why": "a reset must reach the journal too, or a cleared attempt looks unchecked"
+  },
+  {
+    "id": "setup-journal-not-written",
+    "file": "test/setup.ts",
+    "find": "  if (journal) appendFileSync(journal,",
+    "replace": "  if (false) appendFileSync(journal,",
+    "test": "test/attempts-check.test.ts",
+    "why": "the journal is the only record of an attempt made after the last check"
+  },
+  {
+    "id": "check-late-events-ignored",
+    "file": "scripts/attempts-check.mjs",
+    "find": "    if (r.checked) {",
+    "replace": "    if (false) {",
+    "test": "test/attempts-check.test.ts",
+    "why": "an attempt or reset after a file's final check must fail the run"
+  },
+  {
+    "id": "check-left-attempts-ignored",
+    "file": "scripts/attempts-check.mjs",
+    "find": "      for (const a of r.pending) problems.push({ ...at, file: e.file, problem: \"attempt left in the log at the final check\", attempt: a });\n",
+    "replace": "",
+    "test": "test/attempts-check.test.ts",
+    "why": "an attempt still in the log at the final check must fail"
+  },
+  {
+    "id": "check-reset-count-ignored",
+    "file": "scripts/attempts-check.mjs",
+    "find": "      if (e.cleared !== r.pending.length) {",
+    "replace": "      if (false) {",
+    "test": "test/attempts-check.test.ts",
+    "why": "a reset that cleared more than the journal holds means a lost attempt"
+  },
+  {
+    "id": "check-unchecked-file-ignored",
+    "file": "scripts/attempts-check.mjs",
+    "find": "    if (!r.checked) for (const a of r.pending)",
+    "replace": "    if (false) for (const a of r.pending)",
+    "test": "test/attempts-check.test.ts",
+    "why": "an attempt in a file that never reached its final check must fail"
+  },
+  {
+    "id": "check-expect-files-ignored",
+    "file": "scripts/attempts-check.mjs",
+    "find": "  if (expectFiles !== null && filesChecked !== expectFiles) {",
+    "replace": "  if (false) {",
+    "test": "test/attempts-check.test.ts",
+    "why": "every test file must reach its final check"
+  },
+  {
+    "id": "check-runs-merged",
+    "file": "scripts/attempts-check.mjs",
+    "find": "    let r = runs.get(e.run);\n    if (!r) {\n      r = { file: e.file, pending: [], checked: false };\n      runs.set(e.run, r);",
+    "replace": "    let r = runs.get(\"all\");\n    if (!r) {\n      r = { file: e.file, pending: [], checked: false };\n      runs.set(\"all\", r);",
+    "test": "test/attempts-check.test.ts",
+    "why": "one file's reset must never clear another file's attempt"
   }
 ]

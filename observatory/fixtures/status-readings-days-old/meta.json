@@ -1,6 +1,6 @@
 {
   "scenario": "status-readings-days-old",
   "description": "Synthetic: status-healthy with the faucet and gateway readings taken eight days before the snapshot time. Both must be degraded, never ok; the RPC head is fresh and stays ok.",
-  "now": "2026-11-09T23:47:41Z",
+  "now": "2026-11-09T23:47:53Z",
   "synthetic": true
 }

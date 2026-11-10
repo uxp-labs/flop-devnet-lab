@@ -65,7 +65,16 @@ def load_pages(scenario_dir):
     pages = []
     pages_dir = os.path.join(scenario_dir, "event-pages")
     names = []
-    if os.path.isdir(pages_dir):
+    try:
+        mode = os.lstat(pages_dir).st_mode
+    except FileNotFoundError:
+        mode = None  # no event-pages folder means no pages
+    except OSError as exc:
+        raise Unreadable("cannot stat %s: %s" % (pages_dir, exc))
+    if mode is not None:
+        # event-pages must be a real folder, not a file or a link (lstat does not follow links).
+        if not stat.S_ISDIR(mode):
+            raise Unreadable("event-pages is not a folder: %s" % pages_dir)
         try:
             names = sorted(os.listdir(pages_dir))
         except OSError as exc:
@@ -88,7 +97,8 @@ def load_pages(scenario_dir):
         for f in ("from_block", "to_block", "page"):
             if not is_int(page.get(f)):
                 raise Unreadable("%s: %s missing or not an integer" % (name, f))
-        if page["page"] < 0 or page["from_block"] > page["to_block"]:
+        # Block numbers start at 0: a range that starts below 0 describes no real blocks.
+        if page["page"] < 0 or page["from_block"] < 0 or page["from_block"] > page["to_block"]:
             raise Unreadable("%s: bad page number or block range" % name)
         if "next_page" not in page or not (page["next_page"] is None or is_int(page["next_page"])):
             raise Unreadable("%s: next_page missing or not an integer or null" % name)
@@ -200,26 +210,33 @@ def recount(scenario_dir, genesis, req_lo, req_hi):
         for page in chain:
             for raw in page["events"]:
                 bn = as_int(raw.get("block_number")) if isinstance(raw, dict) else None
-                if bn is not None and (bn < a or bn > b):
-                    continue
+                inside = bn is None or (a <= bn <= b)
                 ev = parse_event(raw)
                 if ev is None:
-                    malformed += 1
+                    # Malformed with an out of range integer block_number is skipped, not malformed.
+                    if inside:
+                        malformed += 1
                     continue
                 key = (genesis, ev["block_hash"], ev["index"])
                 sig = (ev["section"], ev["method"], account_of(ev.get("data")))
-                groups.setdefault(key, []).append((ev.get("finalized") is True, sig))
+                groups.setdefault(key, []).append((ev.get("finalized") is True, sig, inside))
 
     totals = {k: 0 for k, _, _ in KINDS}
     by_account = {}
     pending = dups = 0
     for key in sorted(groups, key=lambda k: (k[1], k[2])):
         copies = groups[key]
+        where = {inside for _, _, inside in copies}
+        if where == {False}:
+            continue  # every copy lies outside: counts nowhere, not even in duplicates
         dups += len(copies) - 1
-        if len({sig for _, sig in copies}) > 1:
+        if where == {True, False}:
+            malformed += 1  # copies partly inside and partly outside are inconsistent
+            continue
+        if len({sig for _, sig, _ in copies}) > 1:
             malformed += 1  # one key claiming different events: not usable evidence
             continue
-        if not all(fin for fin, _ in copies):
+        if not all(fin for fin, _, _ in copies):
             pending += 1
             continue
         section, method, account = copies[0][1]

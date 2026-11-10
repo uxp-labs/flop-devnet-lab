@@ -58,10 +58,42 @@
   {
     "id": "drift-yaml-1-2",
     "file": "src/drift.ts",
-    "find": "doc = parse(text, { version: \"1.1\", intAsBigInt: true });",
-    "replace": "doc = parse(text, { intAsBigInt: true });",
+    "find": "version: \"1.1\", intAsBigInt: true,",
+    "replace": "intAsBigInt: true,",
     "test": "test/drift.test.ts",
     "why": "Parsing as YAML 1.2 reads 63_072_000 as a string, unlike upstream PyYAML, so real matches turn unknown."
+  },
+  {
+    "id": "drift-decimal-rounded",
+    "file": "src/drift.ts",
+    "find": "if (v instanceof SpecDecimal) return decimalText(v.source);",
+    "replace": "if (v instanceof SpecDecimal) return decimalText(String(v.approx));",
+    "test": "test/drift.test.ts",
+    "why": "IMD finding 10: a spec decimal is read from its rounded JS number, so 1200000.000000000000001 FLOP matches 1200000 FLOP and 1.0000000000000000001 FLOP matches instead of being unknown."
+  },
+  {
+    "id": "drift-decimal-source-dropped",
+    "file": "src/drift.ts",
+    "find": "customTags: keepSource",
+    "replace": "customTags: (tags) => tags",
+    "test": "test/drift.test.ts",
+    "why": "The YAML parser no longer keeps the source text of decimals, so every decimal is a rounded JS number before the exact comparison."
+  },
+  {
+    "id": "drift-decimal-scalar-not-unwrapped",
+    "file": "src/drift.ts",
+    "find": "const n = isScalar(v) ? v.value : v;",
+    "replace": "const n = v;",
+    "test": "test/drift.test.ts",
+    "why": "The YAML 1.1 float tag resolves to a Scalar node, so without unwrapping it no decimal keeps its source text and every decimal silently rounds."
+  },
+  {
+    "id": "drift-decimal-shown-rounded",
+    "file": "src/drift.ts",
+    "find": "if (v instanceof SpecDecimal) return exactNumber(v) ?? v.source;",
+    "replace": "if (v instanceof SpecDecimal) return v.approx;",
+    "test": "test/drift.test.ts",
+    "why": "The report's spec field shows the rounded JS number, so 1.0000000000000000001 is shown as 1."
   },
   {
     "id": "drift-compare-as-float",

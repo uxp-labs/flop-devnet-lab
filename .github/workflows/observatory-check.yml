@@ -30,10 +30,12 @@ jobs:
           persist-credentials: false
           ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
 
-      - name: Use Node.js 22
+      # The exact version, not the newest 22.x: every snapshot's pin records process.version, so
+      # outputs/ is byte-identical to a local run only on the same Node version.
+      - name: Use Node.js 22.23.4
         uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: "22.23.4"
 
       - name: Check
         working-directory: observatory

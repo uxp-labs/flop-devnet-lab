@@ -10,12 +10,17 @@
 //   the walk reaches (1, 2).
 //   Covered ranges are clipped to the request and merged when they overlap or touch. Gaps are the
 //   rest of the request. Any gap makes the census partial, and then every total is partial (3).
-//   Per event, in this order: block range filter, malformed, dedupe, pending or finalized, kind (10).
-//   An integer is judged by value and must be safe, at most 2^53 less 1 in size (14).
+//   In this order (10): malformed events drop out, except that a malformed event outside the
+//   request or its page's range is skipped; the rest group by key; a group whose copies all lie
+//   outside is skipped, and a group partly inside and partly outside is malformed once (4); then
+//   dedupe, pending or finalized, and kind.
+//   An integer is judged by value and must be safe, at most 2^53 less 1 in size (14). Every integer
+//   check uses isSafeInt from strict.ts, the reading escrow and status share.
 //   An unreadable page file, an entry in event-pages that is not a page file, a structurally invalid
 //   page or an invalid request refuses the whole census. None of them is ever turned into a partial
 //   count (12, 13, 15).
 // Pure: no clock and no I/O. Everything comes in through the arguments.
+import { isSafeInt } from "./strict.js";
 import type { BlockRange, CensusCounts, CensusReport, Trust } from "./types.js";
 
 /** Thrown when the input cannot give a census at all. Never turned into a partial count. */
@@ -87,6 +92,11 @@ interface Event {
   finalized: boolean;
 }
 
+/** One copy of an event, and whether it lies outside the request or its own page's range. */
+interface Copy extends Event {
+  outside: boolean;
+}
+
 interface Chain {
   range: BlockRange;
   byNumber: Map<number, Page[]>;
@@ -96,14 +106,6 @@ type Walk = { complete: true; pages: Page[] } | { complete: false; reason: strin
 
 function isObject(v: unknown): v is Record<string, unknown> {
   return typeof v === "object" && v !== null && !Array.isArray(v);
-}
-
-/**
- * Clause 14: an integer is judged by value (1.0 is 1) and must be safe, so its size is at most
- * 2^53 less 1. Booleans, fractions and larger numbers are not integers.
- */
-function isInt(v: unknown): v is number {
-  return typeof v === "number" && Number.isSafeInteger(v);
 }
 
 function isText(v: unknown): v is string {
@@ -119,7 +121,7 @@ function isBlockHash(v: unknown): v is string {
 function checkRequest(r: unknown): BlockRange {
   if (!isObject(r)) throw new CensusRefused("no requested block range");
   const { from_block, to_block } = r;
-  if (!isInt(from_block) || !isInt(to_block)) {
+  if (!isSafeInt(from_block) || !isSafeInt(to_block)) {
     throw new CensusRefused("the requested range needs safe integer from_block and to_block");
   }
   if (from_block < 0) throw new CensusRefused(`the requested range starts below block 0 (${from_block})`);
@@ -133,11 +135,13 @@ function checkPage(raw: unknown, n: number): Page {
   if (!isObject(raw)) throw new CensusRefused(`${at} is not an object`);
   const { genesis, from_block, to_block, page, next_page, events } = raw;
   if (typeof genesis !== "string") throw new CensusRefused(`${at}: genesis is not a string`);
-  if (!isInt(from_block)) throw new CensusRefused(`${at}: from_block is missing or not a safe integer`);
-  if (!isInt(to_block)) throw new CensusRefused(`${at}: to_block is missing or not a safe integer`);
-  if (!isInt(page)) throw new CensusRefused(`${at}: page is missing or not a safe integer`);
+  if (!isSafeInt(from_block)) throw new CensusRefused(`${at}: from_block is missing or not a safe integer`);
+  if (!isSafeInt(to_block)) throw new CensusRefused(`${at}: to_block is missing or not a safe integer`);
+  if (!isSafeInt(page)) throw new CensusRefused(`${at}: page is missing or not a safe integer`);
   if (page < 0) throw new CensusRefused(`${at}: page ${page} is negative`);
-  if (next_page !== null && !isInt(next_page)) {
+  // Block numbers start at 0, so a page whose range starts below 0 describes no real blocks.
+  if (from_block < 0) throw new CensusRefused(`${at}: from_block ${from_block} is negative`);
+  if (next_page !== null && !isSafeInt(next_page)) {
     throw new CensusRefused(`${at}: next_page is missing or neither a safe integer nor null`);
   }
   if (!Array.isArray(events)) throw new CensusRefused(`${at}: events is not a list`);
@@ -227,14 +231,17 @@ function readEvent(raw: unknown): Event | null {
   const { section, method, block_hash, index, block_number } = raw;
   if (!isText(section) || !isText(method)) return null;
   if (!isBlockHash(block_hash)) return null;
-  if (!isInt(index) || index < 0) return null;
-  if (block_number !== null && !isInt(block_number)) return null;
+  if (!isSafeInt(index) || index < 0) return null;
+  if (block_number !== null && !isSafeInt(block_number)) return null;
   return { block_hash, index, section, method, account: accountOf(raw.data), finalized: raw.finalized === true };
 }
 
-/** Clause 4: an integer block_number outside the request or its page's range is skipped. */
+/**
+ * Clause 4: whether a copy lies outside, that is, holds an integer block_number outside the
+ * request or its own page's range. A null block_number, or one that is not an integer, never does.
+ */
 function outOfRange(raw: unknown, page: Page, req: BlockRange): boolean {
-  if (!isObject(raw) || !isInt(raw.block_number)) return false;
+  if (!isObject(raw) || !isSafeInt(raw.block_number)) return false;
   const b = raw.block_number;
   return b < req.from_block || b > req.to_block || b < page.from_block || b > page.to_block;
 }
@@ -342,35 +349,47 @@ export function census(pages: readonly unknown[], opts: CensusOptions): CensusRe
   const complete = gaps.length === 0;
   const status = complete ? "complete" : "partial";
 
-  // Clause 10: block range filter, then malformed, then dedupe.
+  // Clause 10: malformed first, but a malformed event outside the request or its page's range is
+  // skipped instead. Well formed events group by key, each copy marked inside or outside (clause 4).
   let skipped = 0;
   let malformed = 0;
-  const groups = new Map<string, Event[]>();
+  let mixed = 0;
+  const groups = new Map<string, Copy[]>();
   for (const page of counted) {
     for (const raw of page.events) {
-      if (outOfRange(raw, page, req)) {
-        skipped++;
-        continue;
-      }
+      const outside = outOfRange(raw, page, req);
       const ev = readEvent(raw);
       if (ev === null) {
-        malformed++;
+        if (outside) skipped++;
+        else malformed++;
         continue;
       }
       const key = JSON.stringify([page.genesis, ev.block_hash, ev.index]);
       const group = groups.get(key) ?? [];
-      group.push(ev);
+      group.push({ ...ev, outside });
       groups.set(key, group);
     }
   }
 
-  // Clause 9, then clause 10 again: pending or finalized, then kind.
+  // Clause 4 for each group, then clauses 9 and 10: dedupe, pending or finalized, then kind.
   const totals = zeroCounts();
   const perAccount = new Map<string, Partial<CensusCounts>>();
   let duplicates = 0;
   let pending = 0;
   for (const group of groups.values()) {
+    const outsideCopies = group.filter((e) => e.outside).length;
+    // Clause 4: a group whose copies all lie outside is skipped, not even counted in duplicates.
+    if (outsideCopies === group.length) {
+      skipped += group.length;
+      continue;
+    }
     duplicates += group.length - 1;
+    // Clause 4: copies partly inside and partly outside are inconsistent, so malformed once.
+    if (outsideCopies > 0) {
+      malformed++;
+      mixed++;
+      continue;
+    }
     const first = group[0]!;
     const disagree = group.some(
       (e) => e.section !== first.section || e.method !== first.method || e.account !== first.account,
@@ -415,6 +434,9 @@ export function census(pages: readonly unknown[], opts: CensusOptions): CensusRe
     );
   }
   if (skipped > 0) notes.push(`${skipped} event(s) outside the request or their page's range were skipped`);
+  if (mixed > 0) {
+    notes.push(`${mixed} event(s) had copies both inside and outside the request or their page's range, so each counts once as malformed`);
+  }
   const requested_blocks = req.to_block - req.from_block + 1;
   const covered_blocks = blocks(covered);
   if (!complete) {

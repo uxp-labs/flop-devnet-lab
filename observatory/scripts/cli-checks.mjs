@@ -30,6 +30,28 @@ const meta = JSON.parse(readFileSync(join(otherPin, "meta.json"), "utf8"));
 meta.pinned_genesis = "0x" + "ab".repeat(32);
 writeFileSync(join(otherPin, "meta.json"), JSON.stringify(meta, null, 2));
 
+// Two snapshots into one log: the second rolls the finalized height back on the same genesis.
+const rollA = join(work, "roll-a");
+const rollB = join(work, "roll-b");
+cpSync(join(pkg, fx("status-healthy")), rollA, { recursive: true });
+cpSync(join(pkg, fx("status-healthy")), rollB, { recursive: true });
+{
+  const edit = (dir, file, fn) => {
+    const p = join(dir, file);
+    const o = JSON.parse(readFileSync(p, "utf8"));
+    fn(o);
+    writeFileSync(p, JSON.stringify(o, null, 2));
+  };
+  edit(rollB, "rpc-head.json", (o) => {
+    o.finalized = { number: 3340000, hash: "0x" + "11".repeat(32) };
+    o.best_number = 3340002;
+    o.observed_at = "2026-11-09T23:48:40Z";
+  });
+  edit(rollB, "meta.json", (o) => (o.now = "2026-11-09T23:48:41Z"));
+  for (const f of ["faucet-health.json", "faucet-chain.json", "gateway-models.json"]) edit(rollB, f, (o) => (o.fetched_at = "2026-11-09T23:48:40Z"));
+}
+const rollLog = join(work, "roll.jsonl");
+
 const cases = [
   {
     name: "census refuses a scenario with an unreadable page file",
@@ -64,6 +86,28 @@ const cases = [
     name: "a snapshot refuses a part pinned to a different genesis",
     run: () => cli("snapshot", "--status", fx("status-healthy"), "--census", otherPin, "--out", join(work, "snap-pin")),
     ok: (r) => r.exit === 2 && /pinned to genesis 0xabab/.test(r.stderr),
+  },
+  {
+    name: "a snapshot reads the previous one from its log: a rollback on the same genesis is a conflict",
+    run: () => {
+      const first = cli("snapshot", "--status", rollA, "--out", join(work, "roll-o1"), "--log", rollLog);
+      if (first.exit !== 0) return first;
+      const second = cli("snapshot", "--status", rollB, "--out", join(work, "roll-o2"), "--log", rollLog);
+      if (second.exit !== 0) return second;
+      return { ...second, json: JSON.parse(readFileSync(join(work, "roll-o2", "status.json"), "utf8")).status };
+    },
+    ok: (r) => r.exit === 0 && r.json.rpc.health === "degraded" && r.json.conflicts.some((c) => /went backwards from 3341575 to 3340000/.test(c)),
+  },
+  {
+    name: "a snapshot refuses to extend or trust a log whose hash chain is broken",
+    run: () => {
+      const lines = readFileSync(rollLog, "utf8").split("\n").filter(Boolean);
+      const bad = JSON.parse(lines[0]);
+      bad.status.finalized_height = 1;
+      writeFileSync(join(work, "broken.jsonl"), [JSON.stringify(bad), ...lines.slice(1)].join("\n") + "\n");
+      return cli("snapshot", "--status", rollA, "--out", join(work, "roll-o3"), "--log", join(work, "broken.jsonl"));
+    },
+    ok: (r) => r.exit === 2 && /is broken at line 0/.test(r.stderr),
   },
   {
     name: "status: a head time later than the snapshot time is a conflict and degraded",

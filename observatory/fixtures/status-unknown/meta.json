@@ -1,6 +1,6 @@
 {
   "scenario": "status-unknown",
   "description": "Nothing was read: every value must be unknown and reset_detected null.",
-  "now": "2026-11-09T23:47:41Z",
+  "now": "2026-11-09T23:47:53Z",
   "synthetic": true
 }

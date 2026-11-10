@@ -2,7 +2,8 @@
 //
 // Every transport (the live RPC and HTTP readers in M1) must call these checks before it
 // sends anything. A refused call is recorded, then thrown, so tests can prove that nothing
-// tried to write. In tests, test/setup.ts also records every network and child process attempt.
+// tried to write. In tests, test/setup.ts also records every network and child process attempt,
+// and writes each one to a journal on disk the moment it is recorded (onAttempt below).
 
 export type AttemptKind = "network" | "process" | "rpc-write" | "http-write" | "sign" | "spend";
 
@@ -13,6 +14,26 @@ export interface Attempt {
 }
 
 const attempts: Attempt[] = [];
+
+/** What a listener hears: each attempt the moment it is recorded, and each reset of the log. */
+export type AttemptEvent = { type: "attempt"; attempt: Attempt } | { type: "reset"; cleared: number };
+
+const listeners = new Set<(event: AttemptEvent) => void>();
+
+/**
+ * Calls `listener` synchronously on every recorded attempt and every reset, so a journal can hold
+ * an attempt made after the last look at the log (from a timer, say). Returns a remover.
+ */
+export function onAttempt(listener: (event: AttemptEvent) => void): () => void {
+  listeners.add(listener);
+  return () => {
+    listeners.delete(listener);
+  };
+}
+
+function notify(event: AttemptEvent): void {
+  for (const listener of listeners) listener(event);
+}
 
 export class ReadOnlyViolation extends Error {
   readonly attempt: Attempt;
@@ -26,6 +47,7 @@ export class ReadOnlyViolation extends Error {
 export function recordAttempt(kind: AttemptKind, what: string): Attempt {
   const attempt = { kind, what, at: new Date().toISOString() };
   attempts.push(attempt);
+  notify({ type: "attempt", attempt });
   return attempt;
 }
 
@@ -35,7 +57,9 @@ export function attemptLog(): readonly Attempt[] {
 }
 
 export function resetAttempts(): void {
+  const cleared = attempts.length;
   attempts.length = 0;
+  notify({ type: "reset", cleared });
 }
 
 /** RPC methods the observatory may call. Anything else is refused and recorded. */

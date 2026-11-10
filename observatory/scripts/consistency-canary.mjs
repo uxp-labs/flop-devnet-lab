@@ -79,6 +79,23 @@ function swapCells(dir, keyA, keyB) {
   writeFileSync(p, out);
 }
 
+/** Rewrites the page with fn; the tamper fails loudly when fn changes nothing. */
+function editHtml(dir, fn) {
+  const p = join(dir, "index.html");
+  const html = readFileSync(p, "utf8");
+  const out = fn(html);
+  if (out === html) throw new Error("the edit changed nothing");
+  writeFileSync(p, out);
+}
+/** The whole <tr> that holds the labeled row for one key. */
+const rowOf = (html, key) => {
+  const k = key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const m = new RegExp(`<tr><th[^>]*data-for="${k}"[^>]*>[\\s\\S]*?</tr>`).exec(html);
+  if (!m) throw new Error(`page has no ${key} row`);
+  return m[0];
+};
+const hasDriftItems = (d) => snap(d).drift !== null && snap(d).drift.items.length > 0;
+
 const hasEmptyListCell = (dir) => /data-k="[^"]*" data-n="0"/.test(readFileSync(join(dir, "index.html"), "utf8"));
 
 const tampers = [
@@ -241,6 +258,81 @@ const tampers = [
       writeFileSync(p, out);
     },
   },
+  // The IMD audit's finding 12: a value a reader cannot see must not pass as shown. Each of these
+  // must be caught by the check named in "expect", not only by some other failure.
+  {
+    name: "reset-row-in-a-comment",
+    expect: /no comment/,
+    applies: () => true,
+    run: (d) => editHtml(d, (h) => h.replace(rowOf(h, "status.reset_detected"), (r) => `<!-- ${r} -->`)),
+  },
+  {
+    name: "reset-row-with-the-hidden-attribute",
+    expect: /only the attributes/,
+    applies: () => true,
+    run: (d) => editHtml(d, (h) => h.replace(rowOf(h, "status.reset_detected"), (r) => r.replace("<tr>", "<tr hidden>"))),
+  },
+  {
+    name: "reset-row-styled-display-none",
+    expect: /only the attributes/,
+    applies: () => true,
+    run: (d) => editHtml(d, (h) => h.replace(rowOf(h, "status.reset_detected"), (r) => r.replace("<tr>", '<tr style="display:none">'))),
+  },
+  {
+    name: "a-stylesheet-rule-hides-the-reset-row",
+    expect: /stylesheet is the renderer's own/,
+    applies: () => true,
+    run: (d) => editHtml(d, (h) => h.replace("</style>", 'tr:has(th[data-for="status.reset_detected"]){visibility:hidden}</style>')),
+  },
+  {
+    name: "status-section-folded-in-a-details-element",
+    expect: /only the elements/,
+    applies: () => true,
+    run: (d) => editHtml(d, (h) => h.replace('<div class="card"><table data-section="status">', '<details><div class="card"><table data-section="status">').replace("</table></div>\n<h2>Escrows</h2>", "</table></div></details>\n<h2>Escrows</h2>")),
+  },
+  {
+    name: "a-script-rewrites-the-reset-cell-in-the-browser",
+    expect: /only the elements/,
+    applies: () => true,
+    run: (d) => editHtml(d, (h) => h.replace("</body>", `<script>document.querySelector('[data-k="status.reset_detected"]').textContent = "false";</script></body>`)),
+  },
+  // The third rerun's remaining placement gaps: a right value in the wrong section, under the
+  // wrong heading, or under the wrong drift column.
+  {
+    name: "census-row-moved-into-the-status-table",
+    expect: /a status table holds only status cells/,
+    applies: (d) => snap(d).census !== null,
+    run: (d) =>
+      editHtml(d, (h) => {
+        const r = rowOf(h, "census.malformed_dropped");
+        return h.replace(r, "").replace(rowOf(h, "status.observed_at"), (x) => x + r);
+      }),
+  },
+  {
+    name: "census-and-drift-headings-swapped",
+    expect: /section headings|sits under the/,
+    applies: (d) => snap(d).census !== null && snap(d).drift !== null,
+    run: (d) => editHtml(d, (h) => h.replace("<h2>Census</h2>", "<h2>@@</h2>").replace("<h2>Spec drift</h2>", "<h2>Census</h2>").replace("<h2>@@</h2>", "<h2>Spec drift</h2>")),
+  },
+  {
+    name: "drift-spec-and-runtime-columns-swapped-in-the-header",
+    expect: /column order/,
+    applies: hasDriftItems,
+    run: (d) => editHtml(d, (h) => h.replace('<th data-col="spec">spec</th><th data-col="runtime">runtime</th>', '<th data-col="runtime">runtime</th><th data-col="spec">spec</th>')),
+  },
+  {
+    name: "drift-spec-column-labeled-runtime",
+    expect: /drift column spec reads its field/,
+    applies: hasDriftItems,
+    run: (d) => editHtml(d, (h) => h.replace('<th data-col="spec">spec</th>', '<th data-col="spec">runtime</th>')),
+  },
+  {
+    name: "drift-note-column-dropped-from-header-and-rows",
+    expect: /shows every field as a column/,
+    applies: hasDriftItems,
+    run: (d) =>
+      editHtml(d, (h) => h.replace('<th data-col="note">note</th>', "").replace(/<td data-k="drift\.\d+\.note"[^>]*>[^<]*<\/td>/g, "")),
+  },
   {
     // Everything agrees, but the snapshot was changed after it was hashed: only the hash and
     // the log can catch this.
@@ -299,8 +391,8 @@ for (const t of tampers) {
   try {
     t.run(tmp);
     const r = check(tmp);
-    outcome = r.exit !== 0 ? "caught" : "missed";
-    failures = r.failures.slice(0, 3);
+    outcome = r.exit === 0 ? "missed" : t.expect && !r.failures.some((w) => t.expect.test(w)) ? "caught-but-not-by-the-named-check" : "caught";
+    failures = t.expect ? r.failures.filter((w) => t.expect.test(w)).slice(0, 3) : r.failures.slice(0, 3);
   } catch (e) {
     outcome = `tamper-failed: ${e.message}`;
   }

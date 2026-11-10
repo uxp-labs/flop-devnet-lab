@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { renderPage } from "../src/page.js";
+import { PAGE_CSS, renderPage } from "../src/page.js";
 import { hashSnapshot } from "../src/store.js";
 import type { EscrowState, Snapshot } from "../src/types.js";
 
@@ -312,7 +312,7 @@ describe("page rows and cards", () => {
     });
   }
   it("the drift header row stays plain th cells", () => {
-    expect(renderPage(buildReset())).toContain("<tr><th>param</th><th>spec</th>");
+    expect(renderPage(buildReset())).toContain('<tr><th data-col="param">param</th><th data-col="spec">spec</th>');
   });
   it("a card's state cell is the card's own escrow state", () => {
     const h = renderPage(buildReset());
@@ -320,5 +320,74 @@ describe("page rows and cards", () => {
       const card = new RegExp(`data-escrow="${e.escrow_id}">(.*?)</table></div>`, "s").exec(h)![1]!;
       expect(card).toContain(`data-k="escrow.${e.escrow_id}.state" data-v="${e.state}"`);
     }
+  });
+});
+
+describe("page sections, columns and hidden content", () => {
+  const sectionOf = (k: string) => (k.startsWith("status.") ? "status" : k.startsWith("escrow.") ? "escrow" : k.startsWith("census") ? "census" : k.startsWith("drift") ? "drift" : k.startsWith("snapshot.") ? "snapshot" : "?");
+  for (const [name, snap] of [["default", build()], ["reset", buildReset()], ["null parts", build({ census: null, drift: null })]] as const) {
+    const h = renderPage(snap);
+    it(`${name}: every table has a data-section and holds only that section's keys`, () => {
+      const tables = [...h.matchAll(/<table( [^>]*)?>(.*?)<\/table>/gs)];
+      expect(tables.length).toBeGreaterThan(3);
+      for (const t of tables) {
+        const sec = /data-section="([^"]*)"/.exec(t[1] ?? "")?.[1];
+        expect(["status", "escrow", "census", "drift"], String(sec)).toContain(sec);
+        const keys = [...(t[2] as string).matchAll(/data-k="([^"]*)"/g)].map((k) => k[1] as string);
+        expect(keys.length).toBeGreaterThan(0);
+        for (const k of keys) expect(sectionOf(k), `${k} in ${sec} table`).toBe(sec);
+      }
+    });
+    it(`${name}: no comments or hidden markup`, () => {
+      expect(h).not.toMatch(/<!--|\bhidden\b|display\s*:\s*none|visibility\s*:\s*hidden/i);
+    });
+  }
+  it("the drift header data-col order matches the cells of every row", () => {
+    const h = renderPage(buildReset());
+    const head = [...h.matchAll(/<th data-col="([^"]*)"/g)].map((m) => m[1]);
+    expect(head).toEqual(["param", "spec", "runtime", "status", "note", "mapping", "unit", "expected", "runtime_path"]);
+    const rows = [...h.matchAll(/<tr data-row="(drift\.\d+)">(.*?)<\/tr>/gs)];
+    expect(rows.length).toBe(2);
+    for (const r of rows) {
+      const keys = [...(r[2] as string).matchAll(/data-k="([^"]*)"/g)].map((k) => k[1]);
+      expect(keys).toEqual(head.map((c) => `${r[1]}.${c}`));
+    }
+  });
+  it("the status table holds the status reset row and the census table the census one", () => {
+    const h = renderPage(buildReset());
+    const st = /<table data-section="status">(.*?)<\/table>/s.exec(h)![1]!;
+    const ce = /<table data-section="census">(.*?)<\/table>/s.exec(h)![1]!;
+    expect(st).toMatch(/data-for="status.reset_detected">reset detected<\/th><td data-k="status.reset_detected" data-v="true"/);
+    expect(ce).toMatch(/data-for="census.reset_detected">reset detected<\/th><td data-k="census.reset_detected" data-v="true"/);
+  });
+});
+
+describe("the stylesheet hides nothing (IMD audit finding 12)", () => {
+  // Every property the page's one stylesheet sets, each reviewed: none of them can hide a value,
+  // shrink it to nothing or paint it invisible. A new property must be added here on purpose.
+  const REVIEWED = new Set([
+    "background", "border", "border-bottom", "border-collapse", "border-left", "border-radius", "box-sizing", "color",
+    "font", "font-size", "font-weight", "margin", "margin-inline", "max-width", "overflow-x", "padding", "text-align",
+    "vertical-align", "width", "word-break",
+  ]);
+  const declarations = [...PAGE_CSS.matchAll(/([a-z-]+)\s*:\s*([^;{}]+)/g)].map((m) => [m[1]!, m[2]!.trim()] as const);
+
+  it("sets only reviewed properties, besides its own color variables", () => {
+    const props = declarations.map(([p]) => p).filter((p) => !p.startsWith("--") && p !== "prefers-color-scheme");
+    expect(props.length).toBeGreaterThan(20);
+    expect(props.filter((p) => !REVIEWED.has(p))).toEqual([]);
+  });
+
+  it("never shrinks text or a box to nothing, paints it transparent or clips it", () => {
+    for (const [p, v] of declarations) {
+      if (["font", "font-size", "width", "max-width"].includes(p)) expect(`${p}: ${v}`).not.toMatch(/(?:^|[\s:])0(?:px|em|rem|%)?(?=[\s/]|$)/);
+      expect(`${p}: ${v}`).not.toMatch(/transparent|hidden|clip/);
+    }
+  });
+
+  it("is the one stylesheet on a rendered page", () => {
+    const html = renderPage(build());
+    expect(html.split("<style>")).toHaveLength(2);
+    expect(html).toContain(`<style>${PAGE_CSS}</style>`);
   });
 });

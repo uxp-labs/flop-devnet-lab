@@ -128,8 +128,15 @@ describe("source scan", () => {
   // M0 has no transport at all. This keeps it that way until M1 adds one behind the guard.
   const NET = "(?:http|https|http2|net|tls|dgram|dns|dns/promises|child_process|worker_threads|cluster|inspector|vm|module|undici|ws|axios|node-fetch)";
   const forbidden = [
-    /\bfetch\s*\(/,
-    /new\s+WebSocket\b/,
+    // The name alone, so fetch.call(...), const f = fetch, and new globalThis.WebSocket(...) count.
+    /\bfetch\b/,
+    /\bWebSocket\b/,
+    /\bEventSource\b/,
+    /\bXMLHttpRequest\b/,
+    // The global object by any of its names, which reaches every global, computed or not.
+    /\bglobalThis\b/,
+    /\bglobal\s*(?:\?\.)?\s*[.[]/,
+    /\b(?:self|window)\s*(?:\?\.)?\s*[.[]/,
     new RegExp(`from\\s*["'](?:node:)?${NET}["']`),
     new RegExp(`import\\s*\\(?\\s*["'](?:node:)?${NET}["']`),
     new RegExp(`require\\s*\\(\\s*["'](?:node:)?${NET}["']`),
@@ -140,8 +147,8 @@ describe("source scan", () => {
     // import() or require() whose argument is anything but one plain string literal
     /\bimport\s*\((?!\s*(["'])[^"'`]*\1\s*\))/,
     /\brequire\s*\((?!\s*(["'])[^"'`]*\1\s*\))/,
-    /\beval\s*\(/,
-    /\bnew\s+Function\s*\(/,
+    /\beval\b/,
+    /\bFunction\s*\(/,
     /signAndSend/,
     /\bsignRaw\b/,
     /\bsignPayload\b/,
@@ -167,8 +174,15 @@ describe("source scan", () => {
     for (const re of forbidden) expect(text, `${file} matches ${re}`).not.toMatch(re);
   });
 
-  it("allows a plain dynamic import of a local module", () => {
-    expect(forbidden.some((re) => re.test('const t = await import("./types.js");'))).toBe(false);
+  it("allows a plain dynamic import of a local module, and words that only contain a banned name", () => {
+    for (const line of [
+      'const t = await import("./types.js");',
+      "const fetchedAt = reading.fetched_at;",
+      "// One self-contained HTML page.",
+      "const evaluated = evaluate(x);",
+    ]) {
+      expect(forbidden.some((re) => re.test(line)), line).toBe(false);
+    }
   });
 
   it("catches each kind of forbidden line it claims to", () => {
@@ -188,6 +202,16 @@ describe("source scan", () => {
       'const r = eval("fetch(1)");',
       'const f = new Function("return 1");',
       'const s = process.binding("spawn_sync");',
+      "const r = await fetch.call(null, url);",
+      "const f = fetch;",
+      "const ws = new globalThis.WebSocket(url);",
+      'const get = globalThis["fe" + "tch"];',
+      "const W = WebSocket;",
+      "const es = new EventSource(url);",
+      'const x = global["fetch"];',
+      "const y = self.fetch;",
+      "const z = (0, eval)(code);",
+      'const g = Function("return this")();',
     ];
     for (const line of samples) expect(forbidden.some((re) => re.test(line)), line).toBe(true);
   });

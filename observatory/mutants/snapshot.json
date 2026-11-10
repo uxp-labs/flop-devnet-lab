@@ -18,7 +18,7 @@
   {
     "id": "source-parser-wording-leaks",
     "file": "src/source.ts",
-    "find": "const reason = e instanceof SyntaxError ? \"not valid JSON\" : (e as Error).message;",
+    "find": "const reason = e instanceof SyntaxError || e instanceof TypeError ? \"not valid JSON\" : (e as Error).message;",
     "replace": "const reason = (e as Error).message;",
     "test": "test/snapshot.test.ts",
     "why": "outputs must not carry the parser's wording, which changes between Node versions"
@@ -70,5 +70,37 @@
     "replace": "          continue;",
     "test": "test/snapshot.test.ts",
     "why": "an entry that is not a page file must be reported, never skipped silently"
+  },
+  {
+    "id": "snapshot-previous-dropped",
+    "file": "src/snapshot.ts",
+    "find": "    previous: o.previous ?? null,",
+    "replace": "    previous: null,",
+    "test": "test/snapshot.test.ts",
+    "why": "the previous snapshot must reach the rollback and stuck height checks"
+  },
+  {
+    "id": "source-lossy-utf8",
+    "file": "src/source.ts",
+    "find": "        const text = new TextDecoder(\"utf-8\", { fatal: true, ignoreBOM: true }).decode(readFileSync(path));",
+    "replace": "        const text = readFileSync(path, \"utf8\");",
+    "test": "test/snapshot.test.ts",
+    "why": "an invalid UTF-8 byte must refuse, never become U+FFFD"
+  },
+  {
+    "id": "source-bom-stripped",
+    "file": "src/source.ts",
+    "find": "{ fatal: true, ignoreBOM: true }",
+    "replace": "{ fatal: true, ignoreBOM: false }",
+    "test": "test/snapshot.test.ts",
+    "why": "a byte order mark must refuse, as the recount does"
+  },
+  {
+    "id": "source-event-pages-file-accepted",
+    "file": "src/source.ts",
+    "find": "    if (pagesStat && !pagesStat.isDirectory()) {",
+    "replace": "    if (false) {",
+    "test": "test/snapshot.test.ts",
+    "why": "event-pages that is not a real folder must refuse"
   }
 ]

@@ -114,8 +114,8 @@
   {
     "id": "escrow-malformed-structure-accepted",
     "file": "src/escrow.ts",
-    "find": "if (typeof index !== \"number\" || !Number.isInteger(index) || index < 0) return \"index is not a whole number\";",
-    "replace": "if (typeof index !== \"number\" && typeof index !== \"string\") return \"index is not a whole number\";",
+    "find": "if (!isSafeInt(index) || index < 0) return \"index is not a safe whole number\";",
+    "replace": "if (typeof index !== \"number\" && typeof index !== \"string\") return \"index is not a safe whole number\";",
     "test": "test/escrow.test.ts",
     "why": "Events with wrong field types must be ignored."
   },
@@ -170,8 +170,8 @@
   {
     "id": "escrow-two-opens-no-conflict",
     "file": "src/escrow.ts",
-    "find": "} else if (opened.length > 1) {",
-    "replace": "} else if (false) {",
+    "find": "if (opened.length > 1) conflicts.push(",
+    "replace": "if (opened.length > 2) conflicts.push(",
     "test": "test/escrow.test.ts",
     "why": "Two distinct finalized opens are conflicting evidence and the note must say so (U-new-2)."
   },
@@ -254,5 +254,77 @@
     "replace": "if (copies.some((c) => c.finalized)) {\n        const what",
     "test": "test/escrow.test.ts",
     "why": "Only an out of range release or refund is conflicting evidence; an out of range open is ignored with a note."
+  },
+  {
+    "id": "escrow-unsafe-index-accepted",
+    "file": "src/escrow.ts",
+    "find": "if (!isSafeInt(index) || index < 0) return \"index is not a safe whole number\";",
+    "replace": "if (typeof index !== \"number\" || !Number.isInteger(index) || index < 0) return \"index is not a safe whole number\";",
+    "test": "test/escrow.test.ts",
+    "why": "An unsafe integer index makes the event malformed (IMD audit finding 1)."
+  },
+  {
+    "id": "escrow-unsafe-block-number-accepted",
+    "file": "src/escrow.ts",
+    "find": "if (n !== null && n !== undefined && !isSafeInt(n)) {",
+    "replace": "if (n !== null && n !== undefined && !(typeof n === \"number\" && Number.isInteger(n))) {",
+    "test": "test/escrow.test.ts",
+    "why": "An unsafe integer block_number makes the event malformed."
+  },
+  {
+    "id": "escrow-unsafe-page-field-accepted",
+    "file": "src/escrow.ts",
+    "find": "if (!isSafeInt(page[k])) return",
+    "replace": "if (!(typeof page[k] === \"number\" && Number.isInteger(page[k]))) return",
+    "test": "test/escrow.test.ts",
+    "why": "An unsafe integer in a page field makes the page invalid (IMD audit finding 2)."
+  },
+  {
+    "id": "escrow-unsafe-next-page-accepted",
+    "file": "src/escrow.ts",
+    "find": "(page[\"next_page\"] !== null && !isSafeInt(page[\"next_page\"]))) {",
+    "replace": "(page[\"next_page\"] !== null && !Number.isInteger(page[\"next_page\"]))) {",
+    "test": "test/escrow.test.ts",
+    "why": "An unsafe next_page makes the page invalid."
+  },
+  {
+    "id": "escrow-two-opens-ignored-with-terminal",
+    "file": "src/escrow.ts",
+    "find": "if (opened.length > 1) conflicts.push(",
+    "replace": "if (opened.length > 1 && released.length + refunded.length === 0) conflicts.push(",
+    "test": "test/escrow.test.ts",
+    "why": "Two distinct finalized opens conflict whether or not a release or refund exists (IMD audit finding 7)."
+  },
+  {
+    "id": "escrow-above-height-terminal-ignored",
+    "file": "src/escrow.ts",
+    "find": "      aboveHeight++;\n      if (method !== OPENED) {",
+    "replace": "      aboveHeight++;\n      if (false) {",
+    "test": "test/escrow.test.ts",
+    "why": "A finalized release or refund above the finalized height leaves the escrow unverified (IMD audit finding 11)."
+  },
+  {
+    "id": "escrow-above-height-open-conflicts",
+    "file": "src/escrow.ts",
+    "find": "      aboveHeight++;\n      if (method !== OPENED) {",
+    "replace": "      aboveHeight++;\n      if (true) {",
+    "test": "test/escrow.test.ts",
+    "why": "Only a release or refund above the height is conflicting evidence; an open there is ignored with a note."
+  },
+  {
+    "id": "escrow-negative-block-number-malformed",
+    "file": "src/escrow.ts",
+    "find": "if (n !== null && n !== undefined && !isSafeInt(n)) {",
+    "replace": "if (n !== null && n !== undefined && (!isSafeInt(n) || n < 0)) {",
+    "test": "test/escrow.test.ts",
+    "why": "A negative block_number is an integer; the page range rule handles it, it is not malformed (IMD audit finding 14)."
+  },
+  {
+    "id": "escrow-negative-from-block-accepted",
+    "file": "src/escrow.ts",
+    "find": "  if ((page[\"from_block\"] as number) < 0) return \"from_block is negative\";\n",
+    "replace": "",
+    "test": "test/escrow.test.ts",
+    "why": "a page whose range starts below block 0 is invalid, so nothing in it is evidence"
   }
 ]

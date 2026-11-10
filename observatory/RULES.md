@@ -16,8 +16,14 @@ Each service has one health value: `ok`, `degraded`, `down` or `unknown`. `ok` n
 check below to run and pass.
 
 - Times are ISO 8601 with an explicit zone: `Z` or an offset such as `+00:00`. A time without a
-  zone does not parse, because its meaning would depend on the machine's time zone. The snapshot
-  time must have a zone too, or the status refuses.
+  zone does not parse, because its meaning would depend on the machine's time zone. A time must
+  also be a real instant: a date such as 2026-11-31, an hour of 24, a minute or second of 60, or
+  an offset beyond 23:59 does not parse (it is never rolled over). The snapshot time must parse,
+  or the status refuses.
+- The faucet genesis comes from `GET /chain` only when that reading is HTTP 200 with no error and
+  a reading time that parses, is at most the stale limit old, and is not later than the snapshot
+  time. Otherwise the faucet genesis is `null`, so `reset_detected` cannot be `false`. A `/chain`
+  reading time later than the snapshot time is also a conflict.
 - A reading time later than the snapshot time is a conflict, noted in `conflicts`, whatever that
   reading's health.
 
@@ -41,7 +47,9 @@ check below to run and pass.
   - `observed_at` parses, is not later than the snapshot time, and is at most the stale limit old
     (120 seconds by default)
   - when there is a previous snapshot on the same genesis: no rollback, no changed finalized hash,
-    and no finalized height stuck for longer than the stale limit
+    and no finalized height stuck for longer than the stale limit. The snapshot command reads the
+    previous snapshot from its log, after verifying the log's hash chain (a broken log refuses),
+    and passes its RPC genesis, finalized head and RPC reading time to these checks.
 - Any failed check makes RPC health `degraded`. A missing or invalid genesis hash, finalized head
   or best height is a failed check. A missing or unparsable `observed_at` means the age check
   cannot run: health is `unknown` when nothing else failed.
@@ -78,6 +86,14 @@ check below to run and pass.
   refund that names an escrow leaves that escrow `unverified` with a note. The census skips such
   an event (clause 4), so neither reads it as a release or refund.
 - Genesis values and block hashes are compared exactly as written, as in census clause 5.
+- Integers in event and page fields follow census clause 14: an unsafe integer (beyond 2^53 - 1)
+  makes an event malformed and a page invalid. A negative integer `block_number` is an integer:
+  it is outside its page's range (the rule above), not malformed.
+- Two distinct finalized opens for one escrow are conflicting evidence whether or not a release or
+  refund exists: the escrow is `unverified` with a note.
+- A finalized release or refund that names an escrow but lies above the finalized height leaves
+  the escrow `unverified` with a note: the page calls it final, but our finalized head does not
+  reach it yet.
 - A finalized height bounds the evidence only when it comes from an RPC head on the pinned
   genesis. Otherwise (the RPC was not read, or reports another genesis) `finalized_height` is
   `null`, and a result with evidence notes that its evidence is not bounded by a finalized height.
@@ -135,7 +151,11 @@ check below to run and pass.
    (1 to 5 and 6 to 10 become 1 to 10). With no pages at all, the whole request is one gap.
 4. An event whose integer `block_number` is outside the request or outside its page's range is
    skipped, not malformed. A `null` block_number is kept, on a chain that intersects the request
-   (clause 1).
+   (clause 1). Copies of one event (one key, clause 9) that lie partly inside and partly outside
+   (their own page's range or the request) are inconsistent: the group counts once in
+   `malformed_dropped`, its copies beyond the first count in `duplicates_dropped` as for any group
+   (clause 9), and it counts nowhere else. A group whose copies all lie outside is skipped and
+   counts nowhere, not even in `duplicates_dropped`.
 5. Genesis values are compared exactly as written. Fixtures use lower case.
 6. `excluded_other_genesis` is the number of events on all pages of any other genesis, whatever
    their chain or finality. Those pages never add coverage.
@@ -149,14 +169,19 @@ check below to run and pass.
    copy is not finalized, the group is one pending event. If copies disagree on section, method
    or account, the group counts once in `malformed_dropped` and nowhere else. Malformed events have
    no key and are never deduplicated.
-10. Order: block range filter, then malformed, then dedupe, then pending or finalized, then kind.
-    Finalized events of kinds not in the table count nowhere.
+10. Order: malformed, then group by key, then the block range rule of clause 4 (a group all
+    outside is skipped, a mixed group is malformed), then dedupe, then pending or finalized, then
+    kind. An event that is malformed and also has an integer `block_number` outside the request or
+    its page's range is skipped, not malformed. Finalized events of kinds not in the table count
+    nowhere.
 11. The account is the first of `who`, `owner`, `agent`, `payer` whose value is a non-empty string.
     `by_account` lists only non-zero kinds; accounts sort ascending.
 12. A structurally invalid page (not an object, `genesis` not a string, `from_block`, `to_block`,
-    `page` or `next_page` missing or of the wrong type, a negative `page`, `events` not a list, or an
-    inverted range) makes the whole census refuse with an error. So does an event page file that
-    cannot be read or parsed as standard JSON (RFC 8259: `NaN` and `Infinity` are not JSON).
+    `page` or `next_page` missing or of the wrong type, a negative `page`, a negative `from_block`
+    (block numbers start at 0), `events` not a list, or an inverted range) makes the whole census refuse with an error. So does an event page file that
+    cannot be read, decoded as strict UTF-8, or parsed as standard JSON (RFC 8259: the text is
+    UTF-8 with no byte order mark, and `NaN` and `Infinity` are not JSON). A byte that is not
+    valid UTF-8 refuses; it is never replaced and read around.
     Neither is ever turned into a partial count.
 13. A request with a negative `from_block` or `from_block` greater than `to_block` is refused.
 14. An integer is a JSON number with no fractional part, judged by value: `1.0` is the integer 1,
@@ -168,7 +193,9 @@ check below to run and pass.
 15. Every entry in `event-pages/` must be a page file: a regular file whose name ends in `.json` and
     does not start with a dot. Any other entry (a dotfile, another extension, a folder) refuses the
     census and leaves every escrow `unverified`, because it may be a page that was meant to count.
-    A symbolic link is not a regular file, even when it points to one.
+    A symbolic link is not a regular file, even when it points to one. `event-pages` itself must
+    be a folder, not a file or a link; otherwise the census refuses and every escrow is
+    `unverified`.
 
 ## 4. Read only
 
@@ -186,10 +213,24 @@ Tests fail if any attempt is left in the log.
 - A source scan fails any `src` module, other than `guard.ts`, that imports one of those modules or
   calls fetch, WebSocket, a signing API or a key API. It also fails the indirect forms:
   `process.getBuiltinModule`, `createRequire`, an `import()` or `require()` whose argument is not
-  a plain string, `process.binding`, `eval` and `new Function`.
+  a plain string, `process.binding`, `eval` and `Function`, called or not.
+- The source scan fails any use of the bare names `fetch`, `WebSocket`, `EventSource`,
+  `XMLHttpRequest` and `globalThis` in `src`, and any member or computed access on `global`,
+  `self` or `window`, so an aliased, `.call` or computed form cannot slip past it.
+- Every attempt, every reset of the log and every test file's final check is written to a
+  journal the moment it happens. Once every test file has ended, and again after the test run
+  exits, the journal is checked:
+  - an attempt still in a file's log at its final check fails;
+  - anything after a file's final check fails, an attempt or a reset made from a timer, say,
+    which no test hook can see;
+  - a reset or a final check whose count disagrees with the attempts journaled before it fails,
+    because it means the journal lost an attempt;
+  - every test file must reach its final check.
 - The harness canary proves that a test leaving any of these in the log fails: a fetch, an
   `node:https` request, a `node:net` connection, a child process, a refused RPC write, a refused
-  signature and a refused spend.
+  signature and a refused spend. It proves the same for a blocked call fired from a timer after
+  the file's final check, with and without a reset there, and that the timer case passes once
+  the journal check is taken out, so that check is what catches it.
 
 ## 5. Outputs agree
 
@@ -199,6 +240,19 @@ blank on the page and `null` in JSON and MCP.
 - Each feed's payload (`status`, `escrows`, `census`, `drift`) equals the matching part of the
   snapshot exactly, every field included. MCP tool text equals the feed file byte for byte.
   `snapshot.json` equals the last line of the snapshot log, and its hash verifies.
+- Nothing on the page is hidden, so nothing the check compares can be invisible to a reader:
+  - no HTML comment and no other `<!` markup but the doctype;
+  - only the elements and attributes the renderer writes, so no `hidden` or `style` attribute
+    and no `script`, `details` or `template` element;
+  - only the renderer's own stylesheet, which sets no property that can hide a value, shrink it
+    to nothing or paint it invisible (`test/page.test.ts` reviews each property it sets).
+- Every table carries `data-section` (`status`, `escrow`, `census` or `drift`), holds only keys
+  of that section, and sits under that section's heading. The headings are Network status,
+  Escrows, Census and Spec drift, in that order. Only the intro line's snapshot values and the
+  census banner sit outside a section table.
+- The drift item table's header cells carry `data-col` with the field each column shows and read
+  that field's name, with underscores as spaces. Each field of a drift item is a column, named
+  once, and every drift row's cells follow the header's order.
 - Every `td` on the page carries `data-k`; a cell without one fails the check. The visible text of
   every marked element, nested tags included, must match its value as rendered below.
 - Every value sits where a person reads it:

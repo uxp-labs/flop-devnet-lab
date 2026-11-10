@@ -262,5 +262,29 @@
   "replace": "    finalized_height: s.status.finalized_height,\n    observed_at: s.observed_at,",
   "test": "test/mcp.test.ts",
   "why": "an unseen escrow must not borrow the status height"
+ },
+ {
+  "id": "page-status-census-reset-rows-swapped",
+  "file": "src/page.ts",
+  "find": "row(\"status.reset_detected\", cell(\"status.reset_detected\", st.reset_detected), \"status.\")",
+  "replace": "row(\"census.reset_detected\", cell(\"census.reset_detected\", s.census?.reset_detected ?? null), \"census.\")",
+  "test": "test/page.test.ts",
+  "why": "the reset rows must stay in their own tables"
+ },
+ {
+  "id": "page-drift-spec-runtime-swapped",
+  "file": "src/page.ts",
+  "find": "${cell(`drift.${i}.spec`, jsonValue(it.spec))}${cell(`drift.${i}.runtime`, jsonValue(it.runtime))}",
+  "replace": "${cell(`drift.${i}.runtime`, jsonValue(it.runtime))}${cell(`drift.${i}.spec`, jsonValue(it.spec))}",
+  "test": "test/page.test.ts",
+  "why": "drift cells follow the header column order"
+ },
+ {
+  "id": "page-table-section-wrong",
+  "file": "src/page.ts",
+  "find": "<table data-section=\"escrow\">",
+  "replace": "<table data-section=\"status\">",
+  "test": "test/page.test.ts",
+  "why": "every table carries the section of its keys"
  }
 ]

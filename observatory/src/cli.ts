@@ -9,7 +9,7 @@
 //                             --out <dir> [--log <file>] [--now <iso>] [--source-sha <sha>]
 //
 // JSON goes to stdout. Errors go to stderr with exit 2 for bad usage or input.
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { CensusRefused, census } from "./census.js";
@@ -19,8 +19,8 @@ import { writeFeeds } from "./feed.js";
 import { renderPage } from "./page.js";
 import { buildSnapshot } from "./snapshot.js";
 import { FixtureSource } from "./source.js";
-import { DEVNET_GENESIS, networkStatus } from "./status.js";
-import { appendSnapshot, hashSnapshot } from "./store.js";
+import { DEVNET_GENESIS, networkStatus, type StatusOptions } from "./status.js";
+import { appendSnapshot, hashSnapshot, readSnapshots, verifyChain } from "./store.js";
 import type { Snapshot } from "./types.js";
 
 const PKG = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -146,11 +146,27 @@ async function main(): Promise<void> {
       const src = samePin(FixtureSource.fromDir(driftDir), driftDir);
       driftPart = { label: `fixture:${src.data.meta.scenario}`, report: await driftFor(driftDir, one(a, "--spec"), now) };
     }
+    const log = one(a, "--log");
+    // RULES.md 1.1: the rollback, changed hash and stuck height checks need the previous snapshot.
+    // It comes from the log, and only after the log's whole hash chain verifies.
+    let previous: StatusOptions["previous"] = null;
+    if (log && existsSync(log)) {
+      const broken = verifyChain(log);
+      if (broken !== null) fail(`snapshot log ${log} is broken at line ${broken}; it is never extended or trusted`);
+      const st = readSnapshots(log).at(-1)?.status;
+      if (st && st.genesis.rpc !== null && st.finalized_height !== null && st.finalized_hash !== null && st.rpc.observed_at !== null) {
+        previous = {
+          genesis: st.genesis.rpc,
+          finalized_height: st.finalized_height,
+          finalized_hash: st.finalized_hash,
+          observed_at: st.rpc.observed_at,
+        };
+      }
+    }
     const fresh = await buildSnapshot(
       { status, escrows, census: censusPart, drift: driftPart },
-      { pinnedGenesis: pinned, now, sourceSha: one(a, "--source-sha") ?? null },
+      { pinnedGenesis: pinned, now, sourceSha: one(a, "--source-sha") ?? null, previous },
     );
-    const log = one(a, "--log");
     let snap: Snapshot;
     if (log) {
       mkdirSync(dirname(log), { recursive: true });

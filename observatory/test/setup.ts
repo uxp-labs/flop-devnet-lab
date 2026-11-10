@@ -9,14 +9,30 @@
 //
 // After each test file, any attempt still in the log fails the file. A test that provokes a
 // refusal on purpose must assert it and then call resetAttempts().
+//
+// The log is also written to a journal (OBS_ATTEMPTS_FILE, which test/global-setup.ts always
+// sets) the moment anything happens: each attempt, each reset, and each file's final check. A
+// blocked call fired from a timer after that check is out of reach of any afterAll, but it is on
+// disk, and scripts/attempts-check.mjs fails the run for it once every file has ended.
+import { randomUUID } from "node:crypto";
 import { appendFileSync } from "node:fs";
 // Imported before the block is set, to prove the sync below reaches bindings that already exist.
 import { request as httpsRequestBeforeBlock } from "node:https";
 import { createRequire, syncBuiltinESMExports } from "node:module";
-import { afterAll } from "vitest";
-import { type AttemptKind, attemptLog, recordAttempt } from "../src/guard.js";
+import { relative } from "node:path";
+import { afterAll, expect } from "vitest";
+import { type AttemptKind, attemptLog, onAttempt, recordAttempt } from "../src/guard.js";
 
 const require = createRequire(import.meta.url);
+
+const journal = process.env.OBS_ATTEMPTS_FILE || null;
+const run = randomUUID();
+const testFile = relative(process.cwd(), expect.getState().testPath ?? "") || "unknown";
+function journalLine(entry: Record<string, unknown>): void {
+  if (journal) appendFileSync(journal, JSON.stringify({ run, file: testFile, ...entry }) + "\n");
+}
+// Registered before anything is blocked, so no attempt can come before it.
+onAttempt((e) => journalLine(e.type === "attempt" ? { event: "attempt", attempt: e.attempt } : { event: "reset", cleared: e.cleared }));
 
 function describeTarget(args: unknown[]): string {
   const a = args[0];
@@ -103,10 +119,7 @@ export const earlyBindings = { httpsRequest: () => httpsRequestBeforeBlock };
 
 afterAll(() => {
   const left = attemptLog();
-  const file = process.env.OBS_ATTEMPTS_FILE;
-  if (file && left.length > 0) {
-    appendFileSync(file, left.map((a) => JSON.stringify(a)).join("\n") + "\n");
-  }
+  journalLine({ event: "checked", left: left.length });
   if (left.length > 0) {
     throw new Error(`unexpected network, write, sign or spend attempts: ${JSON.stringify(left)}`);
   }

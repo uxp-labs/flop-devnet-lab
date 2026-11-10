@@ -8,6 +8,7 @@
 // - Disagreements between sources go in `conflicts`, in plain words.
 import type { FaucetHealthBody, Health, HttpResult, NetworkStatus, RpcHead, ServiceStatus } from "./types.js";
 import type { Source } from "./source.js";
+import { parseZoned, secondsBetween } from "./strict.js";
 
 /**
  * FLOP devnet genesis, as pinned by imd-flop (imd-flop/src/networks.ts) and read from
@@ -40,23 +41,8 @@ function nonNegativeInt(value: unknown): number | null {
   return typeof value === "number" && Number.isInteger(value) && value >= 0 ? value : null;
 }
 
-// RULES.md 1.1: a time must carry its zone (Z or an offset). Date.parse would read a time without
-// one in the machine's own zone, so the same input could be fresh on one machine and stale on
-// another.
-const ZONED = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:\d{2})$/;
-
-/** Milliseconds since the epoch for an ISO 8601 time with a zone, or null. */
-export function parseZoned(t: unknown): number | null {
-  if (typeof t !== "string" || !ZONED.test(t)) return null;
-  const v = Date.parse(t);
-  return Number.isFinite(v) ? v : null;
-}
-
-function secondsBetween(earlier: unknown, later: unknown): number | null {
-  const a = parseZoned(earlier);
-  const b = parseZoned(later);
-  return a !== null && b !== null ? (b - a) / 1000 : null;
-}
+// Times and their ages: shared strict parsing (src/strict.ts), RULES.md 1.1.
+export { parseZoned } from "./strict.js";
 
 export function classifyFaucet(r: HttpResult<FaucetHealthBody>): NetworkStatus["faucet"] {
   const body = r.body && typeof r.body === "object" ? r.body : null;
@@ -241,7 +227,15 @@ export async function networkStatus(source: Source, opts: StatusOptions): Promis
   ]);
   const conflicts: string[] = [];
 
-  const rawFaucetGenesis = chain.body && typeof chain.body === "object" ? chain.body.genesisHash : undefined;
+  // RULES.md 1.1: the faucet genesis counts only from a usable /chain reading: HTTP 200, no error,
+  // and a reading time that parses, is not later than the snapshot time and is fresh. Otherwise it
+  // is null, so reset_detected cannot be false on the faucet's word.
+  const chainAge = secondsBetween(chain.fetched_at, o.now);
+  if (chainAge !== null && chainAge < 0) {
+    conflicts.push(`faucet /chain reading time ${String(chain.fetched_at)} is later than the snapshot time ${o.now}`);
+  }
+  const chainUsable = chain.http === 200 && !chain.error && chainAge !== null && chainAge >= 0 && chainAge <= o.staleAfterSeconds;
+  const rawFaucetGenesis = chainUsable && chain.body && typeof chain.body === "object" ? chain.body.genesisHash : undefined;
   const faucetGenesis = normalizeHash(rawFaucetGenesis);
   if (rawFaucetGenesis !== undefined && faucetGenesis === null) {
     conflicts.push("faucet /chain genesisHash is malformed");

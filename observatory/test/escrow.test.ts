@@ -101,7 +101,7 @@ function validate(schema: Schema, v: unknown, path = "$"): string[] {
 }
 
 describe("fixture scenarios", () => {
-  it("has all twenty escrow scenarios", () => {
+  it("has all twenty-five escrow scenarios", () => {
     expect(scenarios).toEqual([
       "escrows-block-number-disagrees",
       "escrows-conflicting",
@@ -111,6 +111,7 @@ describe("fixture scenarios", () => {
       "escrows-genesis-case",
       "escrows-invalid-page",
       "escrows-malformed",
+      "escrows-negative-block-number",
       "escrows-one-event-two-escrows",
       "escrows-opened-only",
       "escrows-other-genesis",
@@ -118,10 +119,14 @@ describe("fixture scenarios", () => {
       "escrows-outside-range-copy-disagrees",
       "escrows-outside-range-refund-vs-claim",
       "escrows-outside-range-unparsable",
+      "escrows-release-above-height",
+      "escrows-two-opens-and-release",
       "escrows-unfinalized-only",
       "escrows-unparsable-copies-disagree",
       "escrows-unparsable-copy-disagrees",
       "escrows-unreadable-page",
+      "escrows-unsafe-index",
+      "escrows-unsafe-page-range",
       "escrows-verification",
     ]);
   });
@@ -153,7 +158,7 @@ describe("fixture scenarios", () => {
         checked++;
       }
     }
-    expect(checked).toBeGreaterThanOrEqual(36);
+    expect(checked).toBeGreaterThanOrEqual(46);
   });
 
   it("the schema check itself rejects bad objects", () => {
@@ -818,5 +823,155 @@ describe("evidence without a finalized height says so", () => {
     expect(got[0]?.notes).toContain(unbounded);
     expect(got[1]?.notes).toContain(unbounded);
     expect(got[2]?.notes).not.toContain(unbounded);
+  });
+});
+
+describe("unsafe integers (census clause 14)", () => {
+  const UNSAFE = 9007199254740992; // 2^53, what JSON.parse makes of 9007199254740993
+  it("the fixture files really hold the literal 9007199254740993, and parsing rounds it", () => {
+    for (const name of ["escrows-unsafe-index", "escrows-unsafe-page-range"]) {
+      const text = readFileSync(join(fixturesDir, name, "event-pages", "000.json"), "utf8");
+      expect(text, name).toContain("9007199254740993");
+      expect(text, name).not.toContain("9007199254740992");
+      expect(JSON.stringify(JSON.parse(text)), name).toContain("9007199254740992");
+    }
+    const idx = readFileSync(join(fixturesDir, "escrows-unsafe-index", "event-pages", "000.json"), "utf8");
+    expect(idx).toMatch(/"index": 9007199254740993,/);
+    const rng = readFileSync(join(fixturesDir, "escrows-unsafe-page-range", "event-pages", "000.json"), "utf8");
+    expect(rng).toMatch(/"to_block": 9007199254740993,/);
+  });
+  it("an event with an unsafe index is malformed, never evidence", () => {
+    const s = escrowState(A, [page([{ ...ev("EscrowOpened", A, 1), index: UNSAFE }])], opts);
+    expect(s.state).toBe("unverified");
+    expect(s.evidence).toEqual([]);
+    expect(s.notes).toContain("malformed event ignored: hasStation.EscrowOpened (index is not a safe whole number)");
+  });
+  it("the largest safe index is fine", () => {
+    const s = escrowState(A, [page([{ ...ev("EscrowOpened", A, 1), index: Number.MAX_SAFE_INTEGER }])], opts);
+    expect(s.state).toBe("funded");
+  });
+  it("an event with an unsafe block_number is malformed, never evidence", () => {
+    const wide = { ...page([{ ...ev("EscrowReleased", A, 2), block_number: UNSAFE }]), to_block: Number.MAX_SAFE_INTEGER };
+    const s = escrowState(A, [wide], { ...opts, finalizedHeight: null });
+    expect(s.state).toBe("unverified");
+    expect(s.notes.some((n) => n.includes("block_number is not a safe integer or null"))).toBe(true);
+  });
+  it("fixture: the unsafe index leaves a1 unverified and b2 funded", async () => {
+    const { expected, pages, o } = await loadScenario("escrows-unsafe-index");
+    const [a, b] = escrowStates(expected.escrows.map((e) => e.id), pages, o) as [EscrowState, EscrowState];
+    expect(a.state).toBe("unverified");
+    expect(a.notes.join(" ")).toContain("index is not a safe whole number");
+    expect(b.state).toBe("funded");
+  });
+  const unsafePages: [string, unknown][] = [
+    ["from_block", { ...page([]), from_block: -UNSAFE }],
+    ["to_block", { ...page([]), to_block: UNSAFE }],
+    ["page", { ...page([]), page: UNSAFE }],
+    ["next_page", { ...page([]), next_page: UNSAFE }],
+  ];
+  for (const [field, bad] of unsafePages) {
+    it(`a page with an unsafe ${field} is invalid and verifies nothing`, () => {
+      expect(pageProblem(bad)).not.toBeNull();
+      const good = page([ev("EscrowReleased", A, 2)]);
+      expect(escrowState(A, [good], opts).state).toBe("claimed");
+      const s = escrowState(A, [good, bad as EventPage], opts);
+      expect(s.state).toBe("unverified");
+      expect(s.evidence).toEqual([]);
+    });
+  }
+  it("fixture: the unsafe to_block makes every escrow unverified", async () => {
+    const { expected, pages, o } = await loadScenario("escrows-unsafe-page-range");
+    expect(pageProblem(pages[0])).toBe("to_block is missing or not a safe whole number");
+    for (const s of escrowStates(expected.escrows.map((e) => e.id), pages, o)) {
+      expect(s.state).toBe("unverified");
+      expect(s.notes.join(" ")).toContain("event page is invalid");
+    }
+  });
+});
+
+describe("two distinct finalized opens conflict whatever else exists", () => {
+  const twoOpens = [ev("EscrowOpened", A, 1), ev("EscrowOpened", A, 2)];
+  const note = "conflicting evidence: more than one distinct finalized open for this escrow";
+  it("with a release the escrow is unverified, not claimed", () => {
+    const s = escrowState(A, [page([...twoOpens, ev("EscrowReleased", A, 3)])], opts);
+    expect(s.state).toBe("unverified");
+    expect(s.evidence).toEqual([]);
+    expect(s.notes).toContain(note);
+  });
+  it("with a refund the escrow is unverified, not refunded", () => {
+    const s = escrowState(A, [page([...twoOpens, ev("EscrowRefunded", A, 3)])], opts);
+    expect(s.state).toBe("unverified");
+    expect(s.notes).toContain(note);
+  });
+  it("control: one open, seen twice, plus a release is claimed", () => {
+    const open = ev("EscrowOpened", A, 1);
+    expect(escrowState(A, [page([open, open, ev("EscrowReleased", A, 3)])], opts).state).toBe("claimed");
+  });
+  it("fixture: both escrows are unverified", async () => {
+    const { expected, pages, o } = await loadScenario("escrows-two-opens-and-release");
+    for (const s of escrowStates(expected.escrows.map((e) => e.id), pages, o)) {
+      expect(s.state).toBe("unverified");
+      expect(s.notes).toContain(note);
+    }
+  });
+});
+
+describe("a finalized release or refund above the finalized height", () => {
+  const low = { ...opts, finalizedHeight: 150 };
+  it("leaves a funded escrow unverified, with a note", () => {
+    const s = escrowState(A, [page([ev("EscrowOpened", A, 1), ev("EscrowReleased", A, 2, { block_number: 160 })])], low);
+    expect(s.state).toBe("unverified");
+    expect(s.evidence).toEqual([]);
+    expect(s.notes).toContain("1 event above the finalized height: not evidence");
+    expect(s.notes.join(" ")).toContain("a finalized release above the finalized height names this escrow");
+  });
+  it("a refund above the height overrides a clean claim", () => {
+    const pages = [page([ev("EscrowReleased", A, 2), ev("EscrowRefunded", A, 3, { block_number: 160 })])];
+    const s = escrowState(A, pages, low);
+    expect(s.state).toBe("unverified");
+    expect(s.notes.join(" ")).toContain("a finalized refund above the finalized height names this escrow");
+  });
+  it("an open above the height is ignored with a note and is not a conflict", () => {
+    const s = escrowState(A, [page([ev("EscrowOpened", A, 1, { block_number: 160 })])], low);
+    expect(s.state).toBe("unverified");
+    expect(s.notes).toContain("1 event above the finalized height: not evidence");
+    expect(s.notes.join(" ")).not.toContain("conflicting evidence");
+  });
+  it("an event exactly at the height counts", () => {
+    const s = escrowState(A, [page([ev("EscrowOpened", A, 1), ev("EscrowRefunded", A, 3, { block_number: 150 })])], low);
+    expect(s.state).toBe("refunded");
+  });
+  it("fixture: a1 unverified, b2 refunded, c3 unverified", async () => {
+    const { expected, pages, o } = await loadScenario("escrows-release-above-height");
+    expect(o.finalizedHeight).toBe(150);
+    const got = escrowStates(expected.escrows.map((e) => e.id), pages, o);
+    expect(got.map((g) => g.state)).toEqual(["unverified", "refunded", "unverified"]);
+    expect(got[0]?.notes.join(" ")).toContain("above the finalized height names this escrow");
+  });
+});
+
+describe("a negative block_number is an integer, handled by the page range rule", () => {
+  it("a finalized release at block -5 is out of range, not malformed, and leaves the escrow unverified", () => {
+    const s = escrowState(A, [page([ev("EscrowOpened", A, 1), ev("EscrowReleased", A, 9, { block_number: -5 })])], opts);
+    expect(s.state).toBe("unverified");
+    expect(s.evidence).toEqual([]);
+    expect(s.notes).toContain("1 event outside its page's block range: never evidence");
+    expect(s.notes.join(" ")).toContain("a finalized release outside its page's block range names this escrow");
+    expect(s.notes.some((n) => n.startsWith("malformed event ignored"))).toBe(false);
+  });
+  it("a page whose range starts below block 0 is invalid, so a release at block -5 inside it is never evidence", () => {
+    const wide = { ...page([ev("EscrowOpened", A, 1, { block_number: 2 }), ev("EscrowReleased", A, 9, { block_number: -5 })]), from_block: -10, to_block: 10 };
+    expect(pageProblem(wide)).toBe("from_block is negative");
+    const s = escrowState(A, [wide], opts);
+    expect(s.state).toBe("unverified");
+    expect(s.evidence).toEqual([]);
+    expect(pageProblem({ ...wide, from_block: 0 })).toBeNull();
+  });
+  it("fixture: a1 is unverified with a range note", async () => {
+    const { expected, pages, o } = await loadScenario("escrows-negative-block-number");
+    const [a] = escrowStates(expected.escrows.map((e) => e.id), pages, o) as [EscrowState];
+    expect(a.state).toBe("unverified");
+    expect(a.notes.join(" ")).toContain("outside its page's block range");
+    expect(a.notes.some((n) => n.startsWith("malformed event ignored"))).toBe(false);
   });
 });

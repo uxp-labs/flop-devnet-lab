@@ -200,14 +200,6 @@
     "why": "a reading time later than the snapshot time is a conflict"
   },
   {
-    "id": "status-zoneless-time-parses",
-    "file": "src/status.ts",
-    "find": "  if (typeof t !== \"string\" || !ZONED.test(t)) return null;",
-    "replace": "  if (typeof t !== \"string\") return null;",
-    "test": "test/status.test.ts",
-    "why": "a time without a zone must not parse, or health depends on the machine's time zone"
-  },
-  {
     "id": "status-snapshot-time-without-zone-accepted",
     "file": "src/status.ts",
     "find": "  if (parseZoned(opts.now) === null) throw new Error(",
@@ -222,5 +214,45 @@
     "replace": "  if (svc.health === \"ok\" && age !== null && age < 0) {\n    conflicts.push(`${name} reading time",
     "test": "test/status.test.ts",
     "why": "a future reading time is a conflict whatever the reading's health"
+  },
+  {
+    "id": "status-chain-http-ignored",
+    "file": "src/status.ts",
+    "find": "  const chainUsable = chain.http === 200 && !chain.error && chainAge !== null",
+    "replace": "  const chainUsable = !chain.error && chainAge !== null",
+    "test": "test/status.test.ts",
+    "why": "a /chain body on HTTP 500 must not report the faucet genesis"
+  },
+  {
+    "id": "status-chain-error-ignored",
+    "file": "src/status.ts",
+    "find": "  const chainUsable = chain.http === 200 && !chain.error && chainAge !== null",
+    "replace": "  const chainUsable = chain.http === 200 && chainAge !== null",
+    "test": "test/status.test.ts",
+    "why": "a /chain reading with an error must not report the faucet genesis"
+  },
+  {
+    "id": "status-chain-freshness-ignored",
+    "file": "src/status.ts",
+    "find": " && chainAge <= o.staleAfterSeconds;",
+    "replace": ";",
+    "test": "test/status.test.ts",
+    "why": "a 39 day old /chain reading must not report the faucet genesis"
+  },
+  {
+    "id": "status-chain-future-no-conflict",
+    "file": "src/status.ts",
+    "find": "  if (chainAge !== null && chainAge < 0) {\n    conflicts.push(`faucet /chain reading time",
+    "replace": "  if (false) {\n    conflicts.push(`faucet /chain reading time",
+    "test": "test/status.test.ts",
+    "why": "a future /chain reading time is a conflict"
+  },
+  {
+    "id": "status-chain-time-not-needed",
+    "file": "src/status.ts",
+    "find": "  const chainUsable = chain.http === 200 && !chain.error && chainAge !== null && chainAge >= 0 && chainAge <= o.staleAfterSeconds;",
+    "replace": "  const chainUsable = chain.http === 200 && !chain.error && (chainAge === null || (chainAge >= 0 && chainAge <= o.staleAfterSeconds));",
+    "test": "test/status.test.ts",
+    "why": "a /chain reading with no time cannot be shown as current"
   }
 ]

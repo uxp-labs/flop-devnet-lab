@@ -5,7 +5,7 @@ import { FixtureSource } from "../src/source.js";
 import { unknownHttp } from "../src/source.js";
 import { DEVNET_GENESIS, classifyFaucet, classifyGateway, networkStatus, resetDetected } from "../src/status.js";
 
-const NOW = "2026-11-09T23:47:41Z";
+const NOW = "2026-11-09T23:47:53Z";
 const OTHER = "0x" + "ab".repeat(32);
 const fx = (name: string) => FixtureSource.fromDir(fileURLToPath(new URL(`../fixtures/${name}`, import.meta.url)));
 const run = (name: string, extra: Record<string, unknown> = {}) =>
@@ -203,7 +203,7 @@ describe("health is ok only when every check ran and passed (RULES 1.1)", () => 
 
   it("a head one second old is fine, and the stale limit is inclusive", async () => {
     expect((await run("status-healthy")).rpc.stale).toBe(false);
-    const s = await status(withHead({ observed_at: "2026-11-09T23:45:41Z" }));
+    const s = await status(withHead({ observed_at: "2026-11-09T23:45:53Z" }));
     expect(s.rpc.stale).toBe(false);
     expect(s.rpc.health).toBe("ok");
   });
@@ -248,14 +248,14 @@ describe("health is ok only when every check ran and passed (RULES 1.1)", () => 
   });
 
   it("head age: 120 s is fresh, 121 s is stale", async () => {
-    expect((await status(withHead({ observed_at: "2026-11-09T23:45:41Z" }))).rpc.stale).toBe(false);
-    const s = await status(withHead({ observed_at: "2026-11-09T23:45:40Z" }));
+    expect((await status(withHead({ observed_at: "2026-11-09T23:45:53Z" }))).rpc.stale).toBe(false);
+    const s = await status(withHead({ observed_at: "2026-11-09T23:45:52Z" }));
     expect(s.rpc.stale).toBe(true);
     expect(s.rpc.health).toBe("degraded");
   });
 
   it("a head time even 1 s later than the snapshot time is a conflict", async () => {
-    const s = await status(withHead({ observed_at: "2026-11-09T23:47:42Z" }));
+    const s = await status(withHead({ observed_at: "2026-11-09T23:47:54Z" }));
     expect(s.rpc.health).toBe("degraded");
     expect(s.rpc.stale).toBeNull();
     expect(s.conflicts.join(" ")).toMatch(/later than the snapshot time/);
@@ -310,6 +310,45 @@ describe("times must carry a zone (RULES 1.1)", () => {
   });
 });
 
+describe("the faucet genesis comes only from a usable /chain reading (RULES 1.1)", () => {
+  const chainWith = (patch: Record<string, unknown>) => {
+    const src = fx("status-healthy");
+    return networkStatus(new FixtureSource({ ...src.data, faucetChain: { ...(src.data.faucetChain as object), ...patch } as never }), { pinnedGenesis: DEVNET_GENESIS, now: NOW });
+  };
+
+  it("a fresh HTTP 200 reading counts: the healthy devnet has reset_detected false", async () => {
+    const s = await run("status-healthy");
+    expect(s.genesis.faucet).toBe(DEVNET_GENESIS);
+    expect(s.reset_detected).toBe(false);
+    expect(s.conflicts).toEqual([]);
+  });
+
+  it.each([
+    ["an HTTP 500 reading", { http: 500, error: "server error" }],
+    ["a reading with an error but a body", { error: "timeout" }],
+    ["no response", { http: null, error: "timeout", fetched_at: null }],
+    ["a reading 39 days old", { fetched_at: "2026-10-01T00:00:00Z" }],
+    ["a reading 121 s old", { fetched_at: "2026-11-09T23:45:52Z" }],
+    ["a reading with no time", { fetched_at: null }],
+    ["a reading time without a zone", { fetched_at: "2026-11-09T23:47:52" }],
+  ])("%s does not count: faucet genesis null, reset_detected null", async (_name, patch) => {
+    const s = await chainWith(patch);
+    expect(s.genesis.faucet).toBeNull();
+    expect(s.reset_detected).toBeNull();
+  });
+
+  it("a reading 120 s old still counts", async () => {
+    expect((await chainWith({ fetched_at: "2026-11-09T23:45:53Z" })).reset_detected).toBe(false);
+  });
+
+  it("a reading time later than the snapshot time is a conflict and does not count", async () => {
+    const s = await chainWith({ fetched_at: "2026-12-01T00:00:00Z" });
+    expect(s.conflicts.join(" ")).toMatch(/faucet \/chain reading time .* is later than the snapshot time/);
+    expect(s.genesis.faucet).toBeNull();
+    expect(s.reset_detected).toBeNull();
+  });
+});
+
 describe("the classifiers on their own, before freshness is applied", () => {
   it("a faucet or gateway that gave no response is unknown, never ok", () => {
     expect(classifyGateway(unknownHttp("no response")).health).toBe("unknown");
@@ -334,9 +373,9 @@ describe("faucet and gateway freshness (RULES 1.1)", () => {
   });
 
   it("a reading exactly at the stale limit is fresh, one second more is degraded", async () => {
-    expect((await status(edit("faucetHealth", { fetched_at: "2026-11-09T23:45:41Z" }))).faucet.health).toBe("ok");
-    expect((await status(edit("faucetHealth", { fetched_at: "2026-11-09T23:45:40Z" }))).faucet.health).toBe("degraded");
-    expect((await status(edit("gatewayModels", { fetched_at: "2026-11-09T23:45:40Z" }))).gateway.health).toBe("degraded");
+    expect((await status(edit("faucetHealth", { fetched_at: "2026-11-09T23:45:53Z" }))).faucet.health).toBe("ok");
+    expect((await status(edit("faucetHealth", { fetched_at: "2026-11-09T23:45:52Z" }))).faucet.health).toBe("degraded");
+    expect((await status(edit("gatewayModels", { fetched_at: "2026-11-09T23:45:52Z" }))).gateway.health).toBe("degraded");
   });
 
   it("an ok reading with no parsable time is unknown", async () => {
@@ -345,7 +384,7 @@ describe("faucet and gateway freshness (RULES 1.1)", () => {
   });
 
   it("a reading time later than the snapshot time is a conflict and degraded", async () => {
-    const s = await status(edit("gatewayModels", { fetched_at: "2026-11-09T23:47:42Z" }));
+    const s = await status(edit("gatewayModels", { fetched_at: "2026-11-09T23:47:54Z" }));
     expect(s.gateway.health).toBe("degraded");
     expect(s.conflicts.join(" ")).toMatch(/gateway reading time .* is later than the snapshot time/);
   });

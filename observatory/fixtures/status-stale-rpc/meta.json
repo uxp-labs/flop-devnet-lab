@@ -1,6 +1,6 @@
 {
   "scenario": "status-stale-rpc",
   "description": "Synthetic stale RPC: the head was read an hour before the snapshot time.",
-  "now": "2026-11-09T23:47:41Z",
+  "now": "2026-11-09T23:47:53Z",
   "synthetic": true
 }
