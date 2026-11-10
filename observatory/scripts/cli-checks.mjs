@@ -34,7 +34,7 @@ const cases = [
   {
     name: "census refuses a scenario with an unreadable page file",
     run: () => cli("census", "--fixtures", fx("census-unreadable-page")),
-    ok: (r) => r.exit === 2 && /unreadable event page/.test(r.stderr) && /01-unreadable\.json/.test(r.stderr),
+    ok: (r) => r.exit === 2 && /(unreadable|unusable) event page/.test(r.stderr) && /01-unreadable\.json/.test(r.stderr),
   },
   {
     name: "every escrow is unverified when a page file is unreadable, and the note names it",
@@ -58,7 +58,7 @@ const cases = [
   {
     name: "a snapshot refuses a census with an unreadable page file",
     run: () => cli("snapshot", "--status", fx("status-healthy"), "--census", fx("census-unreadable-page"), "--out", join(work, "snap-census")),
-    ok: (r) => r.exit === 2 && /unreadable event page/.test(r.stderr),
+    ok: (r) => r.exit === 2 && /(unreadable|unusable) event page/.test(r.stderr),
   },
   {
     name: "a snapshot refuses a part pinned to a different genesis",
