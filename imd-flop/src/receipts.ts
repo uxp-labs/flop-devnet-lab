@@ -2,7 +2,7 @@
  * Receipt rules, ported from spend-guard/guard.py classify_receipt and receipts.py, matching the viewer:
  *  - stage is "gateway observed" until chain settlement is checked (never "gateway settled");
  *  - chain_final is false unless verified (nothing verifies it yet: InferenceReceipt not observed);
- *  - a null settled_spend stays null and shows blank, never 0;
+ *  - settled_spend counts only when it is finite and >= 0; null, negative, and non-finite stay null and show blank, never 0;
  *  - a 401 api_key_expired gets its own key_expired flag (and keeps the last known receipt).
  */
 export interface GatewayReceipt {
@@ -41,11 +41,15 @@ export interface Classified {
   mock: boolean;
 }
 
+/** A known settlement is a finite amount >= 0. Negative, non-finite, and non-numeric values are unknown, not zero. */
+export function knownSettledSpend(value: unknown): number | null {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : null;
+}
+
 export function classifyReceipt(
   r: GatewayReceipt | null,
   ctx: { job: string | null; provider: string; http?: number; error?: string | null; requestId?: string; chainVerified?: boolean; mock?: boolean },
 ): Classified {
-  const settled = r?.settled_spend;
   const err = ctx.error ?? null;
   return {
     request_id: r?.request_id ?? ctx.requestId ?? "",
@@ -54,7 +58,7 @@ export function classifyReceipt(
     provider: ctx.provider,
     state: r?.state ?? null,
     reserved: typeof r?.reserved_spend === "number" ? r.reserved_spend : null,
-    settled: typeof settled === "number" ? settled : null, // never coerce null/undefined to 0
+    settled: knownSettledSpend(r?.settled_spend),
     settled_raw: r?.settled_spend_raw ?? null,
     stage: ctx.chainVerified === true ? STAGE_CHAIN : STAGE_GATEWAY,
     chain_final: ctx.chainVerified === true, // terminal_event may be pooled; not proof of finality

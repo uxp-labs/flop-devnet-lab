@@ -26,7 +26,7 @@ class ScriptedUsageProvider implements Provider {
   constructor(
     private readonly text: string,
     private readonly cost: CostMode,
-    private readonly settled: number | null,
+    private readonly settled: unknown,
   ) {}
   estimate(body: { model: string; prompt: string; max_tokens: number }) {
     return this.inner.estimate(body);
@@ -58,8 +58,9 @@ type LedgerRow = {
   state: string;
   spend: number | null;
   cost_reported: number | null;
-  cap_charge: number;
+  cap_charge: number | null;
   quote_padded: number | null;
+  spent_before: number | null;
 };
 
 type Printed = {
@@ -78,12 +79,16 @@ function rowsFor(home: string, requestId: string): LedgerRow[] {
   return (readLines(join(home, "ledger.jsonl")) as LedgerRow[]).filter((row) => row.request_id === requestId);
 }
 
-async function runWithheld(job: string, cost: CostMode, settled: number | null) {
-  const home = tmpHome();
-  await readySeat(home, SEAT, "5");
+async function runOn(home: string, job: string, cost: CostMode, settled: unknown) {
   const provider = new ScriptedUsageProvider(MARKER_TEXT, cost, settled);
   const result = await cliP(home, ["run", "--seat", SEAT, "--job", job, "--prompt", "Say hi", "--max-tokens", "8", "--provider", "mock", "--json"], provider);
-  return { home, provider, result, printed: result.json() as Printed };
+  return { provider, result, printed: result.json() as Printed };
+}
+
+async function runWithheld(job: string, cost: CostMode, settled: unknown) {
+  const home = tmpHome();
+  await readySeat(home, SEAT, "5");
+  return { home, ...(await runOn(home, job, cost, settled)) };
 }
 
 function expectWithheld(stdout: string, printed: Printed) {
@@ -103,7 +108,10 @@ async function expectExposure(
   result: RunOut,
   printed: Printed,
   latest: { state: string; spend: number | null; cost_reported: number | null; cap_charge: number },
+  exposure: { dayTotal?: number; spentBefore?: number } = {},
 ) {
+  const spentBefore = exposure.spentBefore ?? 0;
+  const dayTotal = exposure.dayTotal ?? latest.cap_charge;
   expect(result.code).toBe(0);
   expect(printed.quote_padded).toBe(RESERVATION);
   expect(printed.receipt.reserved).toBe(RESERVATION);
@@ -112,12 +120,13 @@ async function expectExposure(
   expectWithheld(result.out, printed);
   const rows = rowsFor(home, printed.request_id);
   expect(rows).toHaveLength(2);
-  expect(rows[0]).toMatchObject({ state: "sent", spend: null, cost_reported: null, cap_charge: RESERVATION, quote_padded: RESERVATION });
-  expect(rows[1]).toMatchObject(latest);
+  expect(rows[0]).toMatchObject({ state: "sent", spend: null, cost_reported: null, cap_charge: RESERVATION, quote_padded: RESERVATION, spent_before: spentBefore });
+  expect(rows[1]).toMatchObject({ ...latest, spent_before: spentBefore });
   expect(printed.cap_charge).toBe(latest.cap_charge);
+  expect(Number.isFinite(rows[1].cap_charge)).toBe(true);
   const status = await cli(home, ["status", "--seat", SEAT, "--json"]);
   const today = status.json().today_utc as { mock: number; flop: number };
-  expect(today.mock).toBe(latest.cap_charge);
+  expect(today.mock).toBe(dayTotal);
   expect(today.flop).toBe(0);
   expect(readFileSync(join(home, "ledger.jsonl"), "utf8").includes(MARKER_HEX)).toBe(false);
 }
@@ -166,5 +175,68 @@ describe("known settlement", () => {
   it("an explicit settled zero still charges zero over a higher usage report", async () => {
     const { home, result, printed } = await runWithheld("settled-zero", HIGHER, 0);
     await expectExposure(home, result, printed, { state: "settled", spend: 0, cost_reported: HIGHER, cap_charge: 0 });
+  });
+});
+
+describe("rejected settled_spend is not a known settlement", () => {
+  it("negative settled_spend -1 keeps the 0.18 reservation and the day total", async () => {
+    const { home, result, printed } = await runWithheld("settled-neg-1", 0.01, -1);
+    await expectExposure(home, result, printed, { state: "settled", spend: null, cost_reported: 0.01, cap_charge: RESERVATION });
+  });
+
+  it("negative settled_spend -0.01 keeps the 0.18 reservation and the day total", async () => {
+    const { home, result, printed } = await runWithheld("settled-neg-small", 0.01, -0.01);
+    await expectExposure(home, result, printed, { state: "settled", spend: null, cost_reported: 0.01, cap_charge: RESERVATION });
+  });
+
+  it("NaN settled_spend keeps a finite 0.18 reservation in the ledger and the day total", async () => {
+    const { home, result, printed } = await runWithheld("settled-nan", 0.01, Number.NaN);
+    await expectExposure(home, result, printed, { state: "settled", spend: null, cost_reported: 0.01, cap_charge: RESERVATION });
+  });
+
+  it("Infinity settled_spend keeps a finite 0.18 reservation in the ledger and the day total", async () => {
+    const { home, result, printed } = await runWithheld("settled-inf", 0.01, Number.POSITIVE_INFINITY);
+    await expectExposure(home, result, printed, { state: "settled", spend: null, cost_reported: 0.01, cap_charge: RESERVATION });
+  });
+
+  it("-Infinity settled_spend keeps a finite 0.18 reservation in the ledger and the day total", async () => {
+    const { home, result, printed } = await runWithheld("settled-neginf", 0.01, Number.NEGATIVE_INFINITY);
+    await expectExposure(home, result, printed, { state: "settled", spend: null, cost_reported: 0.01, cap_charge: RESERVATION });
+  });
+
+  it("a negative settled attempt then an unresolved attempt keeps both reservations in the day total", async () => {
+    const home = tmpHome();
+    await readySeat(home, SEAT, "5");
+    const first = await runOn(home, "seq-neg", 0.01, -1);
+    const second = await runOn(home, "seq-neg-next", "omit", null);
+    const today = (await cli(home, ["status", "--seat", SEAT, "--json"])).json().today_utc as { mock: number; flop: number };
+    expect(today.mock).toBe(RESERVATION * 2);
+    expect(today.flop).toBe(0);
+    expect(rowsFor(home, second.printed.request_id)[0].spent_before).toBe(RESERVATION);
+    await expectExposure(home, first.result, first.printed, { state: "settled", spend: null, cost_reported: 0.01, cap_charge: RESERVATION }, { dayTotal: RESERVATION * 2 });
+    await expectExposure(home, second.result, second.printed, { state: "estimated", spend: null, cost_reported: null, cap_charge: RESERVATION }, { dayTotal: RESERVATION * 2, spentBefore: RESERVATION });
+  });
+
+  it("a nonfinite settled attempt then an unresolved attempt keeps both reservations in the day total", async () => {
+    const home = tmpHome();
+    await readySeat(home, SEAT, "5");
+    const first = await runOn(home, "seq-nan", 0.01, Number.NaN);
+    const second = await runOn(home, "seq-nan-next", "omit", null);
+    const today = (await cli(home, ["status", "--seat", SEAT, "--json"])).json().today_utc as { mock: number; flop: number };
+    expect(today.mock).toBe(RESERVATION * 2);
+    expect(today.flop).toBe(0);
+    expect(rowsFor(home, second.printed.request_id)[0].spent_before).toBe(RESERVATION);
+    await expectExposure(home, first.result, first.printed, { state: "settled", spend: null, cost_reported: 0.01, cap_charge: RESERVATION }, { dayTotal: RESERVATION * 2 });
+    await expectExposure(home, second.result, second.printed, { state: "estimated", spend: null, cost_reported: null, cap_charge: RESERVATION }, { dayTotal: RESERVATION * 2, spentBefore: RESERVATION });
+  });
+
+  it("a numeric string settled_spend stays unknown and keeps the reservation", async () => {
+    const { home, result, printed } = await runWithheld("settled-string", 0.01, "0.05");
+    await expectExposure(home, result, printed, { state: "settled", spend: null, cost_reported: 0.01, cap_charge: RESERVATION });
+  });
+
+  it("an object settled_spend stays unknown and keeps the reservation", async () => {
+    const { home, result, printed } = await runWithheld("settled-object", 0.01, { amount: 0.05 });
+    await expectExposure(home, result, printed, { state: "settled", spend: null, cost_reported: 0.01, cap_charge: RESERVATION });
   });
 });
