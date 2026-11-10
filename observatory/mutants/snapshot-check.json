@@ -1270,5 +1270,581 @@
     "replace": "best !== null && best > finalized ? best - finalized : null",
     "test": "test/snapshot-check.test.ts",
     "why": "tenth rerun S8: equal heights have a lag of 0, as the command writes (case: a best height equal to the finalized one, with a lag of 0)"
+  },
+  {
+    "id": "snapshot-check-required-prev-hash",
+    "file": "src/snapshot-check.ts",
+    "find": "  [\"prev_hash\", orNone(sha256)],",
+    "replace": "  [\"prev_hash\", sha256],",
+    "test": "test/snapshot-check.test.ts",
+    "why": "round 15 sweep, stricter: a prev_hash of none refused (case: the honest snapshot)"
+  },
+  {
+    "id": "snapshot-check-required-census",
+    "file": "src/snapshot-check.ts",
+    "find": "  [\"census\", orNone(schemaPart(\"flop-observatory/census@0\"))],",
+    "replace": "  [\"census\", schemaPart(\"flop-observatory/census@0\")],",
+    "test": "test/snapshot-check.test.ts",
+    "why": "round 15 sweep, stricter: a census of none refused (case: the honest snapshot)"
+  },
+  {
+    "id": "snapshot-check-required-drift",
+    "file": "src/snapshot-check.ts",
+    "find": "  [\"drift\", orNone(schemaPart(\"flop-observatory/drift@0\"))],",
+    "replace": "  [\"drift\", schemaPart(\"flop-observatory/drift@0\")],",
+    "test": "test/snapshot-check.test.ts",
+    "why": "round 15 sweep, stricter: a drift report of none refused (case: the honest snapshot)"
+  },
+  {
+    "id": "snapshot-check-required-pin-genesis",
+    "file": "src/snapshot-check.ts",
+    "find": "  [\"genesis\", orNone(hash)],\n  [\"finalized_height\", orNone(count)],",
+    "replace": "  [\"genesis\", hash],\n  [\"finalized_height\", orNone(count)],",
+    "test": "test/snapshot-check.test.ts",
+    "why": "round 15 sweep, stricter: a pin genesis of none refused (case: reset_detected false with no rpc genesis)"
+  },
+  {
+    "id": "snapshot-check-required-pin-height",
+    "file": "src/snapshot-check.ts",
+    "find": "  [\"genesis\", orNone(hash)],\n  [\"finalized_height\", orNone(count)],",
+    "replace": "  [\"genesis\", orNone(hash)],\n  [\"finalized_height\", count],",
+    "test": "test/snapshot-check.test.ts",
+    "why": "round 15 sweep, stricter: a pin finalized height of none refused (case: reset_detected false with no heights)"
+  },
+  {
+    "id": "snapshot-check-required-pin-hash",
+    "file": "src/snapshot-check.ts",
+    "find": "  [\"finalized_hash\", orNone(hash)],\n  [\"node\", text],",
+    "replace": "  [\"finalized_hash\", hash],\n  [\"node\", text],",
+    "test": "test/snapshot-check.test.ts",
+    "why": "round 15 sweep, stricter: a pin finalized hash of none refused (case: reset_detected false with no heights)"
+  },
+  {
+    "id": "snapshot-check-required-reset",
+    "file": "src/snapshot-check.ts",
+    "find": "  [\"reset_detected\", orNone(flag)],",
+    "replace": "  [\"reset_detected\", flag],",
+    "test": "test/snapshot-check.test.ts",
+    "why": "round 15 sweep, stricter: a reset_detected of none refused (case: a lag with no best height)"
+  },
+  {
+    "id": "snapshot-check-required-status-height",
+    "file": "src/snapshot-check.ts",
+    "find": "  [\"conflicts\", texts],\n  [\"finalized_height\", orNone(count)],",
+    "replace": "  [\"conflicts\", texts],\n  [\"finalized_height\", count],",
+    "test": "test/snapshot-check.test.ts",
+    "why": "round 15 sweep, stricter: a status finalized height of none refused (case: reset_detected false with no heights)"
+  },
+  {
+    "id": "snapshot-check-required-status-hash",
+    "file": "src/snapshot-check.ts",
+    "find": "  [\"finalized_hash\", orNone(hash)],\n  [\"best_height\", orNone(count)],",
+    "replace": "  [\"finalized_hash\", hash],\n  [\"best_height\", orNone(count)],",
+    "test": "test/snapshot-check.test.ts",
+    "why": "round 15 sweep, stricter: a status finalized hash of none refused (case: reset_detected false with no heights)"
+  },
+  {
+    "id": "snapshot-check-required-best-height",
+    "file": "src/snapshot-check.ts",
+    "find": "  [\"best_height\", orNone(count)],",
+    "replace": "  [\"best_height\", count],",
+    "test": "test/snapshot-check.test.ts",
+    "why": "round 15 sweep, stricter: a best height of none refused (case: reset_detected false with no heights)"
+  },
+  {
+    "id": "snapshot-check-required-lag",
+    "file": "src/snapshot-check.ts",
+    "find": "  [\"finality_lag\", orNone(count)],",
+    "replace": "  [\"finality_lag\", count],",
+    "test": "test/snapshot-check.test.ts",
+    "why": "round 15 sweep, stricter: a finality lag of none refused (case: a best height below the finalized one, with no lag)"
+  },
+  {
+    "id": "snapshot-check-required-genesis-faucet",
+    "file": "src/snapshot-check.ts",
+    "find": "  [\"faucet\", orNone(hash)],",
+    "replace": "  [\"faucet\", hash],",
+    "test": "test/snapshot-check.test.ts",
+    "why": "round 15 sweep, stricter: a faucet genesis of none refused (case: reset_detected false with no faucet genesis)"
+  },
+  {
+    "id": "snapshot-check-required-genesis-rpc",
+    "file": "src/snapshot-check.ts",
+    "find": "  [\"rpc\", orNone(hash)],",
+    "replace": "  [\"rpc\", hash],",
+    "test": "test/snapshot-check.test.ts",
+    "why": "round 15 sweep, stricter: a rpc genesis of none refused (case: reset_detected false with no rpc genesis)"
+  },
+  {
+    "id": "snapshot-check-required-service-http",
+    "file": "src/snapshot-check.ts",
+    "find": "  [\"http\", orNone(statusCode)],",
+    "replace": "  [\"http\", statusCode],",
+    "test": "test/snapshot-check.test.ts",
+    "why": "round 15 sweep, stricter: a service http status of none refused (case: the honest snapshot)"
+  },
+  {
+    "id": "snapshot-check-required-service-detail",
+    "file": "src/snapshot-check.ts",
+    "find": "  [\"detail\", orNone(text)],",
+    "replace": "  [\"detail\", text],",
+    "test": "test/snapshot-check.test.ts",
+    "why": "round 15 sweep, stricter: a service detail of none refused (case: the honest snapshot)"
+  },
+  {
+    "id": "snapshot-check-required-escrow-bound",
+    "file": "src/snapshot-check.ts",
+    "find": "  [\"finalized_height\", orNone(count)],\n  [\"observed_at\", time],",
+    "replace": "  [\"finalized_height\", count],\n  [\"observed_at\", time],",
+    "test": "test/snapshot-check.test.ts",
+    "why": "round 15 sweep, stricter: a escrow bound of none refused (case: reset_detected true with the rpc on another genesis and no bound)"
+  },
+  {
+    "id": "snapshot-check-required-block-number",
+    "file": "src/snapshot-check.ts",
+    "find": "  [\"block_number\", orNone(count)],",
+    "replace": "  [\"block_number\", count],",
+    "test": "test/snapshot-check.test.ts",
+    "why": "round 15 sweep, stricter: a evidence block number of none refused (case: the honest snapshot)"
+  },
+  {
+    "id": "snapshot-check-zero-refused-seq",
+    "file": "src/snapshot-check.ts",
+    "find": "  [\"seq\", count],",
+    "replace": "  [\"seq\", (v) => count(v) && v !== 0],",
+    "test": "test/snapshot-check.test.ts",
+    "why": "round 15 sweep, stricter: a seq of 0 refused (case: the honest snapshot)"
+  },
+  {
+    "id": "snapshot-check-zero-refused-status-height",
+    "file": "src/snapshot-check.ts",
+    "find": "  [\"conflicts\", texts],\n  [\"finalized_height\", orNone(count)],",
+    "replace": "  [\"conflicts\", texts],\n  [\"finalized_height\", orNone((v) => count(v) && v !== 0)],",
+    "test": "test/snapshot-check.test.ts",
+    "why": "round 15 sweep, stricter: a status finalized height of 0 refused (case: a chain at its first block, finalized and best height 0)"
+  },
+  {
+    "id": "snapshot-check-zero-refused-best-height",
+    "file": "src/snapshot-check.ts",
+    "find": "  [\"best_height\", orNone(count)],",
+    "replace": "  [\"best_height\", orNone((v) => count(v) && v !== 0)],",
+    "test": "test/snapshot-check.test.ts",
+    "why": "round 15 sweep, stricter: a best height of 0 refused (case: a chain at its first block, finalized and best height 0)"
+  },
+  {
+    "id": "snapshot-check-zero-refused-runtime-version",
+    "file": "src/snapshot-check.ts",
+    "find": "  [\"runtime_version\", orNone(count)],",
+    "replace": "  [\"runtime_version\", orNone((v) => count(v) && v !== 0)],",
+    "test": "test/snapshot-check.test.ts",
+    "why": "round 15 sweep, stricter: a runtime version of 0 refused (case: a runtime version of 0)"
+  },
+  {
+    "id": "snapshot-check-zero-refused-block-number",
+    "file": "src/snapshot-check.ts",
+    "find": "  [\"block_number\", orNone(count)],",
+    "replace": "  [\"block_number\", orNone((v) => count(v) && v !== 0)],",
+    "test": "test/snapshot-check.test.ts",
+    "why": "round 15 sweep, stricter: a evidence block number of 0 refused (case: evidence in block 0)"
+  },
+  {
+    "id": "snapshot-check-zero-refused-event-index",
+    "file": "src/snapshot-check.ts",
+    "find": "  [\"event_index\", count],",
+    "replace": "  [\"event_index\", (v) => count(v) && v !== 0],",
+    "test": "test/snapshot-check.test.ts",
+    "why": "round 15 sweep, stricter: a evidence index of 0 refused (case: the honest snapshot)"
+  },
+  {
+    "id": "snapshot-check-flag-zero-one",
+    "file": "src/snapshot-check.ts",
+    "find": "const flag: Check = (v) => typeof v === \"boolean\";",
+    "replace": "const flag: Check = (v) => typeof v === \"boolean\" || v === 0 || v === 1;",
+    "test": "test/snapshot-check.test.ts",
+    "why": "round 15 sweep, weaker: a flag of 0 or 1 served (case: a reset_detected of 1)"
+  },
+  {
+    "id": "snapshot-check-text-any",
+    "file": "src/snapshot-check.ts",
+    "find": "const text: Check = (v) => typeof v === \"string\";",
+    "replace": "const text: Check = (v) => v !== undefined;",
+    "test": "test/snapshot-check.test.ts",
+    "why": "round 15 sweep, weaker: any value as text served (case: a pin source_sha that is a number)"
+  },
+  {
+    "id": "snapshot-check-text-non-empty",
+    "file": "src/snapshot-check.ts",
+    "find": "const text: Check = (v) => typeof v === \"string\";",
+    "replace": "const text: Check = (v) => typeof v === \"string\" && v !== \"\";",
+    "test": "test/snapshot-check.test.ts",
+    "why": "round 15 sweep, stricter: empty text refused (case: an empty service detail)"
+  },
+  {
+    "id": "snapshot-check-texts-non-empty",
+    "file": "src/snapshot-check.ts",
+    "find": "const texts: Check = (v) => Array.isArray(v) && v.every(text);",
+    "replace": "const texts: Check = (v) => Array.isArray(v) && v.length > 0 && v.every(text);",
+    "test": "test/snapshot-check.test.ts",
+    "why": "round 15 sweep, stricter: an empty text list refused (case: the honest snapshot)"
+  },
+  {
+    "id": "snapshot-check-list-any",
+    "file": "src/snapshot-check.ts",
+    "find": "const list: Check = (v) => Array.isArray(v);",
+    "replace": "const list: Check = (v) => v !== null && typeof v === \"object\";",
+    "test": "test/snapshot-check.test.ts",
+    "why": "round 15 sweep, weaker: an object as a list served (case: escrows that are no list)"
+  },
+  {
+    "id": "snapshot-check-object-array",
+    "file": "src/snapshot-check.ts",
+    "find": "const object: Check = (v) => isObject(v);",
+    "replace": "const object: Check = (v) => v !== null && typeof v === \"object\";",
+    "test": "test/snapshot-check.test.ts",
+    "why": "round 15 sweep, weaker: an array as an object served (case: a pin that is a list)"
+  },
+  {
+    "id": "snapshot-check-limits-strings",
+    "file": "src/snapshot-check.ts",
+    "find": "(typeof x === \"number\" && Number.isFinite(x))",
+    "replace": "(typeof x === \"number\" && Number.isFinite(x)) || typeof x === \"string\"",
+    "test": "test/snapshot-check.test.ts",
+    "why": "round 15 sweep, weaker: a faucet limit of text served (case: a faucet limit that is a word)"
+  },
+  {
+    "id": "snapshot-check-limits-numbers-only",
+    "file": "src/snapshot-check.ts",
+    "find": "typeof x === \"boolean\" || (typeof x === \"number\" && Number.isFinite(x))",
+    "replace": "(typeof x === \"number\" && Number.isFinite(x))",
+    "test": "test/snapshot-check.test.ts",
+    "why": "round 15 sweep, stricter: a faucet limit that is a flag refused (case: the honest snapshot)"
+  },
+  {
+    "id": "snapshot-check-limits-array",
+    "file": "src/snapshot-check.ts",
+    "find": "const limits: Check = (v) => isObject(v) &&",
+    "replace": "const limits: Check = (v) => v !== null && typeof v === \"object\" &&",
+    "test": "test/snapshot-check.test.ts",
+    "why": "round 15 sweep, weaker: faucet limits as a list served (case: faucet limits as a list)"
+  },
+  {
+    "id": "snapshot-check-limits-empty-refused",
+    "file": "src/snapshot-check.ts",
+    "find": "const limits: Check = (v) => isObject(v) && Object.values(v)",
+    "replace": "const limits: Check = (v) => isObject(v) && Object.values(v).length > 0 && Object.values(v)",
+    "test": "test/snapshot-check.test.ts",
+    "why": "round 15 sweep, stricter: empty faucet limits refused (case: empty faucet limits)"
+  },
+  {
+    "id": "snapshot-check-schema-part-any-object",
+    "file": "src/snapshot-check.ts",
+    "find": "    isObject(v) && v.schema === schema;",
+    "replace": "    isObject(v);",
+    "test": "test/snapshot-check.test.ts",
+    "why": "round 15 sweep, weaker: a census or drift report of any schema served (case: another census schema)"
+  },
+  {
+    "id": "snapshot-check-one-of-case",
+    "file": "src/snapshot-check.ts",
+    "find": "    typeof v === \"string\" && words.includes(v);",
+    "replace": "    typeof v === \"string\" && words.some((w) => w.toLowerCase() === v.toLowerCase());",
+    "test": "test/snapshot-check.test.ts",
+    "why": "round 15 sweep, weaker: a fixed word in another case served (case: an rpc health in upper case)"
+  },
+  {
+    "id": "snapshot-check-exactly-case",
+    "file": "src/snapshot-check.ts",
+    "find": "    v === word;",
+    "replace": "    typeof v === \"string\" && v.toLowerCase() === word.toLowerCase();",
+    "test": "test/snapshot-check.test.ts",
+    "why": "round 15 sweep, weaker: a fixed value in another case served (case: a schema in upper case)"
+  },
+  {
+    "id": "snapshot-check-fields-missing-allowed",
+    "file": "src/snapshot-check.ts",
+    "find": "Object.keys(v).length !== keys.length || !keys.every((k) => Object.hasOwn(v, k))",
+    "replace": "!Object.keys(v).every((k) => keys.includes(k))",
+    "test": "test/snapshot-check.test.ts",
+    "why": "round 15 sweep, weaker: an object with a field left out served (case: an object that is no snapshot)"
+  },
+  {
+    "id": "snapshot-check-prev-hash-first-only",
+    "file": "src/snapshot-check.ts",
+    "find": "(s) => (s.seq === 0) === (s.prev_hash === null)]",
+    "replace": "(s) => s.seq !== 0 || s.prev_hash === null]",
+    "test": "test/snapshot-check.test.ts",
+    "why": "round 15 sweep, weaker: a later line with no line before served (case: a later line that names no line before it)"
+  },
+  {
+    "id": "snapshot-check-prev-hash-later-only",
+    "file": "src/snapshot-check.ts",
+    "find": "(s) => (s.seq === 0) === (s.prev_hash === null)]",
+    "replace": "(s) => s.prev_hash !== null || s.seq === 0]",
+    "test": "test/snapshot-check.test.ts",
+    "why": "round 15 sweep, weaker: a first line naming a line before served (case: a first line that names a line before it)"
+  },
+  {
+    "id": "snapshot-check-reset-false-faucet-only",
+    "file": "src/snapshot-check.ts",
+    "find": "(s.status.genesis.faucet === s.status.genesis.pinned && s.status.genesis.rpc === s.status.genesis.pinned)",
+    "replace": "(s.status.genesis.faucet === s.status.genesis.pinned)",
+    "test": "test/snapshot-check.test.ts",
+    "why": "round 15 sweep, weaker: reset false with the rpc elsewhere served (case: reset_detected false with no rpc genesis)"
+  },
+  {
+    "id": "snapshot-check-reset-false-rpc-only",
+    "file": "src/snapshot-check.ts",
+    "find": "(s.status.genesis.faucet === s.status.genesis.pinned && s.status.genesis.rpc === s.status.genesis.pinned)",
+    "replace": "(s.status.genesis.rpc === s.status.genesis.pinned)",
+    "test": "test/snapshot-check.test.ts",
+    "why": "round 15 sweep, weaker: reset false with the faucet elsewhere served (case: reset_detected false with no faucet genesis)"
+  },
+  {
+    "id": "snapshot-check-reset-false-none-passes",
+    "file": "src/snapshot-check.ts",
+    "find": "(s.status.genesis.faucet === s.status.genesis.pinned && s.status.genesis.rpc === s.status.genesis.pinned)",
+    "replace": "((s.status.genesis.faucet ?? s.status.genesis.pinned) === s.status.genesis.pinned && (s.status.genesis.rpc ?? s.status.genesis.pinned) === s.status.genesis.pinned)",
+    "test": "test/snapshot-check.test.ts",
+    "why": "round 15 sweep, weaker: reset false with a genesis of none served (case: reset_detected false with no rpc genesis)"
+  },
+  {
+    "id": "snapshot-check-reset-false-finalized-only",
+    "file": "src/snapshot-check.ts",
+    "find": "(s.status.finalized_height !== null && s.status.best_height !== null)",
+    "replace": "(s.status.finalized_height !== null)",
+    "test": "test/snapshot-check.test.ts",
+    "why": "round 15 sweep, weaker: reset false with no best height served (case: reset_detected false with no best height)"
+  },
+  {
+    "id": "snapshot-check-reset-false-best-only",
+    "file": "src/snapshot-check.ts",
+    "find": "(s.status.finalized_height !== null && s.status.best_height !== null)",
+    "replace": "(s.status.best_height !== null)",
+    "test": "test/snapshot-check.test.ts",
+    "why": "round 15 sweep, weaker: reset false with no finalized height served (case: reset_detected false with no finalized height)"
+  },
+  {
+    "id": "snapshot-check-reset-true-none-counts",
+    "file": "src/snapshot-check.ts",
+    "find": "(g.faucet !== null && g.faucet !== g.pinned) || (g.rpc !== null && g.rpc !== g.pinned)",
+    "replace": "g.faucet !== g.pinned || g.rpc !== g.pinned",
+    "test": "test/snapshot-check.test.ts",
+    "why": "round 15 sweep, weaker: reset true on a genesis of none served (case: reset_detected true with no faucet genesis)"
+  },
+  {
+    "id": "snapshot-check-reset-true-off",
+    "file": "src/snapshot-check.ts",
+    "find": "return s.status.reset_detected !== true ||",
+    "replace": "return true ||",
+    "test": "test/snapshot-check.test.ts",
+    "why": "round 15 sweep, weaker: reset true on the pinned genesis served (case: reset_detected true on the pinned genesis)"
+  },
+  {
+    "id": "snapshot-check-lag-none-passes",
+    "file": "src/snapshot-check.ts",
+    "find": "(s) => s.status.finality_lag === lagOf(s.status.finalized_height, s.status.best_height)]",
+    "replace": "(s) => s.status.finality_lag === null || s.status.finality_lag === lagOf(s.status.finalized_height, s.status.best_height)]",
+    "test": "test/snapshot-check.test.ts",
+    "why": "round 15 sweep, weaker: no lag with both heights served (case: no lag though both heights are read)"
+  },
+  {
+    "id": "snapshot-check-lag-unknown-passes",
+    "file": "src/snapshot-check.ts",
+    "find": "(s) => s.status.finality_lag === lagOf(s.status.finalized_height, s.status.best_height)]",
+    "replace": "(s) => lagOf(s.status.finalized_height, s.status.best_height) === null || s.status.finality_lag === lagOf(s.status.finalized_height, s.status.best_height)]",
+    "test": "test/snapshot-check.test.ts",
+    "why": "round 15 sweep, weaker: a lag with a height unknown served (case: a lag with no best height)"
+  },
+  {
+    "id": "snapshot-check-lag-off-by-one",
+    "file": "src/snapshot-check.ts",
+    "find": "best >= finalized ? best - finalized : null",
+    "replace": "best >= finalized ? best - finalized + 1 : null",
+    "test": "test/snapshot-check.test.ts",
+    "why": "round 15 sweep, stricter and weaker: a lag one more (case: the honest snapshot)"
+  },
+  {
+    "id": "snapshot-check-listed-once-off",
+    "file": "src/snapshot-check.ts",
+    "find": "(s) => new Set(s.escrows.map((e) => e.escrow_id)).size === s.escrows.length]",
+    "replace": "(s) => true]",
+    "test": "test/snapshot-check.test.ts",
+    "why": "round 15 sweep, weaker: an escrow listed twice served (case: an escrow listed twice, with two states)"
+  },
+  {
+    "id": "snapshot-check-unverified-one-item",
+    "file": "src/snapshot-check.ts",
+    "find": "ofState(s, \"unverified\").every((e) => e.evidence.length === 0)",
+    "replace": "ofState(s, \"unverified\").every((e) => e.evidence.length <= 1)",
+    "test": "test/snapshot-check.test.ts",
+    "why": "round 15 sweep, weaker: an unverified escrow holding one item served (case: an unverified escrow holding an event of its own)"
+  },
+  {
+    "id": "snapshot-check-claimed-release-at-most",
+    "file": "src/snapshot-check.ts",
+    "find": "ofState(s, \"claimed\").every((e) => howMany(e, RELEASED) === 1)",
+    "replace": "ofState(s, \"claimed\").every((e) => howMany(e, RELEASED) <= 1)",
+    "test": "test/snapshot-check.test.ts",
+    "why": "round 15 sweep, weaker: claimed on no release served (case: claimed on no event)"
+  },
+  {
+    "id": "snapshot-check-refunded-refund-at-most",
+    "file": "src/snapshot-check.ts",
+    "find": "ofState(s, \"refunded\").every((e) => howMany(e, REFUNDED) === 1)",
+    "replace": "ofState(s, \"refunded\").every((e) => howMany(e, REFUNDED) <= 1)",
+    "test": "test/snapshot-check.test.ts",
+    "why": "round 15 sweep, weaker: refunded on no refund served (case: refunded on no event)"
+  },
+  {
+    "id": "snapshot-check-claimed-open-two",
+    "file": "src/snapshot-check.ts",
+    "find": "ofState(s, \"claimed\").every((e) => howMany(e, OPENED) <= 1)",
+    "replace": "ofState(s, \"claimed\").every((e) => howMany(e, OPENED) <= 2)",
+    "test": "test/snapshot-check.test.ts",
+    "why": "round 15 sweep, weaker: claimed on two opens served (case: claimed on two opens)"
+  },
+  {
+    "id": "snapshot-check-claimed-open-none",
+    "file": "src/snapshot-check.ts",
+    "find": "ofState(s, \"claimed\").every((e) => howMany(e, OPENED) <= 1)",
+    "replace": "ofState(s, \"claimed\").every((e) => howMany(e, OPENED) === 1)",
+    "test": "test/snapshot-check.test.ts",
+    "why": "round 15 sweep, stricter: claimed with no open refused (case: the honest snapshot)"
+  },
+  {
+    "id": "snapshot-check-refunded-open-two",
+    "file": "src/snapshot-check.ts",
+    "find": "ofState(s, \"refunded\").every((e) => howMany(e, OPENED) <= 1)",
+    "replace": "ofState(s, \"refunded\").every((e) => howMany(e, OPENED) <= 2)",
+    "test": "test/snapshot-check.test.ts",
+    "why": "round 15 sweep, weaker: refunded on two opens served (case: refunded on two opens)"
+  },
+  {
+    "id": "snapshot-check-refunded-open-none",
+    "file": "src/snapshot-check.ts",
+    "find": "ofState(s, \"refunded\").every((e) => howMany(e, OPENED) <= 1)",
+    "replace": "ofState(s, \"refunded\").every((e) => howMany(e, OPENED) === 1)",
+    "test": "test/snapshot-check.test.ts",
+    "why": "round 15 sweep, stricter: refunded with no open refused (case: the honest snapshot)"
+  },
+  {
+    "id": "snapshot-check-evidence-genesis-or-rpc",
+    "file": "src/snapshot-check.ts",
+    "find": "evidenceOf(s).every((x) => x.genesis === s.status.genesis.pinned)",
+    "replace": "evidenceOf(s).every((x) => x.genesis === s.status.genesis.pinned || x.genesis === s.status.genesis.rpc)",
+    "test": "test/snapshot-check.test.ts",
+    "why": "round 15 sweep, weaker: evidence on the rpc's other genesis served (case: evidence on the other genesis the rpc reads)"
+  },
+  {
+    "id": "snapshot-check-evidence-genesis-or-faucet",
+    "file": "src/snapshot-check.ts",
+    "find": "evidenceOf(s).every((x) => x.genesis === s.status.genesis.pinned)",
+    "replace": "evidenceOf(s).every((x) => x.genesis === s.status.genesis.pinned || x.genesis === s.status.genesis.faucet)",
+    "test": "test/snapshot-check.test.ts",
+    "why": "round 15 sweep, weaker: evidence on the faucet's other genesis served (case: evidence on the other genesis the faucet reads)"
+  },
+  {
+    "id": "snapshot-check-used-once-by-event",
+    "file": "src/snapshot-check.ts",
+    "find": "new Set(evidenceOf(s).map((x) => `${x.block_hash} ${x.event_index}`))",
+    "replace": "new Set(evidenceOf(s).map((x) => `${x.block_hash} ${x.event_index} ${x.event}`))",
+    "test": "test/snapshot-check.test.ts",
+    "why": "round 15 sweep, weaker: one event used under two names served (case: one event as both open and release)"
+  },
+  {
+    "id": "snapshot-check-used-once-by-escrow",
+    "file": "src/snapshot-check.ts",
+    "find": "(s) => new Set(evidenceOf(s).map((x) => `${x.block_hash} ${x.event_index}`)).size === evidenceOf(s).length]",
+    "replace": "(s) => s.escrows.every((e) => new Set(e.evidence.map((x) => `${x.block_hash} ${x.event_index}`)).size === e.evidence.length)]",
+    "test": "test/snapshot-check.test.ts",
+    "why": "round 15 sweep, weaker: one event used by two escrows served (case: one release as evidence for two escrows)"
+  },
+  {
+    "id": "snapshot-check-used-once-by-block",
+    "file": "src/snapshot-check.ts",
+    "find": "new Set(evidenceOf(s).map((x) => `${x.block_hash} ${x.event_index}`))",
+    "replace": "new Set(evidenceOf(s).map((x) => `${x.block_number} ${x.event_index}`))",
+    "test": "test/snapshot-check.test.ts",
+    "why": "round 15 sweep, weaker or stricter: events keyed by block number (case: the honest snapshot)"
+  },
+  {
+    "id": "snapshot-check-bound-status-none",
+    "file": "src/snapshot-check.ts",
+    "find": "e.finalized_height === null || e.finalized_height === s.status.finalized_height)",
+    "replace": "e.finalized_height === null || s.status.finalized_height === null || e.finalized_height === s.status.finalized_height)",
+    "test": "test/snapshot-check.test.ts",
+    "why": "round 15 sweep, weaker: a bound with no status height served (case: a bound though the status read no height)"
+  },
+  {
+    "id": "snapshot-check-bound-genesis-faucet",
+    "file": "src/snapshot-check.ts",
+    "find": "e.finalized_height === null || s.status.genesis.rpc === s.status.genesis.pinned)",
+    "replace": "e.finalized_height === null || s.status.genesis.faucet === s.status.genesis.pinned)",
+    "test": "test/snapshot-check.test.ts",
+    "why": "round 15 sweep, weaker: a bound from the faucet's genesis served (case: reset_detected true with the faucet on another genesis)"
+  },
+  {
+    "id": "snapshot-check-above-bound-none-number",
+    "file": "src/snapshot-check.ts",
+    "find": "x.block_number === null || x.block_number <= (e.finalized_height as number)",
+    "replace": "x.block_number !== null && x.block_number <= (e.finalized_height as number)",
+    "test": "test/snapshot-check.test.ts",
+    "why": "round 15 sweep, stricter: evidence with no block number under a bound refused (case: the honest snapshot)"
+  },
+  {
+    "id": "snapshot-check-pin-genesis-status-none",
+    "file": "src/snapshot-check.ts",
+    "find": "(s) => s.pin.genesis === s.status.genesis.rpc]",
+    "replace": "(s) => s.status.genesis.rpc === null || s.pin.genesis === s.status.genesis.rpc]",
+    "test": "test/snapshot-check.test.ts",
+    "why": "round 15 sweep, weaker: a pin naming a genesis the status did not read served (case: a pin naming a genesis though the status read none)"
+  },
+  {
+    "id": "snapshot-check-pin-genesis-pinned",
+    "file": "src/snapshot-check.ts",
+    "find": "(s) => s.pin.genesis === s.status.genesis.rpc]",
+    "replace": "(s) => s.pin.genesis === s.status.genesis.rpc || s.pin.genesis === s.status.genesis.pinned]",
+    "test": "test/snapshot-check.test.ts",
+    "why": "round 15 sweep, weaker: a pin naming the pinned genesis while the rpc read another served (case: a pin naming a genesis though the status read none)"
+  },
+  {
+    "id": "snapshot-check-pin-height-status-none",
+    "file": "src/snapshot-check.ts",
+    "find": "(s) => s.pin.finalized_height === s.status.finalized_height]",
+    "replace": "(s) => s.status.finalized_height === null || s.pin.finalized_height === s.status.finalized_height]",
+    "test": "test/snapshot-check.test.ts",
+    "why": "round 15 sweep, weaker: a pin naming a height the status did not read served (case: a pin naming a height though the status read none)"
+  },
+  {
+    "id": "snapshot-check-pin-height-at-most",
+    "file": "src/snapshot-check.ts",
+    "find": "(s) => s.pin.finalized_height === s.status.finalized_height]",
+    "replace": "(s) => (s.pin.finalized_height ?? -1) <= (s.status.finalized_height ?? -1)]",
+    "test": "test/snapshot-check.test.ts",
+    "why": "round 15 sweep, weaker: a pin height below the status height served (case: a pin naming another height)"
+  },
+  {
+    "id": "snapshot-check-pin-hash-status-none",
+    "file": "src/snapshot-check.ts",
+    "find": "(s) => s.pin.finalized_hash === s.status.finalized_hash]",
+    "replace": "(s) => s.status.finalized_hash === null || s.pin.finalized_hash === s.status.finalized_hash]",
+    "test": "test/snapshot-check.test.ts",
+    "why": "round 15 sweep, weaker: a pin naming a hash the status did not read served (case: a pin naming a hash though the status read none)"
+  },
+  {
+    "id": "snapshot-check-fixture-trusted-always",
+    "file": "src/snapshot-check.ts",
+    "find": "(s) => s.trust === \"fixture\" || ![s.status",
+    "replace": "(s) => s.trust === \"trusted RPC\" || ![s.status",
+    "test": "test/snapshot-check.test.ts",
+    "why": "round 15 sweep, weaker and stricter: the label turned around (case: the honest snapshot)"
+  },
+  {
+    "id": "snapshot-check-fixture-always",
+    "file": "src/snapshot-check.ts",
+    "find": "(s) => s.trust === \"fixture\" || ![s.status, ...s.escrows, s.census, s.drift].some((x) => isObject(x) && x.trust === \"fixture\")]",
+    "replace": "(s) => s.trust === \"fixture\"]",
+    "test": "test/snapshot-check.test.ts",
+    "why": "round 15 sweep, stricter: a trusted snapshot refused (case: a trusted snapshot whose parts are all trusted)"
   }
 ]

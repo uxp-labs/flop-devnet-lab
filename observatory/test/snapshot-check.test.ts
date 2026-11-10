@@ -3,9 +3,9 @@
 // case passes only when its edit breaks exactly those checks: a check that stopped firing, or one
 // that started to fire on something else, fails it. A last test shows every check has a case.
 // Firing alone is not being exact, so comparisons have refused cases on both sides and the fields
-// the command may write as none, or write at an edge, have served cases (tenth rerun U1). The
-// weakened and stricter forms tried are hand mutants in mutants/snapshot-check.json; the table is
-// no proof that every other form fails.
+// the command may write as none, or write at an edge, have served cases (tenth rerun U1, and a
+// sweep of weaker and stricter forms in round 15). The forms tried are mutants in
+// mutants/snapshot-check.json; the table is no proof that every other form fails.
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { CHECKS, checkSnapshot } from "../src/snapshot-check.js";
@@ -79,6 +79,20 @@ const CASES: readonly (readonly [string, (s: Json) => void, readonly string[]])[
   ["a pin source sha of none", (s) => (s.pin.source_sha = null), []],
   ["a time with an offset", (s) => (s.observed_at = "2026-11-10T00:47:53+01:00"), []],
   ["a best height equal to the finalized one, with a lag of 0", (s) => ((s.status.best_height = s.status.finalized_height), (s.status.finality_lag = 0)), []],
+  // The lead's sweep of stricter forms (round 15): a value at the low edge of its type.
+  [
+    "a chain at its first block, finalized and best height 0",
+    (s) => {
+      Object.assign(s.status, { finalized_height: 0, best_height: 0, finality_lag: 0 });
+      s.pin.finalized_height = 0;
+      for (const e of s.escrows) e.finalized_height = null;
+    },
+    [],
+  ],
+  ["a runtime version of 0", (s) => (s.status.runtime_version = 0), []],
+  ["evidence in block 0", (s) => (s.escrows[0].evidence[0].block_number = 0), []],
+  ["an empty service detail", (s) => (s.status.gateway.detail = ""), []],
+  ["empty faucet limits", (s) => (s.status.faucet.limits = {}), []],
   [
     "a trusted snapshot whose parts are all trusted",
     (s) => {
@@ -100,6 +114,7 @@ const CASES: readonly (readonly [string, (s: Json) => void, readonly string[]])[
   ["a hash of 63 hex", (s) => (s.hash = "a".repeat(63)), ["snapshot.hash"]],
   ["a hash in upper case", (s) => (s.hash = "AB".repeat(32)), ["snapshot.hash"]],
   ["a hash with junk before it", (s) => (s.hash = "x" + "ab".repeat(32)), ["snapshot.hash"]],
+  ["a schema in upper case", (s) => (s.schema = "FLOP-OBSERVATORY/SNAPSHOT@0"), ["snapshot.schema"]],
   ["an observed_at of yesterday", (s) => (s.observed_at = "yesterday"), ["snapshot.observed_at"]],
   ["an observed_at with no zone", (s) => (s.observed_at = "2026-11-09T23:47:53"), ["snapshot.observed_at"]],
   ["an observed_at on a day that does not exist", (s) => (s.observed_at = "2026-02-30T00:00:00Z"), ["snapshot.observed_at"]],
@@ -130,6 +145,7 @@ const CASES: readonly (readonly [string, (s: Json) => void, readonly string[]])[
   ["a status trust of approved", (s) => (s.status.trust = "approved"), ["status.trust"]],
   ["a genesis that is no object", (s) => (s.status.genesis = 5), ["status.genesis"]],
   ["a reset_detected of no", (s) => (s.status.reset_detected = "no"), ["status.reset_detected"]],
+  ["a reset_detected of 1", (s) => (s.status.reset_detected = 1), ["status.reset_detected"]],
   ["conflicts that are not text", (s) => (s.status.conflicts = [1, null]), ["status.conflicts"]],
   ["conflicts holding text and a number", (s) => (s.status.conflicts = ["a conflict", 1]), ["status.conflicts"]],
   ["a finalized height as text", (s) => (s.status.finalized_height = "3341575"), ["status.finalized_height"]],
@@ -150,6 +166,7 @@ const CASES: readonly (readonly [string, (s: Json) => void, readonly string[]])[
   ["an rpc genesis that is no hash", (s) => (s.status.genesis.rpc = "x"), ["status.genesis.rpc"]],
   ["an rpc with an extra field", (s) => (s.status.rpc.approved = true), ["status.rpc.fields"]],
   ["an rpc health of great", (s) => (s.status.rpc.health = "great"), ["status.rpc.health"]],
+  ["an rpc health in upper case", (s) => (s.status.rpc.health = "OK"), ["status.rpc.health"]],
   ["an rpc http of 1.5", (s) => (s.status.rpc.http = 1.5), ["status.rpc.http"]],
   ["an rpc detail that is a number", (s) => (s.status.rpc.detail = 5), ["status.rpc.detail"]],
   ["an rpc time that is a number", (s) => (s.status.rpc.observed_at = 5), ["status.rpc.observed_at"]],
@@ -170,6 +187,7 @@ const CASES: readonly (readonly [string, (s: Json) => void, readonly string[]])[
   ["a faucet ready of yes", (s) => (s.status.faucet.ready = "yes"), ["status.faucet.ready"]],
   ["faucet limits of none as text", (s) => (s.status.faucet.limits = "none"), ["status.faucet.limits"]],
   ["faucet limits of 5", (s) => (s.status.faucet.limits = 5), ["status.faucet.limits"]],
+  ["faucet limits as a list", (s) => (s.status.faucet.limits = [1]), ["status.faucet.limits"]],
   ["a faucet limit that is a word", (s) => (s.status.faucet.limits = { a: "x" }), ["status.faucet.limits"]],
   // No file holds Infinity in the written form; a caller of the function can still pass it.
   ["a faucet limit of Infinity", (s) => (s.status.faucet.limits.ipCooldownMs = Infinity), ["status.faucet.limits"]],
@@ -370,6 +388,26 @@ const CASES: readonly (readonly [string, (s: Json) => void, readonly string[]])[
   ],
   ["evidence from another genesis", (s) => (s.escrows[0].evidence[0].genesis = OTHER), ["evidence.on-the-pinned-genesis"]],
   [
+    "evidence on the other genesis the rpc reads",
+    (s) => {
+      s.status.genesis.rpc = OTHER;
+      s.pin.genesis = OTHER;
+      s.status.reset_detected = true;
+      for (const e of s.escrows) e.finalized_height = null;
+      s.escrows[0].evidence[0].genesis = OTHER;
+    },
+    ["evidence.on-the-pinned-genesis"],
+  ],
+  [
+    "evidence on the other genesis the faucet reads",
+    (s) => {
+      s.status.genesis.faucet = OTHER;
+      s.status.reset_detected = true;
+      s.escrows[0].evidence[0].genesis = OTHER;
+    },
+    ["evidence.on-the-pinned-genesis"],
+  ],
+  [
     "one release as evidence for two escrows",
     (s) => {
       s.escrows[1].state = "claimed";
@@ -380,6 +418,14 @@ const CASES: readonly (readonly [string, (s: Json) => void, readonly string[]])[
   ["one event as both open and release", (s) => s.escrows[0].evidence.unshift({ ...s.escrows[0].evidence[0], event: "hasStation.EscrowOpened" }), ["evidence.used-once"]],
   ["a bound other than the status's height", (s) => (s.escrows[0].finalized_height = 5), ["escrow.bound-is-the-status-height"]],
   ["a bound above the status's height", (s) => (s.escrows[0].finalized_height = s.status.finalized_height + 1), ["escrow.bound-is-the-status-height"]],
+  [
+    "a bound though the status read no height",
+    (s) => {
+      Object.assign(s.status, { finalized_height: null, finality_lag: null, reset_detected: null });
+      s.pin.finalized_height = null;
+    },
+    ["escrow.bound-is-the-status-height"],
+  ],
   [
     "a bound from a head on another genesis",
     (s) => {
@@ -401,10 +447,37 @@ const CASES: readonly (readonly [string, (s: Json) => void, readonly string[]])[
   ["evidence above its bound", (s) => (s.escrows[0].evidence[0].block_number = s.status.finalized_height + 1), ["escrow.no-evidence-above-the-bound"]],
   ["a pin naming another genesis", (s) => (s.pin.genesis = "0x" + "cd".repeat(32)), ["pin.genesis-is-the-status-rpc-genesis"]],
   ["a pin naming no genesis though the status read one", (s) => (s.pin.genesis = null), ["pin.genesis-is-the-status-rpc-genesis"]],
+  [
+    "a pin naming a genesis though the status read none",
+    (s) => {
+      s.status.genesis.rpc = null;
+      s.status.reset_detected = null;
+      for (const e of s.escrows) e.finalized_height = null;
+    },
+    ["pin.genesis-is-the-status-rpc-genesis"],
+  ],
+  [
+    "a pin naming the pinned genesis though the rpc read another",
+    (s) => {
+      s.status.genesis.rpc = OTHER;
+      s.status.reset_detected = true;
+      for (const e of s.escrows) e.finalized_height = null;
+    },
+    ["pin.genesis-is-the-status-rpc-genesis"],
+  ],
   ["a pin naming another height", (s) => (s.pin.finalized_height = 7), ["pin.height-is-the-status-height"]],
   ["a pin height above the status's", (s) => (s.pin.finalized_height = s.status.finalized_height + 1), ["pin.height-is-the-status-height"]],
+  [
+    "a pin naming a height though the status read none",
+    (s) => {
+      Object.assign(s.status, { finalized_height: null, finality_lag: null, reset_detected: null });
+      for (const e of s.escrows) e.finalized_height = null;
+    },
+    ["pin.height-is-the-status-height"],
+  ],
   ["a pin naming another hash", (s) => (s.pin.finalized_hash = "0x" + "ef".repeat(32)), ["pin.hash-is-the-status-hash"]],
   ["a pin naming no hash though the status read one", (s) => (s.pin.finalized_hash = null), ["pin.hash-is-the-status-hash"]],
+  ["a pin naming a hash though the status read none", (s) => (s.status.finalized_hash = null), ["pin.hash-is-the-status-hash"]],
   ["a snapshot trusted though its parts are fixtures", (s) => (s.trust = "trusted RPC"), ["snapshot.fixture-when-a-part-is"]],
   ...(
     [
