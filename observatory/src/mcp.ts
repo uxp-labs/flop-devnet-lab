@@ -121,6 +121,13 @@ export function handleLine(line: string, ctx: McpContext): string | null {
   } catch {
     return JSON.stringify(err(null, -32700, "parse error"));
   }
-  const res = handleMcp(req, ctx);
+  let res: JsonRpcResponse | null;
+  try {
+    res = handleMcp(req, ctx);
+  } catch {
+    // A request the server cannot answer gets an error, never a dead server or a partial answer.
+    const r = req !== null && typeof req === "object" ? (req as Record<string, unknown>) : {};
+    res = err(typeof r.id === "string" || typeof r.id === "number" ? r.id : null, -32603, "internal error");
+  }
   return res === null ? null : JSON.stringify(res);
 }

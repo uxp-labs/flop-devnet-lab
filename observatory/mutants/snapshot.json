@@ -10,8 +10,8 @@
   {
     "id": "source-page-errors-not-recorded",
     "file": "src/source.ts",
-    "find": "const page = read<EventPage>(join(\"event-pages\", name), [loadErrors, pageErrors]);",
-    "replace": "const page = read<EventPage>(join(\"event-pages\", name), [loadErrors]);",
+    "find": "const page = read<EventPage>(join(\"event-pages\", name), [loadErrors, pageErrors], true);",
+    "replace": "const page = read<EventPage>(join(\"event-pages\", name), [loadErrors], true);",
     "test": "test/snapshot.test.ts",
     "why": "an unreadable event page must be listed as a page error"
   },
@@ -34,8 +34,8 @@
   {
     "id": "snapshot-escrows-ignore-finalized-height",
     "file": "src/snapshot.ts",
-    "find": "    status.genesis.rpc !== null && status.genesis.rpc === status.genesis.pinned && rpcHeadUsable(head, o.now) ? status.finalized_height : null;",
-    "replace": "    null;",
+    "find": "  const bound = status.genesis.rpc !== null && status.genesis.rpc === status.genesis.pinned && rpcUsable ? status.finalized_height : null;",
+    "replace": "  const bound = null;",
     "test": "test/snapshot.test.ts",
     "why": "escrow evidence is bounded by the finalized height the status read on the pinned genesis"
   },
@@ -50,8 +50,8 @@
   {
     "id": "snapshot-other-chain-height",
     "file": "src/snapshot.ts",
-    "find": "    status.genesis.rpc !== null && status.genesis.rpc === status.genesis.pinned && rpcHeadUsable(head, o.now) ? status.finalized_height : null;",
-    "replace": "    rpcHeadUsable(head, o.now) ? status.finalized_height : null;",
+    "find": "  const bound = status.genesis.rpc !== null && status.genesis.rpc === status.genesis.pinned && rpcUsable ? status.finalized_height : null;",
+    "replace": "  const bound = rpcUsable ? status.finalized_height : null;",
     "test": "test/snapshot.test.ts",
     "why": "another chain's finalized height must never bound pinned genesis escrows"
   },
@@ -66,8 +66,8 @@
   {
     "id": "source-other-files-skipped",
     "file": "src/source.ts",
-    "find": "          loadErrors.push(why);\n          pageErrors.push(why);\n          continue;",
-    "replace": "          continue;",
+    "find": "          const why = `event-pages/${name}: not a page file (a regular file named *.json, not starting with a dot)`;\n          loadErrors.push(why);\n          pageErrors.push(why);\n          continue;",
+    "replace": "          const why = `event-pages/${name}: not a page file (a regular file named *.json, not starting with a dot)`;\n          continue;",
     "test": "test/snapshot.test.ts",
     "why": "an entry that is not a page file must be reported, never skipped silently"
   },
@@ -122,8 +122,8 @@
   {
     "id": "snapshot-unusable-head-bounds",
     "file": "src/snapshot.ts",
-    "find": "    status.genesis.rpc !== null && status.genesis.rpc === status.genesis.pinned && rpcHeadUsable(head, o.now) ? status.finalized_height : null;",
-    "replace": "    status.genesis.rpc !== null && status.genesis.rpc === status.genesis.pinned ? status.finalized_height : null;",
+    "find": "  const bound = status.genesis.rpc !== null && status.genesis.rpc === status.genesis.pinned && rpcUsable ? status.finalized_height : null;",
+    "replace": "  const bound = status.genesis.rpc !== null && status.genesis.rpc === status.genesis.pinned ? status.finalized_height : null;",
     "test": "test/snapshot.test.ts",
     "why": "a stale or failed RPC head must never bound escrow evidence"
   },

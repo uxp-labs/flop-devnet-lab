@@ -262,5 +262,13 @@
     "replace": "  if (Array.isArray(pages)) pages.forEach((p, n) => checkPage(p, n));\n  const unreadable = opts.unreadablePages ?? [];\n  if (unreadable.length > 0) {",
     "test": "test/census.test.ts",
     "why": "a page file problem is named before a page structure problem (clause 16)"
+  },
+  {
+    "id": "census-accounts-utf16-order",
+    "file": "src/census.ts",
+    "find": "[...perAccount.keys()].sort(byCodePoint)",
+    "replace": "[...perAccount.keys()].sort()",
+    "test": "test/census.test.ts",
+    "why": "clause 11: accounts sort by code point, as the recount does, not by UTF-16 unit"
   }
 ]

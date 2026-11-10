@@ -16,6 +16,8 @@
 //   when git cannot list the files, the runner reports "setup-failed" as JSON and exits 1
 // And one more: with the temp folder reached through a symbolic link (as on stock macOS), the
 // runner still maps vitest's real file names back, so its controls pass and the real bug is killed.
+// Last, a mutant file that holds no mutant must fail the run: a run that tests nothing proves
+// nothing (Fable review L9).
 // Exit 0 only when every outcome is the expected one.
 import { spawnSync } from "node:child_process";
 import { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, readlinkSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
@@ -193,6 +195,23 @@ const throughLink = {
       : "mapped-wrong",
 };
 
+const emptyBox = realpathSync(mkdtempSync(join(tmpdir(), "obs-empty-canary-")));
+const emptyFile = join(emptyBox, "none.json");
+writeFileSync(emptyFile, "[]\n");
+const empty = spawnSync("node", [join(pkg, "scripts", "mutate.mjs"), emptyFile], { cwd: pkg, encoding: "utf8" });
+let emptyReport = null;
+try {
+  emptyReport = JSON.parse(empty.stdout);
+} catch {
+  emptyReport = null;
+}
+rmSync(emptyBox, { recursive: true, force: true });
+const noMutants = {
+  check: "a mutant file that holds no mutant fails the run",
+  exit: empty.status,
+  outcome: empty.status === 1 && emptyReport?.results?.some((x) => x.outcome === "no-mutants") && emptyReport?.summary?.killed === 0 ? "failed-right" : "passed-wrong",
+};
+
 const ok =
   results.every((x) => x.outcome === "classified-right") &&
   r.status === 1 &&
@@ -200,6 +219,7 @@ const ok =
   controls.control_after === "control-pass" &&
   copy.outcome === "copied-right" &&
   setupFailure.outcome === "reported-right" &&
-  throughLink.outcome === "mapped-right";
-console.log(JSON.stringify({ results, runner_exit: runnerExit, ...controls, copy, setup_failure: setupFailure, through_link: throughLink }, null, 2));
+  throughLink.outcome === "mapped-right" &&
+  noMutants.outcome === "failed-right";
+console.log(JSON.stringify({ results, runner_exit: runnerExit, ...controls, copy, setup_failure: setupFailure, through_link: throughLink, no_mutants: noMutants }, null, 2));
 process.exit(ok ? 0 : 1);

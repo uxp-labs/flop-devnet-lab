@@ -127,6 +127,9 @@ export class FixtureSource implements Source {
   static fromDir(dir: string): FixtureSource {
     const loadErrors: string[] = [];
     const pageErrors: string[] = [];
+    // Files that exist but could not be read, and why. A saved reading in one of them becomes
+    // "nothing read", with the reason in its detail, never a reading that was silently dropped.
+    const unreadable = new Map<string, string>();
     const read = <T>(name: string, errors: string[][] = [loadErrors], listed = false): T | undefined => {
       const path = join(dir, name);
       if (!existsSync(path)) {
@@ -156,8 +159,17 @@ export class FixtureSource implements Source {
               ? "not valid JSON"
               : (e as Error).message;
         for (const list of errors) list.push(`${name}: ${reason}`);
+        unreadable.set(name, `${name}: ${reason}`);
         return undefined;
       }
+    };
+    const http = <T>(name: string): HttpResult<T> | undefined => {
+      const r = read<HttpResult<T>>(name);
+      return r ?? (unreadable.has(name) ? unknownHttp<T>(unreadable.get(name)!) : undefined);
+    };
+    const head = (name: string): RpcHead | undefined => {
+      const r = read<RpcHead>(name);
+      return r ?? (unreadable.has(name) ? { ...unknownHead(), unreadable: unreadable.get(name)! } : undefined);
     };
     const meta = read<FixtureMeta>("meta.json");
     if (!meta) throw new Error(`fixture ${dir} has no readable meta.json`);
@@ -206,10 +218,10 @@ export class FixtureSource implements Source {
     return new FixtureSource(
       {
         meta,
-        faucetHealth: read("faucet-health.json"),
-        faucetChain: read("faucet-chain.json"),
-        gatewayModels: read("gateway-models.json"),
-        rpcHead: read("rpc-head.json"),
+        faucetHealth: http<FaucetHealthBody>("faucet-health.json"),
+        faucetChain: http<FaucetChainBody>("faucet-chain.json"),
+        gatewayModels: http<unknown>("gateway-models.json"),
+        rpcHead: head("rpc-head.json"),
         runtimeConstants: read("runtime-constants.json"),
         eventPages,
         loadErrors,

@@ -58,8 +58,8 @@ Known limits (v0):
   refund on the pinned genesis, escrows it could contradict are reported `unverified`. This is strict
   on purpose.
 - One chain event is never evidence for two escrows. If copies of one event (same genesis, block
-  hash and index) disagree on section, method, escrow id or block number, every escrow they name
-  is `unverified`.
+  hash and index) disagree on section, method, escrow id, block number or account, every escrow
+  they name is `unverified`.
 - If any copy of an event is not finalized, the event is pending and is not evidence.
 - If any event page could not be read, or is structurally invalid, every escrow in that result is
   `unverified`. The missing page could hold a conflicting event.
@@ -83,7 +83,11 @@ Known limits (v0):
 - A malformed finalized release or refund that could be about an escrow leaves it `unverified`,
   whatever state the clean evidence would give: it could be a second release or refund.
 - `finalized_height` bounds the evidence only when it comes from a usable RPC head on the pinned
-  genesis (no read error, fresh, not later than the snapshot). Otherwise it is `null`.
+  genesis (no read error, fresh, not later than the snapshot, and not contradicting itself or an
+  earlier snapshot: no rollback, no changed finalized hash, best height not below finalized).
+  Otherwise it is `null`.
+- The same escrow id listed twice (in either case) is refused by the command line, never shown as
+  two results.
 - Amount, payee and policy are not checked here. FlopRail's `verifyLock` does that. Use both.
 
 ## NetworkStatus
@@ -94,7 +98,7 @@ What it answers: is this still the chain we pinned, how far is finality, and are
 |---|---|
 | `schema` | Always `flop-observatory/network-status@0`. |
 | `genesis.pinned`, `.faucet`, `.rpc` | The pinned genesis and what each source reported. `null` means unread. |
-| `reset_detected` | `true`: a usable reading reports another genesis. `false`: a usable faucet `/chain` reading and a usable RPC head both report the pinned one. `null`: not enough evidence. A reading with an error, a stale one or one later than the snapshot counts for neither. |
+| `reset_detected` | `true`: a usable reading reports another genesis. `false`: a usable faucet `/chain` reading and a usable RPC head both report the pinned one. `null`: not enough evidence. A reading with an error, a stale one, one later than the snapshot, or an RPC head that contradicts itself or an earlier snapshot counts for neither. |
 | `conflicts` | Disagreements between sources, in words. |
 | `finalized_height`, `finalized_hash`, `best_height`, `finality_lag` | Chain head as read. `null` when unknown. |
 | `runtime_version` | Runtime spec version, or `null`. |
@@ -109,6 +113,21 @@ How imd-flop and Seat Court should use it:
 - Seat Court: do not act on a deadline when `finalized_height` is `null` or `rpc.stale` is not `false`.
 - The faucet fields come from `GET /health` and `GET /chain` only. The observatory never calls the
   funding endpoint.
+
+Known limits (v0):
+
+- A genesis must be `0x` plus 64 lower case hex. Any other spelling, upper case included, reads as
+  `null`, so it never makes `reset_detected` `false`.
+- A reading whose `error` holds any value but `null`, an empty string included, is never `ok`.
+- A field of the wrong type (a number for `observed_at`, a string for `http`, a nested object in
+  `limits`) reads as `null`.
+- A saved reading that cannot be read (not strict UTF-8 JSON, a key twice in one object, nested
+  deeper than 64 levels) counts as nothing read: that service is `unknown`, and its `detail` names
+  the file and why.
+- Times are compared to the millisecond. A reading less than 1 ms after the snapshot time is not
+  "later".
+- The census also has a field named `reset_detected`. It speaks of its event pages only and is not
+  this value. Branch on this one.
 
 ## Versioning
 

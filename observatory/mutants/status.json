@@ -42,8 +42,8 @@
   {
     "id": "status-unknown-gateway-ok",
     "file": "src/status.ts",
-    "find": "    health = \"unknown\";\n    detail = r.error ?? \"no response\";\n  } else if (r.http === 200) {",
-    "replace": "    health = \"ok\";\n    detail = r.error ?? \"no response\";\n  } else if (r.http === 200) {",
+    "find": "    health = \"unknown\";\n    detail = r.http === null ? (hasError(r.error) ? String(r.error) : \"no response\") : \"http status is not a whole number\";\n  } else if (http === 200) {",
+    "replace": "    health = \"ok\";\n    detail = r.http === null ? (hasError(r.error) ? String(r.error) : \"no response\") : \"http status is not a whole number\";\n  } else if (http === 200) {",
     "test": "test/status.test.ts",
     "why": "a gateway we did not read is unknown, never ok"
   },
@@ -66,15 +66,15 @@
   {
     "id": "status-malformed-genesis-accepted",
     "file": "src/status.ts",
-    "find": "return HASH_RE.test(v) ? v : null;",
-    "replace": "return v;",
+    "find": "  return typeof value === \"string\" && HASH_RE.test(value) ? value : null;",
+    "replace": "  return typeof value === \"string\" ? value : null;",
     "test": "test/status.test.ts",
     "why": "a malformed genesis is unknown, never a value"
   },
   {
     "id": "status-faucet-http-ignored",
     "file": "src/status.ts",
-    "find": "    if (r.http === 200) {\n      health = \"ok\";",
+    "find": "    if (http === 200) {\n      health = \"ok\";",
     "replace": "    if (true) {\n      health = \"ok\";",
     "test": "test/status.test.ts",
     "why": "a faucet body that says ok on HTTP 503 must not be ok"
@@ -106,7 +106,7 @@
   {
     "id": "status-read-error-ignored",
     "file": "src/status.ts",
-    "find": "  if (head.error) problems.push(`read error: ${head.error}`);\n",
+    "find": "  if (hasError(head.error)) problems.push(`read error: ${String(head.error)}`);\n",
     "replace": "",
     "test": "test/status.test.ts",
     "why": "a read error on part of the head cannot be ok"
@@ -130,16 +130,16 @@
   {
     "id": "v-faucet-any-2xx-ok",
     "file": "src/status.ts",
-    "find": "    if (r.http === 200) {",
-    "replace": "    if (r.http >= 200 && r.http < 300) {",
+    "find": "    if (http === 200) {\n      health = \"ok\";",
+    "replace": "    if (http >= 200 && http < 300) {\n      health = \"ok\";",
     "test": "test/status.test.ts",
     "why": "a faucet ok body on 204 is ok (verifier probe, round 2)"
   },
   {
     "id": "v-gateway-any-2xx-ok",
     "file": "src/status.ts",
-    "find": "  } else if (r.http === 200) {",
-    "replace": "  } else if (r.http >= 200 && r.http < 300) {",
+    "find": "  } else if (http === 200) {",
+    "replace": "  } else if (http >= 200 && http < 300) {",
     "test": "test/status.test.ts",
     "why": "a gateway 204 is ok (verifier probe, round 2)"
   },
@@ -218,16 +218,16 @@
   {
     "id": "status-chain-http-ignored",
     "file": "src/status.ts",
-    "find": "  const chainUsable = chain.http === 200 && !chain.error && chainAge !== null",
-    "replace": "  const chainUsable = !chain.error && chainAge !== null",
+    "find": "  const chainUsable = chain.http === 200 && !hasError(chain.error) && chainAge !== null && chainAge >= 0 && chainAge <= o.staleAfterSeconds;",
+    "replace": "  const chainUsable = !hasError(chain.error) && chainAge !== null && chainAge >= 0 && chainAge <= o.staleAfterSeconds;",
     "test": "test/status.test.ts",
     "why": "a /chain body on HTTP 500 must not report the faucet genesis"
   },
   {
     "id": "status-chain-error-ignored",
     "file": "src/status.ts",
-    "find": "  const chainUsable = chain.http === 200 && !chain.error && chainAge !== null",
-    "replace": "  const chainUsable = chain.http === 200 && chainAge !== null",
+    "find": "  const chainUsable = chain.http === 200 && !hasError(chain.error) && chainAge !== null && chainAge >= 0 && chainAge <= o.staleAfterSeconds;",
+    "replace": "  const chainUsable = chain.http === 200 && chainAge !== null && chainAge >= 0 && chainAge <= o.staleAfterSeconds;",
     "test": "test/status.test.ts",
     "why": "a /chain reading with an error must not report the faucet genesis"
   },
@@ -250,15 +250,15 @@
   {
     "id": "status-chain-time-not-needed",
     "file": "src/status.ts",
-    "find": "  const chainUsable = chain.http === 200 && !chain.error && chainAge !== null && chainAge >= 0 && chainAge <= o.staleAfterSeconds;",
-    "replace": "  const chainUsable = chain.http === 200 && !chain.error && (chainAge === null || (chainAge >= 0 && chainAge <= o.staleAfterSeconds));",
+    "find": "  const chainUsable = chain.http === 200 && !hasError(chain.error) && chainAge !== null && chainAge >= 0 && chainAge <= o.staleAfterSeconds;",
+    "replace": "  const chainUsable = chain.http === 200 && !hasError(chain.error) && (chainAge === null || (chainAge >= 0 && chainAge <= o.staleAfterSeconds));",
     "test": "test/status.test.ts",
     "why": "a /chain reading with no time cannot be shown as current"
   },
   {
     "id": "status-rpc-error-counts-for-reset",
     "file": "src/status.ts",
-    "find": "  return !head.error && age !== null && age >= 0 && age <= staleAfterSeconds;",
+    "find": "  return !hasError(head.error) && age !== null && age >= 0 && age <= staleAfterSeconds;",
     "replace": "  return age !== null && age >= 0 && age <= staleAfterSeconds;",
     "test": "test/status.test.ts",
     "why": "an RPC head with a read error must not count toward reset_detected"
@@ -266,24 +266,24 @@
   {
     "id": "status-rpc-freshness-ignored-for-reset",
     "file": "src/status.ts",
-    "find": "  return !head.error && age !== null && age >= 0 && age <= staleAfterSeconds;",
-    "replace": "  return !head.error && age !== null && age >= 0;",
+    "find": "  return !hasError(head.error) && age !== null && age >= 0 && age <= staleAfterSeconds;",
+    "replace": "  return !hasError(head.error) && age !== null && age >= 0;",
     "test": "test/status.test.ts",
     "why": "an old RPC head must not count toward reset_detected"
   },
   {
     "id": "status-rpc-future-counts-for-reset",
     "file": "src/status.ts",
-    "find": "  return !head.error && age !== null && age >= 0 && age <= staleAfterSeconds;",
-    "replace": "  return !head.error && age !== null && age <= staleAfterSeconds;",
+    "find": "  return !hasError(head.error) && age !== null && age >= 0 && age <= staleAfterSeconds;",
+    "replace": "  return !hasError(head.error) && age !== null && age <= staleAfterSeconds;",
     "test": "test/status.test.ts",
     "why": "an RPC head time later than the snapshot must not count toward reset_detected"
   },
   {
     "id": "status-rpc-time-not-needed-for-reset",
     "file": "src/status.ts",
-    "find": "  return !head.error && age !== null && age >= 0 && age <= staleAfterSeconds;",
-    "replace": "  return !head.error && (age === null || (age >= 0 && age <= staleAfterSeconds));",
+    "find": "  return !hasError(head.error) && age !== null && age >= 0 && age <= staleAfterSeconds;",
+    "replace": "  return !hasError(head.error) && (age === null || (age >= 0 && age <= staleAfterSeconds));",
     "test": "test/status.test.ts",
     "why": "an RPC head with no usable time must not count toward reset_detected"
   },
@@ -342,5 +342,109 @@
     "replace": "",
     "test": "test/status.test.ts",
     "why": "an earlier head time that does not parse means the stuck check cannot run"
+  },
+  {
+    "id": "status-faucet-error-ignored",
+    "file": "src/status.ts",
+    "find": "    if (health === \"ok\") health = \"degraded\";\n    detail = [detail, `read error: ${String(r.error)}`].filter((d) => d !== null).join(\"; \");\n  }\n  return { health, http, detail, observed_at: timeField(r.fetched_at), ready, limits };",
+    "replace": "    detail = [detail, `read error: ${String(r.error)}`].filter((d) => d !== null).join(\"; \");\n  }\n  return { health, http, detail, observed_at: timeField(r.fetched_at), ready, limits };",
+    "test": "test/status.test.ts",
+    "why": "a faucet reading that came with an error is never ok"
+  },
+  {
+    "id": "status-gateway-error-ignored",
+    "file": "src/status.ts",
+    "find": "    if (health === \"ok\") health = \"degraded\";\n    detail = [detail, `read error: ${String(r.error)}`].filter((d) => d !== null).join(\"; \");\n  }\n  return { health, http, detail, observed_at: timeField(r.fetched_at) };",
+    "replace": "    detail = [detail, `read error: ${String(r.error)}`].filter((d) => d !== null).join(\"; \");\n  }\n  return { health, http, detail, observed_at: timeField(r.fetched_at) };",
+    "test": "test/status.test.ts",
+    "why": "a gateway reading that came with an error is never ok"
+  },
+  {
+    "id": "status-empty-error-ignored",
+    "file": "src/status.ts",
+    "find": "  return e !== null && e !== undefined;",
+    "replace": "  return e !== null && e !== undefined && e !== \"\";",
+    "test": "test/status.test.ts",
+    "why": "an empty error string is still an error"
+  },
+  {
+    "id": "status-contradicted-head-usable",
+    "file": "src/status.ts",
+    "find": "  const rpcUsable = fresh && !flags.contradicted;",
+    "replace": "  const rpcUsable = fresh;",
+    "test": "test/status.test.ts",
+    "why": "a head that contradicts itself or history must not count toward reset_detected"
+  },
+  {
+    "id": "status-earlier-later-ignored",
+    "file": "src/status.ts",
+    "find": "    if (t !== null && t < 0) {\n      conflicts.push(`an earlier snapshot read",
+    "replace": "    if (false) {\n      conflicts.push(`an earlier snapshot read",
+    "test": "test/status.test.ts",
+    "why": "a log that runs backwards in time is a conflict"
+  },
+  {
+    "id": "status-nothing-future-no-conflict",
+    "file": "src/status.ts",
+    "find": "  if (age !== null && age < 0) {\n    // A reading time later than the snapshot time is a conflict whatever the reading holds.",
+    "replace": "  if (false) {\n    // A reading time later than the snapshot time is a conflict whatever the reading holds.",
+    "test": "test/status.test.ts",
+    "why": "a future head time is a conflict even when the head read nothing"
+  },
+  {
+    "id": "status-uppercase-hash-accepted",
+    "file": "src/status.ts",
+    "find": "  return typeof value === \"string\" && HASH_RE.test(value) ? value : null;",
+    "replace": "  return typeof value === \"string\" && HASH_RE.test(value.toLowerCase()) ? value.toLowerCase() : null;",
+    "test": "test/status.test.ts",
+    "why": "hashes compare exactly as written, as in the census"
+  },
+  {
+    "id": "status-http-type-unchecked",
+    "file": "src/status.ts",
+    "find": "  return isSafeInt(h) ? h : null;",
+    "replace": "  return h as number | null;",
+    "test": "test/status.test.ts",
+    "why": "a status that is not a whole number never reaches the interface"
+  },
+  {
+    "id": "status-time-type-unchecked",
+    "file": "src/status.ts",
+    "find": "  return typeof t === \"string\" ? t : null;",
+    "replace": "  return t as string | null;",
+    "test": "test/status.test.ts",
+    "why": "a time that is not a string never reaches the interface"
+  },
+  {
+    "id": "status-limits-type-unchecked",
+    "file": "src/status.ts",
+    "find": "    rawLimits && Object.values(rawLimits).every((v) => typeof v === \"boolean\" || (typeof v === \"number\" && Number.isFinite(v))) ? rawLimits : null;",
+    "replace": "    rawLimits;",
+    "test": "test/status.test.ts",
+    "why": "faucet limits carry numbers and booleans only"
+  },
+  {
+    "id": "source-unreadable-head-dropped",
+    "file": "src/source.ts",
+    "find": "return r ?? (unreadable.has(name) ? { ...unknownHead(), unreadable: unreadable.get(name)! } : undefined);",
+    "replace": "return r;",
+    "test": "test/status.test.ts",
+    "why": "Fable review M5: an RPC head file that cannot be read is named in the RPC detail, not reported as no head"
+  },
+  {
+    "id": "source-unreadable-http-dropped",
+    "file": "src/source.ts",
+    "find": "return r ?? (unreadable.has(name) ? unknownHttp<T>(unreadable.get(name)!) : undefined);",
+    "replace": "return r;",
+    "test": "test/status.test.ts",
+    "why": "Fable review M5: a faucet or gateway file that cannot be read is named in its detail"
+  },
+  {
+    "id": "status-unreadable-detail-dropped",
+    "file": "src/status.ts",
+    "find": "typeof head.unreadable === \"string\" ? head.unreadable : \"no rpc head\"",
+    "replace": "\"no rpc head\"",
+    "test": "test/status.test.ts",
+    "why": "the reason a saved RPC head could not be read shows as the RPC detail"
   }
 ]

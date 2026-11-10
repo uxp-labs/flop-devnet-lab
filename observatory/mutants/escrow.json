@@ -34,8 +34,8 @@
   {
     "id": "escrow-block-number-disagreement-ignored",
     "file": "src/escrow.ts",
-    "find": "|${idPart}|${String(c.block_number)}`);",
-    "replace": "|${idPart}`);",
+    "find": "String(c.method), idPart, String(c.block_number), c.account]));",
+    "replace": "String(c.method), idPart, c.account]));",
     "test": "test/escrow.test.ts",
     "why": "Copies of one event must agree on block_number; null against a number disagrees."
   },
@@ -382,5 +382,21 @@
     "replace": "    } else if (refunded.length === 1) {\n      if (suspectTerminals.has(RELEASED)) {",
     "test": "test/escrow.test.ts",
     "why": "a malformed finalized refund could be a second distinct refund"
+  },
+  {
+    "id": "escrow-copies-ignore-account",
+    "file": "src/escrow.ts",
+    "find": "String(c.block_number), c.account]));",
+    "replace": "String(c.block_number)]));",
+    "test": "test/escrow.test.ts",
+    "why": "copies that disagree on the account are malformed in the census, so never escrow evidence"
+  },
+  {
+    "id": "escrow-broken-kind-not-suspect",
+    "file": "src/escrow.ts",
+    "find": "          if (raw[\"finalized\"] === true) suspectTerminals.add(UNKNOWN_KIND);\n",
+    "replace": "",
+    "test": "test/escrow.test.ts",
+    "why": "a finalized event naming the escrow with a broken kind could be its release or refund"
   }
 ]

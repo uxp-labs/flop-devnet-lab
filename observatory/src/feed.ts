@@ -7,9 +7,14 @@ function sortDeep(v: unknown): unknown {
   if (Array.isArray(v)) return v.map(sortDeep);
   if (v !== null && typeof v === "object") {
     const o = v as Record<string, unknown>;
-    const out: Record<string, unknown> = {};
-    for (const k of Object.keys(o).sort()) if (o[k] !== undefined) out[k] = sortDeep(o[k]);
-    return out;
+    // fromEntries defines each key as an own property. Plain assignment would treat a key named
+    // __proto__ (an account, say) as the prototype and drop it from the written file.
+    return Object.fromEntries(
+      Object.keys(o)
+        .sort()
+        .filter((k) => o[k] !== undefined)
+        .map((k) => [k, sortDeep(o[k])]),
+    );
   }
   return v;
 }

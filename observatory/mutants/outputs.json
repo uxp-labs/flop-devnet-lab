@@ -66,10 +66,18 @@
  {
   "id": "feed-unsorted",
   "file": "src/feed.ts",
-  "find": "for (const k of Object.keys(o).sort())",
-  "replace": "for (const k of Object.keys(o))",
+  "find": "Object.keys(o)\n        .sort()\n        .filter",
+  "replace": "Object.keys(o)\n        .filter",
   "test": "test/store.test.ts",
   "why": "feeds must have sorted keys"
+ },
+ {
+  "id": "feed-proto-account-dropped",
+  "file": "src/feed.ts",
+  "find": "    return Object.fromEntries(\n      Object.keys(o)\n        .sort()\n        .filter((k) => o[k] !== undefined)\n        .map((k) => [k, sortDeep(o[k])]),\n    );",
+  "replace": "    const out: Record<string, unknown> = {};\n    for (const k of Object.keys(o).sort()) if (o[k] !== undefined) out[k] = sortDeep(o[k]);\n    return out;",
+  "test": "test/store.test.ts",
+  "why": "an account named __proto__ must stay in every feed, and snapshot.json must still verify"
  },
  {
   "id": "mcp-drops-trust",
@@ -286,5 +294,29 @@
   "replace": "<table data-section=\"status\">",
   "test": "test/page.test.ts",
   "why": "every table carries the section of its keys"
+ },
+ {
+  "id": "store-repeated-key-line-trusted",
+  "file": "src/store.ts",
+  "find": "  return twice === null ? s : `holds the key ${JSON.stringify(twice)} twice in one object`;",
+  "replace": "  return s;",
+  "test": "test/store.test.ts",
+  "why": "a log line with a key twice can read as two different snapshots, so it breaks the chain"
+ },
+ {
+  "id": "store-lossy-utf8",
+  "file": "src/store.ts",
+  "find": "const strict = new TextDecoder(\"utf-8\", { fatal: true });",
+  "replace": "const strict = new TextDecoder(\"utf-8\");",
+  "test": "test/store.test.ts",
+  "why": "the log is read as strict UTF-8, or a changed byte reads back as U+FFFD and still verifies"
+ },
+ {
+  "id": "mcp-internal-error-thrown",
+  "file": "src/mcp.ts",
+  "find": "res = err(typeof r.id === \"string\" || typeof r.id === \"number\" ? r.id : null, -32603, \"internal error\");",
+  "replace": "throw new Error(\"unhandled\");",
+  "test": "test/mcp.test.ts",
+  "why": "a call the server cannot answer gets a JSON-RPC error, not a thrown exception that kills the server"
  }
 ]

@@ -92,7 +92,7 @@ for (const [label, body] of Object.entries(canaries)) {
     continue;
   }
   writeFileSync(join(tmp, "test", name), body);
-  const r = spawnSync("npx", ["vitest", "run", `test/${name}`], {
+  const r = spawnSync("npx", ["--no-install", "vitest", "run", `test/${name}`], {
     cwd: tmp,
     encoding: "utf8",
     env: { ...process.env, OBS_ATTEMPTS_FILE: "" },

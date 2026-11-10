@@ -337,20 +337,30 @@ def recount(scenario_dir, genesis, req_lo, req_hi):
     }
 
 
+def request_int(flag, text):
+    """A request number read as the TypeScript command reads it: ASCII digits only. Python's int()
+    would also take " 0", "+5", "1_0" and other scripts' digits, which the other side refuses."""
+    if re.fullmatch(r"[0-9]+", text) is None:
+        raise Unreadable("request", "%s must be a non-negative integer" % flag)
+    return int(text)
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description="Independent census recount")
     ap.add_argument("--dir", required=True)
     ap.add_argument("--genesis", required=True)
-    ap.add_argument("--from", dest="lo", required=True, type=int)
-    ap.add_argument("--to", dest="hi", required=True, type=int)
+    ap.add_argument("--from", dest="lo", required=True)
+    ap.add_argument("--to", dest="hi", required=True)
     try:
         args = ap.parse_args(argv)
     except SystemExit as exc:
         return 2 if exc.code else 0
     try:
-        if as_int(args.lo) is None or as_int(args.hi) is None or args.lo < 0 or args.lo > args.hi:
-            raise Unreadable("request", "bad requested range %d..%d" % (args.lo, args.hi))
-        result = recount(args.dir, args.genesis, args.lo, args.hi)
+        lo = request_int("--from", args.lo)
+        hi = request_int("--to", args.hi)
+        if as_int(lo) is None or as_int(hi) is None or lo > hi:
+            raise Unreadable("request", "bad requested range %d..%d" % (lo, hi))
+        result = recount(args.dir, args.genesis, lo, hi)
     except Unreadable as exc:
         print("census refused (%s): %s" % (exc.kind, exc), file=sys.stderr)
         return 2

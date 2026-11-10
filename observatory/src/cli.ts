@@ -53,9 +53,25 @@ const need = (a: Args, k: string): string => one(a, k) ?? fail(`missing ${k}`);
 const print = (v: unknown) => process.stdout.write(JSON.stringify(v, null, 2) + "\n");
 const int = (s: string | undefined, k: string): number | undefined => {
   if (s === undefined) return undefined;
-  if (!/^\d+$/.test(s)) fail(`${k} must be a non-negative integer`);
+  // ASCII digits only, the recount's reading too (RULES.md 3.1 clause 16): a refusal of the request.
+  if (!/^[0-9]+$/.test(s)) fail(`census refused (request): ${k} must be a non-negative integer`);
   return Number(s);
 };
+
+/**
+ * Escrow ids to look up, each once. Ids compare in lower case, as escrow results show them, so the
+ * same escrow listed twice (in either case) refuses rather than giving two cards with one key.
+ */
+function distinctIds(ids: unknown, where: string): string[] {
+  if (!Array.isArray(ids) || ids.length === 0) fail(`${where}: escrow ids must be a non-empty list`);
+  const seen = new Set<string>();
+  for (const id of ids) {
+    const k = String(id).toLowerCase();
+    if (seen.has(k)) fail(`${where}: escrow id ${String(id)} is listed twice`);
+    seen.add(k);
+  }
+  return ids as string[];
+}
 
 async function main(): Promise<void> {
   const a = parse(process.argv.slice(2));
@@ -70,7 +86,8 @@ async function main(): Promise<void> {
 
   if (cmd === "escrow") {
     const src = FixtureSource.fromDir(need(a, "--fixtures"));
-    const ids = a.flags.get("--id") ?? src.data.meta.escrow_ids ?? fail("no --id and no escrow_ids in meta.json");
+    const flagged = a.flags.get("--id");
+    const ids = distinctIds(flagged ?? src.data.meta.escrow_ids ?? fail("no --id and no escrow_ids in meta.json"), flagged ? "--id" : "meta.json");
     print(
       escrowStates(ids, await src.eventPages(), {
         pinnedGenesis: src.data.meta.pinned_genesis ?? DEVNET_GENESIS,
@@ -124,7 +141,7 @@ async function main(): Promise<void> {
     let escrows = null;
     if (escrowDir) {
       const src = samePin(FixtureSource.fromDir(escrowDir), escrowDir);
-      escrows = { source: src, ids: src.data.meta.escrow_ids ?? fail(`${escrowDir}/meta.json has no escrow_ids`) };
+      escrows = { source: src, ids: distinctIds(src.data.meta.escrow_ids ?? fail(`${escrowDir}/meta.json has no escrow_ids`), `${escrowDir}/meta.json`) };
     }
     let censusPart = null;
     if (censusDir) {
@@ -156,7 +173,8 @@ async function main(): Promise<void> {
       const broken = verifyChain(log);
       if (broken !== null) fail(`snapshot log ${log} is broken at line ${broken}; it is never extended or trusted`);
       for (const { status: st } of readSnapshots(log)) {
-        if (st.genesis.rpc !== null && st.finalized_height !== null && st.finalized_hash !== null && st.rpc.observed_at !== null) {
+        // A head time is needed only for the stuck check, so a snapshot without one still counts.
+        if (st.genesis.rpc !== null && st.finalized_height !== null && st.finalized_hash !== null) {
           previous.push({
             genesis: st.genesis.rpc,
             finalized_height: st.finalized_height,

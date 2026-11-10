@@ -1,9 +1,11 @@
-import { readFileSync } from "node:fs";
+import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { describe, expect, it } from "vitest";
+import { afterAll, describe, expect, it } from "vitest";
 import { FixtureSource } from "../src/source.js";
 import { unknownHttp } from "../src/source.js";
-import { DEVNET_GENESIS, classifyFaucet, classifyGateway, networkStatus, resetDetected } from "../src/status.js";
+import { DEVNET_GENESIS, classifyFaucet, classifyGateway, networkStatus, resetDetected, rpcHeadUsable } from "../src/status.js";
 
 const NOW = "2026-11-09T23:47:53Z";
 const OTHER = "0x" + "ab".repeat(32);
@@ -506,5 +508,155 @@ describe("resetDetected", () => {
     [OTHER, OTHER, true],
   ])("faucet %s, rpc %s gives %s", (faucet, rpc, expected) => {
     expect(resetDetected(P, faucet, rpc)).toBe(expected);
+  });
+});
+
+describe("Fable review: status readings", () => {
+  const withData = (patch: Record<string, unknown>) => {
+    const src = fx("status-healthy");
+    return networkStatus(new FixtureSource({ ...src.data, ...patch } as never), { pinnedGenesis: DEVNET_GENESIS, now: NOW });
+  };
+  const healthy = fx("status-healthy").data;
+
+  it("a faucet or gateway reading that came with an error is never ok, even on HTTP 200", async () => {
+    const s = await withData({
+      faucetHealth: { ...(healthy.faucetHealth as object), error: "socket hang up after headers" },
+      gatewayModels: { ...(healthy.gatewayModels as object), error: "body truncated", body: null },
+    });
+    expect(s.faucet.health).toBe("degraded");
+    expect(s.faucet.detail).toMatch(/read error: socket hang up after headers/);
+    expect(s.gateway.health).toBe("degraded");
+    expect(s.gateway.detail).toMatch(/read error: body truncated/);
+  });
+
+  it("an empty string is an error too: on the RPC head and on the faucet /chain reading", async () => {
+    const s = await withData({ rpcHead: { ...(healthy.rpcHead as object), error: "" } });
+    expect(s.rpc.health).toBe("degraded");
+    expect(s.reset_detected).toBeNull();
+    const c = await withData({ faucetChain: { ...(healthy.faucetChain as object), error: "" } });
+    expect(c.genesis.faucet).toBeNull();
+    expect(c.reset_detected).toBeNull();
+  });
+
+  it("a head that contradicts itself (best below finalized) never counts toward reset_detected", async () => {
+    const s = await withData({ rpcHead: { ...(healthy.rpcHead as object), best_number: 3341000 } });
+    expect(s.conflicts.join(" ")).toMatch(/best block 3341000 is below finalized block 3341575/);
+    expect(s.reset_detected).toBeNull();
+  });
+
+  it("a head that went backwards never counts toward reset_detected", async () => {
+    const s = await run("status-healthy", { previous: [{ genesis: DEVNET_GENESIS, finalized_height: 3341600, finalized_hash: "0x" + "5e".repeat(32), observed_at: "2026-11-09T23:47:00Z" }] });
+    expect(s.reset_detected).toBeNull();
+    expect(s.genesis.rpc).toBe(DEVNET_GENESIS);
+  });
+
+  it("an earlier snapshot with no head time still raises the floor: a rollback after it is caught", async () => {
+    const s = await run("status-healthy", { previous: [{ genesis: DEVNET_GENESIS, finalized_height: 3341600, finalized_hash: "0x" + "5e".repeat(32), observed_at: null }] });
+    expect(s.conflicts.join(" ")).toMatch(/went backwards from 3341600 to 3341575/);
+    expect(s.rpc.health).toBe("degraded");
+  });
+
+  it("an earlier snapshot whose head time is later than this snapshot is a conflict", async () => {
+    const s = await run("status-healthy", { previous: [{ genesis: DEVNET_GENESIS, finalized_height: 3341570, finalized_hash: "0x" + "11".repeat(32), observed_at: "2026-11-09T23:48:40Z" }] });
+    expect(s.conflicts.join(" ")).toMatch(/an earlier snapshot read the rpc head at 2026-11-09T23:48:40Z, later than this snapshot time/);
+    expect(s.rpc.health).toBe("degraded");
+    expect(s.reset_detected).toBeNull();
+  });
+
+  it("a head that read nothing but carries a future time is still a conflict", async () => {
+    const s = await withData({ rpcHead: { genesis_hash: null, finalized: null, best_number: null, runtime_spec_version: null, observed_at: "2030-01-01T00:00:00Z", error: null } });
+    expect(s.conflicts.join(" ")).toMatch(/rpc head observed_at 2030-01-01T00:00:00Z is later than the snapshot time/);
+  });
+
+  it("a genesis written in upper case is malformed, as in the census: never the pinned one", async () => {
+    const upper = "0x" + DEVNET_GENESIS.slice(2).toUpperCase();
+    const s = await withData({ rpcHead: { ...(healthy.rpcHead as object), genesis_hash: upper } });
+    expect(s.genesis.rpc).toBeNull();
+    expect(s.conflicts).toContain("rpc genesis hash is malformed");
+    expect(s.reset_detected).toBeNull();
+  });
+
+  it("wrong typed fields never reach the interface: a numeric time, a string status, odd limits", async () => {
+    const s = await withData({
+      rpcHead: { ...(healthy.rpcHead as object), observed_at: 1794268060 },
+      gatewayModels: { ...(healthy.gatewayModels as object), http: "200", fetched_at: 17 },
+      faucetHealth: { ...(healthy.faucetHealth as object), body: { ...((healthy.faucetHealth as { body: object }).body), limits: { ipCooldownMs: "ten seconds" } } },
+    });
+    expect(s.rpc.observed_at).toBeNull();
+    expect(s.gateway.http).toBeNull();
+    expect(s.gateway.health).toBe("unknown");
+    expect(s.gateway.observed_at).toBeNull();
+    expect(s.faucet.limits).toBeNull();
+  });
+});
+
+describe("rpcHeadUsable on its own", () => {
+  const head = (over: Record<string, unknown>) => ({ genesis_hash: DEVNET_GENESIS, finalized: null, best_number: null, runtime_spec_version: null, observed_at: "2026-11-09T23:47:40Z", error: null, ...over }) as never;
+  it.each([
+    ["a fresh head with no error", {}, true],
+    ["a head 120 s old", { observed_at: "2026-11-09T23:45:53Z" }, true],
+    ["a head 121 s old", { observed_at: "2026-11-09T23:45:52Z" }, false],
+    ["a head time later than the snapshot", { observed_at: "2026-11-09T23:47:54Z" }, false],
+    ["no head time", { observed_at: null }, false],
+    ["a read error", { error: "timeout" }, false],
+    ["an empty error", { error: "" }, false],
+  ])("%s: %s", (_name, over, want) => {
+    expect(rpcHeadUsable(head(over as Record<string, unknown>), NOW)).toBe(want);
+  });
+});
+
+describe("a saved reading that cannot be read (Fable review M5)", () => {
+  const healthy = fileURLToPath(new URL("../fixtures/status-healthy", import.meta.url));
+  const made: string[] = [];
+  afterAll(() => {
+    for (const d of made) rmSync(d, { recursive: true, force: true });
+  });
+  /** A copy of status-healthy with one file's bytes changed. */
+  const withFile = (file: string, edit: (raw: Buffer) => Buffer | string) => {
+    const d = mkdtempSync(join(tmpdir(), "obs-status-unreadable-"));
+    made.push(d);
+    cpSync(healthy, d, { recursive: true });
+    const p = join(d, file);
+    const before = readFileSync(p);
+    const after = edit(before);
+    expect(Buffer.from(after).equals(before)).toBe(false);
+    writeFileSync(p, after);
+    return FixtureSource.fromDir(d);
+  };
+  /** The first line of "key" said twice, the first copy holding other (JSON.parse keeps the last). */
+  const twice = (key: string, other: string) => (raw: Buffer) =>
+    raw.toString("utf8").replace(new RegExp(`("${key}": [^\\n]*\\n)`), `"${key}": ${other},\n  $1`);
+  const status = (src: FixtureSource) => networkStatus(src, { pinnedGenesis: DEVNET_GENESIS, now: NOW });
+
+  it("control: the unedited copy reads as before", async () => {
+    const s = await status(withFile("rpc-head.json", (raw) => raw.toString("utf8") + "\n"));
+    expect(s.rpc.health).toBe("ok");
+    expect(s.reset_detected).toBe(false);
+  });
+  it("an RPC head that holds its genesis twice is nothing read, names the file, and leaves reset_detected null", async () => {
+    const src = withFile("rpc-head.json", twice("genesis_hash", JSON.stringify("0x" + "11".repeat(32))));
+    const s = await status(src);
+    const why = 'rpc-head.json: the key "genesis_hash" appears twice in one object';
+    expect(s.rpc).toMatchObject({ health: "unknown", detail: why, stale: null });
+    expect(s.genesis.rpc).toBeNull();
+    expect(s.finalized_height).toBeNull();
+    expect(s.reset_detected).toBeNull();
+    expect(src.data.loadErrors).toEqual([why]);
+  });
+  it("a faucet health reading that holds its error twice is unknown and names the file, never ok", async () => {
+    const s = await status(withFile("faucet-health.json", twice("error", '"socket hang up after headers"')));
+    expect(s.faucet).toMatchObject({ health: "unknown", http: null, detail: 'faucet-health.json: the key "error" appears twice in one object' });
+  });
+  it("a gateway reading that holds its http status twice is unknown and names the file", async () => {
+    const s = await status(withFile("gateway-models.json", twice("http", "503")));
+    expect(s.gateway).toMatchObject({ health: "unknown", http: null, detail: 'gateway-models.json: the key "http" appears twice in one object' });
+  });
+  it("a /chain reading that is not valid UTF-8 gives no faucet genesis, so reset_detected is null", async () => {
+    const s = await status(withFile("faucet-chain.json", (raw) => Buffer.from(raw.toString("latin1").replace('"FLOP Devnet"', '"FLOP \xff Devnet"'), "latin1")));
+    expect(s.genesis.faucet).toBeNull();
+    expect(s.reset_detected).toBeNull();
+  });
+  it("a meta.json that holds its clock twice refuses the scenario", () => {
+    expect(() => withFile("meta.json", twice("now", '"2030-01-01T00:00:00Z"'))).toThrow(/has no readable meta\.json/);
   });
 });

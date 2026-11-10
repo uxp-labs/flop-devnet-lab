@@ -628,7 +628,7 @@ describe("copies of one event must agree on block_number", () => {
     const s = escrowState(A, pages, opts);
     expect(s.state).toBe("unverified");
     expect(s.evidence).toEqual([]);
-    expect(s.notes.join(" ")).toContain("copies of one event disagree on section, method, escrow id or block number");
+    expect(s.notes.join(" ")).toContain("copies of one event disagree on section, method, escrow id, block number or account");
     expect(s.notes.join(" ")).toContain(`block ${bh(2)}, index 0`);
   });
   it("null against a number is a conflict, in either order", () => {
@@ -1062,6 +1062,54 @@ describe("IMD follow-up audit: escrow pages follow census clause 2", () => {
       const { expected, pages, o } = await loadScenario(name);
       expect(escrowStates(expected.escrows.map((e) => e.id), pages, o).map((s) => s.state)).toEqual(want);
     }
+  });
+});
+
+describe("Fable review: copies of one event must agree on the account, as census clause 9 says", () => {
+  it.each([
+    ["a release", "EscrowReleased"],
+    ["an open", "EscrowOpened"],
+  ])("two copies of %s that name different accounts are a conflict, never evidence", (_name, method) => {
+    const a = ev(method, A, 2, { data: { "0": A, who: "alice" } });
+    const b = ev(method, A, 2, { data: { "0": A, who: "bob" } });
+    const s = escrowState(A, [page([ev("EscrowOpened", A, 1), a, b].filter((e, i) => method === "EscrowReleased" || i > 0))], opts);
+    expect(s.state).toBe("unverified");
+    expect(s.notes.join(" ")).toContain("copies of one event disagree on section, method, escrow id, block number or account");
+  });
+  it("copies that agree on the account, or that both have none, still count once", () => {
+    const same = ev("EscrowReleased", A, 2, { data: { "0": A, who: "alice" } });
+    expect(escrowState(A, [page([ev("EscrowOpened", A, 1), same, same])], opts).state).toBe("claimed");
+    expect(escrowState(A, [page([ev("EscrowOpened", A, 1), ev("EscrowReleased", A, 2), ev("EscrowReleased", A, 2)])], opts).state).toBe("claimed");
+  });
+});
+
+describe("Fable review: a finalized event that names this escrow but lost its section or method is suspect", () => {
+  it.each([
+    ["no section key", (e: Record<string, unknown>) => { const { section: _s, ...rest } = e; return rest; }],
+    ["a section that is a list", (e: Record<string, unknown>) => ({ ...e, section: ["hasStation"] })],
+    ["an empty method", (e: Record<string, unknown>) => ({ ...e, method: "" })],
+    ["a null method", (e: Record<string, unknown>) => ({ ...e, method: null })],
+  ])("%s: a funded escrow is unverified, with a note", (_name, damage) => {
+    const broken = damage(ev("EscrowReleased", A, 2) as unknown as Record<string, unknown>);
+    const s = escrowState(A, [page([ev("EscrowOpened", A, 1), broken])], opts);
+    expect(s.state).toBe("unverified");
+    expect(s.notes).toContain("malformed event ignored: an event that names this escrow has no valid section or method");
+    expect(s.notes.join(" ")).toContain("a malformed finalized terminal event could be about this escrow");
+  });
+  it("the same damage on an event that names another escrow changes nothing here", () => {
+    const B = "0x" + "b2".repeat(32);
+    const { section: _s, ...other } = ev("EscrowReleased", B, 2) as unknown as Record<string, unknown>;
+    expect(escrowState(A, [page([ev("EscrowOpened", A, 1), other])], opts).state).toBe("funded");
+  });
+  it("a well formed event of another kind that happens to carry this id is not an escrow event", () => {
+    const transfer = ev("Transfer", A, 2, { section: "balances" });
+    expect(escrowState(A, [page([ev("EscrowOpened", A, 1), transfer])], opts).state).toBe("funded");
+  });
+  it("with a clean release too, a damaged event naming the escrow leaves it unverified", () => {
+    const { method: _m, ...noMethod } = ev("EscrowRefunded", A, 3) as unknown as Record<string, unknown>;
+    const s = escrowState(A, [page([ev("EscrowOpened", A, 1), ev("EscrowReleased", A, 2), noMethod])], opts);
+    expect(s.state).toBe("unverified");
+    expect(s.notes).toContain("conflicting evidence: a malformed finalized event of unknown kind could be about this escrow");
   });
 });
 

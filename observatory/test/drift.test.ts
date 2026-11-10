@@ -151,6 +151,17 @@ describe("drift fixtures", () => {
     const withChain = drift(EXCERPT, rc({}, { runtime_spec_version: 7 }), { ...OPTS, genesis: "0xab", finalizedHeight: 12 });
     expect([withChain.runtime_version, withChain.genesis, withChain.finalized_height]).toEqual([7, "0xab", 12]);
   });
+
+  it("a runtime version past 2^53 or below 0, and a reading time that does not parse, read as unknown (Fable review L15)", () => {
+    for (const v of [2 ** 53, 2 ** 53 + 2, -1, 1.5, true, "7"]) {
+      expect(drift(EXCERPT, rc({}, { runtime_spec_version: v as number }), OPTS).runtime_version, String(v)).toBeNull();
+    }
+    expect(drift(EXCERPT, rc({}, { runtime_spec_version: 2 ** 53 - 1 }), OPTS).runtime_version).toBe(2 ** 53 - 1);
+    for (const t of ["2026-11-10T00:00:00", "2026-11-31T00:00:00Z", "yesterday", 1794268060]) {
+      expect(drift(EXCERPT, rc({}, { observed_at: t as string }), OPTS).runtime_observed_at, String(t)).toBeNull();
+    }
+    expect(drift(EXCERPT, rc({}, { observed_at: "2026-11-10T00:00:00+01:00" }), OPTS).runtime_observed_at).toBe("2026-11-10T00:00:00+01:00");
+  });
 });
 
 describe("unknown, never match by default", () => {

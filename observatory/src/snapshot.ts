@@ -3,7 +3,7 @@
 // can be built with or without them. A missing part is null, never an empty report.
 import { escrowStates } from "./escrow.js";
 import type { Source } from "./source.js";
-import { networkStatus, rpcHeadUsable, type StatusOptions } from "./status.js";
+import { assessNetwork, type StatusOptions } from "./status.js";
 import type { NewSnapshot } from "./store.js";
 import type { CensusReport, DriftReport, EscrowState, RunPin, Trust } from "./types.js";
 
@@ -28,17 +28,15 @@ function weakest(trusts: Trust[]): Trust {
 }
 
 export async function buildSnapshot(parts: SnapshotParts, o: SnapshotOptions): Promise<NewSnapshot> {
-  const status = await networkStatus(parts.status, {
+  const { status, rpcUsable } = await assessNetwork(parts.status, {
     pinnedGenesis: o.pinnedGenesis,
     now: o.now,
     previous: o.previous ?? null,
   });
   // RULES.md section 2: a finalized height bounds escrow evidence only from a usable RPC head on
-  // the pinned genesis: no read error, and a head time that parses, is not later than the snapshot
-  // and is fresh. Another chain's height, or a stale or failed reading, never bounds these escrows.
-  const head = await parts.status.rpcHead();
-  const bound =
-    status.genesis.rpc !== null && status.genesis.rpc === status.genesis.pinned && rpcHeadUsable(head, o.now) ? status.finalized_height : null;
+  // the pinned genesis (assessNetwork says what usable means). Another chain's height, or a
+  // stale, failed or contradicted reading, never bounds these escrows.
+  const bound = status.genesis.rpc !== null && status.genesis.rpc === status.genesis.pinned && rpcUsable ? status.finalized_height : null;
   let escrows: EscrowState[] = [];
   const labels = [parts.status.label];
   const trusts: Trust[] = [parts.status.trust];

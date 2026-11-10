@@ -138,5 +138,15 @@ for (const { name: d, dir } of scenarios) {
   });
 }
 rmSync(generatedRoot, { recursive: true, force: true });
+// The canary must nudge at least one counted scenario and at least one refusal, or it proves
+// nothing about either comparison (Fable review L9).
+if (perturb) {
+  const counted = results.filter((r) => r.outcome === "agree" || r.outcome === "disagree").length;
+  const refused = results.filter((r) => r.outcome === "both-refused" || r.outcome === "disagree-on-reason").length;
+  if (counted === 0 || refused === 0) {
+    bad++;
+    results.push({ scenario: null, outcome: "nothing-perturbed", counted, refused });
+  }
+}
 console.log(JSON.stringify(results, null, 2));
 process.exit(bad ? 1 : 0);

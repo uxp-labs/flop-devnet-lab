@@ -5,9 +5,15 @@
 // Usage: node scripts/consistency-canary.mjs <outputs dir> [<outputs dir> ...]
 // Each tamper runs on the first given dir where it applies (for example a reset flip needs a
 // snapshot with reset_detected true). A tamper that applies nowhere counts as a failure, so none
-// can be skipped silently. Tampers that edit a feed also edit the MCP text to the same bytes, so
+// can be skipped silently. Tampers that edit a feed also edit the MCP text to the same bytes, and
+// every transcript edit keeps response_line the server's own serialization of the response, so
 // the feed itself, not the MCP comparison, has to be what catches them.
-// Exit 0 only when the control passes and every tamper is caught.
+// Each copy is checked twice: in full, and with --semantic-only, which leaves out section 10 (each
+// file byte for byte against what src/page.ts and src/feed.ts write). A tamper counts as caught
+// only when both fail it, so sections 1 to 9 are shown to catch it on their own; a tamper with
+// `expect` must be caught by that named check. The one bytesOnly tamper changes nothing those
+// sections model, so it must pass them and fail section 10, which shows section 10 bites.
+// Exit 0 only when every control passes both ways and every tamper is caught.
 import { spawnSync } from "node:child_process";
 import { cpSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -33,19 +39,48 @@ const feedText = (v) => JSON.stringify(sortDeep(v), null, 2) + "\n";
 const readJson = (dir, f) => JSON.parse(readFileSync(join(dir, f), "utf8"));
 const snap = (dir) => readJson(dir, "snapshot.json");
 
+/**
+ * Edits the transcript exchanges that pick selects (the first one, or all). response_line becomes
+ * the server's own serialization of the edited response, unless edit returns a line of its own.
+ */
+function editTranscript(dir, pick, edit, all = false) {
+  const p = join(dir, "mcp-transcript.jsonl");
+  const lines = readFileSync(p, "utf8").split("\n").filter(Boolean).map((l) => JSON.parse(l));
+  const hits = all ? lines.filter(pick) : [lines.find(pick)].filter(Boolean);
+  if (hits.length === 0) throw new Error("the transcript has no such exchange");
+  for (const x of hits) {
+    const line = edit(x);
+    x.response_line = typeof line === "string" ? line : JSON.stringify(x.response);
+  }
+  writeFileSync(p, lines.map((l) => JSON.stringify(l)).join("\n") + "\n");
+}
+
+/** Sets the text of one tool's MCP answer. */
+const setToolText = (dir, tool, text) =>
+  editTranscript(dir, (l) => l.request?.params?.name === tool && l.response?.result, (x) => {
+    x.response.result.content[0].text = text;
+  });
+
+/** Writes a feed file's text and the matching MCP tool text, byte-identical. */
+function setFeedText(dir, file, tool, text) {
+  writeFileSync(join(dir, file), text);
+  setToolText(dir, tool, text);
+}
+
 /** Edits a feed file and the matching MCP tool text so both stay byte-identical. */
 function editFeed(dir, file, tool, edit) {
   const obj = readJson(dir, file);
   edit(obj);
-  const text = feedText(obj);
-  writeFileSync(join(dir, file), text);
-  const p = join(dir, "mcp-transcript.jsonl");
-  const lines = readFileSync(p, "utf8").split("\n").filter(Boolean).map((l) => JSON.parse(l));
-  const x = lines.find((l) => l.request?.params?.name === tool && l.response?.result);
-  if (!x) throw new Error(`transcript has no ${tool} result`);
-  x.response.result.content[0].text = text;
-  writeFileSync(p, lines.map((l) => JSON.stringify(l)).join("\n") + "\n");
+  setFeedText(dir, file, tool, feedText(obj));
 }
+
+/** Text with one "key": value line repeated, the first copy saying the opposite (JSON.parse keeps the last). */
+function sayTwice(text, key, value) {
+  const out = text.replace(`"${key}": ${value},`, `"${key}": ${!value},\n    "${key}": ${value},`);
+  if (out === text) throw new Error(`no ${key} line`);
+  return out;
+}
+const hasProtoAccount = (d) => snap(d).census !== null && Object.prototype.hasOwnProperty.call(snap(d).census.by_account, "__proto__");
 
 /** Replaces the attributes and text of one page cell, found by its data-k. */
 function editCell(dir, key, edit) {
@@ -122,15 +157,12 @@ const tampers = [
   {
     name: "trust-in-mcp-only",
     applies: () => true,
-    run: (d) => {
-      const p = join(d, "mcp-transcript.jsonl");
-      const lines = readFileSync(p, "utf8").split("\n").filter(Boolean).map((l) => JSON.parse(l));
-      const x = lines.find((l) => l.request?.params?.name === "get_status" && l.response?.result);
-      const obj = JSON.parse(x.response.result.content[0].text);
-      obj.trust = obj.trust === "fixture" ? "trusted RPC" : "fixture";
-      x.response.result.content[0].text = feedText(obj);
-      writeFileSync(p, lines.map((l) => JSON.stringify(l)).join("\n") + "\n");
-    },
+    run: (d) =>
+      editTranscript(d, (l) => l.request?.params?.name === "get_status" && l.response?.result, (x) => {
+        const obj = JSON.parse(x.response.result.content[0].text);
+        obj.trust = obj.trust === "fixture" ? "trusted RPC" : "fixture";
+        x.response.result.content[0].text = feedText(obj);
+      }),
   },
   {
     name: "reset-true-shown-false-on-page",
@@ -388,6 +420,221 @@ const tampers = [
     applies: (d) => snap(d).status.reset_detected === true,
     run: (d) => editCell(d, "status.reset_detected", (a, t) => [`${a} class="unk"`, t]),
   },
+  // Round 6 (Fable review M7 to M9, L2, L13): upper case tags, bare text, a lone <, a th that no
+  // check reads, a head that says something else, and JSON outputs with extra, repeated or
+  // renamed fields.
+  {
+    name: "an-upper-case-row-states-rpc-health",
+    expect: /the body uses only the elements the renderer writes/,
+    applies: () => true,
+    run: (d) => editHtml(d, (h) => h.replace('<tr><th scope="row" data-for="status.rpc.health">', '<TR><TH>rpc health (corrected)</TH><TD>down</TD></TR><tr><th scope="row" data-for="status.rpc.health">')),
+  },
+  {
+    name: "an-upper-case-table-with-no-section",
+    expect: /the body uses only the elements the renderer writes/,
+    applies: () => true,
+    run: (d) => editHtml(d, (h) => h.replace("</table></div>", "</table><TABLE><TR><TD>finalized height 1</TD></TR></TABLE></div>")),
+  },
+  {
+    name: "an-upper-case-paragraph-claims-payment",
+    expect: /the body uses only the elements the renderer writes/,
+    applies: () => true,
+    run: (d) => editHtml(d, (h) => h.replace('<p class="banner">', '<P>All escrows below are claimed and paid.</P><p class="banner">')),
+  },
+  {
+    name: "bare-text-typed-into-the-reset-row",
+    expect: /fixed words/,
+    applies: () => true,
+    run: (d) => editHtml(d, (h) => h.replace(/(<td data-k="status\.reset_detected"[^>]*>[^<]*<\/td>)/, "$1 RESET DETECTED: true")),
+  },
+  {
+    name: "bare-text-at-the-top-of-the-status-card",
+    expect: /fixed words/,
+    applies: () => true,
+    run: (d) => editHtml(d, (h) => h.replace('<h2>Network status</h2><div class="card">', '<h2>Network status</h2><div class="card">reset detected: true. rpc health: down.')),
+  },
+  {
+    name: "words-behind-a-lone-less-than-sign",
+    expect: /every < in the body opens a lower case tag/,
+    applies: () => true,
+    run: (d) => editHtml(d, (h) => h.replace("<h2>Escrows</h2>", "<h2>Escrows</h2>< every escrow is claimed >")),
+  },
+  {
+    name: "a-th-outside-every-row",
+    expect: /every th on the page is a row label or drift column whose words were read/,
+    applies: () => true,
+    run: (d) => editHtml(d, (h) => h.replace('<table data-section="status">', '<table data-section="status"><th scope="row" data-for="status.trust">reset detected true</th>')),
+  },
+  {
+    name: "a-th-inside-a-drift-item-row",
+    expect: /row drift\.0 holds no th/,
+    applies: hasDriftItems,
+    run: (d) => editHtml(d, (h) => h.replace('<tr data-row="drift.0">', '<tr data-row="drift.0"><th scope="row" data-for="drift.0.param">reset detected true</th>')),
+  },
+  {
+    name: "census-banner-words-after-the-first-say-complete",
+    expect: /banner reads its whole fixed partial sentence/,
+    applies: (d) => snap(d).census !== null && snap(d).census.status !== "complete",
+    run: (d) =>
+      editHtml(d, (h) =>
+        h.replace(
+          "PARTIAL: these totals cover only part of the requested range and are not complete.",
+          "PARTIAL no more: every block of the requested range is now covered and these totals are complete.",
+        ),
+      ),
+  },
+  {
+    name: "the-head-declares-another-charset-and-a-robots-value",
+    expect: /the page head is the renderer's fixed head/,
+    applies: () => true,
+    run: (d) => editHtml(d, (h) => h.replace('<meta charset="utf-8">', '<meta charset="utf-16be"><meta name="robots" content="reset_detected true">')),
+  },
+  {
+    name: "a-closing-tag-carries-words",
+    expect: /a closing tag holds nothing but its name/,
+    applies: () => true,
+    run: (d) => editHtml(d, (h) => h.replace("</h1>", '</h1 title="reset detected true">')),
+  },
+  {
+    name: "status-feed-gains-top-level-reset-and-health",
+    expect: /status\.json holds exactly schema, snapshot_hash, observed_at, trust and status/,
+    applies: () => true,
+    run: (d) => editFeed(d, "status.json", "get_status", (f) => Object.assign(f, { reset_detected: true, health: "down" })),
+  },
+  {
+    name: "status-feed-says-reset-twice",
+    expect: /status\.json holds no repeated key/,
+    applies: (d) => typeof snap(d).status.reset_detected === "boolean",
+    run: (d) => setFeedText(d, "status.json", "get_status", sayTwice(readFileSync(join(d, "status.json"), "utf8"), "reset_detected", snap(d).status.reset_detected)),
+  },
+  {
+    name: "status-feed-schema-renamed",
+    expect: /status\.json schema/,
+    applies: () => true,
+    run: (d) => editFeed(d, "status.json", "get_status", (f) => (f.schema = "flop-observatory/feed-census@0")),
+  },
+  {
+    name: "snapshot-json-says-reset-twice",
+    expect: /snapshot\.json holds no repeated key/,
+    applies: (d) => typeof snap(d).status.reset_detected === "boolean",
+    run: (d) => writeFileSync(join(d, "snapshot.json"), sayTwice(readFileSync(join(d, "snapshot.json"), "utf8"), "reset_detected", snap(d).status.reset_detected)),
+  },
+  {
+    name: "pin-json-names-the-genesis-twice",
+    expect: /pin\.json holds no repeated key/,
+    applies: () => true,
+    run: (d) => {
+      const p = join(d, "pin.json");
+      const text = readFileSync(p, "utf8");
+      const out = text.replace('  "genesis": ', `  "genesis": "0x${"00".repeat(32)}",\n  "genesis": `);
+      if (out === text) throw new Error("no genesis line");
+      writeFileSync(p, out);
+    },
+  },
+  {
+    name: "the-log-line-says-reset-twice",
+    expect: /the snapshot log's last line holds no repeated key/,
+    applies: (d) => typeof snap(d).status.reset_detected === "boolean",
+    run: (d) => {
+      const p = join(d, "snapshots.jsonl");
+      const lines = readFileSync(p, "utf8").split("\n").filter(Boolean);
+      const v = snap(d).status.reset_detected;
+      const last = lines.at(-1);
+      const out = last.replace(`"reset_detected":${v},"rpc"`, `"reset_detected":${!v},"reset_detected":${v},"rpc"`);
+      if (out === last) throw new Error("no status reset_detected in the log line");
+      lines[lines.length - 1] = out;
+      writeFileSync(p, lines.join("\n") + "\n");
+    },
+  },
+  {
+    name: "mcp-status-answer-gains-a-second-item-and-structured-content",
+    expect: /mcp get_status answer is exactly one text item/,
+    applies: () => true,
+    run: (d) =>
+      editTranscript(d, (l) => l.request?.params?.name === "get_status" && l.response?.result, (x) => {
+        x.response.result.content.push({ type: "text", text: '{"status":{"reset_detected":true}}' });
+        x.response.result.structuredContent = { reset_detected: true };
+      }),
+  },
+  {
+    name: "mcp-escrow-answers-flagged-as-errors",
+    expect: /answer is exactly one text item/,
+    applies: (d) => snap(d).escrows.length > 0,
+    run: (d) =>
+      editTranscript(
+        d,
+        (l) => l.request?.params?.name === "get_escrow_state" && l.response?.result,
+        (x) => {
+          x.response.result.isError = true;
+          x.response.result.content.push({ type: "text", text: "state: refunded" });
+        },
+        true,
+      ),
+  },
+  {
+    name: "mcp-status-line-holds-content-twice",
+    expect: /mcp response line \d+ holds no repeated key/,
+    applies: () => true,
+    run: (d) =>
+      editTranscript(d, (l) => l.request?.params?.name === "get_status" && l.response?.result, (x) =>
+        JSON.stringify(x.response).replace('"result":{', '"result":{"content":[{"type":"text","text":"{\\"status\\":{\\"reset_detected\\":true}}"}],'),
+      ),
+  },
+  {
+    name: "mcp-meta-answer-gains-a-reset-field",
+    expect: /mcp get_snapshot_meta is the snapshot's meta in the feed format/,
+    applies: () => true,
+    run: (d) =>
+      editTranscript(d, (l) => l.request?.params?.name === "get_snapshot_meta" && l.response?.result, (x) => {
+        const meta = JSON.parse(x.response.result.content[0].text);
+        meta.reset_detected = true;
+        x.response.result.content[0].text = feedText(meta);
+      }),
+  },
+  {
+    name: "mcp-tools-list-offers-a-signing-tool",
+    expect: /names exactly the six read-only tools/,
+    applies: () => true,
+    run: (d) =>
+      editTranscript(d, (l) => l.request?.method === "tools/list", (x) => {
+        x.response.result.tools.push({ name: "sign_transaction", description: "Signs.", inputSchema: { type: "object" }, annotations: { readOnlyHint: true, destructiveHint: false } });
+      }),
+  },
+  {
+    name: "mcp-signing-request-answered-instead-of-refused",
+    expect: /is refused with an error and nothing else/,
+    applies: () => true,
+    run: (d) =>
+      editTranscript(d, (l) => l.request?.params?.name === "sign_transaction", (x) => {
+        delete x.response.error;
+        x.response.result = { content: [{ type: "text", text: "signed" }] };
+      }),
+  },
+  // Fable review M6: an account named __proto__ dropped from one output.
+  {
+    name: "census-feed-drops-the-proto-account",
+    expect: /census\.json census equals snapshot\.census/,
+    applies: hasProtoAccount,
+    run: (d) => editFeed(d, "census.json", "get_census", (f) => delete f.census.by_account["__proto__"]),
+  },
+  {
+    name: "snapshot-json-drops-the-proto-account",
+    expect: /snapshot\.json hash verifies/,
+    applies: hasProtoAccount,
+    run: (d) => {
+      const s = snap(d);
+      delete s.census.by_account["__proto__"];
+      writeFileSync(join(d, "snapshot.json"), feedText(s));
+    },
+  },
+  // Changes nothing sections 1 to 9 model: only section 10's byte comparison can see it.
+  {
+    name: "the-page-gains-one-line-break-and-nothing-else",
+    bytesOnly: true,
+    expect: /index\.html is exactly the page src\/page\.ts renders/,
+    applies: () => true,
+    run: (d) => editHtml(d, (h) => h.replace("</table></div>", "</table>\n</div>")),
+  },
   {
     // Everything agrees, but the snapshot was changed after it was hashed: only the hash and
     // the log can catch this.
@@ -404,8 +651,8 @@ const tampers = [
   },
 ];
 
-function check(dir) {
-  const r = spawnSync("node", [join(pkg, "scripts", "consistency.mjs"), dir], { encoding: "utf8" });
+function check(dir, semanticOnly) {
+  const r = spawnSync("node", [join(pkg, "scripts", "consistency.mjs"), dir, ...(semanticOnly ? ["--semantic-only"] : [])], { encoding: "utf8" });
   let failures = [];
   try {
     failures = JSON.parse(r.stdout).failures.map((f) => f.what);
@@ -420,11 +667,12 @@ let bad = 0;
 for (const src of dirs) {
   const tmp = realpathSync(mkdtempSync(join(tmpdir(), "obs-consistency-")));
   cpSync(src, tmp, { recursive: true });
-  const r = check(tmp);
+  const full = check(tmp, false);
+  const sem = check(tmp, true);
   rmSync(tmp, { recursive: true, force: true });
-  const outcome = r.exit === 0 ? "control-pass" : "control-fail";
+  const outcome = full.exit === 0 && sem.exit === 0 ? "control-pass" : "control-fail";
   if (outcome !== "control-pass") bad++;
-  results.push({ tamper: "none (control)", outputs: basename(src), outcome, failures: r.failures.slice(0, 3) });
+  results.push({ tamper: "none (control)", outputs: basename(src), outcome, failures: [...full.failures, ...sem.failures].slice(0, 3) });
 }
 for (const t of tampers) {
   const src = dirs.find((d) => {
@@ -443,17 +691,24 @@ for (const t of tampers) {
   cpSync(src, tmp, { recursive: true });
   let outcome;
   let failures = [];
+  let exits = null;
   try {
     t.run(tmp);
-    const r = check(tmp);
-    outcome = r.exit === 0 ? "missed" : t.expect && !r.failures.some((w) => t.expect.test(w)) ? "caught-but-not-by-the-named-check" : "caught";
-    failures = t.expect ? r.failures.filter((w) => t.expect.test(w)).slice(0, 3) : r.failures.slice(0, 3);
+    const full = check(tmp, false);
+    const sem = check(tmp, true);
+    exits = { full: full.exit, semantic_only: sem.exit };
+    const named = (fs) => (t.expect ? fs.filter((w) => t.expect.test(w)) : fs);
+    if (full.exit === 0) outcome = "missed";
+    else if (t.bytesOnly) outcome = sem.exit !== 0 ? "bytes-only-tamper-also-caught-by-sections-1-to-9" : named(full.failures).length === 0 ? "caught-but-not-by-the-named-check" : "caught";
+    else if (sem.exit === 0) outcome = "caught-only-by-the-byte-comparison";
+    else outcome = named(sem.failures).length === 0 ? "caught-but-not-by-the-named-check" : "caught";
+    failures = named(t.bytesOnly ? full.failures : sem.failures).slice(0, 3);
   } catch (e) {
     outcome = `tamper-failed: ${e.message}`;
   }
   rmSync(tmp, { recursive: true, force: true });
   if (outcome !== "caught") bad++;
-  results.push({ tamper: t.name, outputs: basename(src), outcome, caught_by: failures });
+  results.push({ tamper: t.name, outputs: basename(src), outcome, exits, caught_by: failures });
 }
 console.log(JSON.stringify(results, null, 2));
 process.exit(bad ? 1 : 0);

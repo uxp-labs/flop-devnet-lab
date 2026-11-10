@@ -16,6 +16,8 @@
 #                         moment it happened (the attempts tests provoke on purpose and clear)
 #     attempts-check.json the journal checked again once vitest has exited
 #     attempts.jsonl      the journal's problems, if any (should be absent)
+#     source-scan.json    every src module through the syntax tree scan, after the scan has caught
+#                         every known bad sample and passed every known good one
 #     canary.json         throwaway tests that each leave one forbidden attempt, all caught, two of
 #                         them from a timer that fires after the file's final check
 #     mutants.json        each injected bug, the test that caught it, and both controls
@@ -141,6 +143,10 @@ step test env OBS_ATTEMPTS_FILE="$evidence/attempts-journal.jsonl" npx --no-inst
 test_files="$(find test -maxdepth 1 -name '*.test.ts' | wc -l | tr -d ' ')"
 step attempts sh -c "node scripts/attempts-check.mjs '$evidence/attempts-journal.jsonl' --unexpected '$evidence/attempts.jsonl' --expect-files $test_files > '$evidence/attempts-check.json'"
 
+# The source scan over the syntax tree: module names and identifiers after their escapes are
+# decoded, imports against an allow-list. It proves itself on known bad and good samples first.
+step source-scan sh -c "node scripts/source-scan.mjs > '$evidence/source-scan.json'"
+
 # 3. The harness itself: a test that leaves any forbidden attempt in the log must fail.
 step canary sh -c "node scripts/canary.mjs > '$evidence/canary.json'"
 
@@ -179,8 +185,12 @@ scenario degraded-faucet --status fixtures/status-degraded-real --escrows fixtur
   --census fixtures/census-unfinalized --drift fixtures/drift-seeded
 scenario conflict --status fixtures/status-conflict --escrows fixtures/escrows-one-event-two-escrows \
   --census fixtures/census-paginated --drift fixtures/drift-seeded
+# Accounts named after properties every JavaScript object inherits (__proto__ among them), so a
+# writer that assigns keys one by one would drop one from a feed and break snapshot.json's hash.
+scenario odd-accounts --status fixtures/status-healthy --census fixtures/census-odd-accounts
 # The comparison itself: tampered copies of these outputs must each fail it, and clean copies pass.
 step consistency-canary sh -c "node scripts/consistency-canary.mjs '$evidence/outputs/healthy' '$evidence/outputs/reset' \
-  '$evidence/outputs/nothing-read' '$evidence/outputs/degraded-faucet' '$evidence/outputs/conflict' > '$evidence/consistency-canary.json'"
+  '$evidence/outputs/nothing-read' '$evidence/outputs/degraded-faucet' '$evidence/outputs/conflict' \
+  '$evidence/outputs/odd-accounts' > '$evidence/consistency-canary.json'"
 
 exit "$overall"

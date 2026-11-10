@@ -226,8 +226,8 @@
   {
     "id": "scan-not-recursive",
     "file": "test/guard.test.ts",
-    "find": "(readdirSync(dir, { recursive: true }) as string[])",
-    "replace": "(readdirSync(dir) as string[])",
+    "find": "(readdirSync(d, { recursive: true }) as string[])",
+    "replace": "(readdirSync(d) as string[])",
     "test": "test/guard.test.ts",
     "why": "a module in a src subfolder must be scanned too"
   },
@@ -246,5 +246,53 @@
     "replace": "",
     "test": "test/guard.test.ts",
     "why": "[].constructor.constructor is the Function constructor"
+  },
+  {
+    "id": "scan-tree-any-module-allowed",
+    "file": "scripts/source-scan.mjs",
+    "find": "  return ALLOWED_MODULES.has(name) ? null : `imports ${JSON.stringify(name)}, which is not on the allow-list`;",
+    "replace": "  return null;",
+    "test": "scripts/source-scan.mjs",
+    "why": "imports are checked against an allow-list, so an escaped, legacy or third party module fails"
+  },
+  {
+    "id": "scan-tree-any-crypto-name",
+    "file": "scripts/source-scan.mjs",
+    "find": "CRYPTO_NAMES.has(s.imported.name ?? s.imported.value)",
+    "replace": "true",
+    "test": "scripts/source-scan.mjs",
+    "why": "only createHash may come from node:crypto, not a key or cipher API"
+  },
+  {
+    "id": "scan-tree-any-process-member",
+    "file": "scripts/source-scan.mjs",
+    "find": "!parent.computed && PROCESS_MEMBERS.has(parent.property?.name)",
+    "replace": "true",
+    "test": "scripts/source-scan.mjs",
+    "why": "process is used only through its six allowed members, never env, binding or a computed key"
+  },
+  {
+    "id": "scan-tree-dynamic-import-any-argument",
+    "file": "scripts/source-scan.mjs",
+    "find": "        if (n.source?.type !== \"Literal\" || typeof n.source.value !== \"string\") out.push(\"a dynamic import names its module as something other than one plain string\");\n        else {",
+    "replace": "        if (n.source?.type !== \"Literal\" || typeof n.source.value !== \"string\") {} else {",
+    "test": "scripts/source-scan.mjs",
+    "why": "a dynamic import whose module is built at run time cannot be checked, so it fails"
+  },
+  {
+    "id": "scan-tree-computed-keys-unchecked",
+    "file": "scripts/source-scan.mjs",
+    "find": "        if (k !== null && (BANNED.has(k) || /mnemonic/i.test(k))) out.push(`reaches ${k} by a computed key`);",
+    "replace": "",
+    "test": "scripts/source-scan.mjs",
+    "why": "a banned name reached by a literal computed key, as in [\"constructor\"], fails like the dotted form"
+  },
+  {
+    "id": "scan-tree-class-constructor-exemption-everywhere",
+    "file": "scripts/source-scan.mjs",
+    "find": "const ownConstructor = key === \"key\" && parent?.type === \"MethodDefinition\" && parent.kind === \"constructor\";",
+    "replace": "const ownConstructor = n.name === \"constructor\";",
+    "test": "scripts/source-scan.mjs",
+    "why": "only a class's own constructor method is exempt; .constructor reaches Function"
   }
 ]

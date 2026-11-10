@@ -142,5 +142,21 @@
     "replace": "",
     "test": "test/drift.test.ts",
     "why": "A spec with no entries gives a report with 0 mismatches, which reads as no drift."
+  },
+  {
+    "id": "drift-runtime-version-unsafe",
+    "file": "src/drift.ts",
+    "find": "runtime_version: isSafeInt(version) && version >= 0 ? version : null,",
+    "replace": "runtime_version: typeof version === \"number\" && Number.isInteger(version) ? version : null,",
+    "test": "test/drift.test.ts",
+    "why": "Fable review L15: a runtime version past 2^53 was already rounded, so it reads as unknown"
+  },
+  {
+    "id": "drift-runtime-time-unparsed",
+    "file": "src/drift.ts",
+    "find": "runtime_observed_at: parseZoned(readAt) !== null ? (readAt as string) : null,",
+    "replace": "runtime_observed_at: typeof readAt === \"string\" ? readAt : null,",
+    "test": "test/drift.test.ts",
+    "why": "Fable review L15: the runtime reading time shows only when it is a real zoned time"
   }
 ]

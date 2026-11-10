@@ -225,7 +225,7 @@ function blocks(ranges: BlockRange[]): number {
 }
 
 /** Clause 11. A data value that is not an object has no account (clause 7). */
-function accountOf(data: unknown): string | null {
+export function accountOf(data: unknown): string | null {
   if (!isObject(data)) return null;
   for (const field of ACCOUNT_FIELDS) {
     const v = Object.hasOwn(data, field) ? data[field] : undefined;

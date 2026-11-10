@@ -12,6 +12,9 @@ These rules are the spec. Code and tests follow them, and the independent recoun
   before spending. An unusable reading counts for neither: it never makes the value `false`, and
   never `true` either, though its genesis still shows in `genesis` and a disagreement with the
   other source is still a conflict.
+- A genesis is `0x` plus 64 lower case hex digits, compared exactly as written, as in census
+  clause 5. Any other spelling, upper case hex included, is not a valid genesis: the status reads
+  it as `null`, so it can never make `reset_detected` `false`.
 
 ### 1.1 Health
 
@@ -27,14 +30,28 @@ check below to run and pass.
   a reading time that parses, is at most the stale limit old, and is not later than the snapshot
   time. Otherwise the faucet genesis is `null`, so `reset_detected` cannot be `false`. A `/chain`
   reading time later than the snapshot time is also a conflict.
-- The RPC genesis counts toward `reset_detected` only from a usable head: no read error, and an
+- The RPC genesis counts toward `reset_detected` only from a usable head: no read error, an
   `observed_at` that parses, is at most the stale limit old and is not later than the snapshot
-  time. `genesis.rpc` still shows what the head said. The same usable head is the only one whose
-  finalized height may bound escrow evidence (section 2).
+  time, and nothing below found the head contradicting itself or an earlier snapshot: no
+  rollback, no changed finalized hash, a best height not below the finalized height, and no
+  earlier snapshot read later than this snapshot time. A head that fails any of these is not
+  usable, however fresh. `genesis.rpc` still shows what the head said. The same usable head is the
+  only one whose finalized height may bound escrow evidence (section 2).
 - Heights and the runtime version are safe integers (census clause 14). A finalized or best
   height past 2^53 - 1 was already rounded by the JSON parser, so it is not a valid one.
 - A reading time later than the snapshot time is a conflict, noted in `conflicts`, whatever that
   reading's health.
+- An `error` holding any value but `null`, an empty string included, is a read error. A faucet or
+  gateway reading with a read error is never `ok`: with an HTTP status it is `degraded` and its
+  detail names the error; with none it is `unknown`. The `/chain` reading and the RPC head follow
+  the same reading of `error`.
+- Each reading's fields reach the status only with the interface's types: `observed_at` a string,
+  `http` a safe integer, the faucet `limits` an object whose every value is a finite number or a
+  boolean. A field of any other type is `null`.
+- A saved reading that cannot be read (not strict UTF-8, not JSON, nested deeper than 64 levels or
+  holding one key twice, as census clause 12 reads a page file) counts as nothing read: the faucet
+  or gateway is `unknown`, and so is the RPC, each with the file and the reason as its detail. Its
+  last copy of a repeated key never wins. A `meta.json` that cannot be read refuses the scenario.
 
 - Faucet: `ok` needs HTTP 200 and a body with `status` "ok" and `ready` true. A body that says ok
   with any other HTTP status is `degraded`. A body with `status` "degraded", or `ready` false, is
@@ -62,7 +79,11 @@ check below to run and pass.
     stuck check cannot run. The snapshot command reads the earlier snapshots from its log, after
     verifying the log's hash chain (a broken log refuses), and passes every one that recorded a
     finalized head, oldest first, so a snapshot in between with no RPC reading, or one on another
-    genesis, hides nothing.
+    genesis, hides nothing. An earlier snapshot that recorded no head time still sets the
+    floor; only the stuck check needs the time. An earlier snapshot whose head was read later
+    than this snapshot time is a conflict. The floor is only as durable as the log: an absent
+    log means no earlier snapshot, and a log cut short or removed cannot be detected from the
+    log itself.
 - Any failed check makes RPC health `degraded`. A missing or invalid genesis hash, finalized head
   or best height is a failed check. A missing or unparsable `observed_at` means the age check
   cannot run: health is `unknown` when nothing else failed.
@@ -84,10 +105,14 @@ check below to run and pass.
 - Conflicting evidence leaves it `unverified` with a note: for example both a finalized release
   and a finalized refund for one id, or an event whose escrow id does not parse.
 - A malformed event (escrow id not `0x` plus 64 hex, missing fields, wrong types) is ignored with a
-  note. It can never make an escrow look funded, claimed or refunded.
+  note. It can never make an escrow look funded, claimed or refunded. A finalized event whose data
+  names an escrow but whose section or method is missing, empty or not a string (census clause 7)
+  could be any of the three kinds, so it leaves that escrow `unverified`, as a malformed release
+  or refund does.
 - Copies of one event (same genesis, block_hash and index) must agree on section, method, escrow
-  id and block_number. When copies disagree, every escrow that any copy names is `unverified` with a
-  note. One chain event is never evidence for two escrows.
+  id, block_number and account (the account census clause 11 reads, so the census and the escrow
+  rules drop the same groups, clause 9). When copies disagree, every escrow that any copy names is
+  `unverified` with a note. One chain event is never evidence for two escrows.
 - A finalized `hasStation.EscrowReleased` or `hasStation.EscrowRefunded` on the pinned genesis
   whose escrow id does not parse cannot be tied to one escrow, so it could contradict any of them:
   every escrow in the result that it could contradict is `unverified` with a note. A release
@@ -110,9 +135,10 @@ check below to run and pass.
   the escrow `unverified` with a note: the page calls it final, but our finalized head does not
   reach it yet.
 - A finalized height bounds the evidence only when it comes from a usable RPC head on the pinned
-  genesis: no read error, and a head time that parses, is not later than the snapshot time and is
-  at most the stale limit old. Otherwise (the RPC was not read, the reading is not usable, or it
-  reports another genesis) `finalized_height` is `null`, and a result with evidence notes that its
+  genesis (section 1.1): no read error, a head time that parses, is not later than the snapshot
+  time and is at most the stale limit old, and no check that found the head contradicting itself
+  or an earlier snapshot. Otherwise (the RPC was not read, the reading is not usable, or it reports
+  another genesis) `finalized_height` is `null`, and a result with evidence notes that its
   evidence is not bounded by a finalized height.
 - An event with no `block_number` key is malformed (census clause 7). One whose `block_number`
   is `null` is kept, but no finalized height can bound it, and a result whose evidence includes
@@ -128,6 +154,12 @@ check below to run and pass.
 - If any event page in the input could not be read or parsed, or is structurally invalid (census
   clause 12), every escrow in the result is `unverified` with a note naming the file. The missing
   page could hold a conflicting event.
+- Event data written as a list rather than an object (the positional form) holds no escrow id
+  these rules can read: for an escrow it is malformed, with a note, while the census counts it
+  with no account. The difference can only make an escrow less confident, never more.
+- Block order is not checked: a release counts whatever block its open sits at, and a finalized
+  release makes an escrow `claimed` even when its open is pending or absent. A caller that needs
+  funded, then released, checks both itself.
 - Gateway receipts, gateway "settled" fields and any other non-chain report are not chain proof.
   They cannot move an escrow to any state.
 - Every escrow result carries `scope: "settlement only; says nothing about output quality"`.
@@ -147,6 +179,11 @@ check below to run and pass.
 - Count only pages on the pinned genesis. Pages on any other genesis go to
   `excluded_other_genesis` (counted in events) and set the census `reset_detected` note. Counts
   never mix geneses.
+- The census's own `reset_detected` speaks of its pages only: `true` when a page is on another
+  genesis, `false` when pages were read and none is, `null` when no page was read. It is not the
+  status `reset_detected`. Pages alone cannot show the chain was not reset, so a census `false`
+  never stands for the status value, and a page may show the status `reset detected` as `true`
+  while the census row of the same name reads `false`. Branch on the status value.
 - Malformed events (missing section, method, block hash or index; clause 7 has the full list) go
   to `malformed_dropped`.
 - Event names counted:
@@ -201,7 +238,12 @@ check below to run and pass.
     its page's range is skipped, not malformed. Finalized events of kinds not in the table count
     nowhere.
 11. The account is the first of `who`, `owner`, `agent`, `payer` whose value is a non-empty string.
-    `by_account` lists only non-zero kinds; accounts sort ascending.
+    `by_account` lists only non-zero kinds; accounts sort ascending by code point, as Python
+    orders strings (U+FF41 before U+1D400, which UTF-16 units would put first). Any string is an
+    account name, `__proto__` and `constructor` included, and every output keeps it. Key order is
+    presentation only: the cross-check compares accounts and their counts, not their order, the
+    feeds sort every key by UTF-16 unit for their fixed format, and a JavaScript object lists a
+    name such as `7` first whatever the sort.
 12. A structurally invalid page (not an object, `genesis` not a string, `from_block`, `to_block`,
     `page` or `next_page` missing or of the wrong type, a negative `page`, a negative `from_block`
     (block numbers start at 0), `events` not a list, or an inverted range) makes the whole census refuse with an error. So does an event page file that
@@ -219,7 +261,8 @@ check below to run and pass.
     -(2^53 - 1) to 2^53 - 1. A larger value is not an integer, so a page field holding one refuses
     the census and an event field holding one makes the event malformed. This holds for every
     integer field in these rules (`index`, `block_number`, `page`, `next_page`, `from_block`,
-    `to_block`) and for the request.
+    `to_block`) and for the request. The value judged is the one the JSON text reads as, a binary
+    double (IEEE 754), on both sides: `1.0000000000000000001` reads as the integer 1.
 15. Every entry in `event-pages/` must be a page file: a regular file whose name ends in `.json` and
     does not start with a dot. Any other entry (a dotfile, another extension, a folder) refuses the
     census and leaves every escrow `unverified`, because it may be a page that was meant to count.
@@ -227,7 +270,9 @@ check below to run and pass.
     be a folder, not a file or a link; otherwise the census refuses and every escrow is
     `unverified`.
 16. A refusal names its reason, and the Python recount names the same one:
-    - `request`: the request is invalid (clause 13);
+    - `request`: the request is invalid (clause 13). On the command line both sides read
+      `--from` and `--to` as ASCII digits only, so " 0", "+5", "1_0", "0x10" or digits of
+      another script refuse here, never read as a number;
     - `page-file`: an event page file cannot be read, decoded or parsed, an entry in
       `event-pages/` is not a page file, or `event-pages` is not a real folder (clauses 12 and
       15). The refusal names the first such entry in name order, or `event-pages` itself;
@@ -256,6 +301,21 @@ Tests fail if any attempt is left in the log.
 - The source scan fails any use of the bare names `fetch`, `WebSocket`, `EventSource`,
   `XMLHttpRequest` and `globalThis` in `src`, and any member or computed access on `global`,
   `self` or `window`, so an aliased, `.call` or computed form cannot slip past it.
+- A second scan (`scripts/source-scan.mjs`) reads each `src` module as a syntax tree, with every
+  escape in a module name or identifier decoded and comments skipped, so `"n\x65t"`, an escaped
+  `fetch` and `from /* x */ "node:net"` are seen for what they are. Every import, dynamic import
+  and re-export names one plain string, and the module must be relative or on an allow-list:
+  `node:fs`, `node:path`, `node:readline`, `node:url`, `node:crypto` (`createHash` only) and
+  `yaml`. A module nobody thought to ban, a legacy one such as `_http_client` or a third party
+  client, fails. It also fails the banned names as identifiers, properties or literal computed
+  keys (transports, the global object, `eval`, `Function`, `Reflect`, `constructor` but a class's
+  own, module loading, signing, key and cipher APIs), `process` other than `version`, `argv`,
+  `exit`, `stdout`, `stderr` and `stdin`, and any string naming an RPC method that writes or
+  signs. It proves itself on known bad and good samples before it scans. It cannot see a
+  computed key assembled at run time; the runtime block in the tests covers that path.
+- `tools/recount.py` is read the same two ways: its own tests walk its syntax tree (exactly six
+  plain imports, no from-import, no `os` call but reads, nothing that runs code from a string,
+  and `open` only for reading), and the guard test reads every name on every import line.
 - Every attempt, every reset of the log and every test file's final check is written to a
   journal the moment it happens. Once every test file has ended, and again after the test run
   exits, the journal is checked:
@@ -265,6 +325,9 @@ Tests fail if any attempt is left in the log.
   - a reset or a final check whose count disagrees with the attempts journaled before it fails,
     because it means the journal lost an attempt;
   - every test file must reach its final check.
+- No test may load a second copy of `src/guard.ts` (by reloading or mocking modules, or by
+  importing it under a query string): a copy's attempts would reach neither the log nor the
+  journal. A test reads every test file for those forms.
 - The harness canary proves that a test leaving any of these in the log fails: a fetch, an
   `node:https` request, a `node:net` connection, a child process, a refused RPC write, a refused
   signature and a refused spend. It proves the same for a blocked call fired from a timer after
@@ -279,7 +342,24 @@ blank on the page and `null` in JSON and MCP.
 - Each feed's payload (`status`, `escrows`, `census`, `drift`) equals the matching part of the
   snapshot exactly, every field included. MCP tool text equals the feed file byte for byte.
   `snapshot.json` equals the last line of the snapshot log, and its hash verifies.
+- Every JSON output is read strictly: no key twice in one object, and each is in its written
+  format (keys sorted, two-space indent, one trailing newline; `pin.json` two-space indent). A
+  feed holds exactly `schema` (`flop-observatory/feed-<part>@0`), `snapshot_hash`,
+  `observed_at`, `trust` and its part. The log's last line is `snapshot.json` in canonical form,
+  byte for byte.
+- `get_escrow_state` and `get_snapshot_meta` have no feed file: their text is the escrow, and the
+  snapshot's meta (`schema` `flop-observatory/feed-snapshot-meta@0`, hash, seq, previous hash,
+  `observed_at`, trust and pin), in the feed format. A tool answer is exactly one text item: no
+  `isError`, no `structuredContent`, no second item a client could read instead. `tools/list`
+  names exactly the six read-only tools. Each answer is checked as the server wrote its line.
+- The MCP binary serves only an observatory snapshot (`schema` `flop-observatory/snapshot@0`)
+  whose hash verifies, read as strict UTF-8 with one value per key; anything else is refused and
+  nothing is served. A call it cannot answer gets a JSON-RPC error, never a dead server.
 - Nothing on the page is hidden, so nothing the check compares can be invisible to a reader:
+  - the head is the renderer's fixed head (charset, viewport, colour scheme, title and
+    stylesheet), so no `meta` or `title` can carry a value or change how the page is decoded;
+  - tag and attribute names are lower case, as the renderer writes them (a browser reads `<TR>`
+    as `<tr>`), every `<` opens a tag, and a closing tag holds only its name;
   - no HTML comment and no other `<!` markup but the doctype;
   - only the elements and attributes the renderer writes, so no `hidden` or `style` attribute
     and no `script`, `details` or `template` element;
@@ -294,8 +374,10 @@ blank on the page and `null` in JSON and MCP.
   once, and every drift row's cells follow the header's order. A `data-col` header exists only
   there.
 - No text states a value the check does not compare: every `th` is a row label (`data-for`) or a
-  drift column (`data-col`); every row but the drift header holds a `td`; the title is
-  "FLOP Observatory"; and every piece of text outside a marked cell and a `th` is one of the
+  drift column (`data-col`), and its words are read as one or the other, so a `th` outside a
+  row, a second `th` in a row or a `th` in a drift item row fails; every row but the drift header
+  holds a `td`; the title is "FLOP Observatory"; the census banner is one of its two fixed
+  sentences, read whole; and every piece of text outside a marked cell and a `th` is one of the
   page's fixed words, in order, with the intro's `seq` equal to the snapshot's. `aria-label`
   appears only as `unknown` on a blank unknown cell, and each cell's `class` is the one its value
   calls for (`unk` for unknown, `h-<health>`, `s-<state>`, none otherwise).
@@ -332,5 +414,24 @@ blank on the page and `null` in JSON and MCP.
   `rpc.stale`, `conflicts`, the genesis values, the finalized height and hash, `observed_at` and
   the trust label; for every escrow: state, evidence, notes, `observed_at`, trust and scope; for
   the census: status, coverage, gaps and every total.
+- Last, every file is compared byte for byte with what the code writes for the snapshot:
+  `index.html` with `src/page.ts`, the feeds and `snapshot.json` with `src/feed.ts`. The rules
+  above judge the outputs against the snapshot on their own; this closes what they do not model.
+  The canary runs every tamper with and without this comparison, so each tamper is shown caught
+  by the rules alone, and one tamper that changes nothing they model shows the comparison bites.
 - The check runs on real rendered snapshots of several scenarios, not only the healthy one: a
-  reset, nothing read, a degraded faucet, a partial census, and conflicting escrow evidence.
+  reset, nothing read, a degraded faucet, a partial census, conflicting escrow evidence, and
+  accounts named after properties every JavaScript object inherits (`__proto__`, `constructor`,
+  `hasOwnProperty`, `toString`, `valueOf`), which a writer that assigns keys one by one would drop.
+
+## 6. Spec drift
+
+- Drift compares the parameters in a spec file (`params/*.yaml`) with saved runtime constants.
+  A missing, `null` or unreadable runtime value is `unknown`, never a match; the spec decides how
+  a value is read (its unit and decimals), and `source_only` items are `unknown` with their reason.
+- `runtime_version` is a safe, non-negative integer, or `null`. `runtime_observed_at` is the
+  constants' own reading time when it parses as a zoned time (section 1.1), or `null`.
+- In M0 the constants come from a saved file with no chain of its own: `drift.genesis` and
+  `drift.finalized_height` are always `null`, and no freshness rule applies. A `match` says the
+  saved constants agree with the spec, not which chain they came from or when. M1 reads them from
+  a usable RPC head (section 1.1) and fills both fields.

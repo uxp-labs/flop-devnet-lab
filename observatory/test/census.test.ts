@@ -219,6 +219,25 @@ const EXPECTED: Record<string, Expected & { reset_detected: boolean }> = {
     malformed_dropped: 2,
     reset_detected: false,
   },
+  "census-odd-accounts": {
+    complete: true,
+    status: "complete",
+    covered: [r(0, 99)],
+    gaps: [],
+    totals: counts({ escrows_opened: 6, escrows_released: 1, escrows_refunded: 1 }),
+    // A computed key, so __proto__ is an own key here as JSON.parse makes it, not the prototype.
+    by_account: {
+      ["__proto__"]: { escrows_opened: 1, escrows_released: 1 },
+      constructor: { escrows_opened: 1 },
+      hasOwnProperty: { escrows_refunded: 1 },
+      "synthetic-\u{ff41}": { escrows_opened: 1 },
+      "synthetic-\u{1d400}": { escrows_opened: 1 },
+      toString: { escrows_opened: 1 },
+      valueOf: { escrows_opened: 1 },
+    },
+    ...quiet,
+    reset_detected: false,
+  },
 };
 
 /** Fixtures the census must refuse, with what the refusal must name. */

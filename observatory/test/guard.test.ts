@@ -2,7 +2,9 @@ import * as childProcess from "node:child_process";
 import { spawnSync } from "node:child_process";
 import * as dgram from "node:dgram";
 import * as dns from "node:dns";
-import { readdirSync, readFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import * as http from "node:http";
 import * as http2 from "node:http2";
 import * as inspector from "node:inspector";
@@ -173,7 +175,8 @@ describe("source scan", () => {
   ];
   const dir = new URL("../src/", import.meta.url);
   // Every module under src, in subfolders too, since tsconfig compiles all of src.
-  const files = (readdirSync(dir, { recursive: true }) as string[]).filter((f) => f.endsWith(".ts") && f !== "guard.ts").sort();
+  const listModules = (d: URL | string) => (readdirSync(d, { recursive: true }) as string[]).filter((f) => f.endsWith(".ts") && f !== "guard.ts").sort();
+  const files = listModules(dir);
 
   it.each(files)("%s has no network, process, signing, spending or key handling", (file) => {
     const text = readFileSync(new URL(file, dir), "utf8");
@@ -227,6 +230,7 @@ describe("source scan", () => {
       "const AF = Object.getPrototypeOf(async () => {}).constructor;",
       'const b = (process as any)["bind" + "ing"];',
       'const c = process?.["dlopen"];',
+      'const m = proc.getBuiltinModule("node:https");',
       "const p = process;",
       "process.env.HOME;",
     ];
@@ -235,6 +239,34 @@ describe("source scan", () => {
 
   // The independent recount may run its own tests in a subprocess, but recount.py itself
   // reads files only.
+  it("lists modules in subfolders too", () => {
+    const tmp = mkdtempSync(join(tmpdir(), "obs-scan-"));
+    try {
+      mkdirSync(join(tmp, "live"));
+      writeFileSync(join(tmp, "a.ts"), "");
+      writeFileSync(join(tmp, "live", "net.ts"), "");
+      writeFileSync(join(tmp, "guard.ts"), "");
+      expect(listModules(tmp)).toEqual(["a.ts", join("live", "net.ts")]);
+    } finally {
+      rmSync(tmp, { recursive: true, force: true });
+    }
+  });
+
+  it("no test loads a second copy of src/guard.ts, whose attempts no check would read", () => {
+    // The attempt log lives in the instance test/setup.ts imported. A test that reloads modules,
+    // mocks them, or imports the guard under a query string would get a copy of its own, and a
+    // refused write there would reach neither the log nor the journal (Fable review I6). The
+    // pattern is built from pieces so this file does not match itself.
+    const ways = ["reset" + "Modules", "isolate" + "Modules", "vi" + "\\.mock", "vi" + "\\.doMock", "vi" + "\\.importActual", "vi" + "\\.importMock", "guard" + "\\.(?:js|ts)\\?"];
+    const re = new RegExp(ways.join("|"));
+    const testDir = new URL("./", import.meta.url);
+    const files = (readdirSync(testDir, { recursive: true }) as string[]).filter((f) => f.endsWith(".ts"));
+    expect(files).toContain("guard.test.ts");
+    for (const f of files) expect(readFileSync(new URL(f, testDir), "utf8"), f).not.toMatch(re);
+    expect(re.test('await import("../src/guard' + '.js?fresh")')).toBe(true);
+    expect(re.test("vi.reset" + "Modules()")).toBe(true);
+  });
+
   it("lists every module under src, subfolders included, and the list is not empty", () => {
     expect(files.length).toBeGreaterThan(10);
     expect(files).toContain("status.ts");
@@ -244,10 +276,17 @@ describe("source scan", () => {
   });
 
   it("tools/recount.py imports nothing that reaches the network or starts a process", () => {
+    // tools/test_recount.py reads the same file as a syntax tree; this is the raw text view.
     const text = readFileSync(new URL("../tools/recount.py", import.meta.url), "utf8");
-    const imports = [...text.matchAll(/^\s*(?:import|from)\s+([\w.]+)/gm)].map((m) => m[1]);
-    expect(imports.sort()).toEqual(["argparse", "json", "os", "re", "stat", "sys"]);
-    expect(text).not.toMatch(/\bos\.(?:system|popen|exec|spawn|fork)/);
-    expect(text).not.toMatch(/__import__|importlib/);
+    // Every name on every import line ("import a, b as c" lists a and b), and no from-import.
+    const names = [...text.matchAll(/^[ \t]*import[ \t]+([^\n#]+)/gm)].flatMap((m) =>
+      (m[1] as string).split(",").map((p) => (p.trim().split(/\s+/)[0] as string).split(".")[0]),
+    );
+    expect([...new Set(names)].sort()).toEqual(["argparse", "json", "os", "re", "stat", "sys"]);
+    expect(text).not.toMatch(/^[ \t]*from[ \t]+\S+[ \t]+import\b/m);
+    // An import after a semicolon or a colon would not start its own line.
+    expect(text).not.toMatch(/[;:][ \t]*(?:import|from)[ \t]/);
+    expect(text).not.toMatch(/\bos\.(?:system|popen|exec\w*|spawn\w*|posix_spawn\w*|fork\w*|kill\w*|remove|unlink|rename|replace)\b/);
+    expect(text).not.toMatch(/__import__|importlib|\bgetattr\s*\(|\bsubprocess\b|\bsocket\b|\beval\s*\(|\bexec\s*\(/);
   });
 });

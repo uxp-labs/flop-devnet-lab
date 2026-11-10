@@ -228,6 +228,16 @@ describe("buildSnapshot", () => {
     expect(s.escrows.filter((e) => e.evidence.length > 0).every((e) => e.notes.join(" ").includes("not bounded by a finalized height"))).toBe(true);
   });
 
+  it("a contradicted RPC head (a rollback) never bounds the escrows either (Fable review)", async () => {
+    const escrows = fx("escrows-verification");
+    const s = await buildSnapshot(
+      { status: fx("status-healthy"), escrows: { source: escrows, ids: escrows.data.meta.escrow_ids ?? [] } },
+      { ...opts, previous: [{ genesis: DEVNET_GENESIS, finalized_height: 3341600, finalized_hash: "0x" + "5e".repeat(32), observed_at: "2026-11-09T23:47:00Z" }] },
+    );
+    expect(s.status.conflicts.join(" ")).toMatch(/went backwards/);
+    expect(s.escrows.every((e) => e.finalized_height === null)).toBe(true);
+  });
+
   it("passes the previous snapshot to the status checks: a rollback on the same genesis is a conflict", async () => {
     const s = await buildSnapshot(
       { status: fx("status-healthy") },

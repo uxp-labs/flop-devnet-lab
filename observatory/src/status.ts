@@ -33,19 +33,35 @@ export interface StatusOptions {
   previous?: PreviousHead | readonly PreviousHead[] | null;
 }
 
-/** One earlier snapshot's finalized head, as its status recorded it. */
+/** One earlier snapshot's finalized head, as its status recorded it. Its time may be null. */
 export interface PreviousHead {
   genesis: string;
   finalized_height: number;
   finalized_hash: string;
-  observed_at: string;
+  observed_at: string | null;
 }
 
-/** A 0x + 64 hex hash in lower case, or null when absent or malformed. */
+/**
+ * A 0x + 64 hex hash written in lower case, or null when absent or malformed. Hashes are compared
+ * exactly as written, as census clause 5 and section 2 say, so another spelling is malformed.
+ */
 export function normalizeHash(value: unknown): string | null {
-  if (typeof value !== "string") return null;
-  const v = value.toLowerCase();
-  return HASH_RE.test(v) ? v : null;
+  return typeof value === "string" && HASH_RE.test(value) ? value : null;
+}
+
+/** Any error value at all, an empty string included, is an error (RULES.md 1.1). */
+function hasError(e: unknown): boolean {
+  return e !== null && e !== undefined;
+}
+
+/** A reading time as given when it is a string, else null: the interface carries strings only. */
+function timeField(t: unknown): string | null {
+  return typeof t === "string" ? t : null;
+}
+
+/** An HTTP status that is a whole number, else null. */
+function httpField(h: unknown): number | null {
+  return isSafeInt(h) ? h : null;
 }
 
 /** A safe integer (clause 14, src/strict.ts) that is not negative, or null. */
@@ -59,54 +75,68 @@ export { parseZoned } from "./strict.js";
 export function classifyFaucet(r: HttpResult<FaucetHealthBody>): NetworkStatus["faucet"] {
   const body = r.body && typeof r.body === "object" ? r.body : null;
   const ready = body && typeof body.ready === "boolean" ? body.ready : null;
+  // The interface carries numbers and booleans in limits; any other value voids them all.
+  const rawLimits = body && body.limits && typeof body.limits === "object" && !Array.isArray(body.limits) ? body.limits : null;
   const limits =
-    body && body.limits && typeof body.limits === "object" && !Array.isArray(body.limits) ? body.limits : null;
+    rawLimits && Object.values(rawLimits).every((v) => typeof v === "boolean" || (typeof v === "number" && Number.isFinite(v))) ? rawLimits : null;
+  const http = httpField(r.http);
   let health: Health;
   let detail: string | null;
-  if (r.http === null) {
+  if (http === null) {
     health = "unknown";
-    detail = r.error ?? "no response";
+    detail = r.http === null ? (hasError(r.error) ? String(r.error) : "no response") : "http status is not a whole number";
   } else if (!body) {
-    health = r.http >= 500 ? "down" : "unknown";
-    detail = `http ${r.http} with no readable body`;
+    health = http >= 500 ? "down" : "unknown";
+    detail = `http ${http} with no readable body`;
   } else if (body.status === "ok" && ready === true) {
     // A body that says ok on an error status is not ok: the HTTP status wins.
-    if (r.http === 200) {
+    if (http === 200) {
       health = "ok";
       detail = null;
     } else {
       health = "degraded";
-      detail = `body says ok but http ${r.http}`;
+      detail = `body says ok but http ${http}`;
     }
   } else if (body.status === "degraded" || body.status === "down" || ready === false) {
     health = body.status === "down" ? "down" : "degraded";
-    detail = `status ${String(body.status ?? "missing")}, ready ${String(ready)}, http ${r.http}`;
+    detail = `status ${String(body.status ?? "missing")}, ready ${String(ready)}, http ${http}`;
   } else {
     health = "unknown";
-    detail = `unrecognized health body, http ${r.http}`;
+    detail = `unrecognized health body, http ${http}`;
   }
-  return { health, http: r.http, detail, observed_at: r.fetched_at, ready, limits };
+  // A reading that came with an error is a failed read, never ok (RULES.md 1.1).
+  if (http !== null && hasError(r.error)) {
+    if (health === "ok") health = "degraded";
+    detail = [detail, `read error: ${String(r.error)}`].filter((d) => d !== null).join("; ");
+  }
+  return { health, http, detail, observed_at: timeField(r.fetched_at), ready, limits };
 }
 
 export function classifyGateway(r: HttpResult<unknown>): ServiceStatus {
+  const http = httpField(r.http);
   let health: Health;
   let detail: string | null = null;
-  if (r.http === null) {
+  if (http === null) {
     health = "unknown";
-    detail = r.error ?? "no response";
-  } else if (r.http === 200) {
+    detail = r.http === null ? (hasError(r.error) ? String(r.error) : "no response") : "http status is not a whole number";
+  } else if (http === 200) {
     health = "ok";
-  } else if (r.http === 429 || r.http === 503) {
+  } else if (http === 429 || http === 503) {
     health = "degraded";
-    detail = `http ${r.http}`;
-  } else if (r.http >= 500) {
+    detail = `http ${http}`;
+  } else if (http >= 500) {
     health = "down";
-    detail = `http ${r.http}`;
+    detail = `http ${http}`;
   } else {
     health = "degraded";
-    detail = `http ${r.http}`;
+    detail = `http ${http}`;
   }
-  return { health, http: r.http, detail, observed_at: r.fetched_at };
+  // A reading that came with an error is a failed read, never ok (RULES.md 1.1).
+  if (http !== null && hasError(r.error)) {
+    if (health === "ok") health = "degraded";
+    detail = [detail, `read error: ${String(r.error)}`].filter((d) => d !== null).join("; ");
+  }
+  return { health, http, detail, observed_at: timeField(r.fetched_at) };
 }
 
 /**
@@ -141,6 +171,8 @@ export function classifyRpc(
   conflicts: string[],
   previous: StatusOptions["previous"],
   genesis: string | null,
+  /** Set to true when this head contradicts itself or an earlier snapshot. */
+  flags: { contradicted: boolean } = { contradicted: false },
 ): NetworkStatus["rpc"] {
   // Every earlier head on this genesis counts, in log order, so a snapshot in between with no RPC
   // reading (or one on another genesis) cannot hide a rollback.
@@ -151,12 +183,18 @@ export function classifyRpc(
     : null;
   const best = nonNegativeInt(head.best_number);
   const nothing = head.genesis_hash === null && head.finalized === null && head.best_number === null;
+  const age = secondsBetween(head.observed_at, o.now);
+  if (age !== null && age < 0) {
+    // A reading time later than the snapshot time is a conflict whatever the reading holds.
+    conflicts.push(`rpc head observed_at ${String(head.observed_at)} is later than the snapshot time ${o.now}`);
+    flags.contradicted = true;
+  }
   if (nothing) {
     return {
-      health: head.error ? "down" : "unknown",
+      health: hasError(head.error) ? "down" : "unknown",
       http: null,
-      detail: head.error ?? "no rpc head",
-      observed_at: head.observed_at,
+      detail: hasError(head.error) ? String(head.error) : typeof head.unreadable === "string" ? head.unreadable : "no rpc head",
+      observed_at: timeField(head.observed_at),
       stale: null,
     };
   }
@@ -164,18 +202,26 @@ export function classifyRpc(
   // unless another check failed. Nothing missing is ever counted as passing.
   const problems: string[] = [];
   const cannotRun: string[] = [];
-  if (head.error) problems.push(`read error: ${head.error}`);
+  if (hasError(head.error)) problems.push(`read error: ${String(head.error)}`);
   if (genesis === null) problems.push("no valid genesis hash");
   let stale: boolean | null = null;
-  const age = secondsBetween(head.observed_at, o.now);
   if (age === null) {
     cannotRun.push(head.observed_at === null ? "no observed_at, so the head age is unknown" : "observed_at does not parse as a time with a zone, so the head age is unknown");
   } else if (age < 0) {
-    conflicts.push(`rpc head observed_at ${head.observed_at} is later than the snapshot time ${o.now}`);
     problems.push("head observed_at is later than the snapshot time");
   } else {
     stale = age > o.staleAfterSeconds;
     if (stale) problems.push(`head is ${Math.round(age)}s old`);
+  }
+  // An earlier snapshot's head read later than this snapshot's time means the log runs backwards.
+  for (const p of earlier) {
+    const t = secondsBetween(p.observed_at, o.now);
+    if (t !== null && t < 0) {
+      conflicts.push(`an earlier snapshot read the rpc head at ${String(p.observed_at)}, later than this snapshot time ${o.now}`);
+      problems.push("an earlier snapshot is later than this one");
+      flags.contradicted = true;
+      break;
+    }
   }
   if (finalized && sameGenesis.length > 0) {
     // Finality never goes back: the highest finalized height any earlier snapshot saw on this
@@ -193,9 +239,11 @@ export function classifyRpc(
     if (finalized.number < highest) {
       conflicts.push(`finalized height went backwards from ${highest} to ${finalized.number} on the same genesis`);
       problems.push("finalized height went backwards");
+      flags.contradicted = true;
     } else if (changed) {
       conflicts.push(`finalized block ${finalized.number} changed hash since the previous snapshot`);
       problems.push("finalized block changed");
+      flags.contradicted = true;
     } else if (sinceUnknown) {
       cannotRun.push("an earlier snapshot at this finalized height has a head time that does not parse, so whether the height is stuck is unknown");
     } else if (since !== null && since > o.staleAfterSeconds) {
@@ -207,6 +255,7 @@ export function classifyRpc(
     if (best < finalized.number) {
       conflicts.push(`best block ${best} is below finalized block ${finalized.number}`);
       problems.push("best below finalized");
+      flags.contradicted = true;
     } else if (best - finalized.number > o.maxFinalityLag) {
       problems.push(`finality lag ${best - finalized.number} blocks`);
     }
@@ -219,7 +268,7 @@ export function classifyRpc(
     health,
     http: null,
     detail: notes.length ? notes.join("; ") : null,
-    observed_at: head.observed_at,
+    observed_at: timeField(head.observed_at),
     stale,
   };
 }
@@ -242,12 +291,22 @@ export function resetDetected(pinned: string, faucet: string | null, rpc: string
  */
 export function rpcHeadUsable(head: RpcHead, now: string, staleAfterSeconds = 120): boolean {
   const age = secondsBetween(head.observed_at, now);
-  return !head.error && age !== null && age >= 0 && age <= staleAfterSeconds;
+  return !hasError(head.error) && age !== null && age >= 0 && age <= staleAfterSeconds;
 }
 
 export async function networkStatus(source: Source, opts: StatusOptions): Promise<NetworkStatus> {
+  return (await assessNetwork(source, opts)).status;
+}
+
+/**
+ * The status, and whether its RPC head is usable: no read error, a fresh head time that is not
+ * later than the snapshot, and no contradiction of itself or of an earlier snapshot (a rollback,
+ * a changed finalized hash, best below finalized). Only a usable head counts toward
+ * reset_detected, and only a usable head on the pinned genesis bounds escrow evidence.
+ */
+export async function assessNetwork(source: Source, opts: StatusOptions): Promise<{ status: NetworkStatus; rpcUsable: boolean }> {
   const pinned = normalizeHash(opts.pinnedGenesis);
-  if (pinned === null) throw new Error("pinnedGenesis must be 0x followed by 64 hex characters");
+  if (pinned === null) throw new Error("pinnedGenesis must be 0x followed by 64 lower case hex characters");
   if (parseZoned(opts.now) === null) throw new Error("now must be an ISO 8601 time with a zone, such as 2026-11-09T23:47:41Z");
   const o = {
     now: opts.now,
@@ -269,7 +328,7 @@ export async function networkStatus(source: Source, opts: StatusOptions): Promis
   if (chainAge !== null && chainAge < 0) {
     conflicts.push(`faucet /chain reading time ${String(chain.fetched_at)} is later than the snapshot time ${o.now}`);
   }
-  const chainUsable = chain.http === 200 && !chain.error && chainAge !== null && chainAge >= 0 && chainAge <= o.staleAfterSeconds;
+  const chainUsable = chain.http === 200 && !hasError(chain.error) && chainAge !== null && chainAge >= 0 && chainAge <= o.staleAfterSeconds;
   const rawFaucetGenesis = chainUsable && chain.body && typeof chain.body === "object" ? chain.body.genesisHash : undefined;
   const faucetGenesis = normalizeHash(rawFaucetGenesis);
   if (rawFaucetGenesis !== undefined && faucetGenesis === null) {
@@ -281,12 +340,14 @@ export async function networkStatus(source: Source, opts: StatusOptions): Promis
   }
   // RULES.md 1.1: the RPC genesis counts toward reset_detected only from a usable head reading,
   // the same gate as the faucet /chain. genesis.rpc still shows what the head said.
-  const rpcUsable = rpcHeadUsable(head, o.now, o.staleAfterSeconds);
+  const fresh = rpcHeadUsable(head, o.now, o.staleAfterSeconds);
   if (faucetGenesis !== null && rpcGenesis !== null && faucetGenesis !== rpcGenesis) {
     conflicts.push(`faucet genesis ${faucetGenesis} differs from rpc genesis ${rpcGenesis}`);
   }
 
-  const rpc = classifyRpc(head, o, conflicts, opts.previous ?? null, rpcGenesis);
+  const flags = { contradicted: false };
+  const rpc = classifyRpc(head, o, conflicts, opts.previous ?? null, rpcGenesis, flags);
+  const rpcUsable = fresh && !flags.contradicted;
   const finalizedValid =
     head.finalized && nonNegativeInt(head.finalized.number) !== null && normalizeHash(head.finalized.hash) !== null;
   const finalizedHeight = finalizedValid ? (head.finalized as { number: number }).number : null;
@@ -295,7 +356,7 @@ export async function networkStatus(source: Source, opts: StatusOptions): Promis
   const lag =
     finalizedHeight !== null && bestHeight !== null && bestHeight >= finalizedHeight ? bestHeight - finalizedHeight : null;
 
-  return {
+  const status: NetworkStatus = {
     schema: "flop-observatory/network-status@0",
     observed_at: opts.now,
     trust: source.trust,
@@ -311,4 +372,5 @@ export async function networkStatus(source: Source, opts: StatusOptions): Promis
     gateway: applyFreshness(classifyGateway(gateway), "gateway", o, conflicts),
     faucet: applyFreshness(classifyFaucet(health), "faucet", o, conflicts),
   };
+  return { status, rpcUsable };
 }

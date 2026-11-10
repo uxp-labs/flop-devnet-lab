@@ -47,10 +47,16 @@ import type {
   EventPage,
   RawEvent,
 } from "./types.js";
-import { walkChain } from "./census.js";
+import { accountOf, walkChain } from "./census.js";
 import { isSafeInt } from "./strict.js";
 
 export const ESCROW_SCOPE = "settlement only; says nothing about output quality" as const;
+/** A finalized event naming this escrow whose section or method is broken: it could be any kind. */
+const UNKNOWN_KIND = "event of unknown kind";
+/** The suspect kinds in words, sorted: event of unknown kind, refund, release. */
+function suspectWords(kinds: ReadonlySet<string>): string {
+  return [...kinds].map((m) => (m === "EscrowReleased" ? "release" : m === "EscrowRefunded" ? "refund" : m)).sort().join(" and ");
+}
 export const ESCROW_SCHEMA = "flop-observatory/escrow-state@0" as const;
 
 const SECTION = "hasStation";
@@ -161,6 +167,8 @@ function plural(n: number, word: string): string {
 interface Copy {
   section: unknown;
   method: unknown;
+  /** The account the census reads from data (clause 11); copies must agree on it (clause 9). */
+  account: string | null;
   /** True when this copy is one of the three hasStation escrow events. */
   escrowEvent: boolean;
   id: IdRead;
@@ -268,6 +276,18 @@ export function escrowState(
         continue;
       }
       const method = raw["method"];
+      // Census clause 7: a missing, empty or non-string section or method is malformed. When the
+      // data still names this escrow, the event could be any of the three, so if finalized it is
+      // suspect, as a malformed release or refund is.
+      const section = raw["section"];
+      if (onPinned && !(typeof section === "string" && section !== "" && typeof method === "string" && method !== "")) {
+        const named = readEscrowId(raw["data"]);
+        if (named.ok && named.id === id) {
+          malformedNotes.push("an event that names this escrow has no valid section or method");
+          if (raw["finalized"] === true) suspectTerminals.add(UNKNOWN_KIND);
+        }
+        continue;
+      }
       const escrowEvent = raw["section"] === SECTION && typeof method === "string" && METHODS.includes(method);
       const idRead = escrowEvent ? readEscrowId(raw["data"]) : ({ ok: false, why: "not an escrow event" } as IdRead);
       if (!onPinned) {
@@ -292,6 +312,7 @@ export function escrowState(
       const copy: Copy = {
         section: raw["section"],
         method,
+        account: accountOf(raw["data"]),
         escrowEvent,
         id: idRead,
         finalized: raw["finalized"] === true,
@@ -321,8 +342,9 @@ export function escrowState(
     for (const c of copies) {
       if (c.escrowEvent && c.id.ok) named.add(c.id.id);
       const idPart = c.escrowEvent && c.id.ok ? c.id.id : "?";
-      // A block hash fixes the block number, so copies must agree on it. Null against a number disagrees.
-      signatures.add(`${String(c.section)}|${String(c.method)}|${idPart}|${String(c.block_number)}`);
+      // A block hash fixes the block number, so copies must agree on it. Null against a number
+      // disagrees. They must agree on the account too, as census clause 9 says.
+      signatures.add(JSON.stringify([String(c.section), String(c.method), idPart, String(c.block_number), c.account]));
     }
     // A finalized terminal copy whose escrow id does not parse could contradict any escrow.
     // This holds for every such copy, whatever the other copies of the event say.
@@ -337,7 +359,7 @@ export function escrowState(
     if (signatures.size > 1) {
       // Copies of one event disagree. Every escrow any copy names is unverified.
       if (named.has(id)) {
-        conflicts.push(`copies of one event disagree on section, method, escrow id or block number (${where})`);
+        conflicts.push(`copies of one event disagree on section, method, escrow id, block number or account (${where})`);
       }
       continue;
     }
@@ -429,14 +451,14 @@ export function escrowState(
       // A malformed finalized release could be a second distinct release, and a refund contradicts
       // it outright: either one leaves the escrow unverified.
       if (suspectTerminals.size > 0) {
-        conflicts.push(`a malformed finalized ${[...suspectTerminals].sort().map((m) => (m === RELEASED ? "release" : "refund")).join(" and ")} could be about this escrow`);
+        conflicts.push(`a malformed finalized ${suspectWords(suspectTerminals)} could be about this escrow`);
       } else {
         state = "claimed";
         evidence = [...(opened.length === 1 ? opened : []), ...released];
       }
     } else if (refunded.length === 1) {
       if (suspectTerminals.size > 0) {
-        conflicts.push(`a malformed finalized ${[...suspectTerminals].sort().map((m) => (m === RELEASED ? "release" : "refund")).join(" and ")} could be about this escrow`);
+        conflicts.push(`a malformed finalized ${suspectWords(suspectTerminals)} could be about this escrow`);
       } else {
         state = "refunded";
         evidence = [...(opened.length === 1 ? opened : []), ...refunded];

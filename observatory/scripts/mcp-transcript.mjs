@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // Drives the real MCP binary (dist/mcp-bin.js) over stdio against <outputs>/snapshot.json and
-// prints one JSON line per exchange: {"request": ..., "response": ...}.
+// prints one JSON line per exchange: {"request", "expect_error", "response", "response_line"}, where
+// response_line is the server's line exactly as it wrote it.
 // Calls every tool, every escrow id in the snapshot, one unknown tool and one malformed id.
 // Exit 1 if a response is missing, or an expected success is an error, or an expected error is not.
 import { spawn } from "node:child_process";
@@ -39,8 +40,10 @@ child.stdout.on("data", (d) => {
     const line = buf.slice(0, i);
     buf = buf.slice(i + 1);
     if (line.trim()) {
+      // The line is kept as the server wrote it, so the check can read it strictly (a repeated key
+      // would be lost in a parse and a re-serialization).
       const msg = JSON.parse(line);
-      responses.set(msg.id, msg);
+      responses.set(msg.id, { msg, line });
     }
   }
 });
@@ -57,10 +60,11 @@ child.on("close", (code) => {
     process.stderr.write(`mcp-bin exited ${code}: ${stderr}\n`);
   }
   for (const { req, expectError } of requests) {
-    const res = responses.get(req.id) ?? null;
+    const got = responses.get(req.id) ?? null;
+    const res = got?.msg ?? null;
     const isError = !res || "error" in res || res?.result?.isError === true;
     if (!res || isError !== expectError) bad++;
-    process.stdout.write(JSON.stringify({ request: req, expect_error: expectError, response: res }) + "\n");
+    process.stdout.write(JSON.stringify({ request: req, expect_error: expectError, response: res, response_line: got?.line ?? null }) + "\n");
   }
   if (responses.has(undefined)) bad++;
   process.exit(bad ? 1 : 0);

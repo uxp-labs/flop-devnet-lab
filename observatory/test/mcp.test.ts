@@ -162,6 +162,14 @@ describe("mcp protocol", () => {
     expect(handleMcp({ id: 1, method: "ping" }, ctx)?.error?.code).toBe(-32600);
     expect(JSON.parse(handleLine("{nope", ctx) as string).error.code).toBe(-32700);
   });
+  it("answers a call it cannot serve with an internal error instead of throwing", () => {
+    // A snapshot with no status makes get_status throw inside the handler.
+    const broken = { snapshot: { ...build(), status: undefined } as unknown as Snapshot };
+    const req = JSON.stringify({ jsonrpc: "2.0", id: 7, method: "tools/call", params: { name: "get_status", arguments: {} } });
+    expect(JSON.parse(handleLine(req, broken) as string)).toEqual({ jsonrpc: "2.0", id: 7, error: { code: -32603, message: "internal error" } });
+    // The same server still answers what it can.
+    expect(JSON.parse(handleLine('{"jsonrpc":"2.0","id":8,"method":"ping"}', broken) as string)).toEqual({ jsonrpc: "2.0", id: 8, result: {} });
+  });
 });
 
 describe("mcp tools", () => {

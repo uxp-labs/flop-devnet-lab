@@ -23,6 +23,7 @@
 // written as (SpecDecimal), because a JS number keeps only about 17 significant digits. A value
 // that cannot be read exactly is unknown, never a match from a rounded number.
 import { isScalar, parse, type ScalarTag, type Tags } from "yaml";
+import { isSafeInt, parseZoned } from "./strict.js";
 import type { DriftItem, DriftReport, RuntimeConstants, Trust } from "./types.js";
 
 /** Thrown when the spec itself is unusable. A report with no items would look like no drift. */
@@ -343,9 +344,12 @@ export function drift(spec: string | ParsedSpec, runtime: RuntimeConstants | nul
     trust: opts.trust,
     genesis: opts.genesis ?? null,
     finalized_height: opts.finalizedHeight ?? null,
-    runtime_version: typeof version === "number" && Number.isInteger(version) ? version : null,
+    // A safe, non-negative integer (census clause 14), or unknown: past 2^53 the parser has
+    // already rounded it, so it would not be the version the chain reported.
+    runtime_version: isSafeInt(version) && version >= 0 ? version : null,
     spec_source: opts.specSource,
-    runtime_observed_at: typeof readAt === "string" ? readAt : null,
+    // Shown only when it is a real zoned time (section 1.1), so a reading time is never a guess.
+    runtime_observed_at: parseZoned(readAt) !== null ? (readAt as string) : null,
     items,
     matches: count("match"),
     mismatches: count("mismatch"),

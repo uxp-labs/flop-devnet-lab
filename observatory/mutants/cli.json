@@ -54,5 +54,45 @@
     "replace": "if (false) {",
     "test": "scripts/cli-checks.mjs",
     "why": "the MCP binary must refuse a snapshot whose hash fails"
+  },
+  {
+    "id": "cli-previous-needs-a-head-time",
+    "file": "src/cli.ts",
+    "find": "if (st.genesis.rpc !== null && st.finalized_height !== null && st.finalized_hash !== null) {",
+    "replace": "if (st.genesis.rpc !== null && st.finalized_height !== null && st.finalized_hash !== null && st.rpc.observed_at !== null) {",
+    "test": "scripts/cli-checks.mjs",
+    "why": "Fable review M4: an earlier snapshot with no head time still sets the rollback floor; only the stuck check needs its time"
+  },
+  {
+    "id": "mcp-bin-repeated-key-served",
+    "file": "src/mcp-bin.ts",
+    "find": "  if (twice !== null) throw new Error(`it holds the key ${JSON.stringify(twice)} twice in one object`);",
+    "replace": "",
+    "test": "scripts/cli-checks.mjs",
+    "why": "the MCP binary must refuse a snapshot with a key twice, which two readers can resolve differently"
+  },
+  {
+    "id": "mcp-bin-lossy-utf8",
+    "file": "src/mcp-bin.ts",
+    "find": "text = new TextDecoder(\"utf-8\", { fatal: true }).decode(readFileSync(path));",
+    "replace": "text = readFileSync(path, \"utf8\");",
+    "test": "scripts/cli-checks.mjs",
+    "why": "the MCP binary must read the snapshot as strict UTF-8, not turn a bad byte into U+FFFD"
+  },
+  {
+    "id": "mcp-bin-any-hashed-object-served",
+    "file": "src/mcp-bin.ts",
+    "find": "if (!shaped) {",
+    "replace": "if (false) {",
+    "test": "scripts/cli-checks.mjs",
+    "why": "the MCP binary serves only an observatory snapshot, not any object that hashes to its own hash field"
+  },
+  {
+    "id": "cli-duplicate-escrow-id-accepted",
+    "file": "src/cli.ts",
+    "find": "    if (seen.has(k)) fail(`${where}: escrow id ${String(id)} is listed twice`);\n",
+    "replace": "",
+    "test": "scripts/cli-checks.mjs",
+    "why": "Fable review L8: the same escrow listed twice would give two cards with one key"
   }
 ]

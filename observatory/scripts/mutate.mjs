@@ -21,7 +21,7 @@
 // 4. Control again, to prove every file was restored.
 //
 // Usage: node scripts/mutate.mjs [mutants/escrow.json ...]   (default: all mutants/*.json)
-// Prints one JSON object. Exit 1 if a control fails or any mutant is not killed.
+// Prints one JSON object. Exit 1 if a control fails, any mutant is not killed, or there are none.
 import { spawnSync } from "node:child_process";
 import { existsSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -143,7 +143,8 @@ function control(tests, label) {
   const run = runTests(tests, label);
   const missing = tests.filter((t) => !run.files.some((f) => f.file === t));
   const failing = run.files.filter((f) => f.status !== "passed" || f.failed.length > 0 || f.tests === 0);
-  const pass = !run.timeout && !run.noReport && run.exit === 0 && missing.length === 0 && failing.length === 0;
+  // A control that ran no test file shows nothing passing, so it fails.
+  const pass = tests.length > 0 && !run.timeout && !run.noReport && run.exit === 0 && missing.length === 0 && failing.length === 0;
   return {
     outcome: pass ? "control-pass" : "control-fail",
     exit: run.exit,
@@ -170,6 +171,11 @@ for (const f of files) {
 
 const results = [...problems];
 let bad = problems.length;
+// A run that tests nothing proves nothing (Fable review L9): no mutants at all fails.
+if (mutants.length === 0) {
+  results.push({ id: null, source: files.join(", ") || null, outcome: "no-mutants", detail: "the mutant files hold no mutant" });
+  bad++;
+}
 let before = null;
 let after = null;
 let copied = null;
@@ -257,7 +263,7 @@ try {
 
 const count = (o) => results.filter((r) => r.outcome === o).length;
 const summary = {
-  mutants: results.length,
+  mutants: results.filter((r) => r.outcome !== "no-mutants").length,
   killed: count("killed"),
   survived: count("survived"),
   load_error: count("load-error"),

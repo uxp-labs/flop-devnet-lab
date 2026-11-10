@@ -2,6 +2,7 @@
 import { appendFileSync, existsSync, mkdirSync, readFileSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { dirname } from "node:path";
+import { duplicateKey } from "./strict.js";
 import type { Snapshot } from "./types.js";
 
 function canon(v: unknown): string | undefined {
@@ -34,18 +35,49 @@ export function hashSnapshot(s: Omit<Snapshot, "hash"> | Snapshot): string {
 
 export type NewSnapshot = Omit<Snapshot, "hash" | "seq" | "prev_hash">;
 
-function lines(path: string): string[] {
+/**
+ * The log's non-blank lines, each decoded as strict UTF-8. A line that is not valid UTF-8 is null:
+ * it is never read with U+FFFD in place of its bad bytes.
+ */
+function lines(path: string): (string | null)[] {
   if (!existsSync(path)) return [];
-  return readFileSync(path, "utf8").split("\n").filter((l) => l.trim() !== "");
+  const raw = readFileSync(path);
+  const strict = new TextDecoder("utf-8", { fatal: true });
+  const out: (string | null)[] = [];
+  let start = 0;
+  for (let i = 0; i <= raw.length; i++) {
+    if (i < raw.length && raw[i] !== 0x0a) continue;
+    let line: string | null;
+    try {
+      line = strict.decode(raw.subarray(start, i));
+    } catch {
+      line = null;
+    }
+    start = i + 1;
+    if (line === null || line.trim() !== "") out.push(line);
+  }
+  return out;
+}
+
+/** One log line as a snapshot, or the reason it is not one (strict UTF-8, JSON, one value per key). */
+function parseLine(line: string | null): Snapshot | string {
+  if (line === null) return "is not valid UTF-8";
+  let s: Snapshot;
+  try {
+    s = JSON.parse(line) as Snapshot;
+  } catch {
+    return "is not JSON";
+  }
+  // Two readers of a line with a repeated key can see two different snapshots.
+  const twice = duplicateKey(line);
+  return twice === null ? s : `holds the key ${JSON.stringify(twice)} twice in one object`;
 }
 
 export function readSnapshots(path: string): Snapshot[] {
   return lines(path).map((l, i) => {
-    try {
-      return JSON.parse(l) as Snapshot;
-    } catch (e) {
-      throw new Error(`snapshot log ${path} line ${i} is not JSON: ${(e as Error).message}`);
-    }
+    const s = parseLine(l);
+    if (typeof s === "string") throw new Error(`snapshot log ${path} line ${i} ${s}`);
+    return s;
   });
 }
 
@@ -69,12 +101,8 @@ export function verifyChain(path: string): number | null {
   const ls = lines(path);
   let prev: string | null = null;
   for (let i = 0; i < ls.length; i++) {
-    let s: Snapshot;
-    try {
-      s = JSON.parse(ls[i] as string) as Snapshot;
-    } catch {
-      return i;
-    }
+    const s = parseLine(ls[i] ?? null);
+    if (typeof s === "string") return i;
     if (s.seq !== i) return i;
     if (s.prev_hash !== prev) return i;
     if (s.hash !== hashSnapshot(s)) return i;

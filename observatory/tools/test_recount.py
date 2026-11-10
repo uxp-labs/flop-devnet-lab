@@ -1,6 +1,7 @@
 """Tests for tools/recount.py. Run from the package root:
 python3 -I -m unittest tools/test_recount.py
 """
+import ast
 import json
 import os
 import subprocess
@@ -28,6 +29,34 @@ def census(scn, lo, hi, genesis=G):
     code, out, err = run(os.path.join(DATA, scn), lo, hi, genesis)
     assert code == 0, err
     return json.loads(out)
+
+
+ALLOWED_IMPORTS = {"argparse", "json", "os", "re", "stat", "sys"}
+OS_READS = {"path", "lstat", "listdir", "fsencode", "fsdecode"}
+BANNED_NAMES = {"eval", "exec", "compile", "__import__", "__builtins__", "builtins", "getattr", "setattr",
+                "delattr", "globals", "locals", "vars", "breakpoint", "input", "importlib", "subprocess", "socket"}
+
+
+def scan_problems(code):
+    """What the read-only scan finds in Python source: an import outside the allow-list, any
+    from-import, a name that runs code or reaches processes and sockets, an os call other than a
+    read, and open in a mode that writes."""
+    found = []
+    for node in ast.walk(ast.parse(code)):
+        if isinstance(node, ast.Import):
+            found += ["import " + a.name for a in node.names if a.name.split(".")[0] not in ALLOWED_IMPORTS]
+        elif isinstance(node, ast.ImportFrom):
+            found.append("from %s import" % node.module)
+        elif isinstance(node, ast.Name) and node.id in BANNED_NAMES:
+            found.append(node.id)
+        elif isinstance(node, ast.Attribute) and isinstance(node.value, ast.Name) and node.value.id == "os" \
+                and node.attr not in OS_READS:
+            found.append("os." + node.attr)
+        elif isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "open":
+            mode = node.args[1] if len(node.args) > 1 else next((k.value for k in node.keywords if k.arg == "mode"), None)
+            if mode is not None and not (isinstance(mode, ast.Constant) and mode.value in ("r", "rb")):
+                found.append("open for writing")
+    return found
 
 
 def totals(**kw):
@@ -178,6 +207,18 @@ class RecountTests(unittest.TestCase):
     def test_bad_range_exits_2(self):
         code, _, _ = run(os.path.join(DATA, "complete"), 9, 3)
         self.assertEqual(code, 2)
+
+    def test_request_numbers_are_ascii_digits_only(self):
+        # Python's int() takes all of these; the TypeScript command refuses them (Fable review L11).
+        for text in (" 0", "0 ", "+5", "1_0", "-1", "0x10", "1e3", "\u0663", ""):
+            code, out, err = run(os.path.join(DATA, "complete"), text, 10)
+            self.assertEqual(code, 2, repr(text))
+            self.assertEqual(out, "", repr(text))
+            self.assertIn("census refused (request): --from must be a non-negative integer", err, repr(text))
+        code, _, err = run(os.path.join(DATA, "complete"), 1, "1_0")
+        self.assertEqual(code, 2)
+        self.assertIn("census refused (request): --to must be a non-negative integer", err)
+        self.assertEqual(run(os.path.join(DATA, "complete"), "01", "10")[0], 0)
 
     def test_block_number_key_missing_is_malformed_but_null_is_kept(self):
         r = census("bnmissing", 1, 10)
@@ -435,6 +476,29 @@ class RecountTests(unittest.TestCase):
             code, out, _ = run(d, 1, 5)
             self.assertEqual(code, 0)
             self.assertFalse(json.loads(out)["complete"])
+
+    def test_recount_reads_files_only(self):
+        """recount.py, read as a syntax tree: it imports exactly the six modules it needs and makes
+        no call that could start a process, open a socket, run code from a string or write a file."""
+        with open(RECOUNT, encoding="utf-8") as fh:
+            code = fh.read()
+        self.assertEqual(scan_problems(code), [])
+        names = {a.name.split(".")[0] for n in ast.walk(ast.parse(code)) if isinstance(n, ast.Import) for a in n.names}
+        self.assertEqual(names, ALLOWED_IMPORTS)
+
+    def test_the_scan_catches_every_form(self):
+        # Fable review L12: the old line scan read only the first name of an import line and five
+        # os calls. Each of these must be found; each of the last four must pass.
+        bad = ("import json, socket", "import os, subprocess", "from os import system", "x = 1; import socket",
+               "if True: import socket", "import urllib.request", "import http.client", "import importlib",
+               'os.posix_spawn("/bin/sh", [], {})', 'getattr(os, "sys" + "tem")("id")', 'os.system("id")',
+               'os.popen("id")', 'os.remove("x")', 'eval("1")', 'exec("1")', '__import__("socket")',
+               'open("x", "w")', 'open("x", mode="a")', 'open("x", "r+")')
+        for code in bad:
+            self.assertNotEqual(scan_problems(code), [], code)
+        good = ("import os", 'os.path.join("a", "b")', 'open("x", "r", encoding="utf-8")', 'os.lstat("x")')
+        for code in good:
+            self.assertEqual(scan_problems(code), [], code)
 
     def test_output_is_deterministic(self):
         a = run(os.path.join(DATA, "gap"), 1, 30)[1]

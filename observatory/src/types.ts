@@ -61,6 +61,12 @@ export interface RpcHead {
   observed_at: string | null;
   /** Transport error, if the read failed. */
   error: string | null;
+  /**
+   * Set only when a saved reading exists but cannot be read (a fixture file that is not strict
+   * UTF-8 JSON with one value per key): the file and why. Nothing else is set, so the head counts
+   * as nothing read, and the reason shows as the RPC detail.
+   */
+  unreadable?: string;
 }
 
 /** One chain event, kept verbatim as a raw input. */

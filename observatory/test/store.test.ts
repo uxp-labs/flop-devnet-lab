@@ -202,6 +202,46 @@ describe("snapshot log chain", () => {
   });
 });
 
+describe("snapshot log read strictly", () => {
+  it("refuses a line that holds a key twice, even though its hash verifies", () => {
+    const p = join(tmp(), "log.jsonl");
+    appendSnapshot(p, fresh());
+    const line = readFileSync(p, "utf8").trim();
+    // The first copy says the opposite; JSON.parse keeps the last, so the hash still verifies.
+    const twice = line.replace('"reset_detected":null,"rpc"', '"reset_detected":true,"reset_detected":null,"rpc"');
+    expect(twice).not.toBe(line);
+    writeFileSync(p, twice + "\n");
+    const parsed = JSON.parse(twice) as Snapshot;
+    expect(hashSnapshot(parsed)).toBe(parsed.hash);
+    expect(verifyChain(p)).toBe(0);
+    expect(() => readSnapshots(p)).toThrow(/line 0 holds the key "reset_detected" twice in one object/);
+  });
+  it("refuses a line that is not valid UTF-8, which a lossy read would accept", () => {
+    const p = join(tmp(), "log.jsonl");
+    const s = fresh();
+    appendSnapshot(p, { ...s, escrows: [{ ...s.escrows[0]!, notes: ["a \uFFFD in a note"] }, ...s.escrows.slice(1)] });
+    const raw = readFileSync(p);
+    const at = raw.indexOf(Buffer.from([0xef, 0xbf, 0xbd]));
+    expect(at).toBeGreaterThan(0);
+    const bad = Buffer.concat([raw.subarray(0, at), Buffer.from([0xff]), raw.subarray(at + 3)]);
+    writeFileSync(p, bad);
+    // Read lossily, the bad byte turns back into U+FFFD and the hash verifies; read strictly, it refuses.
+    const lossy = JSON.parse(new TextDecoder("utf-8").decode(bad).trim()) as Snapshot;
+    expect(hashSnapshot(lossy)).toBe(lossy.hash);
+    expect(verifyChain(p)).toBe(0);
+    expect(() => readSnapshots(p)).toThrow(/line 0 is not valid UTF-8/);
+  });
+  it("still reads a valid log after a line that ends without a newline, and skips blank lines", () => {
+    const p = join(tmp(), "log.jsonl");
+    appendSnapshot(p, fresh());
+    appendSnapshot(p, fresh());
+    const [a, b] = readFileSync(p, "utf8").trim().split("\n");
+    writeFileSync(p, `${a}\n\n${b}`);
+    expect(verifyChain(p)).toBeNull();
+    expect(readSnapshots(p).map((x) => x.seq)).toEqual([0, 1]);
+  });
+});
+
 describe("feeds", () => {
   it("are deterministic, sorted, indented, newline terminated, and carry observed_at, trust and hash", () => {
     const s = build();
@@ -231,6 +271,20 @@ describe("feeds", () => {
     expect(c.census).toBeNull();
     expect(dr.drift).toBeNull();
     expect(readFileSync(join(d, "census.json"), "utf8")).not.toContain("escrows_opened");
+  });
+  it("keeps accounts named __proto__ and constructor in census.json and snapshot.json, which still verifies", () => {
+    // JSON.parse makes __proto__ an own key, as the census does for an account of that name.
+    const odd = JSON.parse('{"__proto__":{"escrows_opened":1},"alice":{"escrows_opened":2},"constructor":{"escrows_opened":3}}');
+    const s = build({ census: { ...build().census!, by_account: odd } });
+    const d = tmp();
+    writeFeeds(d, s);
+    const census = JSON.parse(readFileSync(join(d, "census.json"), "utf8")).census;
+    expect(Object.keys(census.by_account)).toEqual(["__proto__", "alice", "constructor"]);
+    expect(census.by_account.__proto__).not.toBe(Object.prototype);
+    expect(Object.getOwnPropertyDescriptor(census.by_account, "__proto__")?.value).toEqual({ escrows_opened: 1 });
+    const snap = JSON.parse(readFileSync(join(d, "snapshot.json"), "utf8")) as Snapshot;
+    expect(Object.keys(snap.census!.by_account)).toEqual(["__proto__", "alice", "constructor"]);
+    expect(hashSnapshot(snap)).toBe(s.hash);
   });
   it("keeps null status values null, not 0", () => {
     const d = tmp();
