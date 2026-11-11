@@ -262,7 +262,7 @@ export function jobSpent(h: string, job: string, provider: string): number {
   return sumCharges(placed(h, [onJob(job), onProvider(provider), onPayer("requester")], `the requester total of job ${job} (${provider})`));
 }
 
-export { LedgerLockError, LedgerUnlockable } from "./lock.js";
+export { LedgerLockError, LedgerLockLost, LedgerUnlockable } from "./lock.js";
 
 /**
  * Exclusive lock over a read of the ledger and the append that follows from it: the cap check with its

@@ -12,7 +12,7 @@ import { chmodSync, existsSync, mkdirSync, readdirSync, readFileSync, unlinkSync
 import { hostname } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
-import { appendLedger, LedgerLockError, withLedgerLock, type LedgerEntry } from "../src/ledger.js";
+import { appendLedger, LedgerLockError, LedgerLockLost, withLedgerLock, type LedgerEntry } from "../src/ledger.js";
 import { provablyDead, reclaim, rightPath, runOnDisk, sweep, timeoutMessage, type Self, type Step } from "../src/lock.js";
 import { cli, readLines, readySeat, tmpHome } from "./helpers.js";
 
@@ -302,14 +302,16 @@ describe("L7: every append re-checks that the lock is still ours", () => {
 
   it("a lock removed by hand while a holder is inside: the append refuses and writes nothing", () => {
     const h = tmpHome();
-    expect(() => withLedgerLock(h, () => { unlinkSync(lockPath(h)); appendLedger(h, row()); })).toThrow(LedgerLockError);
+    // A lost lock is its own error, not a busy ledger (review of the lock reclaim, defect 5).
+    const err = (() => { try { withLedgerLock(h, () => { unlinkSync(lockPath(h)); appendLedger(h, row()); }); } catch (e) { return e; } })();
+    expect({ lost: err instanceof LedgerLockLost, busy: err instanceof LedgerLockError }).toEqual({ lost: true, busy: false });
     expect(() => withLedgerLock(h, () => { unlinkSync(lockPath(h)); appendLedger(h, row()); })).toThrow(/^ledger lock lost: \S+ledger\.jsonl\.lock no longer carries this process's token, so nothing was appended$/);
     expect(existsSync(ledgerPath(h))).toBe(false);
   });
 
   it("a lock removed by hand and taken by another process: the append refuses, writes nothing, and the release leaves the other lock", () => {
     const h = tmpHome();
-    expect(() => withLedgerLock(h, () => { writeFileSync(lockPath(h), owner(process.ppid, "someone")); appendLedger(h, row()); })).toThrow(LedgerLockError);
+    expect(() => withLedgerLock(h, () => { writeFileSync(lockPath(h), owner(process.ppid, "someone")); appendLedger(h, row()); })).toThrow(LedgerLockLost);
     expect(existsSync(ledgerPath(h))).toBe(false);
     expect(readFileSync(lockPath(h), "utf8")).toBe(owner(process.ppid, "someone"));
   });

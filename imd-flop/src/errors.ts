@@ -10,7 +10,7 @@ export const EXIT = {
   ESTIMATE_FAILED: 7, // fail closed: no quote, no send
   VERIFY_FAILED: 8, // link verify found a bad signature or mismatch
   FAUCET_REFUSED: 9, // team rule: no faucets
-  REFUSED_LOCK: 10, // ledger lock timeout, or ledger lock lost at the append, before the paid call; nothing sent
+  REFUSED_LOCK: 10, // ledger lock timeout before the paid call, or a refusal row that a lock error kept out of the ledger; nothing sent
   NOT_SENT: 11, // the provider failed before the paid request was sent (child-key mint, abort before send): nothing sent, nothing charged
 } as const;
 

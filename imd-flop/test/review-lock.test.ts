@@ -177,24 +177,26 @@ describe("review defect 4, fixed: a right file held by a live unrelated process"
   }, 30_000);
 });
 
-describe("DEFECT 5: receipt --refresh calls a lost lock a busy ledger", () => {
-  // receipt-store.ts refreshReceipt prints LEDGER_BUSY for every LedgerLockError. "ledger lock lost" is a
-  // LedgerLockError too, so an append that found the lock no longer ours prints "ledger busy". README
-  // (Lock-timeout rule) and the refreshReceipt comment say the busy line is for a lock that could not be
-  // taken, and that any other failure, "a failed append for one", prints DISAGREE. The lock was taken
-  // here; the append failed. The new error reached a branch whose words do not cover it.
-  it("DEFECT 5 (low): an append that finds the lock lost during a refresh prints the busy line, not DISAGREE", async () => {
+describe("review defect 5, fixed: a lost lock at an append is a failed append, never a busy ledger", () => {
+  // Was: receipt-store.ts refreshReceipt printed LEDGER_BUSY for every LedgerLockError, and "ledger lock
+  // lost" was one, so an append that found the lock no longer ours printed "ledger busy".
+  // Decided: a lost lock is its own error (LedgerLockLost). A refresh prints DISAGREE for it, as for any
+  // failed append. A refusal row that a lock error keeps out of the ledger: run still refuses, sends
+  // nothing, exits 10 and says the row could not be written and why.
+  const quote = { estimated_cost_flop: 0.066, estimated_input_tokens: 3, estimated_output_tokens: 8 };
+  const receipt = (id: string, fields: Record<string, unknown>) => ({ http: 200, error: null, receipt: { request_id: id, correlation_id: "imd-job-j1", model: "m", reserved_spend: 0.186, settled_spend: null, state: "estimated", ...fields } });
+  const provider = (fields: Record<string, unknown> = {}, calls = { n: 0 }) => ({
+    name: "mock" as const,
+    async estimate() { return quote as never; },
+    async complete(req: { requestId: string }) { calls.n++; return { request_id: req.requestId, text: "ok", usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 } } as never; },
+    async readReceipt(id: string) { return receipt(id, fields) as never; },
+  }) as never;
+  const runArgs = (job: string) => ["run", "--seat", SEAT, "--job", job, "--prompt", "hi", "--provider", "mock", "--max-tokens", "8", "--json"];
+
+  it("review defect 5, fixed: an append that finds the lock lost during a refresh prints DISAGREE, not the busy line", async () => {
     const h = tmpHome();
     await readySeat(h, SEAT, "1");
-    const quote = { estimated_cost_flop: 0.066, estimated_input_tokens: 3, estimated_output_tokens: 8 };
-    const receipt = (id: string, fields: Record<string, unknown>) => ({ http: 200, error: null, receipt: { request_id: id, correlation_id: "imd-job-j1", model: "m", reserved_spend: 0.186, settled_spend: null, state: "estimated", ...fields } });
-    const provider = (fields: Record<string, unknown>) => ({
-      name: "mock" as const,
-      async estimate() { return quote as never; },
-      async complete(req: { requestId: string }) { return { request_id: req.requestId, text: "ok", usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 } } as never; },
-      async readReceipt(id: string) { return receipt(id, fields) as never; },
-    }) as never;
-    const run = await cli(h, ["run", "--seat", SEAT, "--job", "j1", "--prompt", "hi", "--provider", "mock", "--max-tokens", "8", "--json"], { provider: provider({}) });
+    const run = await cli(h, runArgs("j1"), { provider: provider() });
     expect(run.code, run.err).toBe(0);
     const rid = run.json().request_id as string;
     const before = readLines(join(h, "ledger.jsonl")).length;
@@ -202,10 +204,47 @@ describe("DEFECT 5: receipt --refresh calls a lost lock a busy ledger", () => {
     const r = await cli(h, ["receipt", rid, "--refresh", "--json", "--seat", SEAT], { provider: provider({ state: "settled", settled_spend: 0.05 }) });
     expect(hook.loseLock).toBe(false); // the append ran its check, and the lock was gone
     expect(readLines(join(h, "ledger.jsonl"))).toHaveLength(before); // nothing appended
-    expect(r.code).toBe(0);
-    expect(r.err).toMatch(/^ledger busy; the receipt read was stored and nothing was booked \(ledger lock lost: \S+ledger\.jsonl\.lock no longer carries this process's token, so nothing was appended\)$/);
-    expect(r.err.startsWith(LEDGER_BUSY)).toBe(true);
-    expect(r.err).not.toContain(DISAGREE);
+    expect({ code: r.code, err: r.err }).toEqual({ code: 0, err: DISAGREE });
+    expect(r.err).not.toContain(LEDGER_BUSY);
+  }, 30_000);
+
+  it("a refusal row kept out by a lost lock: run refuses, sends nothing, exits 10, and says why", async () => {
+    const h = tmpHome();
+    await readySeat(h, SEAT, "0.186"); // room for exactly one call
+    expect((await cli(h, runArgs("j1"), { provider: provider() })).code).toBe(0);
+    const before = readLines(join(h, "ledger.jsonl")).length;
+    const calls = { n: 0 };
+    hook.loseLock = true;
+    const r = await cli(h, runArgs("j2"), { provider: provider({}, calls) });
+    expect(hook.loseLock).toBe(false);
+    expect({ code: r.code, calls: calls.n }).toEqual({ code: 10, calls: 0 });
+    expect(r.err).toMatch(/^imd-flop: refused locally, nothing sent: .+\. The refusal row could not be written: ledger lock lost: \S+ledger\.jsonl\.lock no longer carries this process's token, so nothing was appended$/);
+    expect(readLines(join(h, "ledger.jsonl"))).toHaveLength(before);
+  }, 30_000);
+
+  it("a refusal row kept out by a lock timeout: run refuses, sends nothing, exits 10, and says why", async () => {
+    const h = tmpHome();
+    await readySeat(h, SEAT, "0.186");
+    expect((await cli(h, runArgs("j1"), { provider: provider() })).code).toBe(0);
+    const before = readLines(join(h, "ledger.jsonl")).length;
+    writeFileSync(lockPath(h), owner(process.ppid, "busy"));
+    const calls = { n: 0 };
+    const r = await cli(h, runArgs("j2"), { provider: provider({}, calls) });
+    unlinkSync(lockPath(h));
+    expect({ code: r.code, calls: calls.n }).toEqual({ code: 10, calls: 0 });
+    expect(r.err).toMatch(new RegExp(`^imd-flop: refused locally, nothing sent: .+\\. The refusal row could not be written: ledger lock timeout: \\S+ledger\\.jsonl\\.lock \\(\\d+ s old\\) is held by pid ${process.ppid} on host `));
+    expect(readLines(join(h, "ledger.jsonl"))).toHaveLength(before);
+  }, 30_000);
+
+  it("the sent row kept out by a lost lock: nothing is sent, and run fails as for any append that failed there (exit 1)", async () => {
+    const h = tmpHome();
+    await readySeat(h, SEAT, "1");
+    const calls = { n: 0 };
+    hook.loseLock = true;
+    const r = await cli(h, runArgs("j1"), { provider: provider({}, calls) });
+    expect(hook.loseLock).toBe(false);
+    expect({ code: r.code, calls: calls.n }).toEqual({ code: 1, calls: 0 });
+    expect(r.err).toMatch(/^imd-flop: ledger lock lost: /);
   }, 30_000);
 });
 

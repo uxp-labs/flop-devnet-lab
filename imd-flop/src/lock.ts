@@ -45,8 +45,14 @@ import { randomBytes } from "node:crypto";
 import { hostname } from "node:os";
 import { basename, dirname, join } from "node:path";
 
-/** The ledger lock could not be taken, or an append found it no longer ours. Either way that append wrote nothing. */
+/** The ledger lock could not be taken. Thrown before the guarded work runs, so nothing in it happened. */
 export class LedgerLockError extends Error {}
+
+/**
+ * An append found the lock no longer ours (it was removed by hand while this process was inside). The
+ * append wrote nothing. Not a busy ledger: it is a failed append, and callers treat it as one.
+ */
+export class LedgerLockLost extends Error {}
 
 /**
  * The ledger lock cannot be created at all: no permission to create the file, or a read only file system.
@@ -445,7 +451,7 @@ export function assertLockHeld(key: string): void {
   const lock = `${key}.lock`;
   const token = tokens.get(key);
   if (token === undefined || parseOwner(readText(lock))?.token !== token) {
-    throw new LedgerLockError(`ledger lock lost: ${lock} no longer carries this process's token, so nothing was appended`);
+    throw new LedgerLockLost(`ledger lock lost: ${lock} no longer carries this process's token, so nothing was appended`);
   }
 }
 
