@@ -36,11 +36,12 @@
 //   reach anything: every property src reads or writes is named in the code, where the rules above
 //   read it. src reads a data record by a run time key through own() in src/own.ts, which walks the
 //   record's own entries and never hands back a function.
-// - One exemption, for the composition root of the live read (RULES.md section 4): src/live-bin.ts
-//   may name the global WebSocket class and fetch, each exactly once, and only as the value of a
-//   plain property (no shorthand, no computed key, no method or getter) of the object literal that
-//   is the one argument of `new NetTransport(...)`. Every other rule still holds there, and no other
-//   module, nor a live-bin.ts in a subfolder, gets the exemption.
+// - One exemption, for the composition root of every network read (RULES.md section 4):
+//   src/net-root.ts may name the global WebSocket class and fetch, each exactly once, and only as the
+//   value of a plain property (no shorthand, no computed key, no method or getter) of the object
+//   literal that is the one argument of `new NetTransport(...)`. Every other rule still holds there,
+//   and no other module (the live command and the recorder take their transport from it), nor a
+//   net-root.ts in a subfolder, gets the exemption.
 // Before it scans src it proves itself: every BAD sample must fail and every GOOD sample must pass.
 // Known limit: the scan reads what src names, not what an allowed module does with the arguments
 // it is given; the runtime guard in the tests covers that.
@@ -167,9 +168,9 @@ const WRITE_RPC = /author_submit|eth_send(?:Raw)?Transaction|eth_sign|personal_s
 
 const SRC = join(pkg, "src");
 
-// The one exemption: the composition root of the live read, by its path inside src, and the two
-// globals it hands to the transport it makes.
-const COMPOSITION_ROOT = "live-bin.ts";
+// The one exemption: the composition root of every network read, by its path inside src, and the
+// two globals it hands to the transport it makes.
+const COMPOSITION_ROOT = "net-root.ts";
 const ROOT_GLOBALS = new Set(["WebSocket", "fetch"]);
 
 /**
@@ -216,7 +217,7 @@ function problems(code, file = "sample.ts", scanned = SCANNED) {
   // How often each exempted global has been named, in the composition root only.
   const rootUses = new Map();
   /**
-   * The exemption's one form: in src/live-bin.ts, WebSocket or fetch as the value of a plain
+   * The exemption's one form: in src/net-root.ts, WebSocket or fetch as the value of a plain
    * property of the object literal that is the one argument of new NetTransport(...).
    */
   const rootGlobal = (n, parent, key) => {
@@ -572,7 +573,7 @@ const GOOD = [
 // The composition root's exemption, in its one form, and every way it could widen: another use of
 // either global there, a second transport, another callee or argument list, a shorthand, computed,
 // method or getter property, another global, and the same form in any other module.
-const ROOT_FORM = "const t = new NetTransport({ socketClass: WebSocket, httpCall: fetch });";
+const ROOT_FORM = "const t = new NetTransport({ socketClass: WebSocket, httpCall: fetch, answerLimits });";
 const ROOT_GOOD = [ROOT_FORM, "const t = new NetTransport({ httpCall: fetch, socketClass: WebSocket, rpcUrl: url });"];
 const ROOT_BAD = [
   "const f = fetch;",
@@ -617,7 +618,7 @@ for (const code of ROOT_BAD) {
   const p = problems(code, COMPOSITION_ROOT);
   record(`catches in src/${COMPOSITION_ROOT}: ${code}`, p.length > 0 && !p.some((x) => x.startsWith("does not parse")), p.length ? p.join("; ") : "nothing found");
 }
-for (const file of ["cli.ts", "net.ts", "live/live-bin.ts", "live-bin.mts.ts", "xlive-bin.ts"]) {
+for (const file of ["cli.ts", "net.ts", "live-bin.ts", "record-bin.ts", "live/net-root.ts", "net-root.mts.ts", "xnet-root.ts"]) {
   const p = problems(ROOT_FORM, file);
   record(`catches in src/${file}, which is not the composition root: ${ROOT_FORM}`, p.some((x) => x === "uses WebSocket") && p.some((x) => x === "uses fetch"), p.length ? p.join("; ") : "nothing found");
 }

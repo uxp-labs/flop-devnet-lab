@@ -309,7 +309,7 @@
     "find": "    if (file !== COMPOSITION_ROOT || !ROOT_GLOBALS.has(n.name)) return false;",
     "replace": "    if (!ROOT_GLOBALS.has(n.name)) return false;",
     "test": "scripts/source-scan.mjs",
-    "why": "only src/live-bin.ts may name WebSocket and fetch"
+    "why": "only src/net-root.ts may name WebSocket and fetch"
   },
   {
     "id": "scan-root-exemption-any-use",
@@ -341,6 +341,6 @@
     "find": "  const exempted = (file: string, text: string) => (file === ROOT ? text.split(ROOT_FORM).join(\"\") : text);",
     "replace": "  const exempted = (file: string, text: string) => text.split(ROOT_FORM).join(\"\");",
     "test": "test/guard.test.ts",
-    "why": "the raw text scan exempts the one text in src/live-bin.ts only"
+    "why": "the raw text scan exempts the one text in src/net-root.ts only"
   }
 ]

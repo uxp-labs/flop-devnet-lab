@@ -445,7 +445,7 @@ Tests fail if any attempt is left in the log.
   system or global git config) and a `GITHUB_SERVER_URL` that is not `file://` refused. A call from
   any other file is recorded as a process attempt and throws, as every other process call does.
 - A source scan fails any `src` module, other than `guard.ts`, that imports one of those modules or
-  calls fetch, WebSocket, a signing API or a key API (`src/live-bin.ts` names fetch and WebSocket
+  calls fetch, WebSocket, a signing API or a key API (`src/net-root.ts` names fetch and WebSocket
   in the one form the exemption below allows, and calls neither). It also fails the indirect forms:
   `process.getBuiltinModule`, `createRequire`, an `import()` or `require()` whose argument is not
   a plain string, `process.binding`, `eval` and `Function`, called or not.
@@ -498,14 +498,15 @@ Tests fail if any attempt is left in the log.
   scans check that. It proves itself on known bad and good samples, and its file list on a throwaway
   folder, before it scans. What it cannot see is what an allowed module does with the arguments
   `src` passes it; the runtime block in the tests covers that.
-- One exemption, for the live read's composition root. `src/live-bin.ts` may name `WebSocket` and
-  `fetch`, each once, and only as the values of the plain properties of the one object literal it
-  hands to `new NetTransport(...)`. The syntax tree scan holds it to that form: no shorthand,
+- One exemption, for the composition root of every network read. `src/net-root.ts` may name
+  `WebSocket` and `fetch`, each once, and only as the values of the plain properties of the one
+  object literal it hands to `new NetTransport(...)`. The live command (`src/live-bin.ts`) and the
+  recorder (`src/record-bin.ts`) both take their one transport from it. The syntax tree scan holds it to that form: no shorthand,
   computed, method or getter property, no other callee, no second argument, no second use of either
   name, and every other rule still applies there. The text scan in `test/guard.test.ts` holds it to
-  the exact text `new NetTransport({ socketClass: WebSocket, httpCall: fetch })`, once, and reads
-  the rest of the file by every rule. No other module gets the exemption, nor a `live-bin.ts` in a
-  subfolder; both scans prove that on samples before they scan. Every other module reaches the
+  the exact text `new NetTransport({ socketClass: WebSocket, httpCall: fetch, answerLimits })`,
+  once, and reads the rest of the file by every rule. No other module gets the exemption, the two
+  commands included, nor a `net-root.ts` in a subfolder; both scans prove that on samples before they scan. Every other module reaches the
   network only through the transport it is handed, so a test hands it fakes.
 - `tools/recount.py` is read the same two ways: its own tests walk its syntax tree (exactly five
   plain imports, none under an alias and none of a submodule, no from-import, every use of a

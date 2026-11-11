@@ -2,7 +2,7 @@
 // gateway. Its trust is "trusted RPC": it trusts the one endpoint it reads, and proves nothing.
 //
 // It never names the global socket class or the global HTTP call. Both are handed to it, so a
-// test hands it fakes and no test opens a socket. src/live-bin.ts, the composition root, is the
+// test hands it fakes and no test opens a socket. src/net-root.ts, the composition root, is the
 // one module that names the real ones.
 //
 // Before anything is sent:

@@ -50,6 +50,7 @@ on:
       - "observatory/src/transport.ts"
       - "observatory/src/tape.ts"
       - "observatory/src/net.ts"
+      - "observatory/src/net-root.ts"
       - "observatory/src/rpc-head.ts"
       - "observatory/src/live-source.ts"
       - "observatory/src/live-run.ts"
