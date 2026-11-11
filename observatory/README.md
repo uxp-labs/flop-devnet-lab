@@ -5,7 +5,9 @@ census, and escrow states from finalized blocks. Output as a page, JSON feeds an
 
 M0 runs on saved fixtures only. No network, no keys, no spend, no signatures. The first step of
 live reads is one command that reads network status from FLOP devnet, read only, and nothing else
-([Live network status](#live-network-status)). Every other command still reads saved fixtures.
+([Live network status](#live-network-status)). A second one records what the RPC answers to a
+reviewed list of read calls, for building decoders ([Recordings](#recordings)). Every other command
+still reads saved fixtures.
 
 ## Check
 
@@ -230,17 +232,38 @@ names the list's hash, and a tape that holds exactly the calls of that list, in 
 answered or failed. It gives the calls with their answers, and the tape replays through
 `TapeTransport`.
 
+`.github/workflows/observatory-record.yml` runs it by hand, and on a push to any branch that changes
+the request list, the workflow or any src module the command is built from, and uploads the folder
+as an artifact. The record job reads the repository and nothing else, uses no secrets and no cache,
+and checks out without credentials. On main, when the record job exited 0, its publish job puts
+the recording on the branch `observatory-data` under `recordings/<id>/`, where `<id>` is the UTC
+time the run started as 14 digits, a dash and the first 16 hex of the request list's sha256, built
+by the shell from validated values only. A recording is immutable: when that folder is already
+there, the job changes nothing and says so. It writes nothing outside it, and the live publish job
+writes nothing inside `recordings/`. On any other branch the run is a smoke run and publishes
+nothing. A recording is copied into `fixtures/` by hand, with its provenance, when a decoder needs
+it.
+
+Offline, `npm test` covers the request list, the run over a fake socket that answers each call
+(answers, RPC errors, a time limit, answers over and under their limits, a socket refused), the
+reader on doctored copies, the workflow read as data, and both publish jobs' shells run with bash
+against a local bare repository, on one branch.
+
 ## Published readings
 
 On main, the publish job in `.github/workflows/observatory-live.yml` puts each live reading on the
-branch `observatory-data` of this repository. It holds block heights, hashes and service health.
-It holds no key and nothing personal. Every commit on it is made by that job.
+branch `observatory-data` of this repository, and the publish job in
+`.github/workflows/observatory-record.yml` puts each recording there. It holds block heights,
+hashes, service health and what the RPC answered to read calls. It holds no key and nothing
+personal. Every commit on it is made by one of those two jobs, and each leaves the other's paths
+alone.
 
 | Path on `observatory-data` | What |
 |---|---|
 | `latest/` | the output folder of the newest published run: `snapshot.json`, `status.json`, `escrows.json`, `census.json`, `drift.json`, `snapshots.jsonl`, `tape.jsonl`, `run.json` and `SHA256SUMS`. Each run replaces it whole |
 | `log/<UTC date>.jsonl` | one snapshot per line, one line for each reading published that day, as the run's `snapshots.jsonl` holds it. Read in name order, the day files are one hash chained log: each line names the hash of the line before it. The readings published before runs kept memory are each `seq` 0 with no `prev_hash`, at the start of the log |
 | `README.md` | what the branch is, written when it is missing |
+| `recordings/<id>/` | one recording each: `tape.jsonl`, `run.json` and `SHA256SUMS`, written once by the record workflow's publish job and never changed ([Recordings](#recordings)) |
 
 A run is published only when it wrote a truthful snapshot: exit 0, or exit 3 for a reset signal.
 A run that broke or was refused leaves the branch as it was, so `latest/` can be old: check its
@@ -300,7 +323,11 @@ The two interfaces other teams import are in [../interfaces](../interfaces).
 | `src/rpc-head.ts`, `src/live-source.ts` | the RPC answers turned into a head, and the Source over a transport |
 | `src/live-run.ts`, `src/live-bin.ts` | one live run and its files, and the command |
 | `src/net-root.ts` | the one module that names the real socket class and HTTP call: the live command and the recorder take their transport from it |
-| `src/sums.ts` | the one form of `SHA256SUMS`, for the live run that writes it and the reader that checks it |
+| `src/sums.ts` | the one form of `SHA256SUMS`, and the check of a folder against it, for the runs that write it and the readers that check it |
+| `src/run-command.ts` | what the live run and the recorder share: exit codes, flags, `SHA256SUMS` over the folder, how the command ends |
+| `src/requests.ts`, `recordings/requests.json` | the request list's form, and the first list |
+| `src/record-run.ts`, `src/record-bin.ts` | one record run and its files, and the command |
+| `src/recording.ts` | the reader contract for a recording |
 | `src/published.ts` | the reader contract for `latest/` on the branch `observatory-data` |
 | `src/snapshot.ts`, `src/cli.ts` | one pass and the command line |
 | `src/snapshot-check.ts`, `src/mcp-bin.ts` | every check a snapshot must pass before the MCP binary serves it, each by name, and the binary that reads, checks and serves it |
@@ -310,7 +337,7 @@ The two interfaces other teams import are in [../interfaces](../interfaces).
 | `fixtures/` | saved scenarios; `meta.json` says which values are real and which are made up; `live-*` and `memory-*` are synthetic tapes; `published-*` are real readings from the data branch, with their provenance |
 | `mutants/` | the injected bugs and the tests that must catch them |
 | `REVIEW-LOG.md` | what each outside review and independent rerun found, and the fix and proof for each, newest first |
-| `test/setup.ts` | the runtime block on every network and process path, its one exemption (`runShell`, for `test/publish-shell.test.ts` only), the leftover attempt check, and the attempts journal |
+| `test/setup.ts` | the runtime block on every network and process path, its one exemption (`runShell`, for `test/publish-shell.test.ts` only, which runs both publish jobs' shells), the leftover attempt check, and the attempts journal |
 | `test/global-setup.ts`, `scripts/attempts-check.mjs` | the journal check once every test file has ended, and again after the run |
 | `scripts/tracked.mjs` | the copy of exactly the tracked files that the mutation runner and the canary work in |
 | `scripts/check.sh` | the check |

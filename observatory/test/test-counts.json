@@ -24,8 +24,8 @@
     "names": "bd439ca49837d3e62977352e9315883dd115a9abd92613ad412e6457ee0f7bc5"
   },
   "guard.test.ts": {
-    "tests": 76,
-    "names": "a8eab4e3eedf5630979b31841b7bb2f7f1d3ee302e107659c6433288493f326d"
+    "tests": 82,
+    "names": "306a9c7fb41b670bbb82ed3db21c6d5bb64f7af43ca9945bac3bd9b86dda029f"
   },
   "history.test.ts": {
     "tests": 8,
@@ -52,20 +52,36 @@
     "names": "6411fd587a94ddb736eee8a5b021a067f97eccd35b396d37f8cf6149f60402eb"
   },
   "net.test.ts": {
-    "tests": 31,
-    "names": "6c475f5284b85a6146e58adad5571ced6c7eac01d956a15ddbf0fb109c5d836e"
+    "tests": 36,
+    "names": "cf3456300c8dafe090a66ccfd2b8ba5a8d686a6cee78a5ce27a0b358c137de24"
   },
   "page.test.ts": {
     "tests": 40,
     "names": "c1629a5c9e7fa1134a7e062494c93ae5e762fbe1cc26328108e74d808eb49693"
   },
   "publish-shell.test.ts": {
-    "tests": 39,
-    "names": "89b69685a4e142f2f2ea02e2c404d71c92b96fc51984d709b727b140dff339c2"
+    "tests": 74,
+    "names": "2f76753f1047a4060acec9eaecda62184417f6a47324f6a11c81bbf328370fcc"
   },
   "published.test.ts": {
     "tests": 21,
     "names": "903d704885ae6f13255754cd80c7df684a1f721cb9c697dc7dd4a3825d546ce8"
+  },
+  "record-run.test.ts": {
+    "tests": 22,
+    "names": "cff429df7715470029ca532f56d1411e057beec2f7b90e731217031ef9909c0b"
+  },
+  "record-workflow.test.ts": {
+    "tests": 18,
+    "names": "b76fc93903973b1ef0ef34a8a39359436bccd139857557aec0eac1f3522e15b2"
+  },
+  "recording.test.ts": {
+    "tests": 21,
+    "names": "e11d508e2ff7c94d2653444eaab80dae64322643f284dec9e2d755c07bce3f90"
+  },
+  "requests.test.ts": {
+    "tests": 22,
+    "names": "813c6354b20649549fd2e627109a2bc4615a1499757b6c4acc8a55263e7a6346"
   },
   "review-memory.test.ts": {
     "tests": 2,
