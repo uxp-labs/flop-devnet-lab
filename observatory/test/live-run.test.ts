@@ -246,6 +246,8 @@ describe("runLive over the live transport, with a fake network", () => {
     expect([first.r.code, sockets]).toEqual([EXIT.ok, 1]);
     const recorded = first.r.snapshot as Snapshot;
     expect([recorded.trust, recorded.status.trust, recorded.pin.source]).toEqual(["trusted RPC", "trusted RPC", "live:rpc wss://rpc.devnet.flop.network"]);
+    // The MCP binary's checks pass for it: a live snapshot can be served as any other.
+    expect(checkSnapshot(json(first.out, "snapshot.json"))).toEqual([]);
     expect(first.r.notice).toContain('"trust":"trusted RPC"');
     // What it recorded is what the fixture tape holds, request for request.
     expect(read(first.out, "tape.jsonl")).toBe(tapeText("live-healthy"));
