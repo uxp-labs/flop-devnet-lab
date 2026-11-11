@@ -24,8 +24,8 @@
     "names": "bd439ca49837d3e62977352e9315883dd115a9abd92613ad412e6457ee0f7bc5"
   },
   "guard.test.ts": {
-    "tests": 86,
-    "names": "b99251012084ffc2ed81d1064611d5fb46ff76c279a35f713760d313fc881f3b"
+    "tests": 87,
+    "names": "e65a4664f01ddb92c86fc866da8fa81e2cb0feb6e3fd06004b7b755e01fb3801"
   },
   "hash.test.ts": {
     "tests": 20,
@@ -98,6 +98,10 @@
   "rpc-head.test.ts": {
     "tests": 19,
     "names": "91fe904982e61644eeb892bfad19b911f8c48c2e803742e26397ca7da72677fa"
+  },
+  "scale-decode.test.ts": {
+    "tests": 18,
+    "names": "696dfbd6dc3612a4c11bf7215479040b8a2a78ad1fe07f28c949e66d748d2b31"
   },
   "scale-metadata.test.ts": {
     "tests": 22,
