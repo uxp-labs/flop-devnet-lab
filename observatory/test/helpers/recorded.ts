@@ -2,13 +2,18 @@
 // judgeRecording with the request list it was made from, and laid out by block for the decoder
 // tests. Real data from one RPC endpoint: evidence for building the decoder, never proof of chain
 // state (RULES.md section 8).
+//
+// The list it was made from is the fixture's own copy, requests.json in its folder, byte for byte
+// the list recordings/requests.json held when the recording was made (its sha256 is the one
+// run.json names). recordings/requests.json is the list to be recorded next, so it moves on.
 import { readFileSync } from "node:fs";
 import { type RecordedCall, judgeRecording } from "../../src/recording.js";
 
 export const RECORDING = "recording-20261111160917-3c228907aa129a01";
 const FIXTURE = new URL(`../../fixtures/${RECORDING}/`, import.meta.url);
 export const fixtureText = (name: string) => readFileSync(new URL(name, FIXTURE), "utf8");
-export const REQUESTS_TEXT = readFileSync(new URL("../../recordings/requests.json", import.meta.url), "utf8");
+/** The request list the recording was made from: the fixture's own copy. */
+export const REQUESTS_TEXT = fixtureText("requests.json");
 
 /** The three files of the recording as published, by name. */
 export const recordingFiles = (): Record<string, string> => ({

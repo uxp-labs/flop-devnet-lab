@@ -2,6 +2,7 @@
 // three files as the record workflow published them, read through judgeRecording with the request
 // list they were made from, and its meta.json held to what run.json and the files say.
 import { createHash } from "node:crypto";
+import { readdirSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { writtenValue } from "../src/feed.js";
 import { judgeRecording } from "../src/recording.js";
@@ -13,7 +14,9 @@ const EVENTS_BYTES = [2226, 550, 624, 484, 1119, 538, 535, 579, 535, 749, 784, 1
 
 describe("the first real recording, as a fixture", () => {
   it("is usable through judgeRecording with the request list it names", () => {
+    // The list is the fixture's own copy, and its sha256 is the one run.json names.
     expect(sha256(REQUESTS_TEXT)).toBe("3c228907aa129a0190e3df130b7c6bb3efc99783a32be1b16137a86e827d6c20");
+    expect(sha256(REQUESTS_TEXT)).toBe((JSON.parse(fixtureText("run.json")) as Record<string, unknown>).request_list_sha256);
     const j = judgeRecording(recordingFiles(), REQUESTS_TEXT);
     expect(j.usable).toBe(true);
     if (!j.usable) return;
@@ -22,6 +25,7 @@ describe("the first real recording, as a fixture", () => {
   });
 
   it("holds exactly the published files and a meta.json in the written form that says where they came from", () => {
+    expect(readdirSync(new URL(`../fixtures/${RECORDING}/`, import.meta.url)).sort()).toEqual(["SHA256SUMS", "meta.json", "requests.json", "run.json", "tape.jsonl"]);
     const meta = writtenValue("meta.json", fixtureText("meta.json"));
     expect(typeof meta).toBe("object");
     const m = (meta as { value: Record<string, unknown> }).value;
@@ -36,6 +40,7 @@ describe("the first real recording, as a fixture", () => {
         revision: run.source_sha,
         started_at: run.started_at,
         ended_at: run.ended_at,
+        request_list_copy: "requests.json",
         request_list_sha256: run.request_list_sha256,
         tape_sha256: sha256(fixtureText("tape.jsonl")),
       },
