@@ -25,6 +25,7 @@ import { bookFailure, bookRead } from "../src/booking.js";
 import { PreSendError } from "../src/gateway.js";
 import { utcDay } from "../src/ledger.js";
 import type { CompleteReq, CompleteRes, Provider } from "../src/providers.js";
+import { LEDGER_BUSY } from "../src/receipt-store.js";
 import { CHARGE_RAISED, decideBooking, decideFailure, DISAGREE, type Failure } from "../src/settlement.js";
 import { cli, readLines, readySeat, tmpHome } from "./helpers.js";
 
@@ -547,18 +548,35 @@ describe("pin: after the paid call, when the booking step cannot run", () => {
     expect(JSON.parse(readFileSync(join(h, "responses", `${rows[0].request_id}.json`), "utf8")).text).toBe("ok");
     expect(await today(h)).toBe(0.186);
   });
+});
 
-  it("receipt --refresh, the lock cannot be taken: the read is stored, nothing is booked, DISAGREE is printed, exit 0", async () => {
+describe("fails on 9adfd17: a refresh that cannot take the ledger lock says the ledger was busy, not that receipt and ledger disagree", () => {
+  // Booking step, review of the audit 8ddc5d2 fixes, decision 2. This was the pin "receipt --refresh, the
+  // lock cannot be taken: the read is stored, nothing is booked, DISAGREE is printed, exit 0". Kept: the read
+  // is stored, nothing is booked, exit 0. Changed: the stderr line. A busy ledger is not a disagreement, and
+  // since the booking step takes the lock before it decides, the old line was also printed for a read that
+  // had nothing to book. DISAGREE on stderr stays for a read that was refused, and for an append that failed
+  // (test/audit-v3.test.ts).
+  const BUSY = `${LEDGER_BUSY} (ledger lock timeout)`;
+
+  it("a read with nothing to book: the busy line, no status, exit 0; then a read that settles: the busy line, and the files do disagree", async () => {
     const h = await ready();
     const rid = await pendingRun(h);
     const before = readFileSync(ledgerPath(h), "utf8");
     const lock = `${ledgerPath(h)}.lock`;
     writeFileSync(lock, JSON.stringify({ pid: process.pid, host: hostname(), token: "other" }));
-    const refreshed = await cli(h, refreshArgs(rid), { provider: new P({ read: settledAt(0.05) }) });
+    const same = await cli(h, refreshArgs(rid), { provider: new P({ read: pending }) });
+    expect({ code: same.code, err: same.err, status: same.json().status, ledger_state: same.json().ledger_state }).toEqual({ code: 0, err: BUSY, status: undefined, ledger_state: "estimated" });
+    const settles = await cli(h, refreshArgs(rid), { provider: new P({ read: settledAt(0.05) }) });
     rmSync(lock);
-    expect({ code: refreshed.code, err: refreshed.err, status: refreshed.json().status, settled: refreshed.json().settled, ledger_state: refreshed.json().ledger_state })
-      .toEqual({ code: 0, err: DISAGREE, status: DISAGREE, settled: 0.05, ledger_state: "estimated" });
+    // The status is read from the files: the stored read settles and the ledger row is still pending.
+    expect({ code: settles.code, err: settles.err, status: settles.json().status, settled: settles.json().settled, ledger_state: settles.json().ledger_state })
+      .toEqual({ code: 0, err: BUSY, status: DISAGREE, settled: 0.05, ledger_state: "estimated" });
     expect(readFileSync(ledgerPath(h), "utf8")).toBe(before);
+    expect(BUSY).not.toContain("disagree");
+    // With the lock free the same refresh books the read and says nothing.
+    const again = await cli(h, refreshArgs(rid), { provider: new P({ read: settledAt(0.05) }) });
+    expect({ code: again.code, err: again.err, status: again.json().status, last: booked(ledger(h).at(-1)!) }).toEqual({ code: 0, err: "", status: undefined, last: { state: "settled", spend: 0.05, cap_charge: 0.05 } });
   }, 30_000);
 });
 

@@ -9,7 +9,7 @@ import { join } from "node:path";
 import { CliError, EXIT } from "./errors.js";
 import { readIdentity } from "./keys.js";
 import { bookRead } from "./booking.js";
-import { latestAttempts, type LedgerEntry } from "./ledger.js";
+import { latestAttempts, LedgerLockError, type LedgerEntry } from "./ledger.js";
 import { matchable, matchReceipt, type ReceiptIds } from "./match.js";
 import { receiptsDir } from "./paths.js";
 import type { Provider } from "./providers.js";
@@ -106,10 +106,17 @@ function refreshedBody(saved: SavedReceipt | null, ident: Record<string, unknown
 }
 
 /**
+ * What `receipt --refresh` prints on stderr when it could not take the ledger lock: another process held
+ * it. The read is stored and nothing is booked. That is not a disagreement, so it is not the DISAGREE line.
+ */
+export const LEDGER_BUSY = "ledger busy; the receipt read was stored and nothing was booked";
+
+/**
  * `receipt <id> --refresh`: read the receipt again, store it, and book what it proves through the booking
- * step, against the latest ledger row of the request. `warn` receives the DISAGREE line at the moment the
- * read is not booked: the booking step refused it, or the step could not run. Whether the stored receipt
- * and the ledger disagree afterwards is not decided here: receiptVerdicts reads it from the files.
+ * step, against the latest ledger row of the request. `warn` receives one line when the read is not
+ * booked: DISAGREE when the booking step refused it or its append failed, LEDGER_BUSY when the ledger
+ * lock could not be taken. Whether the stored receipt and the ledger disagree afterwards is not decided
+ * here: receiptVerdicts reads it from the files.
  */
 export async function refreshReceipt(
   h: string,
@@ -136,11 +143,12 @@ export async function refreshReceipt(
     // Disagree: a read below a booked settlement, or an unknown charge with no proven settlement (never substitute 0).
     if (booked.outcome === "disagree") warn(DISAGREE);
     return { saved, ledgerRow: booked.row };
-  } catch {
-    // The booking step could not run: the ledger lock could not be taken, or the append failed. The read
-    // is stored and not booked, and the latest row keeps its reservation.
-    const ledgerRow = latestAttempts(h).find((e) => e.request_id === rid);
-    warn(DISAGREE);
+  } catch (e) {
+    // The booking step could not run. The read is stored and not booked, and the latest row keeps its
+    // reservation. A lock that could not be taken says nothing about the read, so it gets its own line.
+    // A failed append means a booking was due and is not in the ledger.
+    const ledgerRow = latestAttempts(h).find((row) => row.request_id === rid);
+    warn(e instanceof LedgerLockError ? `${LEDGER_BUSY} (${e.message})` : DISAGREE);
     return { saved, ledgerRow };
   }
 }
