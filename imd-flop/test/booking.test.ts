@@ -9,8 +9,9 @@
  *     `receipt <id>` and `status`. Its cases are the shared vectors in contract/vectors/reconcile.json.
  * Each test asserts the safe outcome. The blocks named "fails on dbffac0" failed on that commit, the one the
  * review read, and pass with the booking step. The blocks named "fails on 9adfd17" failed on the first
- * build of the booking step, which covered receipt reads only. The blocks named "pin" passed on dbffac0 too:
- * they hold a behavior the booking step must keep.
+ * build of the booking step, which covered receipt reads only. The blocks named "fails on a3d71d6" failed
+ * on the commit the review of the booking step read, and pass with its fixes. The blocks named "pin" passed
+ * on dbffac0 too: they hold a behavior the booking step must keep.
  * Stub providers only; no network (test/setup.ts disables fetch). A second process is stood in for by a
  * stub whose readReceipt runs the other reader before it answers, or by a child process that holds the real
  * ledger lock.
@@ -701,9 +702,10 @@ describe("fails on 9adfd17: a refresh that cannot take the ledger lock says the 
   }, 30_000);
 });
 
-describe("after the paid call, when the ledger no longer holds the request's row", () => {
-  it("run writes the row again and books against it, so the paid call stays on the books", async () => {
-    // On dbffac0 run appended one full row, built from the row it held in memory. The booking is the same.
+describe("fails on dbffac0: after the paid call, when the ledger no longer holds the request's row", () => {
+  it("the booking step writes run's row again and books against it, so the paid call stays on the books", async () => {
+    // On dbffac0 run appended one full row, built from the row it held in memory, so the ledger held that
+    // row only and not the sent row. The booking is the same.
     const h = await ready();
     const read: Reader = (id) => {
       rmSync(ledgerPath(h));
@@ -717,9 +719,10 @@ describe("after the paid call, when the ledger no longer holds the request's row
   });
 });
 
-describe("after a failed call, when the ledger no longer holds the request's row", () => {
-  it("run writes the row again and books the timeout against it, so the reservation is held", async () => {
-    // On 9adfd17 run appended one full timeout row, built from the row it held in memory. The booking is the same.
+describe("fails on dbffac0: after a failed call, when the ledger no longer holds the request's row", () => {
+  it("the booking step writes run's row again and books the timeout against it, so the reservation is held", async () => {
+    // On dbffac0 and on 9adfd17 run appended one full timeout row, built from the row it held in memory, so
+    // the ledger held that row only and not the sent row. The booking is the same.
     const h = await ready();
     const complete = (req: CompleteReq) => {
       rmSync(ledgerPath(h));

@@ -218,7 +218,7 @@
         "imd-flop"
       ],
       "summary": "A fresh refresh that is unusable (no settling state, or wrong identity) writes spend null over a previously booked spend; cap_charge stays.",
-      "fixed_behavior": "A read that is not a fresh, identity-matched settlement leaves the booked spend, cap_charge and state alone; only a trusted read moves the state, never from settled/released back to pending (settlement.ts nextBooking). Same root as IMD TS M1 (cli.ts:451). Booking step, review of the audit 8ddc5d2 fixes: nextBooking and refreshBooking are now the one decision settlement.ts decideBooking, with the same rule. One change: the reported cost a row records may raise its cap_charge on any refresh, not only on one that reads a trusted settlement (known defect KD-6)."
+      "fixed_behavior": "A read that is not a fresh, identity-matched settlement leaves the booked spend, cap_charge and state alone; only a trusted read moves the state, never from settled/released back to pending (settlement.ts nextBooking). Same root as IMD TS M1 (cli.ts:451). Booking step, review of the audit 8ddc5d2 fixes: nextBooking and refreshBooking are now the one decision settlement.ts decideBooking, with the same rule. One change: the reported cost a row records may raise its cap_charge on any refresh, not only on one that reads a trusted settlement (known defect KD-9)."
     },
     {
       "id": "R-b",
@@ -388,6 +388,18 @@
       "target": "every ledger row run writes after the paid call goes through the booking step against the latest row of the request, under the ledger lock; a failure report never replaces a booked settlement",
       "status": "fixed: booking step, review of the audit 8ddc5d2 fixes",
       "fixed_behavior": "settlement.ts decideFailure(prev, failure) is the one decision for a failure report (timeout_unknown, error, or refused_local for a failure before anything was sent): a row in a settling state stays; a timeout or a gateway error moves a row that does not settle to timeout_unknown or error, and spend and charge stay; 'nothing was sent' releases the reservation (refused_local, cap_charge 0) only from a row still in state sent (review of the booking step: it released any row that does not settle, including reserved and estimated rows that only a trusted gateway read produces); a charge that is not a known amount is never replaced. booking.ts bookFailure(h, requestId, failure, info) books it under the ledger lock on the same step as bookRead. A booked report records run's reason and HTTP status on the row it moves. Review of the booking step: a report that is not booked is still recorded (it appended nothing before): one row keeps state, spend and charge exactly, with reason settlement.ts keptReason (the report named, 'booked settlement kept' or 'booked row kept') and the report's http. run keeps its exit code; its message says what the ledger kept, and when the ledger holds a settlement for the request it says so and does not call the spend unknown. Pinned by imd-flop/test/booking.test.ts and the decideFailure properties in imd-flop/test/decision-properties.test.ts. Review of the booking step closed the gap this left open: a trusted read that moves a refused_local row now holds the row's quote_padded again (raised by a reported cost), and when quote_padded is not a known amount the read disagrees and nothing changes (settlement.ts decideBooking). A trusted read and a 'nothing was sent' report book the same spend and charge in either order (decision-properties.test.ts)."
+    },
+    {
+      "id": "KD-9",
+      "source": "found by the independent review of the audit 8ddc5d2 fixes, 2026-11-11",
+      "parts": [
+        "imd-flop"
+      ],
+      "where": "src/settlement.ts nextBooking (dbffac0): a reported cost raised the cap_charge only when the read proved a settlement; any other read kept the charge as booked",
+      "today": "a settled row booked below the cost its completion reported (booked before a reported cost could raise a settled charge) stayed charged below that cost after any refresh that did not read a trusted settlement: a failed read, a pending read, or a read below the booked settlement",
+      "target": "a reported cost may raise a charge and never lowers it, on a hold and on a settlement alike, whatever the read",
+      "status": "fixed: booking step, review of the audit 8ddc5d2 fixes",
+      "fixed_behavior": "settlement.ts decideBooking raises a known charge to the reported cost on every read, including a read that is not trusted and a read below a booked settlement; state and spend follow the usual rules, and a charge that is not a known amount is never replaced by a guess. A settled row booked below its reported cost is raised by the next receipt --refresh for it, whatever that refresh reads, and its reason reads 'cap charge raised to reported cost'. Pinned by imd-flop/test/booking.test.ts ('fails on dbffac0: a reported cost raises a charge on a hold and on a settlement alike')."
     }
   ]
 }

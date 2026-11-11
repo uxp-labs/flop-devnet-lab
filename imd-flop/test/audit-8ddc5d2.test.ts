@@ -179,7 +179,7 @@ describe("finding 2: a later read never lowers a booked settlement, and a report
       expect(decideBooking(sent, read("settled", 0.05), null).booking).toEqual({ state: "settled", spend: 0.05, cap_charge: 0.05 });
     });
 
-    it("a refresh takes the reported cost from the ledger row (reportedCost), and ignores one that is not a finite number", () => {
+    it("a reported cost counts only when reportedCost reads a finite number: 0.15 raises the settled charge, and anything else leaves it", () => {
       const prev = { state: "estimated", spend: null, cap_charge: 0.186 };
       expect(decideBooking(prev, read("settled", 0.05), reportedCost(0.15))).toEqual({ booking: { state: "settled", spend: 0.05, cap_charge: 0.15 }, disagree: false });
       for (const bad of [null, undefined, "0.15", Number.NaN, Number.POSITIVE_INFINITY]) {

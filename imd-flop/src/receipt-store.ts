@@ -114,8 +114,8 @@ export const LEDGER_BUSY = "ledger busy; the receipt read was stored and nothing
 /**
  * `receipt <id> --refresh`: read the receipt again, store it, and book what it proves through the booking
  * step, against the latest ledger row of the request. `warn` receives one line when the read is not
- * booked: DISAGREE when the booking step refused it or its append failed, LEDGER_BUSY when the ledger
- * lock could not be taken. Whether the stored receipt and the ledger disagree afterwards is not decided
+ * booked: LEDGER_BUSY when the ledger lock could not be taken (LedgerLockError), and DISAGREE when the
+ * booking step refused the read or threw anything else, a failed append for one. Whether the stored receipt and the ledger disagree afterwards is not decided
  * here: receiptVerdicts reads it from the files.
  */
 export async function refreshReceipt(
@@ -146,7 +146,7 @@ export async function refreshReceipt(
   } catch (e) {
     // The booking step could not run. The read is stored and not booked, and the latest row keeps its
     // reservation. A lock that could not be taken says nothing about the read, so it gets its own line.
-    // A failed append means a booking was due and is not in the ledger.
+    // Any other exception, a failed append for one, may mean a booking was due and is not in the ledger.
     const ledgerRow = latestAttempts(h).find((row) => row.request_id === rid);
     warn(e instanceof LedgerLockError ? `${LEDGER_BUSY} (${e.message})` : DISAGREE);
     return { saved, ledgerRow };
