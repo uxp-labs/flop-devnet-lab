@@ -45,6 +45,21 @@ export interface StatusOptions {
   earlierBest?: readonly EarlierBest[] | null;
 }
 
+/** One earlier snapshot's runtime version and the RPC genesis it read it on (RULES.md 1.1, the spec floor). */
+export interface EarlierSpec {
+  genesis: string;
+  runtime_version: number;
+}
+
+/**
+ * The anchor (RULES.md 1.1): the latest finalized head an earlier snapshot logged on the pinned
+ * genesis. A live run reads the block hash at its height back and compares it with this hash.
+ */
+export interface Anchor {
+  height: number;
+  hash: string;
+}
+
 /** One earlier snapshot's best height and the RPC genesis it read it on. */
 export interface EarlierBest {
   genesis: string;

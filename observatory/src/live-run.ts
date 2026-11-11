@@ -159,7 +159,7 @@ export async function runLive(transport: Transport, o: RunOptions): Promise<RunR
       await source.read();
       // The snapshot time is taken once every reading is in, so no reading is later than it.
       const now = recorder.now();
-      const fresh = await buildSnapshot({ status: source }, { pinnedGenesis: DEVNET_GENESIS, now, sourceSha: o.sourceSha, ...earlierOf(history.snapshots) });
+      const fresh = await buildSnapshot({ status: source }, { pinnedGenesis: DEVNET_GENESIS, now, sourceSha: o.sourceSha, ...earlierOf(history.snapshots, DEVNET_GENESIS) });
       snapshot = sealSnapshot(fresh, history.snapshots.at(-1));
       writeFileSync(join(o.out, "snapshots.jsonl"), logLine(snapshot));
       writeFeeds(o.out, snapshot);
