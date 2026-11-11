@@ -198,6 +198,83 @@ try { withLedgerLock(${JSON.stringify(h)}, () => {}); process.stdout.write("TAKE
   }, 60_000);
 });
 
+describe("the liveness probe: EPERM means alive (review M29)", () => {
+  it("the pure rule: an owner on this host is dead only when the alive operation says its pid is gone", () => {
+    const me = self(4_000_010, "me");
+    const ask = (aliveAnswer: boolean) => {
+      const g = provablyDead(me, { pid: 4_000_011, host: hostname(), token: "o" });
+      const op = g.next();
+      expect(op.value).toEqual({ kind: "alive", pid: 4_000_011 });
+      return g.next(aliveAnswer).value;
+    };
+    expect(ask(true)).toBe(false);
+    expect(ask(false)).toBe(true);
+  });
+
+  it("the real driver: a process of another user probing this root process gets EPERM, and judges it alive", () => {
+    const h = tmpHome();
+    const script = join(h, "probe.mjs");
+    writeFileSync(script, `
+const { provablyDead, runOnDisk } = await import(${JSON.stringify(`file://${join(root, "dist", "lock.js")}`)});
+const { hostname } = await import("node:os");
+const me = { pid: process.pid, host: hostname(), token: "me", held: new Set(["me"]) };
+let eperm = false;
+try { process.kill(Number(process.argv[2]), 0); } catch (e) { eperm = e.code === "EPERM"; }
+const dead = runOnDisk(provablyDead(me, { pid: Number(process.argv[2]), host: hostname(), token: "root" }), () => {});
+const gone = runOnDisk(provablyDead(me, { pid: Number(process.argv[3]), host: hostname(), token: "gone" }), () => {});
+process.stdout.write(JSON.stringify({ uid: process.getuid(), eperm, dead, gone }));
+`);
+    chmodSync(h, 0o755);
+    chmodSync(script, 0o644);
+    const r = spawnSync("setpriv", ["--reuid=65534", "--regid=65534", "--clear-groups", process.execPath, script, String(process.pid), String(deadPid())], { encoding: "utf8", timeout: 30_000 });
+    expect(JSON.parse(r.stdout || "null"), r.stderr).toEqual({ uid: 65534, eperm: true, dead: false, gone: true });
+  }, 30_000);
+});
+
+describe("a right file with no readable owner means no right (review M2)", () => {
+  it("not JSON: the waiter gets no right, removes nothing and makes no next level", () => {
+    const h = tmpHome();
+    const lock = lockPath(h);
+    writeFileSync(lock, owner(deadPid(), "T"));
+    writeFileSync(rightPath(lock, "T", 1), "not json");
+    expect(runOnDisk(reclaim(self(4_000_020, "c"), lock, "T"), noWait)).toBe(false);
+    expect(lockFiles(h)).toEqual(["ledger.jsonl.lock", "ledger.jsonl.lock.reclaim.T.1"]);
+  });
+
+  it("mode 000 (cannot be read under the suite's dropped capabilities): no right, and the timeout names it", () => {
+    const h = tmpHome();
+    const lock = lockPath(h);
+    const dead = deadPid();
+    writeFileSync(lock, owner(dead, "T"));
+    writeFileSync(rightPath(lock, "T", 1), owner(deadPid(), "r"));
+    chmodSync(rightPath(lock, "T", 1), 0o000);
+    try {
+      expect(runOnDisk(reclaim(self(4_000_021, "c"), lock, "T"), noWait)).toBe(false);
+      expect(lockFiles(h)).toEqual(["ledger.jsonl.lock", "ledger.jsonl.lock.reclaim.T.1"]);
+      expect(() => withLedgerLock(h, () => 1)).toThrow(new RegExp(`was held by pid ${dead} on host \\S+, which is gone, and its reclaim right \\S+reclaim\\.T\\.1 \\(\\d+ s old\\) has no readable owner\\. If no imd-flop`));
+      expect(lockFiles(h)).toEqual(["ledger.jsonl.lock", "ledger.jsonl.lock.reclaim.T.1"]);
+    } finally {
+      chmodSync(rightPath(lock, "T", 1), 0o644);
+    }
+  }, 20_000);
+});
+
+/*
+ * Mutants of the review that survive and are harmless, so no test is needed for them:
+ *  - M14, a lock that vanished between the create and the read waits in place of trying again at once.
+ *    That is now the rule itself (review defect 1): an attempt answers "again" only after this process
+ *    removed the lock. It costs one 25 ms wait.
+ *  - M15, parseOwner accepts a pid of 0 or below. This tool only ever writes process.pid, which is above 0,
+ *    so a lock with such a pid is damage, outside the promise. pid 0 and pid -1 probe as alive (the probe
+ *    reaches a process group, or every process), so such a lock fails closed. A negative pid whose process
+ *    group is gone would probe as dead and be reclaimed: that is why the guard stays, although no lock the
+ *    tool writes can reach it.
+ *  - M19, release keeps its token in the held set. Tokens are random and never reused, so a released token
+ *    is carried by no lock, unless the release could not remove the lock. Then the mutant keeps this
+ *    process's own leftover lock alive for as long as it lives: it fails closed. The release test above
+ *    reclaims that leftover at once in the same process, so it kills M19 too.
+ */
+
 describe("L4: no age rule", () => {
   it("a provably dead owner's lock is reclaimed at once, however young", () => {
     const h = tmpHome();
