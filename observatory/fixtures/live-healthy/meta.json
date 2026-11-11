@@ -1,0 +1,6 @@
+{
+  "scenario": "live-healthy",
+  "description": "A healthy devnet reading: faucet, gateway and RPC all answer, on the pinned genesis, finalized 2 blocks behind best. Every value is made up for this test, shaped after the devnet as read on 2026-11-11.",
+  "now": "2026-11-11T06:00:01.000Z",
+  "synthetic": true
+}

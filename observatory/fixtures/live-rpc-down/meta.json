@@ -1,0 +1,6 @@
+{
+  "scenario": "live-rpc-down",
+  "description": "The RPC socket fails: every call fails with the socket's error, so the finalized header and the runtime version are never asked for. Faucet and gateway answer. Every value is made up for this test, shaped after the devnet as read on 2026-11-11.",
+  "now": "2026-11-11T06:00:01.000Z",
+  "synthetic": true
+}

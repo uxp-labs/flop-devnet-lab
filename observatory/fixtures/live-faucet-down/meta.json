@@ -1,0 +1,6 @@
+{
+  "scenario": "live-faucet-down",
+  "description": "The faucet answers HTTP 503 with a body that is not JSON, on /health and /chain. Gateway and RPC answer. Every value is made up for this test, shaped after the devnet as read on 2026-11-11.",
+  "now": "2026-11-11T06:00:01.000Z",
+  "synthetic": true
+}

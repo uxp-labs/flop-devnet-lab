@@ -1,0 +1,6 @@
+{
+  "scenario": "live-faucet-disagrees",
+  "description": "The faucet /chain reports another genesis than the pinned one, while the RPC reports the pinned one. Every value is made up for this test, shaped after the devnet as read on 2026-11-11.",
+  "now": "2026-11-11T06:00:01.000Z",
+  "synthetic": true
+}

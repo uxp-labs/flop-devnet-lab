@@ -1,0 +1,6 @@
+{
+  "scenario": "live-oversize",
+  "description": "The best header's answer was larger than the size limit, so the socket failed and the runtime version call after it failed too. The gateway's body was over the limit as well. Every value is made up for this test, shaped after the devnet as read on 2026-11-11.",
+  "now": "2026-11-11T06:00:01.000Z",
+  "synthetic": true
+}
