@@ -155,6 +155,32 @@ describe("D (review fixes 2): the \"raised to reported cost\" note only when the
   });
 });
 
+describe("A (review fixes 2): a settled_spend_raw of 64 or more digits is redacted, and the hold stays", () => {
+  // settled_spend_raw is decimal digits with no length limit in the gateway's schema, so 64 or more of them
+  // match the secret scan's 64 hex rule. The receipt is then stored redacted, a redacted read never proves a
+  // settlement, and the call stays charged at its hold: the safe direction.
+  const settledRaw = (raw: string) => (id: string) => receiptFor(id, { state: "settled", settled_spend: 0.05, settled_spend_raw: raw });
+  const file = (h: string, rid: string) => JSON.parse(readFileSync(join(h, "receipts", `${rid}.json`), "utf8"));
+
+  it("64 digits (0.05 with 47 leading zeros): settled_raw is redacted, nothing is booked, the hold stays and the receipt shows it disagrees", async () => {
+    const h = await ready();
+    const rid = await pendingRun(h);
+    const r = await cli(h, refreshArgs(rid), { provider: new P({ read: settledRaw("0".repeat(47) + "50000000000000000") }) });
+    expect(r.code, r.err).toBe(0);
+    expect({ settled_raw: file(h, rid).settled_raw, state: file(h, rid).state }).toEqual({ settled_raw: null, state: "settled" });
+    expect(booked(ledger(h).at(-1)!)).toEqual({ state: "estimated", spend: null, cap_charge: 0.186 });
+    expect(r.json().status).toBe(DISAGREE);
+  });
+
+  it("control: 63 digits are stored whole and the read settles", async () => {
+    const h = await ready();
+    const rid = await pendingRun(h);
+    expect((await cli(h, refreshArgs(rid), { provider: new P({ read: settledRaw("9".repeat(63)) }) })).code).toBe(0);
+    expect(file(h, rid).settled_raw).toBe("9".repeat(63));
+    expect(booked(ledger(h).at(-1)!)).toEqual({ state: "settled", spend: 0.05, cap_charge: 0.186 });
+  });
+});
+
 describe("R2 (medium): a trusted receipt with no state does not beat \"nothing was sent\"", () => {
   // b0835bb: a trusted read beats a "nothing was sent" report in both orders. The gateway's schema allows
   // state null (receipts.ts GatewayReceipt). A trusted 200 receipt for this request id with state null
