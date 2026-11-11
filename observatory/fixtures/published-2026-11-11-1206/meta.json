@@ -1,0 +1,17 @@
+{
+  "scenario": "published-2026-11-11-1206",
+  "description": "Real data, nothing made up: the first live reading the memory step published, built on the five readings before it, as the workflow published it on observatory-data at commit 7a2c8a3. The RPC refused its socket on that run, so the reading holds no head. tape.jsonl, snapshot.json, run.json and SHA256SUMS are latest/ at that commit, byte for byte; log/2026-11-11.jsonl is the day file of the log at that commit, its six lines, this reading's the last. SHA256SUMS lists all nine published files; only these four are kept here.",
+  "now": "2026-11-11T12:06:21.748Z",
+  "synthetic": false,
+  "provenance": {
+    "data_branch": "observatory-data",
+    "data_branch_commit": "7a2c8a31dc1c07c49a9267c83efdeabd1a110c4c",
+    "workflow_run": 43017392775,
+    "workflow_run_from": "the data branch commit message",
+    "revision": "3df6e3375d19b50e5f9f818cacd96e9d9c9ab5fb",
+    "revision_from": "run.json source_sha",
+    "tape_sha256": "cac3932b75952ab6a002f95ae2cb07f0e6dd94289af518af06a665b0efd7f510",
+    "log_day_file_git_blob": "138f0e3cc4ee36a2aac58948f88e140c51dfe9a5",
+    "snapshot_hash": "16b903e1300b7a005615e8bcb52074db76b2724e65be94df50e3a363d4b269d6"
+  }
+}
