@@ -2,11 +2,11 @@
   "census": null,
   "drift": null,
   "escrows": [],
-  "hash": "58b5cd06e1dd1c7ae37b0b45119fdf735c8db96c88e27713f9d03608cc08ca95",
-  "observed_at": "2026-11-11T09:31:16.783Z",
+  "hash": "dfa1f92c5dad43a2997cfcc6629726c2f5acffe8bae3888940ff68b50539464d",
+  "observed_at": "2026-11-11T10:36:35.883Z",
   "pin": {
-    "finalized_hash": "0x1a865100a54686211481fd0521b35d27af1676a88bb38c95f839fa4b42330226",
-    "finalized_height": 3462415,
+    "finalized_hash": "0x99bc0aff12e038655fb7dba52dc2e4772c7a9aa3a125238a78b1e7a15cfbe63c",
+    "finalized_height": 3466167,
     "genesis": "0x99c172c095340ace980631f9123544c6bebd4839f3437e463533422d8be2d631",
     "node": "v22.23.4",
     "source": "live:rpc wss://rpc.devnet.flop.network",
@@ -16,7 +16,7 @@
   "schema": "flop-observatory/snapshot@0",
   "seq": 0,
   "status": {
-    "best_height": 3462421,
+    "best_height": 3466172,
     "conflicts": [],
     "faucet": {
       "detail": "status degraded, ready false, http 200",
@@ -31,30 +31,30 @@
         "ipGrantsPerDay": 300,
         "ipPrefixGrantsPerDay": 10000
       },
-      "observed_at": "2026-11-11T09:31:11.699Z",
+      "observed_at": "2026-11-11T10:36:27.466Z",
       "ready": false
     },
-    "finality_lag": 6,
-    "finalized_hash": "0x1a865100a54686211481fd0521b35d27af1676a88bb38c95f839fa4b42330226",
-    "finalized_height": 3462415,
+    "finality_lag": 5,
+    "finalized_hash": "0x99bc0aff12e038655fb7dba52dc2e4772c7a9aa3a125238a78b1e7a15cfbe63c",
+    "finalized_height": 3466167,
     "gateway": {
       "detail": null,
       "health": "ok",
       "http": 200,
-      "observed_at": "2026-11-11T09:31:12.895Z"
+      "observed_at": "2026-11-11T10:36:30.292Z"
     },
     "genesis": {
       "faucet": "0x99c172c095340ace980631f9123544c6bebd4839f3437e463533422d8be2d631",
       "pinned": "0x99c172c095340ace980631f9123544c6bebd4839f3437e463533422d8be2d631",
       "rpc": "0x99c172c095340ace980631f9123544c6bebd4839f3437e463533422d8be2d631"
     },
-    "observed_at": "2026-11-11T09:31:16.783Z",
+    "observed_at": "2026-11-11T10:36:35.883Z",
     "reset_detected": false,
     "rpc": {
       "detail": null,
       "health": "ok",
       "http": null,
-      "observed_at": "2026-11-11T09:31:12.912Z",
+      "observed_at": "2026-11-11T10:36:30.305Z",
       "stale": false
     },
     "runtime_version": 1014014,
