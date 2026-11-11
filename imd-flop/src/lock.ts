@@ -235,7 +235,8 @@ const code = (e: unknown) => (e as NodeJS.ErrnoException).code;
  * carries the same owner, so a creator that died before removing it leaves a file the sweep can judge.
  * On any failure the temporary file is removed before the error goes on. Known defect: a process killed
  * between creating its temporary file and writing it leaves an empty one, which has no readable owner and
- * so is never swept (about one per 600 kills at that moment in the review). It is never read as a lock.
+ * so is never swept (the review measured about one per 600 kills; a SIGKILL stress run of this branch left 10
+ * in 2880 kills at random moments). It is never read as a lock.
  */
 function createFile(path: string, content: string): boolean {
   const tmp = `${path}.${process.pid}.${randomBytes(4).toString("hex")}.tmp`;
