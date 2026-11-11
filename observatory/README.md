@@ -148,8 +148,11 @@ What it never does: call an RPC method outside the guard's list, send anything b
 other than `rpc.devnet.flop.network`, `faucet.flop.network` and `api.flop.network`, follow a
 redirect, hold a key, sign, or spend. Each request has a 15 s limit and each answer a 1 MiB limit.
 Its memory is the published log and nothing else: it keeps no cache. Its history is only as
-durable as that branch: lines cut from the end of the log, a one-line log removed from its start,
-or the whole log removed cannot be detected from the log itself. It reads no events, so it writes no census, no escrow state and
+durable as that branch: lines cut from the end of the log, a line from before memory added to,
+removed from or moved within its start (those lines are each checked alone, not chained to each
+other), or the whole log removed cannot be detected from the log itself. The chain catches damage
+and reordering after its first chained line; it is no defence against someone who can write to the
+branch, who can rebuild every hash. It reads no events, so it writes no census, no escrow state and
 no drift.
 
 `.github/workflows/observatory-live.yml` runs it at 7 and 37 past each hour, by hand, and on a push

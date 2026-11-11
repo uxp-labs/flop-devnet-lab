@@ -728,11 +728,20 @@ it adds.
   that each hold `seq` 0 and no `prev_hash`, each a whole log of one line that passes its hash
   check. They count as earlier snapshots like any other, and the chain goes on from the last of
   them. Once a line follows another, a line with `seq` 0 breaks the chain.
+- The lines from before memory (each `seq` 0, at the start of the log) are each checked alone, by
+  their own hash and the checks of section 5. They are not chained to each other, so their order
+  and their number are not protected by the chain: one can be moved, added or removed among them,
+  and the log still reads. A log that runs backwards in time still shows, as a conflict, through
+  section 1.1's rule that no earlier snapshot is later than the new one.
+- What the chain is and is not: from the first chained line on, each line names the hash of the one
+  before it, so a line changed after that point, or one removed or moved anywhere but at the end,
+  breaks the chain and the log is refused. That catches damage and reordering. It is no defence against someone who can write to
+  the branch, who can rebuild every hash.
 - A live snapshot still trusts one RPC endpoint, and the history it is built on is what that
-  endpoint said before. The log shows the lines were not changed or reordered since they were
-  written. It does not show they are true, and lines cut from its end, a one-line log removed from
-  its start, or the whole log removed cannot be detected from the log itself, as section 1.1 says
-  of any log. Section 1.1's three restarts the history cannot see stay unseen.
+  endpoint said before. The log does not show its lines are true, and lines cut from its end, a
+  line from before memory added to or removed from its start, or the whole log removed cannot be
+  detected from the log itself, as section 1.1 says of any log. Section 1.1's three restarts the
+  history cannot see stay unseen.
 - Every run reads the whole log: the checks need the highest finalized and best heights ever logged
   on the genesis, every hash logged at the current height and the latest run of snapshots at that
   height, which can be any length, and any shorter read would need a second owner of those rules.
