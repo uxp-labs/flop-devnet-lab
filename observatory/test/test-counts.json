@@ -43,6 +43,10 @@
     "tests": 13,
     "names": "386c37c6722d7c6b8032fa68be18daf2f1e8fdd3a9b4e6fb438036ff79a6cb5a"
   },
+  "memory.test.ts": {
+    "tests": 28,
+    "names": "6411fd587a94ddb736eee8a5b021a067f97eccd35b396d37f8cf6149f60402eb"
+  },
   "net.test.ts": {
     "tests": 31,
     "names": "6c475f5284b85a6146e58adad5571ced6c7eac01d956a15ddbf0fb109c5d836e"

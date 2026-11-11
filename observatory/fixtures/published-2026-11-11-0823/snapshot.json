@@ -1,0 +1,57 @@
+{
+  "census": null,
+  "drift": null,
+  "escrows": [],
+  "hash": "201cd6e452b6459b38acf05f11a66d014d0302294447ed0ded09e016e2ba8506",
+  "observed_at": "2026-11-11T08:23:05.518Z",
+  "pin": {
+    "finalized_hash": "0xbd9029954f5d4d3c82e8fc059aeb0c5c06e96ba8a8d42d2c4efc916cd8aa66fa",
+    "finalized_height": 3458329,
+    "genesis": "0x99c172c095340ace980631f9123544c6bebd4839f3437e463533422d8be2d631",
+    "node": "v22.23.4",
+    "source": "live:rpc wss://rpc.devnet.flop.network",
+    "source_sha": "b839bf34ab07f1b429dbb0662fb3ed64923b61a3"
+  },
+  "prev_hash": null,
+  "schema": "flop-observatory/snapshot@0",
+  "seq": 0,
+  "status": {
+    "best_height": 3458333,
+    "conflicts": [],
+    "faucet": {
+      "detail": "GET timed out after 15000 ms",
+      "health": "unknown",
+      "http": null,
+      "limits": null,
+      "observed_at": null,
+      "ready": null
+    },
+    "finality_lag": 4,
+    "finalized_hash": "0xbd9029954f5d4d3c82e8fc059aeb0c5c06e96ba8a8d42d2c4efc916cd8aa66fa",
+    "finalized_height": 3458329,
+    "gateway": {
+      "detail": null,
+      "health": "ok",
+      "http": 200,
+      "observed_at": "2026-11-11T08:23:01.209Z"
+    },
+    "genesis": {
+      "faucet": "0x99c172c095340ace980631f9123544c6bebd4839f3437e463533422d8be2d631",
+      "pinned": "0x99c172c095340ace980631f9123544c6bebd4839f3437e463533422d8be2d631",
+      "rpc": "0x99c172c095340ace980631f9123544c6bebd4839f3437e463533422d8be2d631"
+    },
+    "observed_at": "2026-11-11T08:23:05.518Z",
+    "reset_detected": false,
+    "rpc": {
+      "detail": null,
+      "health": "ok",
+      "http": null,
+      "observed_at": "2026-11-11T08:23:01.229Z",
+      "stale": false
+    },
+    "runtime_version": 1014014,
+    "schema": "flop-observatory/network-status@0",
+    "trust": "trusted RPC"
+  },
+  "trust": "trusted RPC"
+}

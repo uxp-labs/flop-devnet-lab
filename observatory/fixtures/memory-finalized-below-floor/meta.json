@@ -1,0 +1,6 @@
+{
+  "scenario": "memory-finalized-below-floor",
+  "description": "Synthetic second reading, made from the real tape in fixtures/published-2026-11-11-0808 (every time moved 1800 s later): the finalized header is block 3457477, 10 below the finalized height 3457487 the log holds, with another hash; best is 3457481. It is read on top of a log holding that real reading.",
+  "now": "2026-11-11T08:38:57.648Z",
+  "synthetic": true
+}

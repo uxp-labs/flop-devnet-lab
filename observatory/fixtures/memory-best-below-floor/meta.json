@@ -1,0 +1,6 @@
+{
+  "scenario": "memory-best-below-floor",
+  "description": "Synthetic second reading, made from the real tape in fixtures/published-2026-11-11-0808 (every time moved 1800 s later): the RPC names no finalized head, and its best block is 3457400, below the finalized height 3457487 and more than 30 blocks below the best height 3457491 the log holds. It is read on top of a log holding that real reading.",
+  "now": "2026-11-11T08:38:57.648Z",
+  "synthetic": true
+}

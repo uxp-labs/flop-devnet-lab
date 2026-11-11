@@ -1,0 +1,6 @@
+{
+  "scenario": "memory-rpc-down",
+  "description": "Synthetic second reading, made from the real tape in fixtures/published-2026-11-11-0808 (every time moved 900 s later): every RPC call fails with the socket's error, so this reading holds no head at all. It is read on top of a log holding that real reading.",
+  "now": "2026-11-11T08:23:57.648Z",
+  "synthetic": true
+}

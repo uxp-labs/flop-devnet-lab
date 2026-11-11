@@ -86,5 +86,85 @@
     "replace": "  return true;",
     "test": "test/history.test.ts",
     "why": "only an absent, empty or wholly read log gives a run something to build on"
+  },
+  {
+    "id": "live-run-history-not-passed",
+    "file": "src/live-run.ts",
+    "find": ", ...earlierOf(history.snapshots) });",
+    "replace": " });",
+    "test": "test/memory.test.ts",
+    "why": "a live snapshot is built on every snapshot in the published log, so the checks against earlier snapshots run"
+  },
+  {
+    "id": "live-run-history-last-day-only",
+    "file": "src/live-run.ts",
+    "find": "...earlierOf(history.snapshots)",
+    "replace": "...earlierOf(history.snapshots.slice(-1))",
+    "test": "test/memory.test.ts",
+    "why": "every earlier snapshot counts, not only the last"
+  },
+  {
+    "id": "live-run-new-log-each-run",
+    "file": "src/live-run.ts",
+    "find": "      snapshot = sealSnapshot(fresh, history.snapshots.at(-1));",
+    "replace": "      snapshot = sealSnapshot(fresh, undefined);",
+    "test": "test/memory.test.ts",
+    "why": "a live snapshot follows the published log's last line in one chain"
+  },
+  {
+    "id": "live-run-refused-log-read-as-none",
+    "file": "src/live-run.ts",
+    "find": "    if (usable(history)) {",
+    "replace": "    if (true) {",
+    "test": "test/memory.test.ts",
+    "why": "a refused log is never read as no log: no network read, no snapshot, never a new log over it"
+  },
+  {
+    "id": "live-run-refusal-unsaid",
+    "file": "src/live-run.ts",
+    "find": "  if (history !== null && !usable(history)) {",
+    "replace": "  if (false) {",
+    "test": "test/memory.test.ts",
+    "why": "a refused log is said to be one, with its case and reason"
+  },
+  {
+    "id": "live-run-history-unrecorded",
+    "file": "src/live-run.ts",
+    "find": "      history: historyRecord(history),",
+    "replace": "      history: historyRecord(null),",
+    "test": "test/memory.test.ts",
+    "why": "run.json says which case the published log was in"
+  },
+  {
+    "id": "live-run-notice-chain-dropped",
+    "file": "src/live-run.ts",
+    "find": "    seq: s.seq,\n    prev_hash: s.prev_hash,\n",
+    "replace": "",
+    "test": "test/memory.test.ts",
+    "why": "the notice says which line of the log the snapshot follows"
+  },
+  {
+    "id": "live-args-log-optional",
+    "file": "src/live-run.ts",
+    "find": "  if (log === undefined) return \"missing --log\";\n",
+    "replace": "",
+    "test": "test/live-run.test.ts",
+    "why": "--log is always given, so a run never forgets its history by a flag left out"
+  },
+  {
+    "id": "published-history-unchecked",
+    "file": "src/published.ts",
+    "find": "  if (!built) return refuse(",
+    "replace": "  if (false) return refuse(",
+    "test": "test/memory.test.ts",
+    "why": "a published run.json names the log line its snapshot follows"
+  },
+  {
+    "id": "published-old-run-schema-accepted",
+    "file": "src/live-run.ts",
+    "find": "export const RUN_SCHEMA = \"flop-observatory/live-run@1\";",
+    "replace": "export const RUN_SCHEMA = \"flop-observatory/live-run@0\";",
+    "test": "test/published.test.ts",
+    "why": "a run.json from before runs kept memory is not read as one that did"
   }
 ]

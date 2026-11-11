@@ -1,0 +1,6 @@
+{
+  "scenario": "memory-other-genesis",
+  "description": "Synthetic second reading, made from the real tape in fixtures/published-2026-11-11-0808 (every time moved 1800 s later): the RPC and the faucet both name another genesis, 0x5e5e...5e, with finalized block 120 and best 124: a chain started again after the one the log holds. It is read on top of a log holding that real reading.",
+  "now": "2026-11-11T08:38:57.648Z",
+  "synthetic": true
+}

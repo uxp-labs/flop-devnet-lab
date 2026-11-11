@@ -1,0 +1,6 @@
+{
+  "scenario": "memory-changed-hash",
+  "description": "Synthetic second reading, made from the real tape in fixtures/published-2026-11-11-0808 (every time moved 1800 s later): the finalized header is block 3457487 again, the height the log holds, but under another hash. It is read on top of a log holding that real reading.",
+  "now": "2026-11-11T08:38:57.648Z",
+  "synthetic": true
+}

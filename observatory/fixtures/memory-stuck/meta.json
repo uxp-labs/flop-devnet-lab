@@ -1,0 +1,6 @@
+{
+  "scenario": "memory-stuck",
+  "description": "Synthetic second reading, made from the real tape in fixtures/published-2026-11-11-0808 (every time moved 600 s later): the same finalized block 3457487 under the same hash, 600 s after the reading the log holds, past the 120 s stale limit. It is read on top of a log holding that real reading.",
+  "now": "2026-11-11T08:18:57.648Z",
+  "synthetic": true
+}
