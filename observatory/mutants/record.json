@@ -246,5 +246,141 @@
     "replace": "  if (false) return refuse(",
     "test": "test/recording.test.ts",
     "why": "the tape holds exactly the list's calls, in order"
+  },
+  {
+    "id": "record-publish-immutability-off",
+    "file": "../.github/workflows/observatory-record.yml",
+    "find": "            if [ -e \"$dest\" ]; then return 0; fi\n",
+    "replace": "",
+    "test": "test/publish-shell.test.ts",
+    "why": "a recording is immutable: when recordings/<id>/ is there, the job changes nothing"
+  },
+  {
+    "id": "record-publish-id-recheck-off",
+    "file": "../.github/workflows/observatory-record.yml",
+    "find": "          [[ \"$RECORDING_ID\" =~ ^[0-9]{14}-[0-9a-f]{16}$ ]] || {",
+    "replace": "          true || {",
+    "test": "test/publish-shell.test.ts",
+    "why": "the publish step checks the id again where it names the one path it writes"
+  },
+  {
+    "id": "record-check-sums-off",
+    "file": "../.github/workflows/observatory-record.yml",
+    "find": "          sha256sum -- \"${files[@]}\" | cmp -s - SHA256SUMS || fail",
+    "replace": "          true || fail",
+    "test": "test/publish-shell.test.ts",
+    "why": "every file is checked against SHA256SUMS before anything reads it"
+  },
+  {
+    "id": "record-check-extra-file-allowed",
+    "file": "../.github/workflows/observatory-record.yml",
+    "find": "          [ \"$(find . -mindepth 1 -printf x | wc -c)\" -eq \"$((${#files[@]} + 1))\" ] || fail",
+    "replace": "          true || fail",
+    "test": "test/publish-shell.test.ts",
+    "why": "the artifact holds the recording's three files and nothing else"
+  },
+  {
+    "id": "record-check-any-exit",
+    "file": "../.github/workflows/observatory-record.yml",
+    "find": "          jq -e '.exit_code == 0' run.json >/dev/null || fail",
+    "replace": "          true || fail",
+    "test": "test/publish-shell.test.ts",
+    "why": "only a run that exited 0 is published"
+  },
+  {
+    "id": "record-check-start-unchecked",
+    "file": "../.github/workflows/observatory-record.yml",
+    "find": "$utc ]] || fail \"run.json holds no started_at in the form the recorder writes\"",
+    "replace": "$utc ]] || true",
+    "test": "test/publish-shell.test.ts",
+    "why": "the start time is read in the one form the recorder writes, digit by digit"
+  },
+  {
+    "id": "record-check-list-hash-unchecked",
+    "file": "../.github/workflows/observatory-record.yml",
+    "find": "          [[ \"$list_sha\" =~ ^[0-9a-f]{64}$ ]] || fail",
+    "replace": "          true || fail",
+    "test": "test/publish-shell.test.ts",
+    "why": "the list hash is 64 lower case hex before it is part of a path"
+  },
+  {
+    "id": "record-check-counts-unchecked",
+    "file": "../.github/workflows/observatory-record.yml",
+    "find": "[[ \"$failed\" =~ $count ]]; } || fail",
+    "replace": "true; } || fail",
+    "test": "test/publish-shell.test.ts",
+    "why": "the counts that reach the commit message are plain numbers"
+  },
+  {
+    "id": "record-publish-tree-check-off",
+    "file": "../.github/workflows/observatory-record.yml",
+    "find": "              if [ -n \"$tree\" ] && grep -qv '^100644 blob ' <<<\"$tree\"; then",
+    "replace": "              if false; then",
+    "test": "test/publish-shell.test.ts",
+    "why": "a fetched branch that holds anything but plain files fails the job before anything is read or written"
+  },
+  {
+    "id": "record-publish-no-retry",
+    "file": "../.github/workflows/observatory-record.yml",
+    "find": "          prepare 2\n",
+    "replace": "          exit 1\n",
+    "test": "test/publish-shell.test.ts",
+    "why": "a refused push is fetched again and tried once more"
+  },
+  {
+    "id": "record-publish-forced",
+    "file": "../.github/workflows/observatory-record.yml",
+    "find": "\n          git push \"$remote\" refs/heads/observatory-data:refs/heads/observatory-data\n",
+    "replace": "\n          git push --force \"$remote\" refs/heads/observatory-data:refs/heads/observatory-data\n",
+    "test": "test/record-workflow.test.ts",
+    "why": "the push is never forced"
+  },
+  {
+    "id": "record-publish-any-branch",
+    "file": "../.github/workflows/observatory-record.yml",
+    "find": "    if: ${{ github.ref == 'refs/heads/main' && ",
+    "replace": "    if: ${{ ",
+    "test": "test/record-workflow.test.ts",
+    "why": "only main publishes; a run on any other branch is a smoke run"
+  },
+  {
+    "id": "record-publish-on-failure",
+    "file": "../.github/workflows/observatory-record.yml",
+    "find": " && needs.record.result == 'success' && ",
+    "replace": " && (needs.record.result == 'success' || needs.record.result == 'failure') && ",
+    "test": "test/record-workflow.test.ts",
+    "why": "only a record job that exited 0 is published"
+  },
+  {
+    "id": "record-job-may-write",
+    "file": "../.github/workflows/observatory-record.yml",
+    "find": "    timeout-minutes: 25\n",
+    "replace": "    timeout-minutes: 25\n    permissions:\n      contents: write\n",
+    "test": "test/record-workflow.test.ts",
+    "why": "the record job may read the repository and nothing else"
+  },
+  {
+    "id": "record-checkout-keeps-credentials",
+    "file": "../.github/workflows/observatory-record.yml",
+    "find": "          persist-credentials: false\n",
+    "replace": "          persist-credentials: true\n",
+    "test": "test/record-workflow.test.ts",
+    "why": "checkout keeps no credentials"
+  },
+  {
+    "id": "record-smoke-path-dropped",
+    "file": "../.github/workflows/observatory-record.yml",
+    "find": "      - \"observatory/src/net-root.ts\"\n",
+    "replace": "",
+    "test": "test/record-workflow.test.ts",
+    "why": "a change to any module the record command is built from gives a smoke run"
+  },
+  {
+    "id": "live-publish-removes-recordings",
+    "file": "../.github/workflows/observatory-live.yml",
+    "find": "            rm -rf latest\n",
+    "replace": "            rm -rf latest recordings\n",
+    "test": "test/publish-shell.test.ts",
+    "why": "the live publish job leaves recordings/ alone"
   }
 ]

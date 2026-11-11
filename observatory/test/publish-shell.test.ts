@@ -1,7 +1,10 @@
-// The publish job's shell, run (memory review). test/live-workflow.test.ts reads the workflow as
-// text; this runs the two run: blocks of the publish job, "Check the files against SHA256SUMS" and
-// "Publish to observatory-data", taken out of .github/workflows/observatory-live.yml by step name
-// when the test runs, so it always runs what the workflow holds. There is no copy of the shell here.
+// The publish jobs' shell, run (memory review, and the recorder). test/live-workflow.test.ts and
+// test/record-workflow.test.ts read the workflows as text; this runs the two run: blocks of each
+// publish job, "Check the files against SHA256SUMS" and "Publish to observatory-data", taken out of
+// .github/workflows/observatory-live.yml and .github/workflows/observatory-record.yml by step name
+// when the test runs, so it always runs what the workflows hold. There is no copy of the shell here.
+// It is the one test file that runs a shell (test/setup.ts runShell): both jobs push to the same
+// branch, so the cases that show each leaves the other's files alone run both shells in one place.
 //
 // Each case builds real readings with the repo's own code (a live run over a tape, as
 // test/memory.test.ts does), lays them out as the artifact download does, and runs the two steps
@@ -13,6 +16,7 @@
 //
 // bash, git, jq, sha256sum, base64, find and date must all be here: the offline check runs on a
 // GitHub runner that has them, so a missing one fails every test in this file, never skips it.
+import { createHash } from "node:crypto";
 import { chmodSync, copyFileSync, cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync, unlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -25,6 +29,11 @@ import { PUBLISHED_FILES } from "../src/published.js";
 import { logLine } from "../src/store.js";
 import { sumsOf } from "../src/sums.js";
 import { TapeTransport } from "../src/tape.js";
+import { feedText } from "../src/feed.js";
+import { runRecord } from "../src/record-run.js";
+import { RECORDING_FILES } from "../src/recording.js";
+import { REQUESTS_SCHEMA } from "../src/requests.js";
+import { network } from "./helpers/answering.js";
 import { anchoredAs } from "./helpers/tapes.js";
 import type { Transport } from "../src/transport.js";
 import type { Snapshot } from "../src/types.js";
@@ -35,16 +44,20 @@ const REF = "refs/heads/observatory-data";
 const REPOSITORY = "uxp-labs/flop-devnet-lab";
 const ARTIFACT = [...PUBLISHED_FILES, "SHA256SUMS"];
 
-// ---- The two steps, from the workflow as it is.
+// ---- The two steps of each publish job, from the workflows as they are.
 type Step = { name?: string; id?: string; run?: string; if?: string; env?: Record<string, string> };
-const workflow = parse(readFileSync(new URL("../../.github/workflows/observatory-live.yml", import.meta.url), "utf8")) as { jobs: Record<string, { steps: Step[] }> };
-function step(name: string): Step {
+type Workflow = { jobs: Record<string, { steps: Step[] }> };
+const workflowOf = (file: string) => parse(readFileSync(new URL(`../../.github/workflows/${file}`, import.meta.url), "utf8")) as Workflow;
+function step(name: string, workflow: Workflow = workflowOf("observatory-live.yml")): Step {
   const found = (workflow.jobs.publish?.steps ?? []).filter((s) => s.name === name);
   if (found.length !== 1 || typeof found[0]?.run !== "string") throw new Error(`the publish job holds no one run: step named ${JSON.stringify(name)}`);
   return found[0];
 }
 const CHECK = step("Check the files against SHA256SUMS");
 const PUBLISH = step("Publish to observatory-data");
+const RECORD = workflowOf("observatory-record.yml");
+const RECORD_CHECK = step("Check the files against SHA256SUMS", RECORD);
+const RECORD_PUBLISH = step("Publish to observatory-data", RECORD);
 
 // ---- Readings, made by the repo's own code.
 const FIXTURES = new URL("../fixtures/", import.meta.url);
@@ -180,26 +193,36 @@ function outputsOf(path: string): Record<string, string> {
  * (GitHub's default shell) and the environment the workflow gives it.
  */
 function publishJob(r: Reading, tamper: (reading: string) => void = () => {}): Job {
+  if (PUBLISH.if !== "${{ steps.check.outputs.publish == 'true' }}") throw new Error(`the publish step's condition is not the one this test evaluates: ${PUBLISH.if}`);
+  return runJob(r.out, "reading", CHECK, PUBLISH, (o) => o.publish === "true", tamper);
+}
+
+/**
+ * A publish job's two steps on an output folder laid out in the artifact folder the job downloads
+ * into (folder, under the runner temp folder): the check step, then the publish step when the
+ * check exited 0 and runs(outputs) holds, with the environment the workflow gives it, the env
+ * values taken from the check step's outputs as GitHub would.
+ */
+function runJob(out: string, folder: string, checkStep: Step, publishStep: Step, runs: (outputs: Record<string, string>) => boolean, tamper: (dir: string) => void): Job {
   const temp = next("runner");
-  const reading = join(temp, "reading");
-  mkdirSync(reading, { recursive: true });
-  for (const f of readdirSync(r.out)) copyFileSync(join(r.out, f), join(reading, f));
-  tamper(reading);
+  const dir = join(temp, folder);
+  mkdirSync(dir, { recursive: true });
+  for (const f of readdirSync(out)) copyFileSync(join(out, f), join(dir, f));
+  tamper(dir);
   const base = { HOME: temp, RUNNER_TEMP: temp, GITHUB_RUN_ID: "4242", GITHUB_SHA: "c".repeat(40) };
-  writeFileSync(join(temp, "check.sh"), CHECK.run as string);
+  writeFileSync(join(temp, "check.sh"), checkStep.run as string);
   const checkOut = join(temp, "output-check");
   const check = runShell(["-e", join(temp, "check.sh")], { ...base, GITHUB_OUTPUT: checkOut }, temp);
   const outputs = outputsOf(checkOut);
   if (check.status !== 0) return { check, outputs, publish: null };
-  if (PUBLISH.if !== "${{ steps.check.outputs.publish == 'true' }}") throw new Error(`the publish step's condition is not the one this test evaluates: ${PUBLISH.if}`);
-  if (outputs.publish !== "true") return { check, outputs, publish: null };
+  if (!runs(outputs)) return { check, outputs, publish: null };
   const env: Record<string, string> = { ...base, GITHUB_OUTPUT: join(temp, "output-publish"), GITHUB_SERVER_URL: `file://${server()}`, GITHUB_REPOSITORY: REPOSITORY };
-  for (const [k, v] of Object.entries(PUBLISH.env ?? {})) {
-    const m = /^\$\{\{ (?:(github\.token)|steps\.check\.outputs\.([a-z_]+)) \}\}$/.exec(v);
+  for (const [k, v] of Object.entries(publishStep.env ?? {})) {
+    const m = /^\$\{\{ (?:(github\.token)|steps\.check\.outputs\.([a-z_0-9]+)) \}\}$/.exec(v);
     if (m === null) throw new Error(`the publish step's env ${k} is ${v}, which this test does not know how to give`);
     env[k] = m[1] !== undefined ? "test-token" : (outputs[m[2] as string] ?? "");
   }
-  writeFileSync(join(temp, "publish.sh"), PUBLISH.run as string);
+  writeFileSync(join(temp, "publish.sh"), publishStep.run as string);
   const publish = runShell(["-e", join(temp, "publish.sh")], env, temp);
   return { check, outputs, publish };
 }
@@ -650,5 +673,330 @@ describe("a branch the live run or the job refuses, and a log dated past the clo
     expect([fresh.code, fresh.snapshot?.seq]).toEqual([EXIT.ok, 0]);
     published(publishJob(fresh));
     expect(branch().log).toEqual({ "2026-11-11.jsonl": dayFile(fresh) });
+  });
+});
+
+// ---- The record workflow's publish job (the recorder): recordings/<id>/, immutable, beside the
+// live job's latest/, log/ and README.md, each job leaving the other's files alone.
+
+interface Recording {
+  out: string;
+  code: number;
+  /** recordings/<id>, as the job builds it from run.json. */
+  dest: string;
+}
+
+const LIST = feedText({
+  schema: REQUESTS_SCHEMA,
+  calls: [
+    { method: "chain_getBlockHash", params: [3479329], why: "block 3479329" },
+    { method: "state_getMetadata", params: [`0x${"ef".repeat(32)}`], why: "the metadata at block 3479329" },
+  ],
+});
+const LIST_SHA = createHash("sha256").update(LIST).digest("hex");
+
+/** One record run over the fake network, started at the time given, of the list given. */
+async function recordAt(startedAt: string, list = LIST): Promise<Recording> {
+  const requests = next("requests");
+  writeFileSync(requests, list);
+  const out = next("recording");
+  const { t } = network((m) => ({ result: m === "state_getMetadata" ? "0x6d657461" : `0x${"ef".repeat(32)}` }));
+  const r = await runRecord(t, { requests, out, sourceSha: "f".repeat(40), clock: () => startedAt });
+  const digits = startedAt.slice(0, 19).replace(/[-T:]/g, "");
+  return { out, code: r.code, dest: `recordings/${digits}-${createHash("sha256").update(list).digest("hex").slice(0, 16)}` };
+}
+
+/** The record workflow's publish job on a recording: its check step, then its publish step. */
+const recordJob = (r: Recording, tamper: (dir: string) => void = () => {}): Job => {
+  if (RECORD_PUBLISH.if !== undefined) throw new Error(`the record publish step has a condition this test does not evaluate: ${RECORD_PUBLISH.if}`);
+  return runJob(r.out, "recording", RECORD_CHECK, RECORD_PUBLISH, () => true, tamper);
+};
+
+const RECORDED = [...RECORDING_FILES, "SHA256SUMS"];
+/** Every file under recordings/ on the branch, by path, with its text. */
+function recordingsOnBranch(): Record<string, string> {
+  const b = branch();
+  return Object.fromEntries(b.files.filter((f) => f.startsWith("recordings/")).map((f) => [f, git("--git-dir", bare(), "show", `${REF}:${f}`)]));
+}
+const laidAt = (r: Recording) => Object.fromEntries(RECORDED.map((f) => [`${r.dest}/${f}`, readFileSync(join(r.out, f), "utf8")]));
+/** Everything on the branch but recordings/: what the live job owns. */
+function liveFiles(): Record<string, string> {
+  const b = branch();
+  return Object.fromEntries(b.files.filter((f) => !f.startsWith("recordings/")).map((f) => [f, git("--git-dir", bare(), "show", `${REF}:${f}`)]));
+}
+
+describe("the record publish job", () => {
+  it("finds both steps by name in the record workflow, each in strict mode", () => {
+    expect(RECORD_CHECK.id).toBe("check");
+    expect(RECORD_CHECK.run).toMatch(/^set -euo pipefail\n/);
+    expect(RECORD_PUBLISH.run).toMatch(/^set -euo pipefail\n/);
+  });
+
+  it("starts the branch as an orphan holding only recordings/<id>/ when there is none, with the id built from the start time and the list's hash", async () => {
+    const r = await recordAt("2026-11-11T12:34:56.789Z");
+    expect([r.code, r.dest]).toEqual([EXIT.ok, `recordings/20261111123456-${LIST_SHA.slice(0, 16)}`]);
+    const j = recordJob(r);
+    published(j);
+    expect(j.outputs).toEqual({ id: `20261111123456-${LIST_SHA.slice(0, 16)}`, started_at: "2026-11-11T12:34:56.789Z", request_list_sha256: LIST_SHA, asked: "2", answered: "2", failed: "0" });
+    const b = branch();
+    expect(b.refs).toEqual([REF]);
+    expect(b.parents).toEqual([]);
+    expect(b.files).toEqual(Object.keys(laidAt(r)).sort());
+    expect(recordingsOnBranch()).toEqual(laidAt(r));
+    expect(b.message).toBe(
+      `github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>\nobservatory-data: recording 20261111123456-${LIST_SHA.slice(0, 16)}\n\nstarted 2026-11-11T12:34:56.789Z, request list ${LIST_SHA}\n\n2 answered and 0 failed of 2 calls, run 4242, revision ${"c".repeat(40)}`,
+    );
+  });
+
+  it("adds a later recording beside an earlier one, on top of its commit, and leaves the earlier one as it was", async () => {
+    const r1 = await recordAt("2026-11-11T12:00:00.000Z");
+    published(recordJob(r1));
+    const first = branch();
+    const r2 = await recordAt("2026-11-11T13:00:00.000Z");
+    published(recordJob(r2));
+    expect(branch().parents).toEqual([first.commit]);
+    expect(recordingsOnBranch()).toEqual({ ...laidAt(r1), ...laidAt(r2) });
+  });
+
+  it("changes nothing when recordings/<id>/ is already there: the same recording again, or another one with the same id", async () => {
+    const r = await recordAt("2026-11-11T12:00:00.000Z");
+    published(recordJob(r));
+    const before = branch();
+    // Another run in the same second, of the same list, with other answers: the same id.
+    const other = await recordAt("2026-11-11T12:00:00.000Z");
+    writeFileSync(join(other.out, "tape.jsonl"), readFileSync(join(other.out, "tape.jsonl"), "utf8").replace("0x6d657461", "0x6d657462"));
+    writeFileSync(join(other.out, "SHA256SUMS"), sumsOf(RECORDING_FILES.map((n) => [n, readFileSync(join(other.out, n))] as const)));
+    for (const again of [r, other]) {
+      const j = recordJob(again);
+      published(j);
+      expect(j.publish?.stdout).toContain(`observatory-data already holds ${r.dest}, and a recording is immutable: nothing is changed`);
+      expect(branch()).toEqual(before);
+      expect(recordingsOnBranch()).toEqual(laidAt(r));
+    }
+  });
+
+  it("a refused push is fetched again and tried once more, on top of what the other job pushed in between", async () => {
+    const r = await recordAt("2026-11-11T12:00:00.000Z");
+    // The server refuses the first push and moves the branch under it by a commit of the live
+    // job's kind: a new log day file. Only a fresh fetch, with the recording laid on top, is taken.
+    const marker = join(box, "refused-once");
+    const hook = join(bare(), "hooks", "pre-receive");
+    writeFileSync(
+      hook,
+      [
+        "#!/usr/bin/env bash",
+        "set -euo pipefail",
+        `if [ -e "${marker}" ]; then exit 0; fi`,
+        `: >"${marker}"`,
+        "unset GIT_QUARANTINE_PATH GIT_OBJECT_DIRECTORY GIT_ALTERNATE_OBJECT_DIRECTORIES",
+        "blob=$(printf 'a live line\\n' | git hash-object -w --stdin)",
+        "sub=$(printf '100644 blob %s\\t2026-11-11.jsonl\\n' \"$blob\" | git mktree)",
+        "tree=$(printf '040000 tree %s\\tlog\\n' \"$sub\" | git mktree)",
+        "c=$(GIT_AUTHOR_NAME=m GIT_AUTHOR_EMAIL=m@example.invalid GIT_COMMITTER_NAME=m GIT_COMMITTER_EMAIL=m@example.invalid git commit-tree \"$tree\" -m live)",
+        'git update-ref refs/heads/observatory-data "$c"',
+        "echo refused >&2",
+        "exit 1",
+        "",
+      ].join("\n"),
+    );
+    chmodSync(hook, 0o755);
+    const j = recordJob(r);
+    published(j);
+    expect(j.publish?.stdout).toContain("the push was refused; fetching observatory-data again and trying once more");
+    const b = branch();
+    expect(git("--git-dir", bare(), "log", "-1", "--format=%s", `${REF}~1`).trim()).toBe("live");
+    expect(b.files).toEqual(["log/2026-11-11.jsonl", ...Object.keys(laidAt(r)).sort()]);
+    expect(b.log).toEqual({ "2026-11-11.jsonl": ["a live line", ""] });
+    expect(recordingsOnBranch()).toEqual(laidAt(r));
+  });
+
+  it("a push refused twice fails the job, and the branch stays as it was", async () => {
+    const r1 = await recordAt("2026-11-11T12:00:00.000Z");
+    published(recordJob(r1));
+    const before = branch();
+    const hook = join(bare(), "hooks", "pre-receive");
+    writeFileSync(hook, "#!/usr/bin/env bash\necho refused >&2\nexit 1\n");
+    chmodSync(hook, 0o755);
+    const j = recordJob(await recordAt("2026-11-11T13:00:00.000Z"));
+    expect([j.check.status, j.publish?.status]).toEqual([0, 1]);
+    expect(branch()).toEqual(before);
+  });
+
+  it.each([
+    ["a link", () => seed({}, { "recordings/x": "../README.md" })],
+    ["an executable file", () => seed({ "notes.sh": "x" }, {}, [], (w) => git("-C", w, "update-index", "--chmod=+x", "notes.sh"))],
+    ["a submodule", () => seed({}, {}, [], (w) => git("-C", w, "update-index", "--add", "--cacheinfo", `160000,${git("--git-dir", bare(), "rev-parse", REF).trim()},vendor`))],
+  ] as const)("refuses a fetched branch that holds %s with the live job's own check, and pushes nothing", async (_what, make) => {
+    const r1 = await recordAt("2026-11-11T12:00:00.000Z");
+    published(recordJob(r1));
+    make();
+    const odd = branch();
+    refusedAtPublish(recordJob(await recordAt("2026-11-11T13:00:00.000Z")), /observatory-data holds something the job never writes/);
+    expect(branch()).toEqual(odd);
+    // Also a recording already there: the tree is checked before anything on it is read.
+    refusedAtPublish(recordJob(r1), /observatory-data holds something the job never writes/);
+    expect(branch()).toEqual(odd);
+  });
+
+  it("fails, and pushes nothing, when recordings is a file on the branch", async () => {
+    seed({ recordings: "not a folder\n" });
+    const before = branch();
+    const j = recordJob(await recordAt("2026-11-11T12:00:00.000Z"));
+    expect([j.check.status, j.publish?.status]).toEqual([0, 1]);
+    expect(branch()).toEqual(before);
+  });
+
+  it("refuses an id that is not in its form where it names the path, also when the check was passed by", async () => {
+    const r = await recordAt("2026-11-11T12:00:00.000Z");
+    published(recordJob(r));
+    const before = branch();
+    for (const id of ["../latest", "20261111120000-0123456789abcdef/../../log", "-rf", "", "20261111120000-0123456789ABCDEF", "2026111112000-0123456789abcdef", `20261111120000-0123456789abcdef\nx`]) {
+      const temp = next("runner");
+      mkdirSync(join(temp, "recording"), { recursive: true });
+      for (const f of RECORDED) copyFileSync(join(r.out, f), join(temp, "recording", f));
+      writeFileSync(join(temp, "publish.sh"), RECORD_PUBLISH.run as string);
+      const env = { HOME: temp, RUNNER_TEMP: temp, GITHUB_RUN_ID: "4242", GITHUB_SHA: "c".repeat(40), GITHUB_SERVER_URL: `file://${server()}`, GITHUB_REPOSITORY: REPOSITORY, PUSH_TOKEN: "t", RECORDING_ID: id, STARTED_AT: "x", REQUEST_LIST_SHA256: "x", ASKED: "1", ANSWERED: "1", FAILED: "0" };
+      const p = runShell(["-e", join(temp, "publish.sh")], env, temp);
+      expect([p.status, p.stdout], JSON.stringify(id)).toEqual([1, "::error::the recording's id is not in its form\n"]);
+      expect(branch()).toEqual(before);
+    }
+  });
+});
+
+describe("an artifact the record check refuses: the publish step never runs and nothing is pushed", () => {
+  async function onBranch(): Promise<{ before: Branch; next: Recording }> {
+    published(recordJob(await recordAt("2026-11-11T12:00:00.000Z")));
+    return { before: branch(), next: await recordAt("2026-11-11T13:00:00.000Z") };
+  }
+  function refusedAtCheck(j: Job, why: string): void {
+    expect([j.check.status, j.publish], said(j)).toEqual([1, null]);
+    expect(j.check.stdout).toContain(`::error::${why}`);
+    expect(j.outputs).toEqual({});
+  }
+  /** Writes a file and SHA256SUMS again around it, as a forger would. */
+  const forge = (name: string, edit: (t: string) => string) => (d: string) => {
+    const was = readFileSync(join(d, name), "utf8");
+    expect(edit(was)).not.toBe(was);
+    writeFileSync(join(d, name), edit(was));
+    writeFileSync(join(d, "SHA256SUMS"), sumsOf(RECORDING_FILES.map((n) => [n, readFileSync(join(d, n))] as const)));
+  };
+  const runAs = (edit: (r: Record<string, unknown>) => Record<string, unknown>) => forge("run.json", (t) => `${JSON.stringify(edit(JSON.parse(t) as Record<string, unknown>), null, 2)}\n`);
+
+  it.each([
+    ["an extra file", (d: string) => writeFileSync(join(d, "notes.txt"), "x"), "the artifact holds something that is not on the list"],
+    ["an extra hidden file", (d: string) => writeFileSync(join(d, ".hidden"), "x"), "the artifact holds something that is not on the list"],
+    ["a folder", (d: string) => mkdirSync(join(d, "sub")), "the artifact holds something that is not on the list"],
+    ["a live run's file", (d: string) => writeFileSync(join(d, "snapshot.json"), "{}"), "the artifact holds something that is not on the list"],
+    ["no tape", (d: string) => unlinkSync(join(d, "tape.jsonl")), "the artifact holds no tape.jsonl as a regular file"],
+    ["no SHA256SUMS", (d: string) => unlinkSync(join(d, "SHA256SUMS")), "the artifact holds no SHA256SUMS as a regular file"],
+    [
+      "a run.json that is a link to the same bytes",
+      (d: string) => {
+        cpSync(join(d, "run.json"), join(d, "..", "away.json"));
+        unlinkSync(join(d, "run.json"));
+        symlinkSync(join(d, "..", "away.json"), join(d, "run.json"));
+      },
+      "the artifact holds no run.json as a regular file",
+    ],
+    ["a changed byte in the tape", (d: string) => writeFileSync(join(d, "tape.jsonl"), readFileSync(join(d, "tape.jsonl"), "utf8").replace("0x6d657461", "0x6d657462")), "a file differs from SHA256SUMS"],
+    ["a changed byte in run.json", (d: string) => writeFileSync(join(d, "run.json"), readFileSync(join(d, "run.json"), "utf8").replace('"answered": 2', '"answered": 3')), "a file differs from SHA256SUMS"],
+    ["a run that exited 4, sums written again", runAs((r) => ({ ...r, exit_code: 4 })), "run.json does not say the run exited 0, so it is no recording"],
+    ["an exit code that is a string", runAs((r) => ({ ...r, exit_code: "0" })), "run.json does not say the run exited 0, so it is no recording"],
+    ["a run.json that is not JSON", forge("run.json", (t) => t.slice(1)), "run.json does not say the run exited 0, so it is no recording"],
+    ["a start that runs on to another line", runAs((r) => ({ ...r, started_at: "2026-11-11T13:00:00.000Z\nid=../x" })), "run.json holds no started_at in the form the recorder writes"],
+    ["a start that is an option", runAs((r) => ({ ...r, started_at: "-d now" })), "run.json holds no started_at in the form the recorder writes"],
+    ["a start with an offset", runAs((r) => ({ ...r, started_at: "2026-11-11T13:00:00.000+00:00" })), "run.json holds no started_at in the form the recorder writes"],
+    ["a start with no milliseconds", runAs((r) => ({ ...r, started_at: "2026-11-11T13:00:00Z" })), "run.json holds no started_at in the form the recorder writes"],
+    ["a list hash that is a path", runAs((r) => ({ ...r, request_list_sha256: "../../../latest/x/../../../../../../../../../../../.." })), "run.json holds no request list sha256 in the written form"],
+    ["a list hash in upper case", runAs((r) => ({ ...r, request_list_sha256: LIST_SHA.toUpperCase() })), "run.json holds no request list sha256 in the written form"],
+    ["no list hash", runAs((r) => ({ ...r, request_list_sha256: null })), "run.json holds no request list sha256 in the written form"],
+    ["a count with a leading zero", runAs((r) => ({ ...r, calls: { asked: "02", answered: 2, failed: 0 } })), "run.json holds no call counts in the written form"],
+    ["a count that is a word", runAs((r) => ({ ...r, calls: { asked: 2, answered: "$(true)", failed: 0 } })), "run.json holds no call counts in the written form"],
+  ] as const)("%s", async (_what, tamper, why) => {
+    const { before, next } = await onBranch();
+    refusedAtCheck(recordJob(next, tamper), why);
+    expect(branch()).toEqual(before);
+  });
+});
+
+describe("the two publish jobs on one branch: each leaves the other's files alone", () => {
+  it("a recording on a branch the live job has published to leaves latest/, log/ and README.md byte for byte", async () => {
+    const r1 = await read(live("published-2026-11-11-0808"), checkout());
+    published(publishJob(r1));
+    const r2 = await read(live("published-2026-11-11-0823"), checkout());
+    published(publishJob(r2));
+    const liveBefore = liveFiles();
+    expect(Object.keys(liveBefore)).toEqual(LAID(["2026-11-11.jsonl"]));
+    const rec = await recordAt("2026-11-11T12:00:00.000Z");
+    published(recordJob(rec));
+    expect(liveFiles()).toEqual(liveBefore);
+    expect(recordingsOnBranch()).toEqual(laidAt(rec));
+  });
+
+  it("a live reading on a branch that holds recordings: the live run reads its log, the job's checks pass, and the recordings stay byte for byte", async () => {
+    const rec1 = await recordAt("2026-11-11T07:00:00.000Z");
+    published(recordJob(rec1));
+    // A first live reading on a branch that holds only a recording: the log folder is not there.
+    const r1 = await read(live("published-2026-11-11-0808"), checkout());
+    expect([r1.code, r1.snapshot?.seq, r1.snapshot?.prev_hash]).toEqual([EXIT.ok, 0, null]);
+    published(publishJob(r1));
+    const rec2 = await recordAt("2026-11-11T08:15:00.000Z");
+    published(recordJob(rec2));
+    const recordings = recordingsOnBranch();
+    expect(recordings).toEqual({ ...laidAt(rec1), ...laidAt(rec2) });
+    // The next live reading follows the last line of log/ alone, through the chain check on the
+    // published log and the plain files check, with the recordings on the branch.
+    const log = checkout();
+    expect(readHistory(log).state).toBe("read");
+    const r2 = await read(live("published-2026-11-11-0823"), log);
+    expect([r2.code, r2.snapshot?.seq, r2.snapshot?.prev_hash]).toEqual([EXIT.ok, 1, r1.snapshot?.hash]);
+    published(publishJob(r2));
+    const b = branch();
+    expect(b.log).toEqual({ "2026-11-11.jsonl": dayFile(r1, r2) });
+    expect(b.latest).toEqual(filesOf(r2));
+    expect(recordingsOnBranch()).toEqual(recordings);
+    expect(b.files).toEqual([...LAID(["2026-11-11.jsonl"]), ...Object.keys(recordings)].sort());
+  });
+
+  it("a live push refused because a recording landed in between is fetched again, and the reading laid on top of the recording", async () => {
+    const r1 = await read(live("published-2026-11-11-0808"), checkout());
+    published(publishJob(r1));
+    const r2 = await read(live("published-2026-11-11-0823"), checkout());
+    // The server refuses the live job's first push, and moves the branch under it by a commit of
+    // the record job's kind: one recordings/<id>/ folder added, log/ unchanged.
+    const marker = join(box, "refused-once");
+    const hook = join(bare(), "hooks", "pre-receive");
+    writeFileSync(
+      hook,
+      [
+        "#!/usr/bin/env bash",
+        "set -euo pipefail",
+        `if [ -e "${marker}" ]; then exit 0; fi`,
+        `: >"${marker}"`,
+        "unset GIT_QUARANTINE_PATH GIT_OBJECT_DIRECTORY GIT_ALTERNATE_OBJECT_DIRECTORIES",
+        "tip=$(git rev-parse refs/heads/observatory-data)",
+        `export GIT_INDEX_FILE="${join(box, "hook-index")}"`,
+        'git read-tree "$tip"',
+        "blob=$(printf 'recorded\\n' | git hash-object -w --stdin)",
+        'git update-index --add --cacheinfo "100644,$blob,recordings/20261111082000-0123456789abcdef/run.json"',
+        "tree=$(git write-tree)",
+        'c=$(GIT_AUTHOR_NAME=m GIT_AUTHOR_EMAIL=m@example.invalid GIT_COMMITTER_NAME=m GIT_COMMITTER_EMAIL=m@example.invalid git commit-tree "$tree" -p "$tip" -m recording)',
+        'git update-ref refs/heads/observatory-data "$c" "$tip"',
+        "echo refused >&2",
+        "exit 1",
+        "",
+      ].join("\n"),
+    );
+    chmodSync(hook, 0o755);
+    const j = publishJob(r2);
+    published(j);
+    expect(j.publish?.stdout).toContain("the push was refused; fetching observatory-data again and trying once more");
+    const b = branch();
+    const between = git("--git-dir", bare(), "rev-parse", `${REF}~1`).trim();
+    expect(git("--git-dir", bare(), "log", "-1", "--format=%s", between).trim()).toBe("recording");
+    expect(b.parents).toEqual([between]);
+    expect(recordingsOnBranch()).toEqual({ "recordings/20261111082000-0123456789abcdef/run.json": "recorded\n" });
+    expect(b.log).toEqual({ "2026-11-11.jsonl": dayFile(r1, r2) });
+    expect(b.latest).toEqual(filesOf(r2));
   });
 });
