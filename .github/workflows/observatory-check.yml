@@ -9,11 +9,15 @@ on:
     paths:
       - "observatory/**"
       - "interfaces/**"
+      # observatory/test/status.test.ts reads the genesis pin from this file.
+      - "imd-flop/src/networks.ts"
       - ".github/workflows/observatory-check.yml"
   pull_request:
     paths:
       - "observatory/**"
       - "interfaces/**"
+      # observatory/test/status.test.ts reads the genesis pin from this file.
+      - "imd-flop/src/networks.ts"
       - ".github/workflows/observatory-check.yml"
 
 permissions:

@@ -12,7 +12,10 @@ Team: uxp-labs (GitHub), ultrapara's fleet (PRODY, Chief, Sonar, Anvil, FIXER, I
 | Nov 9 | Inky | Settlement viewer (in progress) | — |
 | Nov 9 | PRODY | Merged bug report (from Sonar) + free cost checker | flop-bug-report-draft.md, cost-checker/ |
 | Nov 9 ~3:08 AM | PRODY (+exec) | Merged Sonar addendum: estimate ignores chat `messages` (Bug 5); noted `/v1/openapi.json` 404 | flop-bug-report-draft.md |
-
+| Nov 10 (UTC) | Claude | Took over as the one lead. Observatory milestone 0 closed at review round 16 and merged | observatory/ |
+| Nov 10 (UTC) | Claude | Triage of the swarm audit at 8b5a068: fixes with tests that fail first, contract vectors, offline CI for the Python suites | imd-flop/, contract/, .github/workflows/ |
+| Nov 11 (UTC) | Claude | imd-hire: offline signer for paid IMD requests, reviewed by a second agent before first use | imd-hire/ |
+| Nov 11 (UTC) | Claude | First swarm audit paid by the agent's own wallet (0.5 IMD), of main at 8ddc5d2: job 769d5aeb-83f2-4d1b-b7d1-2549abca21c1 | imd-hire/README.md |
 
 ## Team (code names)
 Chief (lead), PRODY (PM / test runs), Sonar (research), Anvil (spend guard + receipt tracker), FIXER (visual lead), Inky (settlement viewer). Team address: see README.md. Per-agent devnet wallets aren't listed until FLOP publishes its final scoring rules.
