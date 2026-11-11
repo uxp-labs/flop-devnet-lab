@@ -210,3 +210,27 @@ describe("DEFECT 5: receipt --refresh calls a lost lock a busy ledger", () => {
     expect(r.err).not.toContain(DISAGREE);
   }, 30_000);
 });
+
+describe("DEFECT 6: two copies of lock.ts in one thread", () => {
+  // The own pid rule trusts that `held` lists every token this process holds. `held` is module state, so
+  // it lists only the tokens of one copy of lock.ts. Two copies in one process (here src/lock.ts through
+  // vitest and dist/lock.js, the same as a package loaded from two paths) each see the other's live lock
+  // as "our own pid, a token we do not hold": provably dead. The second copy reclaims the first copy's
+  // live lock and enters while the first is still inside. No worker thread is involved, so the planned
+  // "main thread only" rule does not cover it.
+  it("DEFECT 6 (low): a second copy of lock.ts in the same thread reclaims the first copy's live lock, and both are inside at once", async () => {
+    const h = tmpHome();
+    const dist = (await import(join(root, "dist", "ledger.js"))) as typeof import("../src/ledger.js");
+    const inside: string[] = [];
+    withLedgerLock(h, () => {
+      inside.push("src");
+      const mine = readFileSync(lockPath(h), "utf8");
+      dist.withLedgerLock(h, () => {
+        inside.push(`dist while src holds the lock: ${inside.includes("src")}`);
+        // dist's lock replaced src's: the first holder's lock is gone while it is still inside.
+        expect(readFileSync(lockPath(h), "utf8")).not.toBe(mine);
+      });
+    });
+    expect(inside).toEqual(["src", "dist while src holds the lock: true"]);
+  });
+});
