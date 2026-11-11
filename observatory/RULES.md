@@ -675,3 +675,47 @@ blank on the page and `null` in JSON and MCP.
   `drift.finalized_height` are always `null`, and no freshness rule applies. A `match` says the
   saved constants agree with the spec, not which chain they came from or when. M1 reads them from
   a usable RPC head (section 1.1) and fills both fields.
+
+## 7. Live network status
+
+The first live step reads network status only. Everything above holds for it; these rules are what
+it adds.
+
+- A live snapshot's trust is `"trusted RPC"`: it trusts one RPC endpoint, and the faucet and the
+  gateway as they answer. It is not proof. No light client runs and no header hash is checked. A
+  replay of a live run's tape has trust `"fixture"`, as all saved data has.
+- The pinned genesis is `DEVNET_GENESIS` in `src/status.ts`, never one a reading names.
+- The head is read once, one call at a time, in a fixed order: `system_chain`,
+  `chain_getBlockHash(0)` for the genesis, `chain_getFinalizedHead` for the finalized hash,
+  `chain_getHeader` at that hash for the finalized height, `chain_getHeader` with no hash for the
+  best height, and `state_getRuntimeVersion` at the finalized hash. Its `observed_at` is taken just
+  before the first call, so the head is never shown as fresher than it is, and the snapshot time
+  just after the last reading, so no reading is later than it.
+- A call that failed on the way (no socket, a time limit, an answer over the size limit or not
+  strict JSON, an RPC error) is a read error: the head's `error` names the call and why. An answer
+  that came back but does not hold what it should is `null`, with no error of its own, and the
+  status judges it as section 1.1 judges a saved head with that field left out. A header number is
+  read only as `0x` and hex digits, and only as a safe integer. A finalized hash that is not `0x`
+  plus 64 lower case hex is never read by: the finalized head and the runtime version stay unread.
+  `system_chain` is read for the tape only; no rule reads it.
+- Nothing is sent before the guard (section 4) allows it: every RPC method through `guardRpc`, every
+  HTTP method through `guardHttp`. Only these are reached: `wss://rpc.devnet.flop.network`,
+  `https://faucet.flop.network` and `https://api.flop.network`, with no port, user or password. A URL
+  off that list is refused and recorded as a network attempt, a redirect is refused, every request
+  has a 15 second limit, every answer a 1 MiB limit counted in bytes, and the run uses one socket.
+  An RPC answer that cannot be held to one call (too large, not text, not strict JSON, not an
+  object) fails the
+  socket, and every call after it.
+- A live run keeps no memory. It reads no earlier snapshot log, so none of the checks against
+  earlier snapshots in section 1.1 runs, and its `reset_detected` speaks for that one reading only,
+  as the `status` command's does.
+- It reads no event pages and no runtime constants. Its source reports no pages and no page errors,
+  as a scenario with no `event-pages` folder does, so a census over it is partial over its whole
+  range and every escrow is `unverified`. Neither is ever shown as "no events".
+- The tape holds every request in the order it was made and the answer as the observatory read
+  it, after parsing: a body that was not JSON is a reading with its error set, not the bytes. A
+  replay answers each request with the next entry and refuses any other request, naming both.
+- The run exits 0 when a truthful snapshot was written, whatever it says of each service, 3 when
+  that snapshot holds a reset signal (`reset_detected` true or any conflict), 4 when the guard or
+  the transport refused a request, 1 when the run broke before a snapshot was written, and 2 for
+  wrong flags or an output folder that is not empty. A run never writes over an earlier one.

@@ -3,8 +3,9 @@
 Read-only observatory for FLOP devnet: network status, reset detection, spec drift, an event
 census, and escrow states from finalized blocks. Output as a page, JSON feeds and an MCP server.
 
-M0 runs on saved fixtures only. No network, no keys, no spend, no signatures. Live reads (M1)
-wait for ultrapara's approval.
+M0 runs on saved fixtures only. No network, no keys, no spend, no signatures. The first step of
+live reads is one command that reads network status from FLOP devnet, read only, and nothing else
+([Live network status](#live-network-status)). Every other command still reads saved fixtures.
 
 ## Check
 
@@ -80,6 +81,48 @@ same. If a reading that later proves wrong keeps every later
 snapshot degraded, start a new log (a new `--log` path) and keep the old one for audit: the floor
 starts again from the first snapshot in the new log.
 
+## Live network status
+
+```sh
+npm run build
+node dist/live-bin.js --out <a new folder> [--source-sha <revision>]
+```
+
+What it does, once per run:
+
+- GETs the faucet's `/health` and `/chain` and the gateway's `/v1/models`.
+- Opens one WebSocket to `wss://rpc.devnet.flop.network` and calls `system_chain`,
+  `chain_getBlockHash(0)`, `chain_getFinalizedHead`, `chain_getHeader` for the finalized head (by
+  its hash) and for the best head, and `state_getRuntimeVersion` at the finalized head.
+- Builds a `networkStatus` snapshot from those answers with the same code the fixtures go through,
+  pinned to the genesis in `src/status.ts`.
+- Writes into the folder, which must be new or empty: the snapshot (`snapshot.json`, the feeds and
+  a one line `snapshots.jsonl`), `tape.jsonl` (every request and its answer, in order), `run.json`
+  (start, end, the revision if given, how it ended) and `SHA256SUMS`.
+- Prints one line in the GitHub Actions notice format with the trust, the three geneses,
+  `reset_detected`, the heights, the runtime version, each service's health and the snapshot hash.
+- Exits 0 when a truthful snapshot was written, even with a service down or unknown. It exits 3 for a
+  reset signal (`reset_detected` true, or any conflict), 4 when the guard or the transport refused a
+  request, 1 when the run broke, and 2 for wrong flags or a folder that is not empty.
+
+A live snapshot's trust is `"trusted RPC"`. It trusts one RPC endpoint, and the faucet and gateway
+as they answer. It is not proof: no light client, and no header hash is checked.
+
+What it never does: call an RPC method outside the guard's list, send anything but GET, reach a host
+other than `rpc.devnet.flop.network`, `faucet.flop.network` and `api.flop.network`, follow a
+redirect, hold a key, sign, or spend. Each request has a 15 s limit and each answer a 1 MiB limit.
+It keeps nothing between runs: it reads no earlier snapshot log, so the rollback, changed hash and
+stuck height checks do not run, and its `reset_detected` speaks for that one reading only, as the
+`status` command's does. It reads no events, so it writes no census, no escrow state and no drift.
+
+`.github/workflows/observatory-live.yml` runs it at 7 and 37 past each hour, by hand, and on a push
+that changes the workflow or a live source file, and uploads the folder as an artifact. No secrets.
+
+Offline, `npm test` covers it without a network: synthetic tapes in `fixtures/live-*` replayed
+through the status code, the transport with a fake socket class and a fake HTTP call, a run whose
+tape replays to the same snapshot, and the workflow read as data. `npm run check` runs those with
+everything else, and `mutants/live.json` holds the bugs they must catch.
+
 ## Rules
 
 [RULES.md](RULES.md) is the spec: unknown is never good news, only finalized events on the pinned
@@ -97,12 +140,17 @@ The two interfaces other teams import are in [../interfaces](../interfaces).
 | `src/census.ts`, `src/drift.ts` | event census and spec drift |
 | `src/store.ts`, `src/feed.ts`, `src/page.ts`, `src/mcp.ts` | snapshot log, feeds, page, MCP |
 | `src/guard.ts` | the read-only guard every transport must pass through |
+| `src/transport.ts` | the one interface a live read goes through |
+| `src/net.ts` | the live transport: the guard and the allow list before every send, time and size limits, one socket |
+| `src/tape.ts` | the recording of a live run, and its replay, which refuses any request that is not next |
+| `src/rpc-head.ts`, `src/live-source.ts` | the RPC answers turned into a head, and the Source over a transport |
+| `src/live-run.ts`, `src/live-bin.ts` | one live run and its files, and the command, the one module that names the real socket class and HTTP call |
 | `src/snapshot.ts`, `src/cli.ts` | one pass and the command line |
 | `src/snapshot-check.ts`, `src/mcp-bin.ts` | every check a snapshot must pass before the MCP binary serves it, each by name, and the binary that reads, checks and serves it |
 | `src/own.ts` | the one way src reads a data record by a key only known at run time |
 | `src/files.ts` | the one way src reads a file it is handed: a regular file only, opened without waiting, so a named pipe is refused instead of blocking |
 | `tools/recount.py` | independent census recount, written from RULES.md alone |
-| `fixtures/` | saved scenarios; `meta.json` says which values are real and which are made up |
+| `fixtures/` | saved scenarios; `meta.json` says which values are real and which are made up; `live-*` are synthetic tapes |
 | `mutants/` | the injected bugs and the tests that must catch them |
 | `REVIEW-LOG.md` | what each outside review and independent rerun found, and the fix and proof for each, newest first |
 | `test/setup.ts` | the runtime block on every network and process path, the leftover attempt check, and the attempts journal |
