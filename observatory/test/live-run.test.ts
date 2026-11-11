@@ -37,25 +37,28 @@ function asLive(inner: Transport): Transport {
   return { trust: "trusted RPC", label: "rpc wss://rpc.devnet.flop.network", rpc: (m, p) => inner.rpc(m, p), httpGet: (u) => inner.httpGet(u), now: () => inner.now(), close: () => inner.close() };
 }
 
-async function run(t: Transport, name = "out") {
+/** A run into a new folder under box, on the published log in log (by default one that does not exist: a first run). */
+async function run(t: Transport, name = "out", log = join(box, "no-log")) {
   const out = join(box, name);
-  return { out, r: await runLive(t, { out, sourceSha: SHA, clock: RUN_CLOCK }) };
+  return { out, r: await runLive(t, { out, log, sourceSha: SHA, clock: RUN_CLOCK }) };
 }
 
 describe("parseLiveArgs", () => {
-  it("reads --out and --source-sha", () => {
-    expect(parseLiveArgs(["--out", "o"])).toEqual({ out: "o", sourceSha: null });
-    expect(parseLiveArgs(["--source-sha", SHA, "--out", "o"])).toEqual({ out: "o", sourceSha: SHA });
+  it("reads --out, --log and --source-sha", () => {
+    expect(parseLiveArgs(["--out", "o", "--log", "l"])).toEqual({ out: "o", log: "l", sourceSha: null });
+    expect(parseLiveArgs(["--source-sha", SHA, "--log", "l", "--out", "o"])).toEqual({ out: "o", log: "l", sourceSha: SHA });
   });
 
   it.each([
     [[], "missing --out"],
+    [["--out", "o"], "missing --log"],
+    [["--out", "o", "--log"], "--log needs a value"],
     [["--out"], "--out needs a value"],
     [["--out", ""], "--out needs a value"],
     [["--out", "--source-sha"], "--out needs a value"],
     [["--out=o"], '"--out=o": give a flag\'s value as the next argument, not after ='],
     [["--out", "a", "--out", "b"], "--out is given twice"],
-    [["--log", "x", "--out", "o"], "--log is not a flag the live command reads"],
+    [["--logs", "x", "--out", "o"], "--logs is not a flag the live command reads"],
     [["o"], '"o" is no flag\'s value; every argument is --name followed by its value'],
   ])("refuses %j", (argv, why) => {
     expect(parseLiveArgs(argv)).toBe(why);
@@ -92,6 +95,7 @@ describe("runLive over a tape", () => {
       source_sha: SHA,
       exit_code: 0,
       exit_reason: "a truthful snapshot was written",
+      history: { state: "absent", detail: "the log folder does not exist, so this is a first run", files: 0, snapshots: 0, last_hash: null },
       snapshot_hash: snap.hash,
     });
   });
@@ -101,7 +105,7 @@ describe("runLive over a tape", () => {
     const s = r.snapshot as Snapshot;
     expect(r.notice).toBe(
       `::notice title=networkStatus::{"trust":"fixture","genesis_pinned":"${DEVNET_GENESIS}","genesis_rpc":"${DEVNET_GENESIS}","genesis_faucet":"${DEVNET_GENESIS}",` +
-        `"reset_detected":false,"finalized_height":3430000,"best_height":3430002,"runtime_version":1014014,"rpc":"ok","faucet":"ok","gateway":"ok","snapshot_hash":"${s.hash}"}`,
+        `"reset_detected":false,"finalized_height":3430000,"best_height":3430002,"runtime_version":1014014,"rpc":"ok","faucet":"ok","gateway":"ok","seq":0,"prev_hash":null,"snapshot_hash":"${s.hash}"}`,
     );
     expect(noticeLine(s)).toBe(r.notice);
     expect(r.notice).not.toMatch(/\n/);
@@ -179,7 +183,7 @@ describe("runLive over a tape", () => {
     writeFileSync(join(out, "old.txt"), "x");
     let closed = false;
     const t: Transport = { ...asLive(TapeTransport.parse(tapeText("live-healthy"))), close: () => (closed = true) };
-    const r = await runLive(t, { out, sourceSha: null, clock: RUN_CLOCK });
+    const r = await runLive(t, { out, log: join(box, "no-log"), sourceSha: null, clock: RUN_CLOCK });
     expect([r.code, r.snapshot, closed]).toEqual([EXIT.usage, null, true]);
     expect(readdirSync(out)).toEqual(["old.txt"]);
   });

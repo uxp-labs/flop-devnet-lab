@@ -39,7 +39,7 @@ type Files = Record<string, string>;
 async function latest(tape: string, live = true): Promise<Files> {
   const out = join(box, "latest");
   const t = TapeTransport.parse(tapeText(tape), `tape:${tape}`);
-  await runLive(live ? asLive(t) : t, { out, sourceSha: null, clock: () => "2026-11-11T06:00:02.000Z" });
+  await runLive(live ? asLive(t) : t, { out, log: join(box, "no-log"), sourceSha: null, clock: () => "2026-11-11T06:00:02.000Z" });
   return Object.fromEntries(readdirSync(out).map((n) => [n, readFileSync(join(out, n), "utf8")]));
 }
 
@@ -133,7 +133,8 @@ describe("judgeLatest", () => {
     const run = JSON.parse(f["run.json"] as string) as Record<string, unknown>;
     const withRun = (change: Record<string, unknown>) => judge(resummed({ ...f, "run.json": feedText({ ...run, ...change }) }));
     expect(withRun({ snapshot_hash: "0".repeat(64) })).toEqual({ usable: false, refused: ["run.json names another snapshot"] });
-    expect(withRun({ schema: "flop-observatory/live-run@1" })).toEqual({ usable: false, refused: ["run.json is not a flop-observatory/live-run@0"] });
+    // A run.json from before runs kept memory: its reading spoke for itself only.
+    expect(withRun({ schema: "flop-observatory/live-run@0" })).toEqual({ usable: false, refused: ["run.json is not a flop-observatory/live-run@1"] });
     expect(withRun({ exit_code: 3 })).toEqual({ usable: false, refused: ["run.json says exit 3, the snapshot says 0"] });
     expect(withRun({ exit_code: 4 })).toEqual({ usable: false, refused: ["run.json says exit 4, the snapshot says 0"] });
     expect(judge(resummed({ ...f, "run.json": JSON.stringify(run) }))).toEqual({ usable: false, refused: ["run.json is not in the written form"] });

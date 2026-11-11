@@ -2,8 +2,8 @@
   {
     "id": "day-log-name-order-ignored",
     "file": "src/store.ts",
-    "find": "  const names = readdirSync(dir).sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));",
-    "replace": "  const names = readdirSync(dir).sort((a, b) => (a < b ? 1 : a > b ? -1 : 0));",
+    "find": ".sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));\n  const snapshots",
+    "replace": ".sort((a, b) => (a < b ? 1 : a > b ? -1 : 0));\n  const snapshots",
     "test": "test/store.test.ts",
     "why": "the day files of a log are read in name order, as one chain"
   },
@@ -42,7 +42,7 @@
   {
     "id": "day-log-file-link-followed",
     "file": "src/store.ts",
-    "find": "    if (!lstatSync(path).isFile()) throw",
+    "find": "    if (!read(name, () => lstatSync(path)).isFile()) throw",
     "replace": "    if (false) throw",
     "test": "test/store.test.ts",
     "why": "a link or a folder at a day file's name is never read"

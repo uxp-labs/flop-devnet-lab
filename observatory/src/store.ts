@@ -200,14 +200,22 @@ export function readDayLog(dir: string): DayLog | null {
     throw new LogRefused("unreadable", `the log folder cannot be read: ${(e as NodeJS.ErrnoException).code ?? (e as Error).message}`);
   }
   if (!st.isDirectory()) throw new LogRefused("unreadable", "the log folder is not a folder");
-  const names = readdirSync(dir).sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
+  /** A system error on the way (no permission, say) refuses the log too: it is never a crash. */
+  const read = <T>(what: string, f: () => T): T => {
+    try {
+      return f();
+    } catch (e) {
+      throw new LogRefused("unreadable", `${what} cannot be read: ${(e as NodeJS.ErrnoException).code ?? (e as Error).message}`);
+    }
+  };
+  const names = read("the log folder", () => readdirSync(dir)).sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
   const snapshots: Snapshot[] = [];
   let chained = false;
   for (const name of names) {
     const path = join(dir, name);
     if (!isDayFile(name)) throw new LogRefused("unreadable", `the log folder holds ${JSON.stringify(name)}, which is no <UTC date>.jsonl day file`);
-    if (!lstatSync(path).isFile()) throw new LogRefused("unreadable", `${name} is not a regular file`);
-    for (const [i, line] of lines(path).entries()) {
+    if (!read(name, () => lstatSync(path)).isFile()) throw new LogRefused("unreadable", `${name} is not a regular file`);
+    for (const [i, line] of read(name, () => lines(path)).entries()) {
       const s = parseLine(line);
       if (typeof s === "string") throw new LogRefused("unreadable", `${name} line ${i} ${s}`);
       const last = snapshots.at(-1);
