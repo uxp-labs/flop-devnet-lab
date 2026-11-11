@@ -2,11 +2,11 @@
   "census": null,
   "drift": null,
   "escrows": [],
-  "hash": "93ef7da25ef6c9fa54d484c8885a19707f41d6087141901c633b709e9b241843",
-  "observed_at": "2026-11-11T08:08:57.648Z",
+  "hash": "201cd6e452b6459b38acf05f11a66d014d0302294447ed0ded09e016e2ba8506",
+  "observed_at": "2026-11-11T08:23:05.518Z",
   "pin": {
-    "finalized_hash": "0x39ec5c58218ed6f195942411d94a1d7d1198a3c8421f0eaf5a3f68ff7b31a23f",
-    "finalized_height": 3457487,
+    "finalized_hash": "0xbd9029954f5d4d3c82e8fc059aeb0c5c06e96ba8a8d42d2c4efc916cd8aa66fa",
+    "finalized_height": 3458329,
     "genesis": "0x99c172c095340ace980631f9123544c6bebd4839f3437e463533422d8be2d631",
     "node": "v22.23.4",
     "source": "live:rpc wss://rpc.devnet.flop.network",
@@ -16,45 +16,37 @@
   "schema": "flop-observatory/snapshot@0",
   "seq": 0,
   "status": {
-    "best_height": 3457491,
+    "best_height": 3458333,
     "conflicts": [],
     "faucet": {
-      "detail": "status degraded, ready false, http 200",
-      "health": "degraded",
-      "http": 200,
-      "limits": {
-        "addressCooldownMs": 86400000,
-        "dailyCapExemptionConfigured": true,
-        "dailyCapFlop": 10000000,
-        "identityCooldownMs": 86400000,
-        "ipCooldownMs": 10000,
-        "ipGrantsPerDay": 300,
-        "ipPrefixGrantsPerDay": 10000
-      },
-      "observed_at": "2026-11-11T08:08:49.501Z",
-      "ready": false
+      "detail": "GET timed out after 15000 ms",
+      "health": "unknown",
+      "http": null,
+      "limits": null,
+      "observed_at": null,
+      "ready": null
     },
     "finality_lag": 4,
-    "finalized_hash": "0x39ec5c58218ed6f195942411d94a1d7d1198a3c8421f0eaf5a3f68ff7b31a23f",
-    "finalized_height": 3457487,
+    "finalized_hash": "0xbd9029954f5d4d3c82e8fc059aeb0c5c06e96ba8a8d42d2c4efc916cd8aa66fa",
+    "finalized_height": 3458329,
     "gateway": {
       "detail": null,
       "health": "ok",
       "http": 200,
-      "observed_at": "2026-11-11T08:08:51.686Z"
+      "observed_at": "2026-11-11T08:23:01.209Z"
     },
     "genesis": {
       "faucet": "0x99c172c095340ace980631f9123544c6bebd4839f3437e463533422d8be2d631",
       "pinned": "0x99c172c095340ace980631f9123544c6bebd4839f3437e463533422d8be2d631",
       "rpc": "0x99c172c095340ace980631f9123544c6bebd4839f3437e463533422d8be2d631"
     },
-    "observed_at": "2026-11-11T08:08:57.648Z",
+    "observed_at": "2026-11-11T08:23:05.518Z",
     "reset_detected": false,
     "rpc": {
       "detail": null,
       "health": "ok",
       "http": null,
-      "observed_at": "2026-11-11T08:08:51.704Z",
+      "observed_at": "2026-11-11T08:23:01.229Z",
       "stale": false
     },
     "runtime_version": 1014014,
