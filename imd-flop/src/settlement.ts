@@ -4,9 +4,9 @@
  * the one verdict for a stored receipt beside the latest ledger row of its request (reconcile). Pure: no
  * file, network or ledger access. `run` (after its call) and `receipt --refresh` both book through
  * decideBooking, and `run` books a failed call through decideFailure, all in booking.ts. `run`,
- * `receipt <id>` and `status` all show the reconcile verdict. Behavior is pinned by contract/vectors/settlement-run.json,
- * settlement-refresh.json and reconcile.json, and the decision's properties by
- * test/decision-properties.test.ts.
+ * `receipt <id>` and `status` all show the reconcile verdict. Behavior is pinned by
+ * contract/vectors/settlement-run.json, settlement-refresh.json and reconcile.json, and the properties of
+ * the two decisions by test/decision-properties.test.ts.
  */
 import { knownAmount } from "./amount.js";
 

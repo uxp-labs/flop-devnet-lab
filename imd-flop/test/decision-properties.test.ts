@@ -1,6 +1,7 @@
 /**
- * Properties of the one booking decision (settlement.ts decideBooking), checked over a small grid of
- * previous rows, receipt reads and reported costs (booking step, review of the audit 8ddc5d2 fixes).
+ * Properties of the two booking decisions, checked over a small grid of previous rows, receipt reads,
+ * failure reports and reported costs (booking step, review of the audit 8ddc5d2 fixes): decideBooking for
+ * a receipt read, and decideFailure for what run reports when its paid call fails (settlement.ts).
  * Pure: no file, no provider, no network. The whole grid is walked on every run, and each test also
  * asserts how many cases it walked, so the grid cannot shrink unnoticed.
  *
@@ -14,9 +15,10 @@
  *  - Reported costs. None, 0, below every amount, between the amounts and the hold, above the hold. A
  *    request has one completion, so one reported cost: a row has either not recorded it yet or records the
  *    same cost the decision is given.
+ *  - Failure reports. A timeout, a gateway error, and "nothing was sent".
  */
 import { describe, expect, it } from "vitest";
-import { decideBooking, type Booking, type ReadOutcome } from "../src/settlement.js";
+import { decideBooking, decideFailure, type Booking, type Failure, type ReadOutcome } from "../src/settlement.js";
 
 const HOLD = 0.186;
 const BOOKED = 0.05;
@@ -177,5 +179,98 @@ describe("decideBooking properties", () => {
       return again.state !== next.state || again.spend !== next.spend || again.cap_charge !== next.cap_charge;
     });
     expect(r).toEqual({ walked: 154 * 100, failures: [], failed: 0 });
+  });
+});
+
+describe("decideFailure properties", () => {
+  const REPORTS: Failure[] = ["timeout_unknown", "error", "refused_local"];
+  /** The row after a failure report: the next booking, or the row itself when the report is not booked. */
+  const afterFailure = (prev: Row, report: Failure): Row => decideFailure(prev, report) ?? prev;
+  const same = (a: Row, b: Row) => a.state === b.state && a.spend === b.spend && a.cap_charge === b.cap_charge;
+  /** Walk every case with every report, collect what breaks the property, and say how many were walked. */
+  function walkReports(broken: (c: Case, report: Failure, next: Row, booked: boolean) => boolean) {
+    const failures: string[] = [];
+    let walked = 0;
+    for (const c of CASES) {
+      for (const report of REPORTS) {
+        walked += 1;
+        const decided = decideFailure(c.prev, report);
+        if (broken(c, report, decided ?? c.prev, decided !== null)) failures.push(JSON.stringify({ ...c, report }));
+      }
+    }
+    return { walked, failures: failures.slice(0, 5), failed: failures.length };
+  }
+
+  it("a failure report never changes a settling row", () => {
+    const r = walkReports((c, _report, next, booked) => settles(c.prev.state) && (booked || !same(next, c.prev)));
+    expect(r).toEqual({ walked: 154 * 3, failures: [], failed: 0 });
+    // 6 of the 11 row shapes settle: 54 of the 99 written rows and 30 of the 55 damaged ones.
+    expect(CASES.filter((c) => settles(c.prev.state)).length).toBe(84);
+  });
+
+  it("a failure report never changes the spend, and never lowers a known charge except the pre send release from a row that does not settle", () => {
+    const r = walkReports((c, report, next) => {
+      if (next.spend !== c.prev.spend) return true;
+      if (!known(c.prev.cap_charge)) return next.cap_charge !== c.prev.cap_charge;
+      const release = report === "refused_local" && !settles(c.prev.state);
+      return release ? next.cap_charge !== 0 : next.cap_charge !== c.prev.cap_charge;
+    });
+    expect(r).toEqual({ walked: 154 * 3, failures: [], failed: 0 });
+  });
+
+  it("a failure report is booked exactly on a row that does not settle and has a known charge, and then the state is the report", () => {
+    const r = walkReports((c, report, next, booked) => {
+      const expected = !settles(c.prev.state) && known(c.prev.cap_charge);
+      return booked !== expected || (booked ? next.state !== report : !same(next, c.prev));
+    });
+    expect(r).toEqual({ walked: 154 * 3, failures: [], failed: 0 });
+  });
+
+  it("a charge that is not a known amount is never replaced by a guess: no report changes such a row", () => {
+    const damaged = CASES.filter((c) => !known(c.prev.cap_charge));
+    const changed = damaged.flatMap((c) => REPORTS.filter((report) => decideFailure(c.prev, report) !== null).map((report) => JSON.stringify({ ...c, report })));
+    expect({ walked: damaged.length * 3, changed }).toEqual({ walked: 55 * 3, changed: [] });
+  });
+
+  it("booking the same report again changes nothing", () => {
+    const r = walkReports((_c, report, next) => !same(afterFailure(next, report), next));
+    expect(r).toEqual({ walked: 154 * 3, failures: [], failed: 0 });
+  });
+
+  it("a failure report before or after a trusted settling read: the same booked spend, and a charge not lower than the settlement's", () => {
+    // A report can reach the booking step before or after another process books a settling read of the same
+    // request. Either way the spend is the same. When the read's settlement is booked, the charge is at
+    // least max(settled, reported cost) either way, and in fact equal. When no settlement is booked from
+    // the read, the charge is equal either way too, with one exception that is counted here, not hidden:
+    // "nothing was sent" released a hold, and then a trusted read says settled or released with no amount.
+    // The released row holds nothing, so the row ends as settling with no spend and no hold, where the
+    // other order keeps the hold. It needs the gateway to hold a receipt for a request that was never sent.
+    const settlingReads = TRUSTED_READS.filter((read) => settles(read.state));
+    let walked = 0;
+    let releasedThenNoAmount = 0;
+    const failures: string[] = [];
+    for (const c of CASES) {
+      for (const report of REPORTS) {
+        for (const read of settlingReads) {
+          walked += 1;
+          const reportFirst = decideBooking(afterFailure(c.prev, report), read, c.cost).booking;
+          const readFirst = afterFailure(decideBooking(c.prev, read, c.cost).booking, report);
+          const settled = proves(read);
+          const bookedSettlement = settled !== null && !below(c.prev, read);
+          let ok = reportFirst.spend === readFirst.spend && settles(reportFirst.state) === settles(readFirst.state);
+          if (bookedSettlement) {
+            const floor = max(settled, c.cost);
+            ok &&= known(reportFirst.cap_charge) && known(readFirst.cap_charge) && reportFirst.cap_charge! >= floor && readFirst.cap_charge! >= floor && reportFirst.cap_charge === readFirst.cap_charge;
+          } else if (report === "refused_local" && !settles(c.prev.state) && known(c.prev.cap_charge)) {
+            releasedThenNoAmount += 1;
+            ok &&= reportFirst.cap_charge === max(0, c.cost) && readFirst.cap_charge === max(c.prev.cap_charge!, c.cost);
+          } else {
+            ok &&= reportFirst.cap_charge === readFirst.cap_charge;
+          }
+          if (!ok) failures.push(show(c, read) + " " + report);
+        }
+      }
+    }
+    expect({ walked, releasedThenNoAmount, failures: failures.slice(0, 5), failed: failures.length }).toEqual({ walked: 154 * 3 * 10, releasedThenNoAmount: 90, failures: [], failed: 0 });
   });
 });
