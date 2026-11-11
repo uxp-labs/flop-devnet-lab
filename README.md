@@ -13,7 +13,7 @@ paid to the IMD swarm to audit it.
 |---|---|---|
 | `imd-flop/` | Reference CLI for FLOP as a provider in the IMD worker. Links one seat to one FLOP identity, caps daily spend, keeps a receipt next to each job. Mock provider by default. A paid call needs explicit opt in. | `npm run check` |
 | `imd-hire/` | Offline signer for hiring the IMD swarm. Makes the two wallet signatures a paid IMD request needs, after checking them against the request and a price limit. Never touches the network. | `npm test` |
-| `observatory/` | Read only view of the devnet: network status, reset detection, spec drift, an event census and escrow states. Milestone 0 runs on saved fixtures only. | `npm run check` |
+| `observatory/` | Read only view of the devnet: network status, reset detection, spec drift, an event census and escrow states. A scheduled run reads network status about hourly and publishes it to the `observatory-data` branch, with recordings of what the RPC answered. A decoder turns recorded metadata, events and storage keys into values, pinned to a reviewed shape of the runtime. Everything else still runs on saved fixtures. | `npm run check` |
 | `interfaces/` | The JSON schemas the tools share: `escrowState` and `networkStatus`. | |
 | `contract/` | The spend rules and test vectors that `imd-flop`, `spend-guard` and `viewer` must agree on. | |
 | `spend-guard/` | Gets the free estimate and refuses anything over the cap before sending. Unknown spend stays unknown, never 0. Includes a read only receipt tracker. | `python3 -m unittest discover -s . -p "test_*.py"` |
@@ -35,7 +35,26 @@ Nothing here spends, signs with a wallet or posts in public without ultrapara's 
 Audits of the spend path are bought from the IMD swarm with `imd-hire`, and each report is triaged
 into fixes with a test that fails first.
 
-## Team
+## Who works here
+
+ultrapara owns the repo and decides what spends, what signs and what is posted. X: [@ultrapara](https://x.com/ultrapara)
+
+**Claude** has been the one lead since Nov 10, 2026. Claude is an AI agent (Anthropic's Claude) that
+works for ultrapara. It writes the code, has other agents that wrote none of it review it, buys
+audits and research from the IMD swarm, runs the lab's devnet tests, and merges when the checks pass.
+
+Claude's public identity on FLOP devnet, one key made for this lab:
+
+| | |
+|---|---|
+| FLOP devnet address | `5HEA8QECFwBg1F9cxoXzvQzryu2d5qj5zASJS7owNW2zebBz` |
+| DID | `did:key:z6MkupnPdzwmSg8eN4qgqhhT3ciNQuApTMQt1u5gHDCqhqmB` |
+
+The devnet tests under `research/` are run from that address. It is the owner account in each, and
+the device keys a test uses are funded from it and emptied again. It claimed the faucet once and does
+not claim again. Its key stays on ultrapara's machine and is never printed.
+
+**The first team.** ultrapara's first agent fleet started this repo on Nov 8 to 10, 2026:
 
 | Code name | Role |
 |---|---|
@@ -45,11 +64,10 @@ into fixes with a test that fails first.
 | Anvil | spend guard + receipt tracker |
 | FIXER | visual lead |
 | Inky | settlement viewer |
-| Claude | lead since Nov 10, 2026: Observatory, audit fixes, imd-hire |
 
-**Team address (FLOP devnet):** `5Cg5aZXdxXDTemdppujUdniQ3LE9dacHvXRWabU18vphcLY6`
+Their team address on FLOP devnet: `5Cg5aZXdxXDTemdppujUdniQ3LE9dacHvXRWabU18vphcLY6`
 
-X: [@ultrapara](https://x.com/ultrapara)
+`CREDITS.md` is the dated log of who did what, with the public filings.
 
 ## License
 
