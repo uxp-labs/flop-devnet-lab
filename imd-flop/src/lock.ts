@@ -24,6 +24,10 @@
  *    every other outcome waits, so the deadline is reached whatever is at the path.
  *  - Right after taking the lock, the holder removes every right file whose token is not its own, and
  *    every temporary file whose owner is provably dead. Never the lock.
+ *  - A token is 1 to 64 characters of A to Z, a to z, 0 to 9, "_" and "-" (this tool writes 32 hex digits).
+ *    The token read from a lock becomes part of a file name, the reclaim right. An owner record whose
+ *    token is anything else, a path for one, is not a readable owner: nothing is created for it, nothing
+ *    is removed for it, and the waiter times out.
  *
  * Why it is exclusive. Tokens are random and never reused, so a lock that stops carrying a token never
  * carries it again. While the lock carries token T, a right file of T is removed only by its own creator:
@@ -121,10 +125,19 @@ export function parseOwner(text: string | null): LockOwner | null {
   if (text === null) return null;
   try {
     const o = JSON.parse(text);
-    if (Number.isInteger(o?.pid) && o.pid > 0 && typeof o.host === "string" && typeof o.token === "string") return { pid: o.pid, host: o.host, token: o.token };
+    if (Number.isInteger(o?.pid) && o.pid > 0 && typeof o.host === "string" && isToken(o.token)) return { pid: o.pid, host: o.host, token: o.token };
   } catch { /* unreadable or malformed: never provably dead */ }
   return null;
 }
+
+/**
+ * What a token is made of. A token read from a file goes into the name of the reclaim right, so it must
+ * never hold a path separator, a dot or anything that is not plain: see the rules in the header.
+ */
+const TOKEN = "[A-Za-z0-9_-]{1,64}";
+const TOKEN_ONLY = new RegExp(`^${TOKEN}$`);
+const RIGHT_NAME = new RegExp(`^(${TOKEN})\\.\\d+$`);
+export const isToken = (v: unknown): v is string => typeof v === "string" && TOKEN_ONLY.test(v);
 
 /** The reclaim right of level n for the lock that carries token. */
 export const rightPath = (lock: string, token: string, n: number): string => `${lock}.reclaim.${token}.${n}`;
@@ -200,7 +213,7 @@ export function* release(self: Self, lock: string): Step<Unlinked> {
 
 /** The token a right file name is for, or null when the path is not a right file of this lock. */
 export function rightToken(lock: string, path: string): string | null {
-  const m = path.startsWith(`${lock}.reclaim.`) ? /^([^.]+)\.\d+$/.exec(path.slice(`${lock}.reclaim.`.length)) : null;
+  const m = path.startsWith(`${lock}.reclaim.`) ? RIGHT_NAME.exec(path.slice(`${lock}.reclaim.`.length)) : null;
   return m ? m[1] : null;
 }
 const isTmpName = (lock: string, path: string) => path.startsWith(`${lock}.`) && path.endsWith(".tmp");

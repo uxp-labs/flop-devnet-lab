@@ -13,7 +13,7 @@ import { hostname } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import { appendLedger, LedgerLockError, LedgerLockLost, withLedgerLock, type LedgerEntry } from "../src/ledger.js";
-import { provablyDead, reclaim, rightPath, runOnDisk, sweep, timeoutMessage, type Self, type Step } from "../src/lock.js";
+import { attempt, parseOwner, provablyDead, reclaim, rightPath, rightToken, runOnDisk, sweep, timeoutMessage, type Self, type Step } from "../src/lock.js";
 import { canActAsAnotherUser, cli, OTHER_UID, readLines, readySeat, tmpHome } from "./helpers.js";
 
 const SEAT = "9001";
@@ -331,6 +331,64 @@ describe("a right file with no readable owner means no right (review M2)", () =>
  *    process's own leftover lock alive for as long as it lives: it fails closed. The release test above
  *    reclaims that leftover at once in the same process, so it kills M19 too.
  */
+
+describe("a token is plain: nothing read from a lock file becomes a path", () => {
+  // The token of a lock goes into the name of the reclaim right, `<lock>.reclaim.<token>.<n>`. With any
+  // string allowed, a lock file that names a dead pid and the token "x/../../escape" made a waiter create
+  // `<home>/../escape.1` (given a directory `<lock>.reclaim.x`), a path outside the home that the lock file
+  // chose. Decided: a token is 1 to 64 characters of A-Z a-z 0-9 _ -, and an owner record with any other
+  // token is not a readable owner.
+  const good = ["T", "a", "0123456789abcdef0123456789abcdef", "A_b-9", "x".repeat(64)];
+  const bad = ["", "x".repeat(65), "x/../../escape", "/abs", "a.b", "..", "a b", "a\n", "a\\b", "a\u0000", "\u00e9", "a\u202eb"];
+
+  it("parseOwner: a plain token is an owner, anything else is not a readable owner", () => {
+    for (const t of good) expect(parseOwner(owner(4_000_020, t)), t).toEqual({ pid: 4_000_020, host: hostname(), token: t });
+    for (const t of bad) expect(parseOwner(owner(4_000_020, t)), JSON.stringify(t)).toBeNull();
+    for (const t of [7, null, true, ["T"], { t: "T" }]) expect(parseOwner(JSON.stringify({ pid: 4_000_020, host: hostname(), token: t })), JSON.stringify(t)).toBeNull();
+    expect(parseOwner(JSON.stringify({ pid: 4_000_020, host: hostname() }))).toBeNull();
+  });
+
+  it("one attempt at a lock whose token holds a path: no liveness probe, no file created anywhere, it waits", () => {
+    const lock = "/h/home/ledger.jsonl.lock";
+    for (const t of bad) {
+      const g = attempt(self(4_000_021, "me"), lock);
+      expect(g.next().value).toEqual({ kind: "create", path: lock, content: expect.any(String) });
+      expect(g.next(false).value).toEqual({ kind: "read", path: lock });
+      expect(g.next(owner(4_000_022, t)), JSON.stringify(t)).toEqual({ done: true, value: "wait" });
+    }
+  });
+
+  it("a right file name with anything but a plain token is not a right file of this lock", () => {
+    const lock = "/h/ledger.jsonl.lock";
+    for (const t of good) expect(rightToken(lock, rightPath(lock, t, 3)), t).toBe(t);
+    for (const t of bad) expect(rightToken(lock, rightPath(lock, t, 3)), JSON.stringify(t)).toBeNull();
+    expect(rightToken(lock, `${lock}.reclaim.T`)).toBeNull();
+    expect(rightToken(lock, `${lock}.reclaim.T.x`)).toBeNull();
+    expect(rightToken(lock, `${lock}.reclaim.T.1\n`)).toBeNull();
+    expect(rightToken(lock, `/other/ledger.jsonl.lock.reclaim.T.1`)).toBeNull();
+  });
+
+  it("the real thing: a dead pid's lock whose token is a path is never removed, and nothing appears outside the home", () => {
+    const h = tmpHome();
+    const home = join(h, "home");
+    mkdirSync(home);
+    const lock = lockPath(home);
+    // What the path needs to resolve: the directory the token's first part names.
+    mkdirSync(`${lock}.reclaim.x`);
+    const text = owner(deadPid(), "x/../../escape");
+    writeFileSync(lock, text);
+    // Before the rule this take succeeded: the waiter made its right file at `<h>/escape.1`, removed the
+    // lock, and removed the right file again.
+    let caught: unknown;
+    try { withLedgerLock(home, () => 1); } catch (e) { caught = e; }
+    expect(caught).toBeInstanceOf(LedgerLockError);
+    expect((caught as Error).message).toMatch(/^ledger lock timeout: .*ledger\.jsonl\.lock \(\d+ s old\) has no readable owner\. If no imd-flop process/);
+    expect(readFileSync(lock, "utf8")).toBe(text);
+    expect(readdirSync(h)).toEqual(["home"]);
+    expect(readdirSync(home).sort()).toEqual(["ledger.jsonl.lock", "ledger.jsonl.lock.reclaim.x"]);
+    expect(readdirSync(`${lock}.reclaim.x`)).toEqual([]);
+  }, 30_000);
+});
 
 describe("L4: no age rule", () => {
   it("a provably dead owner's lock is reclaimed at once, however young", () => {
