@@ -8,7 +8,7 @@ import { existsSync, readFileSync, writeFileSync, appendFileSync } from "node:fs
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { FlopHTTPError } from "@flop-labs/client";
-import { knownAmount } from "../src/amount.js";
+import { EXACT_BOUND, exactAmount, knownAmount } from "../src/amount.js";
 import { EXIT } from "../src/errors.js";
 import { PreSendError } from "../src/gateway.js";
 import { usableCapCharge } from "../src/ledger.js";
@@ -86,6 +86,8 @@ const adapters: Record<string, (i: Json, want: Json) => Promise<Json> | Json> = 
     return { accepted: true, value: (await cli(h, ["cap", "show", "--json"])).json().cap.daily };
   },
   "amount.json": (i) => ({ known_settled: knownAmount(i.value), usable_cap_charge: usableCapCharge(i.value) }),
+  // An input with no value key stands for a missing field: i.value is undefined.
+  "amount.exact": (i) => ({ exact: exactAmount(i.value) }),
   "amount.reserved": (i) => ({ reserved: classifyReceipt({ request_id: "r", reserved_spend: i.value } as GatewayReceipt, { job: "j", provider: "mock" }).reserved }),
   max_tokens: async (i) => {
     const h = await ready();
@@ -171,6 +173,8 @@ describe("contract files", () => {
     expect(RECEIPT_IDENTITY_STATUS).toBe(c.IDENTITY.value);
     expect(STAGE_GATEWAY).toBe(c.STAGE_GATEWAY.value);
     expect(EXIT).toEqual(c.EXIT[PART]);
+    expect(EXACT_BOUND.toString()).toBe(c.EXACT_AMOUNT_BOUND.value);
+    expect(EXACT_BOUND).toBe(2n ** 128n);
   });
   it("settlement.ts SETTLES, UNRESOLVED and DISAGREE match rules.json", () => {
     expect([...SETTLES]).toEqual(rules.constants.SETTLES.value);

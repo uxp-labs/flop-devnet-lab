@@ -25,6 +25,11 @@ def amount_json(i):
     return {"amount": NS["amount"](i["value"])}
 
 
+def amount_exact(i):
+    # An input with no value key stands for a missing field.
+    return {"exact": NS["exact"](i.get("value"))}
+
+
 def receipt_state(i):
     return {"settles": i["state"] in NS["SETTLES"]}
 
@@ -87,7 +92,7 @@ def reconcile(i):
     return {"verdict": verdict}
 
 
-ADAPTERS = {"amount.json": amount_json, "receipt.state": receipt_state, "identity": identity, "read.failed": read_failed, "viewer.label": label,
+ADAPTERS = {"amount.json": amount_json, "amount.exact": amount_exact, "receipt.state": receipt_state, "identity": identity, "read.failed": read_failed, "viewer.label": label,
             "viewer.reservation_line": reservation_line, "viewer.cap_charge_line": cap_charge_line, "reconcile": reconcile}
 
 
@@ -97,6 +102,9 @@ class ContractVectors(unittest.TestCase):
         self.assertEqual(NS["DISAGREE"], c["DISAGREE"]["value"])
         self.assertEqual(NS["IDENTITY"], c["IDENTITY"]["value"])
         self.assertEqual(list(NS["SETTLES"]), c["SETTLES"]["value"])
+        self.assertEqual(NS["EXACT_BOUND"], 2 ** 128)
+        self.assertEqual(str(NS["EXACT_BOUND"]), c["EXACT_AMOUNT_BOUND"]["value"])
+        self.assertEqual(NS["FLOP_DECIMALS"], c["FLOP_DECIMALS"]["value"])
         # unresolved() holds its own literal. It must name exactly the states rules.json lists.
         for state in c["UNRESOLVED"]["value"]:
             self.assertTrue(NS["unresolved"]({"state": state}), state)

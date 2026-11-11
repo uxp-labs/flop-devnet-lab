@@ -4,7 +4,7 @@ Inputs:  mock-receipts/ledger.jsonl + mock-receipts/*.json  (written by imd-flop
          lane-examples.json                                  (example data for kinds the demo lacks)
 Output:  rewrites the block between <!-- lane:start --> and <!-- lane:end --> in the viewer HTML.
 No network. Unknown spend renders as an empty slot, never 0."""
-import json, glob, os, sys, html
+import json, glob, os, re, sys, html
 from datetime import datetime
 from zoneinfo import ZoneInfo
 D = os.path.dirname(os.path.abspath(__file__))
@@ -39,6 +39,19 @@ def amount(v):
     nothing shows it or subtracts it."""
     if isinstance(v, bool) or not isinstance(v, (int, float)) or v != v or v in (float("inf"), float("-inf")) or v < 0: return None
     return v
+EXACT_BOUND = int(_C["EXACT_AMOUNT_BOUND"]["value"])  # 2^128: per FLOP's own sources (read 2026-11-11) the chain holds money in a u128
+EXACT_DIGITS = len(str(EXACT_BOUND - 1))  # 39
+FLOP_DECIMALS = _C["FLOP_DECIMALS"]["value"]  # 10^18 base units per FLOP
+DIGITS = re.compile(r"[0-9]+")
+def exact(v):
+    """The exact amount rule (money stage 1), the twin of imd-flop's amount.ts exactAmount; pinned for both by
+    contract/vectors/exact-amount.json. An exact amount is a string of ASCII decimal digits only (full match,
+    so a trailing newline is refused) whose value is below 2^128, returned in canonical form: no leading
+    zeros, "0" for zero. Anything else is None (unknown, never 0). The zeros go before int(), so a long run of
+    them never meets Python's limit on digits."""
+    if not isinstance(v, str) or not DIGITS.fullmatch(v): return None
+    digits = v.lstrip("0") or "0"
+    return digits if len(digits) <= EXACT_DIGITS and int(digits) < EXACT_BOUND else None
 def short(s, n=10):
     """Head and tail of an id, so distinct random tails stay distinct. The full id goes in a title attribute."""
     return s if len(s) <= n + 2 else s[:6] + "…" + s[-(n - 6):]

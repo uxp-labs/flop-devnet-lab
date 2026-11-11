@@ -1,0 +1,634 @@
+{
+ "file": "exact-amount.json",
+ "description": "The exact amount rule (money stage 1). imd-flop: amount.ts exactAmount(value). viewer: build-lane.py exact(value). An exact amount is a string of ASCII decimal digits only whose value is below 2^128 (rules.json EXACT_AMOUNT_BOUND), returned in canonical form: no leading zeros, \"0\" for zero. Anything else is unknown (null), never 0. Per FLOP's own sources, read 2026-11-11: the chain counts money in whole base units, 10^18 per FLOP, in a u128, and the gateway receipt (OpenAPI CredentialReceipt) carries settled_spend_raw as a string matching ^[0-9]+$ in base units, or null. A vector whose input has no value key stands for a missing field.",
+ "status": "money stage 1",
+ "vectors": [
+  {
+   "id": "exact-digits",
+   "rule": "amount.exact",
+   "input": {
+    "value": "500"
+   },
+   "expect": {
+    "imd-flop": {
+     "exact": "500"
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard does not read exact amounts yet (money stage 1)"
+    },
+    "viewer": {
+     "exact": "500"
+    }
+   }
+  },
+  {
+   "id": "exact-one-flop",
+   "rule": "amount.exact",
+   "input": {
+    "value": "1000000000000000000"
+   },
+   "expect": {
+    "imd-flop": {
+     "exact": "1000000000000000000"
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard does not read exact amounts yet (money stage 1)"
+    },
+    "viewer": {
+     "exact": "1000000000000000000"
+    }
+   },
+   "note": "1 FLOP in base units (10^18 per FLOP)"
+  },
+  {
+   "id": "exact-zero",
+   "rule": "amount.exact",
+   "input": {
+    "value": "0"
+   },
+   "expect": {
+    "imd-flop": {
+     "exact": "0"
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard does not read exact amounts yet (money stage 1)"
+    },
+    "viewer": {
+     "exact": "0"
+    }
+   }
+  },
+  {
+   "id": "exact-zeros",
+   "rule": "amount.exact",
+   "input": {
+    "value": "000"
+   },
+   "expect": {
+    "imd-flop": {
+     "exact": "0"
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard does not read exact amounts yet (money stage 1)"
+    },
+    "viewer": {
+     "exact": "0"
+    }
+   },
+   "note": "leading zeros of zero: canonical \"0\""
+  },
+  {
+   "id": "exact-leading-zeros",
+   "rule": "amount.exact",
+   "input": {
+    "value": "000500"
+   },
+   "expect": {
+    "imd-flop": {
+     "exact": "500"
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard does not read exact amounts yet (money stage 1)"
+    },
+    "viewer": {
+     "exact": "500"
+    }
+   },
+   "note": "leading zeros are dropped"
+  },
+  {
+   "id": "exact-many-leading-zeros",
+   "rule": "amount.exact",
+   "input": {
+    "value": "000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001"
+   },
+   "expect": {
+    "imd-flop": {
+     "exact": "1"
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard does not read exact amounts yet (money stage 1)"
+    },
+    "viewer": {
+     "exact": "1"
+    }
+   },
+   "note": "5000 leading zeros: still the value 1. Python's int() refuses strings over 4300 digits, so the zeros go first"
+  },
+  {
+   "id": "exact-max",
+   "rule": "amount.exact",
+   "input": {
+    "value": "340282366920938463463374607431768211455"
+   },
+   "expect": {
+    "imd-flop": {
+     "exact": "340282366920938463463374607431768211455"
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard does not read exact amounts yet (money stage 1)"
+    },
+    "viewer": {
+     "exact": "340282366920938463463374607431768211455"
+    }
+   },
+   "note": "the largest u128 value, 2^128 - 1"
+  },
+  {
+   "id": "exact-max-leading-zero",
+   "rule": "amount.exact",
+   "input": {
+    "value": "0340282366920938463463374607431768211455"
+   },
+   "expect": {
+    "imd-flop": {
+     "exact": "340282366920938463463374607431768211455"
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard does not read exact amounts yet (money stage 1)"
+    },
+    "viewer": {
+     "exact": "340282366920938463463374607431768211455"
+    }
+   }
+  },
+  {
+   "id": "exact-bound",
+   "rule": "amount.exact",
+   "input": {
+    "value": "340282366920938463463374607431768211456"
+   },
+   "expect": {
+    "imd-flop": {
+     "exact": null
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard does not read exact amounts yet (money stage 1)"
+    },
+    "viewer": {
+     "exact": null
+    }
+   },
+   "note": "2^128 does not fit a u128"
+  },
+  {
+   "id": "exact-above-bound",
+   "rule": "amount.exact",
+   "input": {
+    "value": "340282366920938463463374607431768211457"
+   },
+   "expect": {
+    "imd-flop": {
+     "exact": null
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard does not read exact amounts yet (money stage 1)"
+    },
+    "viewer": {
+     "exact": null
+    }
+   }
+  },
+  {
+   "id": "exact-forty-digits",
+   "rule": "amount.exact",
+   "input": {
+    "value": "1000000000000000000000000000000000000000"
+   },
+   "expect": {
+    "imd-flop": {
+     "exact": null
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard does not read exact amounts yet (money stage 1)"
+    },
+    "viewer": {
+     "exact": null
+    }
+   },
+   "note": "40 digits, above 2^128"
+  },
+  {
+   "id": "exact-number",
+   "rule": "amount.exact",
+   "input": {
+    "value": 500
+   },
+   "expect": {
+    "imd-flop": {
+     "exact": null
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard does not read exact amounts yet (money stage 1)"
+    },
+    "viewer": {
+     "exact": null
+    }
+   },
+   "note": "a JSON number is not an exact amount: the exact amount is a digit string"
+  },
+  {
+   "id": "exact-number-zero",
+   "rule": "amount.exact",
+   "input": {
+    "value": 0
+   },
+   "expect": {
+    "imd-flop": {
+     "exact": null
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard does not read exact amounts yet (money stage 1)"
+    },
+    "viewer": {
+     "exact": null
+    }
+   },
+   "note": "a number 0 is unknown, never 0"
+  },
+  {
+   "id": "exact-empty",
+   "rule": "amount.exact",
+   "input": {
+    "value": ""
+   },
+   "expect": {
+    "imd-flop": {
+     "exact": null
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard does not read exact amounts yet (money stage 1)"
+    },
+    "viewer": {
+     "exact": null
+    }
+   }
+  },
+  {
+   "id": "exact-minus",
+   "rule": "amount.exact",
+   "input": {
+    "value": "-1"
+   },
+   "expect": {
+    "imd-flop": {
+     "exact": null
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard does not read exact amounts yet (money stage 1)"
+    },
+    "viewer": {
+     "exact": null
+    }
+   }
+  },
+  {
+   "id": "exact-plus",
+   "rule": "amount.exact",
+   "input": {
+    "value": "+1"
+   },
+   "expect": {
+    "imd-flop": {
+     "exact": null
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard does not read exact amounts yet (money stage 1)"
+    },
+    "viewer": {
+     "exact": null
+    }
+   }
+  },
+  {
+   "id": "exact-decimal-point",
+   "rule": "amount.exact",
+   "input": {
+    "value": "1.0"
+   },
+   "expect": {
+    "imd-flop": {
+     "exact": null
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard does not read exact amounts yet (money stage 1)"
+    },
+    "viewer": {
+     "exact": null
+    }
+   }
+  },
+  {
+   "id": "exact-trailing-point",
+   "rule": "amount.exact",
+   "input": {
+    "value": "1."
+   },
+   "expect": {
+    "imd-flop": {
+     "exact": null
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard does not read exact amounts yet (money stage 1)"
+    },
+    "viewer": {
+     "exact": null
+    }
+   }
+  },
+  {
+   "id": "exact-exponent",
+   "rule": "amount.exact",
+   "input": {
+    "value": "1e18"
+   },
+   "expect": {
+    "imd-flop": {
+     "exact": null
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard does not read exact amounts yet (money stage 1)"
+    },
+    "viewer": {
+     "exact": null
+    }
+   }
+  },
+  {
+   "id": "exact-hex",
+   "rule": "amount.exact",
+   "input": {
+    "value": "0x10"
+   },
+   "expect": {
+    "imd-flop": {
+     "exact": null
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard does not read exact amounts yet (money stage 1)"
+    },
+    "viewer": {
+     "exact": null
+    }
+   }
+  },
+  {
+   "id": "exact-hex-letters",
+   "rule": "amount.exact",
+   "input": {
+    "value": "ff"
+   },
+   "expect": {
+    "imd-flop": {
+     "exact": null
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard does not read exact amounts yet (money stage 1)"
+    },
+    "viewer": {
+     "exact": null
+    }
+   }
+  },
+  {
+   "id": "exact-leading-space",
+   "rule": "amount.exact",
+   "input": {
+    "value": " 1"
+   },
+   "expect": {
+    "imd-flop": {
+     "exact": null
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard does not read exact amounts yet (money stage 1)"
+    },
+    "viewer": {
+     "exact": null
+    }
+   }
+  },
+  {
+   "id": "exact-trailing-space",
+   "rule": "amount.exact",
+   "input": {
+    "value": "1 "
+   },
+   "expect": {
+    "imd-flop": {
+     "exact": null
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard does not read exact amounts yet (money stage 1)"
+    },
+    "viewer": {
+     "exact": null
+    }
+   }
+  },
+  {
+   "id": "exact-trailing-newline",
+   "rule": "amount.exact",
+   "input": {
+    "value": "1\n"
+   },
+   "expect": {
+    "imd-flop": {
+     "exact": null
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard does not read exact amounts yet (money stage 1)"
+    },
+    "viewer": {
+     "exact": null
+    }
+   },
+   "note": "full match: a trailing newline is refused"
+  },
+  {
+   "id": "exact-tab",
+   "rule": "amount.exact",
+   "input": {
+    "value": "\t1"
+   },
+   "expect": {
+    "imd-flop": {
+     "exact": null
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard does not read exact amounts yet (money stage 1)"
+    },
+    "viewer": {
+     "exact": null
+    }
+   }
+  },
+  {
+   "id": "exact-underscore",
+   "rule": "amount.exact",
+   "input": {
+    "value": "1_000"
+   },
+   "expect": {
+    "imd-flop": {
+     "exact": null
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard does not read exact amounts yet (money stage 1)"
+    },
+    "viewer": {
+     "exact": null
+    }
+   }
+  },
+  {
+   "id": "exact-comma",
+   "rule": "amount.exact",
+   "input": {
+    "value": "1,000"
+   },
+   "expect": {
+    "imd-flop": {
+     "exact": null
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard does not read exact amounts yet (money stage 1)"
+    },
+    "viewer": {
+     "exact": null
+    }
+   }
+  },
+  {
+   "id": "exact-arabic-indic-digit",
+   "rule": "amount.exact",
+   "input": {
+    "value": "١"
+   },
+   "expect": {
+    "imd-flop": {
+     "exact": null
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard does not read exact amounts yet (money stage 1)"
+    },
+    "viewer": {
+     "exact": null
+    }
+   },
+   "note": "only ASCII 0-9 are digits"
+  },
+  {
+   "id": "exact-fullwidth-digit",
+   "rule": "amount.exact",
+   "input": {
+    "value": "１"
+   },
+   "expect": {
+    "imd-flop": {
+     "exact": null
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard does not read exact amounts yet (money stage 1)"
+    },
+    "viewer": {
+     "exact": null
+    }
+   }
+  },
+  {
+   "id": "exact-null",
+   "rule": "amount.exact",
+   "input": {
+    "value": null
+   },
+   "expect": {
+    "imd-flop": {
+     "exact": null
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard does not read exact amounts yet (money stage 1)"
+    },
+    "viewer": {
+     "exact": null
+    }
+   },
+   "note": "null means unavailable, never an inferred zero"
+  },
+  {
+   "id": "exact-missing",
+   "rule": "amount.exact",
+   "input": {},
+   "expect": {
+    "imd-flop": {
+     "exact": null
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard does not read exact amounts yet (money stage 1)"
+    },
+    "viewer": {
+     "exact": null
+    }
+   },
+   "note": "absent: unknown, never 0"
+  },
+  {
+   "id": "exact-true",
+   "rule": "amount.exact",
+   "input": {
+    "value": true
+   },
+   "expect": {
+    "imd-flop": {
+     "exact": null
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard does not read exact amounts yet (money stage 1)"
+    },
+    "viewer": {
+     "exact": null
+    }
+   }
+  },
+  {
+   "id": "exact-list",
+   "rule": "amount.exact",
+   "input": {
+    "value": [
+     "1"
+    ]
+   },
+   "expect": {
+    "imd-flop": {
+     "exact": null
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard does not read exact amounts yet (money stage 1)"
+    },
+    "viewer": {
+     "exact": null
+    }
+   }
+  },
+  {
+   "id": "exact-object",
+   "rule": "amount.exact",
+   "input": {
+    "value": {
+     "value": "1"
+    }
+   },
+   "expect": {
+    "imd-flop": {
+     "exact": null
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard does not read exact amounts yet (money stage 1)"
+    },
+    "viewer": {
+     "exact": null
+    }
+   }
+  }
+ ]
+}

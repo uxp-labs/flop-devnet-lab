@@ -25,6 +25,20 @@
       "spend-guard": "guard.py MIN_CAP (read from this file)",
       "viewer": null
     },
+    "FLOP_DECIMALS": {
+      "value": 18,
+      "imd-flop": null,
+      "spend-guard": null,
+      "viewer": "build-lane.py FLOP_DECIMALS (read from this file)",
+      "note": "money stage 1. Base units per FLOP are 10^18. Per FLOP's own sources, read 2026-11-11: the chain counts money in whole base units, 10^18 per FLOP, and its spec forbids floating point conversion in encoders. The viewer shows an exact amount as FLOP with this many decimals."
+    },
+    "EXACT_AMOUNT_BOUND": {
+      "value": "340282366920938463463374607431768211456",
+      "imd-flop": "src/amount.ts EXACT_BOUND",
+      "spend-guard": null,
+      "viewer": "build-lane.py EXACT_BOUND (read from this file)",
+      "note": "money stage 1. 2^128, written as a digit string because a JSON number cannot hold it exactly. An exact amount is below it: per FLOP's own sources, read 2026-11-11, the chain holds money in a u128. The exact amount rule (amount.ts exactAmount, build-lane.py exact) is pinned by vectors/exact-amount.json."
+    },
     "RECEIPT_STATES": {
       "value": [
         "reserved",

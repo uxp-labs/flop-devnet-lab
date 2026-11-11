@@ -1,8 +1,38 @@
 /**
- * The one amount rule. A known amount is a finite number that is not negative. Null, a negative number,
- * a non-finite number and anything that is not a number are unknown, never 0. Pure, and it imports
- * nothing, so receipts.ts, ledger.ts, policy.ts and settlement.ts can all build on it.
+ * The two amount rules. Pure, and they import nothing, so receipts.ts, ledger.ts, policy.ts and
+ * settlement.ts can all build on them.
+ *  - knownAmount: the float rule every cap, quote, charge and settlement decision runs on today.
+ *  - exactAmount: the exact rule for amounts in base units (money stage 1). It is recorded beside the float
+ *    figures and decides nothing about the cap yet.
+ */
+
+/**
+ * The float amount rule. A known amount is a finite number that is not negative. Null, a negative number,
+ * a non-finite number and anything that is not a number are unknown, never 0.
  */
 export function knownAmount(value: unknown): number | null {
   return typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : null;
+}
+
+/**
+ * Exact amounts are below 2^128. Per FLOP's own sources, read 2026-11-11: the chain counts money in whole
+ * base units, 10^18 per FLOP, in a u128. Its spec forbids floating point conversion in encoders, and its
+ * official test vectors carry money as decimal digit strings. contract/rules.json EXACT_AMOUNT_BOUND.
+ */
+export const EXACT_BOUND = 2n ** 128n;
+/** The most digits a canonical exact amount can have: 2^128 - 1 has 39. */
+const EXACT_DIGITS = (EXACT_BOUND - 1n).toString().length;
+
+/**
+ * The exact amount rule (money stage 1). An exact amount is a string of ASCII decimal digits only whose
+ * value is below 2^128. It is returned in canonical form: no leading zeros, "0" for zero. Anything else is
+ * unknown (null), never 0: a number, an empty string, a sign, a decimal point, hex, whitespace, a value at
+ * or above 2^128, null, undefined. Per the gateway's OpenAPI (CredentialReceipt), read 2026-11-11,
+ * settled_spend_raw is the exact amount: a string matching ^[0-9]+$ in base units, or null, and null means
+ * unavailable, never an inferred zero. Pinned by contract/vectors/exact-amount.json, shared with the viewer.
+ */
+export function exactAmount(value: unknown): string | null {
+  if (typeof value !== "string" || !/^[0-9]+$/.test(value)) return null;
+  const digits = value.replace(/^0+/, "") || "0";
+  return digits.length <= EXACT_DIGITS && BigInt(digits) < EXACT_BOUND ? digits : null;
 }
