@@ -9,7 +9,7 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { CompleteReq, CompleteRes, Provider } from "../src/providers.js";
-import { appendLedger, spentToday, utcDay, type LedgerEntry } from "../src/ledger.js";
+import { appendLedger, reportedSpendToday, spentToday, utcDay, type LedgerEntry } from "../src/ledger.js";
 import { readLedgerText } from "../src/ledger-text.js";
 import { ledgerFile } from "../src/paths.js";
 import { appendJsonlSafe } from "../src/store.js";
@@ -133,5 +133,52 @@ describe("finding 12 (info): a refusal row carries the day the locked check used
     expect(r.code, r.err).toBe(3);
     expect(r.err).toContain("daily cap reached");
     expect(ledgerRows(h).at(-1)!.day).toBe(D);
+  });
+});
+
+describe("finding 13 (info): an unknown spend is never shown as 0", () => {
+  const settled = (id: string, spend: number | null) => row(id, { state: "settled", spend, cap_charge: 0.4, http: 200 });
+
+  it("reportedSpendToday sums the known spends and counts the sent calls whose spend is unknown", () => {
+    const h = tmpHome();
+    appendLedger(h, settled("mock-7-a", 0.05));
+    appendLedger(h, settled("mock-7-b", null));
+    expect(reportedSpendToday(h, "7", "mock")).toEqual({ spent: 0.05, unknownRows: 1 });
+    const g = tmpHome();
+    appendLedger(g, settled("mock-7-a", 0.05));
+    appendLedger(g, settled("mock-7-b", 0));
+    expect(reportedSpendToday(g, "7", "mock")).toEqual({ spent: 0.05, unknownRows: 0 });
+  });
+
+  it("with no known spend and at least one unknown, the total is null, never 0", () => {
+    const h = tmpHome();
+    appendLedger(h, row("mock-7-a"));
+    expect(reportedSpendToday(h, "7", "mock")).toEqual({ spent: null, unknownRows: 1 });
+    expect(reportedSpendToday(tmpHome(), "7", "mock")).toEqual({ spent: 0, unknownRows: 0 });
+  });
+
+  it("a refused_local row is not an unknown spend: nothing was sent", () => {
+    const h = tmpHome();
+    appendLedger(h, row("mock-7-a", { state: "refused_local", cap_charge: 0, quote_padded: null }));
+    appendLedger(h, row("", { request_id: null, state: "refused_local", cap_charge: 0, reason: "daily cap reached" }));
+    expect(reportedSpendToday(h, "7", "mock")).toEqual({ spent: 0, unknownRows: 0 });
+  });
+
+  it("status --json adds gateway_spend_unknown_rows per provider, and the text line says the count in words", async () => {
+    const h = await seat7("1");
+    appendLedger(h, settled("mock-7-a", null));
+    const st = await cli(h, ["status", "--seat", "7", "--json"]);
+    expect(st.code, st.err).toBe(0);
+    expect({ spent: st.json().gateway_spent_today_utc, unknown: st.json().gateway_spend_unknown_rows }).toEqual({ spent: { flop: 0, mock: null }, unknown: { flop: 0, mock: 1 } });
+    const text = await cli(h, ["status", "--seat", "7"]);
+    const line = text.out.split("\n").find((l) => l.includes("gateway reported spent"))!;
+    expect(line).toContain("mock  (1 call with no reported spend)");
+    expect(line).not.toMatch(/mock 0\b/);
+    appendLedger(h, settled("mock-7-b", 0.05));
+    appendLedger(h, settled("mock-7-c", null));
+    const two = (await cli(h, ["status", "--seat", "7"])).out.split("\n").find((l) => l.includes("gateway reported spent"))!;
+    expect(two).toContain("mock 0.05 (2 calls with no reported spend)");
+    expect(two).toContain("flop 0 ");
+    expect(two).not.toContain("flop 0 (");
   });
 });

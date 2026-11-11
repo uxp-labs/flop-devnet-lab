@@ -244,15 +244,26 @@ function seatDay(h: string, seat: string, provider: string, day: string): Line[]
 }
 
 /**
- * What the gateway reported as spent on one UTC day: the sum of the known settled spends (`spend`) of the
- * same rows spentToday counts, rounded up to 6 decimals as that total is. A row whose spend is unknown adds
- * nothing: the gateway reported no amount for it. `status` shows it beside spentToday, which is what counts
- * against the cap. No cap or booking decision reads it.
+ * What the gateway reported as spent on one UTC day, over the same rows spentToday counts. `spent` is the sum
+ * of their known settled spends (`spend`), rounded up to 6 decimals as that total is. `unknownRows` counts the
+ * rows for a call that was sent (any state but refused_local) whose spend is not a known amount: the gateway
+ * reported no amount for them, so they add nothing to the sum and are never shown as 0. `spent` is null when
+ * no row has a known spend and at least one is unknown (swarm audit 33f3b9f, finding 13). A refused_local row
+ * is not an unknown spend: nothing was sent. `status` shows both beside spentToday, which is what counts
+ * against the cap. No cap or booking decision reads them.
  */
-export function reportedSpendToday(h: string, seat: string, provider: string, day = utcDay()): number {
+export function reportedSpendToday(h: string, seat: string, provider: string, day = utcDay()): { spent: number | null; unknownRows: number } {
   let sum = 0;
-  for (const { row } of seatDay(h, seat, provider, day)) sum += knownAmount(row.spend) ?? 0;
-  return ceil6(sum);
+  let known = 0;
+  let unknownRows = 0;
+  for (const { row } of seatDay(h, seat, provider, day)) {
+    const spend = knownAmount(row.spend);
+    if (spend !== null) {
+      sum += spend;
+      known += 1;
+    } else if (row.state !== "refused_local") unknownRows += 1;
+  }
+  return { spent: known === 0 && unknownRows > 0 ? null : ceil6(sum), unknownRows };
 }
 
 /** The requester spend on one job, on any day: the job budget's running total. */

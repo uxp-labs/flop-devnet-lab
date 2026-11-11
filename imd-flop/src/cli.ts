@@ -360,6 +360,8 @@ export async function main(argv: string[], io: IO): Promise<number> {
         // today_utc counts against the cap: what each call was allowed to spend (the hold floor). Beside it,
         // what the gateway reported as spent, and whether the day is above its cap.
         const today = { flop: spentToday(h, seat, "flop"), mock: spentToday(h, seat, "mock") };
+        // What the gateway reported, and how many sent calls it reported no amount for (never shown as 0).
+        const reported = { flop: reportedSpendToday(h, seat, "flop"), mock: reportedSpendToday(h, seat, "mock") };
         const o = {
           network: cfg.network,
           seat,
@@ -371,7 +373,8 @@ export async function main(argv: string[], io: IO): Promise<number> {
           payer: cfg.payer,
           cap,
           today_utc: today,
-          gateway_spent_today_utc: { flop: reportedSpendToday(h, seat, "flop"), mock: reportedSpendToday(h, seat, "mock") },
+          gateway_spent_today_utc: { flop: reported.flop.spent, mock: reported.mock.spent },
+          gateway_spend_unknown_rows: { flop: reported.flop.unknownRows, mock: reported.mock.unknownRows },
           over_cap_today_utc: { flop: overDailyCap(today.flop, cap), mock: overDailyCap(today.mock, cap) },
           attempts: latestAttempts(h).filter((e) => e.seat === seat).length,
           recent_receipts: recent,
@@ -388,7 +391,11 @@ export async function main(argv: string[], io: IO): Promise<number> {
           io.out(`  cap   ${cap ? `${cap.daily} FLOP/day, ${cap.perCall}/call` : "none (FLOP off)"}`);
           const charged = (p: "flop" | "mock") => `${p} ${o.today_utc[p]}${cap ? ` / ${cap.daily}` : ""}${o.over_cap_today_utc[p] ? " OVER CAP" : ""}`;
           io.out(`  today, charged to the cap      ${charged("flop")}   ${charged("mock")}`);
-          io.out(`  today, gateway reported spent  flop ${o.gateway_spent_today_utc.flop}   mock ${o.gateway_spent_today_utc.mock}`);
+          const reportedText = (p: "flop" | "mock") => {
+            const n = o.gateway_spend_unknown_rows[p];
+            return `${p} ${blank(o.gateway_spent_today_utc[p])}${n > 0 ? ` (${n} ${n === 1 ? "call" : "calls"} with no reported spend)` : ""}`;
+          };
+          io.out(`  today, gateway reported spent  ${reportedText("flop")}   ${reportedText("mock")}`);
           io.out(`  recent receipts:`);
           for (const r of recent) io.out(`    ${receiptLine(r)}`);
           if (recent.length === 0) io.out(`    (none)`);
