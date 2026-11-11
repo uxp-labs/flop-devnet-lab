@@ -45,6 +45,16 @@
       "spend-guard": null,
       "viewer": "build-lane.py SETTLES (read from this file)"
     },
+    "UNRESOLVED": {
+      "value": [
+        "timeout_unknown",
+        "error"
+      ],
+      "imd-flop": "src/settlement.ts UNRESOLVED",
+      "spend-guard": null,
+      "viewer": "build-lane.py unresolved() (its own literal; viewer/test_contract_vectors.py checks it against this value)",
+      "note": "ledger states of a call whose outcome is not known. A row in one of them disagrees with any receipt until a read is booked for it."
+    },
     "STAGE_GATEWAY": {
       "value": "gateway observed",
       "imd-flop": "src/receipts.ts STAGE_GATEWAY",
@@ -53,7 +63,7 @@
     },
     "DISAGREE": {
       "value": "receipt and ledger disagree; reservation held, chain-final green blocked",
-      "imd-flop": "src/settlement.ts DISAGREE (receipt --refresh stderr)",
+      "imd-flop": "src/settlement.ts DISAGREE (run and receipt --refresh stderr when a read is not booked; the status of a receipt shown by run, receipt <id> and status when settlement.ts reconcile says disagree)",
       "spend-guard": null,
       "viewer": "build-lane.py DISAGREE (read from this file)"
     },
@@ -169,7 +179,7 @@
         "spend-guard",
         "viewer"
       ],
-      "summary": "'Failed read' differs: imd-flop refresh = not (http === 200 and an object body); spend-guard receipts.py = code != 200; viewer = http not in (None, 200) or a non-empty error, or flag key_expired (since [fix: KD-1] a failed read with its own 'key expired' wording, not the 'receipt read failed' flag). http null + no error is fresh in the viewer only; http 200 + error text is failed in the viewer only."
+      "summary": "'Failed read' differs: imd-flop refresh = not (http === 200 and an object body); spend-guard receipts.py = code != 200; viewer = http not in (None, 200) or a non-empty error, or flag key_expired (since [fix: KD-1] a failed read with its own 'key expired' wording, not the 'receipt read failed' flag). http null + no error is fresh in the viewer only; http 200 + error text is failed in the viewer only. Booking step, review of the audit 8ddc5d2 fixes: that is about a live read. For a stored receipt file, imd-flop settlement.ts reconcile uses the viewer's test (flag key_expired, or http not in (null, 200), or a non-empty error), so the two parts decide 'not compared' for the same files (reconcile.json)."
     },
     {
       "id": "Q-IDENTITY-FIELDS",
@@ -178,7 +188,7 @@
         "imd-flop",
         "viewer"
       ],
-      "summary": "imd-flop matchReceipt compares job/seat with !== (null equals null) and also checks correlation_id; viewer identity_ok needs each of request_id/job/seat/did to be a non-empty string on both sides and ignores correlation_id. A numeric seat on the receipt makes imd-flop matchReceipt throw TypeError (it builds the link path from the seat); the viewer reports it as a seat difference. Review of the audit 8ddc5d2 fixes: status no longer hands such a file to matchReceipt. A stored receipt whose seat is neither a string nor absent is listed by name under unreadable_receipts and the other receipts are shown. matchReceipt itself and receipt <id> are unchanged."
+      "summary": "imd-flop matchReceipt compares job/seat with !== (null equals null) and also checks correlation_id; viewer identity_ok needs each of request_id/job/seat/did to be a non-empty string on both sides and ignores correlation_id. A numeric seat on the receipt makes imd-flop matchReceipt throw TypeError (it builds the link path from the seat); the viewer reports it as a seat difference. Review of the audit 8ddc5d2 fixes: status no longer hands such a file to matchReceipt. A stored receipt whose seat is neither a string nor absent is listed by name under unreadable_receipts and the other receipts are shown. matchReceipt itself and receipt <id> are unchanged. Booking step, review of the audit 8ddc5d2 fixes: the row comparison is settlement.ts identityDiff, which matchReceipt and reconcile both use. So where the two parts differ on identity they also differ on the verdict for stored files: imd-flop compares state and amounts, the viewer reports a mismatch and compares nothing. Pinned by vector reconcile-identity-null-job-on-both-sides."
     },
     {
       "id": "Q-PAYER-DAILY-CAP",
@@ -342,6 +352,18 @@
       "fix_step": "step 3",
       "status": "fixed: [fix: KD-5]",
       "fixed_behavior": "FIXER's form (no test edits): the key and amount spans stay exactly as they were and one trailing <span class=\"note\">(held)</span> follows, so the line reads 'reservation <amount> (held)'; rows[].flop keeps ['reservation', amount]; a pending matched row (G5) shows the line until it settles or is released"
+    },
+    {
+      "id": "KD-7",
+      "source": "independent review of the audit 8ddc5d2 fixes, reproduced 2026-11-11",
+      "parts": [
+        "imd-flop"
+      ],
+      "where": "src/cli.ts receipt and status showed a stored receipt with its match field only; src/receipt-store.ts refreshReceipt set the DISAGREE status ad hoc on the object it returned, and nothing derived it from the files",
+      "today": "after a read that would lower a booked settlement, the receipt file holds the lower read and the ledger keeps the booked amount; receipt <id> and status print the lower amount with match=matches and no DISAGREE, while the viewer labels the same files DISAGREE",
+      "target": "one verdict for a stored receipt beside the latest ledger row of its request, the same as the viewer's, shown wherever imd-flop shows the receipt",
+      "status": "fixed: booking step, review of the audit 8ddc5d2 fixes",
+      "fixed_behavior": "settlement.ts reconcile(row, receipt) gives not_compared, disagree, settled_unknown or agree: the decision build-lane.py classify makes for the same files (disagrees, settled_unknown and the checks before them). run, receipt <id> (with and without --refresh) and status show a receipt with status = DISAGREE exactly when the verdict is disagree, in --json and on the text line. match stays the identity verdict. The status is worked out from the files each time and is never stored. run and receipt --refresh still print DISAGREE on stderr at the moment a read is not booked. Pinned for both parts by reconcile.json."
     }
   ]
 }

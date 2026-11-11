@@ -3,7 +3,9 @@
  * the rule "a booked settlement is never lowered by a later read" did not hold when two readers booked the
  * same request, and that a stored read below the booked amount printed as fine. The fix is:
  *   - one decision for every receipt read (settlement.ts decideBooking),
- *   - one booking step under the ledger lock for `run` and `receipt --refresh` (booking.ts bookRead).
+ *   - one booking step under the ledger lock for `run` and `receipt --refresh` (booking.ts bookRead),
+ *   - one verdict for a stored receipt beside its ledger row (settlement.ts reconcile), shown by `run`,
+ *     `receipt <id>` and `status`. Its cases are the shared vectors in contract/vectors/reconcile.json.
  * Each test asserts the safe outcome. The blocks named "fails on dbffac0" failed on that commit, the one the
  * review read, and pass with the booking step. The blocks named "pin" passed there too: they hold a behavior
  * the booking step must keep.
@@ -12,7 +14,7 @@
  * ledger lock.
  */
 import { execFileSync, spawn } from "node:child_process";
-import { appendFileSync, chmodSync, existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { appendFileSync, chmodSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { hostname } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -28,6 +30,7 @@ type Read = { http: number; error: string | null; receipt: Record<string, unknow
 type Reader = (id: string) => Read | Promise<Read>;
 interface Opts {
   usage?: Record<string, unknown>;
+  complete?: (req: CompleteReq) => Promise<CompleteRes>;
   read?: Reader;
 }
 /** A gateway receipt for the run's own request id. Pending unless fields say otherwise. */
@@ -49,6 +52,7 @@ class P implements Provider {
   }
   async complete(req: CompleteReq): Promise<CompleteRes> {
     this.calls += 1;
+    if (this.o.complete) return this.o.complete(req);
     return { request_id: req.requestId, text: "ok", usage: (this.o.usage ?? { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 }) as CompleteRes["usage"] };
   }
   async readReceipt(id: string) {
@@ -172,7 +176,7 @@ describe("fails on dbffac0: run books its own read against the latest row, not t
   // While run waits for its receipt, another reader refreshes the same request and books settled 0.07.
   // Per the gateway's OpenAPI (CredentialReceipt), read 2026-11-11, later reconciliation can change the
   // gateway's ledger observation, so two reads of one request can differ.
-  it("(a) own read settled 0.05: 0.07 stays booked, and DISAGREE is on stderr", async () => {
+  it("(a) own read settled 0.05: 0.07 stays booked, and DISAGREE is on stderr and in the result", async () => {
     const h = await ready();
     const run = await cli(h, runArgs(), { provider: new P({ read: after(h, settledAt(0.07), settledAt(0.05)) }) });
     expect(run.code, run.err).toBe(0);
@@ -180,28 +184,34 @@ describe("fails on dbffac0: run books its own read against the latest row, not t
     // The third row is run's own: it records the HTTP status of its read. The booking in it is the other reader's.
     expect(rows.map((r) => r.state)).toEqual(["sent", "settled", "settled"]);
     expect(booked(rows.at(-1)!)).toEqual({ state: "settled", spend: 0.07, cap_charge: 0.07 });
-    expect({ warned: run.err.includes(DISAGREE), cap_charge: run.json().cap_charge, settled_read: run.json().receipt.settled }).toEqual({ warned: true, cap_charge: 0.07, settled_read: 0.05 });
+    expect({ warned: run.err.includes(DISAGREE), status: run.json().receipt.status, cap_charge: run.json().cap_charge, settled_read: run.json().receipt.settled })
+      .toEqual({ warned: true, status: DISAGREE, cap_charge: 0.07, settled_read: 0.05 });
     expect(await today(h)).toBe(0.07);
   });
 
-  it("(b) own read released 0: 0.07 stays booked and charged, and DISAGREE is on stderr", async () => {
+  it("(b) own read released 0: 0.07 stays booked and charged, and DISAGREE is on stderr and in the result", async () => {
     const h = await ready();
     const run = await cli(h, runArgs(), { provider: new P({ read: after(h, settledAt(0.07), releasedAt(0)) }) });
     expect(run.code, run.err).toBe(0);
     expect(booked(ledger(h).at(-1)!)).toEqual({ state: "settled", spend: 0.07, cap_charge: 0.07 });
-    expect({ warned: run.err.includes(DISAGREE), cap_charge: run.json().cap_charge }).toEqual({ warned: true, cap_charge: 0.07 });
+    expect({ warned: run.err.includes(DISAGREE), status: run.json().receipt.status, cap_charge: run.json().cap_charge }).toEqual({ warned: true, status: DISAGREE, cap_charge: 0.07 });
     expect(await today(h)).toBe(0.07);
   });
 
-  it("(c) own read pending: the settling state does not go back", async () => {
+  it("(c) own read pending: the settling state does not go back, and the result says the stored files disagree", async () => {
     const h = await ready();
     const run = await cli(h, runArgs(), { provider: new P({ read: after(h, settledAt(0.07), pending) }) });
     expect(run.code, run.err).toBe(0);
     expect(booked(ledger(h).at(-1)!)).toEqual({ state: "settled", spend: 0.07, cap_charge: 0.07 });
     // A pending read refuses no settlement, so the booking step does not warn (as vector
-    // refresh-settled-then-fresh-pending-keeps-booking pins for a refresh).
-    expect({ warned: run.err.includes(DISAGREE), cap_charge: run.json().cap_charge }).toEqual({ warned: false, cap_charge: 0.07 });
+    // refresh-settled-then-fresh-pending-keeps-booking pins for a refresh). The receipt file now holds the
+    // pending read beside a settled row, and that is a disagreement of the stored files.
+    expect({ warned: run.err.includes(DISAGREE), status: run.json().receipt.status, cap_charge: run.json().cap_charge }).toEqual({ warned: false, status: DISAGREE, cap_charge: 0.07 });
     expect(await today(h)).toBe(0.07);
+    // The text output carries the status too, on its receipt line.
+    const h2 = await ready();
+    const text = await cli(h2, runArgs().filter((a) => a !== "--json"), { provider: new P({ read: after(h2, settledAt(0.07), pending) }) });
+    expect(text.out.split("\n").find((l) => l.includes("receipt:"))).toContain(`status=${DISAGREE}`);
   });
 
   it("run records what only it knows even when its read is refused: the reported cost raises the other reader's charge", async () => {
@@ -220,7 +230,7 @@ describe("fails on dbffac0: run books its own read against the latest row, not t
     const run = await cli(h, runArgs(), { provider: new P({ read: after(h, settledAt(0.05), settledAt(0.07)) }) });
     expect(run.code, run.err).toBe(0);
     expect(booked(ledger(h).at(-1)!)).toEqual({ state: "settled", spend: 0.07, cap_charge: 0.07 });
-    expect(run.err).toBe("");
+    expect({ err: run.err, status: run.json().receipt.status }).toEqual({ err: "", status: undefined });
   });
 
   it("control: with no other reader, run books its read as before and reports nothing", async () => {
@@ -229,7 +239,7 @@ describe("fails on dbffac0: run books its own read against the latest row, not t
     expect(run.code, run.err).toBe(0);
     expect(ledger(h).map((r) => r.state)).toEqual(["sent", "settled"]);
     expect(booked(ledger(h).at(-1)!)).toEqual({ state: "settled", spend: 0.05, cap_charge: 0.05 });
-    expect(run.err).toBe("");
+    expect({ err: run.err, status: run.json().receipt.status }).toEqual({ err: "", status: undefined });
   });
 });
 
@@ -299,6 +309,86 @@ withLedgerLock(home, () => {
     };
     expect(await outcome(settledAt(0.05), settledAt(0.07))).toEqual({ spend: 0.07, cap_charge: 0.07, today: 0.07 });
     expect(await outcome(settledAt(0.07), settledAt(0.05))).toEqual({ spend: 0.07, cap_charge: 0.07, today: 0.07 });
+  });
+});
+
+describe("fails on dbffac0: a stored read below the booked amount is shown as a disagreement", () => {
+  /** Run settles 0.07, then a refresh reads settled 0.05: the receipt file holds 0.05, the ledger keeps 0.07. */
+  async function lowerReadStored() {
+    const h = await ready();
+    const run = await cli(h, runArgs(), { provider: new P({ read: settledAt(0.07) }) });
+    expect(run.code, run.err).toBe(0);
+    const rid = run.json().request_id as string;
+    const refreshed = await cli(h, refreshArgs(rid), { provider: new P({ read: settledAt(0.05) }) });
+    expect({ code: refreshed.code, warned: refreshed.err.includes(DISAGREE), status: refreshed.json().status, last: booked(ledger(h).at(-1)!) })
+      .toEqual({ code: 0, warned: true, status: DISAGREE, last: { state: "settled", spend: 0.07, cap_charge: 0.07 } });
+    expect(JSON.parse(readFileSync(join(h, "receipts", `${rid}.json`), "utf8")).settled).toBe(0.05);
+    return { h, rid };
+  }
+
+  it("receipt <id>: the status is DISAGREE, in --json and on the text line, and match stays the identity verdict", async () => {
+    const { h, rid } = await lowerReadStored();
+    const shown = (await cli(h, ["receipt", rid, "--json"])).json();
+    expect({ settled: shown.settled, ledger_spend: shown.ledger_spend, status: shown.status, match: shown.match.match }).toEqual({ settled: 0.05, ledger_spend: 0.07, status: DISAGREE, match: "matches" });
+    const text = await cli(h, ["receipt", rid]);
+    expect(text.out.split("\n")[0]).toContain(`match=matches  status=${DISAGREE}`);
+    expect(text.err).toBe(""); // nothing was refused just now: the status is read from the files
+  });
+
+  it("status: the receipt carries the same status, in --json and on its text line", async () => {
+    const { h, rid } = await lowerReadStored();
+    const st = (await cli(h, ["status", "--seat", SEAT, "--json"])).json();
+    const shown = st.recent_receipts.find((r: { request_id: string }) => r.request_id === rid);
+    expect({ settled: shown.settled, status: shown.status, match: shown.match.match }).toEqual({ settled: 0.05, status: DISAGREE, match: "matches" });
+    const text = await cli(h, ["status", "--seat", SEAT]);
+    expect(text.out.split("\n").find((l) => l.includes(rid))).toContain(`status=${DISAGREE}`);
+  });
+
+  it("the status is never stored: the receipt file has no status field, and a refresh that reads the booked amount again clears it", async () => {
+    const { h, rid } = await lowerReadStored();
+    expect("status" in JSON.parse(readFileSync(join(h, "receipts", `${rid}.json`), "utf8"))).toBe(false);
+    const again = await cli(h, refreshArgs(rid), { provider: new P({ read: settledAt(0.07) }) });
+    expect({ code: again.code, err: again.err, status: again.json().status }).toEqual({ code: 0, err: "", status: undefined });
+    expect((await cli(h, ["receipt", rid])).out).not.toContain(DISAGREE);
+    expect((await cli(h, ["status", "--seat", SEAT])).out).not.toContain(DISAGREE);
+  });
+
+  it("control: files that agree show no status, for a settled run and for a pending run", async () => {
+    for (const read of [settledAt(0.05), pending]) {
+      const h = await ready();
+      const run = await cli(h, runArgs(), { provider: new P({ read }) });
+      const rid = run.json().request_id as string;
+      expect({ run: run.json().receipt.status, receipt: (await cli(h, ["receipt", rid, "--json"])).json().status, text: (await cli(h, ["receipt", rid])).out.includes("status=") }).toEqual({ run: undefined, receipt: undefined, text: false });
+      expect((await cli(h, ["status", "--seat", SEAT])).out).not.toContain(DISAGREE);
+    }
+  });
+
+  it("a pending receipt beside a settled row is the same disagreement, without any refusal on stderr", async () => {
+    const h = await ready();
+    const run = await cli(h, runArgs(), { provider: new P({ read: settledAt(0.05) }) });
+    const rid = run.json().request_id as string;
+    const refreshed = await cli(h, refreshArgs(rid), { provider: new P({ read: pending }) });
+    expect({ code: refreshed.code, err: refreshed.err, status: refreshed.json().status, ledger_state: refreshed.json().ledger_state, last: booked(ledger(h).at(-1)!) })
+      .toEqual({ code: 0, err: "", status: DISAGREE, ledger_state: "settled", last: { state: "settled", spend: 0.05, cap_charge: 0.05 } });
+  });
+
+  it("a timed out call disagrees with a receipt stored for it until a read is booked", async () => {
+    const h = await ready();
+    const hang = (req: CompleteReq) => new Promise<CompleteRes>((_, reject) => req.signal.addEventListener("abort", () => reject(req.signal.reason), { once: true }));
+    const timedOut = await cli(h, runArgs(["--timeout-ms", "50"]), { provider: new P({ complete: hang }) });
+    expect(timedOut.code).toBe(6);
+    const row = readLines(ledgerPath(h)).at(-1);
+    expect(row.state).toBe("timeout_unknown");
+    // The receipt file a refresh leaves when its booking could not be written: a pending read, stored.
+    const file = { request_id: row.request_id, correlation_id: "imd-job-j1", job: row.job, provider: "mock", state: "estimated", reserved: 0.186, settled: null, settled_raw: null,
+      stage: "gateway observed", chain_final: false, terminal_event: null, flag: null, http: 200, error: null, observed_at: new Date().toISOString(), mock: true, seat: row.seat, did: row.did };
+    mkdirSync(join(h, "receipts"), { recursive: true });
+    writeFileSync(join(h, "receipts", `${row.request_id}.json`), JSON.stringify(file));
+    const shown = (await cli(h, ["receipt", row.request_id, "--json"])).json();
+    expect({ status: shown.status, match: shown.match.match, ledger_state: shown.ledger_state }).toEqual({ status: DISAGREE, match: "matches", ledger_state: "timeout_unknown" });
+    // Once a read is booked the row is no longer unresolved, and the files agree.
+    const bookedNow = await cli(h, refreshArgs(row.request_id), { provider: new P({ read: pending }) });
+    expect({ err: bookedNow.err, status: bookedNow.json().status, ledger_state: bookedNow.json().ledger_state }).toEqual({ err: "", status: undefined, ledger_state: "estimated" });
   });
 });
 

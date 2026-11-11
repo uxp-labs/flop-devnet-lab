@@ -17,7 +17,7 @@ import { ledgerFile, receiptsDir } from "../src/paths.js";
 import type { CompleteReq, CompleteRes, Provider } from "../src/providers.js";
 import { classifyReceipt, RECEIPT_STATES, STAGE_GATEWAY, type GatewayReceipt } from "../src/receipts.js";
 import { padQuote, TEMPLATE_PAD } from "../src/run.js";
-import { DISAGREE, SETTLES } from "../src/settlement.js";
+import { DISAGREE, reconcile, SETTLES, UNRESOLVED } from "../src/settlement.js";
 import { cli, readLines, readySeat, tmpHome } from "./helpers.js";
 import { decode, forPart, rules, unreferencedLabelRules, unreferencedQuirks, vectors, type Json } from "./lib/contract-vectors.js";
 
@@ -151,6 +151,8 @@ const adapters: Record<string, (i: Json, want: Json) => Promise<Json> | Json> = 
     };
     return pick(got, want);
   },
+  // A stored receipt file beside the latest ledger row of its request: the one verdict, shared with the viewer.
+  reconcile: (i) => ({ verdict: reconcile(i.ledger, i.receipt) }),
 };
 
 describe("contract files", () => {
@@ -170,9 +172,18 @@ describe("contract files", () => {
     expect(STAGE_GATEWAY).toBe(c.STAGE_GATEWAY.value);
     expect(EXIT).toEqual(c.EXIT[PART]);
   });
-  it("settlement.ts SETTLES and DISAGREE match rules.json", () => {
+  it("settlement.ts SETTLES, UNRESOLVED and DISAGREE match rules.json", () => {
     expect([...SETTLES]).toEqual(rules.constants.SETTLES.value);
+    expect([...UNRESOLVED]).toEqual(rules.constants.UNRESOLVED.value);
     expect(DISAGREE).toBe(rules.constants.DISAGREE.value);
+  });
+  it("reconcile vectors expect the same verdict from imd-flop and the viewer, except where a quirk says why not", () => {
+    const shared = vectors.filter((v) => v.rule === "reconcile");
+    expect(shared.length).toBeGreaterThan(0);
+    for (const v of shared) {
+      if ((v.quirks ?? []).length > 0) expect(v.expect.viewer, v.id).not.toEqual(v.expect[PART]);
+      else expect(v.expect.viewer, v.id).toEqual(v.expect[PART]);
+    }
   });
   it("every vector is checked here or tagged not_applicable for imd-flop", () => {
     expect(applicable.length).toBeGreaterThan(0);

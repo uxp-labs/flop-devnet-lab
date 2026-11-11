@@ -10,6 +10,7 @@ import { verifyLink, type LinkFile } from "./link.js";
 import { revokedDids } from "./keys.js";
 import type { LedgerEntry } from "./ledger.js";
 import type { MatchResult } from "./receipts.js";
+import { identityDiff } from "./settlement.js";
 
 export const RECEIPT_IDENTITY_STATUS = "receipt identity mismatch; chain-final green blocked";
 
@@ -32,15 +33,8 @@ export function matchable(receipt: { seat?: unknown }): boolean {
 
 export async function matchReceipt(h: string, receipt: ReceiptIds | null, row: LedgerEntry | null): Promise<MatchResult> {
   if (!receipt) return { match: "pending", fields: [] };
-  const fields: string[] = [];
-  if (!row) fields.push("ledger_row_missing");
-  else {
-    if (receipt.job !== row.job) fields.push("job");
-    if (receipt.seat !== row.seat) fields.push("seat");
-    if (!receipt.did || receipt.did !== row.did) fields.push("did");
-    const sameId = typeof receipt.request_id === "string" && receipt.request_id.length > 0 && receipt.request_id === row.request_id;
-    if (!sameId) fields.push(RECEIPT_IDENTITY_STATUS);
-  }
+  // Against the ledger row: the same job, seat, DID and request id (settlement.ts identityDiff).
+  const fields: string[] = row ? identityDiff(receipt, row).map((f) => (f === "request_id" ? RECEIPT_IDENTITY_STATUS : f)) : ["ledger_row_missing"];
   // The gateway echoes our X-Correlation-ID; it must name the same job.
   if (receipt.job && receipt.correlation_id && receipt.correlation_id !== `imd-job-${receipt.job}`) fields.push("job(correlation_id)");
   const seat = receipt.seat ?? row?.seat ?? null;

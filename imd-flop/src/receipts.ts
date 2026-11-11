@@ -86,8 +86,10 @@ export function receiptLine(c: Classified): string {
     `chain_final=${c.chain_final}`,
   ];
   if (c.flag) parts.push(`flag=${c.flag}`);
-  const m = (c as { match?: MatchResult }).match;
+  const { match: m, status } = c as { match?: MatchResult; status?: string };
   if (m) parts.push(`match=${m.match}${m.fields.length ? `(${m.fields.join(",")})` : ""}`);
+  // Set when the stored receipt and its ledger row disagree (receipt-store.ts receiptVerdicts).
+  if (status) parts.push(`status=${status}`);
   if (c.mock) parts.push("[MOCK]");
   return parts.join("  ");
 }

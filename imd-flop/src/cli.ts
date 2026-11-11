@@ -14,10 +14,9 @@ import { FlopProvider, MOCK_SCENARIOS, MockProvider, type MockScenario, type Pro
 import { checkLinkForRun, runJob } from "./run.js";
 import { padQuote, parseAmount } from "./policy.js";
 import { appendLedger, latestAttempts, spentToday } from "./ledger.js";
-import { listReceipts, readSavedReceipt, refreshReceipt, type SavedReceipt } from "./receipt-store.js";
+import { listReceipts, readSavedReceipt, receiptVerdicts, refreshReceipt, type SavedReceipt } from "./receipt-store.js";
 import { blank, classifyReceipt, receiptLine } from "./receipts.js";
 import { registerSecret } from "./secrets.js";
-import { matchReceipt } from "./match.js";
 
 export interface IO {
   out: (s: string) => void;
@@ -350,7 +349,7 @@ export async function main(argv: string[], io: IO): Promise<number> {
         const recent = await Promise.all(
           listed.receipts
             .slice(0, 5)
-            .map(async (r) => ({ ...r, match: await matchReceipt(h, r, rows.find((e) => e.request_id === r.request_id) ?? null) })),
+            .map(async (r) => ({ ...r, ...(await receiptVerdicts(h, r, rows.find((e) => e.request_id === r.request_id) ?? null)) })),
         );
         // Attempts with no receipt yet (timeouts, crashes) show as pending.
         const pending = rows
@@ -404,8 +403,8 @@ export async function main(argv: string[], io: IO): Promise<number> {
           const p = makeProvider(io, saved?.provider ?? ledgerRow!.provider, h, saved?.seat ?? ledgerRow!.seat, { live: values.live, scenario: saved?.mock_scenario });
           ({ saved, ledgerRow } = await refreshReceipt(h, rid, p, { saved, ledgerRow }, io.err));
         }
-        const match = await matchReceipt(h, saved ?? null, ledgerRow ?? null);
-        const show = { ...(saved ?? { ...classifyReceipt(null, { job: ledgerRow!.job, provider: ledgerRow!.provider, requestId: rid, mock: ledgerRow!.mock }), seat: ledgerRow!.seat, did: ledgerRow!.did }), match };
+        const verdicts = await receiptVerdicts(h, saved ?? null, ledgerRow ?? null);
+        const show = { ...(saved ?? { ...classifyReceipt(null, { job: ledgerRow!.job, provider: ledgerRow!.provider, requestId: rid, mock: ledgerRow!.mock }), seat: ledgerRow!.seat, did: ledgerRow!.did }), ...verdicts };
         if (values.json) print({ ...show, ledger_state: ledgerRow?.state ?? null, ledger_spend: ledgerRow?.spend ?? null });
         else {
           io.out(receiptLine(show));

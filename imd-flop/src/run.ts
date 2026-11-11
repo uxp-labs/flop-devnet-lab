@@ -15,11 +15,10 @@ import { appendLedger, jobSpent, LedgerLockError, spentToday, UnusableLedgerChar
 import { classifyReceipt, type Classified } from "./receipts.js";
 import { bookRead } from "./booking.js";
 import { DISAGREE, isFreshRead, receiptIdentity, reportedCost } from "./settlement.js";
-import { receiptPath, writeReceipt } from "./receipt-store.js";
+import { receiptPath, receiptVerdicts, writeReceipt } from "./receipt-store.js";
 import type { Provider } from "./providers.js";
 import { assertPaidNetwork, checkImdJob, PaidGateError, PreSendError, readVerifiedSeatOwner, type Fetch } from "./gateway.js";
 import { FlopHTTPError } from "@flop-labs/client";
-import { matchReceipt } from "./match.js";
 import type { MatchResult } from "./receipts.js";
 
 export { padQuote, TEMPLATE_PAD } from "./policy.js";
@@ -45,7 +44,8 @@ export interface RunResult {
   payer: string;
   quote_padded: number;
   cap_charge: number;
-  receipt: Classified & { seat: string; did: string; match: MatchResult };
+  /** The receipt as read, with its two verdicts. `status` is set only when it disagrees with the ledger (receipt-store.ts receiptVerdicts). */
+  receipt: Classified & { seat: string; did: string; match: MatchResult; status?: string };
   response_file: string;
   /** Completion text that was stored. Null when the response-file secret scan withheld it. */
   text: string | null;
@@ -304,7 +304,6 @@ export async function runJob(h: string, provider: Provider, o: RunOpts, deps: Ru
   if (booked.outcome === "no_row") throw new Error(`ledger has no row for ${requestId}; its receipt read was not booked`);
   if (booked.outcome === "disagree") deps.warn(DISAGREE);
 
-  const match = await matchReceipt(h, receipt0, booked.row);
-  const receipt = { ...receipt0, match };
+  const receipt = { ...receipt0, ...(await receiptVerdicts(h, receipt0, booked.row)) };
   return { request_id: requestId, job, provider: provider.name, payer, quote_padded: q.padded, cap_charge: booked.row.cap_charge, receipt, response_file: responseFile, text, ...(withheld !== undefined ? { withheld } : {}), link_bypassed: linkBypassed };
 }

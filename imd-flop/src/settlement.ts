@@ -1,8 +1,10 @@
 /**
  * Reservation and settlement: the one copy of the rules that turn a receipt read into the next ledger
- * booking (decideBooking). Pure: no file, network or ledger access. `run` (after its call) and
- * `receipt --refresh` both decide through it. Behavior is pinned by contract/vectors/settlement-run.json
- * and settlement-refresh.json.
+ * booking (decideBooking), and the one verdict for a stored receipt beside the latest ledger row of its
+ * request (reconcile). Pure: no file, network or ledger access. `run` (after its call) and
+ * `receipt --refresh` both book through decideBooking, in booking.ts. `run`, `receipt <id>` and `status`
+ * all show the reconcile verdict. Behavior is pinned by contract/vectors/settlement-run.json,
+ * settlement-refresh.json and reconcile.json.
  */
 import { knownAmount } from "./amount.js";
 
@@ -25,9 +27,32 @@ export function isFreshRead(rr: { http: unknown; receipt: unknown }): boolean {
  * Identity is decided on the raw gateway receipt: its own request_id must be a non-empty string equal to
  * ours. The classifier's requestId fallback never decides identity, settlement or the stored request_id.
  */
-export function receiptIdentity(receipt: unknown, requestId: string): { rawId: unknown; identityOk: boolean } {
+export function receiptIdentity(receipt: unknown, requestId: string | null): { rawId: unknown; identityOk: boolean } {
   const rawId = receipt && typeof receipt === "object" ? (receipt as { request_id?: unknown }).request_id : undefined;
   return { rawId, identityOk: typeof rawId === "string" && rawId.length > 0 && rawId === requestId };
+}
+
+/** The identity fields a stored receipt and a ledger row both carry. A file can hold anything in them. */
+export interface AttemptIds {
+  request_id?: unknown;
+  job?: unknown;
+  seat?: unknown;
+  did?: unknown;
+}
+
+/**
+ * The identity fields of a stored receipt that differ from a ledger row, in this order: job, seat, did,
+ * request_id. Empty when the receipt is for the row's attempt. The job and the seat must be equal, the DID
+ * must be there and equal, and the request id follows receiptIdentity. match.ts builds the `match` verdict
+ * on this, and reconcile compares state and amounts only when it is empty.
+ */
+export function identityDiff(receipt: AttemptIds, row: AttemptIds): ("job" | "seat" | "did" | "request_id")[] {
+  const diff: ("job" | "seat" | "did" | "request_id")[] = [];
+  if (receipt.job !== row.job) diff.push("job");
+  if (receipt.seat !== row.seat) diff.push("seat");
+  if (!receipt.did || receipt.did !== row.did) diff.push("did");
+  if (!receiptIdentity(receipt, typeof row.request_id === "string" ? row.request_id : null).identityOk) diff.push("request_id");
+  return diff;
 }
 
 /** What a receipt read tells the ledger. `fresh`, `identityOk` and `redacted` say whether it may prove a settlement. */
@@ -146,4 +171,67 @@ export const CHARGE_RAISED = "cap charge raised to reported cost";
 /** The ledger reason for a booking: the receipt flag when there is one, else a note when the charge was raised. */
 export function bookingReason(b: Booking, flag: string | null): string | null {
   return flag ?? (b.spend !== null && b.cap_charge > b.spend ? CHARGE_RAISED : null);
+}
+
+/** Ledger states of a call whose outcome is not known: it timed out, or the gateway answered it with an error. */
+export const UNRESOLVED: ReadonlySet<string> = new Set(["timeout_unknown", "error"]);
+
+/** The fields of a stored receipt file that the verdict reads. A file can hold anything in them. */
+export interface StoredReceipt extends AttemptIds {
+  state?: unknown;
+  settled?: unknown;
+  chain_final?: unknown;
+  http?: unknown;
+  error?: unknown;
+  flag?: unknown;
+}
+
+/** The fields of a ledger row that the verdict reads. */
+export interface BookedRow extends AttemptIds {
+  state: string;
+  spend?: unknown;
+}
+
+/**
+ * The stored file shows a failed read: it carries the key_expired flag, an HTTP status other than 200, or
+ * an error text. Such a file holds the last known state, not a fresh read, so it cannot be compared. This is
+ * the viewer's test on the same file (build-lane.py classify). isFreshRead is the test on a live answer.
+ */
+function storedReadFailed(receipt: StoredReceipt): boolean {
+  const httpOk = receipt.http === undefined || receipt.http === null || receipt.http === 200;
+  return receipt.flag === "key_expired" || !httpOk || (typeof receipt.error === "string" && receipt.error.length > 0);
+}
+
+/**
+ * What a stored receipt and the latest ledger row of its request say about each other.
+ *  - not_compared: there is nothing to compare. No row, no receipt, a locally refused row, a stored read
+ *    that failed, or a receipt that is not for the row's attempt (identityDiff).
+ *  - disagree: receipt and ledger cannot both be right.
+ *  - settled_unknown: both say the call settled and neither knows the amount. They agree.
+ *  - agree: they agree.
+ */
+export type Verdict = "not_compared" | "disagree" | "settled_unknown" | "agree";
+
+/**
+ * The one verdict for a stored receipt beside the latest ledger row of its request. It is worked out from
+ * the two files each time and never stored. It is the decision the viewer makes for the same files
+ * (build-lane.py classify, disagrees and settled_unknown), pinned for both by contract/vectors/reconcile.json.
+ * The two differ only where their identity checks differ (quirk Q-IDENTITY-FIELDS in contract/rules.json).
+ * Like the viewer, it compares only once the receipt was read and is for the row's attempt.
+ *  - A settled or released receipt needs a settled or released row with the same spend. An amount on one
+ *    side only is a disagreement. No amount on either side is settled_unknown.
+ *  - A receipt in any other state needs a row that claims no settlement, and it cannot be chain final.
+ *  - A row whose call timed out or errored disagrees with any receipt until a read is booked for it.
+ * The cap charge is not compared: it may be above the settled spend when the completion reported more.
+ */
+export function reconcile(row: BookedRow | null | undefined, receipt: StoredReceipt | null | undefined): Verdict {
+  if (!row || !receipt || row.state === "refused_local") return "not_compared";
+  if (storedReadFailed(receipt) || identityDiff(receipt, row).length > 0) return "not_compared";
+  const rowSettles = SETTLES.has(row.state);
+  const receiptSettles = typeof receipt.state === "string" && SETTLES.has(receipt.state);
+  const spend = knownAmount(row.spend);
+  const settled = knownAmount(receipt.settled);
+  const differs = receiptSettles ? !rowSettles || spend !== settled : rowSettles || receipt.chain_final === true;
+  if (differs || UNRESOLVED.has(row.state)) return "disagree";
+  return receiptSettles && settled === null ? "settled_unknown" : "agree";
 }
