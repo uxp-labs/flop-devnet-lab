@@ -1,12 +1,17 @@
 /**
  * Reservation and settlement: the one copy of the rules that turn a receipt read into the next ledger
- * booking. Pure: no file, network or ledger access. `run` (after its call) and `receipt --refresh` both
- * use it. Behavior is pinned by contract/vectors/settlement-run.json and settlement-refresh.json.
+ * booking (decideBooking). Pure: no file, network or ledger access. `run` (after its call) and
+ * `receipt --refresh` both decide through it. Behavior is pinned by contract/vectors/settlement-run.json
+ * and settlement-refresh.json.
  */
 import { knownAmount } from "./amount.js";
-import { usableCapCharge } from "./ledger.js";
 
-/** Receipt states that settle an attempt. */
+/**
+ * Receipt states that settle an attempt. Per the gateway's OpenAPI (CredentialReceipt), read 2026-11-11:
+ * `reserved` (quota held, no completion checkpoint) and `estimated` (reservation kept after completion, no
+ * reconciled spend) are unresolved. `settled` (spend reconciled) and `released` (reservation returned to
+ * quota) are terminal ledger states.
+ */
 export const SETTLES: ReadonlySet<string> = new Set(["settled", "released"]);
 /** Shown (stderr, receipt status) when the ledger cannot be reconciled with the receipt. Same text as the viewer. */
 export const DISAGREE = "receipt and ledger disagree; reservation held, chain-final green blocked";
@@ -43,16 +48,24 @@ export function trustedRead(o: ReadOutcome): boolean {
   return o.fresh && o.identityOk && !o.redacted;
 }
 
-/** A known settlement: a trusted read in a settling state with a finite spend >= 0 (explicit 0 included). */
+/**
+ * A known settlement: a trusted read in a settling state with a finite spend >= 0 (explicit 0 included).
+ * The spend is the receipt's settled_spend. Per the gateway's OpenAPI (CredentialReceipt), read 2026-11-11,
+ * that field is a number or null from the gateway's legacy floating point ledger, and null means unknown,
+ * including for a released reservation. So a settling state with no amount books no spend, and never 0.
+ */
 export function settledSpend(o: ReadOutcome): number | null {
   return trustedRead(o) && o.state !== null && SETTLES.has(o.state) ? knownAmount(o.settled) : null;
 }
 
-/** The ledger fields a read can change. */
-export interface Booking {
+/**
+ * The ledger fields a read can change. C is the type of the cap charge: a number on a row this program
+ * wrote, and whatever the file holds on a row that was read back.
+ */
+export interface Booking<C = number> {
   state: string;
   spend: number | null;
-  cap_charge: number;
+  cap_charge: C;
 }
 
 /** usage.cost_flop as the completion reported it. It counts only when it is a finite number. Recorded, never a settlement. */
@@ -65,9 +78,9 @@ function raisedBy(charge: number, costReported: number | null): number {
   return costReported !== null ? Math.max(charge, costReported) : charge;
 }
 
-/** While spend is unknown the padded quote stays reserved; a reported cost may raise that reservation, never lower it. */
-export function holdCharge(padded: number, costReported: number | null): number {
-  return raisedBy(padded, costReported);
+/** While no settlement is booked from a read, the charge already held stays; a reported cost may raise it, never lower it. */
+export function holdCharge(held: number, costReported: number | null): number {
+  return raisedBy(held, costReported);
 }
 
 /** A proven settlement is charged in full; a reported cost may raise that charge too, never lower it. */
@@ -85,18 +98,46 @@ export function lowersSettlement(prev: { state: string; spend: unknown }, o: Rea
   return booked !== null && settled !== null && settled < booked;
 }
 
+/** The state after a read. Only a trusted read moves it, and never from a settling state to a non settling one. */
+function stateAfter(prev: string, o: ReadOutcome): string {
+  if (!trustedRead(o) || o.state === null) return prev;
+  return SETTLES.has(prev) && !SETTLES.has(o.state) ? prev : o.state;
+}
+
+/** What a read does to a booking: the next booking, and whether the read disagrees with what is booked. */
+export interface Decision<C> {
+  booking: Booking<C | number>;
+  /** The read was not booked: it would lower a booked settlement, or the booked charge is not a known amount. */
+  disagree: boolean;
+}
+
 /**
- * The next booking after a read. A known settlement replaces the booked spend, and its charge (see
- * settledCharge) replaces the hold; otherwise `hold` stays charged and the booked spend stays. Only a
- * trusted read moves the state, and never from a settling state back to a non-settling one. A read that
- * proves nothing changes nothing, and neither does a read that would lower a booked settlement.
+ * The one decision for every receipt read: `run`'s own read after its call and `receipt --refresh` alike.
+ * `prev` is the latest ledger row of the request. `costReported` is the cost its completion reported, if any.
+ *  - Only a trusted read changes state or spend.
+ *  - A reported cost may raise a charge and never lowers it, on a hold and on a settlement alike.
+ *  - A trusted read that would lower a booked known settlement disagrees. State and spend stay.
+ *  - Otherwise a proven settlement replaces the booked spend, and its charge replaces the hold. The state
+ *    moves only forward: never from a settling state to a non settling one.
+ *  - A booked charge that is not a known amount is never replaced by a guess, and never by 0. Unless a
+ *    proven settlement replaces it, the read disagrees and nothing changes.
+ * Two reads of one request can differ, and that is normal, not an attack: per the gateway's OpenAPI
+ * (CredentialReceipt), read 2026-11-11, later reconciliation can change the gateway's ledger observation.
+ * So two trusted reads book the same spend and charge in either order.
+ * The rule this encodes for the future: a gateway read alone never lowers a booked settlement. On FLOP a
+ * refund comes from an upheld fraud verdict, which is proven on chain: per FLOP's docs, a session's payment
+ * sits in escrow against the proof, and an upheld fraud verdict refunds the agent. Nothing in imd-flop
+ * verifies the chain yet. When chain verification exists, a chain proven refund is the one thing that may
+ * lower a booking, and that change belongs in this function.
  */
-export function nextBooking(prev: { state: string; spend: number | null }, o: ReadOutcome, hold: number, costReported: number | null): Booking {
-  if (lowersSettlement(prev, o)) return { state: prev.state, spend: prev.spend, cap_charge: hold };
+export function decideBooking<C>(prev: Booking<C>, o: ReadOutcome, costReported: number | null): Decision<C> {
+  const lowers = lowersSettlement(prev, o);
+  const state = lowers ? prev.state : stateAfter(prev.state, o);
   const settled = settledSpend(o);
-  const regresses = SETTLES.has(prev.state) && !(o.state !== null && SETTLES.has(o.state));
-  const state = trustedRead(o) && o.state !== null && !regresses ? o.state : prev.state;
-  return { state, spend: settled ?? prev.spend, cap_charge: settled !== null ? settledCharge(settled, costReported) : hold };
+  if (settled !== null && !lowers) return { booking: { state, spend: settled, cap_charge: settledCharge(settled, costReported) }, disagree: false };
+  const held = knownAmount(prev.cap_charge);
+  if (held === null) return { booking: { state: prev.state, spend: prev.spend, cap_charge: prev.cap_charge }, disagree: true };
+  return { booking: { state, spend: prev.spend, cap_charge: holdCharge(held, costReported) }, disagree: lowers };
 }
 
 /** Ledger reason for a settled row whose cap charge is the reported cost, above its settled spend. */
@@ -105,19 +146,4 @@ export const CHARGE_RAISED = "cap charge raised to reported cost";
 /** The ledger reason for a booking: the receipt flag when there is one, else a note when the charge was raised. */
 export function bookingReason(b: Booking, flag: string | null): string | null {
   return flag ?? (b.spend !== null && b.cap_charge > b.spend ? CHARGE_RAISED : null);
-}
-
-export type RefreshBooking = { kind: "append"; booking: Booking } | { kind: "unchanged" } | { kind: "disagree" };
-
-/**
- * `receipt --refresh` against the latest ledger row. An unusable booked charge with no proven settlement
- * is never replaced, and a booked settlement is never lowered (disagree, nothing appended). A row is
- * appended only when a derived field changes. The reported cost is the one the ledger row recorded.
- */
-export function refreshBooking(prev: { state: string; spend: number | null; cap_charge: unknown; cost_reported: unknown }, o: ReadOutcome): RefreshBooking {
-  if (settledSpend(o) === null && !usableCapCharge(prev.cap_charge)) return { kind: "disagree" };
-  if (lowersSettlement(prev, o)) return { kind: "disagree" };
-  const booking = nextBooking(prev, o, prev.cap_charge as number, reportedCost(prev.cost_reported));
-  const changed = booking.state !== prev.state || booking.spend !== prev.spend || booking.cap_charge !== prev.cap_charge;
-  return changed ? { kind: "append", booking } : { kind: "unchanged" };
 }

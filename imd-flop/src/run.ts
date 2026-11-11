@@ -13,7 +13,7 @@ import { DEFAULT_MODEL, network, SEAT_COLLECTION } from "./networks.js";
 import { checkBudget, noRoom, padQuote, requireCap, validateJob, validatePayer, validateRunMaxTokens, type BudgetState } from "./policy.js";
 import { appendLedger, jobSpent, LedgerLockError, spentToday, UnusableLedgerCharge, utcDay, withLedgerLock, type LedgerEntry } from "./ledger.js";
 import { classifyReceipt, type Classified } from "./receipts.js";
-import { bookingReason, holdCharge, isFreshRead, nextBooking, receiptIdentity, reportedCost } from "./settlement.js";
+import { bookingReason, decideBooking, isFreshRead, receiptIdentity, reportedCost } from "./settlement.js";
 import { receiptPath, writeReceipt } from "./receipt-store.js";
 import type { Provider } from "./providers.js";
 import { assertPaidNetwork, checkImdJob, PaidGateError, PreSendError, readVerifiedSeatOwner, type Fetch } from "./gateway.js";
@@ -283,7 +283,7 @@ export async function runJob(h: string, provider: Provider, o: RunOpts, deps: { 
   // Same rules as receipt --refresh, held in settlement.ts: a failed read (not HTTP 200 with a receipt object)
   // or a receipt body that had to be redacted proves nothing and never releases the reservation.
   const outcome = { fresh: isFreshRead(rr), identityOk, redacted: receiptRedacted, state: classified.state, settled: classified.settled };
-  const booking = nextBooking({ state: sent.state, spend: sent.spend }, outcome, holdCharge(q.padded, costReported), costReported);
+  const { booking } = decideBooking(sent, outcome, costReported);
   appendLedger(h, { ...sent, ts: new Date().toISOString(), ...booking, reason: bookingReason(booking, classified.flag), cost_reported: costReported, http: rr.http });
 
   const match = await matchReceipt(h, receipt0, latestAttempts(h).find((e) => e.request_id === requestId) ?? null);

@@ -13,7 +13,7 @@ import { receiptsDir } from "./paths.js";
 import type { Provider } from "./providers.js";
 import { classifyReceipt, type Classified } from "./receipts.js";
 import { redactFlagged } from "./secrets.js";
-import { bookingReason, DISAGREE, isFreshRead, receiptIdentity, refreshBooking } from "./settlement.js";
+import { bookingReason, decideBooking, DISAGREE, isFreshRead, receiptIdentity, reportedCost } from "./settlement.js";
 import { readJson, writeJsonSafe } from "./store.js";
 
 export type SavedReceipt = Classified & { seat: string; mock_scenario?: string };
@@ -117,18 +117,20 @@ export async function refreshReceipt(
 
   const prev = latestAttempts(h).find((e) => e.request_id === rid);
   if (!prev) return { saved, ledgerRow };
-  const next = refreshBooking(prev, { fresh, identityOk, redacted: written.redacted, state: saved?.state ?? null, settled: saved?.settled });
-  const disagree = () => {
+  // The reported cost is the one the ledger row recorded.
+  const { booking, disagree } = decideBooking(prev, { fresh, identityOk, redacted: written.redacted, state: saved?.state ?? null, settled: saved?.settled }, reportedCost(prev.cost_reported));
+  const refused = () => {
     warn(DISAGREE);
     saved = { ...saved, status: DISAGREE } as SavedReceipt;
   };
   // Disagree: an unknown charge with no exact-identity settlement (never substitute 0), or a read below a booked settlement.
-  if (next.kind === "disagree") disagree();
-  else if (next.kind === "append") {
+  if (disagree) refused();
+  // A row is appended only when a booked field changes.
+  if (booking.state !== prev.state || booking.spend !== prev.spend || booking.cap_charge !== prev.cap_charge) {
     try {
-      appendLedger(h, { ...prev, ts: new Date().toISOString(), state: next.booking.state, reason: bookingReason(next.booking, saved?.flag ?? null), spend: next.booking.spend, cap_charge: next.booking.cap_charge });
+      appendLedger(h, { ...prev, ts: new Date().toISOString(), ...booking, reason: bookingReason(booking, saved?.flag ?? null) });
     } catch {
-      disagree();
+      refused();
     }
   }
   return { saved, ledgerRow: latestAttempts(h).find((e) => e.request_id === rid) };
