@@ -68,12 +68,14 @@ describe("open defects (memory review)", () => {
     expect(next.status.conflicts).toContain(`an earlier snapshot was taken at ${late.observed_at}, later than this snapshot time ${next.observed_at}`);
   });
 
-  it("DEFECT 5: the usage line in src/live-bin.ts leaves out --log, and the command refuses it as written", () => {
+  it("the usage line in src/live-bin.ts names every flag the command requires, as the README does", () => {
     const source = readFileSync(new URL("../src/live-bin.ts", import.meta.url), "utf8");
     const usage = /^\/\/\s+node dist\/live-bin\.js (.*)$/m.exec(source)?.[1] ?? "";
-    expect(usage).toBe("--out <new folder> [--source-sha <revision>]");
+    const readme = readFileSync(new URL("../README.md", import.meta.url), "utf8");
+    const documented = /^node dist\/live-bin\.js (.*)$/m.exec(readme)?.[1] ?? "";
     // Its required flags, with each <placeholder> given a value and the [optional] part left out.
-    const args = usage.replace(/\[[^\]]*\]/g, "").replace(/<[^>]*>/g, "x").trim().split(/\s+/);
-    expect(parseLiveArgs(args)).toBe("missing --log");
+    const required = (u: string) => u.replace(/\[[^\]]*\]/g, "").replace(/<[^>]*>/g, "x").trim().split(/\s+/);
+    expect(parseLiveArgs(required(usage))).toEqual({ out: "x", log: "x", sourceSha: null });
+    expect(required(usage)).toEqual(required(documented));
   });
 });

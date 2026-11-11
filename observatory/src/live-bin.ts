@@ -3,9 +3,9 @@
 // src that names the global socket class and the global HTTP call, each once, as the options of the
 // one NetTransport it makes (RULES.md section 4 and scripts/source-scan.mjs hold it to that form).
 //
-//   node dist/live-bin.js --out <new folder> [--source-sha <revision>]
+//   node dist/live-bin.js --out <a new folder> --log <the published log folder> [--source-sha <revision>]
 //
-// It reads FLOP devnet read only, writes the output folder src/live-run.ts describes, prints one
+// It reads the published log, then FLOP devnet read only, writes the output folder src/live-run.ts describes, prints one
 // GitHub Actions notice line with what the snapshot says, and exits with the code live-run gives.
 import { EXIT, commandText, parseLiveArgs, runLive } from "./live-run.js";
 import { NetTransport } from "./net.js";
