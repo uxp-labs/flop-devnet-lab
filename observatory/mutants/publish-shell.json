@@ -1,0 +1,74 @@
+[
+  {
+    "id": "publish-shell-chain-neutralized",
+    "file": "../.github/workflows/observatory-live.yml",
+    "find": "            # The line must follow the branch's last line. When another run published in between,\n",
+    "replace": "            last=\"$PREV_HASH\"\n            # The line must follow the branch's last line. When another run published in between,\n",
+    "test": "test/publish-shell.test.ts",
+    "why": "when the shell runs, the chain comparison refuses a line that does not follow the branch's last line: a reading built on a branch that has moved since, or a first run's line on a log that holds lines"
+  },
+  {
+    "id": "publish-shell-day-order-neutralized",
+    "file": "../.github/workflows/observatory-live.yml",
+    "find": "              if [[ \"log/$DAY.jsonl\" < \"$lastday\" ]]; then\n",
+    "replace": "              lastday=\"\"\n              if [[ \"log/$DAY.jsonl\" < \"$lastday\" ]]; then\n",
+    "test": "test/publish-shell.test.ts",
+    "why": "when the shell runs, a line whose UTC day is before the log's last day file is refused, and nothing is pushed"
+  },
+  {
+    "id": "publish-shell-day-from-clock",
+    "file": "../.github/workflows/observatory-live.yml",
+    "find": "          day=\"$(date -u -d \"$observed_at\" +%Y-%m-%d)\"\n",
+    "replace": "          day=\"$(date -u +%Y-%m-%d)\"\n",
+    "test": "test/publish-shell.test.ts",
+    "why": "when the shell runs, the day file is the UTC date of the reading's observed_at, never of the clock when the job runs"
+  },
+  {
+    "id": "publish-shell-sums-rewritten",
+    "file": "../.github/workflows/observatory-live.yml",
+    "find": "          sha256sum -- \"${present[@]}\" | cmp -s - SHA256SUMS || fail \"a file differs from SHA256SUMS\"\n",
+    "replace": "          sha256sum -- \"${present[@]}\" >SHA256SUMS\n          sha256sum -- \"${present[@]}\" | cmp -s - SHA256SUMS || fail \"a file differs from SHA256SUMS\"\n",
+    "test": "test/publish-shell.test.ts",
+    "why": "when the shell runs, a changed byte in any file of the artifact is refused by the check step, and nothing is pushed"
+  },
+  {
+    "id": "publish-shell-reset-unpublished",
+    "file": "../.github/workflows/observatory-live.yml",
+    "find": "          if [ \"$code\" != 0 ] && [ \"$code\" != 3 ]; then\n",
+    "replace": "          if [ \"$code\" != 0 ]; then\n",
+    "test": "test/publish-shell.test.ts",
+    "why": "when the shell runs, a reading whose run exited 3 (a reset signal) is published"
+  },
+  {
+    "id": "publish-shell-broken-run-not-skipped",
+    "file": "../.github/workflows/observatory-live.yml",
+    "find": "          if [ \"$code\" != 0 ] && [ \"$code\" != 3 ]; then\n",
+    "replace": "          if [ \"$code\" = 2 ]; then\n",
+    "test": "test/publish-shell.test.ts",
+    "why": "when the shell runs, a run that exited 1 publishes nothing and the job ends well"
+  },
+  {
+    "id": "publish-shell-existing-branch-unread",
+    "file": "../.github/workflows/observatory-live.yml",
+    "find": "            if [ \"$found\" -eq 0 ]; then\n",
+    "replace": "            if false; then\n",
+    "test": "test/publish-shell.test.ts",
+    "why": "when the shell runs, a branch that exists is fetched and the reading laid on top of it"
+  },
+  {
+    "id": "publish-shell-rerun-unchecked",
+    "file": "../.github/workflows/observatory-live.yml",
+    "find": "\"log/$DAY.jsonl\"; then return 0; fi",
+    "replace": "\"log/$DAY.jsonl.none\"; then return 0; fi",
+    "test": "test/publish-shell.test.ts",
+    "why": "when the shell runs, a reading already in the log adds no commit and leaves a newer latest/ as it is (test/live-workflow.test.ts kills this one too, from the text)"
+  },
+  {
+    "id": "publish-shell-odd-entries-allowed",
+    "file": "../.github/workflows/observatory-live.yml",
+    "find": "grep -qv '^100644 blob ' <<<\"$tree\"",
+    "replace": "grep -qv '^1[0-9]* ' <<<\"$tree\"",
+    "test": "test/publish-shell.test.ts",
+    "why": "when the shell runs, a fetched branch holding a link, an executable or a submodule is refused and nothing is pushed"
+  }
+]

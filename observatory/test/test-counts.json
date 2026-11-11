@@ -20,24 +20,32 @@
     "names": "bd439ca49837d3e62977352e9315883dd115a9abd92613ad412e6457ee0f7bc5"
   },
   "guard.test.ts": {
-    "tests": 74,
-    "names": "27b65064d3414e410fd84b528b8a2f9942d48d7bf8b8e5e35d399b27d6112f60"
+    "tests": 76,
+    "names": "a8eab4e3eedf5630979b31841b7bb2f7f1d3ee302e107659c6433288493f326d"
+  },
+  "history.test.ts": {
+    "tests": 6,
+    "names": "6623cbc984d353a085253b39f92e932d957de52f3ddf9ab4038ff58d50fbb24e"
   },
   "live-run.test.ts": {
-    "tests": 28,
-    "names": "79a13dbf2f6c74ac902ff5e8d98d18357e21df0326d12e78c422662b4b60bf69"
+    "tests": 30,
+    "names": "0211e19480512e9e4b97504ce65283cdc8b8fc528ac2459c0b4ed56752a60223"
   },
   "live-source.test.ts": {
     "tests": 26,
     "names": "552addede8f03700f304243e1513b90c4a452d170f4633c5db01d92bd1d2f653"
   },
   "live-workflow.test.ts": {
-    "tests": 17,
-    "names": "112f802b2897826e0eb454abafbb49c8b868838f466726faf4f99e58e299c3f3"
+    "tests": 20,
+    "names": "8827bd780d53ac05170a026e59309904b78e0d3e3db131540ea8d0720b7286cd"
   },
   "mcp.test.ts": {
     "tests": 13,
     "names": "386c37c6722d7c6b8032fa68be18daf2f1e8fdd3a9b4e6fb438036ff79a6cb5a"
+  },
+  "memory.test.ts": {
+    "tests": 28,
+    "names": "6411fd587a94ddb736eee8a5b021a067f97eccd35b396d37f8cf6149f60402eb"
   },
   "net.test.ts": {
     "tests": 31,
@@ -47,9 +55,17 @@
     "tests": 40,
     "names": "c1629a5c9e7fa1134a7e062494c93ae5e762fbe1cc26328108e74d808eb49693"
   },
+  "publish-shell.test.ts": {
+    "tests": 39,
+    "names": "89b69685a4e142f2f2ea02e2c404d71c92b96fc51984d709b727b140dff339c2"
+  },
   "published.test.ts": {
     "tests": 21,
     "names": "903d704885ae6f13255754cd80c7df684a1f721cb9c697dc7dd4a3825d546ce8"
+  },
+  "review-memory.test.ts": {
+    "tests": 2,
+    "names": "db7cc5f5fc51f2f7ad3eacabb6a786a7a9e066f7f5623690d16d9bf798068a14"
   },
   "rpc-head.test.ts": {
     "tests": 19,
@@ -76,12 +92,12 @@
     "names": "de59fc974e7a9ef6ac6ebea8086881c36f93b210d7ada69de6aceadcd5650d81"
   },
   "status.test.ts": {
-    "tests": 120,
-    "names": "587c43fd19c8936f07be12ed61be7333f6c57b11abbe00369fa62c49725275a7"
+    "tests": 121,
+    "names": "c94e3b8330a54c75448e9e0b4ca4014dca2c579ba4a41cf3f1cec9ca51b4f9a5"
   },
   "store.test.ts": {
-    "tests": 16,
-    "names": "dd32acd5b7ce293b8f83db33f4cc1a80dd430af92fd21c4846c7205337b0aae5"
+    "tests": 23,
+    "names": "897939b606f7868656f7f3b196a3af533a530dab47e9131cdf4b6ffa1bfb7c99"
   },
   "strict.test.ts": {
     "tests": 66,

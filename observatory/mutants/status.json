@@ -306,7 +306,7 @@
   {
     "id": "status-rollback-against-latest-only",
     "file": "src/status.ts",
-    "find": "  const highest = sameGenesis.length > 0 ? Math.max(...sameGenesis.map((p) => p.finalized_height)) : null;",
+    "find": "  const highest = sameGenesis.length > 0 ? sameGenesis.reduce((m, p) => Math.max(m, p.finalized_height), -Infinity) : null;",
     "replace": "  const highest = sameGenesis.length > 0 ? (sameGenesis.at(-1) as PreviousHead).finalized_height : null;",
     "test": "test/status.test.ts",
     "why": "finality never goes back below the highest height ever seen on the genesis"
@@ -638,5 +638,21 @@
     "replace": "  } else if (http >= 500) {",
     "test": "test/status.test.ts",
     "why": "eleventh rerun: a gateway status from 600 up is degraded, not down (test: only a 5xx status is a server's own failure)"
+  },
+  {
+    "id": "status-floor-spread",
+    "file": "src/status.ts",
+    "find": "sameGenesis.reduce((m, p) => Math.max(m, p.finalized_height), -Infinity)",
+    "replace": "Math.max(...sameGenesis.map((p) => p.finalized_height))",
+    "test": "test/status.test.ts",
+    "why": "the finalized floor is found by a fold, so any number of earlier heads is read"
+  },
+  {
+    "id": "status-best-floor-spread",
+    "file": "src/status.ts",
+    "find": "bestSeen.reduce((m, h) => Math.max(m, h), -Infinity)",
+    "replace": "Math.max(...bestSeen)",
+    "test": "test/status.test.ts",
+    "why": "the best height floor is found by a fold, so any number of earlier best heights is read"
   }
 ]

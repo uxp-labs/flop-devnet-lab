@@ -94,5 +94,93 @@
     "replace": ">>log/$DAY.jsonl",
     "test": "test/live-workflow.test.ts",
     "why": "a value from the reading is used only inside double quotes"
+  },
+  {
+    "id": "publish-chain-unchecked",
+    "file": "../.github/workflows/observatory-live.yml",
+    "find": "            if [ \"$PREV_HASH\" != \"$last\" ]; then\n",
+    "replace": "            if false; then\n",
+    "test": "test/live-workflow.test.ts",
+    "why": "a line that does not follow the branch's last line is never appended: the job fails and pushes nothing"
+  },
+  {
+    "id": "publish-last-line-not-read",
+    "file": "../.github/workflows/observatory-live.yml",
+    "find": "last=\"$(tail -n 1 -- \"$lastday\" | jq -r '.hash')\"",
+    "replace": "last=\"$PREV_HASH\"",
+    "test": "test/live-workflow.test.ts",
+    "why": "the branch's last line is read from the files, never taken from the reading"
+  },
+  {
+    "id": "publish-earlier-day-appended",
+    "file": "../.github/workflows/observatory-live.yml",
+    "find": "              if [[ \"log/$DAY.jsonl\" < \"$lastday\" ]]; then\n",
+    "replace": "              if false; then\n",
+    "test": "test/live-workflow.test.ts",
+    "why": "a line is never appended to a day file before the log's last one, where the chain would break"
+  },
+  {
+    "id": "publish-locale-order",
+    "file": "../.github/workflows/observatory-live.yml",
+    "find": "          export LC_ALL=C\n",
+    "replace": "",
+    "test": "test/live-workflow.test.ts",
+    "why": "day files are ordered byte by byte, as the reader orders them"
+  },
+  {
+    "id": "publish-rerun-lays-latest-again",
+    "file": "../.github/workflows/observatory-live.yml",
+    "find": "\"log/$DAY.jsonl\"; then return 0; fi",
+    "replace": "\"log/$DAY.jsonl\"; then :; fi",
+    "test": "test/live-workflow.test.ts",
+    "why": "a reading already in the log is not laid down again over a newer latest/"
+  },
+  {
+    "id": "publish-prev-unvalidated",
+    "file": "../.github/workflows/observatory-live.yml",
+    "find": "          { [[ \"$prev\" =~ $hex ]] || { [ \"$prev\" = null ] && [ \"$seq\" = 0 ]; }; } || fail \"snapshots.jsonl holds no prev_hash in the written form\"\n",
+    "replace": "",
+    "test": "test/live-workflow.test.ts",
+    "why": "the previous hash is checked against a fixed pattern before use"
+  },
+  {
+    "id": "live-reads-no-log",
+    "file": "../.github/workflows/observatory-live.yml",
+    "find": " --log \"$GITHUB_WORKSPACE/observatory-data/log\"",
+    "replace": "",
+    "test": "test/live-workflow.test.ts",
+    "why": "the live command reads the published log"
+  },
+  {
+    "id": "live-data-checkout-keeps-credentials",
+    "file": "../.github/workflows/observatory-live.yml",
+    "find": "          path: observatory-data\n          persist-credentials: false\n",
+    "replace": "          path: observatory-data\n          persist-credentials: true\n",
+    "test": "test/live-workflow.test.ts",
+    "why": "the data branch is checked out without credentials"
+  },
+  {
+    "id": "live-any-error-is-first-run",
+    "file": "../.github/workflows/observatory-live.yml",
+    "find": "          elif [ \"$found\" -eq 2 ]; then\n",
+    "replace": "          elif true; then\n",
+    "test": "test/live-workflow.test.ts",
+    "why": "only a branch that does not exist is a first run; any other error stops the job"
+  },
+  {
+    "id": "live-data-checkout-always",
+    "file": "../.github/workflows/observatory-live.yml",
+    "find": "        if: ${{ steps.data.outputs.found == 'true' }}\n",
+    "replace": "",
+    "test": "test/live-workflow.test.ts",
+    "why": "the data branch is checked out only when it exists"
+  },
+  {
+    "id": "publish-odd-entries-unchecked",
+    "file": "../.github/workflows/observatory-live.yml",
+    "find": "              tree=\"$(git ls-tree -r --full-tree HEAD)\"\n",
+    "replace": "",
+    "test": "test/live-workflow.test.ts",
+    "why": "the fetched tree is checked for anything but plain files before anything is read or written"
   }
 ]

@@ -1,7 +1,11 @@
-# Live network status for FLOP devnet, read only. Each run reads the devnet RPC, the faucet's
-# GET /health and GET /chain and the gateway's GET /v1/models once, writes a networkStatus snapshot
-# whose trust is "trusted RPC" (it trusts one RPC endpoint; it is not proof), a tape of exactly what
-# it read, run.json and SHA256SUMS, and uploads them as an artifact. Nothing is kept between runs.
+# Live network status for FLOP devnet, read only. Each run reads the published log (log/ on the
+# branch observatory-data), then the devnet RPC, the faucet's GET /health and GET /chain and the
+# gateway's GET /v1/models once. It writes a networkStatus snapshot built on every snapshot in that
+# log, whose trust is "trusted RPC" (it trusts one RPC endpoint; it is not proof), the snapshot's one
+# new line of the log, a tape of exactly what it read, run.json and SHA256SUMS, and uploads them as
+# an artifact. The data branch is checked out read only, without credentials. When it does not
+# exist the run is a first run. A log that cannot be read or whose chain breaks is refused: the run
+# writes no snapshot and fails, and it never starts a new log over it.
 #
 # The live job never calls an RPC write method, never sends anything but GET, uses no secrets,
 # pushes nothing, opens no issue or comment, and uses no cache. Its permissions are contents: read
@@ -11,17 +15,25 @@
 #
 # The command exits 0 when a truthful snapshot was written, even with a service down or unknown,
 # 3 for a reset signal (reset_detected true, or a conflict), 4 when a request was refused, and 1
-# when the run broke. A push that changes this file or the live source files gives a smoke run.
+# when the run broke or the published log was refused. A push that changes this file or the live
+# source files gives a smoke run, which reads the published log too and publishes nothing.
 #
 # The publish job puts the reading on the branch observatory-data (observatory/RULES.md section 7).
 # It runs only on main, only when the live job uploaded its folder, and also when the live run
 # exited 3, so a reset signal is published; the run stays red then. It is the only job that may
 # write, and only contents. It runs no code from the repository: it downloads this run's artifact,
 # checks every file against SHA256SUMS before anything else, publishes only a run that exited 0 or
-# 3, and then uses plain git. It replaces latest/ with the folder, appends the snapshot line to
-# log/<UTC date>.jsonl, writes README.md when it is missing, and pushes to
-# refs/heads/observatory-data only, never with force. A refused push is fetched again and retried
-# once, then the job fails.
+# 3, and then uses plain git. A fetched branch that holds anything but plain files (mode 100644: no
+# link, no executable, no submodule) fails the job before anything on it is read or written. It
+# replaces latest/ with the folder, appends the snapshot line to log/<UTC date>.jsonl, writes
+# README.md when it is missing, and pushes to refs/heads/observatory-data only, never with force.
+# The line names the hash of the line it follows: when that is not the last line of the branch as
+# fetched (another run published in between), or its day is before the log's last day file, the job
+# fails and pushes nothing. The next run reads the branch as it is then and builds on its last line,
+# so nothing has to be done by hand, but in one case: a log whose last line is dated after the real
+# clock. Every later reading is then held back by the day order check until the clock passes that
+# day, and carries a conflict, since the log runs backwards; the way out by hand is to move log/
+# aside (observatory/README.md). A refused push is fetched again and retried once, then the job fails.
 
 name: observatory live
 
@@ -40,6 +52,8 @@ on:
       - "observatory/src/live-run.ts"
       - "observatory/src/live-bin.ts"
       - "observatory/src/sums.ts"
+      - "observatory/src/history.ts"
+      - "observatory/src/store.ts"
 
 permissions:
   contents: read
@@ -62,6 +76,32 @@ jobs:
         with:
           persist-credentials: false
 
+      # The published log. A branch that does not exist yet is a first run, not an error.
+      - name: Find the published log
+        id: data
+        run: |
+          set -euo pipefail
+          found=0
+          git ls-remote --exit-code "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY.git" refs/heads/observatory-data >/dev/null || found=$?
+          if [ "$found" -eq 0 ]; then
+            echo "found=true" >>"$GITHUB_OUTPUT"
+          elif [ "$found" -eq 2 ]; then
+            echo "::notice::observatory-data does not exist yet, so this is a first run"
+            echo "found=false" >>"$GITHUB_OUTPUT"
+          else
+            echo "::error::cannot read observatory-data"
+            exit 1
+          fi
+
+      # Its content is data read from a public network: it is read by the live command only.
+      - name: Check out the published log
+        if: ${{ steps.data.outputs.found == 'true' }}
+        uses: actions/checkout@v4
+        with:
+          ref: observatory-data
+          path: observatory-data
+          persist-credentials: false
+
       # The same Node version as the offline check, so the snapshot's pin.node matches it.
       - name: Use Node.js 22.23.4
         uses: actions/setup-node@v4
@@ -78,7 +118,7 @@ jobs:
 
       - name: Read devnet status
         working-directory: observatory
-        run: node dist/live-bin.js --out "$RUNNER_TEMP/observatory-live" --source-sha "$GITHUB_SHA"
+        run: node dist/live-bin.js --out "$RUNNER_TEMP/observatory-live" --log "$GITHUB_WORKSPACE/observatory-data/log" --source-sha "$GITHUB_SHA"
 
       - name: Upload what was read
         id: upload
@@ -139,6 +179,12 @@ jobs:
           [[ "$hash" =~ $hex ]] || fail "snapshot.json holds no hash in the written form"
           [ "$(jq -r '.snapshot_hash' run.json)" = "$hash" ] || fail "run.json names another snapshot"
           { [ "$(wc -l <snapshots.jsonl)" -eq 1 ] && [ -z "$(tail -c 1 snapshots.jsonl)" ]; } || fail "snapshots.jsonl is not one whole line"
+          # The line to append names the line it follows: a hash, or null when it starts the log.
+          [ "$(jq -r '.hash' snapshots.jsonl)" = "$hash" ] || fail "snapshots.jsonl holds another snapshot"
+          seq="$(jq -r '.seq' snapshots.jsonl)"
+          prev="$(jq -r '.prev_hash' snapshots.jsonl)"
+          [[ "$seq" =~ ^(0|[1-9][0-9]{0,15})$ ]] || fail "snapshots.jsonl holds no seq in the written form"
+          { [[ "$prev" =~ $hex ]] || { [ "$prev" = null ] && [ "$seq" = 0 ]; }; } || fail "snapshots.jsonl holds no prev_hash in the written form"
           day="$(date -u -d "$observed_at" +%Y-%m-%d)"
           [[ "$day" =~ $ymd ]] || fail "observed_at has no UTC date"
           {
@@ -146,6 +192,7 @@ jobs:
             echo "observed_at=$observed_at"
             echo "snapshot_hash=$hash"
             echo "day=$day"
+            echo "prev_hash=$prev"
             echo "exit_code=$code"
           } >>"$GITHUB_OUTPUT"
 
@@ -156,9 +203,12 @@ jobs:
           OBSERVED_AT: ${{ steps.check.outputs.observed_at }}
           SNAPSHOT_HASH: ${{ steps.check.outputs.snapshot_hash }}
           DAY: ${{ steps.check.outputs.day }}
+          PREV_HASH: ${{ steps.check.outputs.prev_hash }}
           EXIT_CODE: ${{ steps.check.outputs.exit_code }}
         run: |
           set -euo pipefail
+          # Day files compare and sort byte by byte.
+          export LC_ALL=C
           reading="$RUNNER_TEMP/reading"
           files=(census.json drift.json escrows.json run.json snapshot.json snapshots.jsonl status.json tape.jsonl SHA256SUMS)
           remote="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY.git"
@@ -179,17 +229,45 @@ jobs:
             if [ "$found" -eq 0 ]; then
               git fetch -q --depth=1 "$remote" refs/heads/observatory-data
               git reset -q --hard FETCH_HEAD
+              # The branch holds only what the job writes, plain files (mode 100644), read from the
+              # tree alone before anything is read or written: a link, an executable, a submodule
+              # or anything else fails the job, and nothing is pushed.
+              tree="$(git ls-tree -r --full-tree HEAD)"
+              if [ -n "$tree" ] && grep -qv '^100644 blob ' <<<"$tree"; then
+                echo "::error::observatory-data holds something the job never writes (a link, an executable, a submodule or another entry that is not a plain file); nothing is pushed"
+                exit 1
+              fi
             elif [ "$found" -ne 2 ]; then
               echo "::error::cannot read observatory-data"
               exit 1
             fi
-            rm -rf latest
-            mkdir -p latest log
-            for f in "${files[@]}"; do cp -- "$reading/$f" "latest/$f"; done
-            # A reading already in the day's log, from a run attempted again, is not added twice.
-            if [ ! -f "log/$DAY.jsonl" ] || ! grep -qxF -f "$reading/snapshots.jsonl" "log/$DAY.jsonl"; then
-              cat -- "$reading/snapshots.jsonl" >>"log/$DAY.jsonl"
+            changed=no
+            # A reading already in the day's log, from a run attempted again, is not added twice,
+            # and latest/ is left as it is: it may hold a newer reading.
+            if [ -f "log/$DAY.jsonl" ] && grep -qxF -f "$reading/snapshots.jsonl" "log/$DAY.jsonl"; then return 0; fi
+            # The log's last line, from the files alone: the last line of the last day file.
+            last=null
+            lastday=""
+            mkdir -p log
+            for f in log/*.jsonl; do if [ -f "$f" ]; then lastday="$f"; fi; done
+            if [ -n "$lastday" ]; then
+              last="$(tail -n 1 -- "$lastday" | jq -r '.hash')" || { echo "::error::the last line of the published log cannot be read"; exit 1; }
+              [[ "$last" =~ ^[0-9a-f]{64}$ ]] || { echo "::error::the last line of the published log holds no hash"; exit 1; }
+              if [[ "log/$DAY.jsonl" < "$lastday" ]]; then
+                echo "::error::the reading's UTC day is before the log's last day file, so its line would break the chain; nothing is pushed"
+                exit 1
+              fi
             fi
+            # The line must follow the branch's last line. When another run published in between,
+            # it does not: nothing is pushed, and the next run builds on the branch as it is then.
+            if [ "$PREV_HASH" != "$last" ]; then
+              echo "::error::the reading follows a line that is not the last line of observatory-data (another reading was published since it was read, or the run did not read the branch); nothing is pushed"
+              exit 1
+            fi
+            rm -rf latest
+            mkdir -p latest
+            for f in "${files[@]}"; do cp -- "$reading/$f" "latest/$f"; done
+            cat -- "$reading/snapshots.jsonl" >>"log/$DAY.jsonl"
             if [ ! -f README.md ]; then
               printf '%s\n' \
                 "# observatory-data" \
@@ -199,7 +277,7 @@ jobs:
                 "Every file here is written by that workflow. Nothing here holds a key or anything personal." \
                 "" \
                 "- latest/ holds the newest reading: snapshot.json, the feeds, snapshots.jsonl, tape.jsonl, run.json and SHA256SUMS." \
-                "- log/<UTC date>.jsonl holds one snapshot per line, one line for each reading of that day." \
+                "- log/<UTC date>.jsonl holds one snapshot per line, one line for each reading of that day. Read in name order, the day files are one hash chained log." \
                 "" \
                 "The trust is \"trusted RPC\": one RPC endpoint was trusted. It is not proof." \
                 "A reader must check every file against SHA256SUMS, check observed_at, and refuse a reading that is stale." \

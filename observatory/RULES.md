@@ -135,7 +135,8 @@ check below to run and pass.
     changed hash there. On devnet, at over three million blocks, the new chain would need months
     to get past the log, so it matters most for a young chain or a log with long gaps.
   - The `status` command reads no log, so none of the checks against earlier snapshots runs there:
-    its `reset_detected` speaks for that one reading only. The snapshot command's does not.
+    its `reset_detected` speaks for that one reading only. The snapshot command's does not, and
+    neither does a live run's, which reads the published log (section 7).
 - Any failed check makes RPC health `degraded`. A missing or invalid genesis hash, finalized head
   or best height is a failed check. A missing or unparsable `observed_at` means the age check
   cannot run: health is `unknown` when nothing else failed.
@@ -403,6 +404,12 @@ Tests fail if any attempt is left in the log.
   `dgram.Socket` send, bind and connect, `dns.Resolver` queries, `ChildProcess.prototype.spawn`,
   `process.binding`, `process.dlopen` and `inspector.open`. The block covers the ways out named
   here and is tried against each of them; it is no proof that Node has no other.
+- One exemption: `runShell` in `test/setup.ts`, which holds the real `spawnSync` taken before the
+  block and never exports it, so `test/publish-shell.test.ts` can run the publish job's shell. It
+  serves that one test file only, runs `bash` only, in an environment built from the caller's
+  values and `PATH` alone, with git limited to `file://` remotes (`GIT_ALLOW_PROTOCOL=file`, no
+  system or global git config) and a `GITHUB_SERVER_URL` that is not `file://` refused. A call from
+  any other file is recorded as a process attempt and throws, as every other process call does.
 - A source scan fails any `src` module, other than `guard.ts`, that imports one of those modules or
   calls fetch, WebSocket, a signing API or a key API (`src/live-bin.ts` names fetch and WebSocket
   in the one form the exemption below allows, and calls neither). It also fails the indirect forms:
@@ -706,9 +713,44 @@ it adds.
   An RPC answer that cannot be held to one call (too large, not text, not strict JSON, not an
   object) fails the
   socket, and every call after it.
-- A live run keeps no memory. It reads no earlier snapshot log, so none of the checks against
-  earlier snapshots in section 1.1 runs, and its `reset_detected` speaks for that one reading only,
-  as the `status` command's does.
+- A live run's memory is the published log: the `log/` folder of the branch `observatory-data`
+  (7.1), named by `--log`, which is always given. Its day files, `<UTC date>.jsonl`, are read in
+  name order as one log. The log is read before anything else, in full, through the store's reader
+  and chain check, and every snapshot in it must pass the checks of section 5. The snapshot is then
+  built on every snapshot in the log, as the snapshot command builds on its own log, so every check
+  against earlier snapshots in section 1.1 runs, with the same code. It follows the log's last line:
+  its `seq` is one more and its `prev_hash` is that line's hash. Its `reset_detected` speaks for
+  that history, not for one reading.
+- Two cases give no earlier snapshot: a log folder that does not exist (a first run) and one that
+  holds no day file. The new snapshot then starts the log at `seq` 0. Every other case refuses the
+  log: a name in the folder that is no day file of a real date, a link or anything but a regular
+  file, a day file that holds no line (the publish job never writes one), a line the store's reader
+  refuses, a line that does not follow the one before it, and a line that
+  breaks a check of section 5 (a snapshot this code cannot check). A refused log is never read as
+  no log: the run reads nothing from the network, writes no snapshot, exits 1, and never starts a
+  new log over it. `run.json` names the case: `absent`, `empty`, `read`, `unreadable`, `broken` or
+  `unchecked`.
+- One allowance, for the readings published before runs kept memory: the log may begin with lines
+  that each hold `seq` 0 and no `prev_hash`, each a whole log of one line that passes its hash
+  check. They count as earlier snapshots like any other, and the chain goes on from the last of
+  them. Once a line follows another, a line with `seq` 0 breaks the chain.
+- The lines from before memory (each `seq` 0, at the start of the log) are each checked alone, by
+  their own hash and the checks of section 5. They are not chained to each other, so their order
+  and their number are not protected by the chain: one can be moved, added or removed among them,
+  and the log still reads. A log that runs backwards in time still shows, as a conflict, through
+  section 1.1's rule that no earlier snapshot is later than the new one.
+- What the chain is and is not: from the first chained line on, each line names the hash of the one
+  before it, so a line changed after that point, or one removed or moved anywhere but at the end,
+  breaks the chain and the log is refused. That catches damage and reordering. It is no defence against someone who can write to
+  the branch, who can rebuild every hash.
+- A live snapshot still trusts one RPC endpoint, and the history it is built on is what that
+  endpoint said before. The log does not show its lines are true, and lines cut from its end, a
+  line from before memory added to or removed from its start, or the whole log removed cannot be
+  detected from the log itself, as section 1.1 says of any log. Section 1.1's three restarts the
+  history cannot see stay unseen.
+- Every run reads the whole log: the checks need the highest finalized and best heights ever logged
+  on the genesis, every hash logged at the current height and the latest run of snapshots at that
+  height, which can be any length, and any shorter read would need a second owner of those rules.
 - It reads no event pages and no runtime constants. Its source reports no pages and no page errors,
   as a scenario with no `event-pages` folder does, so a census over it is partial over its whole
   range and every escrow is `unverified`. Neither is ever shown as "no events".
@@ -717,8 +759,8 @@ it adds.
   replay answers each request with the next entry and refuses any other request, naming both.
 - The run exits 0 when a truthful snapshot was written, whatever it says of each service, 3 when
   that snapshot holds a reset signal (`reset_detected` true or any conflict), 4 when the guard or
-  the transport refused a request, 1 when the run broke before a snapshot was written, and 2 for
-  wrong flags or an output folder that is not empty. A run never writes over an earlier one.
+  the transport refused a request, 1 when the run broke before a snapshot was written or the log
+  was refused, and 2 for wrong flags or an output folder that is not empty. A run never writes over an earlier one.
 
 ### 7.1 Publishing to observatory-data
 
@@ -728,6 +770,9 @@ everything the observatory reads.
 
 - Only the `publish` job in `.github/workflows/observatory-live.yml` may write, and only
   `contents`. The live job keeps `contents: read` and checkout keeps no credentials.
+- The live job checks the branch out read only, without credentials, into the folder
+  `observatory-data`, and passes its `log/` to the command. It first asks the server whether the
+  branch exists: a branch that does not exist is a first run, and any other answer stops the job.
 - The job runs only for `refs/heads/main`, for every event that runs the live job, and only when
   the live job uploaded its output folder. It runs when the live job failed, so a run that exited 3
   for a reset signal is published. It does not run when the run was cancelled. The run stays red
@@ -745,16 +790,37 @@ everything the observatory reads.
   publishing step only through environment variables, and are used only inside double quotes. No
   `${{ }}` value appears in a shell command.
 - The layout: `latest/` is replaced whole by the output folder. The snapshot line from
-  `snapshots.jsonl` is appended to `log/<UTC date of observed_at>.jsonl`, unless that file already
-  holds it. `README.md` at the root is written when it is missing. Nothing else is written.
+  `snapshots.jsonl` is appended to `log/<UTC date of observed_at>.jsonl`. `README.md` at the root
+  is written when it is missing. Nothing else is written. When that day file already holds the
+  line (a run attempted again), nothing is written at all, so `latest/` never goes back to an older
+  reading.
+- The branch as fetched must hold only what the job writes: every entry of its tree, read with
+  `git ls-tree -r` alone and before anything on it is read or written, is a regular file with mode
+  `100644`. A link, an executable, a submodule or any other entry fails the job, and nothing is
+  pushed, a reading attempted again included.
+- The line follows the branch's last line, read from the files alone: the last line of the last day
+  file in byte order. The job checks the line's `seq` and `prev_hash` against fixed patterns, then
+  appends it only when its `prev_hash` is that last line's hash, or is null when the branch holds no
+  day file, and when its day is not before the last day file's. Otherwise the job fails and pushes
+  nothing: another reading was published after the live job read the branch, or the line would
+  break the chain. The reading is not published. The next run checks out the branch as it is then
+  and builds on its last line, so nothing has to be done by hand, but in one case: a log whose last
+  line is dated after the real clock (a runner whose clock ran ahead). Every later reading is then
+  held back by the day order check until the clock passes that line's day, and every one carries a
+  conflict, since the log runs backwards (section 1.1). The way out by hand is the README's recipe:
+  move `log/` aside on the branch, in a commit of its own, and the next run starts a new log.
 - The commit is made by `github-actions[bot]`, and its message carries `observed_at` and the
   snapshot hash. A branch that does not exist starts as an orphan, with no parent.
 - The push names `refs/heads/observatory-data:refs/heads/observatory-data` and nothing else, and is
-  never forced. When it is refused, the job fetches the branch again, lays the reading on top and
-  pushes once more. A second refusal fails the job.
+  never forced. When it is refused, the job fetches the branch again, checks the line against its
+  last line again, lays the reading on top and pushes once more. A second refusal fails the job.
 - The sums show the files are the ones the live job wrote. They do not show the reading is true:
   its trust is still `"trusted RPC"`. A reader judges `latest/` with `judgeLatest` in
   `src/published.ts`: exactly the nine files, each matching `SHA256SUMS`, the snapshot passing
   every check of section 5 and its hash check with trust `"trusted RPC"`, every feed, the log line
-  and `run.json` the ones the snapshot gives, and `observed_at` of the snapshot and of its status
-  neither after the reader's now nor older than the limit the reader passes.
+  and `run.json` the ones the snapshot gives, `run.json` a `flop-observatory/live-run@1` that names
+  the log line the snapshot follows (its `history.last_hash` is the snapshot's `prev_hash`, or the
+  log was absent or empty and the snapshot has `seq` 0), and `observed_at` of the snapshot and of
+  its status neither after the reader's now nor older than the limit the reader passes. A
+  `run.json` from before runs kept memory (`live-run@0`) is refused: its reading spoke for itself
+  only. `judgeLatest` does not read `log/`.

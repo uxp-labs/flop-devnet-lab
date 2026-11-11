@@ -1,30 +1,38 @@
-// One live run of network status: read once through a transport, write what was read and what it
-// means into a fresh output folder, and say how the run ended. src/live-bin.ts hands it the
-// network; a test hands it a tape.
+// One live run of network status: read the published log, read the network once through a
+// transport, write what was read and what it means into a fresh output folder, and say how the
+// run ended. src/live-bin.ts hands it the network; a test hands it a tape.
+//
+// The published log is the log/ folder of the data branch (src/history.ts reads it). The new
+// snapshot is built on every snapshot in it, so the checks against earlier snapshots in
+// src/status.ts run over real history, and it follows the log's last line in one chain. A log that
+// cannot be read, whose chain breaks, or that holds a line this code cannot check is refused: the
+// run reads nothing from the network and writes no snapshot. It never starts a new log over it.
 //
 // The output folder holds, and nothing else:
-//   snapshots.jsonl  a log of one line: the snapshot, seq 0 (src/store.ts). No run reads an
-//                    earlier run's log: this step keeps no memory between runs.
+//   snapshots.jsonl  the one new line of the log: the snapshot, with the seq and prev_hash that
+//                    follow the log's last line (src/store.ts). It is what the publish job appends.
 //   status.json, escrows.json, census.json, drift.json, snapshot.json   the feeds (src/feed.ts)
 //   tape.jsonl       every request and its answer, in order (src/tape.ts)
-//   run.json         when the run started and ended, the source revision if given, and how it ended
+//   run.json         when the run started and ended, the source revision if given, which case the
+//                    published log was in (src/history.ts), and how the run ended
 //   SHA256SUMS       the sha256 of every other file, as sha256sum writes it
 //
 // How a run ends (EXIT):
 //   0  a truthful snapshot was written, whatever it says of each service
 //   3  it was written, and it holds a reset signal: reset_detected true, or a conflict
 //   4  the read only guard or the transport refused a request
-//   1  the run broke before a snapshot was written
+//   1  the run broke before a snapshot was written, or the published log was refused
 //   2  the command was given wrong flags, or an output folder that is not empty
 import { existsSync, mkdirSync, readdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { feedText, writeFeeds } from "./feed.js";
 import { readRegularFile } from "./files.js";
 import { attemptLog } from "./guard.js";
+import { type History, earlierOf, readHistory, usable } from "./history.js";
 import { LiveSource } from "./live-source.js";
 import { buildSnapshot } from "./snapshot.js";
 import { DEVNET_GENESIS } from "./status.js";
-import { appendSnapshot } from "./store.js";
+import { logLine, sealSnapshot } from "./store.js";
 import { sumsOf } from "./sums.js";
 import { Recorder } from "./tape.js";
 import type { Transport } from "./transport.js";
@@ -32,21 +40,24 @@ import type { Snapshot } from "./types.js";
 
 export const EXIT = { ok: 0, crashed: 1, usage: 2, reset: 3, refused: 4 } as const;
 
-export const RUN_SCHEMA = "flop-observatory/live-run@0";
+export const RUN_SCHEMA = "flop-observatory/live-run@1";
 
 export interface LiveArgs {
   out: string;
+  /** The published log: a folder of day files. One that does not exist is a first run. */
+  log: string;
   sourceSha: string | null;
 }
 
 /**
- * The flags: --out <folder>, and --source-sha <revision> when known. Read as the command line
+ * The flags: --out <folder>, --log <folder> (the published log), and --source-sha <revision> when
+ * known. --log is always given, so a run never forgets its history by a flag left out. Read as the command line
  * reads its own (src/cli.ts): each flag is --name followed by its value as the next argument, so
  * --name=value, an unknown flag, one given twice, an empty value or one that starts with -- and a
  * stray argument are each refused. Gives the reason as a string when refused.
  */
 export function parseLiveArgs(argv: readonly string[]): LiveArgs | string {
-  const known = ["--out", "--source-sha"];
+  const known = ["--out", "--log", "--source-sha"];
   const got = new Map<string, string>();
   const rest = [...argv];
   while (rest.length > 0) {
@@ -61,7 +72,9 @@ export function parseLiveArgs(argv: readonly string[]): LiveArgs | string {
   }
   const out = got.get("--out");
   if (out === undefined) return "missing --out";
-  return { out, sourceSha: got.get("--source-sha") ?? null };
+  const log = got.get("--log");
+  if (log === undefined) return "missing --log";
+  return { out, log, sourceSha: got.get("--source-sha") ?? null };
 }
 
 export interface RunOptions extends LiveArgs {
@@ -97,6 +110,8 @@ export function noticeLine(s: Snapshot): string {
     rpc: st.rpc.health,
     faucet: st.faucet.health,
     gateway: st.gateway.health,
+    seq: s.seq,
+    prev_hash: s.prev_hash,
     snapshot_hash: s.hash,
   });
   return `::notice title=networkStatus::${commandText(line)}`;
@@ -118,6 +133,12 @@ export function sumsText(dir: string): string {
   return sumsOf(names.map((n) => [n, readRegularFile(join(dir, n))] as const));
 }
 
+/** What run.json says of the published log: its case, in words, and what was read of it. */
+export function historyRecord(h: History | null): { state: string; detail: string; files: number; snapshots: number; last_hash: string | null } {
+  if (h === null) return { state: "not read", detail: "the run broke before the published log was read", files: 0, snapshots: 0, last_hash: null };
+  return { state: h.state, detail: h.detail, files: h.files.length, snapshots: h.snapshots.length, last_hash: h.snapshots.at(-1)?.hash ?? null };
+}
+
 export async function runLive(transport: Transport, o: RunOptions): Promise<RunResult> {
   if (existsSync(o.out) && readdirSync(o.out).length > 0) {
     transport.close();
@@ -129,14 +150,20 @@ export async function runLive(transport: Transport, o: RunOptions): Promise<RunR
   const recorder = new Recorder(transport);
   let snapshot: Snapshot | null = null;
   let broke: string | null = null;
+  let history: History | null = null;
   try {
-    const source = new LiveSource(recorder);
-    await source.read();
-    // The snapshot time is taken once every reading is in, so no reading is later than it.
-    const now = recorder.now();
-    const fresh = await buildSnapshot({ status: source }, { pinnedGenesis: DEVNET_GENESIS, now, sourceSha: o.sourceSha });
-    snapshot = appendSnapshot(join(o.out, "snapshots.jsonl"), fresh);
-    writeFeeds(o.out, snapshot);
+    // The published log first: a run that cannot build on it reads nothing from the network.
+    history = readHistory(o.log);
+    if (usable(history)) {
+      const source = new LiveSource(recorder);
+      await source.read();
+      // The snapshot time is taken once every reading is in, so no reading is later than it.
+      const now = recorder.now();
+      const fresh = await buildSnapshot({ status: source }, { pinnedGenesis: DEVNET_GENESIS, now, sourceSha: o.sourceSha, ...earlierOf(history.snapshots) });
+      snapshot = sealSnapshot(fresh, history.snapshots.at(-1));
+      writeFileSync(join(o.out, "snapshots.jsonl"), logLine(snapshot));
+      writeFeeds(o.out, snapshot);
+    }
   } catch (e) {
     broke = e instanceof Error ? e.message : String(e);
   } finally {
@@ -146,7 +173,10 @@ export async function runLive(transport: Transport, o: RunOptions): Promise<RunR
   const signal = snapshot === null ? null : resetSignal(snapshot);
   let code: number;
   let reason: string;
-  if (refused.length > 0) {
+  if (history !== null && !usable(history)) {
+    code = EXIT.crashed;
+    reason = `the published log was refused (${history.state}), so nothing was read and no snapshot was written: ${history.detail}`;
+  } else if (refused.length > 0) {
     code = EXIT.refused;
     reason = `refused: ${refused.map((a) => `${a.kind} ${a.what}`).join("; ")}`;
   } else if (broke !== null || snapshot === null) {
@@ -169,6 +199,7 @@ export async function runLive(transport: Transport, o: RunOptions): Promise<RunR
       source_sha: o.sourceSha,
       exit_code: code,
       exit_reason: reason,
+      history: historyRecord(history),
       snapshot_hash: snapshot?.hash ?? null,
     }),
   );

@@ -12,18 +12,20 @@
 //   3. snapshot.json is JSON in the written form (src/feed.ts), passes every snapshot check the
 //      MCP binary holds a snapshot to (src/snapshot-check.ts) and its hash check (src/store.ts),
 //      and its trust is "trusted RPC",
-//   4. every feed and snapshots.jsonl is the one that snapshot gives, and run.json names that
-//      snapshot and the exit it gives (src/live-run.ts),
+//   4. every feed and snapshots.jsonl (the snapshot's one line of the log) is the one that snapshot
+//      gives, and run.json names that snapshot, the exit it gives, and a published log the run
+//      built on whose last line is the one the snapshot follows (src/live-run.ts),
 //   5. neither the snapshot's observed_at nor its status's is after now, and neither is older
 //      than the limit the consumer passes.
 // The first step that fails gives the reasons, and nothing after it is read. The tape is checked
 // against its sum only: no rule here reads what it says. The sums show the files are the ones the
-// publish job checked, not that the reading is true: its trust is one RPC endpoint.
+// publish job checked, not that the reading is true: its trust is one RPC endpoint. The log itself
+// is not read here: a reader who wants the chain reads log/ with readHistory (src/history.ts).
 import { feedFiles, feedText } from "./feed.js";
 import { EXIT, RUN_SCHEMA, resetSignal } from "./live-run.js";
 import { own } from "./own.js";
 import { checkSnapshot } from "./snapshot-check.js";
-import { canonicalJson, hashSnapshot } from "./store.js";
+import { hashSnapshot, logLine } from "./store.js";
 import { MAX_NESTING, nestingDepth, parseZoned } from "./strict.js";
 import { sumsOf } from "./sums.js";
 import type { Snapshot } from "./types.js";
@@ -89,7 +91,7 @@ export function judgeLatest(files: Readonly<Record<string, string>>, o: JudgeOpt
   if (s.trust !== "trusted RPC") return refuse(`snapshot.json has trust ${JSON.stringify(s.trust)}, not "trusted RPC"`);
 
   // 4. Every other file is the one the snapshot gives.
-  const given: [string, string][] = [...feedFiles(s).filter(([n]) => n !== "snapshot.json"), ["snapshots.jsonl", canonicalJson(s) + "\n"]];
+  const given: [string, string][] = [...feedFiles(s).filter(([n]) => n !== "snapshot.json"), ["snapshots.jsonl", logLine(s)]];
   const notGiven = given.filter(([n, t]) => text(n) !== t).map(([n]) => `${n} is not the one the snapshot gives`);
   if (notGiven.length > 0) return refuse(...notGiven);
   const run = written("run.json", text("run.json"));
@@ -101,6 +103,11 @@ export function judgeLatest(files: Readonly<Record<string, string>>, o: JudgeOpt
   if (own(run.value as object, "snapshot_hash") !== s.hash) return refuse("run.json names another snapshot");
   const said = own(run.value as object, "exit_code");
   if (said !== exit) return refuse(`run.json says exit ${JSON.stringify(said)}, the snapshot says ${exit}`);
+  // The log the run built on: a first run on no log, or one whose last line the snapshot follows.
+  const history = own(run.value as object, "history");
+  const state = history !== null && typeof history === "object" ? own(history, "state") : undefined;
+  const built = state === "read" ? own(history as object, "last_hash") === s.prev_hash && s.prev_hash !== null : (state === "absent" || state === "empty") && s.seq === 0 && s.prev_hash === null;
+  if (!built) return refuse("run.json does not name the published log the snapshot follows");
 
   // 5. Fresh: the snapshot's time and its status's, the time every feed carries.
   const stale: string[] = [];

@@ -41,9 +41,9 @@
   },
   {
     "id": "cli-previous-last-line-only",
-    "file": "src/cli.ts",
-    "find": "      for (const { status: st, observed_at: taken } of readSnapshots(log)) {",
-    "replace": "      for (const { status: st, observed_at: taken } of readSnapshots(log).slice(-1)) {",
+    "file": "src/history.ts",
+    "find": "  for (const { status: st, observed_at: taken } of snapshots) {",
+    "replace": "  for (const { status: st, observed_at: taken } of snapshots.slice(-1)) {",
     "test": "scripts/cli-checks.mjs",
     "why": "a snapshot with no RPC reading in between must not hide a rollback"
   },
@@ -57,7 +57,7 @@
   },
   {
     "id": "cli-previous-needs-a-head-time",
-    "file": "src/cli.ts",
+    "file": "src/history.ts",
     "find": "if (st.genesis.rpc !== null && st.finalized_height !== null && st.finalized_hash !== null) {",
     "replace": "if (st.genesis.rpc !== null && st.finalized_height !== null && st.finalized_hash !== null && st.rpc.observed_at !== null) {",
     "test": "scripts/cli-checks.mjs",
@@ -97,8 +97,8 @@
   },
   {
     "id": "cli-earlier-times-not-passed",
-    "file": "src/cli.ts",
-    "find": "        earlierTimes.push(typeof taken === \"string\" ? taken : null);\n",
+    "file": "src/history.ts",
+    "find": "    earlierTimes.push(typeof taken === \"string\" ? taken : null);\n",
     "replace": "",
     "test": "scripts/cli-checks.mjs",
     "why": "round 7 review L1: every earlier snapshot's own time reaches the status, so a log that runs backwards shows"
@@ -169,8 +169,8 @@
   },
   {
     "id": "cli-earlier-best-not-read",
-    "file": "src/cli.ts",
-    "find": "        if (st.genesis.rpc !== null && st.best_height !== null) earlierBest.push({ genesis: st.genesis.rpc, best_height: st.best_height });\n",
+    "file": "src/history.ts",
+    "find": "    if (st.genesis.rpc !== null && st.best_height !== null) earlierBest.push({ genesis: st.genesis.rpc, best_height: st.best_height });\n",
     "replace": "",
     "test": "scripts/cli-checks.mjs",
     "why": "round 8 review L1: every earlier snapshot's best height reaches the floor, with or without a finalized head"

@@ -1,0 +1,9 @@
+{
+  "ended_at": "2026-11-11T08:23:05.520Z",
+  "exit_code": 0,
+  "exit_reason": "a truthful snapshot was written",
+  "schema": "flop-observatory/live-run@0",
+  "snapshot_hash": "201cd6e452b6459b38acf05f11a66d014d0302294447ed0ded09e016e2ba8506",
+  "source_sha": "b839bf34ab07f1b429dbb0662fb3ed64923b61a3",
+  "started_at": "2026-11-11T08:22:44.563Z"
+}

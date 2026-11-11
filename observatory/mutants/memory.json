@@ -1,0 +1,186 @@
+[
+  {
+    "id": "day-log-name-order-ignored",
+    "file": "src/store.ts",
+    "find": ".sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));\n  const snapshots",
+    "replace": ".sort((a, b) => (a < b ? 1 : a > b ? -1 : 0));\n  const snapshots",
+    "test": "test/store.test.ts",
+    "why": "the day files of a log are read in name order, as one chain"
+  },
+  {
+    "id": "day-log-latest-day-only",
+    "file": "src/store.ts",
+    "find": "  for (const name of names) {",
+    "replace": "  for (const name of names.slice(-1)) {",
+    "test": "test/store.test.ts",
+    "why": "every day file is read: the checks against earlier snapshots need the whole log, not a window of days"
+  },
+  {
+    "id": "day-log-restart-accepted",
+    "file": "src/store.ts",
+    "find": "    const oneLine = !chained && s.seq === 0 && s.prev_hash === null;",
+    "replace": "    const oneLine = s.seq === 0 && s.prev_hash === null;",
+    "test": "test/store.test.ts",
+    "why": "once the chain has begun, a line with seq 0 breaks it: a log is never restarted part way"
+  },
+  {
+    "id": "day-log-one-line-hash-unchecked",
+    "file": "src/store.ts",
+    "find": "oneLine ? linkProblem(s, 0, null) :",
+    "replace": "oneLine ? null :",
+    "test": "test/store.test.ts",
+    "why": "a one-line log from before runs kept memory must still pass its hash check"
+  },
+  {
+    "id": "day-log-other-name-read",
+    "file": "src/store.ts",
+    "find": "    if (!isDayFile(name)) throw",
+    "replace": "    if (false) throw",
+    "test": "test/store.test.ts",
+    "why": "the log folder holds only <UTC date>.jsonl day files"
+  },
+  {
+    "id": "day-log-any-date-read",
+    "file": "src/store.ts",
+    "find": "  return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === name.slice(0, 10);",
+    "replace": "  return true;",
+    "test": "test/store.test.ts",
+    "why": "a day file names a real calendar date"
+  },
+  {
+    "id": "day-log-file-link-followed",
+    "file": "src/store.ts",
+    "find": "    if (!read(name, () => lstatSync(path)).isFile()) throw",
+    "replace": "    if (false) throw",
+    "test": "test/store.test.ts",
+    "why": "a link or a folder at a day file's name is never read"
+  },
+  {
+    "id": "day-log-folder-link-followed",
+    "file": "src/store.ts",
+    "find": "  if (!st.isDirectory()) throw new LogRefused(",
+    "replace": "  if (!st.isDirectory() && !st.isSymbolicLink()) throw new LogRefused(",
+    "test": "test/store.test.ts",
+    "why": "a log folder that is a link is never followed"
+  },
+  {
+    "id": "day-log-unreadable-called-broken",
+    "file": "src/store.ts",
+    "find": "      if (typeof s === \"string\") throw new LogRefused(\"unreadable\",",
+    "replace": "      if (typeof s === \"string\") throw new LogRefused(\"broken\",",
+    "test": "test/store.test.ts",
+    "why": "a line that cannot be read is said to be unreadable, not a broken chain"
+  },
+  {
+    "id": "day-log-empty-file-read",
+    "file": "src/store.ts",
+    "find": "    if (fileLines.length === 0) throw new LogRefused(",
+    "replace": "    if (false) throw new LogRefused(",
+    "test": "test/store.test.ts",
+    "why": "a day file with no line is refused: the publish job never writes one, so the two halves find the same last line"
+  },
+  {
+    "id": "history-unchecked-skipped",
+    "file": "src/history.ts",
+    "find": "    if (broken.length > 0) return refused(\"unchecked\",",
+    "replace": "    if (false) return refused(\"unchecked\",",
+    "test": "test/history.test.ts",
+    "why": "a line that is no snapshot this code can check is refused, never read as history"
+  },
+  {
+    "id": "history-refused-read-as-absent",
+    "file": "src/history.ts",
+    "find": "    if (e instanceof LogRefused) return refused(e.kind, e.message);",
+    "replace": "    if (e instanceof LogRefused) return { state: \"absent\", detail: e.message, files: [], snapshots: [] };",
+    "test": "test/history.test.ts",
+    "why": "a log that cannot be read or whose chain breaks is never read as no log"
+  },
+  {
+    "id": "history-refused-usable",
+    "file": "src/history.ts",
+    "find": "  return h.state === \"absent\" || h.state === \"empty\" || h.state === \"read\";",
+    "replace": "  return true;",
+    "test": "test/history.test.ts",
+    "why": "only an absent, empty or wholly read log gives a run something to build on"
+  },
+  {
+    "id": "live-run-history-not-passed",
+    "file": "src/live-run.ts",
+    "find": ", ...earlierOf(history.snapshots) });",
+    "replace": " });",
+    "test": "test/memory.test.ts",
+    "why": "a live snapshot is built on every snapshot in the published log, so the checks against earlier snapshots run"
+  },
+  {
+    "id": "live-run-history-last-day-only",
+    "file": "src/live-run.ts",
+    "find": "...earlierOf(history.snapshots)",
+    "replace": "...earlierOf(history.snapshots.slice(-1))",
+    "test": "test/memory.test.ts",
+    "why": "every earlier snapshot counts, not only the last"
+  },
+  {
+    "id": "live-run-new-log-each-run",
+    "file": "src/live-run.ts",
+    "find": "      snapshot = sealSnapshot(fresh, history.snapshots.at(-1));",
+    "replace": "      snapshot = sealSnapshot(fresh, undefined);",
+    "test": "test/memory.test.ts",
+    "why": "a live snapshot follows the published log's last line in one chain"
+  },
+  {
+    "id": "live-run-refused-log-read-as-none",
+    "file": "src/live-run.ts",
+    "find": "    if (usable(history)) {",
+    "replace": "    if (true) {",
+    "test": "test/memory.test.ts",
+    "why": "a refused log is never read as no log: no network read, no snapshot, never a new log over it"
+  },
+  {
+    "id": "live-run-refusal-unsaid",
+    "file": "src/live-run.ts",
+    "find": "  if (history !== null && !usable(history)) {",
+    "replace": "  if (false) {",
+    "test": "test/memory.test.ts",
+    "why": "a refused log is said to be one, with its case and reason"
+  },
+  {
+    "id": "live-run-history-unrecorded",
+    "file": "src/live-run.ts",
+    "find": "      history: historyRecord(history),",
+    "replace": "      history: historyRecord(null),",
+    "test": "test/memory.test.ts",
+    "why": "run.json says which case the published log was in"
+  },
+  {
+    "id": "live-run-notice-chain-dropped",
+    "file": "src/live-run.ts",
+    "find": "    seq: s.seq,\n    prev_hash: s.prev_hash,\n",
+    "replace": "",
+    "test": "test/memory.test.ts",
+    "why": "the notice says which line of the log the snapshot follows"
+  },
+  {
+    "id": "live-args-log-optional",
+    "file": "src/live-run.ts",
+    "find": "  if (log === undefined) return \"missing --log\";\n",
+    "replace": "",
+    "test": "test/live-run.test.ts",
+    "why": "--log is always given, so a run never forgets its history by a flag left out"
+  },
+  {
+    "id": "published-history-unchecked",
+    "file": "src/published.ts",
+    "find": "  if (!built) return refuse(",
+    "replace": "  if (false) return refuse(",
+    "test": "test/memory.test.ts",
+    "why": "a published run.json names the log line its snapshot follows"
+  },
+  {
+    "id": "published-old-run-schema-accepted",
+    "file": "src/live-run.ts",
+    "find": "export const RUN_SCHEMA = \"flop-observatory/live-run@1\";",
+    "replace": "export const RUN_SCHEMA = \"flop-observatory/live-run@0\";",
+    "test": "test/published.test.ts",
+    "why": "a run.json from before runs kept memory is not read as one that did"
+  }
+]

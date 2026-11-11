@@ -266,8 +266,8 @@
   {
     "id": "live-run-refusal-ignored",
     "file": "src/live-run.ts",
-    "find": "  if (refused.length > 0) {",
-    "replace": "  if (false) {",
+    "find": "  } else if (refused.length > 0) {",
+    "replace": "  } else if (false) {",
     "test": "test/live-run.test.ts",
     "why": "a request the guard or the transport refused makes the run exit 4"
   },

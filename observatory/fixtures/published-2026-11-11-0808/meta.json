@@ -1,0 +1,17 @@
+{
+  "scenario": "published-2026-11-11-0808",
+  "description": "Real data, nothing made up: one live reading of FLOP devnet as the workflow published it on observatory-data at commit a3f1ad4. tape.jsonl, snapshot.json, run.json and SHA256SUMS are latest/ at that commit, byte for byte; log/2026-11-11.jsonl is the day file of the log at that commit. SHA256SUMS lists all nine published files; only these four are kept here.",
+  "now": "2026-11-11T08:08:57.648Z",
+  "synthetic": false,
+  "provenance": {
+    "data_branch": "observatory-data",
+    "data_branch_commit": "a3f1ad422513ee678f1bc908c981d6fd7b86bfc6",
+    "workflow_run": 42984693324,
+    "workflow_run_from": "the data branch commit message",
+    "revision": "b839bf34ab07f1b429dbb0662fb3ed64923b61a3",
+    "revision_from": "run.json source_sha",
+    "tape_sha256": "882ff1d304105e4f71ef8559d248636de482762e1728a59d0c622785b4ee1850",
+    "log_day_file_git_blob": "99daacdbe212611d34e45f85211bbcb88dffec8c",
+    "snapshot_hash": "93ef7da25ef6c9fa54d484c8885a19707f41d6087141901c633b709e9b241843"
+  }
+}
