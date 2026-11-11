@@ -404,7 +404,8 @@ Tests fail if any attempt is left in the log.
   `process.binding`, `process.dlopen` and `inspector.open`. The block covers the ways out named
   here and is tried against each of them; it is no proof that Node has no other.
 - A source scan fails any `src` module, other than `guard.ts`, that imports one of those modules or
-  calls fetch, WebSocket, a signing API or a key API. It also fails the indirect forms:
+  calls fetch, WebSocket, a signing API or a key API (`src/live-bin.ts` names fetch and WebSocket
+  in the one form the exemption below allows, and calls neither). It also fails the indirect forms:
   `process.getBuiltinModule`, `createRequire`, an `import()` or `require()` whose argument is not
   a plain string, `process.binding`, `eval` and `Function`, called or not.
 - The source scan fails any use of the bare names `fetch`, `WebSocket`, `EventSource`,
@@ -456,6 +457,15 @@ Tests fail if any attempt is left in the log.
   scans check that. It proves itself on known bad and good samples, and its file list on a throwaway
   folder, before it scans. What it cannot see is what an allowed module does with the arguments
   `src` passes it; the runtime block in the tests covers that.
+- One exemption, for the live read's composition root. `src/live-bin.ts` may name `WebSocket` and
+  `fetch`, each once, and only as the values of the plain properties of the one object literal it
+  hands to `new NetTransport(...)`. The syntax tree scan holds it to that form: no shorthand,
+  computed, method or getter property, no other callee, no second argument, no second use of either
+  name, and every other rule still applies there. The text scan in `test/guard.test.ts` holds it to
+  the exact text `new NetTransport({ socketClass: WebSocket, httpCall: fetch })`, once, and reads
+  the rest of the file by every rule. No other module gets the exemption, nor a `live-bin.ts` in a
+  subfolder; both scans prove that on samples before they scan. Every other module reaches the
+  network only through the transport it is handed, so a test hands it fakes.
 - `tools/recount.py` is read the same two ways: its own tests walk its syntax tree (exactly five
   plain imports, none under an alias and none of a submodule, no from-import, every use of a
   module one of a fixed list of full dotted names, so no alias of a module or of part of one; every
