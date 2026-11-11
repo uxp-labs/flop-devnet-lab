@@ -92,8 +92,8 @@
     "names": "de59fc974e7a9ef6ac6ebea8086881c36f93b210d7ada69de6aceadcd5650d81"
   },
   "status.test.ts": {
-    "tests": 120,
-    "names": "587c43fd19c8936f07be12ed61be7333f6c57b11abbe00369fa62c49725275a7"
+    "tests": 121,
+    "names": "c94e3b8330a54c75448e9e0b4ca4014dca2c579ba4a41cf3f1cec9ca51b4f9a5"
   },
   "store.test.ts": {
     "tests": 23,

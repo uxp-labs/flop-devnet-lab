@@ -137,9 +137,9 @@ Every run reads the whole log. The checks need the highest finalized and best he
 on the genesis, every hash logged at the current height, and the latest run of snapshots at that
 height, which can be any length. Any bound short of the whole log would need a summary of those,
 which is a second owner of the rules in `src/status.ts`. Measured on Node 22: a year of readings,
-48 a day, is about 31 MB in 366 day files and takes about 1.4 s to read and check. Past roughly
-120,000 earlier heads on one genesis (about seven years at 48 a day) `src/status.ts` throws, as it
-spreads every earlier height into one call, so the run breaks with exit 1 and publishes nothing.
+48 a day, is about 31 MB in 366 day files and takes about 1.4 s to read and check. The floors are
+found by a fold over the earlier heights, so no count of them breaks the checks; a test holds them
+at 200,000 earlier heads, more than eleven years at 48 a day.
 
 A live snapshot's trust is `"trusted RPC"`. It trusts one RPC endpoint, and the faucet and gateway
 as they answer. It is not proof: no light client, and no header hash is checked.

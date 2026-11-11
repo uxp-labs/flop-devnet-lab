@@ -316,7 +316,8 @@ export function classifyRpc(
   // genesis is the floor, for this head's finalized height and for its best height alike. A head
   // whose best height is below the floor contradicts history even when it has no finalized head
   // (a chain restarted from the same spec keeps its genesis and starts again near block 0).
-  const highest = sameGenesis.length > 0 ? Math.max(...sameGenesis.map((p) => p.finalized_height)) : null;
+  // A fold, not one call with every height as an argument, which throws past about 120,000 of them.
+  const highest = sameGenesis.length > 0 ? sameGenesis.reduce((m, p) => Math.max(m, p.finalized_height), -Infinity) : null;
   // With a valid finalized head, a best height under the floor is already a rollback or best below
   // finalized; this catches the head that has no valid finalized head at all.
   if (highest !== null && best !== null && best < highest && finalized === null) {
@@ -332,7 +333,7 @@ export function classifyRpc(
   // stall, a reorganisation that drops a long fork leaves the head unusable until the best height
   // is back within the lag limit of the highest one seen (round 9 review L5).
   const bestSeen = genesis === null ? [] : (earlierBest ?? []).filter((p) => p.genesis === genesis).map((p) => p.best_height);
-  const highestBest = bestSeen.length > 0 ? Math.max(...bestSeen) : null;
+  const highestBest = bestSeen.length > 0 ? bestSeen.reduce((m, h) => Math.max(m, h), -Infinity) : null;
   if (highestBest !== null && best !== null && best < highestBest - o.maxFinalityLag) {
     conflicts.push(`best block ${best} is more than ${o.maxFinalityLag} blocks below the best block ${highestBest} an earlier snapshot saw on this genesis`);
     problems.push("best height fell further than the lag limit below an earlier best height");

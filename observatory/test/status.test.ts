@@ -139,6 +139,19 @@ describe("injected failures", () => {
       const s = await run("status-healthy", { previous: [head(3341600, "2026-11-09T23:46:00Z"), head(3341570, "2026-11-09T23:47:00Z")] });
       expect(s.conflicts.join(" ")).toMatch(/went backwards from 3341600 to 3341575/);
     });
+    it("200,000 earlier heads and best heights, ten years and more of readings, give the floors as a short history does", async () => {
+      // One call that spread every earlier height into its arguments threw near 120,000 of them.
+      const n = 200_000;
+      const heads = Array.from({ length: n }, (_, i) => head(3341000 + (i % 500), "2026-11-09T23:46:00Z", "0x" + (i % 500).toString(16).padStart(64, "0")));
+      heads[n - 7] = head(3341600, "2026-11-09T23:46:00Z");
+      const bests = Array.from({ length: n }, (_, i) => ({ genesis: DEVNET_GENESIS, best_height: 3341000 + (i % 500) }));
+      bests[n - 3] = { genesis: DEVNET_GENESIS, best_height: 3341700 };
+      const many = await run("status-healthy", { previous: heads, earlierBest: bests });
+      const few = await run("status-healthy", { previous: [head(3341000), head(3341600, "2026-11-09T23:46:00Z")], earlierBest: [{ genesis: DEVNET_GENESIS, best_height: 3341700 }] });
+      expect(many.conflicts).toEqual(few.conflicts);
+      expect(many.conflicts.join(" ")).toMatch(/went backwards from 3341600 to 3341575/);
+      expect(many.conflicts.join(" ")).toMatch(/more than 30 blocks below the best block 3341700/);
+    });
     it("a changed hash at this height in any earlier snapshot is a conflict", async () => {
       const s = await run("status-healthy", { previous: [head(3341575, "2026-11-09T23:46:00Z", "0x" + "77".repeat(32)), head(3341570, "2026-11-09T23:47:00Z")] });
       expect(s.conflicts.join(" ")).toMatch(/changed hash/);
