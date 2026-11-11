@@ -30,5 +30,53 @@
     "replace": ") {",
     "test": "test/net.test.ts",
     "why": "no caller may state a limit above 8 MiB"
+  },
+  {
+    "id": "requests-written-form-skipped",
+    "file": "src/requests.ts",
+    "find": "  if (feedText(read.value) !== new TextDecoder().decode(bytes)) return",
+    "replace": "  if (false) return",
+    "test": "test/requests.test.ts",
+    "why": "a request list is in the one written form, so a review sees every change"
+  },
+  {
+    "id": "requests-unknown-key-allowed",
+    "file": "src/requests.ts",
+    "find": "!isRecord(v) || !keysAre(v, [\"calls\", \"schema\"]) || ",
+    "replace": "!isRecord(v) || ",
+    "test": "test/requests.test.ts",
+    "why": "a request list holds exactly calls and schema"
+  },
+  {
+    "id": "requests-call-unknown-key-allowed",
+    "file": "src/requests.ts",
+    "find": "!isRecord(c) || !keysAre(c, [\"method\", \"params\", \"why\"])",
+    "replace": "!isRecord(c)",
+    "test": "test/requests.test.ts",
+    "why": "each call holds exactly method, params and why"
+  },
+  {
+    "id": "requests-why-unchecked",
+    "file": "src/requests.ts",
+    "find": "typeof c.why !== \"string\" || !PLAIN_LINE.test(c.why)",
+    "replace": "typeof c.why !== \"string\"",
+    "test": "test/requests.test.ts",
+    "why": "each call says why it is asked, in one plain line"
+  },
+  {
+    "id": "requests-no-call-limit",
+    "file": "src/requests.ts",
+    "find": " || v.calls.length > MAX_CALLS)",
+    "replace": ")",
+    "test": "test/requests.test.ts",
+    "why": "a list asks at most 256 calls"
+  },
+  {
+    "id": "requests-hash-of-parsed-value",
+    "file": "src/requests.ts",
+    "find": "createHash(\"sha256\").update(bytes).digest(\"hex\")",
+    "replace": "createHash(\"sha256\").update(JSON.stringify(read.value)).digest(\"hex\")",
+    "test": "test/requests.test.ts",
+    "why": "the list's hash is of its bytes as read"
   }
 ]
