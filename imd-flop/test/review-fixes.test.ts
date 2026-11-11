@@ -378,18 +378,17 @@ describe("R7 (low), now residual R-g: the rounding tolerance", () => {
   // Decided (review fixes 2): words, not code. contract/rules.json R-g says what is true: a charge on the 6
   // decimal grid is never understated by rounding; a charge off it within 1e-12 FLOP above a step can be
   // admitted over the cap by at most 1e-12 FLOP. It closes when money moves to exact base units (stage 2).
-  it("R-g: cap 1, a settled row charged 0.8140000000005 (off the grid): a 0.186 call is admitted, and the day is over the cap by at most 1e-12 FLOP", async () => {
+  it("R-g: cap 1, a settled row charged 0.8140000000005 (off the grid): the charge rounds up to 0.814001, so a 0.186 call is refused and the day stays within its cap", async () => {
+    // Moved (review of the audit 33f3b9f fixes, defect 1): there is no 1e-12 tolerance. An amount off the grid
+    // rounds up when charged, so this residual is closed. Before, the call was admitted and the day ended over its
+    // cap by at most 1e-12 FLOP.
     const h = await ready("1");
     await pendingRun(h, "jA");
     const latest = ledger(h).at(-1)!;
     appendFileSync(ledgerPath(h), JSON.stringify({ ...latest, ts: new Date().toISOString(), state: "settled", spend: 0.8140000000005, cap_charge: 0.8140000000005 }) + "\n");
     const second = await cli(h, runArgs("jB"), { provider: new P() });
-    expect(second.code, second.err).toBe(0);
-    const charges = ledger(h).filter((r, i, all) => all.findLastIndex((x) => x.request_id === r.request_id) === i).map((r) => r.cap_charge as number);
-    const over = charges.reduce((a, b) => a + b, 0) - 1;
-    expect(over).toBeGreaterThan(0);
-    expect(over).toBeLessThanOrEqual(1e-12);
-    expect(await today(h)).toBe(1); // the rounded total status shows
+    expect(second.code, second.err).toBe(3);
+    expect(await today(h)).toBe(0.814001);
   });
 
   it("charges on the 6 decimal grid: rounding never admits a call over the cap (20000 random sums)", () => {

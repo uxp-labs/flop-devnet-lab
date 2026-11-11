@@ -1,44 +1,46 @@
 /**
- * Rounding to 6 decimals, the precision every FLOP amount is compared at. Pure.
- * Money already spent rounds up and room left rounds down. ceilMicro and floorMicro give the integer
- * numerator in millionths of a FLOP (micro units), and ceil6 and floor6 are those over 1e6.
- * A value within 1e-12 FLOP of a 1e-6 step counts as on it. Every amount this tool compares is at most
- * AMOUNT_MAX (1e9 FLOP, amount.ts). Up to there an amount on the grid is its own double, and x * 1e6 is within
- * 0.5 of the exact integer, so the grid survives the float: on one amount the tolerance absorbs float noise and
- * the numerator is exact.
- * A day or job total is the exact sum of the charges' integer numerators (ledger.ts sumCharges), never a float
- * sum. The room left is floor6(allowed - spent) (policy.ts roomLeft). That subtraction is a float one, and above
- * about 8192 FLOP its noise can be larger than the tolerance. Then the room can come out one whole step short.
- * It only ever moves the safe way: room down, never up.
- * What that means for the cap (contract/rules.json residual R-g):
- *  - For charges and caps on the 6 decimal grid, rounding never admits a call over the cap. This tool books
- *    every charge on that grid, except a charge a gateway amount raised above the padded quote (that booking
- *    prints PAST_ADMITTED).
- *  - A charge off the grid within 1e-12 FLOP above a step (a hand edit, a damaged row, or such a gateway
- *    amount) rounds down onto the step, so the next call can be admitted with the day over the cap by at most
- *    1e-12 FLOP for each such charge. A cap or budget set within 1e-12 FLOP below a step rounds room up by at
- *    most as much.
- *  - This closes when money moves to exact base units (money stage 2).
+ * Amounts in whole millionths of a FLOP (micro units), the precision every FLOP amount is compared at. Pure.
+ * No epsilon anywhere (review of the audit 33f3b9f fixes, defect 1):
+ *  - An amount x is on the 6 decimal grid when n = floor(x * 1e6 + 0.5) gives back the same double:
+ *    n / 1e6 === x. Then its count of millionths is n, exactly. Every amount this tool compares is at most
+ *    AMOUNT_MAX (1e9 FLOP, amount.ts), and up to there every grid amount is found this way.
+ *  - Only an amount off the grid is rounded, and the result is checked by comparison: up (money already
+ *    spent, a charge) is the smallest n with n / 1e6 >= x; down (room left, a limit) is the largest n with
+ *    n / 1e6 <= x.
+ *  - Totals and the cap check are integers built from these counts (ledger.ts exactTotal, policy.ts
+ *    checkBudget), never a float sum or a float subtraction. So for amounts on the grid every total and every
+ *    cap decision is exact.
+ * What is left for the cap (contract/rules.json residual R-g): an amount off the grid rounds the safe way, a
+ * charge up and a limit down, so rounding never admits a call over the cap. It closes fully when money moves
+ * to exact base units (money stage 2).
  */
 const SCALE = 1e6;
-const NOISE = 1e-6; // in scaled units, so 1e-12 FLOP
 
-/** The boundary this scaled value sits on, or null when it lies between two. */
-function boundary(scaled: number): number | null {
-  const nearest = Math.round(scaled);
-  return Math.abs(scaled - nearest) <= NOISE ? nearest : null;
+/** The count of millionths of an amount on the grid, or null when it is off the grid (or not finite). */
+export function gridMicro(x: number): number | null {
+  if (!Number.isFinite(x)) return null;
+  const n = Math.floor(x * SCALE + 0.5);
+  return n / SCALE === x ? n : null;
 }
 
-/** The value rounded up to 6 decimals, as an integer count of millionths. A value on a 1e-6 step stays on it. */
-export function ceilMicro(n: number): number {
-  const scaled = n * SCALE;
-  return boundary(scaled) ?? Math.ceil(scaled);
+/** The amount rounded up, in millionths: its exact count on the grid, else the smallest n with n / 1e6 >= x. */
+export function ceilMicro(x: number): number {
+  const on = gridMicro(x);
+  if (on !== null) return on;
+  let n = Math.ceil(x * SCALE);
+  while (n / SCALE < x) n += 1;
+  while ((n - 1) / SCALE >= x) n -= 1;
+  return n;
 }
 
-/** The value rounded down to 6 decimals, as an integer count of millionths. A value on a 1e-6 step stays on it. */
-export function floorMicro(n: number): number {
-  const scaled = n * SCALE;
-  return boundary(scaled) ?? Math.floor(scaled);
+/** The amount rounded down, in millionths: its exact count on the grid, else the largest n with n / 1e6 <= x. */
+export function floorMicro(x: number): number {
+  const on = gridMicro(x);
+  if (on !== null) return on;
+  let n = Math.floor(x * SCALE);
+  while (n / SCALE > x) n -= 1;
+  while ((n + 1) / SCALE <= x) n += 1;
+  return n;
 }
 
 /** Round up to 6 decimals: ceilMicro over 1e6. */

@@ -7,7 +7,7 @@
 import { AMOUNT_MAX, knownAmount } from "./amount.js";
 import { CliError, EXIT } from "./errors.js";
 import type { Payer, SeatCap } from "./config.js";
-import { ceil6, floor6 } from "./rounding.js";
+import { ceil6, ceilMicro, floorMicro } from "./rounding.js";
 import { scanForSecrets } from "./secrets.js";
 
 export const TEMPLATE_PAD = 20; // measured: Qwen chat wrap 23 tokens vs 3 raw for "Be brief.\nHi"
@@ -166,13 +166,23 @@ function limitsFor(a: BudgetState): SpendLimit[] | null {
 }
 
 /**
- * Room left under a limit: what it allows, less what is already charged. Rounded down to 6 decimals, so
- * rounding adds no room beyond the 1e-12 FLOP tolerance of rounding.ts, which only amounts off the 6 decimal
- * grid can use (residual R-g). A figure that is missing is unknown, never 0: the room is then not a number.
+ * Room left under a limit, in millionths: what it allows (rounded down), less what is already charged (rounded
+ * up), as integers (rounding.ts), so it is exact for amounts on the grid (review of the audit 33f3b9f fixes,
+ * defect 1). A figure that is missing is unknown, never 0: the room is then not a number.
  */
+function roomMicro(limit: { allowed: number | undefined; spent: number | undefined }): number {
+  if (typeof limit.allowed !== "number" || typeof limit.spent !== "number" || !Number.isFinite(limit.allowed) || !Number.isFinite(limit.spent)) return Number.NaN;
+  return floorMicro(limit.allowed) - ceilMicro(limit.spent);
+}
+
+/** Room left under a limit in FLOP: roomMicro over 1e6. Not a number when a figure is missing. */
 export function roomLeft(limit: { allowed: number | undefined; spent: number | undefined }): number {
-  if (typeof limit.allowed !== "number" || typeof limit.spent !== "number") return Number.NaN;
-  return floor6(limit.allowed - limit.spent);
+  return roomMicro(limit) / 1e6;
+}
+
+/** The padded quote is over what is left of the limit, decided in integers: ceilMicro(padded) > room. */
+function over(padded: number, limit: { allowed: number | undefined; spent: number | undefined }): boolean {
+  return ceilMicro(padded) > roomMicro(limit);
 }
 
 /**
@@ -201,7 +211,7 @@ export function noRoom(a: BudgetState): BudgetRefusal | null {
  * booking that passed what the cap admitted (settlement.ts PAST_ADMITTED), or a cap set lower during the day.
  */
 export function overDailyCap(spent: number, cap: SeatCap | null): boolean {
-  return cap !== null && spent > cap.daily;
+  return cap !== null && ceilMicro(spent) > floorMicro(cap.daily);
 }
 
 /**
@@ -213,11 +223,10 @@ export function checkBudget(a: BudgetState & { padded: number }): BudgetRefusal 
   const { padded, cap } = a;
   const none = noRoom(a);
   if (none) return none;
-  if (padded > cap.perCall) return refusedCap(`padded quote ${padded} FLOP is over the per-call cap ${cap.perCall}`);
+  if (ceilMicro(padded) > floorMicro(cap.perCall)) return refusedCap(`padded quote ${padded} FLOP is over the per-call cap ${cap.perCall}`);
   // noRoom has already refused a payer with no limits.
   for (const limit of limitsFor(a) ?? []) {
-    const left = roomLeft(limit);
-    if (padded > left) return refusedCap(limit.over(padded, left));
+    if (over(padded, limit)) return refusedCap(limit.over(padded, roomLeft(limit)));
   }
   return null;
 }

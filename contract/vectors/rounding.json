@@ -1,6 +1,6 @@
 {
  "file": "rounding.json",
- "description": "Room left rounds down to 6 decimals (money stage 1, item 5a). imd-flop: rounding.ts floor6(value). viewer: build-lane.py floor6(value), which spend_limit uses for what is left of each limit. A value within 1e-12 of a 1e-6 boundary counts as on it, so float noise never moves a 6 decimal amount below 8192 FLOP. Rounding adds no room beyond that tolerance: before this file the viewer rounded room left to nearest, so a row over its limit by less than 1e-6 FLOP was not flagged. rounding.ceil6 (imd-flop rounding.ts ceil6) pins the total already charged rounding up. Residual R-g in rules.json says what the 1e-12 FLOP tolerance can do to amounts off the grid.",
+ "description": "Room left rounds down to 6 decimals (money stage 1, item 5a). imd-flop: rounding.ts floor6(value). viewer: build-lane.py floor6(value), which spend_limit uses for what is left of each limit. A value within 1e-12 of a 1e-6 boundary counts as on it, so float noise never moves a 6 decimal amount below 8192 FLOP. Rounding adds no room beyond that tolerance: before this file the viewer rounded room left to nearest, so a row over its limit by less than 1e-6 FLOP was not flagged. rounding.ceil6 (imd-flop rounding.ts ceil6) pins the total already charged rounding up. Residual R-g in rules.json says what the 1e-12 FLOP tolerance can do to amounts off the grid. Since the review of the audit 33f3b9f fixes (defect 1) there is no tolerance: an amount is on the grid only when floor(x * 1e6 + 0.5) / 1e6 gives back the same double, and any other amount rounds to the next step, up for ceil6 and down for floor6.",
  "status": "money stage 1",
  "vectors": [
   {
@@ -49,16 +49,16 @@
    },
    "expect": {
     "imd-flop": {
-     "floor": 0.3
+     "floor": 0.299999
     },
     "spend-guard": {
      "not_applicable": "spend-guard keeps no room left: it compares the padded quote with --cap"
     },
     "viewer": {
-     "floor": 0.3
+     "floor": 0.299999
     }
    },
-   "note": "float noise below a boundary counts as on it, so it does not lose a step"
+   "note": "float noise below a boundary counts as on it, so it does not lose a step Moved (review of the audit 33f3b9f fixes, defect 1): was 0.3. There is no tolerance now: this value is not on the grid (floor(x * 1e6 + 0.5) / 1e6 is another double), so it rounds down to the next step."
   },
   {
    "id": "floor6-between",
@@ -127,16 +127,16 @@
    },
    "expect": {
     "imd-flop": {
-     "floor": -0.098
+     "floor": -0.098001
     },
     "spend-guard": {
      "not_applicable": "spend-guard keeps no room left: it compares the padded quote with --cap"
     },
     "viewer": {
-     "floor": -0.098
+     "floor": -0.098001
     }
    },
-   "note": "0.5 - 0.4 - 0.198: noise counts as on the boundary"
+   "note": "0.5 - 0.4 - 0.198: noise counts as on the boundary Moved (review of the audit 33f3b9f fixes, defect 1): was -0.098. There is no tolerance now: this value is not on the grid (floor(x * 1e6 + 0.5) / 1e6 is another double), so it rounds down to the next step."
   },
   {
    "id": "floor6-negative-between",
@@ -184,7 +184,7 @@
    },
    "expect": {
     "imd-flop": {
-     "ceil": 0.3
+     "ceil": 0.300001
     },
     "spend-guard": {
      "not_applicable": "spend-guard keeps no running total: it compares the padded quote with --cap"
@@ -193,7 +193,7 @@
      "not_applicable": "the viewer keeps no running total: it reads each row's own spent_before and rounds only room left (floor6)"
     }
    },
-   "note": "0.1 + 0.2: float noise above a step is absorbed, so a total of charges on the grid is not rounded up a whole step"
+   "note": "0.1 + 0.2: float noise above a step is absorbed, so a total of charges on the grid is not rounded up a whole step Moved (review of the audit 33f3b9f fixes, defect 1): was 0.3. There is no tolerance now: this value is not on the grid (floor(x * 1e6 + 0.5) / 1e6 is another double), so it rounds up to the next step."
   },
   {
    "id": "ceil6-off-grid-beyond-tolerance",
@@ -222,7 +222,7 @@
    },
    "expect": {
     "imd-flop": {
-     "ceil": 0.814
+     "ceil": 0.814001
     },
     "spend-guard": {
      "not_applicable": "spend-guard keeps no running total: it compares the padded quote with --cap"
@@ -234,7 +234,7 @@
    "quirks": [
     "R-g"
    ],
-   "note": "residual R-g: a total 5e-13 FLOP above a step (only an off grid charge makes one) is rounded down onto the step, so it is understated by at most 1e-12 FLOP"
+   "note": "residual R-g: a total 5e-13 FLOP above a step (only an off grid charge makes one) is rounded down onto the step, so it is understated by at most 1e-12 FLOP Moved (review of the audit 33f3b9f fixes, defect 1): was 0.814. There is no tolerance now: this value is not on the grid (floor(x * 1e6 + 0.5) / 1e6 is another double), so it rounds up to the next step."
   },
   {
    "id": "floor6-off-grid-within-tolerance-below",
@@ -244,19 +244,19 @@
    },
    "expect": {
     "imd-flop": {
-     "floor": 0.3
+     "floor": 0.299999
     },
     "spend-guard": {
      "not_applicable": "spend-guard keeps no room left: it compares the padded quote with --cap"
     },
     "viewer": {
-     "floor": 0.3
+     "floor": 0.299999
     }
    },
    "quirks": [
     "R-g"
    ],
-   "note": "residual R-g: room left 5e-13 FLOP below a step (only an off grid cap or charge makes one) is rounded up onto the step, by at most 1e-12 FLOP"
+   "note": "residual R-g: room left 5e-13 FLOP below a step (only an off grid cap or charge makes one) is rounded up onto the step, by at most 1e-12 FLOP Moved (review of the audit 33f3b9f fixes, defect 1): was 0.3. There is no tolerance now: this value is not on the grid (floor(x * 1e6 + 0.5) / 1e6 is another double), so it rounds down to the next step."
   }
  ]
 }

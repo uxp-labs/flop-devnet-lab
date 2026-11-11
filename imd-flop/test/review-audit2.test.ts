@@ -10,7 +10,7 @@ import { describe, expect, it } from "vitest";
 import { appendLedger, jobSpent, spentToday, utcDay, type LedgerEntry } from "../src/ledger.js";
 import { keyFile, ledgerFile, receiptsDir } from "../src/paths.js";
 import { ceilMicro, floorMicro } from "../src/rounding.js";
-import { checkBudget } from "../src/policy.js";
+import { checkBudget, roomLeft } from "../src/policy.js";
 import { assertPaidNetwork, readEthereumChainId, type Fetch } from "../src/gateway.js";
 import { network } from "../src/networks.js";
 import { runJob } from "../src/run.js";
@@ -37,47 +37,78 @@ const echoing = (say: (url: string) => string): Fetch =>
   (async (input: string | URL | Request) => new Response(JSON.stringify({ jsonrpc: "2.0", id: 1, error: { code: -32000, message: say(String(input)) } }), { status: 200 })) as Fetch;
 const chainIdError = (url: string, say: (url: string) => string) => readEthereumChainId(url, echoing(say)).then(() => "no error", (e: Error) => e.message);
 
-describe("DEFECT 1 (medium): a grid amount above 16384 FLOP does not get its exact numerator, so totals are not exact and status shows OVER CAP for a call imd-flop admitted at its cap", () => {
-  // rounding.ts claims: up to AMOUNT_MAX x * 1e6 is within 0.5 of the integer, "so ... the numerator is exact".
-  // ceilMicro and floorMicro only snap within 1e-6 (scaled), not 0.5. Above 16384 FLOP x * 1e6 is often one
-  // ulp off the integer, so ceilMicro gives k + 1 or floorMicro gives k - 1.
-  it("DEFECT 1 (medium): ceilMicro(16385.147313) is 16385147314, one step above the numerator, and many grid amounts just above 16384 FLOP miss", () => {
-    expect(ceilMicro(16385.147313)).toBe(16385147314);
+describe("review defect 1 (medium), fixed: a grid amount gets its exact numerator, totals are exact, and status agrees with the cap check", () => {
+  it("review defect 1, fixed: ceilMicro and floorMicro of 16385.147313 are its numerator, and every grid amount just above 16384 FLOP is exact", () => {
+    expect(ceilMicro(16385.147313)).toBe(16385147313);
     expect(floorMicro(16385.147313)).toBe(16385147313);
     let wrong = 0;
     for (let k = 16384_000_000n; k < 16384_020_000n; k++) if (ceilMicro(grid(k)) !== Number(k) || floorMicro(grid(k)) !== Number(k)) wrong++;
-    expect(wrong).toBeGreaterThan(0);
+    expect(wrong).toBe(0);
   });
 
-  it("DEFECT 1 (medium): spentToday of three tool-shaped grid charges is 1e-6 above their exact BigInt sum", () => {
+  it("review defect 1, fixed: spentToday of three tool-shaped grid charges is their exact BigInt sum", () => {
     const h = tmpHome();
     const charges = [282652198067846n, 68491002523412n, 329838119579963n];
     charges.forEach((c, i) => appendLedger(h, row(`mock-7-${i}`, { cap_charge: grid(c), quote_padded: grid(c) })));
     const exact = grid(charges.reduce((a, b) => a + b, 0n));
     expect(exact).toBe(680981320.171221);
-    expect(spentToday(h, "7", "mock")).toBe(680981320.171222);
+    expect(spentToday(h, "7", "mock")).toBe(680981320.171221);
   });
 
-  it("DEFECT 1 (medium): a call admitted exactly at the cap leaves status saying OVER CAP, with no PAST_ADMITTED row", async () => {
+  it("review defect 1, fixed: a call admitted exactly at the cap leaves status at the cap, not OVER CAP", async () => {
     const h = tmpHome();
     const x = 16385.147313;
     expect((await cli(h, ["init", "--seat", "7"])).code).toBe(0);
     expect((await cli(h, ["cap", "set", String(x), "--seat", "7", "--per-call", String(x)])).code).toBe(0);
-    // run's locked check, as run.ts lockedCheck makes it: admitted.
     const spentBefore = spentToday(h, "7", "mock");
     expect(checkBudget({ padded: x, cap: { daily: x, perCall: x }, payer: "holder", spentBefore })).toBeNull();
-    // The sent row run then writes, charged at the padded quote.
     appendLedger(h, row("mock-7-at-cap", { cap_charge: x, quote_padded: x, daily_cap: x, per_call_cap: x, spent_before: spentBefore }));
     const st = await cli(h, ["status", "--seat", "7", "--json"]);
     expect(st.code).toBe(0);
-    expect({ charged: st.json().today_utc.mock, over: st.json().over_cap_today_utc.mock }).toEqual({ charged: 16385.147314, over: true });
-    expect(readFileSync(ledgerFile(h), "utf8")).not.toContain("PAST_ADMITTED");
+    expect({ charged: st.json().today_utc.mock, over: st.json().over_cap_today_utc.mock }).toEqual({ charged: x, over: false });
   });
 
-  it("DEFECT 1 (medium): imd-flop admits a triple the viewer flags 'over the daily cap' (viewer side in test_review_audit2.py)", () => {
+  it("review defect 1, fixed: imd-flop admits these triples, and the viewer agrees (test_review_audit2.py)", () => {
     for (const [cap, spent, charge] of [[16385.147313, 0, 16385.147313], [586607958.833559, 517124896.785768, 69483062.047791]]) {
       expect(checkBudget({ padded: charge, cap: { daily: cap, perCall: cap }, payer: "holder", spentBefore: spent })).toBeNull();
+      expect(checkBudget({ padded: grid(BigInt(Math.round(charge * 1e6)) + 1n), cap: { daily: cap, perCall: cap }, payer: "holder", spentBefore: spent })).not.toBeNull();
     }
+  });
+});
+
+describe("review defect 1 (medium), fixed: properties and the 1e9 bound", () => {
+  const CONTRACT = join(import.meta.dirname, "..", "..", "contract");
+
+  it("every random triple around the cap in contract/fixtures/cap-triples gets the shared answer (the viewer checks the same file)", () => {
+    const { triples } = JSON.parse(readFileSync(join(CONTRACT, "fixtures", "cap-triples", "triples.json"), "utf8")) as { triples: [number, number, number, boolean, number, number][] };
+    expect(triples.length).toBe(2000);
+    const bad = triples.filter(([cap, spent, charge, over, , room]) => (checkBudget({ padded: charge, cap: { daily: cap, perCall: cap }, payer: "holder", spentBefore: spent }) !== null) !== over || roomLeft({ allowed: cap, spent }) !== room);
+    expect(bad.slice(0, 3)).toEqual([]);
+  });
+
+  it("property: random ledgers of grid charges total exactly their BigInt sum", () => {
+    let seed = 99;
+    const rnd = () => ((seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648);
+    const failures: string[] = [];
+    for (let c = 0; c < 300; c++) {
+      const h = tmpHome();
+      const n = 1 + Math.floor(rnd() * 20);
+      const micros = Array.from({ length: n }, () => BigInt(Math.floor(rnd() * (1e15 / n))));
+      writeFileSync(ledgerFile(h), micros.map((m, i) => JSON.stringify(row(`mock-7-p${i}`, { cap_charge: grid(m) }))).join("\n") + "\n");
+      const want = grid(micros.reduce((a, b) => a + b, 0n));
+      const got = spentToday(h, "7", "mock");
+      if (got !== want) failures.push(`${micros.join(",")}: ${got} != ${want}`);
+    }
+    expect(failures.slice(0, 3)).toEqual([]);
+  });
+
+  it("the bound is exact: a total of exactly AMOUNT_MAX is a known amount, one millionth above is not", () => {
+    const at = tmpHome();
+    writeFileSync(ledgerFile(at), [row("mock-7-a", { cap_charge: 999999999.999999 }), row("mock-7-b", { cap_charge: 0.000001 })].map((r) => JSON.stringify(r)).join("\n") + "\n");
+    expect(spentToday(at, "7", "mock")).toBe(1e9);
+    const above = tmpHome();
+    writeFileSync(ledgerFile(above), [row("mock-7-a", { cap_charge: 1e9 }), row("mock-7-b", { cap_charge: 0.000001 })].map((r) => JSON.stringify(r)).join("\n") + "\n");
+    expect(() => spentToday(above, "7", "mock")).toThrow(/above 1000000000 FLOP/);
   });
 });
 

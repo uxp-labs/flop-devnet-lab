@@ -60,16 +60,18 @@ the float figures. The cap still runs on the float figures.
 - `rules.json` constant `AMOUNT_MAX`: a float amount above it is unknown in imd-flop
   (`amount.ts knownAmount`) and the viewer (`build-lane.py amount`). The `amount.json` vectors and
   `reconcile-amounts-above-2-53-are-unknown` pin it. It was 2^53 - 1. Since the swarm audit of 33f3b9f
-  (finding 5) it is 1e9 FLOP: up to there every amount on the 6 decimal grid is its own double and `x * 1e6`
-  is within 0.5 of the exact integer, so day and job totals are exact sums of integer numerators. Above about
-  2^33 FLOP a double cannot hold the grid at all.
+  (finding 5) it is 1e9 FLOP. Up to there an amount x is on the 6 decimal grid when
+  `n = floor(x * 1e6 + 0.5)` gives back the same double (`n / 1e6 === x`), and then n is its exact count of
+  millionths. Day and job totals are exact sums of those counts, with no tolerance anywhere (review of the
+  audit 33f3b9f fixes, defect 1). A total of exactly `AMOUNT_MAX` is a known amount, one millionth above is not.
 - `vectors/cap-compare.json` rule `cap.daily_left` (finding 9) pins one daily cap decision for imd-flop and the
-  viewer: the room is `floor6(cap - spent)`, and a charge above it is over.
+  viewer, made in millionths: over when the charge is above the cap less the spend. `fixtures/cap-triples/`
+  holds 2000 random triples around the cap that both parts must answer the same way.
 - `rules.json` constant `LEDGER_PROVIDERS` and `vectors/ledger-placement.json` (rule `ledger.placement`) pin
   a ledger row that cannot be placed in a total: imd-flop refuses the next call and names the line, and the
   viewer flags the row and never shows it green.
 - `vectors/rounding.json` rule `rounding.ceil6` pins the total already charged rounding up, and residual
-  `R-g` says what the 1e-12 FLOP rounding tolerance can do to amounts off the 6 decimal grid.
+  `R-g` says what rounding can still do to amounts off the 6 decimal grid.
 
 ## Review fixes 3
 

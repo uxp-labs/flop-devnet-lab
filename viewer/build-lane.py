@@ -34,27 +34,32 @@ ET = ZoneInfo("America/New_York")
 
 def num(v): return BLANK if v is None else f'<span class="mono">{v}</span>'
 SCALE = 1e6
-NOISE = 1e-6  # in scaled units, so 1e-12 FLOP
-def _boundary(scaled):
-    """The 1e-6 step this scaled value sits on (within 1e-12 FLOP), or None when it lies between two."""
-    nearest = round(scaled)
-    return nearest if abs(scaled - nearest) <= NOISE else None
-def floor_micro(n):
-    """n rounded down to 6 decimals, as an integer count of millionths: the twin of imd-flop's rounding.ts
-    floorMicro. A value on a 1e-6 step (within 1e-12 FLOP) stays on it."""
-    b = _boundary(n * SCALE)
-    return b if b is not None else math.floor(n * SCALE)
-def ceil_micro(n):
-    """n rounded up to 6 decimals, as an integer count of millionths: the twin of imd-flop's rounding.ts
-    ceilMicro."""
-    b = _boundary(n * SCALE)
-    return b if b is not None else math.ceil(n * SCALE)
+def grid_micro(x):
+    """The count of millionths of an amount on the 6 decimal grid, or None off the grid: n = floor(x * 1e6 + 0.5)
+    when n / 1e6 == x gives back the same double. The twin of imd-flop's rounding.ts gridMicro. Never Python's
+    round(), which rounds half to even (review of the audit 33f3b9f fixes, defect 1)."""
+    if not math.isfinite(x): return None
+    n = math.floor(x * SCALE + 0.5)
+    return n if n / SCALE == x else None
+def ceil_micro(x):
+    """Rounded up in millionths: the exact count on the grid, else the smallest n with n / 1e6 >= x (rounding.ts ceilMicro)."""
+    on = grid_micro(x)
+    if on is not None: return on
+    n = math.ceil(x * SCALE)
+    while n / SCALE < x: n += 1
+    while (n - 1) / SCALE >= x: n -= 1
+    return n
+def floor_micro(x):
+    """Rounded down in millionths: the exact count on the grid, else the largest n with n / 1e6 <= x (rounding.ts floorMicro)."""
+    on = grid_micro(x)
+    if on is not None: return on
+    n = math.floor(x * SCALE)
+    while n / SCALE > x: n -= 1
+    while (n + 1) / SCALE <= x: n += 1
+    return n
 def floor6(n):
-    """Room left rounds down to 6 decimals, floor_micro over 1e6, the twin of imd-flop's rounding.ts floor6;
-    pinned for both by contract/vectors/rounding.json. Up to AMOUNT_MAX (1e9 FLOP) every grid amount is its own
-    double and scales to within 0.5 of its integer, so on one amount the tolerance absorbs float noise. A row over
-    its limit by at most 1e-12 FLOP (only an amount off the 6 decimal grid makes one) reads as on its limit:
-    residual R-g in rules.json."""
+    """Rounded down to 6 decimals, floor_micro over 1e6, the twin of imd-flop's rounding.ts floor6; pinned for both
+    by contract/vectors/rounding.json."""
     return floor_micro(n) / SCALE
 def esc(v): return html.escape("" if v is None else str(v), quote=True)
 AMOUNT_MAX = _C["AMOUNT_MAX"]["value"]  # 1e9 FLOP: up to it the 6 decimal grid survives the float (swarm audit 33f3b9f, finding 5)
@@ -236,43 +241,51 @@ def running_total(e, lim):
     if before_two_totals(e): return amount(e.get("spent_before")) if lim is JOB_BUDGET else None
     return amount(e.get(lim["spent"]))
 
-def left_after(cap, spent, cap_charge):
-    """What is left of a limit after a row's charge, decided with imd-flop's own expression (policy.ts roomLeft
-    and checkBudget; swarm audit 33f3b9f, finding 9): the room is floor6(cap - spent), and the row is over when
-    its cap_charge is above the room. No extra float subtraction. The figure left is the room less the charge in
-    whole millionths (floor_micro, ceil_micro), so it is exact: 0 for a row admitted exactly at its limit. A row
-    that is over shows at most -0.000001, never 0."""
-    room = floor6(cap - spent)
-    left = (floor_micro(cap - spent) - ceil_micro(cap_charge)) / SCALE
-    return min(left, -1 / SCALE) if cap_charge > room else left
+def limit_check(cap, spent, cap_charge):
+    """One limit of a row, decided in whole millionths with imd-flop's own expression (policy.ts checkBudget;
+    review of the audit 33f3b9f fixes, defect 1): the room is floor_micro(cap) - ceil_micro(spent), and the row is
+    over when ceil_micro(cap_charge) is above the room. Returns (left, over): what is left after the charge, in
+    FLOP, and whether the row is over. The two come from the same integers, so a row that is not over never shows
+    a negative left."""
+    room = floor_micro(cap) - ceil_micro(spent)
+    charge = ceil_micro(cap_charge)
+    return (room - charge) / SCALE, charge > room
+
+def limit_overs(e):
+    """Each applied limit with whether the row is over it (True, False), or None when it could not be worked out."""
+    return [(lim, None if inputs is None else limit_check(*inputs)[1]) for lim, inputs in _limit_inputs(e)]
+
+def _limit_inputs(e):
+    """Each limit that applies to the row with its (cap, spent, cap_charge), or None when one is unknown."""
+    limits = SPEND_LIMITS[e["payer"]] if known_payer(e) else EVERY_ROW
+    cap_charge, out = amount(e.get("cap_charge")), []
+    for lim in limits:
+        cap, spent = amount(e.get(lim["field"])), running_total(e, lim)
+        if e.get(lim["field"]) is not None and cap is None: raise ValueError(f'{lim["field"]} is not an amount')
+        out.append((lim, (cap, spent, cap_charge) if None not in (cap, spent, cap_charge) else None))
+    return out
 
 def spend_limit(e):
     """The spend limits that apply to this row, each with what is left of it after the row's cap_charge, as a
     list of (limit, left) in checked order (cap math uses cap_charge; left_after). A payer that is neither holder
     nor requester is checked against the daily cap, its spent_before read as the seat's total. left is None when
     the limit could not be worked out: an input is unknown, or the row does not hold that limit's running
-    total (before_two_totals). Never a guess."""
-    limits = SPEND_LIMITS[e["payer"]] if known_payer(e) else EVERY_ROW
-    cap_charge, applied = amount(e.get("cap_charge")), []
-    for lim in limits:
-        cap, spent = amount(e.get(lim["field"])), running_total(e, lim)
-        if e.get(lim["field"]) is not None and cap is None: raise ValueError(f'{lim["field"]} is not an amount')
-        applied.append((lim, left_after(cap, spent, cap_charge) if None not in (cap, spent, cap_charge) else None))
-    return applied
+    total (before_two_totals). Never a guess. Whether the row is over a limit is limit_overs, never a negative left."""
+    return [(lim, None if inputs is None else limit_check(*inputs)[0]) for lim, inputs in _limit_inputs(e)]
 
-def below_zero(applied):
-    """The 'over' wording of each applied limit with less than nothing left, in checked order."""
-    return [lim["over"] for lim, left in applied if left is not None and left < 0]
+def below_zero(e):
+    """The 'over' wording of each applied limit the row is over (limit_overs, in integers), in checked order."""
+    return [lim["over"] for lim, over in limit_overs(e) if over]
 
 def unchecked(applied):
     """The 'not checked' wording of each applied limit that could not be worked out, in checked order."""
     return [lim["unchecked"] for lim, left in applied if left is None]
 
-def limit_flags(e, applied):
-    """What the row has to say about its limits, in checked order: 'over' for a limit with less than nothing
-    left, 'not checked' for one that could not be worked out. Then 'payer unknown' for a payer that is neither
-    holder nor requester."""
-    flags = [lim["over"] if left is not None else lim["unchecked"] for lim, left in applied if left is None or left < 0]
+def limit_flags(e, applied=None):
+    """What the row has to say about its limits, in checked order: 'over' for a limit the row is over (limit_overs,
+    decided in integers, never from a negative left), 'not checked' for one that could not be worked out. Then
+    'payer unknown' for a payer that is neither holder nor requester. `applied` is accepted and not used."""
+    flags = [lim["unchecked"] if over is None else lim["over"] for lim, over in limit_overs(e) if over is None or over]
     return flags if known_payer(e) else flags + [PAYER_UNKNOWN]
 
 def below_hold(e):
@@ -336,7 +349,7 @@ def over_limit(e, r):
     if settled is None or r.get("state") not in SETTLES: return None
     per_call, quote = amount(e.get("per_call_cap")), amount(e.get("quote_padded"))
     if per_call is not None and settled > per_call: return OVER_PER_CALL
-    broken = below_zero(spend_limit(e))
+    broken = below_zero(e)
     if broken: return broken[0]
     if quote is not None and settled > quote: return OVER_RESERVATION
     return None

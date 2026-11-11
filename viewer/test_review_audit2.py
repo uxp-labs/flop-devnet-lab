@@ -15,27 +15,47 @@ NS = load_lane()
 
 
 class Defect1(unittest.TestCase):
-    """DEFECT 1 (medium): the viewer flags 'over the daily cap' on rows imd-flop admitted. left_after takes
-    floor_micro(cap - spent) - ceil_micro(cap_charge), and above 16384 FLOP ceil_micro of a grid amount can be one
-    step above its numerator, so a row admitted with no room to spare shows -0.000001 left and is flagged over.
-    The other two triples come from a random run of 20000 triples, where 43 split this way."""
+    """review defect 1 (medium), fixed: an amount on the grid has its exact count of millionths
+    (floor(x * 1e6 + 0.5) when that gives back the same double), and the viewer decides over in integers with
+    imd-flop's expression. Rows imd-flop admitted at their cap show left 0 and no flag. The other two triples
+    came from a random run of 20000 triples, where 43 used to split."""
 
     TRIPLES = [(16385.147313, 0, 16385.147313), (586607958.833559, 517124896.785768, 69483062.047791),
                (929138013.233559, 372990546.663973, 556147466.569586)]
 
-    def test_DEFECT_1_medium_ceil_micro_is_one_step_above_the_numerator(self):
-        self.assertEqual(NS["ceil_micro"](16385.147313), 16385147314)
+    def test_review_defect_1_fixed_grid_amounts_have_their_exact_numerator(self):
+        self.assertEqual(NS["ceil_micro"](16385.147313), 16385147313)
         self.assertEqual(NS["floor_micro"](16385.147313), 16385147313)
 
-    def test_DEFECT_1_medium_rows_imd_flop_admitted_are_flagged_over_the_daily_cap(self):
+    def test_review_defect_1_fixed_rows_imd_flop_admitted_are_not_flagged(self):
         for cap, spent, charge in self.TRIPLES:
             with self.subTest(cap=cap, spent=spent, charge=charge):
-                # imd-flop's own expression (policy.ts checkBudget): admitted.
-                self.assertFalse(charge > NS["floor6"](cap - spent))
                 e = dict(LED, daily_cap=cap, per_call_cap=cap, spent_before=spent, cap_charge=charge, quote_padded=charge)
                 applied = NS["spend_limit"](e)
-                self.assertIn(NS["OVER_DAILY"], NS["limit_flags"](e, applied))
-                self.assertEqual([left for lim, left in applied if lim["key"] == "daily_left"], [-1e-06])
+                self.assertNotIn(NS["OVER_DAILY"], NS["limit_flags"](e, applied))
+                self.assertEqual([left for lim, left in applied if lim["key"] == "daily_left"], [0])
+
+
+class Defect1Properties(unittest.TestCase):
+    """review defect 1, fixed: every random triple in contract/fixtures/cap-triples gets the shared answer, the same
+    file imd-flop/test/review-audit2.test.ts checks, so the two readers agree on every one."""
+
+    def test_review_defect_1_fixed_random_triples(self):
+        doc = json.loads((HERE.parent / "contract" / "fixtures" / "cap-triples" / "triples.json").read_text())
+        self.assertEqual(len(doc["triples"]), 2000)
+        bad = []
+        for cap, spent, charge, over, left, _room in doc["triples"]:
+            e = dict(LED, daily_cap=cap, per_call_cap=cap, spent_before=spent, cap_charge=charge, quote_padded=charge)
+            applied = NS["spend_limit"](e)
+            got = ([l for lim, l in applied if lim["key"] == "daily_left"][0], NS["OVER_DAILY"] in NS["limit_flags"](e, applied))
+            if got != (left, over): bad.append((cap, spent, charge, got))
+        self.assertEqual(bad[:3], [])
+
+    def test_review_defect_1_fixed_no_round_half_to_even(self):
+        """0.5 millionths sits half way: floor(x * 1e6 + 0.5) and Python's round() differ there. It is off the grid
+        either way, and rounds to the next step outward."""
+        self.assertEqual((NS["ceil_micro"](2.5e-06), NS["floor_micro"](2.5e-06)), (3, 2))
+        self.assertEqual(NS["grid_micro"](2.5e-06), None)
 
 
 class Defect8(unittest.TestCase):

@@ -282,6 +282,75 @@
     }
    },
    "note": "finding 9, near AMOUNT_MAX: eleven steps on ten steps of room are over"
+  },
+  {
+   "id": "cap-left-off-grid-charge-below",
+   "rule": "cap.daily_left",
+   "input": {
+    "cap": 1,
+    "spent": 0.5,
+    "charge": 0.4000000000005
+   },
+   "expect": {
+    "imd-flop": {
+     "admitted": true,
+     "room": 0.5
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard checks one call against --cap and keeps no running total"
+    },
+    "viewer": {
+     "daily_left": 0.099999,
+     "over": false
+    }
+   },
+   "note": "review of the audit 33f3b9f fixes, defect 1: a charge off the grid rounds up to the next millionth, 0.400001, so the viewer shows 0.099999 left and no flag"
+  },
+  {
+   "id": "cap-left-off-grid-charge-over",
+   "rule": "cap.daily_left",
+   "input": {
+    "cap": 1,
+    "spent": 0.5,
+    "charge": 0.5000000000001
+   },
+   "expect": {
+    "imd-flop": {
+     "admitted": false,
+     "room": 0.5
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard checks one call against --cap and keeps no running total"
+    },
+    "viewer": {
+     "daily_left": -1e-06,
+     "over": true
+    }
+   },
+   "note": "defect 1: a charge a hair above the room is off the grid and rounds up to 0.500001: over in both parts, and the viewer shows -0.000001 left"
+  },
+  {
+   "id": "cap-left-off-grid-charge-just-below-room",
+   "rule": "cap.daily_left",
+   "input": {
+    "cap": 1,
+    "spent": 0.5,
+    "charge": 0.4999999999999
+   },
+   "expect": {
+    "imd-flop": {
+     "admitted": true,
+     "room": 0.5
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard checks one call against --cap and keeps no running total"
+    },
+    "viewer": {
+     "daily_left": 0,
+     "over": false
+    }
+   },
+   "note": "defect 1: a charge a hair below the room rounds up onto it, 0.5: admitted, 0 left, no flag"
   }
  ]
 }
