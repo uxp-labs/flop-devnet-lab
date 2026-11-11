@@ -42,6 +42,11 @@
 //   literal that is the one argument of `new NetTransport(...)`. Every other rule still holds there,
 //   and no other module (the live command and the recorder take their transport from it), nor a
 //   net-root.ts in a subfolder, gets the exemption.
+// - The decoder's folders, src/scale and src/hash, are pure (RULES.md section 9): a module there
+//   imports only modules in those two folders and createHash from node:crypto, and names no clock,
+//   timer, random source or process (Date, performance, setTimeout and the other timers,
+//   queueMicrotask, Math.random, getRandomValues, randomBytes, randomUUID, process). The reference
+//   decoder, a dev dependency for tests only, is on no allow-list, so no src module imports it.
 // Before it scans src it proves itself: every BAD sample must fail and every GOOD sample must pass.
 // Known limit: the scan reads what src names, not what an allowed module does with the arguments
 // it is given; the runtime guard in the tests covers that.
@@ -168,6 +173,22 @@ const WRITE_RPC = /author_submit|eth_send(?:Raw)?Transaction|eth_sign|personal_s
 
 const SRC = join(pkg, "src");
 
+// The decoder's pure folders, by their path inside src, and what a module there may not name.
+const PURE_FOLDERS = ["scale/", "hash/"];
+const PURE_MODULES = new Set(["node:crypto"]);
+const PURE_BANNED = new Set(["Date", "performance", "setTimeout", "setInterval", "setImmediate", "queueMicrotask", "process", "getRandomValues", "randomBytes", "randomUUID"]);
+const isPure = (file) => PURE_FOLDERS.some((f) => file.startsWith(f));
+
+/** In a pure folder, an import must land in a pure folder too, or be createHash from node:crypto. */
+function pureModuleProblem(name, file) {
+  if (!isPure(file)) return null;
+  if (name.startsWith("./") || name.startsWith("../")) {
+    const inside = relative(SRC, resolve(dirname(join(SRC, file)), name)).split(sep).join("/");
+    return isPure(inside) ? null : `imports ${JSON.stringify(name)}, which is outside the pure folders src/scale and src/hash`;
+  }
+  return PURE_MODULES.has(name) ? null : `imports ${JSON.stringify(name)} into the pure folder src/${file.split("/").at(0)}`;
+}
+
 // The one exemption: the composition root of every network read, by its path inside src, and the
 // two globals it hands to the transport it makes.
 const COMPOSITION_ROOT = "net-root.ts";
@@ -248,6 +269,8 @@ function problems(code, file = "sample.ts", scanned = SCANNED) {
         const name = n.source.value;
         const p = moduleProblem(name, file, scanned);
         if (p) out.push(p);
+        const pure = pureModuleProblem(name, file);
+        if (pure) out.push(pure);
         // Every import names what it takes (round 9 review M1): a default or namespace import, or
         // export *, hands over a whole module object.
         if (n.type === "ExportAllDeclaration") out.push(`re-exports the whole of ${JSON.stringify(name)} (export *)`);
@@ -284,6 +307,7 @@ function problems(code, file = "sample.ts", scanned = SCANNED) {
           rootUses.set(n.name, (rootUses.get(n.name) ?? 0) + 1);
           if (rootUses.get(n.name) > 1) out.push(`names ${n.name} more than once in the composition root`);
         }
+        if (isPure(file) && PURE_BANNED.has(n.name)) out.push(`names ${n.name} in the pure folder src/${file.split("/").at(0)}`);
         if (BANNED.has(n.name) && !ownConstructor && !exempt) out.push(`uses ${n.name}`);
         else if (/mnemonic/i.test(n.name)) out.push(`uses ${n.name}`);
         else if (INTERNAL.test(n.name)) out.push(`uses the internal ${n.name}`);
@@ -313,8 +337,10 @@ function problems(code, file = "sample.ts", scanned = SCANNED) {
       case "MemberExpression": {
         // A literal computed key, as in ["constructor"], is a string, which the Literal rule reads.
         if (!n.computed && n.object?.type === "Identifier" && n.object.name === "api" && n.property?.name === "tx") out.push("uses api.tx");
+
         const member = n.computed ? (n.property?.type === "Literal" ? n.property.value : undefined) : n.property?.name;
         if (READER_STREAMS.has(member)) out.push(`reads .${member}, a reader's stream`);
+        if (isPure(file) && member === "random") out.push(`names .random in the pure folder src/${file.split("/").at(0)}`);
         break;
       }
       case "ObjectPattern": {
@@ -421,6 +447,9 @@ const BAD = [
   'const u = await crypto.subtle["sign"](alg, key, data);',
   'const v = crypto["subtle"];',
   'import axios from "axios";',
+  // The reference decoder is a dev dependency for tests only: no src module imports it.
+  'import { getDynamicBuilder } from "@polkadot-api/metadata-builders";',
+  'import { Twox128 } from "@polkadot-api/substrate-bindings";',
   'import got from "got";',
   'import { request as req } from "undici";',
   'export * from "node:net";',
@@ -596,6 +625,28 @@ const ROOT_BAD = [
   "const t = new NetTransport({ socketClass: WebSocket, httpCall: (u, o) => fetch(u, o) });",
 ];
 
+// The pure folders: each sample is read as src/scale/sample.ts and as src/hash/sample.ts.
+const PURE_GOOD = [
+  'import { blake2b } from "../hash/blake2b.js"; import { Reader } from "../scale/reader.js"; import { createHash } from "node:crypto";',
+  "const n = Math.max(1, Math.ceil(len / 128)); const t = new TextDecoder();",
+];
+const PURE_BAD = [
+  'import { readFileSync } from "node:fs";',
+  'import { join } from "node:path";',
+  'import { feedText } from "../feed.js";',
+  'import { own } from "../own.js";',
+  'import { Twox128 } from "@polkadot-api/substrate-bindings";',
+  "const t = Date.now();",
+  "const d = new Date();",
+  "const r = Math.random();",
+  "const m = Math[\"random\"]();",
+  "const p = performance.now();",
+  "setTimeout(() => 0, 1);",
+  "queueMicrotask(() => 0);",
+  "const a = process.argv;",
+  "crypto.getRandomValues(b);",
+];
+
 const results = [];
 let bad = 0;
 const record = (check, pass, stderr) => {
@@ -617,6 +668,21 @@ for (const code of ROOT_GOOD) {
 for (const code of ROOT_BAD) {
   const p = problems(code, COMPOSITION_ROOT);
   record(`catches in src/${COMPOSITION_ROOT}: ${code}`, p.length > 0 && !p.some((x) => x.startsWith("does not parse")), p.length ? p.join("; ") : "nothing found");
+}
+for (const folder of ["scale", "hash"]) {
+  for (const code of PURE_GOOD) {
+    const p = problems(code, `${folder}/sample.ts`);
+    record(`allows in src/${folder}: ${code}`, p.length === 0, p.join("; "));
+  }
+  for (const code of PURE_BAD) {
+    const p = problems(code, `${folder}/sample.ts`);
+    record(`catches in src/${folder}, a pure folder: ${code}`, p.length > 0 && !p.some((x) => x.startsWith("does not parse")), p.length ? p.join("; ") : "nothing found");
+  }
+}
+// The same forms are not the pure rule's to refuse in a module outside the pure folders.
+for (const code of ["const t = Date.now();", "const p = performance.now();", 'import { readFileSync } from "node:fs";']) {
+  const p = problems(code, "cli.ts");
+  record(`allows outside the pure folders, in src/cli.ts: ${code}`, p.length === 0, p.join("; "));
 }
 for (const file of ["cli.ts", "net.ts", "live-bin.ts", "record-bin.ts", "live/net-root.ts", "net-root.mts.ts", "xnet-root.ts"]) {
   const p = problems(ROOT_FORM, file);

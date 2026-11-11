@@ -91,6 +91,10 @@
     "tests": 21,
     "names": "e11d508e2ff7c94d2653444eaab80dae64322643f284dec9e2d755c07bce3f90"
   },
+  "reference.test.ts": {
+    "tests": 6,
+    "names": "44c30903aee84be1353dd97b5e652422c65ef0b2884c7c22a8c5e754e22fbf9d"
+  },
   "requests.test.ts": {
     "tests": 22,
     "names": "813c6354b20649549fd2e627109a2bc4615a1499757b6c4acc8a55263e7a6346"
