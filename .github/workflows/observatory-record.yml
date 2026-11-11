@@ -1,0 +1,233 @@
+# Recordings of FLOP devnet, read only. Each run reads the request list,
+# observatory/recordings/requests.json, a list of read calls reviewed like code, each with the
+# reason it is asked. It makes each call once, in order, on one socket to the devnet RPC, through
+# the same transport and read only guard as the live run, and writes exactly what was asked and
+# answered: a tape, run.json and SHA256SUMS, uploaded as an artifact. A recording is what one RPC
+# endpoint answered. It is evidence for building decoders, never proof of chain state
+# (observatory/RULES.md section 8).
+#
+# The record job never calls an RPC write method (a list that holds one is refused before anything
+# is sent), sends no HTTP request, uses no secrets, pushes nothing, opens no issue or comment, and
+# uses no cache. Its permissions are contents: read only, and checkout does not persist credentials.
+# The transport reaches only rpc.devnet.flop.network.
+#
+# The command exits 0 when every call was made and recorded (answered, or failed on the way: an RPC
+# error, a time limit, an answer over its limit, a socket that failed), 4 when the guard refused a
+# request, 1 when the request list could not be read or was refused or the run broke, and 2 for
+# wrong flags. A push to any branch that changes the request list, this file or a record source
+# file (every src module the record command imports, directly or not) gives a smoke run, and so does a run by hand; on a branch other than main it publishes
+# nothing.
+#
+# The publish job puts the recording on the branch observatory-data, under recordings/<id>/. It
+# runs only on main, only when the record job uploaded its folder and exited 0. Besides the live
+# workflow's publish job it is the only job that may write, and only contents. It runs no code from
+# the repository: it downloads this run's artifact, which must hold exactly run.json, tape.jsonl
+# and SHA256SUMS, checks every file against SHA256SUMS before anything else, then reads run.json
+# with jq and uses plain git. Every value it uses is checked against a fixed pattern and reaches the
+# publishing step through its environment. A fetched branch that holds anything but plain files
+# (mode 100644: no link, no executable, no submodule) fails the job before anything on it is read
+# or written. <id> is the UTC time the run started, as 14 digits (year to second), a dash, and the
+# first 16 hex of the request list's sha256. A recording is immutable: when recordings/<id>/ is
+# already there, the job changes nothing and says so. It writes nothing outside recordings/<id>/:
+# not latest/, not log/, not README.md. It pushes to refs/heads/observatory-data only, never with
+# force. The live workflow's publish job pushes to the same branch, and neither touches the other's
+# files. They share no concurrency group (GitHub cancels a job that waits in a group behind
+# another waiting one): each fetches the branch as it is, lays its own files on top and pushes a
+# fast forward, so a push refused because the other job pushed in between is fetched again and
+# tried once more, then the job fails.
+
+name: observatory record
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - ".github/workflows/observatory-record.yml"
+      - "observatory/recordings/requests.json"
+      - "observatory/src/feed.ts"
+      - "observatory/src/files.ts"
+      - "observatory/src/guard.ts"
+      - "observatory/src/net.ts"
+      - "observatory/src/net-root.ts"
+      - "observatory/src/own.ts"
+      - "observatory/src/record-bin.ts"
+      - "observatory/src/record-run.ts"
+      - "observatory/src/requests.ts"
+      - "observatory/src/run-command.ts"
+      - "observatory/src/store.ts"
+      - "observatory/src/strict.ts"
+      - "observatory/src/sums.ts"
+      - "observatory/src/tape.ts"
+      - "observatory/src/transport.ts"
+      - "observatory/src/types.ts"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: observatory-record
+  cancel-in-progress: false
+
+jobs:
+  record:
+    name: observatory recording of reviewed read calls
+    runs-on: ubuntu-latest
+    # At most 64 calls, each within its 15 s limit, and the install.
+    timeout-minutes: 25
+    # Empty unless the output folder was uploaded: the publish job runs only when it is set.
+    outputs:
+      artifact-id: ${{ steps.upload.outputs.artifact-id }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      # The same Node version as the offline check and the live job.
+      - name: Use Node.js 22.23.4
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22.23.4"
+
+      - name: Install
+        working-directory: observatory
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
+      - name: Build
+        working-directory: observatory
+        run: npm run build
+
+      - name: Record the reviewed read calls
+        working-directory: observatory
+        run: node dist/record-bin.js --requests recordings/requests.json --out "$RUNNER_TEMP/observatory-record" --source-sha "$GITHUB_SHA"
+
+      - name: Upload what was recorded
+        id: upload
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: observatory-record-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/observatory-record
+          retention-days: 14
+          if-no-files-found: error
+
+  publish:
+    name: publish the recording to observatory-data
+    needs: record
+    # main only, for every event, and only a record job that exited 0 and uploaded its folder.
+    if: ${{ github.ref == 'refs/heads/main' && needs.record.result == 'success' && needs.record.outputs.artifact-id != '' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - name: Download what was recorded
+        uses: actions/download-artifact@v4
+        with:
+          artifact-ids: ${{ needs.record.outputs.artifact-id }}
+          merge-multiple: true
+          path: ${{ runner.temp }}/recording
+
+      - name: Check the files against SHA256SUMS
+        id: check
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/recording"
+          fail() { echo "::error::$1"; exit 1; }
+          # The files a record run writes, as SHA256SUMS lists them (RECORDING_FILES in
+          # observatory/src/recording.ts). Names come from this list, never from the artifact.
+          files=(run.json tape.jsonl)
+          for f in "${files[@]}" SHA256SUMS; do
+            { [ -f "$f" ] && [ ! -L "$f" ]; } || fail "the artifact holds no $f as a regular file"
+          done
+          # Nothing else at all: no other name, no folder, no link.
+          [ "$(find . -mindepth 1 -printf x | wc -c)" -eq "$((${#files[@]} + 1))" ] || fail "the artifact holds something that is not on the list"
+          # Before anything reads a file: SHA256SUMS must be exactly the sums of the files here.
+          sha256sum -- "${files[@]}" | cmp -s - SHA256SUMS || fail "a file differs from SHA256SUMS"
+          jq -e '.exit_code == 0' run.json >/dev/null || fail "run.json does not say the run exited 0, so it is no recording"
+          started_at="$(jq -r '.started_at' run.json)" || fail "run.json cannot be read"
+          list_sha="$(jq -r '.request_list_sha256' run.json)" || fail "run.json cannot be read"
+          asked="$(jq -r '.calls.asked' run.json)" || fail "run.json cannot be read"
+          answered="$(jq -r '.calls.answered' run.json)" || fail "run.json cannot be read"
+          failed="$(jq -r '.calls.failed' run.json)" || fail "run.json cannot be read"
+          # The one form the recorder's clock writes, read digit by digit: no date command reads it.
+          utc='^([0-9]{4})-([0-9]{2})-([0-9]{2})T([0-9]{2}):([0-9]{2}):([0-9]{2})\.[0-9]{3}Z$'
+          [[ "$started_at" =~ $utc ]] || fail "run.json holds no started_at in the form the recorder writes"
+          stamp="${BASH_REMATCH[1]}${BASH_REMATCH[2]}${BASH_REMATCH[3]}${BASH_REMATCH[4]}${BASH_REMATCH[5]}${BASH_REMATCH[6]}"
+          [[ "$list_sha" =~ ^[0-9a-f]{64}$ ]] || fail "run.json holds no request list sha256 in the written form"
+          count='^(0|[1-9][0-9]{0,5})$'
+          { [[ "$asked" =~ $count ]] && [[ "$answered" =~ $count ]] && [[ "$failed" =~ $count ]]; } || fail "run.json holds no call counts in the written form"
+          id="$stamp-${list_sha:0:16}"
+          [[ "$id" =~ ^[0-9]{14}-[0-9a-f]{16}$ ]] || fail "the recording's id is not in its form"
+          {
+            echo "id=$id"
+            echo "started_at=$started_at"
+            echo "request_list_sha256=$list_sha"
+            echo "asked=$asked"
+            echo "answered=$answered"
+            echo "failed=$failed"
+          } >>"$GITHUB_OUTPUT"
+
+      - name: Publish to observatory-data
+        env:
+          PUSH_TOKEN: ${{ github.token }}
+          RECORDING_ID: ${{ steps.check.outputs.id }}
+          STARTED_AT: ${{ steps.check.outputs.started_at }}
+          REQUEST_LIST_SHA256: ${{ steps.check.outputs.request_list_sha256 }}
+          ASKED: ${{ steps.check.outputs.asked }}
+          ANSWERED: ${{ steps.check.outputs.answered }}
+          FAILED: ${{ steps.check.outputs.failed }}
+        run: |
+          set -euo pipefail
+          recording="$RUNNER_TEMP/recording"
+          files=(run.json tape.jsonl SHA256SUMS)
+          # The one path this job writes, from the id checked again here: 14 digits, a dash, 16 hex.
+          [[ "$RECORDING_ID" =~ ^[0-9]{14}-[0-9a-f]{16}$ ]] || { echo "::error::the recording's id is not in its form"; exit 1; }
+          dest="recordings/$RECORDING_ID"
+          remote="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY.git"
+          # The token reaches git through its environment only, as an HTTP header, never in a URL.
+          basic=$(printf 'x-access-token:%s' "$PUSH_TOKEN" | base64 -w0)
+          echo "::add-mask::$basic"
+          export GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0="http.$GITHUB_SERVER_URL/.extraheader" GIT_CONFIG_VALUE_0="AUTHORIZATION: basic $basic"
+          # One try: a new repository on the branch as it is now, or on no commit when it does
+          # not exist yet (an orphan), with this recording laid on top and committed.
+          prepare() {
+            work="$RUNNER_TEMP/data-$1"
+            git init -q -b observatory-data "$work"
+            cd "$work"
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            found=0
+            git ls-remote --exit-code "$remote" refs/heads/observatory-data >/dev/null || found=$?
+            if [ "$found" -eq 0 ]; then
+              git fetch -q --depth=1 "$remote" refs/heads/observatory-data
+              git reset -q --hard FETCH_HEAD
+              # The branch holds only what the job writes, plain files (mode 100644), read from the
+              # tree alone before anything is read or written: a link, an executable, a submodule
+              # or anything else fails the job, and nothing is pushed.
+              tree="$(git ls-tree -r --full-tree HEAD)"
+              if [ -n "$tree" ] && grep -qv '^100644 blob ' <<<"$tree"; then
+                echo "::error::observatory-data holds something the job never writes (a link, an executable, a submodule or another entry that is not a plain file); nothing is pushed"
+                exit 1
+              fi
+            elif [ "$found" -ne 2 ]; then
+              echo "::error::cannot read observatory-data"
+              exit 1
+            fi
+            changed=no
+            # A recording is immutable: one already at its path, from this run attempted again or
+            # from any other, is left exactly as it is.
+            if [ -e "$dest" ]; then return 0; fi
+            mkdir -p -- "$dest"
+            for f in "${files[@]}"; do cp -- "$recording/$f" "$dest/$f"; done
+            git add -- "$dest"
+            git commit -q -m "observatory-data: recording $RECORDING_ID" -m "started $STARTED_AT, request list $REQUEST_LIST_SHA256" -m "$ANSWERED answered and $FAILED failed of $ASKED calls, run $GITHUB_RUN_ID, revision $GITHUB_SHA"
+            changed=yes
+          }
+          prepare 1
+          if [ "$changed" = no ]; then echo "observatory-data already holds $dest, and a recording is immutable: nothing is changed"; exit 0; fi
+          if git push "$remote" refs/heads/observatory-data:refs/heads/observatory-data; then exit 0; fi
+          echo "::warning::the push was refused; fetching observatory-data again and trying once more"
+          prepare 2
+          if [ "$changed" = no ]; then echo "observatory-data already holds $dest, and a recording is immutable: nothing is changed"; exit 0; fi
+          git push "$remote" refs/heads/observatory-data:refs/heads/observatory-data
