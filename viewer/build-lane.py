@@ -34,24 +34,41 @@ ET = ZoneInfo("America/New_York")
 
 def num(v): return BLANK if v is None else f'<span class="mono">{v}</span>'
 SCALE = 1e6
-NOISE = 1e-6  # in scaled units, so 1e-12 FLOP
+def grid_micro(x):
+    """The count of millionths of an amount on the 6 decimal grid, or None off the grid: n = floor(x * 1e6 + 0.5)
+    when n / 1e6 == x gives back the same double. The twin of imd-flop's rounding.ts gridMicro. Never Python's
+    round(), which rounds half to even (review of the audit 33f3b9f fixes, defect 1)."""
+    if not math.isfinite(x): return None
+    n = math.floor(x * SCALE + 0.5)
+    return n if n / SCALE == x else None
+def ceil_micro(x):
+    """Rounded up in millionths: the exact count on the grid, else the smallest n with n / 1e6 >= x (rounding.ts ceilMicro)."""
+    on = grid_micro(x)
+    if on is not None: return on
+    n = math.ceil(x * SCALE)
+    while n / SCALE < x: n += 1
+    while (n - 1) / SCALE >= x: n -= 1
+    return n
+def floor_micro(x):
+    """Rounded down in millionths: the exact count on the grid, else the largest n with n / 1e6 <= x (rounding.ts floorMicro)."""
+    on = grid_micro(x)
+    if on is not None: return on
+    n = math.floor(x * SCALE)
+    while n / SCALE > x: n -= 1
+    while (n + 1) / SCALE <= x: n += 1
+    return n
 def floor6(n):
-    """Room left rounds down to 6 decimals, the twin of imd-flop's rounding.ts floor6; pinned for both by
-    contract/vectors/rounding.json. A value within 1e-12 of a 1e-6 boundary counts as on it, so float noise
-    does not move a 6 decimal amount below 8192 FLOP. Rounding adds no room beyond that tolerance, so a row over
-    its limit by more than 1e-12 FLOP and less than 1e-6 FLOP is still over it. A row over by at most 1e-12 FLOP
-    (only an amount off the 6 decimal grid makes one) reads as on its limit: residual R-g in rules.json."""
-    scaled = n * SCALE
-    nearest = round(scaled)
-    return (nearest if abs(scaled - nearest) <= NOISE else math.floor(scaled)) / SCALE
+    """Rounded down to 6 decimals, floor_micro over 1e6, the twin of imd-flop's rounding.ts floor6; pinned for both
+    by contract/vectors/rounding.json."""
+    return floor_micro(n) / SCALE
 def esc(v): return html.escape("" if v is None else str(v), quote=True)
-AMOUNT_MAX = _C["AMOUNT_MAX"]["value"]  # 2^53 - 1, the largest integer a double holds exactly
+AMOUNT_MAX = _C["AMOUNT_MAX"]["value"]  # 1e9 FLOP: up to it the 6 decimal grid survives the float (swarm audit 33f3b9f, finding 5)
+DOUBLE_INT_MAX = 2 ** 53 - 1  # the largest integer a double holds exactly
 def amount(v):
     """A file value used as an amount: a finite int/float that is not negative, not above AMOUNT_MAX and not a
     bool, else None (blank, never 0). The twin of imd-flop's amount.ts knownAmount. A negative number is not an
-    amount, as in imd-flop and spend-guard: it is unknown, so nothing shows it or subtracts it. Above AMOUNT_MAX
-    Python keeps a JSON integer exact while JavaScript rounds it, so the two parts would read the same text as
-    different amounts: it is unknown in both (review fixes 2, R10)."""
+    amount, as in imd-flop and spend-guard: it is unknown, so nothing shows it or subtracts it. Above AMOUNT_MAX a
+    double cannot be trusted to hold the 6 decimal grid, so the amount is unknown in both parts."""
     if isinstance(v, bool) or not isinstance(v, (int, float)) or v != v or v in (float("inf"), float("-inf")) or v < 0 or v > AMOUNT_MAX: return None
     return v
 EXACT_BOUND = int(_C["EXACT_AMOUNT_BOUND"]["value"])  # 2^128: per FLOP's own sources (read 2026-11-11) the chain holds money in a u128
@@ -92,31 +109,60 @@ def _no_constant(name):
     raise ValueError(f"{name} is not JSON")
 def _double_int(text):
     """A JSON integer as JavaScript reads it, a double: float(text), kept as an int only when that double is
-    integral and at most AMOUNT_MAX (so it is exact). A 4300 digit integer is inf, as in JavaScript, and never
+    integral and at most DOUBLE_INT_MAX (so it is exact). A 4300 digit integer is inf, as in JavaScript, and never
     meets Python's limit on digits."""
     f = float(text)
-    return int(f) if f.is_integer() and abs(f) <= AMOUNT_MAX else f
+    return int(f) if f.is_integer() and abs(f) <= DOUBLE_INT_MAX else f
 def loads(text):
     """One JSON value in JSON.parse's grammar: NaN, Infinity and -Infinity are not JSON, and every number is a
     double. Raises ValueError for anything else (RecursionError on very deep nesting is treated the same)."""
     try:
-        return json.loads(text, parse_constant=_no_constant, parse_int=_double_int)
+        return _whole_chars(json.loads(text, parse_constant=_no_constant, parse_int=_double_int))
     except RecursionError as ex:
         raise ValueError("nested too deep") from ex
+LONE_SURROGATE = re.compile("[\ud800-\udfff]")
+def _whole_chars(v):
+    """A lone surrogate escape (an older or foreign ledger can hold one, and JSON.parse reads it) shown as U+FFFD,
+    in every string and key, so the page can always be written as UTF-8 (review defect 11). json joins a valid
+    escaped pair into one character, so any surrogate left is a lone one."""
+    if isinstance(v, str): return LONE_SURROGATE.sub("\ufffd", v)
+    if isinstance(v, list): return [_whole_chars(x) for x in v]
+    if isinstance(v, dict): return {_whole_chars(k): _whole_chars(x) for k, x in v.items()}
+    return v
+MAX_DEPTH = _C["LEDGER_TEXT"]["value"]["max_depth"]
+def nested_too_deep(text):
+    """True when the text is nested deeper than MAX_DEPTH (the row object is level 1), the twin of imd-flop's
+    ledger-text.ts nestedTooDeep (swarm audit 33f3b9f, finding 8). Counted on the text before parsing, so a line
+    that is not valid JSON gets the same answer: { and [ outside a string open a level, } and ] close one, and a
+    string runs from an unescaped " to the next unescaped " (a backslash in a string escapes what follows)."""
+    depth, in_string, i = 0, False, 0
+    while i < len(text):
+        ch = text[i]
+        if in_string:
+            if ch == "\\": i += 1
+            elif ch == '"': in_string = False
+        elif ch == '"': in_string = True
+        elif ch in "{[":
+            depth += 1
+            if depth > MAX_DEPTH: return True
+        elif ch in "}]": depth -= 1
+        i += 1
+    return False
 def decode(data):
     """Bytes as text, the way Node decodes UTF-8: an invalid byte becomes U+FFFD, never an error."""
     return data.decode("utf-8", "replace")
 def read_ledger_text(data):
     """Every line of a ledger file's bytes as (n, kind, value), numbered from 1, blank lines included. Lines end
     at \n only (a \r is an ordinary character), and a final empty piece after the last \n is not a line. kind
-    is "blank" (every character in BLANK_CHARS), "unreadable" (value: "not valid JSON" or "not a JSON object")
-    or "row" (value: the object)."""
+    is "blank" (every character in BLANK_CHARS), "unreadable" (value: "nested too deep" past MAX_DEPTH, "not
+    valid JSON" or "not a JSON object") or "row" (value: the object)."""
     pieces = data.split(b"\n")
     if pieces[-1] == b"": pieces.pop()
     out = []
     for n, piece in enumerate(pieces, 1):
         text = decode(piece)
         if all(ch in BLANK_CHARS for ch in text): out.append((n, "blank", None)); continue
+        if nested_too_deep(text): out.append((n, "unreadable", "nested too deep")); continue
         try:
             value = loads(text)
         except ValueError:
@@ -143,12 +189,14 @@ def read_ledger(led):
     return [latest[k] for k in order], bad
 
 def read_receipts():
-    """Receipt files by request id. A file is one JSON value read the same way (decode, loads) and must be an
-    object; anything else is unreadable."""
+    """Receipt files by request id. A file is one JSON value read the same way (decode, nested at most MAX_DEPTH
+    levels, loads) and must be an object; anything else is unreadable."""
     receipts = {}
     for f in glob.glob(os.path.join(RDIR, "*.json")):
         try:
-            with open(f, "rb") as fh: r = loads(decode(fh.read()))
+            with open(f, "rb") as fh: text = decode(fh.read())
+            # The depth rule of the ledger text contract applies to a receipt file too (review defect 8).
+            r = None if nested_too_deep(text) else loads(text)
         except ValueError:
             r = None
         receipts[os.path.splitext(os.path.basename(f))[0]] = r if isinstance(r, dict) else {"_unreadable": True}
@@ -204,33 +252,51 @@ def running_total(e, lim):
     if before_two_totals(e): return amount(e.get("spent_before")) if lim is JOB_BUDGET else None
     return amount(e.get(lim["spent"]))
 
-def spend_limit(e):
-    """The spend limits that apply to this row, each with what is left of it after the row's cap_charge, as a
-    list of (limit, left) in checked order (cap math uses cap_charge). left rounds down (floor6). A payer that is neither holder nor
-    requester is checked against the daily cap, its spent_before read as the seat's total. left is None when
-    the limit could not be worked out: an input is unknown, or the row does not hold that limit's running
-    total (before_two_totals). Never a guess."""
+def limit_check(cap, spent, cap_charge):
+    """One limit of a row, decided in whole millionths with imd-flop's own expression (policy.ts checkBudget;
+    review of the audit 33f3b9f fixes, defect 1): the room is floor_micro(cap) - ceil_micro(spent), and the row is
+    over when ceil_micro(cap_charge) is above the room. Returns (left, over): what is left after the charge, in
+    FLOP, and whether the row is over. The two come from the same integers, so a row that is not over never shows
+    a negative left."""
+    room = floor_micro(cap) - ceil_micro(spent)
+    charge = ceil_micro(cap_charge)
+    return (room - charge) / SCALE, charge > room
+
+def limit_overs(e):
+    """Each applied limit with whether the row is over it (True, False), or None when it could not be worked out."""
+    return [(lim, None if inputs is None else limit_check(*inputs)[1]) for lim, inputs in _limit_inputs(e)]
+
+def _limit_inputs(e):
+    """Each limit that applies to the row with its (cap, spent, cap_charge), or None when one is unknown."""
     limits = SPEND_LIMITS[e["payer"]] if known_payer(e) else EVERY_ROW
-    cap_charge, applied = amount(e.get("cap_charge")), []
+    cap_charge, out = amount(e.get("cap_charge")), []
     for lim in limits:
         cap, spent = amount(e.get(lim["field"])), running_total(e, lim)
         if e.get(lim["field"]) is not None and cap is None: raise ValueError(f'{lim["field"]} is not an amount')
-        applied.append((lim, floor6(cap - spent - cap_charge) if None not in (cap, spent, cap_charge) else None))
-    return applied
+        out.append((lim, (cap, spent, cap_charge) if None not in (cap, spent, cap_charge) else None))
+    return out
 
-def below_zero(applied):
-    """The 'over' wording of each applied limit with less than nothing left, in checked order."""
-    return [lim["over"] for lim, left in applied if left is not None and left < 0]
+def spend_limit(e):
+    """The spend limits that apply to this row, each with what is left of it after the row's cap_charge, as a
+    list of (limit, left) in checked order (cap math uses cap_charge; left_after). A payer that is neither holder
+    nor requester is checked against the daily cap, its spent_before read as the seat's total. left is None when
+    the limit could not be worked out: an input is unknown, or the row does not hold that limit's running
+    total (before_two_totals). Never a guess. Whether the row is over a limit is limit_overs, never a negative left."""
+    return [(lim, None if inputs is None else limit_check(*inputs)[0]) for lim, inputs in _limit_inputs(e)]
+
+def below_zero(e):
+    """The 'over' wording of each applied limit the row is over (limit_overs, in integers), in checked order."""
+    return [lim["over"] for lim, over in limit_overs(e) if over]
 
 def unchecked(applied):
     """The 'not checked' wording of each applied limit that could not be worked out, in checked order."""
     return [lim["unchecked"] for lim, left in applied if left is None]
 
-def limit_flags(e, applied):
-    """What the row has to say about its limits, in checked order: 'over' for a limit with less than nothing
-    left, 'not checked' for one that could not be worked out. Then 'payer unknown' for a payer that is neither
-    holder nor requester."""
-    flags = [lim["over"] if left is not None else lim["unchecked"] for lim, left in applied if left is None or left < 0]
+def limit_flags(e, applied=None):
+    """What the row has to say about its limits, in checked order: 'over' for a limit the row is over (limit_overs,
+    decided in integers, never from a negative left), 'not checked' for one that could not be worked out. Then
+    'payer unknown' for a payer that is neither holder nor requester. `applied` is accepted and not used."""
+    flags = [lim["unchecked"] if over is None else lim["over"] for lim, over in limit_overs(e) if over is None or over]
     return flags if known_payer(e) else flags + [PAYER_UNKNOWN]
 
 def below_hold(e):
@@ -244,7 +310,18 @@ def below_hold(e):
     return e.get("state") != "refused_local" and None not in (cap_charge, quote) and cap_charge < quote
 
 UNPLACED = "ledger row cannot be placed in a total"
-SEAT_ID = re.compile(r"[0-9]{1,78}")
+# contract/rules.json SEAT_ID (swarm audit 33f3b9f, finding 4): one spelling per seat. The placeholder, or decimal
+# digits with no leading zero (0 alone allowed) of at most max_digits (63: a longer number cannot be told from a key
+# by the secret scan; review defect 9). The twin of imd-flop's isSeatId.
+_SEAT = _C["SEAT_ID"]["value"]
+SEAT_PLACEHOLDER = _SEAT["placeholder"]
+SEAT_ID = re.compile(_SEAT["digits"])
+SEAT_MAX_DIGITS = _SEAT["max_digits"]
+def usable_seat(v):
+    """A canonical seat id: SEAT_PLACEHOLDER, or SEAT_ID digits (full match) of at most SEAT_MAX_DIGITS."""
+    if not isinstance(v, str): return False
+    if v == SEAT_PLACEHOLDER: return True
+    return bool(SEAT_ID.fullmatch(v)) and len(v) <= SEAT_MAX_DIGITS
 JOB_ID = re.compile(r"[\x21-\x7e]{1,120}")
 REQUEST_ID = re.compile(r"[\x21-\x7e]{1,128}")
 def usable_day(v):
@@ -264,7 +341,7 @@ def unplaced(e):
     refusal = e.get("state") == "refused_local" and e.get("cap_charge") == 0 and not isinstance(e.get("cap_charge"), bool)
     checks = [("request_id", (isinstance(rid, str) and bool(REQUEST_ID.fullmatch(rid))) or refusal),
               ("day", usable_day(e.get("day"))),
-              ("seat", isinstance(e.get("seat"), str) and (e["seat"] == "unassigned" or bool(SEAT_ID.fullmatch(e["seat"])))),
+              ("seat", usable_seat(e.get("seat"))),
               ("provider", e.get("provider") in LEDGER_PROVIDERS)]
     if e.get("payer") == "requester": checks.append(("job", isinstance(e.get("job"), str) and bool(JOB_ID.fullmatch(e["job"]))))
     return [field for field, ok in checks if not ok]
@@ -283,7 +360,7 @@ def over_limit(e, r):
     if settled is None or r.get("state") not in SETTLES: return None
     per_call, quote = amount(e.get("per_call_cap")), amount(e.get("quote_padded"))
     if per_call is not None and settled > per_call: return OVER_PER_CALL
-    broken = below_zero(spend_limit(e))
+    broken = below_zero(e)
     if broken: return broken[0]
     if quote is not None and settled > quote: return OVER_RESERVATION
     return None
@@ -520,7 +597,14 @@ def main():
     s = open(VIEWER).read()
     a, b = s.index("<!-- lane:start -->"), s.index("<!-- lane:end -->")
     s = s[:a] + "<!-- lane:start -->\n" + "".join(out) + s[b:]
-    open(VIEWER, "w").write(s)
+    # Written to a temporary file in the same folder, then renamed: the old page is never emptied before the
+    # new one is complete (review defect 11).
+    tmp = f"{VIEWER}.tmp-{os.getpid()}"
+    try:
+        with open(tmp, "w", encoding="utf-8") as fh: fh.write(s)
+        os.replace(tmp, VIEWER)
+    finally:
+        if os.path.exists(tmp): os.unlink(tmp)
     print(f"lane rebuilt: {len(demo)} receipt rows, {len(ex)} example rows")
 if __name__ == "__main__":
     main()

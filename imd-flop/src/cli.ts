@@ -5,7 +5,7 @@ import { bytesToHex, utf8ToBytes } from "@noble/hashes/utils.js";
 import { CliError, EXIT } from "./errors.js";
 import { home, gatewayKeyFile, linkFile, receiptsDir, keyFile } from "./paths.js";
 import { loadConfig, saveConfig, type Payer } from "./config.js";
-import { claimUnassigned, initSeat, loadSigner, readIdentity, UNASSIGNED, validateSeat } from "./keys.js";
+import { claimUnassigned, initSeat, isSeatId, loadSigner, readIdentity, UNASSIGNED, validateSeat } from "./keys.js";
 import { buildLink, verifyLink, type LinkFile } from "./link.js";
 import { readJson, writeJsonSafe, writeSecretFile } from "./store.js";
 import { network, SEAT_COLLECTION } from "./networks.js";
@@ -13,10 +13,10 @@ import { checkGenesis, readVerifiedSeatOwner, enrollChallengeUrl, getEnrollChall
 import { FlopProvider, MOCK_SCENARIOS, MockProvider, type MockScenario, type Provider } from "./providers.js";
 import { checkLinkForRun, runJob } from "./run.js";
 import { overDailyCap, padQuote, parseAmount } from "./policy.js";
-import { appendLedger, latestAttempts, LedgerLockError, reportedSpendToday, spentToday, UnusableLedgerRow, type LedgerEntry } from "./ledger.js";
+import { appendLedger, latestAttempts, latestLineOf, LedgerLockError, reportedSpendToday, spentToday, UnusableLedgerRow, type LedgerEntry } from "./ledger.js";
 import { listReceipts, readSavedReceipt, receiptVerdicts, refreshReceipt, type SavedReceipt } from "./receipt-store.js";
 import { blank, classifyReceipt, receiptLine } from "./receipts.js";
-import { registerSecret } from "./secrets.js";
+import { outsideText, outsideValue, registerSecret } from "./secrets.js";
 
 export interface IO {
   out: (s: string) => void;
@@ -66,10 +66,30 @@ function timeoutMs(raw: string | undefined): number {
   return n;
 }
 
+/** A field the gateway sent, for stdout: a finite number as it is, any other value through outsideText, missing as null (review defect 5). */
+function shownField(v: unknown): number | string | null {
+  if (v === undefined || v === null) return null;
+  if (typeof v === "number" && Number.isFinite(v)) return v;
+  return outsideText(typeof v === "string" ? v : JSON.stringify(v), { max: 200 });
+}
+
+/**
+ * The seat a refresh reads with: the stored receipt's, else the ledger row's. It is used only when it is a usable
+ * seat id (isSeatId), since it picks the gateway key file. Anything else refuses with exit 3 and names the file
+ * or the line it came from; there is no fallback to another seat (review defect 6).
+ */
+function refreshSeat(h: string, rid: string, saved: SavedReceipt | null, ledgerRow: LedgerEntry | undefined): string {
+  const fromFile = saved?.seat !== undefined && saved?.seat !== null;
+  const seat = fromFile ? saved!.seat : ledgerRow?.seat;
+  if (isSeatId(seat)) return seat;
+  const from = fromFile ? `the receipt file of ${rid}` : `ledger line ${latestLineOf(h, rid) ?? "?"}`;
+  throw new CliError(`${from} has seat ${outsideValue(seat)}, which is not a usable seat id; refresh refused, nothing read. Repair that ${fromFile ? "file" : "line"}.`, EXIT.REFUSED_CAP);
+}
+
 function activeSeat(h: string, explicit?: string): string {
   const s = explicit ?? loadConfig(h).seat;
   if (!s) throw new CliError("no seat yet: run `imd-flop init --seat <tokenId>`", EXIT.USAGE);
-  return validateSeat(s);
+  return validateSeat(s, explicit === undefined ? "config.json" : "the command line");
 }
 
 function makeProvider(io: IO, name: string, h: string, seat: string, opts: { live?: boolean; scenario?: string }): Provider {
@@ -109,6 +129,7 @@ export async function main(argv: string[], io: IO): Promise<number> {
         cfg.seat = seat;
         saveConfig(h, cfg);
         const out: Record<string, unknown> = { seat, network: net, did: r.identity.did, ss58: r.identity.ss58, ss58Prefix: r.identity.ss58Prefix, keyFile: "seats/" + seat + "/flop.key (mode 600, never printed)" };
+        if (r.completed) out.completed = "this seat had a key file and no identity.json; its identity was made from that key";
         if (r.rotated) out.rotated = { revokedDid: r.rotated.revokedDid, note: "revocation written to revocations.jsonl; re-run `link`" };
         if (values["check-genesis"]) {
           const g = await checkGenesis(network(net), io.fetch);
@@ -232,10 +253,10 @@ export async function main(argv: string[], io: IO): Promise<number> {
         if ((r.status === 200 || r.status === 201) && typeof bearer === "string") {
           registerSecret(bearer);
           writeSecretFile(gatewayKeyFile(h, seat), bearer + "\n");
-          print({ enrolled: true, http: r.status, model: r.json.model, remaining_quota: r.json.remaining_quota, expires_at: r.json.expires_at });
+          print({ enrolled: true, http: r.status, model: shownField(r.json.model), remaining_quota: shownField(r.json.remaining_quota), expires_at: shownField(r.json.expires_at) });
           return EXIT.OK;
         }
-        print({ enrolled: false, http: r.status, error: r.json.error ?? null });
+        print({ enrolled: false, http: r.status, error: shownField(r.json.error) });
         return EXIT.ERROR;
       }
 
@@ -360,6 +381,8 @@ export async function main(argv: string[], io: IO): Promise<number> {
         // today_utc counts against the cap: what each call was allowed to spend (the hold floor). Beside it,
         // what the gateway reported as spent, and whether the day is above its cap.
         const today = { flop: spentToday(h, seat, "flop"), mock: spentToday(h, seat, "mock") };
+        // What the gateway reported, and how many sent calls it reported no amount for (never shown as 0).
+        const reported = { flop: reportedSpendToday(h, seat, "flop"), mock: reportedSpendToday(h, seat, "mock") };
         const o = {
           network: cfg.network,
           seat,
@@ -371,7 +394,8 @@ export async function main(argv: string[], io: IO): Promise<number> {
           payer: cfg.payer,
           cap,
           today_utc: today,
-          gateway_spent_today_utc: { flop: reportedSpendToday(h, seat, "flop"), mock: reportedSpendToday(h, seat, "mock") },
+          gateway_spent_today_utc: { flop: reported.flop.spent, mock: reported.mock.spent },
+          gateway_spend_unknown_rows: { flop: reported.flop.unknownRows, mock: reported.mock.unknownRows },
           over_cap_today_utc: { flop: overDailyCap(today.flop, cap), mock: overDailyCap(today.mock, cap) },
           attempts: latestAttempts(h).filter((e) => e.seat === seat).length,
           recent_receipts: recent,
@@ -388,7 +412,11 @@ export async function main(argv: string[], io: IO): Promise<number> {
           io.out(`  cap   ${cap ? `${cap.daily} FLOP/day, ${cap.perCall}/call` : "none (FLOP off)"}`);
           const charged = (p: "flop" | "mock") => `${p} ${o.today_utc[p]}${cap ? ` / ${cap.daily}` : ""}${o.over_cap_today_utc[p] ? " OVER CAP" : ""}`;
           io.out(`  today, charged to the cap      ${charged("flop")}   ${charged("mock")}`);
-          io.out(`  today, gateway reported spent  flop ${o.gateway_spent_today_utc.flop}   mock ${o.gateway_spent_today_utc.mock}`);
+          const reportedText = (p: "flop" | "mock") => {
+            const n = o.gateway_spend_unknown_rows[p];
+            return `${p} ${blank(o.gateway_spent_today_utc[p])}${n > 0 ? ` (${n} ${n === 1 ? "call" : "calls"} with no reported spend)` : ""}`;
+          };
+          io.out(`  today, gateway reported spent  ${reportedText("flop")}   ${reportedText("mock")}`);
           io.out(`  recent receipts:`);
           for (const r of recent) io.out(`    ${receiptLine(r)}`);
           if (recent.length === 0) io.out(`    (none)`);
@@ -415,7 +443,7 @@ export async function main(argv: string[], io: IO): Promise<number> {
         }
         if (!saved && !ledgerRow) throw new CliError(`no receipt or ledger entry for ${rid}`, EXIT.USAGE);
         if (values.refresh) {
-          const p = makeProvider(io, saved?.provider ?? ledgerRow!.provider, h, saved?.seat ?? ledgerRow!.seat, { live: values.live, scenario: saved?.mock_scenario });
+          const p = makeProvider(io, saved?.provider ?? ledgerRow!.provider, h, refreshSeat(h, rid, saved, ledgerRow), { live: values.live, scenario: saved?.mock_scenario });
           ({ saved, ledgerRow } = await refreshReceipt(h, rid, p, { saved, ledgerRow }, io.err));
         }
         const verdicts = await receiptVerdicts(h, saved ?? null, ledgerRow ?? null);

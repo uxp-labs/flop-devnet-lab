@@ -7,11 +7,13 @@
  */
 
 /**
- * The largest float amount: 2^53 - 1, the largest integer a double holds exactly. Above it JSON.parse
- * rounds an integer to the nearest double while the viewer's Python keeps it exact, so the two parts would
- * read the same text as different amounts. contract/rules.json AMOUNT_MAX.
+ * The largest float amount: 1e9 FLOP. Up to it every amount on the 6 decimal grid is its own double, and
+ * x * 1e6 is within 0.5 of the exact integer, so rounding.ts recovers the integer numerator of every grid
+ * amount and the sums in ledger.ts are exact. Above about 2^33 FLOP a double cannot hold the grid at all
+ * (swarm audit 33f3b9f, finding 5). It is also far below 2^53, so the viewer's Python and JavaScript read the
+ * same JSON number as the same amount. contract/rules.json AMOUNT_MAX.
  */
-export const AMOUNT_MAX = Number.MAX_SAFE_INTEGER;
+export const AMOUNT_MAX = 1_000_000_000;
 
 /**
  * The float amount rule. A known amount is a finite number that is not negative and not above AMOUNT_MAX.

@@ -126,6 +126,15 @@ def ledger_placement(i):
     return {"flag": flags[0] if flags else None, "bad": row["bad"], "greens": greens(html)}
 
 
+def cap_daily_left(i):
+    """Swarm audit 33f3b9f, finding 9: a ledger row with this daily cap, spend before and cap charge. The daily cap
+    left the row shows after its charge, and whether it carries 'over the daily cap'."""
+    e = dict(LED, daily_cap=i["cap"], per_call_cap=i["cap"], spent_before=i["spent"], cap_charge=i["charge"], quote_padded=i["charge"])
+    applied = NS["spend_limit"](e)
+    (left,) = [left for lim, left in applied if lim["key"] == "daily_left"]
+    return {"daily_left": left, "over": NS["OVER_DAILY"] in NS["limit_flags"](e, applied)}
+
+
 # classify() kinds in the four words reconcile.json uses. Every kind decided before the comparison is "not_compared".
 COMPARED = {"disagree": "disagree", "settled_unknown": "settled_unknown", "matches": "agree", "over_limit": "agree"}
 
@@ -144,7 +153,7 @@ def reconcile(i):
 
 ADAPTERS = {"amount.json": amount_json, "amount.exact": amount_exact, "rounding.floor6": rounding_floor6, "receipt.state": receipt_state, "identity": identity, "read.failed": read_failed, "viewer.label": label,
             "viewer.reservation_line": reservation_line, "viewer.cap_charge_line": cap_charge_line, "viewer.exact_spend": exact_spend, "viewer.below_hold": below_hold, "reconcile": reconcile,
-            "ledger.placement": ledger_placement, "viewer.past_admitted": past_admitted}
+            "ledger.placement": ledger_placement, "cap.daily_left": cap_daily_left, "viewer.past_admitted": past_admitted}
 
 
 class ContractVectors(unittest.TestCase):
@@ -156,7 +165,7 @@ class ContractVectors(unittest.TestCase):
         self.assertEqual(NS["EXACT_BOUND"], 2 ** 128)
         self.assertEqual(str(NS["EXACT_BOUND"]), c["EXACT_AMOUNT_BOUND"]["value"])
         self.assertEqual(NS["FLOP_DECIMALS"], c["FLOP_DECIMALS"]["value"])
-        self.assertEqual(NS["AMOUNT_MAX"], 2 ** 53 - 1)
+        self.assertEqual(NS["AMOUNT_MAX"], 10 ** 9)  # swarm audit 33f3b9f, finding 5; was 2 ** 53 - 1
         self.assertEqual(NS["AMOUNT_MAX"], c["AMOUNT_MAX"]["value"])
         self.assertEqual(NS["PAST_ADMITTED"], c["PAST_ADMITTED"]["value"])
         # unresolved() holds its own literal. It must name exactly the states rules.json lists.

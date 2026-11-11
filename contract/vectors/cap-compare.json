@@ -1,6 +1,6 @@
 {
  "file": "cap-compare.json",
- "description": "Cap compare against the padded quote for the estimate {0.066 FLOP, 3 in, 8 out, max-tokens 8} (padded 0.186). imd-flop: `cap set <cap>` then `run` (mock, fresh ledger): exit code. spend-guard: guard.py --cap <cap>: decision. imd-flop compares the padded quote only; spend-guard also compares the unrounded pad and the exact raw quote.",
+ "description": "Cap compare against the padded quote for the estimate {0.066 FLOP, 3 in, 8 out, max-tokens 8} (padded 0.186). imd-flop: `cap set <cap>` then `run` (mock, fresh ledger): exit code. spend-guard: guard.py --cap <cap>: decision. imd-flop compares the padded quote only; spend-guard also compares the unrounded pad and the exact raw quote. Rule cap.daily_left (swarm audit 33f3b9f, finding 9): a daily cap, the seat's spend before the call and the call's charge. imd-flop: checkBudget with that charge as the padded quote (admitted) and roomLeft (room, floor6(cap - spent)). viewer: a ledger row with that daily_cap, spent_before and cap_charge, and the daily cap left it shows after the charge and whether it flags 'over the daily cap'. Both decide with one expression: over when the charge is above floor6(cap - spent).",
  "status": "current behavior at 3ae1cdf",
  "vectors": [
   {
@@ -98,6 +98,259 @@
      "not_applicable": "viewer does not decide caps; it renders per_call_cap and daily cap left from the ledger"
     }
    }
+  },
+  {
+   "id": "cap-left-audit-triple",
+   "rule": "cap.daily_left",
+   "input": {
+    "cap": 8197.132493,
+    "spent": 4169.158419,
+    "charge": 4027.974074
+   },
+   "expect": {
+    "imd-flop": {
+     "admitted": true,
+     "room": 4027.974074
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard checks one call against --cap and keeps no running total"
+    },
+    "viewer": {
+     "daily_left": 0,
+     "over": false
+    }
+   },
+   "note": "swarm audit 33f3b9f, finding 9: the audit's triple. imd-flop admits the call exactly at the cap (room 4027.974074). The viewer decides with the same expression, left = floor6(cap - spent) and over when cap_charge > left, so it shows daily cap left 0 and no flag. Before, its extra subtraction gave -0.000001 and 'over the daily cap'"
+  },
+  {
+   "id": "cap-left-audit-triple-one-step-over",
+   "rule": "cap.daily_left",
+   "input": {
+    "cap": 8197.132493,
+    "spent": 4169.158419,
+    "charge": 4027.974075
+   },
+   "expect": {
+    "imd-flop": {
+     "admitted": false,
+     "room": 4027.974074
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard checks one call against --cap and keeps no running total"
+    },
+    "viewer": {
+     "daily_left": -1e-06,
+     "over": true
+    }
+   },
+   "note": "finding 9: one step above the room: refused by imd-flop and over in the viewer"
+  },
+  {
+   "id": "cap-left-16384-at-cap",
+   "rule": "cap.daily_left",
+   "input": {
+    "cap": 16384.000047,
+    "spent": 8192.000023,
+    "charge": 8192.000024
+   },
+   "expect": {
+    "imd-flop": {
+     "admitted": true,
+     "room": 8192.000024
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard checks one call against --cap and keeps no running total"
+    },
+    "viewer": {
+     "daily_left": 0,
+     "over": false
+    }
+   },
+   "note": "finding 9, above 8192 FLOP: exactly at the cap"
+  },
+  {
+   "id": "cap-left-16384-one-step-over",
+   "rule": "cap.daily_left",
+   "input": {
+    "cap": 16384.000047,
+    "spent": 8192.000023,
+    "charge": 8192.000025
+   },
+   "expect": {
+    "imd-flop": {
+     "admitted": false,
+     "room": 8192.000024
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard checks one call against --cap and keeps no running total"
+    },
+    "viewer": {
+     "daily_left": -1e-06,
+     "over": true
+    }
+   },
+   "note": "finding 9, above 8192 FLOP: one step over"
+  },
+  {
+   "id": "cap-left-1e8-at-cap",
+   "rule": "cap.daily_left",
+   "input": {
+    "cap": 123456789.654321,
+    "spent": 23456789.123456,
+    "charge": 100000000.530865
+   },
+   "expect": {
+    "imd-flop": {
+     "admitted": true,
+     "room": 100000000.530865
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard checks one call against --cap and keeps no running total"
+    },
+    "viewer": {
+     "daily_left": 0,
+     "over": false
+    }
+   },
+   "note": "finding 9, near 1e8 FLOP: exactly at the cap"
+  },
+  {
+   "id": "cap-left-1e8-one-step-over",
+   "rule": "cap.daily_left",
+   "input": {
+    "cap": 123456789.654321,
+    "spent": 23456789.123456,
+    "charge": 100000000.530866
+   },
+   "expect": {
+    "imd-flop": {
+     "admitted": false,
+     "room": 100000000.530865
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard checks one call against --cap and keeps no running total"
+    },
+    "viewer": {
+     "daily_left": -1e-06,
+     "over": true
+    }
+   },
+   "note": "finding 9, near 1e8 FLOP: one step over"
+  },
+  {
+   "id": "cap-left-near-max-at-cap",
+   "rule": "cap.daily_left",
+   "input": {
+    "cap": 999999999.00001,
+    "spent": 999999999,
+    "charge": 1e-05
+   },
+   "expect": {
+    "imd-flop": {
+     "admitted": true,
+     "room": 1e-05
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard checks one call against --cap and keeps no running total"
+    },
+    "viewer": {
+     "daily_left": 0,
+     "over": false
+    }
+   },
+   "note": "finding 9, near AMOUNT_MAX (1e9 FLOP): ten steps of room admit a charge of ten steps"
+  },
+  {
+   "id": "cap-left-near-max-one-step-over",
+   "rule": "cap.daily_left",
+   "input": {
+    "cap": 999999999.00001,
+    "spent": 999999999,
+    "charge": 1.1e-05
+   },
+   "expect": {
+    "imd-flop": {
+     "admitted": false,
+     "room": 1e-05
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard checks one call against --cap and keeps no running total"
+    },
+    "viewer": {
+     "daily_left": -1e-06,
+     "over": true
+    }
+   },
+   "note": "finding 9, near AMOUNT_MAX: eleven steps on ten steps of room are over"
+  },
+  {
+   "id": "cap-left-off-grid-charge-below",
+   "rule": "cap.daily_left",
+   "input": {
+    "cap": 1,
+    "spent": 0.5,
+    "charge": 0.4000000000005
+   },
+   "expect": {
+    "imd-flop": {
+     "admitted": true,
+     "room": 0.5
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard checks one call against --cap and keeps no running total"
+    },
+    "viewer": {
+     "daily_left": 0.099999,
+     "over": false
+    }
+   },
+   "note": "review of the audit 33f3b9f fixes, defect 1: a charge off the grid rounds up to the next millionth, 0.400001, so the viewer shows 0.099999 left and no flag"
+  },
+  {
+   "id": "cap-left-off-grid-charge-over",
+   "rule": "cap.daily_left",
+   "input": {
+    "cap": 1,
+    "spent": 0.5,
+    "charge": 0.5000000000001
+   },
+   "expect": {
+    "imd-flop": {
+     "admitted": false,
+     "room": 0.5
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard checks one call against --cap and keeps no running total"
+    },
+    "viewer": {
+     "daily_left": -1e-06,
+     "over": true
+    }
+   },
+   "note": "defect 1: a charge a hair above the room is off the grid and rounds up to 0.500001: over in both parts, and the viewer shows -0.000001 left"
+  },
+  {
+   "id": "cap-left-off-grid-charge-just-below-room",
+   "rule": "cap.daily_left",
+   "input": {
+    "cap": 1,
+    "spent": 0.5,
+    "charge": 0.4999999999999
+   },
+   "expect": {
+    "imd-flop": {
+     "admitted": true,
+     "room": 0.5
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard checks one call against --cap and keeps no running total"
+    },
+    "viewer": {
+     "daily_left": 0,
+     "over": false
+    }
+   },
+   "note": "defect 1: a charge a hair below the room rounds up onto it, 0.5: admitted, 0 left, no flag"
   }
  ]
 }

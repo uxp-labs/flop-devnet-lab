@@ -4,7 +4,7 @@
  * books it through the booking step (booking.ts). Behavior is pinned by
  * contract/vectors/settlement-refresh.json and failed-read.json.
  */
-import { existsSync, readdirSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { CliError, EXIT } from "./errors.js";
 import { readIdentity } from "./keys.js";
@@ -16,14 +16,27 @@ import type { Provider, ReceiptRead } from "./providers.js";
 import { classifyReceipt, type Classified, type MatchResult } from "./receipts.js";
 import { redactFlagged } from "./secrets.js";
 import { DISAGREE, isFreshRead, PAST_ADMITTED, receiptIdentity, reconcile, type ReadOutcome, type StoredReceipt } from "./settlement.js";
-import { readJson, writeJsonSafe } from "./store.js";
+import { writeJsonSafe } from "./store.js";
+import { nestedTooDeep } from "./ledger-text.js";
 
 export type SavedReceipt = Classified & { seat: string; mock_scenario?: string };
 
 export const receiptPath = (h: string, requestId: string): string => join(receiptsDir(h), `${requestId}.json`);
 
+/**
+ * The one reading of a receipt file's text: the ledger text contract's rule for a receipt (contract/README.md),
+ * one JSON value, nested at most LEDGER_TEXT.max_depth levels (ledger-text.ts nestedTooDeep; review defect 8).
+ * Null when there is no file. A file nested too deep throws, as one that is not JSON does.
+ */
+function readReceiptJson(path: string): unknown {
+  if (!existsSync(path)) return null;
+  const text = readFileSync(path, "utf8");
+  if (nestedTooDeep(text)) throw new Error(`receipt file ${path} is nested too deep`);
+  return JSON.parse(text);
+}
+
 export function readSavedReceipt(h: string, requestId: string): SavedReceipt | null {
-  return readJson<SavedReceipt>(receiptPath(h, requestId));
+  return readReceiptJson(receiptPath(h, requestId)) as SavedReceipt | null;
 }
 
 /**
@@ -32,7 +45,7 @@ export function readSavedReceipt(h: string, requestId: string): SavedReceipt | n
  */
 function readReceiptFile(path: string): Classified | null {
   try {
-    const body = readJson<unknown>(path);
+    const body = readReceiptJson(path);
     return body !== null && typeof body === "object" && !Array.isArray(body) && matchable(body) ? (body as Classified) : null;
   } catch {
     return null;
@@ -131,7 +144,7 @@ function bodyAfterRead(saved: SavedReceipt | null, ident: Record<string, unknown
 /** The stored receipt file as an object, or null when there is none or it is not a JSON object. A file that cannot be read is not merged. */
 function storedBody(path: string): SavedReceipt | null {
   try {
-    const body = readJson<unknown>(path);
+    const body = readReceiptJson(path);
     return body !== null && typeof body === "object" && !Array.isArray(body) ? (body as SavedReceipt) : null;
   } catch {
     return null;

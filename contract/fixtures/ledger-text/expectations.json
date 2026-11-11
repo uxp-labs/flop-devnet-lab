@@ -308,7 +308,7 @@
    "charges": {}
   },
   "numbers-as-doubles.jsonl": {
-   "note": "a number is a double: a 4300 digit integer and 1e400 are Infinity, 2^53 + 1 is 2^53; none of those is a known amount. 2^53 - 1 is",
+   "note": "a number is a double: a 4300 digit integer and 1e400 are Infinity, 2^53 + 1 is 2^53; none of those is a known amount. 2^53 - 1 is read exactly, and it is not a known amount either: it is above AMOUNT_MAX, 1e9 FLOP (swarm audit 33f3b9f, finding 5; it was a known amount when AMOUNT_MAX was 2^53 - 1)",
    "lines": 4,
    "blank": [],
    "unreadable": [],
@@ -342,7 +342,7 @@
     "1": null,
     "2": null,
     "3": null,
-    "4": 9007199254740991
+    "4": null
    }
   },
   "booleans.jsonl": {
@@ -529,6 +529,157 @@
    "charges": {
     "1": 0.186
    }
+  },
+  "torn-line-then-row.jsonl": {
+   "note": "the writer rule: a row appended after a torn last line starts on a fresh line, so the torn line stays unreadable under its own number and the new row is whole",
+   "lines": 3,
+   "blank": [],
+   "unreadable": [
+    {
+     "line": 2,
+     "why": "not valid JSON"
+    }
+   ],
+   "groups": [
+    [
+     "r1",
+     [
+      1
+     ]
+    ],
+    [
+     "r3",
+     [
+      3
+     ]
+    ]
+   ],
+   "charges": {
+    "1": 0.186,
+    "3": 0.186
+   }
+  },
+  "depth-32.jsonl": {
+   "note": "the nesting limit (swarm audit 33f3b9f, finding 8): a row nested 32 levels deep, the row object included, is at the limit and is a row",
+   "lines": 1,
+   "blank": [],
+   "unreadable": [],
+   "groups": [
+    [
+     "r1",
+     [
+      1
+     ]
+    ]
+   ],
+   "charges": {
+    "1": 0.186
+   }
+  },
+  "depth-33.jsonl": {
+   "note": "33 levels is over the limit: unreadable, nested too deep. Line 2 is not valid JSON either, and it is still nested too deep: depth is counted on the text before parsing",
+   "lines": 2,
+   "blank": [],
+   "unreadable": [
+    {
+     "line": 1,
+     "why": "nested too deep"
+    },
+    {
+     "line": 2,
+     "why": "nested too deep"
+    }
+   ],
+   "groups": [],
+   "charges": {}
+  },
+  "depth-10000.jsonl": {
+   "note": "10000 levels: nested too deep in both parts. JSON.parse reads it and Python's json raises RecursionError, so without the limit the two parts read it differently",
+   "lines": 1,
+   "blank": [],
+   "unreadable": [
+    {
+     "line": 1,
+     "why": "nested too deep"
+    }
+   ],
+   "groups": [],
+   "charges": {}
+  },
+  "depth-brackets-in-strings.jsonl": {
+   "note": "brackets inside a string do not count, an escaped quote does not end the string, and an escaped backslash before the closing quote does not escape it: depth 3",
+   "lines": 1,
+   "blank": [],
+   "unreadable": [],
+   "groups": [
+    [
+     "r1",
+     [
+      1
+     ]
+    ]
+   ],
+   "charges": {
+    "1": 0.186
+   }
+  },
+  "lone-surrogate.jsonl": {
+   "note": "a lone surrogate escape, as an older version's cut could leave one (review of the audit 33f3b9f fixes, defect 11): JSON.parse reads it, and the viewer reads it too and shows U+FFFD in its place, so its page still builds",
+   "lines": 2,
+   "blank": [],
+   "unreadable": [],
+   "groups": [
+    [
+     "r1",
+     [
+      1
+     ]
+    ],
+    [
+     "r2",
+     [
+      2
+     ]
+    ]
+   ],
+   "charges": {
+    "1": 0.186,
+    "2": 0.186
+   }
+  },
+  "depth-siblings.jsonl": {
+   "note": "forty sibling arrays and two sibling objects at the same level: each ] and } closes its level, so the depth stays 3 and the line is a row",
+   "lines": 1,
+   "blank": [],
+   "unreadable": [],
+   "groups": [
+    [
+     "r1",
+     [
+      1
+     ]
+    ]
+   ],
+   "charges": {
+    "1": 0.186
+   }
+  },
+  "depth-unbalanced-closers.jsonl": {
+   "note": "closers before any opener count too: depth goes to -4, then 33 openers reach 29, under the limit, so these lines are not valid JSON rather than nested too deep. The count is never floored at 0",
+   "lines": 2,
+   "blank": [],
+   "unreadable": [
+    {
+     "line": 1,
+     "why": "not valid JSON"
+    },
+    {
+     "line": 2,
+     "why": "not valid JSON"
+    }
+   ],
+   "groups": [],
+   "charges": {}
   }
  }
 }

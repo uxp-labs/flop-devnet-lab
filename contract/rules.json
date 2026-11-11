@@ -26,10 +26,11 @@
       "viewer": null
     },
     "AMOUNT_MAX": {
-      "value": 9007199254740991,
-      "imd-flop": "src/amount.ts AMOUNT_MAX (Number.MAX_SAFE_INTEGER; test/contract.test.ts checks it against this value). knownAmount refuses an amount above it: unknown, never a guess (review fixes 2, R10)",
+      "value": 1000000000,
+      "imd-flop": "src/amount.ts AMOUNT_MAX (its own literal; test/contract.test.ts checks it against this value). knownAmount refuses an amount above it: unknown, never a guess. A day or job total above it is not a known amount either: run refuses (exit 3) and the read commands exit 1 (ledger.ts exactTotal)",
       "spend-guard": null,
-      "viewer": "build-lane.py AMOUNT_MAX (read from this file): amount() refuses an amount above it"
+      "viewer": "build-lane.py AMOUNT_MAX (read from this file): amount() refuses an amount above it",
+      "note": "1e9 FLOP (swarm audit 33f3b9f, finding 5; was 2^53 - 1). Up to 1e9 FLOP an amount x is on the 6 decimal grid when n = floor(x * 1e6 + 0.5) gives back the same double (n / 1e6 === x), and then n is its exact count of millionths. Totals are exact sums of those integers and the cap check is made in them, with no tolerance (review of the audit 33f3b9f fixes, defect 1). A total of exactly AMOUNT_MAX is a known amount; one millionth above is not. Above about 2^33 FLOP a double cannot hold the grid at all. spend-guard has no such bound. Proved by the property tests in imd-flop/test/audit-33f3b9f.test.ts, imd-flop/test/review-audit2.test.ts and the viewer twins"
     },
     "FLOP_DECIMALS": {
       "value": 18,
@@ -80,6 +81,17 @@
       "spend-guard": null,
       "viewer": "build-lane.py REQUEST_ID (read from this file), the same grouping in read_ledger"
     },
+    "SEAT_ID": {
+      "value": {
+        "placeholder": "unassigned",
+        "digits": "^(0|[1-9][0-9]*)$",
+        "max_digits": 63
+      },
+      "imd-flop": "src/keys.ts isSeatId and validateSeat (their own literals; test/audit-33f3b9f.test.ts checks them against this value). A seat on the command line or in config.json that is not canonical is a usage error (exit 2), and the message names where it came from and shows the canonical spelling when the input only has leading zeros. A ledger row whose seat is not canonical cannot be placed in a total (ledger.ts placed)",
+      "spend-guard": null,
+      "viewer": "build-lane.py SEAT_ID and usable_seat (read from this file): a row whose seat is not canonical carries the flag 'ledger row cannot be placed in a total (seat)'",
+      "note": "swarm audit 33f3b9f, finding 4: one spelling per seat. A seat id is the unassigned placeholder, or decimal digits with no leading zero (0 alone is allowed) of at most 63 digits. The chain reads a tokenId as a number, so 42 and 042 are one seat there. Before, both spellings were accepted and compared as text, so one seat could hold two keys, two caps and two daily totals. The 63 digit limit (review of the audit 33f3b9f fixes, defect 9; it replaces at most 2^256 - 1): a number of 64 digits or more cannot be told from a key by the secret scan, so no file of such a seat could be written. Pinned by contract/vectors/ledger-placement.json placement-seat-*"
+    },
     "LEDGER_TEXT": {
       "value": {
         "bytes": "the file is bytes, decoded as UTF-8 the way Node does it: an invalid byte becomes U+FFFD and never aborts the file",
@@ -113,11 +125,13 @@
           65279
         ],
         "blank_note": "a line is blank when every character is one of these code points: exactly the characters JavaScript's String.prototype.trim removes, which is what imd-flop did before this contract",
-        "line": "a line that is not blank is one JSON value in JSON.parse's grammar (NaN, Infinity and -Infinity are not JSON) and must be an object; anything else is unreadable, \"not valid JSON\" or \"not a JSON object\"",
+        "line": "a line that is not blank and not nested too deep (see depth) is one JSON value in JSON.parse's grammar (NaN, Infinity and -Infinity are not JSON) and must be an object; anything else is unreadable, \"not valid JSON\" or \"not a JSON object\"",
+        "max_depth": 32,
+        "depth": "a line nested deeper than max_depth levels is unreadable, \"nested too deep\", whether or not it is otherwise valid JSON. Depth is counted on the line's text before parsing: { and [ outside a JSON string open a level, } and ] close one, and a string runs from an unescaped \" to the next unescaped \" (a backslash in a string escapes the character after it). The row object itself is level 1",
         "numbers": "every number is read as a double; in the viewer an integer is parsed as float(text) and kept as an int only when that double is integral and at most 2^53 - 1, so a 4300 digit integer is Infinity in both parts and never meets Python's digit limit",
         "booleans": "a boolean is never a number",
         "grouping": "rows are grouped by REQUEST_ID; a row without a usable request id is a group of its own, keyed by its line",
-        "receipts": "a receipt file is the whole file decoded the same way, one JSON value in JSON.parse's grammar that must be an object; anything else is unreadable"
+        "receipts": "a receipt file is the whole file decoded the same way, one JSON value in JSON.parse's grammar that must be an object; anything else is unreadable; the depth rule applies to it too, counted on the whole file (review of the audit 33f3b9f fixes, defect 8; pinned by contract/fixtures/receipt-text/)"
       },
       "imd-flop": "src/ledger-text.ts readLedgerText and groupRows, used by ledger.ts for every read of the ledger",
       "spend-guard": null,
@@ -343,11 +357,12 @@
     {
       "id": "R-e",
       "residual": "e",
-      "status": "current behavior",
+      "status": "fixed: swarm audit 33f3b9f, finding 10",
       "parts": [
         "imd-flop"
       ],
-      "summary": "A pre-send error message with a 0x + 64 hex hash is stored as [hash] in the ledger reason but printed raw on stderr. The swarm audit of 8ddc5d2 reported this again as its finding 12 (info). It stays as it is. The ledger reason is rewritten so that the secret scan can store the refused_local row, which is what releases the reservation (src/run.ts). The message on stderr is not rewritten. Pinned by vector run-pre-send-hash-on-stderr."
+      "summary": "A pre-send error message with a 0x + 64 hex hash is stored as [hash] in the ledger reason but printed raw on stderr. The swarm audit of 8ddc5d2 reported this again as its finding 12 (info). It stays as it is. The ledger reason is rewritten so that the secret scan can store the refused_local row, which is what releases the reservation (src/run.ts). The message on stderr is not rewritten. Pinned by vector run-pre-send-hash-on-stderr.",
+      "fixed_behavior": "stderr shows the same reason the ledger row gets. The provider's message goes through secrets.ts outsideText once (each 0x and 64 hex value replaced by [hash], withheld when the scan still flags it, cut to a bound), and run.ts prints that reason. Pinned by vector run-pre-send-hash-on-stderr (stderr now holds the [hash] form) and imd-flop/test/audit-33f3b9f.test.ts (finding 10)"
     },
     {
       "id": "R-f",
@@ -366,7 +381,7 @@
         "imd-flop",
         "viewer"
       ],
-      "summary": "Rounding to 6 decimals counts a value within 1e-12 FLOP of a 1e-6 step as on it (imd-flop rounding.ts ceil6 and floor6, viewer build-lane.py floor6). For a total built from charges on the 6 decimal grid and a cap on it, that absorbs float noise and nothing else, so rounding never admits a call over the cap. imd-flop books every charge on that grid (the padded quote is rounded up to it) except a charge a gateway amount raised above the padded quote, which is booked as the gateway reported it and prints PAST_ADMITTED. A charge off the grid within 1e-12 FLOP above a step (a hand edit, a damaged row, or such a gateway amount) is rounded down onto the step, so the next call can be admitted with the day over the cap by at most 1e-12 FLOP. A cap or job budget set within 1e-12 FLOP below a step is rounded up onto it the same way, by at most 1e-12 FLOP more. It stays as it is: it closes when money moves to exact base units (money stage 2). Pinned by vectors ceil6-off-grid-within-tolerance and floor6-off-grid-within-tolerance-below, and by imd-flop/test/review-fixes.test.ts (R7, now R-g)."
+      "summary": "Amounts are counted in whole millionths of a FLOP with no tolerance (review of the audit 33f3b9f fixes, defect 1; imd-flop rounding.ts gridMicro, ceilMicro and floorMicro, viewer build-lane.py grid_micro, ceil_micro and floor_micro, the same expressions). An amount x is on the grid when n = floor(x * 1e6 + 0.5) gives back the same double; then its count is n. Every amount the tools compare is at most AMOUNT_MAX, 1e9 FLOP, and up to there every grid amount is found this way. A day or job total is the exact sum of its charges' counts (imd-flop ledger.ts exactTotal). The cap check is made in the same integers in both parts: over when the charge is above the cap less the spend. So for amounts on the grid every total and every cap decision is exact, and the two parts agree on every one (contract/fixtures/cap-triples). Only an amount off the grid is rounded, checked by comparison: a charge or a spend up to the smallest step at or above it, a cap or a budget down to the largest step at or below it. So rounding never admits a call over the cap. What remains: an amount off the grid (a hand edit, a damaged row, or a gateway amount a booking raised the charge to, which prints PAST_ADMITTED) is counted at the next step, up to 1e-6 FLOP more than it is. It closes when money moves to exact base units (money stage 2). Pinned by contract/vectors/rounding.json, the cap.daily_left vectors in cap-compare.json, imd-flop/test/review-fixes.test.ts (R-g) and imd-flop/test/review-audit2.test.ts (review defect 1)."
     }
   ],
   "viewer_label_rules": {
@@ -572,6 +587,30 @@
       "target": "the exact spend is set only by the read that books the float spend, as a pair",
       "status": "fixed: hold floor",
       "fixed_behavior": "A read that books a float spend the row did not hold (unknown, or a different known amount) sets the pair: its own exact amount, or unknown. A read whose float amount is unknown never sets or changes the exact spend beside a known float spend. When both floats are unknown the exact spend only rises, as before. Two trusted reads now book the same pair in either order with no counted exception (decision-properties.test.ts). Pinned by imd-flop/test/review-fixes.test.ts (R5) and the vectors refresh-released-no-float-then-settled-sets-pair and refresh-settled-then-released-no-float-keeps-pair."
+    },
+    {
+      "id": "KD-15",
+      "source": "swarm audit of 33f3b9f (IMD job b4e8e103), finding 1 (high), with findings 7 and 11 item 1, 2026-11-11",
+      "parts": [
+        "imd-flop"
+      ],
+      "where": "src/ledger.ts reclaimIfDead: a waiter read the owner of an old lock, then renamed whatever was at the lock path aside",
+      "today": "the reclaim of a dead holder's lock was not exclusive. Between a waiter's read of the owner and its rename, another waiter could reclaim the lock and a third take it; the rename then moved a live holder's lock aside, so two holders ran at once and the cap could be passed with no PAST_ADMITTED. Seen at c79dd6d with a pause of up to 40 ms after the owner read: two holders in 2 of 30 rounds",
+      "target": "nothing renames or moves the lock. A waiter removes it only when its recorded owner is provably dead (the same host and a pid that is gone, or this process's own pid with a token it does not hold now) and the waiter holds the reclaim right for that exact token, after it has read the lock again under the right. Age plays no part. A lock with no readable owner, a lock of another host and a lock whose owner is alive are never removed",
+      "status": "fixed: swarm audit 33f3b9f, finding 1",
+      "fixed_behavior": "src/lock.ts holds the lock as steps that yield before every file operation. The reclaim right is the file <lock>.reclaim.<token>.<n>, created exclusively; it passes to the next level only when its owner is provably dead. Under the right the waiter reads the lock again and unlinks it only if it still carries that token, then removes its own right file. Every ledger append checks first that the lock still carries this process's token (ledger lock lost is a failed append). A token is 1 to 64 characters of letters, digits, _ and -, so nothing read from a lock file becomes a path. Pinned by imd-flop/test/lock-model.test.ts (every interleaving of three waiters with crashes over an in memory file system; it fails for the old rule and for seven other wrong rules), test/lock.test.ts (the real file system, real processes killed at random moments) and test/review-lock.test.ts (the six defects of the independent review). Known and kept: one home under two spellings in one process is not re-entrant (the second take times out); a holder that has exited but is not yet reaped counts as alive; a process killed between creating its temporary file and writing it leaves an empty .tmp file that no rule removes; the lock is tested on Linux only."
+    },
+    {
+      "id": "KD-16",
+      "source": "swarm audit of 33f3b9f (IMD job b4e8e103), finding 6 (low), 2026-11-11",
+      "parts": [
+        "imd-flop"
+      ],
+      "where": "src/ledger.ts placed: the message about a row that cannot be placed quoted the unusable value raw",
+      "today": "when the value is key shaped (64 or more hex digits, a bearer, a flop_ token), refuse() cannot write its refused_local row: the secret scan blocks it, run exits 5, and the message names no line. A seat of 2^256 is 78 decimal digits, so it is key shaped too",
+      "target": "the message names the line and the field, and quotes the value only when it is a string of at most 32 characters that the secret scan passes; otherwise it says the type and the length. refuse() writes its row, run exits 3 and names the line",
+      "status": "fixed: swarm audit 33f3b9f, findings 3, 6 and 10",
+      "fixed_behavior": "ledger.ts placed describes each unusable value through secrets.ts outsideValue: a string of at most 32 characters that the secret scan passes is quoted, and anything else is named by its type and length (for example: day a string of 64 characters). So refuse() writes its refused_local row, run exits 3 and the message names the line and the field. Text this tool did not write goes through one function before any sink: outsideText (marks such as [ETH_RPC_URL] replaced, 0x and 64 hex replaced by [hash], withheld when the scan still finds a key, cut to a bound). The pre-send reason that goes to the ledger row is the one printed on stderr. Pinned by imd-flop/test/audit-33f3b9f.test.ts (findings 3, 6, 10) and the vector placement-seat-above-max"
     }
   ]
 }

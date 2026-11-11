@@ -13,6 +13,7 @@
 import { base58, base64, base64url } from "@scure/base";
 import { bytesToHex } from "@noble/hashes/utils.js";
 import { CliError, EXIT } from "./errors.js";
+import { NETWORKS } from "./networks.js";
 
 const registry = new Set<string>();
 
@@ -48,12 +49,26 @@ export const PUBLIC_HEX_FIELDS = new Set([
   "nonce",
 ]);
 
+/**
+ * Hex values that are public and ours: the pinned genesis hash of each network (networks.ts). The 64 hex rule
+ * never flags them and outsideText never turns them into [hash], so a message can print the pinned genesis in
+ * full (review of the audit 33f3b9f fixes). Exact values only: any other 64 hex run is still key shaped.
+ */
+const PUBLIC_HEX_VALUES: ReadonlySet<string> = new Set(Object.values(NETWORKS).map((n) => n.genesisHash.toLowerCase()));
+/** A 0x and 64 hex run, as [hash] unless it is one of PUBLIC_HEX_VALUES. */
+const hashed = (s: string): string => s.replace(/0x[0-9a-fA-F]{64}/g, (h) => (PUBLIC_HEX_VALUES.has(h.toLowerCase()) ? h : "[hash]"));
+/** The text without the public values, for the 64 hex rule. */
+const withoutPublicHex = (s: string): string => s.replace(/(?:0x)?[0-9a-fA-F]{64,}/g, (h) => (PUBLIC_HEX_VALUES.has((h.startsWith("0x") ? h : `0x${h}`).toLowerCase()) ? "" : h));
+
 const SECRET_FIELD = /^(private[_-]?key|privkey|secret|secret[_-]?key|seed|seed[_-]?phrase|mnemonic|api[_-]?key|apikey|bearer|authorization|access[_-]?token|token|password|passphrase|key)$/i;
 const HEX64 = /(?<![0-9a-fA-F])(?:0x)?[0-9a-fA-F]{64,}(?![0-9a-fA-F])/;
 /** Ed25519 and EIP-712 signatures are longer than a 32-byte key and are stored under these names. */
 const SIGNATURE_FIELDS = new Set(["sig", "signature", "flopSignature"]);
-const BEARER = /\bBearer\s+[A-Za-z0-9._~+/=-]{8,}/;
-const FLOP_TOKEN = /\bflop_(?:ek|sk|pk|key|live|test)?_?[A-Za-z0-9]{16,}/;
+// A token is found wherever its prefix starts, whatever stands before it. A key glued to a letter, a digit
+// or an underscore (for example what is left of an escape sequence, "[2Jflop_ek_...") is still a key, so
+// neither rule asks for a word boundary in front.
+const BEARER = /Bearer\s+[A-Za-z0-9._~+/=-]{8,}/;
+const FLOP_TOKEN = /flop_(?:ek|sk|pk|key|live|test)?_?[A-Za-z0-9]{16,}/;
 const PEM = /-----BEGIN [A-Z ]*PRIVATE KEY-----/;
 
 export interface Finding {
@@ -72,7 +87,7 @@ export function scanForSecrets(value: unknown): Finding[] {
       if (BEARER.test(v)) hit("bearer token");
       if (FLOP_TOKEN.test(v)) hit("FLOP gateway token");
       if (PEM.test(v)) hit("PEM private key");
-      if (!PUBLIC_HEX_FIELDS.has(field) && !SIGNATURE_FIELDS.has(field) && HEX64.test(v)) hit("64-or-more-hex (key-shaped) value");
+      if (!PUBLIC_HEX_FIELDS.has(field) && !SIGNATURE_FIELDS.has(field) && HEX64.test(withoutPublicHex(v))) hit("64-or-more-hex (key-shaped) value");
       if (SECRET_FIELD.test(field) && v.length > 0) hit(`secret-named field "${field}"`);
       return;
     }
@@ -120,4 +135,70 @@ export function assertNoSecrets(value: unknown, what: string): void {
     const where = f.map((x) => `${x.path || "(root)"}: ${x.reason}`).join("; ");
     throw new CliError(`secret scan blocked writing ${what}: ${where}`, EXIT.REFUSED_RULE);
   }
+}
+
+/**
+ * Outside text: text this tool did not write, such as a server's error message, a transport error, or a value
+ * read from a ledger row or another file. It never reaches a sink raw. The sinks are the ledger, a receipt, a
+ * response file, stdout and stderr. It passes through outsideText (a message) or outsideValue (a field
+ * value), and the same result goes to every sink (swarm audit 33f3b9f, findings 3, 6 and 10).
+ */
+
+/** The most characters of outside text a message keeps by default. */
+export const OUTSIDE_TEXT_MAX = 1000;
+/** What a message says in place of outside text the secret scan refused. */
+export const OUTSIDE_WITHHELD = "[withheld by the secret scan]";
+/** Every code point of category Cc, Cf, Zl or Zp, and every lone surrogate (Cs, which a well formed pair never matches with the u flag). */
+const UNSHOWN = /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}\p{Cs}]/gu;
+/** A mark form shorter than this is not used: it hides nothing worth hiding and mangles text like "HTTP 401". */
+export const MARK_MIN = 8;
+/** A thing outside text may repeat, the forms it can be repeated in, and the mark that stands in for it. */
+export interface Mark { forms: string[]; mark: string }
+
+/**
+ * Outside text made safe for every sink, in this order:
+ *  0. the secret scan runs on the text as it came (0x and 64 hex hashes aside): a hit withholds it all;
+ *  1. every form of every mark of at least MARK_MIN characters is replaced by its mark, the longest first;
+ *  2. every code point of category Cc, Cf, Zl or Zp and every lone surrogate becomes one space, and every 0x
+ *     and 64 hex run (a public hash, or a key) is replaced by [hash];
+ *  3. if the secret scan finds anything after the marks, the whole text is withheld (OUTSIDE_WITHHELD);
+ *  4. the text is cut to `max` code points, and a cut text ends with "[cut]".
+ * The scan runs before the cut, so a cut never hides part of a key from it.
+ */
+export function outsideText(text: unknown, opts: { marks?: Mark[]; max?: number } = {}): string {
+  let s = typeof text === "string" ? text : String(text);
+  // The scan runs on the text as it came first: a mark replaced inside a key would split it and hide it.
+  if (scanForSecrets({ reason: hashed(s) }).length > 0) return OUTSIDE_WITHHELD;
+  const forms = (opts.marks ?? []).flatMap((m) => m.forms.filter((f) => f.length >= MARK_MIN).map((form) => ({ form, mark: m.mark })));
+  for (const { form, mark } of forms.sort((a, b) => b.form.length - a.form.length)) s = s.split(form).join(mark);
+  // Control and format characters, line and paragraph separators and lone surrogates each become one space, so
+  // outside text cannot write its own lines or terminal escapes (review defect 10). Before the cut.
+  s = s.replace(UNSHOWN, " ");
+  s = hashed(s);
+  if (scanForSecrets({ reason: s }).length > 0) return OUTSIDE_WITHHELD;
+  const max = opts.max ?? OUTSIDE_TEXT_MAX;
+  // The cut is on code point boundaries, so it never leaves half of a surrogate pair (review defect 11).
+  const points = Array.from(s);
+  return points.length > max ? `${points.slice(0, max).join("")}[cut]` : s;
+}
+
+/** The longest string value a message may quote. */
+const QUOTE_MAX = 32;
+
+/**
+ * A field value read from a file, for a message. It is quoted only when it is a string of at most 32
+ * characters that the secret scan passes. Anything else is described by its type and its length, so a message
+ * about a damaged row can always be written to the ledger and printed.
+ */
+export function outsideValue(v: unknown): string {
+  if (v === null || v === undefined) return "null";
+  if (typeof v === "string") return v.length <= QUOTE_MAX && scanForSecrets({ reason: v }).length === 0 ? JSON.stringify(v) : `a string of ${v.length} ${v.length === 1 ? "character" : "characters"}`;
+  if (typeof v === "number") return "a number";
+  if (typeof v === "boolean") return "a boolean";
+  if (Array.isArray(v)) return `an array of ${v.length} ${v.length === 1 ? "item" : "items"}`;
+  if (typeof v === "object") {
+    const n = Object.keys(v).length;
+    return `an object of ${n} ${n === 1 ? "key" : "keys"}`;
+  }
+  return `a ${typeof v}`;
 }

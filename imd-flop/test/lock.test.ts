@@ -480,6 +480,32 @@ describe("L5: the timeout message names the owner and the way back", () => {
     }
   });
 
+  // A host name in a lock or a right file is text this process did not write. Every sink takes such text
+  // through secrets.ts outsideText (swarm audit 33f3b9f, findings 3, 6 and 10): the lock's messages too.
+  it("a host name read from a lock file is shown as outside text: no control character, no key shaped run", () => {
+    const h = tmpHome();
+    const lock = lockPath(h);
+    const shown = (host: string) => {
+      writeFileSync(lock, owner(1, "x", host));
+      const m = /^ledger lock timeout: .* \(\d+ s old\) is held by pid 1 on host (.*)\. If no imd-flop process/s.exec(timeoutMessage(lock));
+      expect(m, host).not.toBeNull();
+      return m![1];
+    };
+    expect(shown("build-7.example.internal")).toBe("build-7.example.internal");
+    expect(shown("evil\u001b[2J\u001b[Hhost\nimd-flop: all good\r")).toBe("evil [2J [Hhost imd-flop: all good ");
+    expect(shown("a\u202eb\u2028c")).toBe("a b c");
+    expect(shown(`h-flop_ek_${"a".repeat(20)}`)).toBe("[withheld by the secret scan]");
+    expect(shown("h".repeat(300))).toBe(`${"h".repeat(255)}[cut]`);
+    // The same for the owner of a reclaim right in the way.
+    const dead = deadPid();
+    writeFileSync(lock, owner(dead, "T"));
+    writeFileSync(rightPath(lock, "T", 1), owner(1, "r", "right\u0007host\u001b[31m"));
+    const m = timeoutMessage(lock);
+    expect(m).toContain(`${rightPath(lock, "T", 1)} (`);
+    expect(m).toContain("is held by pid 1 on host right host [31m. If no imd-flop process");
+    expect(/[\u0000-\u001f\u007f]/.test(m)).toBe(false);
+  });
+
   it("run against a lock of another host: exit 10, nothing sent, the message names the owner and the way back, and the way back works", async () => {
     const h = tmpHome();
     await readySeat(h, SEAT, "1");

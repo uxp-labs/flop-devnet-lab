@@ -4,7 +4,8 @@
  * gateway via @flop-labs/client and is gated behind --live.
  * complete() re-checks the Ethereum chain id and the pinned genesis before it mints a child key.
  */
-import { readFileSync, statSync } from "node:fs";
+import { statSync } from "node:fs";
+import { readSecretFile } from "./store.js";
 import { sha256 } from "@noble/hashes/sha2.js";
 import { bytesToHex, utf8ToBytes } from "@noble/hashes/utils.js";
 import { FlopClient, FlopHTTPError } from "@flop-labs/client";
@@ -122,7 +123,7 @@ export class FlopProvider implements Provider {
     try {
       const mode = statSync(gatewayKeyPath).mode & 0o777;
       if (mode & 0o077) throw new CliError(`gateway key file is mode ${mode.toString(8)}; expected 600`, EXIT.REFUSED_RULE);
-      raw = readFileSync(gatewayKeyPath, "utf8").trim();
+      raw = readSecretFile(gatewayKeyPath).trim();
     } catch (e) {
       if (e instanceof CliError) throw e;
       throw new CliError("no gateway key for this seat (run `imd-flop enroll --live` on the holder's machine first)", EXIT.USAGE);

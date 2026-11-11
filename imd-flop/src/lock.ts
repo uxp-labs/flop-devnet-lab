@@ -51,6 +51,7 @@ import { randomBytes } from "node:crypto";
 import { hostname } from "node:os";
 import { basename, dirname, join } from "node:path";
 import { isMainThread } from "node:worker_threads";
+import { outsideText } from "./secrets.js";
 
 /** The ledger lock could not be taken. Thrown before the guarded work runs, so nothing in it happened. */
 export class LedgerLockError extends Error {}
@@ -390,6 +391,14 @@ function rightInTheWay(me: Self, lock: string, token: string): { path: string; o
 }
 
 /**
+ * A host name read from a lock or a right file, for a message. It is text this process did not write, so
+ * it goes through the one function for outside text (secrets.ts outsideText): no control character, no
+ * key shaped run, a bounded length. The pid is an integer and the token is plain, so the path of a right
+ * file is safe as it is.
+ */
+const shownHost = (host: string): string => outsideText(host, { max: 255 });
+
+/**
  * The timeout message: the lock file, its age, the recorded owner and the way back, so a holder can see
  * what is in the way and how to clear it.
  */
@@ -401,12 +410,12 @@ export function timeoutMessage(lock: string, blocked: Blocked = {}): string {
   let owner: string;
   if (text === null) owner = "is gone now";
   else if (o === null) owner = `has no readable owner${what ? `: ${what}` : ""}`;
-  else if (!runOnDisk(provablyDead(me, o), () => {})) owner = `is held by pid ${o.pid} on host ${o.host}`;
-  else if (blocked.denied) owner = `was held by pid ${o.pid} on host ${o.host}, which is gone, and this user cannot remove that file (${blocked.denied}; it belongs to ${uidOf(lock)})`;
+  else if (!runOnDisk(provablyDead(me, o), () => {})) owner = `is held by pid ${o.pid} on host ${shownHost(o.host)}`;
+  else if (blocked.denied) owner = `was held by pid ${o.pid} on host ${shownHost(o.host)}, which is gone, and this user cannot remove that file (${blocked.denied}; it belongs to ${uidOf(lock)})`;
   else {
     const right = rightInTheWay(me, lock, o.token);
-    const who = right?.owner ? `is held by pid ${right.owner.pid} on host ${right.owner.host}` : "has no readable owner";
-    owner = `was held by pid ${o.pid} on host ${o.host}, which is gone${right ? `, and its reclaim right ${right.path} (${ageOf(right.path)}) ${who}` : ""}`;
+    const who = right?.owner ? `is held by pid ${right.owner.pid} on host ${shownHost(right.owner.host)}` : "has no readable owner";
+    owner = `was held by pid ${o.pid} on host ${shownHost(o.host)}, which is gone${right ? `, and its reclaim right ${right.path} (${ageOf(right.path)}) ${who}` : ""}`;
   }
   return `ledger lock timeout: ${lock} (${ageOf(lock)}) ${owner}. If no imd-flop process is using this home any more, remove that file and run again.`;
 }

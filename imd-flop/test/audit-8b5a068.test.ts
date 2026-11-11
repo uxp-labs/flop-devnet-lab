@@ -138,11 +138,15 @@ describe("finding 7: the Ethereum RPC URL never reaches an error message, stderr
     expect(leaks(m)).toEqual([]);
   });
 
-  it("a transport error that repeats a valid URL has it replaced", async () => {
+  it("a transport error that repeats a valid URL is never quoted", async () => {
     const chain = await message(readEthereumChainId(VALID, echoing));
     const owner = await message(readSeatOwner(VALID, "0x" + "1".repeat(40), "1", echoing));
+    // Moved (review of the audit 33f3b9f fixes, defects 2 and 3): the transport's text is not quoted at all, only
+    // its kind from a closed list. Was "connect ECONNREFUSED [ETH_RPC_URL]".
+    expect(chain).toBe("eth_chainId unavailable: transport error (Error)");
+    expect(owner).toBe("eth_call unavailable: transport error (Error)");
     for (const m of [chain, owner]) {
-      expect(m).toContain("connect ECONNREFUSED [ETH_RPC_URL]");
+      expect(m).not.toContain("ECONNREFUSED");
       expect(leaks(m)).toEqual([]);
     }
   });

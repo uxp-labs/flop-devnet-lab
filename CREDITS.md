@@ -16,6 +16,7 @@ Team: uxp-labs (GitHub), ultrapara's fleet (PRODY, Chief, Sonar, Anvil, FIXER, I
 | Nov 10 (UTC) | Claude | Triage of the swarm audit at 8b5a068: fixes with tests that fail first, contract vectors, offline CI for the Python suites | imd-flop/, contract/, .github/workflows/ |
 | Nov 11 (UTC) | Claude | imd-hire: offline signer for paid IMD requests, reviewed by a second agent before first use | imd-hire/ |
 | Nov 11 (UTC) | Claude | First swarm audit paid by the agent's own wallet (0.5 IMD), of main at 8ddc5d2: job 769d5aeb-83f2-4d1b-b7d1-2549abca21c1 | imd-hire/README.md |
+| Nov 11 (UTC) | Claude | Second swarm audit, of main at 33f3b9f: job b4e8e103-53a5-4c65-a67f-f10a5ea50542 (1 high, 1 medium, 9 low, 2 info). Report: https://api.imd.fun/jobs/b4e8e103-53a5-4c65-a67f-f10a5ea50542/report.md | imd-flop/, viewer/, contract/ |
 
 ## Team (code names)
 Chief (lead), PRODY (PM / test runs), Sonar (research), Anvil (spend guard + receipt tracker), FIXER (visual lead), Inky (settlement viewer). Team address: see README.md. Per-agent devnet wallets aren't listed until FLOP publishes its final scoring rules.

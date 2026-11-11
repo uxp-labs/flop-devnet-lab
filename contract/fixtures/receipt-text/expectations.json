@@ -1,0 +1,17 @@
+{
+ "description": "Receipt files and the depth rule (review of the audit 33f3b9f fixes, defect 8): a receipt file is one JSON value read by the ledger text contract, so LEDGER_TEXT.max_depth applies to it too, counted on the whole file's text. For each file: whether it is a readable receipt. imd-flop/test/review-audit2.test.ts (receipt-store.ts listReceipts) and viewer/test_review_audit2.py (build-lane.py read_receipts) read every file here.",
+ "files": {
+  "depth-32.json": {
+   "readable": true,
+   "note": "32 levels, the receipt object included: at the limit, readable"
+  },
+  "depth-33.json": {
+   "readable": false,
+   "note": "33 levels: over the limit, unreadable in both parts"
+  },
+  "depth-10000.json": {
+   "readable": false,
+   "note": "10000 levels: JSON.parse reads it and Python's json does not, so the limit keeps the parts together"
+  }
+ }
+}

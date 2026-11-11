@@ -257,7 +257,10 @@ describe("paid run refuses before any paid call", () => {
     expect(code).toBe(5);
     expect(err).toMatch(/agree on a different genesis/);
     expect(err).toContain(PIN);
-    expect(err).toContain(WRONG);
+    // Moved (review of the audit 33f3b9f fixes): the reported genesis is server text, shown as its first 10 and last
+    // 6 characters. The pinned one is ours and printed in full. Was the whole WRONG hash.
+    expect(err).toContain(`${WRONG.slice(0, 10)}...${WRONG.slice(-6)}`);
+    expect(err).not.toContain(WRONG);
     expectNothingPaid(h, spy, seen);
     expect(seen.some((s) => (s.body as { method?: string })?.method === "eth_call")).toBe(false);
   });
@@ -273,7 +276,10 @@ describe("paid run refuses before any paid call", () => {
     expect(code).toBe(5);
     expect(err).toMatch(/genesis mismatch/);
     expect(err).toContain(PIN);
-    expect(err).toContain(WRONG);
+    // Moved (review of the audit 33f3b9f fixes): the reported genesis is server text, shown as its first 10 and last
+    // 6 characters. The pinned one is ours and printed in full. Was the whole WRONG hash.
+    expect(err).toContain(`${WRONG.slice(0, 10)}...${WRONG.slice(-6)}`);
+    expect(err).not.toContain(WRONG);
     expect(err).not.toMatch(/agree on a different genesis/);
     expectNothingPaid(h, spy, seen);
   });
@@ -289,7 +295,10 @@ describe("paid run refuses before any paid call", () => {
     expect(code).toBe(5);
     expect(err).toMatch(/genesis mismatch/);
     expect(err).toContain(PIN);
-    expect(err).toContain(WRONG);
+    // Moved (review of the audit 33f3b9f fixes): the reported genesis is server text, shown as its first 10 and last
+    // 6 characters. The pinned one is ours and printed in full. Was the whole WRONG hash.
+    expect(err).toContain(`${WRONG.slice(0, 10)}...${WRONG.slice(-6)}`);
+    expect(err).not.toContain(WRONG);
     expect(err).not.toMatch(/agree on a different genesis/);
     expectNothingPaid(h, spy, seen);
   });
@@ -472,8 +481,11 @@ describe("FlopProvider.complete refuses before the child-key mint", () => {
       expect(r.code).toBe(5);
       expect(r.err).toMatch(/nothing sent/);
       expect(r.err).toMatch(/genesis mismatch/);
+      // stderr shows the reason the ledger row gets (swarm audit 33f3b9f, finding 10). Moved again (review of the
+      // audit 33f3b9f fixes): the pinned genesis is printed in full and the reported one as 10 ... 6 characters.
       expect(r.err).toContain(PIN);
-      expect(r.err).toContain(WRONG);
+      expect(r.err).toContain(`${WRONG.slice(0, 10)}...${WRONG.slice(-6)}`);
+      expect(r.err).not.toContain(WRONG);
       expect(faucets).toBe(2);
       expect(sockets).toBe(2);
       const estimateAt = seen.findIndex((s) => s.url.endsWith("/models/estimate"));
@@ -489,8 +501,9 @@ describe("FlopProvider.complete refuses before the child-key mint", () => {
       expect(latest.state).toBe("refused_local");
       expect(latest.cap_charge).toBe(0);
       expect(latest.reason).toMatch(/nothing sent/);
-      expect(latest.reason).toContain("[hash]");
-      expect(latest.reason).not.toMatch(/0x[0-9a-f]{64}/);
+      expect(latest.reason).toContain(PIN);
+      expect(latest.reason).not.toContain(WRONG);
+      expect(r.err).toContain(latest.reason!);
       expect(latest.request_id).toBe(rows[0].request_id);
       const st = await cli(h, ["status", "--json"]);
       expect(st.json().today_utc.flop).toBe(0);

@@ -289,9 +289,11 @@ describe("finding 3: money already spent rounds up and room left rounds down, so
   it("ceil6 and floor6 round away from and toward zero room, and both keep a value that is on a boundary", () => {
     expect([ceil6(0.9999992), floor6(0.0000008), ceil6(0.0000001), floor6(0.9999999)]).toEqual([1, 0, 0.000001, 0.999999]);
     expect([ceil6(0.186), floor6(0.186), ceil6(0), floor6(0), ceil6(1), floor6(1)]).toEqual([0.186, 0.186, 0, 0, 1, 1]);
-    expect([ceil6(0.1 + 0.2), floor6(0.1 + 0.2), ceil6(1 - 0.9), floor6(1 - 0.9)]).toEqual([0.3, 0.3, 0.1, 0.1]);
-    // A value 1e-12 from a boundary stays on it. One 1e-9 away does not.
-    expect([ceil6(0.5 + 1e-12), floor6(0.5 - 1e-12), ceil6(0.5 + 1e-9), floor6(0.5 - 1e-9)]).toEqual([0.5, 0.5, 0.500001, 0.499999]);
+    // Moved (review of the audit 33f3b9f fixes, defect 1): there is no tolerance. 0.1 + 0.2 and 1 - 0.9 are
+    // not on the grid (they are other doubles than 0.3 and 0.1), so they round to the next step. Was [0.3, 0.3, 0.1, 0.1].
+    expect([ceil6(0.1 + 0.2), floor6(0.1 + 0.2), ceil6(1 - 0.9), floor6(1 - 0.9)]).toEqual([0.300001, 0.3, 0.1, 0.099999]);
+    // Moved too: a value 1e-12 from a boundary is off the grid and rounds. Was [0.5, 0.5, 0.500001, 0.499999].
+    expect([ceil6(0.5 + 1e-12), floor6(0.5 - 1e-12), ceil6(0.5 + 1e-9), floor6(0.5 - 1e-9)]).toEqual([0.500001, 0.499999, 0.500001, 0.499999]);
   });
 
   it("checkBudget: room left rounds down, for the daily cap and for the job budget", () => {
