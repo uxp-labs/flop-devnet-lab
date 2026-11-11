@@ -4,13 +4,17 @@
  *   1  receipt --refresh never settles from a receipt body that had to be redacted
  *   2  a later read never lowers a booked settlement, and a settlement is never charged below the
  *      cost the completion itself reported
+ *   3  the cap is checked against a total rounded up and room rounded down, never to nearest
  * Findings 5, 6 and 7 are the viewer's. Finding 12 is a documented residual. Finding 13 is a product
  * decision. Stub providers only; no network (test/setup.ts disables fetch).
  */
-import { existsSync } from "node:fs";
+import { appendFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
+import { jobSpent, spentToday, utcDay } from "../src/ledger.js";
+import { checkBudget } from "../src/policy.js";
 import type { CompleteReq, CompleteRes, Provider } from "../src/providers.js";
+import { ceil6, floor6 } from "../src/rounding.js";
 import { CHARGE_RAISED, DISAGREE, nextBooking, refreshBooking, settledSpend } from "../src/settlement.js";
 import { cli, readLines, readySeat, tmpHome } from "./helpers.js";
 
@@ -56,6 +60,13 @@ async function ready(cap = "1") {
   const h = tmpHome();
   await readySeat(h, SEAT, cap);
   return h;
+}
+/** Append a settled ledger row with this cap charge, as an earlier call today would have left it. */
+function seedCharge(home: string, id: string, capCharge: number, payer: "holder" | "requester" = "holder", job = "seed") {
+  const row = { ts: new Date().toISOString(), day: utcDay(), request_id: id, seat: SEAT, did: "did:key:zseed", job, provider: "mock", network: "devnet", payer, model: "m", max_tokens: 8,
+    prompt_sha256: "ab".repeat(32), quote_raw: 0.066, quote_padded: 0.186, per_call_cap: 1, daily_cap: 1, job_budget: payer === "requester" ? 1 : null, spent_before: 0, state: "settled", reason: null,
+    spend: capCharge, cost_reported: null, cap_charge: capCharge, http: 200, mock: true };
+  appendFileSync(join(home, "ledger.jsonl"), JSON.stringify(row) + "\n");
 }
 
 describe("finding 1: receipt --refresh never settles from a receipt body that had to be redacted", () => {
@@ -190,5 +201,69 @@ describe("finding 2: a later read never lowers a booked settlement, and a report
       expect(again.err).not.toContain(DISAGREE);
       expect(ledger(h).length - before).toBe(0);
     });
+  });
+});
+
+describe("finding 3: money already spent rounds up and room left rounds down, so the exact sum never passes the cap", () => {
+  const TINY = { estimated_cost_flop: 1e-8, estimated_input_tokens: 3, estimated_output_tokens: 8 }; // pads to 0.000001
+  const settles = (spend: number) => (id: string) => receiptFor(id, { settled_spend: spend, state: "settled" });
+
+  it("holder: two calls settle 0.4999996 each under cap 1, and a third call quoted 0.000001 is refused (exit 3)", async () => {
+    const h = await ready("1");
+    for (const job of ["a", "b"]) expect((await cli(h, runArgs(job), { provider: new P({ read: settles(0.4999996) }) })).code).toBe(0);
+    const third = new P({ estimate: TINY });
+    const r = await cli(h, runArgs("c"), { provider: third });
+    expect({ code: r.code, calls: third.calls }).toEqual({ code: 3, calls: 0 });
+    expect(r.err).toMatch(/daily cap reached \(1\/1 FLOP today, UTC\)/);
+    expect((await cli(h, ["status", "--seat", SEAT, "--json"])).json().today_utc.mock).toBe(1);
+  });
+
+  it("requester: the same two settlements use up a job budget of 1, and the third call is refused (exit 3)", async () => {
+    const h = await ready("5");
+    await cli(h, ["config", "set", "payer", "requester"]);
+    const budget = ["--job-budget", "1"];
+    for (let i = 0; i < 2; i++) expect((await cli(h, runArgs("j1", budget), { provider: new P({ read: settles(0.4999996) }) })).code).toBe(0);
+    const third = new P({ estimate: TINY });
+    const r = await cli(h, runArgs("j1", budget), { provider: third });
+    expect({ code: r.code, calls: third.calls }).toEqual({ code: 3, calls: 0 });
+    expect(r.err).toMatch(/requester budget/);
+  });
+
+  it("the ledger total rounds up to 6 decimals, for the daily total and the job total", () => {
+    const h = tmpHome();
+    seedCharge(h, "s1", 0.4999996);
+    seedCharge(h, "s2", 0.4999996);
+    expect(spentToday(h, SEAT, "mock")).toBe(1);
+    seedCharge(h, "q1", 0.0000004, "requester", "jq");
+    expect(jobSpent(h, "jq", "mock")).toBe(0.000001);
+  });
+
+  it("control: float noise does not move a total or the room off a 6 decimal boundary", () => {
+    const h = tmpHome();
+    seedCharge(h, "s1", 0.1);
+    seedCharge(h, "s2", 0.2); // 0.1 + 0.2 is 0.30000000000000004
+    expect(spentToday(h, SEAT, "mock")).toBe(0.3);
+    // 1 - 0.9 is 0.09999999999999998: still 0.1 of room, so a 0.1 quote fits and a 0.100001 quote does not.
+    const cap = { daily: 1, perCall: 1 };
+    expect(checkBudget({ padded: 0.1, cap, payer: "holder", spentBefore: 0.9 })).toBeNull();
+    expect(checkBudget({ padded: 0.100001, cap, payer: "holder", spentBefore: 0.9 })).toMatchObject({ code: 3, reason: "padded quote 0.100001 FLOP is over the remaining daily cap 0.1" });
+  });
+
+  it("ceil6 and floor6 round away from and toward zero room, and both keep a value that is on a boundary", () => {
+    expect([ceil6(0.9999992), floor6(0.0000008), ceil6(0.0000001), floor6(0.9999999)]).toEqual([1, 0, 0.000001, 0.999999]);
+    expect([ceil6(0.186), floor6(0.186), ceil6(0), floor6(0), ceil6(1), floor6(1)]).toEqual([0.186, 0.186, 0, 0, 1, 1]);
+    expect([ceil6(0.1 + 0.2), floor6(0.1 + 0.2), ceil6(1 - 0.9), floor6(1 - 0.9)]).toEqual([0.3, 0.3, 0.1, 0.1]);
+    // A value 1e-12 from a boundary stays on it. One 1e-9 away does not.
+    expect([ceil6(0.5 + 1e-12), floor6(0.5 - 1e-12), ceil6(0.5 + 1e-9), floor6(0.5 - 1e-9)]).toEqual([0.5, 0.5, 0.500001, 0.499999]);
+  });
+
+  it("checkBudget: room left rounds down, for the daily cap and for the job budget", () => {
+    const cap = { daily: 1, perCall: 1 };
+    // 1 - 0.9999992 is 0.0000008 of room: less than the smallest quote, so nothing fits.
+    expect(checkBudget({ padded: 0.000001, cap, payer: "holder", spentBefore: 0.9999992 })).toMatchObject({ code: 3, reason: expect.stringMatching(/daily cap reached/) });
+    expect(checkBudget({ padded: 0.000001, cap: { daily: 5, perCall: 5 }, payer: "requester", spentBefore: 0.9999992, jobBudget: 1 })).toMatchObject({ code: 3, reason: expect.stringMatching(/requester budget/) });
+    // 1 - 0.4999996 is 0.5000004: the room is 0.5, not 0.500001.
+    expect(checkBudget({ padded: 0.500001, cap, payer: "holder", spentBefore: 0.4999996 })).toMatchObject({ code: 3, reason: "padded quote 0.500001 FLOP is over the remaining daily cap 0.5" });
+    expect(checkBudget({ padded: 0.5, cap, payer: "holder", spentBefore: 0.4999996 })).toBeNull();
   });
 });

@@ -72,7 +72,7 @@ Known gap: if the estimate step fails while another process holds the ledger loc
 Spend-guard rules, ported from `spend-guard/`:
 - The quote is padded by 20 tokens for the Qwen chat template. On a paid flop run, the chain-id and genesis checks come before that quote. If the estimate fails, nothing is sent.
 - If the pre-mint chain-id or genesis recheck fails, the latest ledger line is `refused_local` with cap charge 0. Status does not list that attempt as pending. The earlier `sent` line is the crash marker written before the call; the latest line is the one the cap uses. A crash between those two lines can leave `sent` as the latest line.
-- A call is refused locally if it's over the per-call cap or what's left of the daily cap.
+- A call is refused locally if it's over the per-call cap or what's left of the daily cap. The total already charged is rounded up to 6 decimals and the room left is rounded down, so rounding never admits a call. `status` and `cap show` print that rounded-up total.
 - A timeout is never retried. Its spend is recorded as `null` with its `request_id`. For the cap, unknown spend counts as the padded quote.
 - Receipts are labeled `gateway observed` and `chain_final=false`, because nothing verifies chain settlement yet. A `null` settled spend shows blank, never 0. A 401 `api_key_expired` gets its own `key_expired` flag.
 - A receipt read settles an attempt only when it is an HTTP 200 answer for this request id and its stored copy needed no redaction by the secret scan. `run` and `receipt --refresh` share that rule (`src/settlement.ts`). Any other read keeps the reservation.

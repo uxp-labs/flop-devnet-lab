@@ -6,6 +6,7 @@
  */
 import { CliError, EXIT } from "./errors.js";
 import type { Payer, SeatCap } from "./config.js";
+import { ceil6, floor6 } from "./rounding.js";
 import { scanForSecrets } from "./secrets.js";
 
 export const TEMPLATE_PAD = 20; // measured: Qwen chat wrap 23 tokens vs 3 raw for "Be brief.\nHi"
@@ -16,14 +17,6 @@ export const posFinite = (v: unknown): v is number => typeof v === "number" && N
 function finiteTokenCount(value: unknown): number | null {
   if (typeof value !== "number" || !Number.isFinite(value)) return null;
   return value;
-}
-
-/** Round up to 6 decimals. A value already on a 1e-6 boundary stays put. */
-function ceil6(n: number): number {
-  const scaled = n * 1e6;
-  const nearest = Math.round(scaled);
-  if (Math.abs(scaled - nearest) <= 1e-6) return nearest / 1e6;
-  return Math.ceil(scaled) / 1e6;
 }
 
 export function padQuote(est: { estimated_cost_flop?: number; estimated_input_tokens?: number; estimated_output_tokens?: number }): { raw: number; padded: number } | null {
@@ -92,21 +85,27 @@ export function validatePayer(payer: unknown, jobBudget: number | undefined): Pa
 
 export interface BudgetRefusal { reason: string; code: number }
 
+/** Room left under a limit after what is already charged. Rounded down to 6 decimals, so rounding never adds room. */
+export function roomLeft(limit: number, charged: number): number {
+  return floor6(limit - charged);
+}
+
 /**
  * The cap check made under the ledger lock. Holder: per-call cap, then the remaining daily cap.
  * Requester: per-call cap, then the remaining job budget. Null means the padded quote fits.
+ * `spentBefore` is the ledger total, already rounded up (ledger.ts).
  */
 export function checkBudget(a: { padded: number; cap: SeatCap; payer: Payer; spentBefore: number; jobBudget?: number }): BudgetRefusal | null {
   const { padded, cap, payer, spentBefore } = a;
   if (padded > cap.perCall) return { reason: `padded quote ${padded} FLOP is over the per-call cap ${cap.perCall}`, code: EXIT.REFUSED_CAP };
   if (payer === "holder") {
-    const left = Math.round((cap.daily - spentBefore) * 1e6) / 1e6;
+    const left = roomLeft(cap.daily, spentBefore);
     if (left <= 0) return { reason: `daily cap reached (${spentBefore}/${cap.daily} FLOP today, UTC)`, code: EXIT.REFUSED_CAP };
     if (padded > left) return { reason: `padded quote ${padded} FLOP is over the remaining daily cap ${left}`, code: EXIT.REFUSED_CAP };
     return null;
   }
   // A non-finite budget left would skip the cap, so refuse it (and any payer other than requester).
-  const left = Math.round((a.jobBudget! - spentBefore) * 1e6) / 1e6;
+  const left = roomLeft(a.jobBudget!, spentBefore);
   if (payer !== "requester" || !Number.isFinite(left)) return { reason: `no usable requester budget for payer ${JSON.stringify(payer)}`, code: EXIT.REFUSED_CAP };
   if (padded > left) return { reason: `padded quote ${padded} FLOP is over this job's remaining requester budget ${left}`, code: EXIT.REFUSED_CAP };
   return null;
