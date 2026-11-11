@@ -78,5 +78,93 @@
     "replace": "createHash(\"sha256\").update(JSON.stringify(read.value)).digest(\"hex\")",
     "test": "test/requests.test.ts",
     "why": "the list's hash is of its bytes as read"
+  },
+  {
+    "id": "record-guard-skipped",
+    "file": "src/record-run.ts",
+    "find": "          guardRpc(c.method);\n",
+    "replace": "",
+    "test": "test/record-run.test.ts",
+    "why": "every method in the list passes the guard before anything is sent, so a list with a write sends nothing"
+  },
+  {
+    "id": "record-failed-call-stops-run",
+    "file": "src/record-run.ts",
+    "find": "            if (!(e instanceof TransportError)) throw e;\n            calls.failed++;",
+    "replace": "            throw e;",
+    "test": "test/record-run.test.ts",
+    "why": "a call that failed on the way is recorded as its error and the run goes on"
+  },
+  {
+    "id": "record-refusal-mid-run-read-as-failed",
+    "file": "src/record-run.ts",
+    "find": "            if (!(e instanceof TransportError)) throw e;\n",
+    "replace": "",
+    "test": "test/record-run.test.ts",
+    "why": "a request the transport refuses, or a tape that does not match, stops the run: it is not a failed read"
+  },
+  {
+    "id": "record-metadata-not-noticed",
+    "file": "src/record-run.ts",
+    "find": "            if (c.method === \"state_getMetadata\") metadata.push(metadataOf(seq, { result }));\n",
+    "replace": "",
+    "test": "test/record-run.test.ts",
+    "why": "the notice gives the byte length and sha256 of each metadata answer"
+  },
+  {
+    "id": "record-metadata-hash-of-hex",
+    "file": "src/record-run.ts",
+    "find": "  return { seq, bytes: bytes.length, sha256: createHash(\"sha256\").update(bytes).digest(\"hex\") };",
+    "replace": "  return { seq, bytes: bytes.length, sha256: createHash(\"sha256\").update(answer.result).digest(\"hex\") };",
+    "test": "test/record-run.test.ts",
+    "why": "the metadata sha256 is of the decoded bytes, to compare with a value measured by hand"
+  },
+  {
+    "id": "record-writes-into-full-folder",
+    "file": "src/record-run.ts",
+    "find": "  if (existsSync(o.out) && readdirSync(o.out).length > 0) {",
+    "replace": "  if (false) {",
+    "test": "test/record-run.test.ts",
+    "why": "a record run writes only into a new folder"
+  },
+  {
+    "id": "record-no-stated-limit",
+    "file": "src/record-run.ts",
+    "find": "new Map([[\"state_getMetadata\", MAX_STATED_ANSWER_BYTES]])",
+    "replace": "new Map<string, number>()",
+    "test": "test/record-run.test.ts",
+    "why": "a recording states 8 MiB for state_getMetadata"
+  },
+  {
+    "id": "record-refused-exits-0",
+    "file": "src/record-run.ts",
+    "find": "    code = EXIT.refused;\n",
+    "replace": "    code = EXIT.ok;\n",
+    "test": "test/record-run.test.ts",
+    "why": "a request the guard refuses gives exit 4"
+  },
+  {
+    "id": "record-bad-list-exits-0",
+    "file": "src/record-run.ts",
+    "find": "    code = EXIT.crashed;\n    reason = `the request list was refused",
+    "replace": "    code = EXIT.ok;\n    reason = `the request list was refused",
+    "test": "test/record-run.test.ts",
+    "why": "a list that is not in its form gives exit 1, and is never published"
+  },
+  {
+    "id": "record-list-hash-dropped",
+    "file": "src/record-run.ts",
+    "find": "      request_list_sha256: listSha,",
+    "replace": "      request_list_sha256: null,",
+    "test": "test/record-run.test.ts",
+    "why": "run.json names the sha256 of the request list as it was read"
+  },
+  {
+    "id": "record-bin-no-limits",
+    "file": "src/record-bin.ts",
+    "find": "realTransport(RECORD_ANSWER_LIMITS)",
+    "replace": "realTransport()",
+    "test": "test/record-run.test.ts",
+    "why": "the recorder's transport states the recording's answer limits"
   }
 ]

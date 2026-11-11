@@ -192,6 +192,44 @@ the same way, hold the anchor call and show each case of the anchor and the spec
 `npm run check` runs those with everything else, and `mutants/live.json`, `mutants/memory.json` and
 `mutants/anchor.json` hold the bugs they must catch.
 
+## Recordings
+
+```sh
+npm run build
+node dist/record-bin.js --requests <the request list> --out <a new folder> [--source-sha <revision>]
+```
+
+A recording is exactly what one RPC endpoint answered to a reviewed list of read calls, for
+building and testing decoders against real data. It is evidence, never proof of chain state
+(RULES.md section 8).
+
+- The request list is `recordings/requests.json`: a `flop-observatory/requests@0` in the written
+  form (sorted keys, two space indent, a newline at the end), with no other key and no key twice,
+  and 1 to 256 calls, each `method`, `params` (a list) and `why` (one plain line). It is reviewed
+  like code. The first list asks the finalized head and the genesis hash, then for each of twelve
+  blocks with compute channel events its hash by height, its header, `System.Events` and
+  `System.LastRuntimeUpgrade` at its hash, then the runtime version and the metadata at the last.
+- A list that is not in that form, or that holds a method the read only guard refuses, is refused
+  before anything is sent: nothing is read from the network, and the run says why.
+- Each call is made once, in order, on one socket, through the same transport and guard as the
+  live run (`src/net-root.ts`, `src/net.ts`), and recorded on a tape by the same code. A call that
+  failed on the way (an RPC error, the 15 s limit, an answer over its limit, a socket that failed)
+  is recorded as its error, and the run goes on.
+- Each answer has the 1 MiB limit, but `state_getMetadata`'s, which has 8 MiB (about 964 KB as hex
+  today). The live run states no larger limit, so its limit is unchanged.
+- It writes `tape.jsonl`, `run.json` (start, end, the revision if given, the endpoint, the sha256 of
+  the request list as read, how many calls were asked, answered and failed, how it ended) and
+  `SHA256SUMS` into a new folder, prints one notice line with the counts and the byte length and
+  sha256 of each metadata answer's decoded bytes, and exits 0 when every call was made and
+  recorded (answered or failed), 4 when the guard refused a request, 1 when the list could not be
+  read or was refused or the run broke, and 2 for wrong flags or a folder that is not empty.
+
+`judgeRecording` in `src/recording.ts` reads a recording: exactly its three files, each matching
+`SHA256SUMS`, `run.json` a `flop-observatory/record-run@0` in the written form that exited 0 and
+names the list's hash, and a tape that holds exactly the calls of that list, in order, each
+answered or failed. It gives the calls with their answers, and the tape replays through
+`TapeTransport`.
+
 ## Published readings
 
 On main, the publish job in `.github/workflows/observatory-live.yml` puts each live reading on the
