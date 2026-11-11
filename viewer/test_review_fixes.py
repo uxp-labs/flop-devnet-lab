@@ -53,7 +53,6 @@ class ReviewFixes(unittest.TestCase):
         receipt = RECEIPT.replace("9007199254740992", "0.05")
         self.assertEqual((viewer_verdict(row, receipt), imd_flop_verdict(row, receipt)), ("disagree", "disagree"))
 
-    @unittest.expectedFailure
     def test_r10_integer_amounts_above_2_53_get_the_same_verdict_in_both_parts(self):
         self.assertEqual(viewer_verdict(ROW, RECEIPT), imd_flop_verdict(ROW, RECEIPT))
 

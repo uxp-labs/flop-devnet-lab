@@ -148,6 +148,8 @@ class ContractVectors(unittest.TestCase):
         self.assertEqual(NS["EXACT_BOUND"], 2 ** 128)
         self.assertEqual(str(NS["EXACT_BOUND"]), c["EXACT_AMOUNT_BOUND"]["value"])
         self.assertEqual(NS["FLOP_DECIMALS"], c["FLOP_DECIMALS"]["value"])
+        self.assertEqual(NS["AMOUNT_MAX"], 2 ** 53 - 1)
+        self.assertEqual(NS["AMOUNT_MAX"], c["AMOUNT_MAX"]["value"])
         # unresolved() holds its own literal. It must name exactly the states rules.json lists.
         for state in c["UNRESOLVED"]["value"]:
             self.assertTrue(NS["unresolved"]({"state": state}), state)

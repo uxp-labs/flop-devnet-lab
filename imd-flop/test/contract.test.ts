@@ -8,7 +8,7 @@ import { existsSync, readFileSync, writeFileSync, appendFileSync } from "node:fs
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { FlopHTTPError } from "@flop-labs/client";
-import { EXACT_BOUND, exactAmount, knownAmount } from "../src/amount.js";
+import { AMOUNT_MAX, EXACT_BOUND, exactAmount, knownAmount } from "../src/amount.js";
 import { EXIT } from "../src/errors.js";
 import { PreSendError } from "../src/gateway.js";
 import { LEDGER_PROVIDERS, usableCapCharge, utcDay } from "../src/ledger.js";
@@ -202,6 +202,7 @@ describe("contract files", () => {
     const c = rules.constants;
     expect(TEMPLATE_PAD).toBe(c.TEMPLATE_PAD.value);
     expect(MIN_CAP).toBe(c.MIN_CAP.value);
+    expect(AMOUNT_MAX).toBe(c.AMOUNT_MAX.value);
     expect([...RECEIPT_STATES]).toEqual(c.RECEIPT_STATES.value);
     expect(RECEIPT_IDENTITY_STATUS).toBe(c.IDENTITY.value);
     expect(STAGE_GATEWAY).toBe(c.STAGE_GATEWAY.value);

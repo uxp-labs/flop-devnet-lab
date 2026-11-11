@@ -43,11 +43,14 @@ def floor6(n):
     nearest = round(scaled)
     return (nearest if abs(scaled - nearest) <= NOISE else math.floor(scaled)) / SCALE
 def esc(v): return html.escape("" if v is None else str(v), quote=True)
+AMOUNT_MAX = _C["AMOUNT_MAX"]["value"]  # 2^53 - 1, the largest integer a double holds exactly
 def amount(v):
-    """A file value used as an amount: a finite int/float that is not negative (and not a bool), else None
-    (blank, never 0). A negative number is not an amount, as in imd-flop and spend-guard: it is unknown, so
-    nothing shows it or subtracts it."""
-    if isinstance(v, bool) or not isinstance(v, (int, float)) or v != v or v in (float("inf"), float("-inf")) or v < 0: return None
+    """A file value used as an amount: a finite int/float that is not negative, not above AMOUNT_MAX and not a
+    bool, else None (blank, never 0). The twin of imd-flop's amount.ts knownAmount. A negative number is not an
+    amount, as in imd-flop and spend-guard: it is unknown, so nothing shows it or subtracts it. Above AMOUNT_MAX
+    Python keeps a JSON integer exact while JavaScript rounds it, so the two parts would read the same text as
+    different amounts: it is unknown in both (review fixes 2, R10)."""
+    if isinstance(v, bool) or not isinstance(v, (int, float)) or v != v or v in (float("inf"), float("-inf")) or v < 0 or v > AMOUNT_MAX: return None
     return v
 EXACT_BOUND = int(_C["EXACT_AMOUNT_BOUND"]["value"])  # 2^128: per FLOP's own sources (read 2026-11-11) the chain holds money in a u128
 EXACT_DIGITS = len(str(EXACT_BOUND - 1))  # 39

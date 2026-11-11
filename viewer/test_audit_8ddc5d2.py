@@ -438,9 +438,12 @@ class Finding7NegativeAmountsAreUnknown(unittest.TestCase):
         for v in (-0.3, -1, -0.000001, -1e308):
             with self.subTest(value=v):
                 self.assertIsNone(amount(v))
-        for v in (0, 0.05, 7, 1e308):  # control: zero and positive amounts are still amounts
+        # Control: zero and positive amounts are still amounts. Moved (review fixes 2, R10): the largest one is
+        # now 2^53 - 1 (AMOUNT_MAX); 1e308 is above it and unknown.
+        for v in (0, 0.05, 7, 2 ** 53 - 1):
             with self.subTest(value=v):
                 self.assertEqual(amount(v), v)
+        self.assertIsNone(amount(1e308))
 
     def test_F7_negative_cap_charge_is_not_extra_headroom(self):
         """The audit's repro: cap_charge -0.3 under a 0.5 daily cap showed 'daily cap left 0.8', no flag."""

@@ -1899,6 +1899,54 @@
     }
    },
    "note": "review of the booking step: the did is the number 7 on both sides. A receipt is compared only when its identity matches by the viewer's rule (build-lane.py identity_ok): request_id, job, seat and did each a non-empty string on both sides, and equal. So neither part compares the amounts (the ledger books 0.07, the receipt reads 0.05). This replaces the vector reconcile-identity-null-job-on-both-sides, where imd-flop compared and the viewer did not."
+  },
+  {
+   "id": "reconcile-amounts-above-2-53-are-unknown",
+   "rule": "reconcile",
+   "input": {
+    "ledger": {
+     "ts": "2026-11-11T15:00:00Z",
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zA",
+     "provider": "mock",
+     "network": "devnet",
+     "payer": "holder",
+     "state": "settled",
+     "spend": 9007199254740993,
+     "cap_charge": 9007199254740993,
+     "quote_padded": 0.186,
+     "per_call_cap": 1,
+     "daily_cap": 5,
+     "spent_before": 0
+    },
+    "receipt": {
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zA",
+     "state": "settled",
+     "settled": 9007199254740992,
+     "stage": "gateway observed",
+     "chain_final": false,
+     "flag": null,
+     "http": 200,
+     "error": null
+    }
+   },
+   "expect": {
+    "imd-flop": {
+     "verdict": "settled_unknown"
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard is a dry run: it keeps no ledger row to compare a receipt with"
+    },
+    "viewer": {
+     "verdict": "settled_unknown"
+    }
+   },
+   "note": "Review fixes 2 (R10): the reviewer's pair. Python reads the ledger spend 2^53 + 1 exactly and JavaScript reads it as 2^53, so before R10 the viewer said disagree and imd-flop said agree on the same text. Both amounts are above AMOUNT_MAX and unknown in both parts: both say settled, neither knows the amount."
   }
  ]
 }

@@ -25,6 +25,12 @@
       "spend-guard": "guard.py MIN_CAP (read from this file)",
       "viewer": null
     },
+    "AMOUNT_MAX": {
+      "value": 9007199254740991,
+      "imd-flop": "src/amount.ts AMOUNT_MAX (Number.MAX_SAFE_INTEGER; test/contract.test.ts checks it against this value). knownAmount refuses an amount above it: unknown, never a guess (review fixes 2, R10)",
+      "spend-guard": null,
+      "viewer": "build-lane.py AMOUNT_MAX (read from this file): amount() refuses an amount above it"
+    },
     "FLOP_DECIMALS": {
       "value": 18,
       "imd-flop": null,
