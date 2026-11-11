@@ -2,9 +2,11 @@
  * Receipt rules, ported from spend-guard/guard.py classify_receipt and receipts.py, matching the viewer:
  *  - stage is "gateway observed" until chain settlement is checked (never "gateway settled");
  *  - chain_final is false unless verified (nothing verifies it yet: InferenceReceipt not observed);
- *  - an amount (reserved_spend, settled_spend) counts only when it is finite and >= 0; null, negative, and non-finite stay null and show blank, never 0;
+ *  - an amount (reserved_spend, settled_spend) counts only when it is finite and >= 0 (amount.ts); null, negative, and non-finite stay null and show blank, never 0;
  *  - a 401 api_key_expired gets its own key_expired flag (and keeps the last known receipt).
  */
+import { knownAmount } from "./amount.js";
+
 export interface GatewayReceipt {
   request_id: string;
   correlation_id?: string;
@@ -39,11 +41,6 @@ export interface Classified {
   error: string | null;
   observed_at: string;
   mock: boolean;
-}
-
-/** The one amount rule: a known amount is a finite number >= 0. Negative, non-finite, and non-numeric values are unknown, not zero. */
-export function knownAmount(value: unknown): number | null {
-  return typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : null;
 }
 
 /** Receipt states the gateway documents. Anything else (including a key-shaped string) is unknown: null. */

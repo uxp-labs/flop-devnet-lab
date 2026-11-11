@@ -8,13 +8,14 @@ import { existsSync, readFileSync, writeFileSync, appendFileSync } from "node:fs
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { FlopHTTPError } from "@flop-labs/client";
+import { knownAmount } from "../src/amount.js";
 import { EXIT } from "../src/errors.js";
 import { PreSendError } from "../src/gateway.js";
 import { usableCapCharge } from "../src/ledger.js";
 import { matchReceipt, RECEIPT_IDENTITY_STATUS } from "../src/match.js";
 import { ledgerFile, receiptsDir } from "../src/paths.js";
 import type { CompleteReq, CompleteRes, Provider } from "../src/providers.js";
-import { classifyReceipt, knownAmount, RECEIPT_STATES, STAGE_GATEWAY, type GatewayReceipt } from "../src/receipts.js";
+import { classifyReceipt, RECEIPT_STATES, STAGE_GATEWAY, type GatewayReceipt } from "../src/receipts.js";
 import { padQuote, TEMPLATE_PAD } from "../src/run.js";
 import { DISAGREE, SETTLES } from "../src/settlement.js";
 import { cli, readLines, readySeat, tmpHome } from "./helpers.js";

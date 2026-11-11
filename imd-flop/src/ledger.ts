@@ -7,6 +7,7 @@
 import { closeSync, linkSync, openSync, readFileSync, renameSync, statSync, unlinkSync, writeSync } from "node:fs";
 import { randomBytes } from "node:crypto";
 import { hostname } from "node:os";
+import { knownAmount } from "./amount.js";
 import { ledgerFile } from "./paths.js";
 import { ceil6 } from "./rounding.js";
 import { appendJsonlSafe, readJsonl } from "./store.js";
@@ -63,9 +64,9 @@ export function latestAttempts(h: string): LedgerEntry[] {
 
 export class UnusableLedgerCharge extends Error {}
 
-/** A cap charge counts only when it is a finite number and not negative. Null is not 0. */
+/** A cap charge counts only when it is a known amount (amount.ts): a finite number and not negative. Null is not 0. */
 export function usableCapCharge(value: unknown): boolean {
-  return typeof value === "number" && Number.isFinite(value) && value >= 0;
+  return knownAmount(value) !== null;
 }
 
 /** The total of these rows' cap charges. Money already spent rounds up to 6 decimals, so the total never understates it. */

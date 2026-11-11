@@ -3,7 +3,7 @@
  * booking. Pure: no file, network or ledger access. `run` (after its call) and `receipt --refresh` both
  * use it. Behavior is pinned by contract/vectors/settlement-run.json and settlement-refresh.json.
  */
-import { knownAmount } from "./receipts.js";
+import { knownAmount } from "./amount.js";
 import { usableCapCharge } from "./ledger.js";
 
 /** Receipt states that settle an attempt. */

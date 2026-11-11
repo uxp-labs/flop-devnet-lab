@@ -22,6 +22,7 @@ import { appendFileSync, existsSync, readFileSync, writeFileSync } from "node:fs
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { FlopHTTPError } from "@flop-labs/client";
+import { knownAmount } from "../src/amount.js";
 import { EXIT } from "../src/errors.js";
 import { mintChildKey, PaidGateError, PreSendError } from "../src/gateway.js";
 import { jobSpent, spentToday, utcDay } from "../src/ledger.js";
@@ -29,7 +30,7 @@ import { matchable } from "../src/match.js";
 import { network } from "../src/networks.js";
 import { checkBudget, noRoom, padQuote } from "../src/policy.js";
 import type { CompleteReq, CompleteRes, Provider } from "../src/providers.js";
-import { classifyReceipt, knownAmount, receiptLine, type GatewayReceipt } from "../src/receipts.js";
+import { classifyReceipt, receiptLine, type GatewayReceipt } from "../src/receipts.js";
 import { ceil6, floor6 } from "../src/rounding.js";
 import { CHARGE_RAISED, DISAGREE, nextBooking, refreshBooking, settledSpend } from "../src/settlement.js";
 import { cli, readLines, readySeat, tmpHome } from "./helpers.js";

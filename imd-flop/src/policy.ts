@@ -4,6 +4,7 @@
  * order of checks and their exit codes. Behavior is pinned by contract/vectors (quote, cap-compare,
  * cap-payer, amount-text, max-tokens) and the older run/cap tests.
  */
+import { knownAmount } from "./amount.js";
 import { CliError, EXIT } from "./errors.js";
 import type { Payer, SeatCap } from "./config.js";
 import { ceil6, floor6 } from "./rounding.js";
@@ -14,10 +15,9 @@ export const TEMPLATE_PAD = 20; // measured: Qwen chat wrap 23 tokens vs 3 raw f
 /** A finite, positive number. */
 export const posFinite = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v) && v > 0;
 
-/** A usable token count is a finite number that is not negative. A negative count would shrink the divisor and inflate the pad. */
+/** A usable token count is a known amount (amount.ts): a finite number that is not negative. A negative count would shrink the divisor and inflate the pad. */
 function usableTokenCount(value: unknown): number | null {
-  if (typeof value !== "number" || !Number.isFinite(value) || value < 0) return null;
-  return value;
+  return knownAmount(value);
 }
 
 export function padQuote(est: { estimated_cost_flop?: number; estimated_input_tokens?: number; estimated_output_tokens?: number }): { raw: number; padded: number } | null {
