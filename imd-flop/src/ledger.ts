@@ -88,7 +88,19 @@ function ledgerLines(h: string): Line[] {
     // and read again before naming any line. Under the lock every append is whole, so a line still
     // unreadable there is damaged. A lock that cannot be taken throws LedgerLockError: the ledger is busy.
     if (!(e instanceof UnreadableLedgerLine) || (lockDepth.get(ledgerFile(h)) ?? 0) > 0) throw e;
-    return withLedgerLock(h, () => parsedLines(h));
+    try {
+      return withLedgerLock(h, () => parsedLines(h));
+    } catch (again) {
+      if (!(again instanceof LedgerUnlockable)) throw again;
+      // The lock cannot be created here (a home this reader may read but not write): read without it, and say
+      // so beside a line that does not parse.
+      try {
+        return parsedLines(h);
+      } catch (still) {
+        if (still instanceof UnreadableLedgerLine) throw new UnreadableLedgerLine(`${still.message} ${NOT_LOCKED}`);
+        throw still;
+      }
+    }
   }
 }
 
@@ -152,6 +164,8 @@ export function latestAttempts(h: string): LedgerEntry[] {
 export class UnusableLedgerRow extends Error {}
 /** The row's cap_charge is not a known amount. */
 export class UnusableLedgerCharge extends UnusableLedgerRow {}
+/** Added to a damaged line's message when the ledger could not be locked to read it again (LedgerUnlockable). */
+export const NOT_LOCKED = "The ledger could not be locked, so this line may be one still being written.";
 /** The line is not valid JSON, or not a JSON object, even when read under the ledger lock (ledgerLines). */
 export class UnreadableLedgerLine extends UnusableLedgerRow {}
 
@@ -279,13 +293,34 @@ function provablyDead(o: LockOwner | null): boolean {
  * a live owner, it is linked back, and if that can't be done the caller refuses rather than reserve.
  */
 function reclaimIfDead(path: string): boolean {
-  if (!provablyDead(readOwner(path))) return false;
+  if (!reclaimable(readOwner(path))) return false;
   const aside = `${path}.stale.${process.pid}.${randomBytes(4).toString("hex")}`;
   try { renameSync(path, aside); } catch { return false; } // someone else moved or released it
-  if (provablyDead(readOwner(aside))) { try { unlinkSync(aside); } catch { /* gone */ } return true; }
-  try { linkSync(aside, path); unlinkSync(aside); } catch { throw new LedgerLockError("ledger lock contested"); }
+  if (reclaimable(readOwner(aside))) { try { unlinkSync(aside); } catch { /* gone */ } return true; }
+  try { linkSync(aside, path); unlinkSync(aside); } catch { throw new LedgerLockError(`ledger lock contested: ${path}`); }
   return false;
 }
+
+/**
+ * An old lock (past the reclaim window) may be reclaimed when its owner is provably dead, or when it holds no
+ * readable owner at all: a holder that died between creating the file and writing its owner into it
+ * (review fixes 4, item 5). The window is far longer than that open and write.
+ */
+function reclaimable(o: LockOwner | null): boolean {
+  return o === null || provablyDead(o);
+}
+
+/** The lock file and how old it is, for every lock message, so a holder can see what is in the way. */
+function lockAge(path: string): string {
+  try { return `${path} (${Math.floor((Date.now() - statSync(path).mtimeMs) / 1000)} s old)`; } catch { return `${path} (gone)`; }
+}
+
+/**
+ * The ledger lock cannot be created at all: no permission to create the file, or a read only file system.
+ * Not a busy ledger and not a crash. A reader reads without the lock (ledgerLines); a writer refuses.
+ */
+export class LedgerUnlockable extends Error {}
+const UNLOCKABLE = new Set(["EACCES", "EPERM", "EROFS"]);
 
 function takeLock(path: string): { fd: number; token: string } {
   const start = Date.now();
@@ -296,11 +331,13 @@ function takeLock(path: string): { fd: number; token: string } {
       writeSync(fd, JSON.stringify(owner));
       return { fd, token: owner.token };
     } catch (e) {
-      if ((e as NodeJS.ErrnoException).code !== "EEXIST") throw e;
+      const code = (e as NodeJS.ErrnoException).code;
+      if (code !== undefined && UNLOCKABLE.has(code)) throw new LedgerUnlockable(`the ledger could not be locked: ${path} cannot be created (${code})`);
+      if (code !== "EEXIST") throw e;
       let old = false;
       try { old = Date.now() - statSync(path).mtimeMs > 30_000; } catch { continue; } // the holder removed it
       if (old && reclaimIfDead(path)) continue;
-      if (Date.now() - start > 5_000) throw new LedgerLockError("ledger lock timeout");
+      if (Date.now() - start > 5_000) throw new LedgerLockError(`ledger lock timeout: ${lockAge(path)} is held`);
       Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 25);
     }
   }

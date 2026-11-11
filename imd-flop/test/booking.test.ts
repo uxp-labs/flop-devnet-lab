@@ -640,7 +640,8 @@ describe("pin: after the paid call, when the booking step cannot run", () => {
     const p = new P({ read });
     const run = await cli(h, runArgs(), { provider: p });
     rmSync(lock);
-    expect({ code: run.code, out: run.out, err: run.err, calls: p.calls }).toEqual({ code: 1, out: "", err: "imd-flop: ledger lock timeout", calls: 1 });
+    // Moved (review fixes 4, item 5): the timeout names the lock file and its age.
+    expect({ code: run.code, out: run.out, err: run.err, calls: p.calls }).toEqual({ code: 1, out: "", err: expect.stringMatching(/^imd-flop: ledger lock timeout: \S+ledger\.jsonl\.lock \(\d+ s old\) is held$/), calls: 1 });
     const rows = ledger(h);
     expect(rows.map(booked)).toEqual([{ state: "sent", spend: null, cap_charge: 0.186 }]);
     const rid = rows[0].request_id!;
@@ -685,7 +686,7 @@ describe("fails on a3d71d6: a reported cost survives a booking step that could n
     // cost here is above it, and the booking that raises the charge past the hold says so in its reason.
     const run = await cli(h, runArgs(), { provider: new P({ usage: usage(0.3), read }) });
     rmSync(lock);
-    expect({ code: run.code, err: run.err }).toEqual({ code: 1, err: "imd-flop: ledger lock timeout" });
+    expect({ code: run.code, err: run.err }).toEqual({ code: 1, err: expect.stringMatching(/^imd-flop: ledger lock timeout: \S+\.lock \(\d+ s old\) is held$/) });
     expect(ledger(h).map(booked)).toEqual([{ state: "sent", spend: null, cap_charge: 0.186 }]);
     const rid = ledger(h)[0].request_id!;
     const refreshed = await cli(h, refreshArgs(rid), { provider: new P({ read: settledAt(0.05) }) });
@@ -722,7 +723,8 @@ describe("fails on 9adfd17: a refresh that cannot take the ledger lock says the 
   // since the booking step takes the lock before it decides, the old line was also printed for a read that
   // had nothing to book. DISAGREE on stderr stays for a read that was refused, and for an append that failed
   // (test/audit-v3.test.ts).
-  const BUSY = `${LEDGER_BUSY} (ledger lock timeout)`;
+  // Moved (review fixes 4, item 5): the timeout now names the lock file and its age.
+  const BUSY = expect.stringMatching(new RegExp(`^${LEDGER_BUSY.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")} \\(ledger lock timeout: \\S+\\.lock \\(\\d+ s old\\) is held\\)$`));
 
   it("a read with nothing to book: the busy line, no status, exit 0; then a read that settles: the busy line, and the files do disagree", async () => {
     const h = await ready();
@@ -738,7 +740,7 @@ describe("fails on 9adfd17: a refresh that cannot take the ledger lock says the 
     expect({ code: settles.code, err: settles.err, status: settles.json().status, settled: settles.json().settled, ledger_state: settles.json().ledger_state })
       .toEqual({ code: 0, err: BUSY, status: DISAGREE, settled: 0.05, ledger_state: "estimated" });
     expect(readFileSync(ledgerPath(h), "utf8")).toBe(before);
-    expect(BUSY).not.toContain("disagree");
+    expect(LEDGER_BUSY).not.toContain("disagree");
     // With the lock free the same refresh books the read and says nothing.
     const again = await cli(h, refreshArgs(rid), { provider: new P({ read: settledAt(0.05) }) });
     expect({ code: again.code, err: again.err, status: again.json().status, last: booked(ledger(h).at(-1)!) }).toEqual({ code: 0, err: "", status: undefined, last: { state: "settled", spend: 0.05, cap_charge: 0.186 } });

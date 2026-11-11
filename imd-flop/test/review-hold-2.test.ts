@@ -163,14 +163,17 @@ describe("review hold 2, items 1 to 3: PAST_ADMITTED", () => {
   });
 });
 
-describe("review hold 2: rule 2, ledgerLines and the lock", () => {
+describe("review hold 2, items 4 and 5: ledgerLines and the lock", () => {
   // Before the third fix pass a reader that met a damaged line named it without touching the lock, so a home
   // the reader may read but not write (an auditor, a second user, a read only mount) got the line named. Now
   // ledgerLines takes the lock first, which creates ledger.jsonl.lock: EACCES is neither a damaged line nor
   // LedgerLockError, so status prints the raw filesystem error and names no line.
   // Right: a lock that cannot be created is the ledger being busy or unreadable, and the reader still names a
   // line that does not parse (or at least says the ledger is busy, as rule 2 says), never a raw EACCES.
-  it("DEFECT 4: status on a home it can read but not write, with a damaged line, should name the line (today it exits 1 with a raw EACCES and names no line)", async () => {
+  // Decided (review fixes 4, item 4): a lock that cannot be created for lack of permission or on a read only
+  // file system is not a busy ledger and not a crash: the reader reads without the lock, and a line that does
+  // not parse is named with one added sentence saying the ledger could not be locked. Writers are unchanged.
+  it("4: status on a home it can read but not write names a damaged line, saying the ledger could not be locked; a good ledger reads as usual", async () => {
     const h = await ready("1");
     expect((await cli(h, runArgs("jA"), { provider: new P() })).code).toBe(0);
     appendFileSync(ledgerPath(h), "not json\n");
@@ -189,9 +192,20 @@ describe("review hold 2: rule 2, ledgerLines and the lock", () => {
       expect(enforced, "run this suite with dac_override dropped (setpriv)").toBe(true);
       const ro = await cli(h, ["status", "--seat", SEAT, "--json"]);
       expect(ro.code).toBe(1);
-      expect(ro.err).toContain("EACCES");
-      expect(ro.err).not.toContain("cannot be read");
+      expect(ro.err).toContain("ledger line 3 cannot be read: not valid JSON");
+      expect(ro.err).toContain("The ledger could not be locked, so this line may be one still being written.");
+      expect(ro.err).not.toContain("EACCES");
       expect(ro.err).not.toContain("ledger lock timeout");
+      // The same home with the damaged line gone: status reads it without the lock and exits 0.
+      chmodSync(h, 0o755);
+      writeFileSync(ledgerPath(h), readFileSync(ledgerPath(h), "utf8").replace("not json\n", ""));
+      chmodSync(h, 0o555);
+      const good = await cli(h, ["status", "--seat", SEAT, "--json"]);
+      expect(good.code, good.err).toBe(0);
+      // Writers are unchanged: a run that cannot lock refuses with exit 1, nothing sent, and says why.
+      const p = new P();
+      const run = await cli(h, runArgs("jB"), { provider: p });
+      expect({ code: run.code, sent: p.calls, why: run.err.includes("the ledger could not be locked") }, run.err).toEqual({ code: 1, sent: 0, why: true });
     } finally {
       chmodSync(h, 0o755);
     }
@@ -204,7 +218,9 @@ describe("review hold 2: rule 2, ledgerLines and the lock", () => {
   // unchanged), but rule 2 now sends every reader that meets a line in flight to this lock as well.
   // Right: an old lock with no readable owner is named in the refusal (path and age), or is reclaimed after
   // the open and write window has long passed.
-  it("DEFECT 5: an empty lock file left by a holder that crashed should not lock the seat out silently (today every run exits 10 with a message that does not name the lock)", async () => {
+  // Decided (review fixes 4, item 5): a lock with no readable owner is reclaimed once it is older than the
+  // reclaim window, by the same path as a lock whose owner is dead; every lock timeout names the lock and its age.
+  it("5: an old empty lock file left by a holder that crashed is reclaimed, and the run goes on", async () => {
     const h = await ready("1");
     const lock = `${ledgerPath(h)}.lock`;
     writeFileSync(lock, "");
@@ -212,9 +228,20 @@ describe("review hold 2: rule 2, ledgerLines and the lock", () => {
     utimesSync(lock, old, old);
     const p = new P();
     const r = await cli(h, runArgs("jA"), { provider: p });
+    expect({ code: r.code, sent: p.calls }, r.err).toEqual({ code: 0, sent: 1 });
+    expect(existsSync(lock)).toBe(false);
+  }, 30_000);
+
+  it("5: a young empty lock is waited for, and the timeout names the lock file and its age", async () => {
+    const h = await ready("1");
+    const lock = `${ledgerPath(h)}.lock`;
+    writeFileSync(lock, "");
+    const p = new P();
+    const r = await cli(h, runArgs("jA"), { provider: p });
     expect({ code: r.code, sent: p.calls }, r.err).toEqual({ code: 10, sent: 0 });
     expect(r.err).toContain("ledger lock timeout");
-    expect(r.err).not.toContain(".lock");
+    expect(r.err).toContain(lock);
+    expect(r.err).toMatch(/\d+ s old/);
     expect(existsSync(lock)).toBe(true);
   }, 30_000);
 });

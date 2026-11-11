@@ -101,9 +101,11 @@ describe("v6 ledger lock liveness", () => {
     expect(existsSync(lockPath(home))).toBe(false);
   }, 30_000);
 
-  it("does not steal an old lock it cannot attribute to a dead owner (unreadable or foreign host)", async () => {
+  it("does not steal an old lock whose owner is on another host", async () => {
+    // Moved (review fixes 4, item 5): this also held an empty and a "not json" lock. A lock with no readable
+    // owner is now reclaimed past the reclaim window, as a dead owner's is (the next test).
     build();
-    for (const body of ["", "not json", JSON.stringify({ pid: 1, host: "some-other-host", token: "x" })]) {
+    for (const body of [JSON.stringify({ pid: 1, host: "some-other-host", token: "x" })]) {
       const home = tmpHome();
       await readySeat(home, SEAT, "0.186");
       writeFileSync(lockPath(home), body);
@@ -115,6 +117,21 @@ describe("v6 ledger lock liveness", () => {
       expect(r.out).not.toContain("COMPLETE_CALLED");
       expect(sentRows(home)).toHaveLength(0);
       expect(readFileSync(lockPath(home), "utf8")).toBe(body);
+    }
+  }, 60_000);
+
+  it("reclaims an old lock with no readable owner (empty or not JSON), as a dead owner's", async () => {
+    build();
+    for (const body of ["", "not json"]) {
+      const home = tmpHome();
+      await readySeat(home, SEAT, "0.186");
+      writeFileSync(lockPath(home), body);
+      const old = (Date.now() - 31_000) / 1000;
+      utimesSync(lockPath(home), old, old);
+      const r = await runCli(home, "reclaim");
+      expect(r.code, r.err).toBe(0);
+      expect(sentRows(home)).toHaveLength(1);
+      expect(existsSync(lockPath(home))).toBe(false);
     }
   }, 60_000);
 });
