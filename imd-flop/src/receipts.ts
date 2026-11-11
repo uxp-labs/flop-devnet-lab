@@ -3,7 +3,10 @@
  *  - stage is "gateway observed" until chain settlement is checked (never "gateway settled");
  *  - chain_final is false unless verified (nothing verifies it yet: InferenceReceipt not observed);
  *  - an amount (reserved_spend, settled_spend) counts only when it is finite and >= 0 (amount.ts); null, negative, and non-finite stay null and show blank, never 0;
- *  - a 401 api_key_expired gets its own key_expired flag (and keeps the last known receipt).
+ *  - a 401 api_key_expired gets its own key_expired flag (and keeps the last known receipt);
+ *  - settled_raw keeps settled_spend_raw exactly as it arrived, unchecked, so the secret scan sees what came. The
+ *    exact amount is decided at booking (settlement.ts), not here;
+ *  - channel_id keeps the gateway's channel id when it is a usable id (knownChannelId), else null.
  */
 import { knownAmount } from "./amount.js";
 
@@ -19,6 +22,7 @@ export interface GatewayReceipt {
   settled_spend_raw?: string | null;
   /** A channel event id that may cover several requests. It is not a payment hash for one request. */
   terminal_event?: string | null;
+  /** The compute channel the request was served on. Proof on chain is per channel: a receipt is later tied to the channel's finalized events through this id. */
   channel_id?: string | null;
   created_at?: number;
   /** reserved and estimated are unresolved. settled and released are terminal ledger states. */
@@ -38,6 +42,7 @@ export interface Classified {
   reserved: number | null; // null = unknown, shown blank
   settled: number | null; // null = unknown, shown blank
   settled_raw: string | null;
+  channel_id: string | null;
   stage: string;
   chain_final: boolean;
   terminal_event: string | null;
@@ -51,6 +56,15 @@ export interface Classified {
 /** Receipt states the gateway documents. Anything else (including a key-shaped string) is unknown: null. */
 export const RECEIPT_STATES = new Set(["reserved", "estimated", "settled", "released"]);
 const knownState = (v: unknown): string | null => (typeof v === "string" && RECEIPT_STATES.has(v) ? v : null);
+
+/**
+ * The channel id as stored (money stage 1): the gateway's value when it is a non empty string of at most 128
+ * printable ASCII characters, no space (the same characters a request id may hold), else null. Nothing
+ * decides on it yet. A 64 hex value is public: channel_id is on the secret scan's public hex allowlist.
+ */
+export function knownChannelId(v: unknown): string | null {
+  return typeof v === "string" && /^[\x21-\x7e]{1,128}$/.test(v) ? v : null;
+}
 
 export function classifyReceipt(
   r: GatewayReceipt | null,
@@ -66,6 +80,7 @@ export function classifyReceipt(
     reserved: knownAmount(r?.reserved_spend),
     settled: knownAmount(r?.settled_spend),
     settled_raw: r?.settled_spend_raw ?? null,
+    channel_id: knownChannelId(r?.channel_id),
     stage: ctx.chainVerified === true ? STAGE_CHAIN : STAGE_GATEWAY,
     chain_final: ctx.chainVerified === true, // terminal_event may cover several requests; it is not proof of finality for this one
     terminal_event: r?.terminal_event ?? null,
@@ -90,6 +105,7 @@ export function receiptLine(c: Classified): string {
     `stage=${c.stage}`,
     `chain_final=${c.chain_final}`,
   ];
+  if (c.channel_id) parts.push(`channel_id=${c.channel_id}`);
   if (c.flag) parts.push(`flag=${c.flag}`);
   const { match: m, status } = c as { match?: MatchResult; status?: string };
   if (m) parts.push(`match=${m.match}${m.fields.length ? `(${m.fields.join(",")})` : ""}`);

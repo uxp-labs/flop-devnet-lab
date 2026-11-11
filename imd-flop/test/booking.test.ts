@@ -1087,3 +1087,44 @@ describe("money stage 1: the exact spend is recorded beside the float figures", 
     expect(totals).toEqual([0.236, 0.236, 0.236]);
   });
 });
+
+describe("money stage 1: the stored receipt keeps the channel id", () => {
+  // Per the gateway's OpenAPI (CredentialReceipt), read 2026-11-11: channel_id (string or null) is the
+  // compute channel the request was served on. Proof on chain is per channel: a receipt is later tied to
+  // the channel's finalized events through that id. Nothing decides on it yet. Each block failed before
+  // money stage 1: the stored receipt had no channel_id.
+  const fileOf = (h: string, rid: string) => JSON.parse(readFileSync(join(h, "receipts", `${rid}.json`), "utf8"));
+  const withChannel = (channel: unknown) => (id: string) => receiptFor(id, { settled_spend: 0.05, state: "settled", channel_id: channel });
+
+  it("a 64 hex channel id is on the secret scan's public allowlist: stored whole, no redaction, the settlement is booked", async () => {
+    const h = await ready();
+    const channel = "cd".repeat(32);
+    const run = await cli(h, runArgs(), { provider: new P({ read: withChannel(channel) }) });
+    expect(run.code, run.err).toBe(0);
+    expect(fileOf(h, run.json().request_id).channel_id).toBe(channel);
+    expect(booked(ledger(h).at(-1)!)).toEqual({ state: "settled", spend: 0.05, cap_charge: 0.05 });
+  });
+
+  it("the gateway's value when it is a non empty printable string of at most 128 characters, else null", async () => {
+    const cases: [unknown, string | null][] = [["ch-1", "ch-1"], ["0x" + "ef".repeat(32), "0x" + "ef".repeat(32)], ["a".repeat(128), "a".repeat(128)], ["a".repeat(129), null],
+      ["", null], [null, null], [undefined, null], [7, null], [["ch-1"], null], ["ch 1", null], ["ch-1\n", null], ["ché", null]];
+    for (const [given, stored] of cases) {
+      const h = await ready();
+      const run = await cli(h, runArgs(), { provider: new P({ read: withChannel(given) }) });
+      expect(run.code, run.err).toBe(0);
+      expect(fileOf(h, run.json().request_id).channel_id, JSON.stringify(given)).toBe(stored);
+    }
+  });
+
+  it("receipt <id> prints it when present, and a refresh keeps the gateway's latest value", async () => {
+    const h = await ready();
+    const run = await cli(h, runArgs(), { provider: new P({ read: withChannel("ch-1") }) });
+    const rid = run.json().request_id as string;
+    expect((await cli(h, ["receipt", rid])).out).toContain("channel_id=ch-1");
+    await cli(h, refreshArgs(rid), { provider: new P({ read: withChannel("ch-2") }) });
+    expect(fileOf(h, rid).channel_id).toBe("ch-2");
+    const none = await ready();
+    const plain = await cli(none, runArgs(), { provider: new P({ read: withChannel(null) }) });
+    expect((await cli(none, ["receipt", plain.json().request_id])).out).not.toContain("channel_id");
+  });
+});
