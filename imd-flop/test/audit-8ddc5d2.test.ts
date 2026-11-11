@@ -16,6 +16,10 @@
  * The blocks named "review" are the review of the audit 8ddc5d2 fixes. They fail on 36b23fe, the commit the
  * review read, and pass with their fix:
  *   item 3  status keeps working when a receipt file cannot be matched, and names the file
+ * Booking step, review of the audit 8ddc5d2 fixes: nextBooking and refreshBooking became the one decision
+ * decideBooking(prev, read, costReported). The assertions that called them call it now, with the same
+ * expectations: a booking that equals the previous row is what refreshBooking called "unchanged", a
+ * different one is what it called "append", and `disagree` is its "disagree".
  * Stub providers only; no network (test/setup.ts disables fetch).
  */
 import { appendFileSync, existsSync, readFileSync, writeFileSync } from "node:fs";
@@ -32,7 +36,7 @@ import { checkBudget, noRoom, padQuote } from "../src/policy.js";
 import type { CompleteReq, CompleteRes, Provider } from "../src/providers.js";
 import { classifyReceipt, receiptLine, type GatewayReceipt } from "../src/receipts.js";
 import { ceil6, floor6 } from "../src/rounding.js";
-import { CHARGE_RAISED, DISAGREE, nextBooking, refreshBooking, settledSpend } from "../src/settlement.js";
+import { CHARGE_RAISED, decideBooking, DISAGREE, reportedCost, settledSpend } from "../src/settlement.js";
 import { cli, readLines, readySeat, tmpHome } from "./helpers.js";
 
 const SEAT = "9001";
@@ -117,8 +121,7 @@ describe("finding 1: receipt --refresh never settles from a receipt body that ha
   it("the rule lives in settlement.ts: a redacted read proves no settlement and moves no state", () => {
     const read = { fresh: true, identityOk: true, state: "settled", settled: 0.05 };
     expect(settledSpend({ ...read, redacted: true })).toBeNull();
-    expect(nextBooking({ state: "estimated", spend: null }, { ...read, redacted: true }, 0.186, null)).toEqual({ state: "estimated", spend: null, cap_charge: 0.186 });
-    expect(refreshBooking({ state: "estimated", spend: null, cap_charge: 0.186, cost_reported: null }, { ...read, redacted: true })).toEqual({ kind: "unchanged" });
+    expect(decideBooking({ state: "estimated", spend: null, cap_charge: 0.186 }, { ...read, redacted: true }, null)).toEqual({ booking: { state: "estimated", spend: null, cap_charge: 0.186 }, disagree: false });
     expect(settledSpend({ ...read, redacted: false })).toBe(0.05);
   });
 });
@@ -130,25 +133,25 @@ describe("finding 2: a later read never lowers a booked settlement, and a report
   const usage = (cost: number) => ({ prompt_tokens: 1, completion_tokens: 1, total_tokens: 2, cost_flop: cost });
 
   describe("(a) a booked known settlement is never lowered", () => {
-    it("nextBooking: settled 0.05, then a fresh released 0 changes nothing", () => {
-      expect(nextBooking({ state: "settled", spend: 0.05 }, read("released", 0), 0.05, null)).toEqual({ state: "settled", spend: 0.05, cap_charge: 0.05 });
+    const settled005 = { state: "settled", spend: 0.05, cap_charge: 0.05 };
+
+    it("decideBooking: settled 0.05, then a fresh released 0 changes nothing", () => {
+      expect(decideBooking(settled005, read("released", 0), null).booking).toEqual(settled005);
     });
 
-    it("refreshBooking: the same read is a disagreement, not a new row", () => {
-      expect(refreshBooking({ state: "settled", spend: 0.05, cap_charge: 0.05, cost_reported: null }, read("released", 0))).toEqual({ kind: "disagree" });
-      expect(refreshBooking({ state: "settled", spend: 0.05, cap_charge: 0.05, cost_reported: null }, read("settled", 0.049999))).toEqual({ kind: "disagree" });
+    it("decideBooking: the same read is a disagreement, not a new row", () => {
+      expect(decideBooking(settled005, read("released", 0), null)).toEqual({ booking: settled005, disagree: true });
+      expect(decideBooking(settled005, read("settled", 0.049999), null)).toEqual({ booking: settled005, disagree: true });
     });
 
     it("an equal amount may still move the state, and a higher amount is booked", () => {
-      expect(nextBooking({ state: "settled", spend: 0.05 }, read("released", 0.05), 0.05, null)).toEqual({ state: "released", spend: 0.05, cap_charge: 0.05 });
-      expect(refreshBooking({ state: "settled", spend: 0.05, cap_charge: 0.05, cost_reported: null }, read("released", 0.05))).toEqual({ kind: "append", booking: { state: "released", spend: 0.05, cap_charge: 0.05 } });
-      expect(nextBooking({ state: "settled", spend: 0.05 }, read("settled", 0.07), 0.05, null)).toEqual({ state: "settled", spend: 0.07, cap_charge: 0.07 });
-      expect(refreshBooking({ state: "settled", spend: 0.05, cap_charge: 0.05, cost_reported: null }, read("settled", 0.07))).toEqual({ kind: "append", booking: { state: "settled", spend: 0.07, cap_charge: 0.07 } });
+      expect(decideBooking(settled005, read("released", 0.05), null)).toEqual({ booking: { state: "released", spend: 0.05, cap_charge: 0.05 }, disagree: false });
+      expect(decideBooking(settled005, read("settled", 0.07), null)).toEqual({ booking: { state: "settled", spend: 0.07, cap_charge: 0.07 }, disagree: false });
     });
 
     it("control: a settling state with no known spend still learns its settlement, whatever the amount", () => {
-      expect(nextBooking({ state: "settled", spend: null }, read("settled", 0.01), 0.186, null)).toEqual({ state: "settled", spend: 0.01, cap_charge: 0.01 });
-      expect(nextBooking({ state: "estimated", spend: null }, read("released", 0), 0.186, null)).toEqual({ state: "released", spend: 0, cap_charge: 0 });
+      expect(decideBooking({ state: "settled", spend: null, cap_charge: 0.186 }, read("settled", 0.01), null).booking).toEqual({ state: "settled", spend: 0.01, cap_charge: 0.01 });
+      expect(decideBooking({ state: "estimated", spend: null, cap_charge: 0.186 }, read("released", 0), null).booking).toEqual({ state: "released", spend: 0, cap_charge: 0 });
     });
 
     for (const [name, later] of [["released 0", releasedAt(0)], ["settled 0.01", settledAt(0.01)]] as const) {
@@ -168,18 +171,19 @@ describe("finding 2: a later read never lowers a booked settlement, and a report
   });
 
   describe("(b) the charge of a proven settlement is max(settled, reported cost); spend stays the settled figure", () => {
-    it("nextBooking: a reported cost raises the settled charge and never lowers it", () => {
-      expect(nextBooking({ state: "sent", spend: null }, read("released", 0), 0.186, 0.15)).toEqual({ state: "released", spend: 0, cap_charge: 0.15 });
-      expect(nextBooking({ state: "sent", spend: null }, read("settled", 0.05), 0.186, 0.15)).toEqual({ state: "settled", spend: 0.05, cap_charge: 0.15 });
-      expect(nextBooking({ state: "sent", spend: null }, read("settled", 0.05), 0.186, 0.01)).toEqual({ state: "settled", spend: 0.05, cap_charge: 0.05 });
-      expect(nextBooking({ state: "sent", spend: null }, read("settled", 0.05), 0.186, null)).toEqual({ state: "settled", spend: 0.05, cap_charge: 0.05 });
+    it("decideBooking: a reported cost raises the settled charge and never lowers it", () => {
+      const sent = { state: "sent", spend: null, cap_charge: 0.186 };
+      expect(decideBooking(sent, read("released", 0), 0.15).booking).toEqual({ state: "released", spend: 0, cap_charge: 0.15 });
+      expect(decideBooking(sent, read("settled", 0.05), 0.15).booking).toEqual({ state: "settled", spend: 0.05, cap_charge: 0.15 });
+      expect(decideBooking(sent, read("settled", 0.05), 0.01).booking).toEqual({ state: "settled", spend: 0.05, cap_charge: 0.05 });
+      expect(decideBooking(sent, read("settled", 0.05), null).booking).toEqual({ state: "settled", spend: 0.05, cap_charge: 0.05 });
     });
 
-    it("refreshBooking takes the reported cost from the ledger row, and ignores one that is not a finite number", () => {
+    it("a reported cost counts only when reportedCost reads a finite number: 0.15 raises the settled charge, and anything else leaves it", () => {
       const prev = { state: "estimated", spend: null, cap_charge: 0.186 };
-      expect(refreshBooking({ ...prev, cost_reported: 0.15 }, read("settled", 0.05))).toEqual({ kind: "append", booking: { state: "settled", spend: 0.05, cap_charge: 0.15 } });
+      expect(decideBooking(prev, read("settled", 0.05), reportedCost(0.15))).toEqual({ booking: { state: "settled", spend: 0.05, cap_charge: 0.15 }, disagree: false });
       for (const bad of [null, undefined, "0.15", Number.NaN, Number.POSITIVE_INFINITY]) {
-        expect(refreshBooking({ ...prev, cost_reported: bad }, read("settled", 0.05)), String(bad)).toEqual({ kind: "append", booking: { state: "settled", spend: 0.05, cap_charge: 0.05 } });
+        expect(decideBooking(prev, read("settled", 0.05), reportedCost(bad)), String(bad)).toEqual({ booking: { state: "settled", spend: 0.05, cap_charge: 0.05 }, disagree: false });
       }
     });
 

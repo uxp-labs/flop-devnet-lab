@@ -71,8 +71,24 @@ def cap_charge_line(i):
     return line_text(i, CAP_CHARGE_LINE)
 
 
+# classify() kinds in the four words reconcile.json uses. Every kind decided before the comparison is "not_compared".
+COMPARED = {"disagree": "disagree", "settled_unknown": "settled_unknown", "matches": "agree", "over_limit": "agree"}
+
+
+def reconcile(i):
+    """What the viewer decides for a ledger row and its receipt file (None: no file). For a compared pair,
+    disagrees() and settled_unknown() are also asked directly and must give the same verdict."""
+    e, r = i["ledger"], i["receipt"]
+    kind, _ = NS["classify"](e, r)
+    verdict = COMPARED.get(kind, "not_compared")
+    if kind in COMPARED:
+        direct = "disagree" if NS["disagrees"](e, r) else "settled_unknown" if NS["settled_unknown"](e, r) else "agree"
+        assert direct == verdict, f"classify says {kind}, disagrees()/settled_unknown() say {direct}"
+    return {"verdict": verdict}
+
+
 ADAPTERS = {"amount.json": amount_json, "receipt.state": receipt_state, "identity": identity, "read.failed": read_failed, "viewer.label": label,
-            "viewer.reservation_line": reservation_line, "viewer.cap_charge_line": cap_charge_line}
+            "viewer.reservation_line": reservation_line, "viewer.cap_charge_line": cap_charge_line, "reconcile": reconcile}
 
 
 class ContractVectors(unittest.TestCase):
@@ -81,6 +97,22 @@ class ContractVectors(unittest.TestCase):
         self.assertEqual(NS["DISAGREE"], c["DISAGREE"]["value"])
         self.assertEqual(NS["IDENTITY"], c["IDENTITY"]["value"])
         self.assertEqual(list(NS["SETTLES"]), c["SETTLES"]["value"])
+        # unresolved() holds its own literal. It must name exactly the states rules.json lists.
+        for state in c["UNRESOLVED"]["value"]:
+            self.assertTrue(NS["unresolved"]({"state": state}), state)
+        for state in ["sent", "refused_local", *c["RECEIPT_STATES"]["value"]]:
+            self.assertFalse(NS["unresolved"]({"state": state}), state)
+
+    def test_reconcile_vectors_expect_the_same_verdict_from_imd_flop_and_the_viewer(self):
+        """Except where a quirk says why not: then the two expectations must differ."""
+        shared = [v for v in cv.vectors() if v["rule"] == "reconcile"]
+        self.assertGreater(len(shared), 0)
+        for v in shared:
+            with self.subTest(v["id"]):
+                if v.get("quirks"):
+                    self.assertNotEqual(v["expect"][PART], v["expect"]["imd-flop"])
+                else:
+                    self.assertEqual(v["expect"][PART], v["expect"]["imd-flop"])
 
     def test_contract_files_are_well_formed_and_every_quirk_is_pinned(self):
         cv.vectors()

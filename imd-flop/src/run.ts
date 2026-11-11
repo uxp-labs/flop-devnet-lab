@@ -1,10 +1,9 @@
 import { readFileSync } from "node:fs";
-import { join } from "node:path";
 import { randomBytes, bytesToHex, utf8ToBytes } from "@noble/hashes/utils.js";
 import { sha256 } from "@noble/hashes/sha2.js";
 import { CliError, EXIT } from "./errors.js";
 import { loadConfig } from "./config.js";
-import { linkFile, responsesDir } from "./paths.js";
+import { linkFile } from "./paths.js";
 import { redactFlagged, scanForSecrets } from "./secrets.js";
 import { readJson, writeJsonSafe } from "./store.js";
 import { loadSigner, readIdentity, revokedDids } from "./keys.js";
@@ -13,13 +12,13 @@ import { DEFAULT_MODEL, network, SEAT_COLLECTION } from "./networks.js";
 import { checkBudget, noRoom, padQuote, requireCap, validateJob, validatePayer, validateRunMaxTokens, type BudgetState } from "./policy.js";
 import { appendLedger, jobSpent, LedgerLockError, spentToday, UnusableLedgerCharge, utcDay, withLedgerLock, type LedgerEntry } from "./ledger.js";
 import { classifyReceipt, type Classified } from "./receipts.js";
-import { bookingReason, holdCharge, isFreshRead, nextBooking, receiptIdentity, reportedCost } from "./settlement.js";
-import { receiptPath, writeReceipt } from "./receipt-store.js";
+import { bookFailure, bookRead } from "./booking.js";
+import { DISAGREE, isFreshRead, receiptIdentity, reportedCost, SETTLES } from "./settlement.js";
+import { receiptPath, receiptVerdicts, writeReceipt } from "./receipt-store.js";
+import { responsePath } from "./response-store.js";
 import type { Provider } from "./providers.js";
 import { assertPaidNetwork, checkImdJob, PaidGateError, PreSendError, readVerifiedSeatOwner, type Fetch } from "./gateway.js";
 import { FlopHTTPError } from "@flop-labs/client";
-import { matchReceipt } from "./match.js";
-import { latestAttempts } from "./ledger.js";
 import type { MatchResult } from "./receipts.js";
 
 export { padQuote, TEMPLATE_PAD } from "./policy.js";
@@ -45,7 +44,8 @@ export interface RunResult {
   payer: string;
   quote_padded: number;
   cap_charge: number;
-  receipt: Classified & { seat: string; did: string; match: MatchResult };
+  /** The receipt as read, with its two verdicts. `status` is set only when it disagrees with the ledger (receipt-store.ts receiptVerdicts). */
+  receipt: Classified & { seat: string; did: string; match: MatchResult; status?: string };
   response_file: string;
   /** Completion text that was stored. Null when the response-file secret scan withheld it. */
   text: string | null;
@@ -81,7 +81,22 @@ export async function checkLinkForRun(h: string, seat: string, requireWallet: bo
   return { ok: why.length === 0, why };
 }
 
-export async function runJob(h: string, provider: Provider, o: RunOpts, deps: { fetch?: Fetch; ethRpc?: string } = {}): Promise<RunResult> {
+/**
+ * The sentence `run` adds to its failure message when the booking step only recorded its report
+ * (booking.ts, outcome recorded): what the ledger kept for the request instead.
+ */
+function keptByLedger(row: LedgerEntry): string {
+  return SETTLES.has(row.state) ? `The ledger already holds a settlement for this request (${row.state}); it was kept.` : `The ledger kept its ${row.state} row for this request.`;
+}
+
+/** What run needs from its caller. `warn` receives the DISAGREE line when run's own receipt read is not booked. */
+export interface RunDeps {
+  fetch?: Fetch;
+  ethRpc?: string;
+  warn: (s: string) => void;
+}
+
+export async function runJob(h: string, provider: Provider, o: RunOpts, deps: RunDeps): Promise<RunResult> {
   const cfg = loadConfig(h);
   const net = network(cfg.network);
   const seat = o.seat ?? cfg.seat;
@@ -203,6 +218,13 @@ export async function runJob(h: string, provider: Provider, o: RunOpts, deps: { 
     throw e;
   }
 
+  // Every row written for this request from here on goes through the booking step (booking.ts), against
+  // the request's latest ledger row and not against `sent`: another process may have refreshed this
+  // request and booked its own read while the call ran. `sent` goes with it as the seed row, which the
+  // step writes again only when the ledger no longer holds the request's row, so the call stays on the
+  // books. If the lock cannot be taken or the append fails, the step throws (exit 1), and the latest row
+  // stays and keeps its reservation.
+
   // A ref'd timer (AbortSignal.timeout is unref'd and would let the process exit mid-call).
   const ac = new AbortController();
   const timer = setTimeout(() => ac.abort(new DOMException(`no answer within ${o.timeoutMs} ms`, "TimeoutError")), o.timeoutMs);
@@ -215,26 +237,33 @@ export async function runJob(h: string, provider: Provider, o: RunOpts, deps: { 
     const preSend = e instanceof PreSendError;
     const timedOut = http === null && !preSend; // abort, timeout or dropped connection: the gateway may have done paid work
     // Pre-mint failure minted nothing. `error` would show in status as a pending paid attempt.
-    // `refused_local` with cap charge 0 is the latest line. Hashes are stripped so the secret scan
+    // `refused_local` with cap charge 0 is the line to write. Hashes are stripped so the secret scan
     // can store that line; otherwise the pre-call `sent` charge would stay in effect.
     let reason = timedOut ? `${err.name}: no answer; spend unknown, not retried` : preSend ? `nothing sent: ${err.message.replace(/0x[0-9a-fA-F]{64}/g, "[hash]")}` : `HTTP ${http}`;
     // A key-shaped provider message would make the secret scan refuse the release row and strand
     // the reservation. Withhold the message instead, so the refused_local (cap charge 0) line is written.
     const preSendWithheld = preSend && scanForSecrets({ reason }).length > 0;
     if (preSendWithheld) reason = "nothing sent: provider error withheld by the secret scan";
-    appendLedger(h, { ...sent, ts: new Date().toISOString(), state: timedOut ? "timeout_unknown" : preSend ? "refused_local" : "error", reason, spend: null, cap_charge: preSend ? 0 : sent.cap_charge, http });
+    // What run saw is a report, not a receipt read (settlement.ts decideFailure). It never replaces a
+    // settlement another process booked meanwhile, and "nothing was sent" never releases a row a trusted
+    // read produced: then the report is only recorded, and the exit code below still says what this call
+    // saw. The message also says what the ledger kept.
+    const { outcome, row } = bookFailure(h, requestId, timedOut ? "timeout_unknown" : preSend ? "refused_local" : "error", { reason, http }, sent);
+    const kept = outcome === "recorded" ? keptByLedger(row) : null;
+    const settled = kept !== null && SETTLES.has(row.state);
+    const also = kept ? ` ${kept}` : "";
     if (timedOut) {
-      throw new CliError(`no answer within ${o.timeoutMs} ms. Spend is UNKNOWN (recorded as null). Not retried. Check later with \`imd-flop receipt ${requestId}\`.`, EXIT.TIMEOUT_UNKNOWN);
+      throw new CliError(`no answer within ${o.timeoutMs} ms. ${settled ? "" : "Spend is UNKNOWN (recorded as null). "}Not retried.${also} Check later with \`imd-flop receipt ${requestId}\`.`, EXIT.TIMEOUT_UNKNOWN);
     }
     // The gate refusing at its pre-mint recheck is the same rule refusal as at the first check above.
     // Any other pre-send failure exits NOT_SENT, so it is told apart from a gateway error on the paid call below.
-    if (preSend) throw new CliError(preSendWithheld ? reason : `nothing sent: ${err.message}`, e instanceof PaidGateError ? EXIT.REFUSED_RULE : EXIT.NOT_SENT);
-    throw new CliError(`gateway refused the call (HTTP ${http}); spend recorded as unknown`, EXIT.ERROR);
+    if (preSend) throw new CliError(`${preSendWithheld ? reason : `nothing sent: ${err.message}`}${kept ? "." + also : ""}`, e instanceof PaidGateError ? EXIT.REFUSED_RULE : EXIT.NOT_SENT);
+    throw new CliError(`gateway refused the call (HTTP ${http})${settled ? "" : "; spend recorded as unknown"}${kept ? "." + also : ""}`, EXIT.ERROR);
   } finally {
     clearTimeout(timer);
   }
 
-  const responseFile = join(responsesDir(h), `${requestId}.json`);
+  const responseFile = responsePath(h, requestId);
   const responseRecord = { request_id: requestId, job, seat, provider: provider.name, model, usage: res.usage ?? null, output_sha256: bytesToHex(sha256(utf8ToBytes(res.text))), text: res.text, mock: provider.name === "mock", note: "not submitted to IMD; the holder decides what to use" };
   // `run --json` prints this return value, so it has to be the text that was stored.
   let text: string | null = res.text;
@@ -279,14 +308,14 @@ export async function runJob(h: string, provider: Provider, o: RunOpts, deps: { 
     for (const k of Object.keys(r0)) if (k in cleaned) r0[k] = cleaned[k] ?? null;
   }
 
-  const costReported = reportedCost(res.usage?.cost_flop);
-  // Same rules as receipt --refresh, held in settlement.ts: a failed read (not HTTP 200 with a receipt object)
-  // or a receipt body that had to be redacted proves nothing and never releases the reservation.
-  const outcome = { fresh: isFreshRead(rr), identityOk, redacted: receiptRedacted, state: classified.state, settled: classified.settled };
-  const booking = nextBooking({ state: sent.state, spend: sent.spend }, outcome, holdCharge(q.padded, costReported), costReported);
-  appendLedger(h, { ...sent, ts: new Date().toISOString(), ...booking, reason: bookingReason(booking, classified.flag), cost_reported: costReported, http: rr.http });
+  // The same booking step as receipt --refresh, with the rules held in settlement.ts: a failed read (not
+  // HTTP 200 with a receipt object) or a receipt body that had to be redacted proves nothing and never
+  // releases the reservation. If the step throws, the answer is in the response file written above.
+  const read = { fresh: isFreshRead(rr), identityOk, redacted: receiptRedacted, state: classified.state, settled: classified.settled };
+  const own = { flag: classified.flag, cost_reported: reportedCost(res.usage?.cost_flop), http: rr.http };
+  const { outcome, row } = bookRead(h, requestId, read, own, sent);
+  if (outcome === "disagree") deps.warn(DISAGREE);
 
-  const match = await matchReceipt(h, receipt0, latestAttempts(h).find((e) => e.request_id === requestId) ?? null);
-  const receipt = { ...receipt0, match };
-  return { request_id: requestId, job, provider: provider.name, payer, quote_padded: q.padded, cap_charge: booking.cap_charge, receipt, response_file: responseFile, text, ...(withheld !== undefined ? { withheld } : {}), link_bypassed: linkBypassed };
+  const receipt = { ...receipt0, ...(await receiptVerdicts(h, receipt0, row)) };
+  return { request_id: requestId, job, provider: provider.name, payer, quote_padded: q.padded, cap_charge: row.cap_charge, receipt, response_file: responseFile, text, ...(withheld !== undefined ? { withheld } : {}), link_bypassed: linkBypassed };
 }

@@ -1,0 +1,1904 @@
+{
+ "file": "reconcile.json",
+ "description": "The verdict for a stored receipt file beside the latest ledger row of its request. input.ledger is the row, input.receipt the file (null: no file). imd-flop: settlement.ts reconcile(ledger, receipt). viewer: build-lane.py classify(ledger, receipt), in the same four words: its kind disagree is \"disagree\", settled_unknown is \"settled_unknown\", matches and over_limit are \"agree\", and every kind decided before the comparison (refused, no_receipt, key_expired, read_failed, mismatch) is \"not_compared\". For a compared vector the viewer adapter also asks disagrees() and settled_unknown() directly. Both parts are expected to give the same verdict; each loader checks that, except on a vector that names a quirk. imd-flop shows the DISAGREE text (run, receipt <id>, status) exactly when the verdict is \"disagree\".",
+ "status": "booking step, review of the audit 8ddc5d2 fixes: imd-flop's verdict is new there; the viewer's is its behavior unchanged",
+ "vectors": [
+  {
+   "id": "reconcile-agree-settled-known-amount",
+   "rule": "reconcile",
+   "input": {
+    "ledger": {
+     "ts": "2026-11-11T15:00:00Z",
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zA",
+     "provider": "mock",
+     "network": "devnet",
+     "payer": "holder",
+     "state": "settled",
+     "spend": 0.05,
+     "cap_charge": 0.05,
+     "quote_padded": 0.186,
+     "per_call_cap": 1,
+     "daily_cap": 5,
+     "spent_before": 0
+    },
+    "receipt": {
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zA",
+     "state": "settled",
+     "settled": 0.05,
+     "stage": "gateway observed",
+     "chain_final": false,
+     "flag": null,
+     "http": 200,
+     "error": null
+    }
+   },
+   "expect": {
+    "imd-flop": {
+     "verdict": "agree"
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard is a dry run: it keeps no ledger row to compare a receipt with"
+    },
+    "viewer": {
+     "verdict": "agree"
+    }
+   }
+  },
+  {
+   "id": "reconcile-agree-pending-both",
+   "rule": "reconcile",
+   "input": {
+    "ledger": {
+     "ts": "2026-11-11T15:00:00Z",
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zA",
+     "provider": "mock",
+     "network": "devnet",
+     "payer": "holder",
+     "state": "estimated",
+     "spend": null,
+     "cap_charge": 0.186,
+     "quote_padded": 0.186,
+     "per_call_cap": 1,
+     "daily_cap": 5,
+     "spent_before": 0
+    },
+    "receipt": {
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zA",
+     "state": "estimated",
+     "settled": null,
+     "stage": "gateway observed",
+     "chain_final": false,
+     "flag": null,
+     "http": 200,
+     "error": null
+    }
+   },
+   "expect": {
+    "imd-flop": {
+     "verdict": "agree"
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard is a dry run: it keeps no ledger row to compare a receipt with"
+    },
+    "viewer": {
+     "verdict": "agree"
+    }
+   }
+  },
+  {
+   "id": "reconcile-agree-sent-row-reserved-receipt",
+   "rule": "reconcile",
+   "input": {
+    "ledger": {
+     "ts": "2026-11-11T15:00:00Z",
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zA",
+     "provider": "mock",
+     "network": "devnet",
+     "payer": "holder",
+     "state": "sent",
+     "spend": null,
+     "cap_charge": 0.186,
+     "quote_padded": 0.186,
+     "per_call_cap": 1,
+     "daily_cap": 5,
+     "spent_before": 0
+    },
+    "receipt": {
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zA",
+     "state": "reserved",
+     "settled": null,
+     "stage": "gateway observed",
+     "chain_final": false,
+     "flag": null,
+     "http": 200,
+     "error": null
+    }
+   },
+   "expect": {
+    "imd-flop": {
+     "verdict": "agree"
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard is a dry run: it keeps no ledger row to compare a receipt with"
+    },
+    "viewer": {
+     "verdict": "agree"
+    }
+   },
+   "note": "neither side claims a settlement: the state names need not be equal"
+  },
+  {
+   "id": "reconcile-agree-settled-row-released-receipt-equal-amount",
+   "rule": "reconcile",
+   "input": {
+    "ledger": {
+     "ts": "2026-11-11T15:00:00Z",
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zA",
+     "provider": "mock",
+     "network": "devnet",
+     "payer": "holder",
+     "state": "settled",
+     "spend": 0.05,
+     "cap_charge": 0.05,
+     "quote_padded": 0.186,
+     "per_call_cap": 1,
+     "daily_cap": 5,
+     "spent_before": 0
+    },
+    "receipt": {
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zA",
+     "state": "released",
+     "settled": 0.05,
+     "stage": "gateway observed",
+     "chain_final": false,
+     "flag": null,
+     "http": 200,
+     "error": null
+    }
+   },
+   "expect": {
+    "imd-flop": {
+     "verdict": "agree"
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard is a dry run: it keeps no ledger row to compare a receipt with"
+    },
+    "viewer": {
+     "verdict": "agree"
+    }
+   },
+   "note": "both states settle and the amounts are equal: the state names need not be equal"
+  },
+  {
+   "id": "reconcile-agree-zero-is-an-amount",
+   "rule": "reconcile",
+   "input": {
+    "ledger": {
+     "ts": "2026-11-11T15:00:00Z",
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zA",
+     "provider": "mock",
+     "network": "devnet",
+     "payer": "holder",
+     "state": "released",
+     "spend": 0,
+     "cap_charge": 0,
+     "quote_padded": 0.186,
+     "per_call_cap": 1,
+     "daily_cap": 5,
+     "spent_before": 0
+    },
+    "receipt": {
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zA",
+     "state": "released",
+     "settled": 0,
+     "stage": "gateway observed",
+     "chain_final": false,
+     "flag": null,
+     "http": 200,
+     "error": null
+    }
+   },
+   "expect": {
+    "imd-flop": {
+     "verdict": "agree"
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard is a dry run: it keeps no ledger row to compare a receipt with"
+    },
+    "viewer": {
+     "verdict": "agree"
+    }
+   }
+  },
+  {
+   "id": "reconcile-agree-cap-charge-above-settled-spend",
+   "rule": "reconcile",
+   "input": {
+    "ledger": {
+     "ts": "2026-11-11T15:00:00Z",
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zA",
+     "provider": "mock",
+     "network": "devnet",
+     "payer": "holder",
+     "state": "settled",
+     "spend": 0.05,
+     "cap_charge": 0.15,
+     "quote_padded": 0.186,
+     "per_call_cap": 1,
+     "daily_cap": 5,
+     "spent_before": 0,
+     "reason": "cap charge raised to reported cost"
+    },
+    "receipt": {
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zA",
+     "state": "settled",
+     "settled": 0.05,
+     "stage": "gateway observed",
+     "chain_final": false,
+     "flag": null,
+     "http": 200,
+     "error": null
+    }
+   },
+   "expect": {
+    "imd-flop": {
+     "verdict": "agree"
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard is a dry run: it keeps no ledger row to compare a receipt with"
+    },
+    "viewer": {
+     "verdict": "agree"
+    }
+   },
+   "note": "the cap charge is not compared: it may be above the settled spend when the completion reported a higher cost"
+  },
+  {
+   "id": "reconcile-agree-settlement-over-the-reservation",
+   "rule": "reconcile",
+   "input": {
+    "ledger": {
+     "ts": "2026-11-11T15:00:00Z",
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zA",
+     "provider": "mock",
+     "network": "devnet",
+     "payer": "holder",
+     "state": "settled",
+     "spend": 0.3,
+     "cap_charge": 0.3,
+     "quote_padded": 0.186,
+     "per_call_cap": 1,
+     "daily_cap": 5,
+     "spent_before": 0
+    },
+    "receipt": {
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zA",
+     "state": "settled",
+     "settled": 0.3,
+     "stage": "gateway observed",
+     "chain_final": false,
+     "flag": null,
+     "http": 200,
+     "error": null
+    }
+   },
+   "expect": {
+    "imd-flop": {
+     "verdict": "agree"
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard is a dry run: it keeps no ledger row to compare a receipt with"
+    },
+    "viewer": {
+     "verdict": "agree"
+    }
+   },
+   "note": "receipt and ledger agree. The viewer then labels the row 'over the reservation' (kind over_limit): that is a broken limit, not a disagreement"
+  },
+  {
+   "id": "reconcile-agree-receipt-file-without-http-field",
+   "rule": "reconcile",
+   "input": {
+    "ledger": {
+     "ts": "2026-11-11T15:00:00Z",
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zA",
+     "provider": "mock",
+     "network": "devnet",
+     "payer": "holder",
+     "state": "settled",
+     "spend": 0.05,
+     "cap_charge": 0.05,
+     "quote_padded": 0.186,
+     "per_call_cap": 1,
+     "daily_cap": 5,
+     "spent_before": 0
+    },
+    "receipt": {
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zA",
+     "state": "settled",
+     "settled": 0.05,
+     "stage": "gateway observed",
+     "chain_final": false,
+     "flag": null
+    }
+   },
+   "expect": {
+    "imd-flop": {
+     "verdict": "agree"
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard is a dry run: it keeps no ledger row to compare a receipt with"
+    },
+    "viewer": {
+     "verdict": "agree"
+    }
+   },
+   "note": "a file with no http and no error field is not a failed read"
+  },
+  {
+   "id": "reconcile-disagree-stored-read-below-booked-amount",
+   "rule": "reconcile",
+   "input": {
+    "ledger": {
+     "ts": "2026-11-11T15:00:00Z",
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zA",
+     "provider": "mock",
+     "network": "devnet",
+     "payer": "holder",
+     "state": "settled",
+     "spend": 0.07,
+     "cap_charge": 0.07,
+     "quote_padded": 0.186,
+     "per_call_cap": 1,
+     "daily_cap": 5,
+     "spent_before": 0
+    },
+    "receipt": {
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zA",
+     "state": "settled",
+     "settled": 0.05,
+     "stage": "gateway observed",
+     "chain_final": false,
+     "flag": null,
+     "http": 200,
+     "error": null
+    }
+   },
+   "expect": {
+    "imd-flop": {
+     "verdict": "disagree"
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard is a dry run: it keeps no ledger row to compare a receipt with"
+    },
+    "viewer": {
+     "verdict": "disagree"
+    }
+   },
+   "status": "fixed",
+   "defect": "KD-7",
+   "note": "[booking step, review of the audit 8ddc5d2 fixes] the files a refused lower read leaves behind: the receipt file holds 0.05, the ledger keeps 0.07. imd-flop receipt <id> and status printed this as fine (match=matches, no DISAGREE); the viewer always labelled it DISAGREE"
+  },
+  {
+   "id": "reconcile-disagree-stored-read-above-booked-amount",
+   "rule": "reconcile",
+   "input": {
+    "ledger": {
+     "ts": "2026-11-11T15:00:00Z",
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zA",
+     "provider": "mock",
+     "network": "devnet",
+     "payer": "holder",
+     "state": "settled",
+     "spend": 0.05,
+     "cap_charge": 0.05,
+     "quote_padded": 0.186,
+     "per_call_cap": 1,
+     "daily_cap": 5,
+     "spent_before": 0
+    },
+    "receipt": {
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zA",
+     "state": "settled",
+     "settled": 0.07,
+     "stage": "gateway observed",
+     "chain_final": false,
+     "flag": null,
+     "http": 200,
+     "error": null
+    }
+   },
+   "expect": {
+    "imd-flop": {
+     "verdict": "disagree"
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard is a dry run: it keeps no ledger row to compare a receipt with"
+    },
+    "viewer": {
+     "verdict": "disagree"
+    }
+   },
+   "note": "the booking step books a higher read, so these files are left only when that booking could not be written"
+  },
+  {
+   "id": "reconcile-disagree-ledger-pending-receipt-settled",
+   "rule": "reconcile",
+   "input": {
+    "ledger": {
+     "ts": "2026-11-11T15:00:00Z",
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zA",
+     "provider": "mock",
+     "network": "devnet",
+     "payer": "holder",
+     "state": "estimated",
+     "spend": null,
+     "cap_charge": 0.186,
+     "quote_padded": 0.186,
+     "per_call_cap": 1,
+     "daily_cap": 5,
+     "spent_before": 0
+    },
+    "receipt": {
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zA",
+     "state": "settled",
+     "settled": 0.05,
+     "stage": "gateway observed",
+     "chain_final": false,
+     "flag": null,
+     "http": 200,
+     "error": null
+    }
+   },
+   "expect": {
+    "imd-flop": {
+     "verdict": "disagree"
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard is a dry run: it keeps no ledger row to compare a receipt with"
+    },
+    "viewer": {
+     "verdict": "disagree"
+    }
+   }
+  },
+  {
+   "id": "reconcile-disagree-ledger-settled-receipt-pending",
+   "rule": "reconcile",
+   "input": {
+    "ledger": {
+     "ts": "2026-11-11T15:00:00Z",
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zA",
+     "provider": "mock",
+     "network": "devnet",
+     "payer": "holder",
+     "state": "settled",
+     "spend": 0.05,
+     "cap_charge": 0.05,
+     "quote_padded": 0.186,
+     "per_call_cap": 1,
+     "daily_cap": 5,
+     "spent_before": 0
+    },
+    "receipt": {
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zA",
+     "state": "estimated",
+     "settled": null,
+     "stage": "gateway observed",
+     "chain_final": false,
+     "flag": null,
+     "http": 200,
+     "error": null
+    }
+   },
+   "expect": {
+    "imd-flop": {
+     "verdict": "disagree"
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard is a dry run: it keeps no ledger row to compare a receipt with"
+    },
+    "viewer": {
+     "verdict": "disagree"
+    }
+   },
+   "note": "the booking step never takes a settling state back, so a pending read stored beside a settled row disagrees until a read that settles is stored again"
+  },
+  {
+   "id": "reconcile-settled-unknown-both-amounts-unknown",
+   "rule": "reconcile",
+   "input": {
+    "ledger": {
+     "ts": "2026-11-11T15:00:00Z",
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zA",
+     "provider": "mock",
+     "network": "devnet",
+     "payer": "holder",
+     "state": "settled",
+     "spend": null,
+     "cap_charge": 0.186,
+     "quote_padded": 0.186,
+     "per_call_cap": 1,
+     "daily_cap": 5,
+     "spent_before": 0
+    },
+    "receipt": {
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zA",
+     "state": "settled",
+     "settled": null,
+     "stage": "gateway observed",
+     "chain_final": false,
+     "flag": null,
+     "http": 200,
+     "error": null
+    }
+   },
+   "expect": {
+    "imd-flop": {
+     "verdict": "settled_unknown"
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard is a dry run: it keeps no ledger row to compare a receipt with"
+    },
+    "viewer": {
+     "verdict": "settled_unknown"
+    }
+   },
+   "note": "both say settled and neither knows the amount: agreement, the row imd-flop books for a settled receipt with no usable amount"
+  },
+  {
+   "id": "reconcile-settled-unknown-negative-amounts-are-unknown",
+   "rule": "reconcile",
+   "input": {
+    "ledger": {
+     "ts": "2026-11-11T15:00:00Z",
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zA",
+     "provider": "mock",
+     "network": "devnet",
+     "payer": "holder",
+     "state": "settled",
+     "spend": -1,
+     "cap_charge": 0.186,
+     "quote_padded": 0.186,
+     "per_call_cap": 1,
+     "daily_cap": 5,
+     "spent_before": 0
+    },
+    "receipt": {
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zA",
+     "state": "released",
+     "settled": -1,
+     "stage": "gateway observed",
+     "chain_final": false,
+     "flag": null,
+     "http": 200,
+     "error": null
+    }
+   },
+   "expect": {
+    "imd-flop": {
+     "verdict": "settled_unknown"
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard is a dry run: it keeps no ledger row to compare a receipt with"
+    },
+    "viewer": {
+     "verdict": "settled_unknown"
+    }
+   },
+   "note": "a negative number is not an amount, on either side"
+  },
+  {
+   "id": "reconcile-disagree-amount-on-ledger-only",
+   "rule": "reconcile",
+   "input": {
+    "ledger": {
+     "ts": "2026-11-11T15:00:00Z",
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zA",
+     "provider": "mock",
+     "network": "devnet",
+     "payer": "holder",
+     "state": "settled",
+     "spend": 0.05,
+     "cap_charge": 0.05,
+     "quote_padded": 0.186,
+     "per_call_cap": 1,
+     "daily_cap": 5,
+     "spent_before": 0
+    },
+    "receipt": {
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zA",
+     "state": "settled",
+     "settled": null,
+     "stage": "gateway observed",
+     "chain_final": false,
+     "flag": null,
+     "http": 200,
+     "error": null
+    }
+   },
+   "expect": {
+    "imd-flop": {
+     "verdict": "disagree"
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard is a dry run: it keeps no ledger row to compare a receipt with"
+    },
+    "viewer": {
+     "verdict": "disagree"
+    }
+   }
+  },
+  {
+   "id": "reconcile-disagree-amount-on-receipt-only",
+   "rule": "reconcile",
+   "input": {
+    "ledger": {
+     "ts": "2026-11-11T15:00:00Z",
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zA",
+     "provider": "mock",
+     "network": "devnet",
+     "payer": "holder",
+     "state": "settled",
+     "spend": null,
+     "cap_charge": 0.186,
+     "quote_padded": 0.186,
+     "per_call_cap": 1,
+     "daily_cap": 5,
+     "spent_before": 0
+    },
+    "receipt": {
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zA",
+     "state": "settled",
+     "settled": 0.05,
+     "stage": "gateway observed",
+     "chain_final": false,
+     "flag": null,
+     "http": 200,
+     "error": null
+    }
+   },
+   "expect": {
+    "imd-flop": {
+     "verdict": "disagree"
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard is a dry run: it keeps no ledger row to compare a receipt with"
+    },
+    "viewer": {
+     "verdict": "disagree"
+    }
+   }
+  },
+  {
+   "id": "reconcile-disagree-zero-is-not-unknown",
+   "rule": "reconcile",
+   "input": {
+    "ledger": {
+     "ts": "2026-11-11T15:00:00Z",
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zA",
+     "provider": "mock",
+     "network": "devnet",
+     "payer": "holder",
+     "state": "released",
+     "spend": null,
+     "cap_charge": 0.186,
+     "quote_padded": 0.186,
+     "per_call_cap": 1,
+     "daily_cap": 5,
+     "spent_before": 0
+    },
+    "receipt": {
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zA",
+     "state": "released",
+     "settled": 0,
+     "stage": "gateway observed",
+     "chain_final": false,
+     "flag": null,
+     "http": 200,
+     "error": null
+    }
+   },
+   "expect": {
+    "imd-flop": {
+     "verdict": "disagree"
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard is a dry run: it keeps no ledger row to compare a receipt with"
+    },
+    "viewer": {
+     "verdict": "disagree"
+    }
+   },
+   "note": "an explicit 0 on one side and an unknown amount on the other disagree: unknown is never read as 0"
+  },
+  {
+   "id": "reconcile-disagree-timeout-unknown-row",
+   "rule": "reconcile",
+   "input": {
+    "ledger": {
+     "ts": "2026-11-11T15:00:00Z",
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zA",
+     "provider": "mock",
+     "network": "devnet",
+     "payer": "holder",
+     "state": "timeout_unknown",
+     "spend": null,
+     "cap_charge": 0.186,
+     "quote_padded": 0.186,
+     "per_call_cap": 1,
+     "daily_cap": 5,
+     "spent_before": 0,
+     "reason": "TimeoutError: no answer; spend unknown, not retried"
+    },
+    "receipt": {
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zA",
+     "state": "estimated",
+     "settled": null,
+     "stage": "gateway observed",
+     "chain_final": false,
+     "flag": null,
+     "http": 200,
+     "error": null
+    }
+   },
+   "expect": {
+    "imd-flop": {
+     "verdict": "disagree"
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard is a dry run: it keeps no ledger row to compare a receipt with"
+    },
+    "viewer": {
+     "verdict": "disagree"
+    }
+   },
+   "note": "a row whose call timed out disagrees with any receipt until a read is booked for it"
+  },
+  {
+   "id": "reconcile-disagree-error-row",
+   "rule": "reconcile",
+   "input": {
+    "ledger": {
+     "ts": "2026-11-11T15:00:00Z",
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zA",
+     "provider": "mock",
+     "network": "devnet",
+     "payer": "holder",
+     "state": "error",
+     "spend": null,
+     "cap_charge": 0.186,
+     "quote_padded": 0.186,
+     "per_call_cap": 1,
+     "daily_cap": 5,
+     "spent_before": 0,
+     "reason": "HTTP 500"
+    },
+    "receipt": {
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zA",
+     "state": "estimated",
+     "settled": null,
+     "stage": "gateway observed",
+     "chain_final": false,
+     "flag": null,
+     "http": 200,
+     "error": null
+    }
+   },
+   "expect": {
+    "imd-flop": {
+     "verdict": "disagree"
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard is a dry run: it keeps no ledger row to compare a receipt with"
+    },
+    "viewer": {
+     "verdict": "disagree"
+    }
+   }
+  },
+  {
+   "id": "reconcile-disagree-timeout-unknown-row-settled-receipt",
+   "rule": "reconcile",
+   "input": {
+    "ledger": {
+     "ts": "2026-11-11T15:00:00Z",
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zA",
+     "provider": "mock",
+     "network": "devnet",
+     "payer": "holder",
+     "state": "timeout_unknown",
+     "spend": null,
+     "cap_charge": 0.186,
+     "quote_padded": 0.186,
+     "per_call_cap": 1,
+     "daily_cap": 5,
+     "spent_before": 0,
+     "reason": "TimeoutError: no answer; spend unknown, not retried"
+    },
+    "receipt": {
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zA",
+     "state": "settled",
+     "settled": 0.05,
+     "stage": "gateway observed",
+     "chain_final": false,
+     "flag": null,
+     "http": 200,
+     "error": null
+    }
+   },
+   "expect": {
+    "imd-flop": {
+     "verdict": "disagree"
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard is a dry run: it keeps no ledger row to compare a receipt with"
+    },
+    "viewer": {
+     "verdict": "disagree"
+    }
+   }
+  },
+  {
+   "id": "reconcile-disagree-chain-final-on-pending-receipt",
+   "rule": "reconcile",
+   "input": {
+    "ledger": {
+     "ts": "2026-11-11T15:00:00Z",
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zA",
+     "provider": "mock",
+     "network": "devnet",
+     "payer": "holder",
+     "state": "estimated",
+     "spend": null,
+     "cap_charge": 0.186,
+     "quote_padded": 0.186,
+     "per_call_cap": 1,
+     "daily_cap": 5,
+     "spent_before": 0
+    },
+    "receipt": {
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zA",
+     "state": "estimated",
+     "settled": null,
+     "stage": "gateway observed",
+     "chain_final": true,
+     "flag": null,
+     "http": 200,
+     "error": null
+    }
+   },
+   "expect": {
+    "imd-flop": {
+     "verdict": "disagree"
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard is a dry run: it keeps no ledger row to compare a receipt with"
+    },
+    "viewer": {
+     "verdict": "disagree"
+    }
+   },
+   "note": "nothing is chain final while the receipt is pending"
+  },
+  {
+   "id": "reconcile-not-compared-failed-read",
+   "rule": "reconcile",
+   "input": {
+    "ledger": {
+     "ts": "2026-11-11T15:00:00Z",
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zA",
+     "provider": "mock",
+     "network": "devnet",
+     "payer": "holder",
+     "state": "estimated",
+     "spend": null,
+     "cap_charge": 0.186,
+     "quote_padded": 0.186,
+     "per_call_cap": 1,
+     "daily_cap": 5,
+     "spent_before": 0
+    },
+    "receipt": {
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zA",
+     "state": "estimated",
+     "settled": null,
+     "stage": "gateway observed",
+     "chain_final": false,
+     "flag": null,
+     "http": 503,
+     "error": "HTTP 503",
+     "last_known_at": "2026-11-11T14:00:00Z"
+    }
+   },
+   "expect": {
+    "imd-flop": {
+     "verdict": "not_compared"
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard is a dry run: it keeps no ledger row to compare a receipt with"
+    },
+    "viewer": {
+     "verdict": "not_compared"
+    }
+   },
+   "note": "the file holds the last known state, not a fresh read"
+  },
+  {
+   "id": "reconcile-not-compared-failed-read-beside-settled-row",
+   "rule": "reconcile",
+   "input": {
+    "ledger": {
+     "ts": "2026-11-11T15:00:00Z",
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zA",
+     "provider": "mock",
+     "network": "devnet",
+     "payer": "holder",
+     "state": "settled",
+     "spend": 0.07,
+     "cap_charge": 0.07,
+     "quote_padded": 0.186,
+     "per_call_cap": 1,
+     "daily_cap": 5,
+     "spent_before": 0
+    },
+    "receipt": {
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zA",
+     "state": "settled",
+     "settled": 0.05,
+     "stage": "gateway observed",
+     "chain_final": false,
+     "flag": null,
+     "http": 0,
+     "error": "fetch failed",
+     "last_known_at": "2026-11-11T14:00:00Z"
+    }
+   },
+   "expect": {
+    "imd-flop": {
+     "verdict": "not_compared"
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard is a dry run: it keeps no ledger row to compare a receipt with"
+    },
+    "viewer": {
+     "verdict": "not_compared"
+    }
+   }
+  },
+  {
+   "id": "reconcile-not-compared-key-expired",
+   "rule": "reconcile",
+   "input": {
+    "ledger": {
+     "ts": "2026-11-11T15:00:00Z",
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zA",
+     "provider": "mock",
+     "network": "devnet",
+     "payer": "holder",
+     "state": "estimated",
+     "spend": null,
+     "cap_charge": 0.186,
+     "quote_padded": 0.186,
+     "per_call_cap": 1,
+     "daily_cap": 5,
+     "spent_before": 0
+    },
+    "receipt": {
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zA",
+     "state": "estimated",
+     "settled": null,
+     "stage": "gateway observed",
+     "chain_final": false,
+     "flag": "key_expired",
+     "http": 401,
+     "error": "api_key_expired"
+    }
+   },
+   "expect": {
+    "imd-flop": {
+     "verdict": "not_compared"
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard is a dry run: it keeps no ledger row to compare a receipt with"
+    },
+    "viewer": {
+     "verdict": "not_compared"
+    }
+   }
+  },
+  {
+   "id": "reconcile-not-compared-http-200-with-error-text",
+   "rule": "reconcile",
+   "input": {
+    "ledger": {
+     "ts": "2026-11-11T15:00:00Z",
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zA",
+     "provider": "mock",
+     "network": "devnet",
+     "payer": "holder",
+     "state": "settled",
+     "spend": 0.07,
+     "cap_charge": 0.07,
+     "quote_padded": 0.186,
+     "per_call_cap": 1,
+     "daily_cap": 5,
+     "spent_before": 0
+    },
+    "receipt": {
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zA",
+     "state": "settled",
+     "settled": 0.05,
+     "stage": "gateway observed",
+     "chain_final": false,
+     "flag": null,
+     "http": 200,
+     "error": "upstream said no"
+    }
+   },
+   "expect": {
+    "imd-flop": {
+     "verdict": "not_compared"
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard is a dry run: it keeps no ledger row to compare a receipt with"
+    },
+    "viewer": {
+     "verdict": "not_compared"
+    }
+   },
+   "note": "a stored error text marks a failed read even with http 200: the viewer's test on a stored file, which imd-flop reconcile shares (quirk Q-FAILED-READ is about live reads)"
+  },
+  {
+   "id": "reconcile-not-compared-identity-mismatch",
+   "rule": "reconcile",
+   "input": {
+    "ledger": {
+     "ts": "2026-11-11T15:00:00Z",
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zA",
+     "provider": "mock",
+     "network": "devnet",
+     "payer": "holder",
+     "state": "settled",
+     "spend": 0.07,
+     "cap_charge": 0.07,
+     "quote_padded": 0.186,
+     "per_call_cap": 1,
+     "daily_cap": 5,
+     "spent_before": 0
+    },
+    "receipt": {
+     "request_id": "req-2",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zA",
+     "state": "settled",
+     "settled": 0.05,
+     "stage": "gateway observed",
+     "chain_final": false,
+     "flag": null,
+     "http": 200,
+     "error": null
+    }
+   },
+   "expect": {
+    "imd-flop": {
+     "verdict": "not_compared"
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard is a dry run: it keeps no ledger row to compare a receipt with"
+    },
+    "viewer": {
+     "verdict": "not_compared"
+    }
+   },
+   "note": "a receipt for another request is not compared: imd-flop shows match=mismatch, the viewer its red mismatch chip"
+  },
+  {
+   "id": "reconcile-not-compared-refused-row",
+   "rule": "reconcile",
+   "input": {
+    "ledger": {
+     "ts": "2026-11-11T15:00:00Z",
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zA",
+     "provider": "mock",
+     "network": "devnet",
+     "payer": "holder",
+     "state": "refused_local",
+     "spend": null,
+     "cap_charge": 0,
+     "quote_padded": 0.186,
+     "per_call_cap": 1,
+     "daily_cap": 5,
+     "spent_before": 0,
+     "reason": "nothing sent: provider refused before mint"
+    },
+    "receipt": {
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zA",
+     "state": "estimated",
+     "settled": null,
+     "stage": "gateway observed",
+     "chain_final": false,
+     "flag": null,
+     "http": 200,
+     "error": null
+    }
+   },
+   "expect": {
+    "imd-flop": {
+     "verdict": "not_compared"
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard is a dry run: it keeps no ledger row to compare a receipt with"
+    },
+    "viewer": {
+     "verdict": "not_compared"
+    }
+   }
+  },
+  {
+   "id": "reconcile-not-compared-no-receipt",
+   "rule": "reconcile",
+   "input": {
+    "ledger": {
+     "ts": "2026-11-11T15:00:00Z",
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zA",
+     "provider": "mock",
+     "network": "devnet",
+     "payer": "holder",
+     "state": "timeout_unknown",
+     "spend": null,
+     "cap_charge": 0.186,
+     "quote_padded": 0.186,
+     "per_call_cap": 1,
+     "daily_cap": 5,
+     "spent_before": 0
+    },
+    "receipt": null
+   },
+   "expect": {
+    "imd-flop": {
+     "verdict": "not_compared"
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard is a dry run: it keeps no ledger row to compare a receipt with"
+    },
+    "viewer": {
+     "verdict": "not_compared"
+    }
+   }
+  },
+  {
+   "id": "reconcile-not-compared-identity-job-null-on-both-sides",
+   "rule": "reconcile",
+   "input": {
+    "ledger": {
+     "ts": "2026-11-11T15:00:00Z",
+     "request_id": "req-1",
+     "job": null,
+     "seat": "9001",
+     "did": "did:key:zA",
+     "provider": "mock",
+     "network": "devnet",
+     "payer": "holder",
+     "state": "settled",
+     "spend": 0.07,
+     "cap_charge": 0.07,
+     "quote_padded": 0.186,
+     "per_call_cap": 1,
+     "daily_cap": 5,
+     "spent_before": 0
+    },
+    "receipt": {
+     "request_id": "req-1",
+     "job": null,
+     "seat": "9001",
+     "did": "did:key:zA",
+     "state": "settled",
+     "settled": 0.05,
+     "stage": "gateway observed",
+     "chain_final": false,
+     "flag": null,
+     "http": 200,
+     "error": null
+    }
+   },
+   "expect": {
+    "imd-flop": {
+     "verdict": "not_compared"
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard is a dry run: it keeps no ledger row to compare a receipt with"
+    },
+    "viewer": {
+     "verdict": "not_compared"
+    }
+   },
+   "note": "review of the booking step: the job is null on both sides. A receipt is compared only when its identity matches by the viewer's rule (build-lane.py identity_ok): request_id, job, seat and did each a non-empty string on both sides, and equal. So neither part compares the amounts (the ledger books 0.07, the receipt reads 0.05). This replaces the vector reconcile-identity-null-job-on-both-sides, where imd-flop compared and the viewer did not."
+  },
+  {
+   "id": "reconcile-not-compared-identity-job-empty-on-both-sides",
+   "rule": "reconcile",
+   "input": {
+    "ledger": {
+     "ts": "2026-11-11T15:00:00Z",
+     "request_id": "req-1",
+     "job": "",
+     "seat": "9001",
+     "did": "did:key:zA",
+     "provider": "mock",
+     "network": "devnet",
+     "payer": "holder",
+     "state": "settled",
+     "spend": 0.07,
+     "cap_charge": 0.07,
+     "quote_padded": 0.186,
+     "per_call_cap": 1,
+     "daily_cap": 5,
+     "spent_before": 0
+    },
+    "receipt": {
+     "request_id": "req-1",
+     "job": "",
+     "seat": "9001",
+     "did": "did:key:zA",
+     "state": "settled",
+     "settled": 0.05,
+     "stage": "gateway observed",
+     "chain_final": false,
+     "flag": null,
+     "http": 200,
+     "error": null
+    }
+   },
+   "expect": {
+    "imd-flop": {
+     "verdict": "not_compared"
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard is a dry run: it keeps no ledger row to compare a receipt with"
+    },
+    "viewer": {
+     "verdict": "not_compared"
+    }
+   },
+   "note": "review of the booking step: the job is the empty string on both sides. A receipt is compared only when its identity matches by the viewer's rule (build-lane.py identity_ok): request_id, job, seat and did each a non-empty string on both sides, and equal. So neither part compares the amounts (the ledger books 0.07, the receipt reads 0.05). This replaces the vector reconcile-identity-null-job-on-both-sides, where imd-flop compared and the viewer did not."
+  },
+  {
+   "id": "reconcile-not-compared-identity-job-absent-on-both-sides",
+   "rule": "reconcile",
+   "input": {
+    "ledger": {
+     "ts": "2026-11-11T15:00:00Z",
+     "request_id": "req-1",
+     "seat": "9001",
+     "did": "did:key:zA",
+     "provider": "mock",
+     "network": "devnet",
+     "payer": "holder",
+     "state": "settled",
+     "spend": 0.07,
+     "cap_charge": 0.07,
+     "quote_padded": 0.186,
+     "per_call_cap": 1,
+     "daily_cap": 5,
+     "spent_before": 0
+    },
+    "receipt": {
+     "request_id": "req-1",
+     "seat": "9001",
+     "did": "did:key:zA",
+     "state": "settled",
+     "settled": 0.05,
+     "stage": "gateway observed",
+     "chain_final": false,
+     "flag": null,
+     "http": 200,
+     "error": null
+    }
+   },
+   "expect": {
+    "imd-flop": {
+     "verdict": "not_compared"
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard is a dry run: it keeps no ledger row to compare a receipt with"
+    },
+    "viewer": {
+     "verdict": "not_compared"
+    }
+   },
+   "note": "review of the booking step: the job is absent on both sides. A receipt is compared only when its identity matches by the viewer's rule (build-lane.py identity_ok): request_id, job, seat and did each a non-empty string on both sides, and equal. So neither part compares the amounts (the ledger books 0.07, the receipt reads 0.05). This replaces the vector reconcile-identity-null-job-on-both-sides, where imd-flop compared and the viewer did not."
+  },
+  {
+   "id": "reconcile-not-compared-identity-job-number-on-both-sides",
+   "rule": "reconcile",
+   "input": {
+    "ledger": {
+     "ts": "2026-11-11T15:00:00Z",
+     "request_id": "req-1",
+     "job": 1,
+     "seat": "9001",
+     "did": "did:key:zA",
+     "provider": "mock",
+     "network": "devnet",
+     "payer": "holder",
+     "state": "settled",
+     "spend": 0.07,
+     "cap_charge": 0.07,
+     "quote_padded": 0.186,
+     "per_call_cap": 1,
+     "daily_cap": 5,
+     "spent_before": 0
+    },
+    "receipt": {
+     "request_id": "req-1",
+     "job": 1,
+     "seat": "9001",
+     "did": "did:key:zA",
+     "state": "settled",
+     "settled": 0.05,
+     "stage": "gateway observed",
+     "chain_final": false,
+     "flag": null,
+     "http": 200,
+     "error": null
+    }
+   },
+   "expect": {
+    "imd-flop": {
+     "verdict": "not_compared"
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard is a dry run: it keeps no ledger row to compare a receipt with"
+    },
+    "viewer": {
+     "verdict": "not_compared"
+    }
+   },
+   "note": "review of the booking step: the job is the number 1 on both sides. A receipt is compared only when its identity matches by the viewer's rule (build-lane.py identity_ok): request_id, job, seat and did each a non-empty string on both sides, and equal. So neither part compares the amounts (the ledger books 0.07, the receipt reads 0.05). This replaces the vector reconcile-identity-null-job-on-both-sides, where imd-flop compared and the viewer did not."
+  },
+  {
+   "id": "reconcile-not-compared-identity-seat-null-on-both-sides",
+   "rule": "reconcile",
+   "input": {
+    "ledger": {
+     "ts": "2026-11-11T15:00:00Z",
+     "request_id": "req-1",
+     "job": null,
+     "seat": null,
+     "did": "did:key:zA",
+     "provider": "mock",
+     "network": "devnet",
+     "payer": "holder",
+     "state": "settled",
+     "spend": 0.07,
+     "cap_charge": 0.07,
+     "quote_padded": 0.186,
+     "per_call_cap": 1,
+     "daily_cap": 5,
+     "spent_before": 0
+    },
+    "receipt": {
+     "request_id": "req-1",
+     "job": null,
+     "seat": null,
+     "did": "did:key:zA",
+     "state": "settled",
+     "settled": 0.05,
+     "stage": "gateway observed",
+     "chain_final": false,
+     "flag": null,
+     "http": 200,
+     "error": null
+    }
+   },
+   "expect": {
+    "imd-flop": {
+     "verdict": "not_compared"
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard is a dry run: it keeps no ledger row to compare a receipt with"
+    },
+    "viewer": {
+     "verdict": "not_compared"
+    }
+   },
+   "note": "review of the booking step: the seat is null on both sides. A receipt is compared only when its identity matches by the viewer's rule (build-lane.py identity_ok): request_id, job, seat and did each a non-empty string on both sides, and equal. So neither part compares the amounts (the ledger books 0.07, the receipt reads 0.05). This replaces the vector reconcile-identity-null-job-on-both-sides, where imd-flop compared and the viewer did not."
+  },
+  {
+   "id": "reconcile-not-compared-identity-seat-empty-on-both-sides",
+   "rule": "reconcile",
+   "input": {
+    "ledger": {
+     "ts": "2026-11-11T15:00:00Z",
+     "request_id": "req-1",
+     "job": null,
+     "seat": "",
+     "did": "did:key:zA",
+     "provider": "mock",
+     "network": "devnet",
+     "payer": "holder",
+     "state": "settled",
+     "spend": 0.07,
+     "cap_charge": 0.07,
+     "quote_padded": 0.186,
+     "per_call_cap": 1,
+     "daily_cap": 5,
+     "spent_before": 0
+    },
+    "receipt": {
+     "request_id": "req-1",
+     "job": null,
+     "seat": "",
+     "did": "did:key:zA",
+     "state": "settled",
+     "settled": 0.05,
+     "stage": "gateway observed",
+     "chain_final": false,
+     "flag": null,
+     "http": 200,
+     "error": null
+    }
+   },
+   "expect": {
+    "imd-flop": {
+     "verdict": "not_compared"
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard is a dry run: it keeps no ledger row to compare a receipt with"
+    },
+    "viewer": {
+     "verdict": "not_compared"
+    }
+   },
+   "note": "review of the booking step: the seat is the empty string on both sides. A receipt is compared only when its identity matches by the viewer's rule (build-lane.py identity_ok): request_id, job, seat and did each a non-empty string on both sides, and equal. So neither part compares the amounts (the ledger books 0.07, the receipt reads 0.05). This replaces the vector reconcile-identity-null-job-on-both-sides, where imd-flop compared and the viewer did not."
+  },
+  {
+   "id": "reconcile-not-compared-identity-seat-absent-on-both-sides",
+   "rule": "reconcile",
+   "input": {
+    "ledger": {
+     "ts": "2026-11-11T15:00:00Z",
+     "request_id": "req-1",
+     "job": null,
+     "did": "did:key:zA",
+     "provider": "mock",
+     "network": "devnet",
+     "payer": "holder",
+     "state": "settled",
+     "spend": 0.07,
+     "cap_charge": 0.07,
+     "quote_padded": 0.186,
+     "per_call_cap": 1,
+     "daily_cap": 5,
+     "spent_before": 0
+    },
+    "receipt": {
+     "request_id": "req-1",
+     "job": null,
+     "did": "did:key:zA",
+     "state": "settled",
+     "settled": 0.05,
+     "stage": "gateway observed",
+     "chain_final": false,
+     "flag": null,
+     "http": 200,
+     "error": null
+    }
+   },
+   "expect": {
+    "imd-flop": {
+     "verdict": "not_compared"
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard is a dry run: it keeps no ledger row to compare a receipt with"
+    },
+    "viewer": {
+     "verdict": "not_compared"
+    }
+   },
+   "note": "review of the booking step: the seat is absent on both sides. A receipt is compared only when its identity matches by the viewer's rule (build-lane.py identity_ok): request_id, job, seat and did each a non-empty string on both sides, and equal. So neither part compares the amounts (the ledger books 0.07, the receipt reads 0.05). This replaces the vector reconcile-identity-null-job-on-both-sides, where imd-flop compared and the viewer did not."
+  },
+  {
+   "id": "reconcile-not-compared-identity-seat-number-on-both-sides",
+   "rule": "reconcile",
+   "input": {
+    "ledger": {
+     "ts": "2026-11-11T15:00:00Z",
+     "request_id": "req-1",
+     "job": null,
+     "seat": 9001,
+     "did": "did:key:zA",
+     "provider": "mock",
+     "network": "devnet",
+     "payer": "holder",
+     "state": "settled",
+     "spend": 0.07,
+     "cap_charge": 0.07,
+     "quote_padded": 0.186,
+     "per_call_cap": 1,
+     "daily_cap": 5,
+     "spent_before": 0
+    },
+    "receipt": {
+     "request_id": "req-1",
+     "job": null,
+     "seat": 9001,
+     "did": "did:key:zA",
+     "state": "settled",
+     "settled": 0.05,
+     "stage": "gateway observed",
+     "chain_final": false,
+     "flag": null,
+     "http": 200,
+     "error": null
+    }
+   },
+   "expect": {
+    "imd-flop": {
+     "verdict": "not_compared"
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard is a dry run: it keeps no ledger row to compare a receipt with"
+    },
+    "viewer": {
+     "verdict": "not_compared"
+    }
+   },
+   "note": "review of the booking step: the seat is the number 9001 on both sides. A receipt is compared only when its identity matches by the viewer's rule (build-lane.py identity_ok): request_id, job, seat and did each a non-empty string on both sides, and equal. So neither part compares the amounts (the ledger books 0.07, the receipt reads 0.05). This replaces the vector reconcile-identity-null-job-on-both-sides, where imd-flop compared and the viewer did not."
+  },
+  {
+   "id": "reconcile-not-compared-identity-did-null-on-both-sides",
+   "rule": "reconcile",
+   "input": {
+    "ledger": {
+     "ts": "2026-11-11T15:00:00Z",
+     "request_id": "req-1",
+     "job": null,
+     "seat": "9001",
+     "did": null,
+     "provider": "mock",
+     "network": "devnet",
+     "payer": "holder",
+     "state": "settled",
+     "spend": 0.07,
+     "cap_charge": 0.07,
+     "quote_padded": 0.186,
+     "per_call_cap": 1,
+     "daily_cap": 5,
+     "spent_before": 0
+    },
+    "receipt": {
+     "request_id": "req-1",
+     "job": null,
+     "seat": "9001",
+     "did": null,
+     "state": "settled",
+     "settled": 0.05,
+     "stage": "gateway observed",
+     "chain_final": false,
+     "flag": null,
+     "http": 200,
+     "error": null
+    }
+   },
+   "expect": {
+    "imd-flop": {
+     "verdict": "not_compared"
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard is a dry run: it keeps no ledger row to compare a receipt with"
+    },
+    "viewer": {
+     "verdict": "not_compared"
+    }
+   },
+   "note": "review of the booking step: the did is null on both sides. A receipt is compared only when its identity matches by the viewer's rule (build-lane.py identity_ok): request_id, job, seat and did each a non-empty string on both sides, and equal. So neither part compares the amounts (the ledger books 0.07, the receipt reads 0.05). This replaces the vector reconcile-identity-null-job-on-both-sides, where imd-flop compared and the viewer did not."
+  },
+  {
+   "id": "reconcile-not-compared-identity-did-empty-on-both-sides",
+   "rule": "reconcile",
+   "input": {
+    "ledger": {
+     "ts": "2026-11-11T15:00:00Z",
+     "request_id": "req-1",
+     "job": null,
+     "seat": "9001",
+     "did": "",
+     "provider": "mock",
+     "network": "devnet",
+     "payer": "holder",
+     "state": "settled",
+     "spend": 0.07,
+     "cap_charge": 0.07,
+     "quote_padded": 0.186,
+     "per_call_cap": 1,
+     "daily_cap": 5,
+     "spent_before": 0
+    },
+    "receipt": {
+     "request_id": "req-1",
+     "job": null,
+     "seat": "9001",
+     "did": "",
+     "state": "settled",
+     "settled": 0.05,
+     "stage": "gateway observed",
+     "chain_final": false,
+     "flag": null,
+     "http": 200,
+     "error": null
+    }
+   },
+   "expect": {
+    "imd-flop": {
+     "verdict": "not_compared"
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard is a dry run: it keeps no ledger row to compare a receipt with"
+    },
+    "viewer": {
+     "verdict": "not_compared"
+    }
+   },
+   "note": "review of the booking step: the did is the empty string on both sides. A receipt is compared only when its identity matches by the viewer's rule (build-lane.py identity_ok): request_id, job, seat and did each a non-empty string on both sides, and equal. So neither part compares the amounts (the ledger books 0.07, the receipt reads 0.05). This replaces the vector reconcile-identity-null-job-on-both-sides, where imd-flop compared and the viewer did not."
+  },
+  {
+   "id": "reconcile-not-compared-identity-did-absent-on-both-sides",
+   "rule": "reconcile",
+   "input": {
+    "ledger": {
+     "ts": "2026-11-11T15:00:00Z",
+     "request_id": "req-1",
+     "job": null,
+     "seat": "9001",
+     "provider": "mock",
+     "network": "devnet",
+     "payer": "holder",
+     "state": "settled",
+     "spend": 0.07,
+     "cap_charge": 0.07,
+     "quote_padded": 0.186,
+     "per_call_cap": 1,
+     "daily_cap": 5,
+     "spent_before": 0
+    },
+    "receipt": {
+     "request_id": "req-1",
+     "job": null,
+     "seat": "9001",
+     "state": "settled",
+     "settled": 0.05,
+     "stage": "gateway observed",
+     "chain_final": false,
+     "flag": null,
+     "http": 200,
+     "error": null
+    }
+   },
+   "expect": {
+    "imd-flop": {
+     "verdict": "not_compared"
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard is a dry run: it keeps no ledger row to compare a receipt with"
+    },
+    "viewer": {
+     "verdict": "not_compared"
+    }
+   },
+   "note": "review of the booking step: the did is absent on both sides. A receipt is compared only when its identity matches by the viewer's rule (build-lane.py identity_ok): request_id, job, seat and did each a non-empty string on both sides, and equal. So neither part compares the amounts (the ledger books 0.07, the receipt reads 0.05). This replaces the vector reconcile-identity-null-job-on-both-sides, where imd-flop compared and the viewer did not."
+  },
+  {
+   "id": "reconcile-not-compared-identity-did-number-on-both-sides",
+   "rule": "reconcile",
+   "input": {
+    "ledger": {
+     "ts": "2026-11-11T15:00:00Z",
+     "request_id": "req-1",
+     "job": null,
+     "seat": "9001",
+     "did": 7,
+     "provider": "mock",
+     "network": "devnet",
+     "payer": "holder",
+     "state": "settled",
+     "spend": 0.07,
+     "cap_charge": 0.07,
+     "quote_padded": 0.186,
+     "per_call_cap": 1,
+     "daily_cap": 5,
+     "spent_before": 0
+    },
+    "receipt": {
+     "request_id": "req-1",
+     "job": null,
+     "seat": "9001",
+     "did": 7,
+     "state": "settled",
+     "settled": 0.05,
+     "stage": "gateway observed",
+     "chain_final": false,
+     "flag": null,
+     "http": 200,
+     "error": null
+    }
+   },
+   "expect": {
+    "imd-flop": {
+     "verdict": "not_compared"
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard is a dry run: it keeps no ledger row to compare a receipt with"
+    },
+    "viewer": {
+     "verdict": "not_compared"
+    }
+   },
+   "note": "review of the booking step: the did is the number 7 on both sides. A receipt is compared only when its identity matches by the viewer's rule (build-lane.py identity_ok): request_id, job, seat and did each a non-empty string on both sides, and equal. So neither part compares the amounts (the ledger books 0.07, the receipt reads 0.05). This replaces the vector reconcile-identity-null-job-on-both-sides, where imd-flop compared and the viewer did not."
+  }
+ ]
+}
