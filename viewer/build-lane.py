@@ -304,16 +304,17 @@ def row_disagree(row, e, r, reservation, limit, label=DISAGREE):
 def cap_charge_line(e):
     """The 'cap charge' line of a settled row whose cap charge is a known amount that is not its settled spend,
     with the ledger reason beside it when there is one. An empty list for any other row. imd-flop books such a
-    row when the completion reported a higher cost than the receipt settled (reason 'cap charge raised to
-    reported cost'). The limit figures already use the cap charge."""
+    row whenever the receipt settles below the hold: the cap charge keeps the padded quote (the hold floor,
+    contract/rules.json KD-12), or a higher reported cost (reason 'cap charge raised to reported cost'). So the
+    line shows what counts against the cap beside the observed spend. The limit figures already use it."""
     spend, cap_charge, reason = amount(e.get("spend")), amount(e.get("cap_charge")), e.get("reason")
     if e.get("state") not in SETTLES or None in (spend, cap_charge) or spend == cap_charge: return []
     return [["cap charge", f'{num(cap_charge)} <span class="note">({esc(reason)})</span>' if present(reason) else cap_charge]]
 
 def row_over_limit(row, e, r, reservation, limit):
     # Receipt and ledger agree, but the settlement breaks a limit: amber, the hold stays, never green (KD-2).
-    # On a settled row imd-flop books cap_charge as the settled amount, or as a higher reported cost
-    # (cap_charge_line). It is not the hold, so the held reservation shown is quote_padded first (FIXER).
+    # On a settled row imd-flop books cap_charge as the hold floor, raised by the settled amount or a reported
+    # cost (cap_charge_line), so it can be above the hold. The held reservation shown is quote_padded first (FIXER).
     quote = amount(e.get("quote_padded"))
     row["chips"] = [["amber", limit]]; row["bad"] = True
     row["flop"] += [["reservation", reservation if quote is None else quote], ["settled", amount(r.get("settled"))]] + cap_charge_line(e)

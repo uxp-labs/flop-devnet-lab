@@ -272,8 +272,8 @@ describe("R4 (low, test gap): reconcile's seat and did checks are pinned by no t
  * has one final outcome (settled at an amount at or below the padded quote, as max_cost_flop requires, with
  * that amount as its reported cost or none; released at 0; or released with no amount), and before it a
  * read may be pending, failed or for another request id. A request that failed before send is answered 404
- * only, so no read takes a released hold back (R3 covers that). A gateway that revises a settlement upward
- * breaks the cap: that is R9, outside this stub.
+ * only, so no read takes a released hold back (R3 covers that). A gateway that revised a settlement upward
+ * broke the cap before the hold floor (R9); it is outside this stub, and R9's own tests pin it.
  * Then the whole ledger is replayed and checked. Size: STRESS_PROCS processes x STRESS_OPS operations x
  * STRESS_ROUNDS rounds (defaults 4 x 25 x 2 here; the review ran 6 x 60 x 20 by env).
  */

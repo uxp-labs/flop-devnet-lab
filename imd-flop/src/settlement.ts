@@ -394,7 +394,8 @@ export type Verdict = "not_compared" | "disagree" | "settled_unknown" | "agree";
  *    side only is a disagreement. No amount on either side is settled_unknown.
  *  - A receipt in any other state needs a row that claims no settlement, and it cannot be chain final.
  *  - A row whose call timed out or errored disagrees with any receipt until a read is booked for it.
- * The cap charge is not compared: it may be above the settled spend when the completion reported more.
+ * The cap charge is not compared: it may be above the settled spend, held at the padded quote or raised by
+ * a reported cost (decideBooking, the hold floor).
  */
 export function reconcile(row: BookedRow | null | undefined, receipt: StoredReceipt | null | undefined): Verdict {
   if (!row || !receipt || row.state === "refused_local") return "not_compared";
