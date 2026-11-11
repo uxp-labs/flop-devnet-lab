@@ -111,6 +111,10 @@
     "tests": 18,
     "names": "696dfbd6dc3612a4c11bf7215479040b8a2a78ad1fe07f28c949e66d748d2b31"
   },
+  "scale-fuzz.test.ts": {
+    "tests": 22,
+    "names": "e548fa96bd52a357642109096ae50458459906d274ed20e78ce6a1f7d0a585ef"
+  },
   "scale-metadata.test.ts": {
     "tests": 22,
     "names": "98b8ed418310b747189bcdf22267ec86f16f178c16978c1049bd28ada5a3a9f0"
