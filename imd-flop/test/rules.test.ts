@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { cli, tmpHome } from "./helpers.js";
-import { assertNoSecrets, clearSecretRegistry, registerSecret, scanForSecrets } from "../src/secrets.js";
+import { assertNoSecrets, clearSecretRegistry, outsideText, registerSecret, scanForSecrets } from "../src/secrets.js";
 import { writeJsonSafe, appendJsonlSafe } from "../src/store.js";
 
 describe("secret scan before any write", () => {
@@ -15,6 +15,18 @@ describe("secret scan before any write", () => {
     expect(scanForSecrets({ x: "-----BEGIN OPENSSH PRIVATE KEY-----" }).length).toBeGreaterThan(0);
     expect(scanForSecrets({ private_key: "anything" }).length).toBeGreaterThan(0);
     expect(scanForSecrets({ seed: "x" }).length).toBeGreaterThan(0);
+  });
+  it("finds a token glued to what stands before it (no word boundary is needed in front)", () => {
+    const key = "flop_ek_" + "SYNTHETICNOTAKEY0123456789";
+    for (const glued of ["[2J" + key, "x_" + key, "9" + key, "rpc" + key, "\u001b[2J" + key]) {
+      expect(scanForSecrets({ t: glued }).length, glued).toBeGreaterThan(0);
+      expect(outsideText(glued), glued).not.toContain("SYNTHETICNOTAKEY");
+    }
+    expect(scanForSecrets({ t: "flop_sk_" + "SYNTHETICPARENT0123456789" }).length).toBeGreaterThan(0);
+    expect(scanForSecrets({ h: "xBearer abcdefghijklmnop" }).length).toBeGreaterThan(0);
+    expect(outsideText("TokenBearer abcdefghijklmnop")).not.toContain("abcdefghijklmnop");
+    // Plain words that only look alike stay readable.
+    expect(scanForSecrets({ t: "the imd-flop ledger and the flop_devnet lab" })).toEqual([]);
   });
   it("blocks a loaded secret in any encoding", () => {
     clearSecretRegistry();

@@ -64,8 +64,11 @@ const SECRET_FIELD = /^(private[_-]?key|privkey|secret|secret[_-]?key|seed|seed[
 const HEX64 = /(?<![0-9a-fA-F])(?:0x)?[0-9a-fA-F]{64,}(?![0-9a-fA-F])/;
 /** Ed25519 and EIP-712 signatures are longer than a 32-byte key and are stored under these names. */
 const SIGNATURE_FIELDS = new Set(["sig", "signature", "flopSignature"]);
-const BEARER = /\bBearer\s+[A-Za-z0-9._~+/=-]{8,}/;
-const FLOP_TOKEN = /\bflop_(?:ek|sk|pk|key|live|test)?_?[A-Za-z0-9]{16,}/;
+// A token is found wherever its prefix starts, whatever stands before it. A key glued to a letter, a digit
+// or an underscore (for example what is left of an escape sequence, "[2Jflop_ek_...") is still a key, so
+// neither rule asks for a word boundary in front.
+const BEARER = /Bearer\s+[A-Za-z0-9._~+/=-]{8,}/;
+const FLOP_TOKEN = /flop_(?:ek|sk|pk|key|live|test)?_?[A-Za-z0-9]{16,}/;
 const PEM = /-----BEGIN [A-Z ]*PRIVATE KEY-----/;
 
 export interface Finding {
