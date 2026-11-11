@@ -464,12 +464,12 @@
     "why": "the agreement status.reset-false-with-both-heights is checked: with it off, the table's cases for it are served"
   },
   {
-    "id": "snapshot-check-status-reset-true-on-another-genesis-off",
+    "id": "snapshot-check-status-reset-true-on-another-genesis-or-a-lost-anchor-off",
     "file": "src/snapshot-check.ts",
-    "find": "  [\n    \"status.reset-true-on-another-genesis\",\n    (s) => {\n      const g = s.status.genesis;\n      return s.status.reset_detected !== true || (g.faucet !== null && g.faucet !== g.pinned) || (g.rpc !== null && g.rpc !== g.pinned);\n    },\n  ],",
-    "replace": "  [\"status.reset-true-on-another-genesis\", () => true],",
+    "find": "  // True only from another genesis, or from a lost anchor, a reset that kept the genesis: its\n  // conflict ends with ANCHOR_LOST (RULES.md 1.1).\n  [\n    \"status.reset-true-on-another-genesis-or-a-lost-anchor\",\n    (s) => {\n      const g = s.status.genesis;\n      const lost = s.status.conflicts.some((c) => c.endsWith(`: ${ANCHOR_LOST}`));\n      return s.status.reset_detected !== true || (g.faucet !== null && g.faucet !== g.pinned) || (g.rpc !== null && g.rpc !== g.pinned) || lost;\n    },\n  ],",
+    "replace": "  [\"status.reset-true-on-another-genesis-or-a-lost-anchor\", () => true],",
     "test": "test/snapshot-check.test.ts",
-    "why": "the agreement status.reset-true-on-another-genesis is checked: with it off, the table's cases for it are served"
+    "why": "the agreement status.reset-true-on-another-genesis-or-a-lost-anchor is checked: with it off, the table's cases for it are served"
   },
   {
     "id": "snapshot-check-status-lag-adds-up-off",

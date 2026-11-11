@@ -69,6 +69,18 @@ export interface RpcHead {
   unreadable?: string;
 }
 
+/**
+ * The anchor read back (RULES.md 1.1): what chain_getBlockHash(height) answered for the latest
+ * finalized height an earlier snapshot logged on the pinned genesis. Only a live run reads one.
+ */
+export interface AnchorReading {
+  height: number;
+  /** The answer as given: a block hash, or null when the node has no block there. Null too when the read failed. */
+  hash: unknown;
+  /** Why the read failed on the way, or null when an answer came back. */
+  error: string | null;
+}
+
 /** One chain event, kept verbatim as a raw input. */
 export interface RawEvent {
   block_number: number | null;

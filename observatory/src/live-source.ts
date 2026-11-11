@@ -13,7 +13,7 @@
 import { type Answer, finalizedHashOf, headFrom } from "./rpc-head.js";
 import type { Source } from "./source.js";
 import { type Transport, TransportError } from "./transport.js";
-import type { EventPage, FaucetChainBody, FaucetHealthBody, HttpResult, RpcHead, RuntimeConstants, Trust } from "./types.js";
+import type { AnchorReading, EventPage, FaucetChainBody, FaucetHealthBody, HttpResult, RpcHead, RuntimeConstants, Trust } from "./types.js";
 
 /** What a live reading GETs. Each host is on the allow list in src/net.ts. */
 export const LIVE_URLS = {
@@ -95,6 +95,10 @@ export class LiveSource implements Source {
 
   async rpcHead(): Promise<RpcHead> {
     return (await this.read()).rpcHead;
+  }
+
+  async anchorBlock(): Promise<AnchorReading | null> {
+    return null;
   }
 
   async runtimeConstants(): Promise<RuntimeConstants | null> {

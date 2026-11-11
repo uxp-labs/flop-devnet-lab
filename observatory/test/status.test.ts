@@ -3,8 +3,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterAll, describe, expect, it } from "vitest";
-import { FixtureSource } from "../src/source.js";
+import { FixtureSource, type FixtureData } from "../src/source.js";
 import { unknownHttp } from "../src/source.js";
+import type { AnchorReading } from "../src/types.js";
 import { DEVNET_GENESIS, assessNetwork, classifyFaucet, classifyGateway, networkStatus, resetDetected, rpcHeadUsable } from "../src/status.js";
 
 const NOW = "2026-11-09T23:47:53Z";
@@ -933,5 +934,111 @@ describe("the spec floor: the runtime version never goes down on a genesis (RULE
     const many = Array.from({ length: 200_000 }, (_, i) => spec(1011000 + (i % 3000)));
     many[123_456] = spec(1014003);
     expect((await assess(many)).status.conflicts).toEqual(["runtime version 1014002 is below the version 1014003 an earlier snapshot saw on this genesis"]);
+  });
+});
+
+describe("the anchor: an earlier finalized block must still be there (RULES.md 1.1, anchor step)", () => {
+  // status-healthy reads finalized block 3341575. The anchor is an earlier one the log holds.
+  const A = "0x" + "a1".repeat(32);
+  const B = "0x" + "b2".repeat(32);
+  const anchor = { height: 3341000, hash: A };
+  /** status-healthy, with what the node answered when the anchor was read back. */
+  class Anchored extends FixtureSource {
+    private readonly reading: AnchorReading;
+    constructor(data: FixtureData, reading: AnchorReading) {
+      super(data);
+      this.reading = reading;
+    }
+    async anchorBlock(): Promise<AnchorReading | null> {
+      return this.reading;
+    }
+  }
+  const assess = (reading: AnchorReading | null, patch: Record<string, unknown> = {}, logged: unknown = anchor) => {
+    const data = { ...fx("status-healthy").data, ...patch } as never;
+    return assessNetwork(reading === null ? new FixtureSource(data) : new Anchored(data, reading), { pinnedGenesis: DEVNET_GENESIS, now: NOW, anchor: logged as never });
+  };
+  const read = (hash: unknown, error: string | null = null): AnchorReading => ({ height: 3341000, hash, error });
+
+  it("the same hash: nothing changes", async () => {
+    const base = await assess(null, {}, null);
+    expect(base.status.reset_detected).toBe(false);
+    expect(await assess(read(A))).toEqual(base);
+  });
+
+  it("no anchor reading (a fixture source, or no call made): nothing changes, whatever the log holds", async () => {
+    expect(await assess(null)).toEqual(await assess(null, {}, null));
+  });
+
+  it("another hash at that height: a conflict naming the height, the logged hash and the answer, reset_detected true, and the head not usable", async () => {
+    const base = (await assess(null, {}, null)).status;
+    const { status, rpcUsable } = await assess(read(B));
+    expect(status).toEqual({
+      ...base,
+      reset_detected: true,
+      conflicts: [`finalized block 3341000 was ${A} when an earlier snapshot logged it, and the node now gives ${B} at that height: the finalized chain is not the one the log saw`],
+      rpc: { ...base.rpc, health: "degraded", detail: "the finalized block an earlier snapshot logged at 3341000 is not on the node's chain" },
+    });
+    expect(rpcUsable).toBe(false);
+  });
+
+  it("no block at that height (the node answers null): the same conflict, in its own words", async () => {
+    const base = (await assess(null, {}, null)).status;
+    const { status, rpcUsable } = await assess(read(null));
+    expect(status).toEqual({
+      ...base,
+      reset_detected: true,
+      conflicts: [`finalized block 3341000 was ${A} when an earlier snapshot logged it, and the node now has no block at that height: the finalized chain is not the one the log saw`],
+      rpc: { ...base.rpc, health: "degraded", detail: "the finalized block an earlier snapshot logged at 3341000 is not on the node's chain" },
+    });
+    expect(rpcUsable).toBe(false);
+  });
+
+  it("the read failed on the way: no verdict, so reset_detected is null, not false, and the detail says why; the head still bounds escrows", async () => {
+    const base = (await assess(null, {}, null)).status;
+    const { status, rpcUsable } = await assess(read(null, "rpc socket error"));
+    expect(status).toEqual({
+      ...base,
+      reset_detected: null,
+      rpc: {
+        ...base.rpc,
+        health: "unknown",
+        detail: "the anchor, finalized block 3341000 an earlier snapshot logged, could not be read back (chain_getBlockHash(3341000): rpc socket error), so whether the finalized chain is the one the log saw is unknown",
+      },
+    });
+    expect(rpcUsable).toBe(true);
+  });
+
+  it("an answer that is no block hash (upper case hex, a number): no verdict either, and never a conflict", async () => {
+    const base = (await assess(null, {}, null)).status;
+    for (const odd of [A.toUpperCase().replace("0X", "0x"), 42, { hash: A }]) {
+      const { status } = await assess(read(odd));
+      expect(status).toEqual({
+        ...base,
+        reset_detected: null,
+        rpc: { ...base.rpc, health: "unknown", detail: "the anchor, finalized block 3341000 an earlier snapshot logged, was read back as no block hash, so whether the finalized chain is the one the log saw is unknown" },
+      });
+    }
+  });
+
+  it("with another genesis on the RPC, a failed anchor read still lets that genesis count: reset_detected true", async () => {
+    const rpcHead = { ...(fx("status-healthy").data.rpcHead as object), genesis_hash: OTHER };
+    const { status } = await assess(read(null, "rpc socket error"), { rpcHead });
+    expect(status.reset_detected).toBe(true);
+  });
+
+  it("with the RPC down, the failed anchor read is said after the head's own errors", async () => {
+    const rpcHead = { genesis_hash: null, finalized: null, best_number: null, runtime_spec_version: null, observed_at: "2026-11-09T23:47:40Z", error: "chain_getBlockHash(0): rpc socket error" };
+    const { status } = await assess(read(null, "rpc socket error"), { rpcHead });
+    expect([status.rpc.health, status.rpc.detail, status.reset_detected, status.conflicts]).toEqual([
+      "down",
+      "chain_getBlockHash(0): rpc socket error; the anchor, finalized block 3341000 an earlier snapshot logged, could not be read back (chain_getBlockHash(3341000): rpc socket error), so whether the finalized chain is the one the log saw is unknown",
+      null,
+      [],
+    ]);
+  });
+
+  it("an anchor reading the log does not name, or for another height, is a fault in the run, never judged", async () => {
+    await expect(assess(read(A), {}, null)).rejects.toThrow(/anchor/);
+    await expect(assess(read(A), {}, { height: 3341001, hash: A })).rejects.toThrow(/anchor/);
   });
 });
