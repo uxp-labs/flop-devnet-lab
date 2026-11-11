@@ -286,28 +286,26 @@ describe("finding 3 (low): Ethereum RPC server text never carries the RPC URL", 
   /** A JSON-RPC server that answers eth_chainId with an error message built from what it was asked. */
   const erroring = (echo: (input: string) => string): Fetch => async (input) => new Response(JSON.stringify({ jsonrpc: "2.0", id: 1, error: { code: -32000, message: echo(String(input)) } }), { status: 200 });
 
-  it("the audit's reproduction: the eth_chainId error text has the URL replaced by the mark", async () => {
+  it("the audit's reproduction: the eth_chainId error text is never quoted, only its JSON-RPC code", async () => {
+    // Moved (review of the audit 33f3b9f fixes, defects 2 and 3): RPC server text is never quoted. Was
+    // "eth_chainId error: unauthorized for [ETH_RPC_URL]".
     const url = "https://eth.example.invalid/v2/k3y-AbCdEf0123456789-path-token";
     const m = await message(assertPaidNetwork(network("devnet"), url, erroring((input) => `unauthorized for ${input}`)));
-    expect(m).toBe("eth_chainId error: unauthorized for [ETH_RPC_URL]");
-    expect(m).not.toContain("k3y");
-    expect(m).not.toContain("eth.example.invalid");
+    expect(m).toBe("eth_chainId error: JSON-RPC error code -32000");
   });
 
-  it("every form the URL can be echoed in is replaced: as given, href, origin with path, userinfo, path alone", async () => {
+  it("whatever form the server echoes the URL in, nothing of it reaches the message", async () => {
     const forms = [URL_GIVEN, parsed.href, parsed.origin + parsed.pathname, `${parsed.username}:${parsed.password}`, parsed.pathname];
     for (const form of forms) {
       const m = await message(readVerifiedSeatOwner(URL_GIVEN, "0x" + "1".repeat(40), "1", erroring(() => `bad key at ${form} (retry later)`)));
-      expect(m, form).toContain("[ETH_RPC_URL]");
+      expect(m, form).toBe("eth_chainId error: JSON-RPC error code -32000");
       expect(leaks(m), form).toEqual([]);
-      expect(scanForSecrets({ reason: m })).toEqual([]);
     }
   });
 
-  it("server text is cut to a bounded length", async () => {
-    const m = await message(readVerifiedSeatOwner(URL_GIVEN, "0x" + "1".repeat(40), "1", erroring(() => "x".repeat(100_000))));
-    expect(m.length).toBeLessThan(400);
-    expect(m.startsWith("eth_chainId error: xxx")).toBe(true);
+  it("a JSON-RPC error with no integer code says so, and quotes nothing", async () => {
+    const f: Fetch = async () => new Response(JSON.stringify({ jsonrpc: "2.0", id: 1, error: { code: "x".repeat(100), message: "y".repeat(100_000) } }), { status: 200 });
+    expect(await message(readVerifiedSeatOwner(URL_GIVEN, "0x" + "1".repeat(40), "1", f))).toBe("eth_chainId error: JSON-RPC error with no code");
   });
 
   it("an eth_call answer that is not JSON never quotes the body", async () => {

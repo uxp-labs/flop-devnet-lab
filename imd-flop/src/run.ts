@@ -17,7 +17,7 @@ import { DISAGREE, PAST_ADMITTED, reportedCost, SETTLES } from "./settlement.js"
 import { receiptVerdicts, storeRead } from "./receipt-store.js";
 import { responsePath } from "./response-store.js";
 import type { Provider } from "./providers.js";
-import { assertPaidNetwork, checkImdJob, PaidGateError, PreSendError, readVerifiedSeatOwner, type Fetch } from "./gateway.js";
+import { assertPaidNetwork, checkImdJob, ethRpcUrlMark, PaidGateError, PreSendError, readVerifiedSeatOwner, type Fetch } from "./gateway.js";
 import { FlopHTTPError } from "@flop-labs/client";
 import type { MatchResult } from "./receipts.js";
 
@@ -249,7 +249,9 @@ export async function runJob(h: string, provider: Provider, o: RunOpts, deps: Ru
     // the pre-call `sent` charge would stay in effect. A key-shaped message would make the scan refuse the
     // release row and strand the reservation, so it is withheld instead. The same reason goes to the ledger
     // row and to stderr (swarm audit 33f3b9f, finding 10).
-    const said = preSend ? outsideText(err.message) : "";
+    // The Ethereum RPC URL mark is defense in depth: the RPC server's own text is never quoted (gateway.ts).
+    const marks = [ethRpcUrlMark(deps.ethRpc)].filter((m) => m !== null);
+    const said = preSend ? outsideText(err.message, { marks }) : "";
     const reason = timedOut ? `${outsideText(err.name)}: no answer; spend unknown, not retried` : preSend ? said === OUTSIDE_WITHHELD ? "nothing sent: provider error withheld by the secret scan" : `nothing sent: ${said}` : `HTTP ${http}`;
     // What run saw is a report, not a receipt read (settlement.ts decideFailure). It never replaces a
     // settlement another process booked meanwhile, and "nothing was sent" never releases a row a trusted

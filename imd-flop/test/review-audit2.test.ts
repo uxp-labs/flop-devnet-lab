@@ -11,10 +11,11 @@ import { appendLedger, jobSpent, spentToday, utcDay, type LedgerEntry } from "..
 import { keyFile, ledgerFile, receiptsDir } from "../src/paths.js";
 import { ceilMicro, floorMicro } from "../src/rounding.js";
 import { checkBudget, roomLeft } from "../src/policy.js";
-import { assertPaidNetwork, readEthereumChainId, type Fetch } from "../src/gateway.js";
+import { assertPaidNetwork, ethRpcUrlMark, readEthereumChainId, type Fetch } from "../src/gateway.js";
 import { network } from "../src/networks.js";
 import { runJob } from "../src/run.js";
-import { scanForSecrets } from "../src/secrets.js";
+import { PreSendError } from "../src/gateway.js";
+import { OUTSIDE_WITHHELD, outsideText, scanForSecrets } from "../src/secrets.js";
 import { listReceipts } from "../src/receipt-store.js";
 import type { CompleteReq, CompleteRes, Provider } from "../src/providers.js";
 import { cli, tmpHome } from "./helpers.js";
@@ -112,18 +113,21 @@ describe("review defect 1 (medium), fixed: properties and the 1e9 bound", () => 
   });
 });
 
-describe("DEFECT 2 (low): forms of the Ethereum RPC URL that outsideText does not replace reach stderr and the ledger reason raw", () => {
+describe("review defect 2 (low), fixed: no form of the Ethereum RPC URL reaches a sink, because RPC server text is never quoted", () => {
   const TOKEN = "AbCdEf0123456789xyzQ";
-  it("DEFECT 2 (low): the path token alone, a query value without '?', a query cut after the key, a percent escape in other case, a cut URL and a host token are all kept", async () => {
-    expect(await chainIdError(`https://eth.example.invalid/v2/${TOKEN}`, () => `invalid project id ${TOKEN}`)).toContain(TOKEN);
-    expect(await chainIdError(`https://eth.example.invalid/rpc?apikey=${TOKEN}`, () => `bad apikey=${TOKEN}`)).toContain(TOKEN);
-    expect(await chainIdError(`https://eth.example.invalid/rpc?apikey=${TOKEN}&chain=1`, (u) => `for ${u.replace("&chain=1", "")}`)).toContain(`?apikey=${TOKEN}`);
-    expect(await chainIdError(`https://eth.example.invalid/v2/Ab%2F${TOKEN}`, () => `for https://eth.example.invalid/v2/Ab%2f${TOKEN}`)).toContain(TOKEN);
-    expect(await chainIdError(`https://eth.example.invalid/v2/${TOKEN}`, (u) => `for ${u.slice(0, u.length - 2)}`)).toContain(TOKEN.slice(0, -2));
-    expect(await chainIdError(`https://${TOKEN.toLowerCase()}.eth.example.invalid/`, () => `unknown host ${TOKEN.toLowerCase()}.eth.example.invalid`)).toContain(TOKEN.toLowerCase());
+  it("review defect 2, fixed: the path token, a query value, a cut query, an escape in other case, a cut URL and a host token are all gone", async () => {
+    const cases: [string, (u: string) => string][] = [
+      [`https://eth.example.invalid/v2/${TOKEN}`, () => `invalid project id ${TOKEN}`],
+      [`https://eth.example.invalid/rpc?apikey=${TOKEN}`, () => `bad apikey=${TOKEN}`],
+      [`https://eth.example.invalid/rpc?apikey=${TOKEN}&chain=1`, (u) => `for ${u.replace("&chain=1", "")}`],
+      [`https://eth.example.invalid/v2/Ab%2F${TOKEN}`, () => `for https://eth.example.invalid/v2/Ab%2f${TOKEN}`],
+      [`https://eth.example.invalid/v2/${TOKEN}`, (u) => `for ${u.slice(0, u.length - 2)}`],
+      [`https://${TOKEN.toLowerCase()}.eth.example.invalid/`, () => `unknown host ${TOKEN.toLowerCase()}.eth.example.invalid`],
+    ];
+    for (const [url, say] of cases) expect(await chainIdError(url, say), url).toBe("eth_chainId error: JSON-RPC error code -32000");
   });
 
-  it("DEFECT 2 (low): at the pre-mint recheck the token lands in the refused_local reason in ledger.jsonl and on stderr", async () => {
+  it("review defect 2, fixed: at the pre-mint recheck neither the refused_local reason nor stderr holds the token", async () => {
     const h = tmpHome();
     expect((await cli(h, ["init", "--seat", "7"])).code).toBe(0);
     expect((await cli(h, ["cap", "set", "1", "--seat", "7"])).code).toBe(0);
@@ -131,7 +135,6 @@ describe("DEFECT 2 (low): forms of the Ethereum RPC URL that outsideText does no
     const provider: Provider = {
       name: "mock",
       estimate: async () => ({ estimated_cost_flop: 0.066, estimated_input_tokens: 3, estimated_output_tokens: 8 }),
-      // The recheck FlopProvider.complete runs before the mint: a PaidGateError, a PreSendError.
       complete: async (_req: CompleteReq): Promise<CompleteRes> => {
         await assertPaidNetwork(network("devnet"), rpc, echoing(() => `project ${TOKEN} is over its limit`));
         throw new Error("unreachable");
@@ -147,27 +150,30 @@ describe("DEFECT 2 (low): forms of the Ethereum RPC URL that outsideText does no
       code = (e as { code: number }).code;
     }
     expect(code).toBe(5);
-    expect(stderr).toContain(TOKEN);
+    expect(stderr).toBe("nothing sent: eth_chainId error: JSON-RPC error code -32000");
     const last = JSON.parse(readFileSync(ledgerFile(h), "utf8").trim().split("\n").at(-1)!);
-    expect({ state: last.state, has: String(last.reason).includes(TOKEN) }).toEqual({ state: "refused_local", has: true });
+    expect({ state: last.state, reason: last.reason }).toEqual({ state: "refused_local", reason: stderr });
   });
 });
 
-describe("DEFECT 3 (low): short URL forms are replaced everywhere in server text, before the secret scan", () => {
-  it("DEFECT 3 (low): a one character password turns every digit 1 into the mark, so 'HTTP 401' reads 'HTTP 40[ETH_RPC_URL]'", async () => {
-    expect(await chainIdError("https://user:1@eth.example.invalid/", () => "HTTP 401 for user at 10:15")).toBe("eth_chainId error: HTTP 40[ETH_RPC_URL] for [ETH_RPC_URL] at [ETH_RPC_URL]0:[ETH_RPC_URL]5");
+describe("review defect 3 (low), fixed: a mark form shorter than 8 characters is not used, and the scan runs before the marks", () => {
+  const mark = (rpc: string) => ethRpcUrlMark(rpc)!;
+  it("review defect 3, fixed: a one character password does not touch 'HTTP 401'", () => {
+    expect(outsideText("HTTP 401 for user at 10:15", { marks: [mark("https://user:1@eth.example.invalid/")] })).toBe("HTTP 401 for user at 10:15");
   });
 
-  it("DEFECT 3 (low): a short path such as /v2 hides the same text in an unrelated message", async () => {
-    expect(await chainIdError("https://eth.example.invalid/v2", () => "endpoint /v2 retired, use /v3")).toBe("eth_chainId error: endpoint [ETH_RPC_URL] retired, use /v3");
+  it("review defect 3, fixed: a short path such as /v2 is not hidden in other text", () => {
+    expect(outsideText("endpoint /v2 retired, use /v3", { marks: [mark("https://eth.example.invalid/v2")] })).toBe("endpoint /v2 retired, use /v3");
   });
 
-  it("DEFECT 3 (low): a short username form splits a 64 hex key in the server text, so the scan passes it and 60 of its 64 digits reach the message", async () => {
+  it("review defect 3, fixed: a key in the text is withheld before any mark could split it", () => {
     const key = "0123456789abcdef".repeat(4);
-    const msg = await chainIdError("https://a@eth.example.invalid/v2/tok", () => `leaked ${key}`);
-    expect(scanForSecrets({ reason: key })).not.toEqual([]);
-    expect(scanForSecrets({ reason: msg })).toEqual([]);
-    expect(msg).toBe(`eth_chainId error: le[ETH_RPC_URL]ked ${key.split("a").join("[ETH_RPC_URL]")}`);
+    expect(outsideText(`leaked ${key}`, { marks: [mark("https://abcdefgh@eth.example.invalid/v2/tok")] })).toBe(OUTSIDE_WITHHELD);
+    expect(outsideText(`leaked ${key}`)).toBe(OUTSIDE_WITHHELD);
+  });
+
+  it("review defect 3, fixed: an RPC error message is never quoted, whatever the URL", async () => {
+    expect(await chainIdError("https://user:1@eth.example.invalid/", () => "HTTP 401 for user at 10:15")).toBe("eth_chainId error: JSON-RPC error code -32000");
   });
 });
 
@@ -281,9 +287,9 @@ describe("DEFECT 9 (low): a canonical seat of 64 to 78 digits passes the seat ru
 });
 
 describe("DEFECT 10 (low): outsideText keeps control characters, so server text writes its own lines and terminal escapes to stderr", () => {
-  it("DEFECT 10 (low): a JSON-RPC error message with a newline and ESC reaches the message as is", async () => {
-    const msg = await chainIdError("https://eth.example.invalid/v2/tok", () => "x\n\u001b[1Aimd-flop: link verified, owner ok");
-    expect(msg).toBe("eth_chainId error: x\n\u001b[1Aimd-flop: link verified, owner ok");
+  it("DEFECT 10 (low): a message with a newline and ESC reaches the message as is", () => {
+    // Moved with defects 2 and 3: RPC server text is no longer quoted, so this goes through outsideText directly.
+    expect(outsideText("x\n\u001b[1Aimd-flop: link verified, owner ok")).toBe("x\n\u001b[1Aimd-flop: link verified, owner ok");
   });
 });
 
@@ -296,8 +302,8 @@ describe("DEFECT 11 (low): the cut in outsideText splits a surrogate pair, so th
       name: "mock",
       estimate: async () => ({ estimated_cost_flop: 0.066, estimated_input_tokens: 3, estimated_output_tokens: 8 }),
       complete: async () => {
-        await assertPaidNetwork(network("devnet"), "https://eth.example.invalid/v2/tok", echoing(() => "z".repeat(199) + "\u{1F600} after"));
-        throw new Error("unreachable");
+        // Moved with defects 2 and 3: RPC server text is no longer quoted, so a pre-send failure carries the text.
+        throw new PreSendError("z".repeat(999) + "\u{1F600} after");
       },
       readReceipt: async () => ({ http: 0, receipt: null, error: null }),
     } as unknown as Provider;
@@ -305,5 +311,51 @@ describe("DEFECT 11 (low): the cut in outsideText splits a surrogate pair, so th
     const text = readFileSync(ledgerFile(h), "utf8");
     expect(text).toContain("z\\ud83d[cut]");
     expect(text).not.toContain("\\ude00");
+  });
+});
+
+describe("surviving mutants of the review: gateway.ts", () => {
+  const BEARER = "Bearer sk_live_0123456789abcdefXYZ";
+
+  it("the decoded form of the URL is a mark: a password escaped in the URL and repeated decoded is hidden", () => {
+    const m = ethRpcUrlMark("https://user:p%40ssw0rd-long@eth.example.invalid/v2/x")!;
+    expect(outsideText("rejected p@ssw0rd-long here", { marks: [m] })).toBe("rejected [ETH_RPC_URL] here");
+  });
+
+  it("the query is a mark of its own", () => {
+    const m = ethRpcUrlMark("https://eth.example.invalid/rpc?apikey=QQQQ1234")!;
+    expect(outsideText("bad ?apikey=QQQQ1234 given", { marks: [m] })).toBe("bad [ETH_RPC_URL] given");
+  });
+
+  it("a path of / is never a mark: it would replace every slash", () => {
+    const m = ethRpcUrlMark("https://eth.example.invalid/")!;
+    expect(outsideText("a/b and c/d", { marks: [m] })).toBe("a/b and c/d");
+  });
+
+  it("the FLOP RPC's error text goes through outsideText: a bearer in it is withheld", async () => {
+    const real = globalThis.WebSocket;
+    class WS {
+      onopen?: () => void;
+      onmessage?: (ev: { data: string }) => void;
+      constructor() { setTimeout(() => this.onopen?.(), 0); }
+      send() { setTimeout(() => this.onmessage?.({ data: JSON.stringify({ error: { message: `denied ${BEARER}` } }) }), 0); }
+      close() {}
+    }
+    (globalThis as { WebSocket: unknown }).WebSocket = WS;
+    try {
+      const { checkGenesis } = await import("../src/gateway.js");
+      const g = await checkGenesis(network("devnet"), (async () => new Response("{}", { status: 500 })) as Fetch);
+      expect(g.error).toContain("rpc unavailable: rpc error: [withheld by the secret scan]");
+      expect(g.error).not.toContain("sk_live");
+    } finally {
+      globalThis.WebSocket = real;
+    }
+  });
+
+  it("a child key mint transport error goes through outsideText: a bearer in it is withheld", async () => {
+    const { mintChildKey } = await import("../src/gateway.js");
+    const f = (async () => { throw new Error(`proxy said ${BEARER}`); }) as Fetch;
+    const m = await mintChildKey(network("devnet"), "flop_ek_PARENTPARENTPARENT00", { model: "m", maxSpend: 0.1 }, f).then(() => "ok", (e: Error) => e.message);
+    expect(m).toBe("child key mint failed (Error: [withheld by the secret scan])");
   });
 });

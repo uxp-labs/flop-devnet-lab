@@ -226,19 +226,48 @@ const CHAIN_ID_RE = /^0x[0-9a-f]+$/i;
 const ETH_RPC_URL_MARK = "[ETH_RPC_URL]";
 
 /**
- * Every form the Ethereum RPC URL can be echoed in, each replaced by ETH_RPC_URL_MARK: the string as given, the
- * parsed href, the origin with the path, the userinfo (and its user and password alone), the path alone when it
- * is longer than "/", and the query.
+ * Every form the Ethereum RPC URL can be echoed in, each replaced by ETH_RPC_URL_MARK in other text (defense in
+ * depth: the RPC server's own text is never quoted, see rpcFailure): the string as given, the parsed href, the
+ * origin with the path, the userinfo (and its user and password alone), the path alone, and the query, and
+ * their decoded forms. secrets.ts outsideText drops a form shorter than 8 characters.
  */
 function rpcUrlMark(rpcUrl: string, url: URL): Mark {
   const userinfo = url.password ? `${url.username}:${url.password}` : url.username;
-  const forms = [rpcUrl, url.href, url.origin + url.pathname, userinfo, url.username, url.password, ...(url.pathname.length > 1 ? [url.pathname] : []), ...(url.search.length > 1 ? [url.search] : [])];
+  const forms = [rpcUrl, url.href, url.origin + url.pathname, userinfo, url.username, url.password, url.pathname, url.search];
   const decoded = forms.flatMap((f) => { try { const d = decodeURIComponent(f); return d === f ? [] : [d]; } catch { return []; } });
   return { forms: [...forms, ...decoded], mark: ETH_RPC_URL_MARK };
 }
 
+/** The mark for a caller's Ethereum RPC URL, for text that might repeat it. Null when it is not a URL. */
+export function ethRpcUrlMark(rpcUrl: string | undefined): Mark | null {
+  if (!rpcUrl) return null;
+  try {
+    return rpcUrlMark(rpcUrl, new URL(rpcUrl));
+  } catch {
+    return { forms: [rpcUrl], mark: ETH_RPC_URL_MARK };
+  }
+}
+
+/** The transport error names a message may give, a closed list. Any other name is reported as "Error". */
+const TRANSPORT_KINDS: ReadonlySet<string> = new Set(["TypeError", "AbortError", "TimeoutError", "SyntaxError", "RangeError"]);
+
+/**
+ * A failure of the Ethereum RPC, as a message: a kind and numbers only. The server's text, its body and the
+ * transport's message are never quoted, in any sink (review of the audit 33f3b9f fixes, defects 2 and 3).
+ */
+const rpcFailure = {
+  transport: (e: unknown): string => {
+    const name = (e as { name?: unknown })?.name;
+    return `transport error (${typeof name === "string" && TRANSPORT_KINDS.has(name) ? name : "Error"})`;
+  },
+  rpcError: (error: unknown): string => {
+    const code = (error as { code?: unknown } | null)?.code;
+    return Number.isSafeInteger(code) ? `JSON-RPC error code ${code}` : "JSON-RPC error with no code";
+  },
+};
+
 /** The Ethereum RPC URL as parsed for a call: what to fetch, and the mark for every message about it. */
-interface EthRpc { url: string; mark: Mark }
+interface EthRpc { url: string }
 
 /** Parsed before any fetch, because fetch's own parse error repeats the whole URL. */
 function ethRpc(rpcUrl: string): EthRpc {
@@ -249,13 +278,13 @@ function ethRpc(rpcUrl: string): EthRpc {
     throw new Error("the Ethereum RPC URL is not a valid http(s) URL");
   }
   if (url.protocol !== "http:" && url.protocol !== "https:") throw new Error("the Ethereum RPC URL is not a valid http(s) URL");
-  return { url: rpcUrl, mark: rpcUrlMark(rpcUrl, url) };
+  return { url: rpcUrl };
 }
 
 /**
  * One read-only POST to the caller's Ethereum JSON-RPC URL: the single place that URL is used.
- * The URL often carries a key (userinfo or a path token), so no message from here quotes it: every message
- * built from server or transport text has each form of the URL replaced by the mark (serverText, rpcUrlMark).
+ * The URL often carries a key (userinfo or a path token), so no message from here quotes it, and no message
+ * quotes what the server or the transport said either (rpcFailure).
  */
 async function postEthRpc(rpc: EthRpc, call: { method: string; params: unknown[] }, f: Fetch, timeoutMs: number): Promise<Response> {
   try {
@@ -266,7 +295,7 @@ async function postEthRpc(rpc: EthRpc, call: { method: string; params: unknown[]
       signal: AbortSignal.timeout(timeoutMs),
     });
   } catch (e) {
-    throw new Error(serverText((e as Error).message, [rpc.mark]));
+    throw new Error(rpcFailure.transport(e));
   }
 }
 
@@ -275,10 +304,9 @@ async function postEthRpc(rpc: EthRpc, call: { method: string; params: unknown[]
  * Throws when the endpoint is down or the payload is not a hex quantity.
  */
 export async function readEthereumChainId(rpcUrl: string, f: Fetch = globalThis.fetch, timeoutMs = 15000): Promise<bigint> {
-  let rpc: EthRpc;
   let res: Response;
   try {
-    rpc = ethRpc(rpcUrl);
+    const rpc = ethRpc(rpcUrl);
     res = await postEthRpc(rpc, { method: "eth_chainId", params: [] }, f, timeoutMs);
   } catch (e) {
     throw new Error(`eth_chainId unavailable: ${(e as Error).message}`);
@@ -291,7 +319,7 @@ export async function readEthereumChainId(rpcUrl: string, f: Fetch = globalThis.
     throw new Error("eth_chainId returned malformed JSON");
   }
   if (!j || typeof j !== "object" || Array.isArray(j)) throw new Error("eth_chainId returned malformed JSON");
-  if (j.error) throw new Error(`eth_chainId error: ${serverText(j.error.message ?? "rpc error", [rpc.mark])}`);
+  if (j.error) throw new Error(`eth_chainId error: ${rpcFailure.rpcError(j.error)}`);
   if (typeof j.result !== "string" || !CHAIN_ID_RE.test(j.result.trim())) throw new Error("eth_chainId returned a malformed result");
   try {
     return BigInt(j.result.trim());
@@ -349,7 +377,12 @@ async function checkPaidNetwork(net: NetworkInfo, ethRpc: string | undefined, f:
 export async function readSeatOwner(rpcUrl: string, collection: string, tokenId: string, f: Fetch = globalThis.fetch, timeoutMs = 15000): Promise<string | null> {
   const rpc = ethRpc(rpcUrl);
   const data = "0x6352211e" + BigInt(tokenId).toString(16).padStart(64, "0");
-  const res = await postEthRpc(rpc, { method: "eth_call", params: [{ to: collection, data }, "latest"] }, f, timeoutMs);
+  let res: Response;
+  try {
+    res = await postEthRpc(rpc, { method: "eth_call", params: [{ to: collection, data }, "latest"] }, f, timeoutMs);
+  } catch (e) {
+    throw new Error(`eth_call unavailable: ${(e as Error).message}`);
+  }
   if (!res.ok) throw new Error(`eth_call HTTP ${res.status}`);
   // The parse error of a body that is not JSON quotes the body: never repeat it.
   let j: { result?: string; error?: { message?: string } };
