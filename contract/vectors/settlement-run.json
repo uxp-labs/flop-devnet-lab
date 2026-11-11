@@ -1,6 +1,6 @@
 {
  "file": "settlement-run.json",
- "description": "imd-flop run: reservation and settlement rows in the ledger. Mock provider (estimate 0.066/3/8, padded 0.186), cap 1 unless input.cap. read.receipt.request_id \"$rid\" means the run's own request_id. complete: ok (default) | presend (PreSendError) | timeout (abort) | http500 (FlopHTTPError 500).",
+ "description": "imd-flop run: reservation and settlement rows in the ledger. Mock provider (estimate 0.066/3/8, padded 0.186), cap 1 unless input.cap. read.receipt.request_id \"$rid\" means the run's own request_id. complete: ok (default) | presend (PreSendError) | timeout (abort) | http500 (FlopHTTPError 500). spend_raw (money stage 1) is the latest row's exact spend, or \"absent\" when the row has no such field.",
  "status": "current behavior at 3ae1cdf",
  "vectors": [
   {
@@ -736,6 +736,158 @@
     }
    },
    "note": "[swarm audit of 8ddc5d2, finding 2] control: a reported cost below the settlement leaves the settled charge"
+  },
+  {
+   "id": "run-settled-exact",
+   "rule": "settlement.run",
+   "input": {
+    "read": {
+     "http": 200,
+     "error": null,
+     "receipt": {
+      "request_id": "$rid",
+      "correlation_id": "imd-job-j1",
+      "model": "m",
+      "reserved_spend": 0.186,
+      "settled_spend": 0.05,
+      "state": "settled",
+      "settled_spend_raw": "50000000000000000"
+     }
+    }
+   },
+   "expect": {
+    "imd-flop": {
+     "exit": 0,
+     "states": [
+      "sent",
+      "settled"
+     ],
+     "last": {
+      "state": "settled",
+      "spend": 0.05,
+      "cap_charge": 0.05
+     },
+     "spend_raw": "50000000000000000"
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard is a dry run: it writes spend 0 and keeps no reservation or settlement"
+    },
+    "viewer": {
+     "not_applicable": "viewer renders ledger rows; it never writes them"
+    }
+   },
+   "note": "money stage 1: the exact spend is carried on a first settlement. The float booking is the same as without it."
+  },
+  {
+   "id": "run-settled-exact-leading-zeros",
+   "rule": "settlement.run",
+   "input": {
+    "read": {
+     "http": 200,
+     "error": null,
+     "receipt": {
+      "request_id": "$rid",
+      "correlation_id": "imd-job-j1",
+      "model": "m",
+      "reserved_spend": 0.186,
+      "settled_spend": 0.05,
+      "state": "settled",
+      "settled_spend_raw": "0050000000000000000"
+     }
+    }
+   },
+   "expect": {
+    "imd-flop": {
+     "exit": 0,
+     "last": {
+      "state": "settled",
+      "spend": 0.05,
+      "cap_charge": 0.05
+     },
+     "spend_raw": "50000000000000000"
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard is a dry run: it writes spend 0 and keeps no reservation or settlement"
+    },
+    "viewer": {
+     "not_applicable": "viewer renders ledger rows; it never writes them"
+    }
+   },
+   "note": "money stage 1: the ledger row holds the canonical form."
+  },
+  {
+   "id": "run-settled-exact-junk",
+   "rule": "settlement.run",
+   "input": {
+    "read": {
+     "http": 200,
+     "error": null,
+     "receipt": {
+      "request_id": "$rid",
+      "correlation_id": "imd-job-j1",
+      "model": "m",
+      "reserved_spend": 0.186,
+      "settled_spend": 0.05,
+      "state": "settled",
+      "settled_spend_raw": "0.05"
+     }
+    }
+   },
+   "expect": {
+    "imd-flop": {
+     "exit": 0,
+     "last": {
+      "state": "settled",
+      "spend": 0.05,
+      "cap_charge": 0.05
+     },
+     "spend_raw": null
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard is a dry run: it writes spend 0 and keeps no reservation or settlement"
+    },
+    "viewer": {
+     "not_applicable": "viewer renders ledger rows; it never writes them"
+    }
+   },
+   "note": "money stage 1: a raw value that is not an exact amount is unknown, and the float settlement is still booked."
+  },
+  {
+   "id": "run-pending-exact",
+   "rule": "settlement.run",
+   "input": {
+    "read": {
+     "http": 200,
+     "error": null,
+     "receipt": {
+      "request_id": "$rid",
+      "correlation_id": "imd-job-j1",
+      "model": "m",
+      "reserved_spend": 0.186,
+      "settled_spend": null,
+      "state": "estimated",
+      "settled_spend_raw": "50000000000000000"
+     }
+    }
+   },
+   "expect": {
+    "imd-flop": {
+     "exit": 0,
+     "last": {
+      "state": "estimated",
+      "spend": null,
+      "cap_charge": 0.186
+     },
+     "spend_raw": null
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard is a dry run: it writes spend 0 and keeps no reservation or settlement"
+    },
+    "viewer": {
+     "not_applicable": "viewer renders ledger rows; it never writes them"
+    }
+   },
+   "note": "money stage 1: only a settling state sets the exact spend."
   }
  ]
 }

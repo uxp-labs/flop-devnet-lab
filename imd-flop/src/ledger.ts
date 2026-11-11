@@ -40,6 +40,11 @@ export interface LedgerEntry {
   reason: string | null;
   spend: number | null; // finite settled spend >= 0; null = unknown (negative, non-finite, and missing are unknown, never coerced to 0)
   cost_reported: number | null; // usage.cost_flop from the completion, if any. Recorded as reported; not a settlement.
+  // The exact spend in base units (10^18 per FLOP) as a canonical digit string, or null for unknown (money
+  // stage 1; settlement.ts decideBooking decides it). Recorded only: policy.ts, the sums here and the cap never
+  // read it, and the cap is computed from cap_charge alone. Rows written before money stage 1 lack the field:
+  // a missing value is unknown, never 0.
+  spend_raw?: string | null;
   cap_charge: number; // known finite settled spend (explicit 0 included), or while spend is unknown the padded quote; either is raised to the reported cost when that is higher
   http: number | null;
   mock: boolean;

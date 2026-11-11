@@ -45,8 +45,12 @@ export type BookResult = { outcome: "no_row" } | Booked;
 /** What the booking step did when the ledger held a row for the request, or was given a seed row for it. */
 export type Booked = { outcome: "appended" | "unchanged" | "disagree" | "recorded"; row: LedgerEntry };
 
-/** The row fields the booking step can change. A row is appended when one of them does, or when it records a report. */
-const RECORDED = ["state", "spend", "cap_charge", "cost_reported", "http"] as const;
+/**
+ * The row fields the booking step can change. A row is appended when one of them does, or when it records a
+ * report. spend_raw is the exact spend (money stage 1): an exact amount that arrives on a later read is a
+ * recorded change, and a row that lacks the field stays as it is until a read sets it.
+ */
+const RECORDED = ["state", "spend", "cap_charge", "spend_raw", "cost_reported", "http"] as const;
 
 /**
  * The step itself. Under the ledger lock: read the latest row of the request, or write the seed row when

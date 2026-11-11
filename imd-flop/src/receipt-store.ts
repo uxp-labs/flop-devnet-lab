@@ -138,7 +138,7 @@ export async function refreshReceipt(
   const saved = written.body as SavedReceipt;
 
   try {
-    const booked = bookRead(h, rid, { fresh, identityOk, redacted: written.redacted, state: saved.state ?? null, settled: saved.settled }, { flag: saved.flag ?? null });
+    const booked = bookRead(h, rid, { fresh, identityOk, redacted: written.redacted, state: saved.state ?? null, settled: saved.settled, settledRaw: saved.settled_raw }, { flag: saved.flag ?? null });
     if (booked.outcome === "no_row") return { saved, ledgerRow: undefined };
     // Disagree: a read below a booked settlement, or an unknown charge with no proven settlement (never substitute 0).
     if (booked.outcome === "disagree") warn(DISAGREE);

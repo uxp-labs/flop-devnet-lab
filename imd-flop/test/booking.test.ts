@@ -971,3 +971,119 @@ describe("bookFailure: a failed call goes through the same booking step", () => 
     expect(ledger(h).map(booked)).toEqual([{ state: "sent", spend: null, cap_charge: 0.186 }, { state: "timeout_unknown", spend: null, cap_charge: 0.186 }, { state: "settled", spend: 0.05, cap_charge: 0.05 }]);
   });
 });
+
+describe("money stage 1: the exact spend is recorded beside the float figures", () => {
+  // Per the gateway's OpenAPI (CredentialReceipt), read 2026-11-11: settled_spend_raw is the exact amount, a
+  // string matching ^[0-9]+$ in base units (10^18 per FLOP), or null, and null means unavailable. The ledger
+  // row records it as spend_raw through the exact amount rule (amount.ts exactAmount), decided in
+  // settlement.ts decideBooking. The cap still runs on the float figures. Each block failed before money
+  // stage 1: the ledger row had no spend_raw.
+  const RAW = "50000000000000000"; // 0.05 FLOP
+  const settledRaw = (spend: number, raw: unknown, fields: Record<string, unknown> = {}) => (id: string) => receiptFor(id, { settled_spend: spend, settled_spend_raw: raw, state: "settled", ...fields });
+  type ExactRow = Row & { spend_raw?: unknown };
+  const last = (h: string) => ledger(h).at(-1)! as ExactRow;
+  const fileOf = (h: string, rid: string) => JSON.parse(readFileSync(join(h, "receipts", `${rid}.json`), "utf8"));
+
+  it("carried on a first settlement: run's own settled read books the exact spend", async () => {
+    const h = await ready();
+    const run = await cli(h, runArgs(), { provider: new P({ read: settledRaw(0.05, RAW) }) });
+    expect(run.code, run.err).toBe(0);
+    expect({ ...booked(last(h)), spend_raw: last(h).spend_raw }).toEqual({ state: "settled", spend: 0.05, cap_charge: 0.05, spend_raw: RAW });
+  });
+
+  it("arrives on a later refresh: one row appended, the float booking unchanged; a lower or equal one later changes nothing, a higher one is booked", async () => {
+    const h = await ready();
+    const run = await cli(h, runArgs(), { provider: new P({ read: settledRaw(0.05, null) }) });
+    const rid = run.json().request_id as string;
+    expect(last(h).spend_raw).toBeNull();
+    const before = ledger(h).length;
+    expect((await cli(h, refreshArgs(rid), { provider: new P({ read: settledRaw(0.05, RAW) }) })).code).toBe(0);
+    expect(ledger(h).length).toBe(before + 1);
+    expect({ ...booked(last(h)), spend_raw: last(h).spend_raw }).toEqual({ state: "settled", spend: 0.05, cap_charge: 0.05, spend_raw: RAW });
+    for (const raw of ["49999999999999999", RAW, "000" + RAW, null]) {
+      const r = await cli(h, refreshArgs(rid), { provider: new P({ read: settledRaw(0.05, raw) }) });
+      expect({ code: r.code, rows: ledger(h).length, spend_raw: last(h).spend_raw }, String(raw)).toEqual({ code: 0, rows: before + 1, spend_raw: RAW });
+    }
+    await cli(h, refreshArgs(rid), { provider: new P({ read: settledRaw(0.05, "50000000000000001") }) });
+    expect({ rows: ledger(h).length, ...booked(last(h)), spend_raw: last(h).spend_raw }).toEqual({ rows: before + 2, state: "settled", spend: 0.05, cap_charge: 0.05, spend_raw: "50000000000000001" });
+  });
+
+  it("a redacted receipt holds the reservation and sets nothing, even when its raw value is a valid exact amount", async () => {
+    // The secret scan sees exactly what arrived. Here the correlation id is key shaped, so the stored copy
+    // is redacted, and the digit string stays in it. A redacted receipt never proves a settlement.
+    const h = await ready();
+    const run = await cli(h, runArgs(), { provider: new P({ read: settledRaw(0.05, RAW, { correlation_id: "ab".repeat(32) }) }) });
+    expect(run.code, run.err).toBe(0);
+    const rid = run.json().request_id as string;
+    expect({ correlation_id: fileOf(h, rid).correlation_id, settled_raw: fileOf(h, rid).settled_raw }).toEqual({ correlation_id: null, settled_raw: RAW });
+    expect({ ...booked(last(h)), spend_raw: last(h).spend_raw }).toEqual({ state: "sent", spend: null, cap_charge: 0.186, spend_raw: null });
+    // A key shaped raw value is redacted too, and also sets nothing.
+    const h2 = await ready();
+    const run2 = await cli(h2, runArgs(), { provider: new P({ read: settledRaw(0.05, "ab".repeat(32)) }) });
+    expect(fileOf(h2, run2.json().request_id).settled_raw).toBeNull();
+    expect({ ...booked(last(h2)), spend_raw: last(h2).spend_raw }).toEqual({ state: "sent", spend: null, cap_charge: 0.186, spend_raw: null });
+  });
+
+  it("a junk raw value sets nothing while the float settlement is still booked, and the receipt file keeps what arrived", async () => {
+    for (const junk of ["0.05", "0x10", "-5", " 5", "5\n", "", 50000000000000000, (2n ** 128n).toString()]) {
+      const h = await ready();
+      const run = await cli(h, runArgs(), { provider: new P({ read: settledRaw(0.05, junk) }) });
+      expect(run.code, run.err).toBe(0);
+      expect({ ...booked(last(h)), spend_raw: last(h).spend_raw }, JSON.stringify(junk)).toEqual({ state: "settled", spend: 0.05, cap_charge: 0.05, spend_raw: null });
+      expect(fileOf(h, run.json().request_id).settled_raw, JSON.stringify(junk)).toEqual(junk);
+    }
+  });
+
+  it("leading zeros are stored canonical on the ledger row, and the receipt file keeps what arrived", async () => {
+    const h = await ready();
+    const run = await cli(h, runArgs(), { provider: new P({ read: settledRaw(0.05, "000" + RAW) }) });
+    expect(last(h).spend_raw).toBe(RAW);
+    expect(fileOf(h, run.json().request_id).settled_raw).toBe("000" + RAW);
+    const zero = await ready();
+    await cli(zero, runArgs(), { provider: new P({ read: settledRaw(0, "0000") }) });
+    expect({ ...booked(last(zero)), spend_raw: last(zero).spend_raw }).toEqual({ state: "settled", spend: 0, cap_charge: 0, spend_raw: "0" });
+  });
+
+  it("a read refused by the float rules (it would lower the booked spend) sets nothing, even with a higher exact amount", async () => {
+    const h = await ready();
+    const run = await cli(h, runArgs(), { provider: new P({ read: settledAt(0.07) }) });
+    const rid = run.json().request_id as string;
+    const before = ledger(h).length;
+    const r = await cli(h, refreshArgs(rid), { provider: new P({ read: settledRaw(0.05, "90000000000000000") }) });
+    expect(r.err).toContain(DISAGREE);
+    expect({ rows: ledger(h).length, ...booked(last(h)), spend_raw: last(h).spend_raw }).toEqual({ rows: before, state: "settled", spend: 0.07, cap_charge: 0.07, spend_raw: null });
+  });
+
+  it("a pending or released read: only a settling state sets it, released included", async () => {
+    const h = await ready();
+    const run = await cli(h, runArgs(), { provider: new P({ read: (id) => receiptFor(id, { settled_spend_raw: RAW }) }) });
+    expect({ ...booked(last(h)), spend_raw: last(h).spend_raw }).toEqual({ state: "estimated", spend: null, cap_charge: 0.186, spend_raw: null });
+    await cli(h, refreshArgs(run.json().request_id), { provider: new P({ read: (id) => receiptFor(id, { settled_spend: null, settled_spend_raw: RAW, state: "released" }) }) });
+    // The float spend stays unknown, so the hold stays charged. The exact spend is recorded, and nothing reads it.
+    expect({ ...booked(last(h)), spend_raw: last(h).spend_raw }).toEqual({ state: "released", spend: null, cap_charge: 0.186, spend_raw: RAW });
+    expect(await today(h)).toBe(0.186);
+  });
+
+  it("a row written before money stage 1 has no spend_raw: read as unknown, never 0, and nothing is appended for it alone", () => {
+    const h = tmpHome();
+    const row = { ts: "2026-11-11T00:00:00.000Z", day: utcDay(), request_id: "r1", seat: SEAT, did: "did:key:zseed", job: "j1", provider: "mock", network: "devnet", payer: "holder", model: "m", max_tokens: 8,
+      prompt_sha256: "ab".repeat(32), quote_raw: 0.066, quote_padded: 0.186, per_call_cap: 1, daily_cap: 1, job_budget: null, spent_before: 0, job_spent_before: null, state: "settled", reason: null,
+      spend: 0.05, cost_reported: null, cap_charge: 0.05, http: 200, mock: true };
+    appendFileSync(ledgerPath(h), JSON.stringify(row) + "\n");
+    const trusted = { fresh: true, identityOk: true, redacted: false, state: "settled", settled: 0.05 };
+    expect(bookRead(h, "r1", { ...trusted, settledRaw: null }, { flag: null }).outcome).toBe("unchanged");
+    expect(bookRead(h, "r1", { ...trusted, settledRaw: "0" }, { flag: null }).outcome).toBe("appended");
+    expect((ledger(h).at(-1) as ExactRow).spend_raw).toBe("0");
+  });
+
+  it("pin: the cap runs on the float figures: the same calls with and without an exact amount charge the same today", async () => {
+    const totals: number[] = [];
+    for (const raw of [null, RAW, "999999999999999999999"]) {
+      const h = await ready();
+      await cli(h, runArgs(), { provider: new P({ read: settledRaw(0.05, raw) }) });
+      await cli(h, runArgs(), { provider: new P({ read: pending }) });
+      totals.push(await today(h));
+    }
+    expect(totals).toEqual([0.236, 0.236, 0.236]);
+  });
+});

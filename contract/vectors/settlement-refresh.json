@@ -1,6 +1,6 @@
 {
  "file": "settlement-refresh.json",
- "description": "imd-flop `receipt <id> --refresh` after a mock run: rows appended, the latest ledger row, the DISAGREE line on stderr, and the stored receipt file. run_read is the run's own receipt read (http 200); run_cost_flop is the usage.cost_flop its completion reported; run_complete timeout leaves no receipt file. prev_cap_charge replaces the latest row's cap_charge before the refresh. strip_receipt_fields deletes keys from the stored file before the refresh.",
+ "description": "imd-flop `receipt <id> --refresh` after a mock run: rows appended, the latest ledger row, the DISAGREE line on stderr, and the stored receipt file. run_read is the run's own receipt read (http 200); run_cost_flop is the usage.cost_flop its completion reported; run_complete timeout leaves no receipt file. prev_cap_charge replaces the latest row's cap_charge before the refresh. strip_receipt_fields deletes keys from the stored file before the refresh. spend_raw (money stage 1) is the latest row's exact spend, or \"absent\" when the row has no such field.",
  "status": "current behavior at 3ae1cdf",
  "vectors": [
   {
@@ -658,6 +658,198 @@
     }
    },
    "note": "[swarm audit of 8ddc5d2, finding 2] refresh applies the ledger row's cost_reported: cap_charge is max(settled, cost_reported); was last {settled, 0.05, 0.05}"
+  },
+  {
+   "id": "refresh-exact-arrives-later",
+   "rule": "settlement.refresh",
+   "input": {
+    "run_read": {
+     "request_id": "$rid",
+     "correlation_id": "imd-job-j1",
+     "model": "m",
+     "reserved_spend": 0.186,
+     "settled_spend": 0.05,
+     "state": "settled",
+     "settled_spend_raw": null
+    },
+    "refresh_read": {
+     "http": 200,
+     "error": null,
+     "receipt": {
+      "request_id": "$rid",
+      "correlation_id": "imd-job-j1",
+      "model": "m",
+      "reserved_spend": 0.186,
+      "settled_spend": 0.05,
+      "state": "settled",
+      "settled_spend_raw": "50000000000000000"
+     }
+    }
+   },
+   "expect": {
+    "imd-flop": {
+     "exit": 0,
+     "appended": 1,
+     "last": {
+      "state": "settled",
+      "spend": 0.05,
+      "cap_charge": 0.05
+     },
+     "spend_raw": "50000000000000000",
+     "stderr_disagree": false
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard is a dry run: it writes spend 0 and keeps no reservation or settlement"
+    },
+    "viewer": {
+     "not_applicable": "viewer renders ledger rows; it never writes them"
+    }
+   },
+   "note": "money stage 1: an exact spend that arrives on a later trusted settling read is a recorded change: one row appended."
+  },
+  {
+   "id": "refresh-exact-lower",
+   "rule": "settlement.refresh",
+   "input": {
+    "run_read": {
+     "request_id": "$rid",
+     "correlation_id": "imd-job-j1",
+     "model": "m",
+     "reserved_spend": 0.186,
+     "settled_spend": 0.05,
+     "state": "settled",
+     "settled_spend_raw": "50000000000000000"
+    },
+    "refresh_read": {
+     "http": 200,
+     "error": null,
+     "receipt": {
+      "request_id": "$rid",
+      "correlation_id": "imd-job-j1",
+      "model": "m",
+      "reserved_spend": 0.186,
+      "settled_spend": 0.05,
+      "state": "settled",
+      "settled_spend_raw": "49999999999999999"
+     }
+    }
+   },
+   "expect": {
+    "imd-flop": {
+     "exit": 0,
+     "appended": 0,
+     "last": {
+      "state": "settled",
+      "spend": 0.05,
+      "cap_charge": 0.05
+     },
+     "spend_raw": "50000000000000000",
+     "stderr_disagree": false
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard is a dry run: it writes spend 0 and keeps no reservation or settlement"
+    },
+    "viewer": {
+     "not_applicable": "viewer renders ledger rows; it never writes them"
+    }
+   },
+   "note": "money stage 1: a lower exact amount than the one booked changes nothing."
+  },
+  {
+   "id": "refresh-exact-higher",
+   "rule": "settlement.refresh",
+   "input": {
+    "run_read": {
+     "request_id": "$rid",
+     "correlation_id": "imd-job-j1",
+     "model": "m",
+     "reserved_spend": 0.186,
+     "settled_spend": 0.05,
+     "state": "settled",
+     "settled_spend_raw": "50000000000000000"
+    },
+    "refresh_read": {
+     "http": 200,
+     "error": null,
+     "receipt": {
+      "request_id": "$rid",
+      "correlation_id": "imd-job-j1",
+      "model": "m",
+      "reserved_spend": 0.186,
+      "settled_spend": 0.05,
+      "state": "settled",
+      "settled_spend_raw": "50000000000000001"
+     }
+    }
+   },
+   "expect": {
+    "imd-flop": {
+     "exit": 0,
+     "appended": 1,
+     "last": {
+      "state": "settled",
+      "spend": 0.05,
+      "cap_charge": 0.05
+     },
+     "spend_raw": "50000000000000001",
+     "stderr_disagree": false
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard is a dry run: it writes spend 0 and keeps no reservation or settlement"
+    },
+    "viewer": {
+     "not_applicable": "viewer renders ledger rows; it never writes them"
+    }
+   },
+   "note": "money stage 1: a higher exact amount is booked."
+  },
+  {
+   "id": "refresh-exact-refused-read",
+   "rule": "settlement.refresh",
+   "input": {
+    "run_read": {
+     "request_id": "$rid",
+     "correlation_id": "imd-job-j1",
+     "model": "m",
+     "reserved_spend": 0.186,
+     "settled_spend": 0.07,
+     "state": "settled",
+     "settled_spend_raw": null
+    },
+    "refresh_read": {
+     "http": 200,
+     "error": null,
+     "receipt": {
+      "request_id": "$rid",
+      "correlation_id": "imd-job-j1",
+      "model": "m",
+      "reserved_spend": 0.186,
+      "settled_spend": 0.05,
+      "state": "settled",
+      "settled_spend_raw": "90000000000000000"
+     }
+    }
+   },
+   "expect": {
+    "imd-flop": {
+     "exit": 0,
+     "appended": 0,
+     "last": {
+      "state": "settled",
+      "spend": 0.07,
+      "cap_charge": 0.07
+     },
+     "spend_raw": null,
+     "stderr_disagree": true
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard is a dry run: it writes spend 0 and keeps no reservation or settlement"
+    },
+    "viewer": {
+     "not_applicable": "viewer renders ledger rows; it never writes them"
+    }
+   },
+   "note": "money stage 1: a read refused by the float rules (it would lower the booked spend) sets nothing."
   }
  ]
 }

@@ -342,3 +342,150 @@ describe("decideFailure properties", () => {
     expect({ walked, failures: failures.slice(0, 5), failed: failures.length }).toEqual({ walked: 26 * 25, failures: [], failed: 0 });
   });
 });
+
+/**
+ * The exact spend (money stage 1). decideBooking also decides the row's spend_raw: the exact spend in base
+ * units (10^18 per FLOP) as a canonical digit string, or null for unknown, taken from the read's
+ * settled_spend_raw through the exact amount rule (amount.ts exactAmount). It is recorded beside the float
+ * figures, and no cap, quote, charge or settlement decision reads it.
+ * The grid: every previous row above with an exact spend that is absent (a row written before this
+ * change), null, junk (a number, which only a damaged file holds), and on a settling row one consistent with
+ * its spend, also with leading zeros as a hand edit could leave it (or, with no spend, an exact spend alone). Every read above with a raw value that is absent,
+ * null, junk ("0x10"), the exact amount of its settled spend and the same with leading zeros (or, with no
+ * settled spend, an exact amount alone). The raw values are consistent with the settled spends: a read
+ * that settles lower carries a lower exact amount. Two reads that contradict each other are not in the
+ * grid, because the gateway's float and exact figures are two views of one ledger observation.
+ */
+describe("decideBooking: the exact spend (money stage 1)", () => {
+  const RAW_OF: Record<number, string> = { 0: "0", 0.01: "10000000000000000", 0.05: "50000000000000000", 0.07: "70000000000000000" };
+  const RAW_ONLY = "60000000000000000";
+  const ABSENT = Symbol("absent");
+  type ExactRow = Row & { spend_raw?: unknown };
+  type ExactRead = ReadOutcome & { settledRaw?: unknown };
+  const withRaw = <T extends object>(o: T, key: string, raw: unknown): T => (raw === ABSENT ? { ...o } : { ...o, [key]: raw });
+  const prevRaws = (prev: Row): unknown[] => [ABSENT, null, 5e16, ...(settles(prev.state) ? (known(prev.spend) ? [RAW_OF[prev.spend!], "00" + RAW_OF[prev.spend!]] : [RAW_ONLY]) : [])];
+  const readRaws = (read: ReadOutcome): unknown[] => [ABSENT, null, "0x10", ...(known(read.settled) ? [RAW_OF[read.settled as number], "00" + RAW_OF[read.settled as number]] : [RAW_ONLY])];
+  const EXACT_CASES: (Case & { prev: ExactRow })[] = CASES.flatMap((c) => prevRaws(c.prev).map((raw) => ({ ...c, prev: withRaw(c.prev, "spend_raw", raw) })));
+  const exactReadsOf = (reads: ReadOutcome[]): { base: ReadOutcome; read: ExactRead }[] => reads.flatMap((base) => readRaws(base).map((raw) => ({ base, read: withRaw(base, "settledRaw", raw) })));
+  const EXACT_READS = exactReadsOf(READS);
+  const isTrusted = (base: ReadOutcome) => TRUSTED_READS.includes(base);
+
+  // The test's own exact amount rule: ASCII digits only, below 2^128, canonical. Else null.
+  const exactOf = (v: unknown): bigint | null => (typeof v === "string" && /^[0-9]+$/.test(v) && BigInt(v) < 2n ** 128n ? BigInt(v) : null);
+  /** The read is not booked: it lowers a booked settlement, or the charge it would hold is unknown and it proves no settlement. */
+  const refused = (prev: Row, base: ReadOutcome) => below(prev, base) || (holds(prev, base) === null && proves(base) === null);
+  /** The exact spend after a read, by the rules: a trusted settling read that is not refused sets a valid exact amount above the booked one. */
+  const expectedRaw = (prev: ExactRow, base: ReadOutcome, read: ExactRead): unknown => {
+    const incoming = exactOf(read.settledRaw);
+    const booked = exactOf(prev.spend_raw);
+    if (!isTrusted(base) || !settles(base.state) || refused(prev, base) || incoming === null) return prev.spend_raw;
+    return booked === null || incoming > booked ? incoming.toString() : prev.spend_raw;
+  };
+  const afterExact = (prev: ExactRow, read: ExactRead, cost: number | null): ExactRow => ({ ...prev, ...decideBooking(prev, read, cost).booking }) as ExactRow;
+
+  function walkExact(reads: { base: ReadOutcome; read: ExactRead }[], broken: (c: Case & { prev: ExactRow }, base: ReadOutcome, read: ExactRead, next: ExactRow) => boolean) {
+    const failures: string[] = [];
+    let walked = 0;
+    for (const c of EXACT_CASES) {
+      for (const { base, read } of reads) {
+        walked += 1;
+        if (broken(c, base, read, afterExact(c.prev, read, c.cost))) failures.push(show(c, read));
+      }
+    }
+    return { walked, failures: failures.slice(0, 5), failed: failures.length };
+  }
+
+  it("the grid: 662 previous rows with an exact spend, 480 reads with a raw value, 120 of them trusted", () => {
+    expect({ cases: EXACT_CASES.length, reads: EXACT_READS.length, trusted: EXACT_READS.filter((r) => isTrusted(r.base)).length }).toEqual({ cases: 662, reads: 480, trusted: 120 });
+  });
+
+  it("an untrusted read never sets the exact spend", () => {
+    const r = walkExact(EXACT_READS.filter((r) => !isTrusted(r.base)), (c, _base, _read, next) => next.spend_raw !== c.prev.spend_raw);
+    expect(r).toEqual({ walked: 662 * 360, failures: [], failed: 0 });
+  });
+
+  it("a booked exact spend is never lowered and never lost", () => {
+    const r = walkExact(EXACT_READS, (c, _base, _read, next) => {
+      const before = exactOf(c.prev.spend_raw);
+      if (before === null) return false;
+      const after = exactOf(next.spend_raw);
+      return after === null || after < before;
+    });
+    expect(r).toEqual({ walked: 662 * 480, failures: [], failed: 0 });
+  });
+
+  it("the exact spend is set only by a trusted settling read that is not refused, only to a valid exact amount above the booked one, and in canonical form", () => {
+    // This covers: carried on a first settlement, arriving on a later read, a lower or equal amount
+    // changing nothing, a refused read (it would lower the booked float spend) setting nothing, junk and a
+    // missing value read as unknown, and leading zeros dropped.
+    let set = 0;
+    const r = walkExact(EXACT_READS, (c, base, read, next) => {
+      const want = expectedRaw(c.prev, base, read);
+      if (want !== c.prev.spend_raw) set += 1;
+      return next.spend_raw !== want;
+    });
+    expect({ ...r, set }).toEqual({ walked: 662 * 480, failures: [], failed: 0, set: 9456 });
+  });
+
+  it("the raw value never changes the float booking: state, spend, charge and disagree are what the same read without it decides", () => {
+    // The cap is computed exactly as before money stage 1: nothing in it reads the exact spend.
+    const failures: string[] = [];
+    let walked = 0;
+    for (const c of EXACT_CASES) {
+      for (const { base, read } of EXACT_READS) {
+        walked += 1;
+        const withIt = decideBooking(c.prev, read, c.cost);
+        const without = decideBooking(c.prev, base, c.cost);
+        const same = withIt.disagree === without.disagree && withIt.booking.state === without.booking.state && withIt.booking.spend === without.booking.spend && withIt.booking.cap_charge === without.booking.cap_charge;
+        if (!same) failures.push(show(c, read));
+      }
+    }
+    expect({ walked, failures: failures.slice(0, 5), failed: failures.length }).toEqual({ walked: 662 * 480, failures: [], failed: 0 });
+  });
+
+  it("order independence: two trusted reads book the same exact spend in either order, but for two shapes counted here", () => {
+    // Two processes can book the same request, and the gateway may answer them differently. Walked over
+    // the rows with no exact spend or a consistent one, and the trusted reads with no raw value or the
+    // exact amount of their settled spend. Two shapes are counted here, not hidden. Both come from the rule
+    // that a read the float rules refuse sets nothing, exact spend included:
+    //  - unknownCharge: one read is refused only because the charge it would hold is unknown (a damaged
+    //    row's null charge, or a released reservation whose padded quote is unknown). A read that settles
+    //    first gives the row a known charge, and then the same read is booked.
+    //  - missingExact: one read carries no exact amount. When the read that settles lower carries one and
+    //    the higher one does not, the lower read is booked first or refused second, so the order decides
+    //    whether its exact amount is recorded.
+    // Every other pair books the same exact spend in either order.
+    const reads = exactReadsOf(TRUSTED_READS).filter(({ read }) => !("settledRaw" in read) || (typeof read.settledRaw === "string" && !read.settledRaw.startsWith("0x") && !read.settledRaw.startsWith("00")));
+    const cases = EXACT_CASES.filter((c) => !("spend_raw" in c.prev) || typeof c.prev.spend_raw === "string");
+    let walked = 0;
+    let unknownCharge = 0;
+    let missingExact = 0;
+    const failures: string[] = [];
+    for (const c of cases) {
+      const chargeUnknown = (x: ReadOutcome) => holds(c.prev, x) === null && proves(x) === null;
+      for (const a of reads) {
+        for (const b of reads) {
+          walked += 1;
+          const ab = afterExact(afterExact(c.prev, a.read, c.cost), b.read, c.cost);
+          const ba = afterExact(afterExact(c.prev, b.read, c.cost), a.read, c.cost);
+          if (ab.spend_raw === ba.spend_raw) continue;
+          if (chargeUnknown(a.base) || chargeUnknown(b.base)) unknownCharge += 1;
+          else if (!("settledRaw" in a.read) || !("settledRaw" in b.read)) missingExact += 1;
+          else failures.push(show(c, a.read, b.read));
+        }
+      }
+    }
+    expect({ cases: cases.length, reads: reads.length }).toEqual({ cases: 314, reads: 50 });
+    expect({ walked, unknownCharge, missingExact, failures: failures.slice(0, 5), failed: failures.length }).toEqual({ walked: 314 * 50 * 50, unknownCharge: 5200, missingExact: 8576, failures: [], failed: 0 });
+  });
+
+  it("booking the same read again leaves the exact spend as it is", () => {
+    const r = walkExact(EXACT_READS, (c, _base, read, next) => afterExact(next, read, c.cost).spend_raw !== next.spend_raw);
+    expect(r).toEqual({ walked: 662 * 480, failures: [], failed: 0 });
+  });
+
+  it("a failure report never changes the exact spend", () => {
+    const failures = EXACT_CASES.flatMap((c) => (["timeout_unknown", "error", "refused_local"] as Failure[]).filter((report) => ({ ...c.prev, ...decideFailure(c.prev, report) }).spend_raw !== c.prev.spend_raw).map((report) => JSON.stringify({ ...c, report })));
+    expect({ walked: EXACT_CASES.length * 3, failures }).toEqual({ walked: 662 * 3, failures: [] });
+  });
+});

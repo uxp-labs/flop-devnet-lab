@@ -57,6 +57,8 @@ async function ready(cap = "1") {
 }
 const pick = (got: Json, want: Json) => Object.fromEntries(Object.keys(want).map((k) => [k, got[k]]));
 const lastOf = (rows: Row[]) => { const r = rows[rows.length - 1]; return { state: r.state, spend: r.spend, cap_charge: r.cap_charge }; };
+/** The latest row's exact spend (money stage 1), or "absent" when the row has no such field. */
+const spendRawOf = (rows: Row[]) => { const r = rows[rows.length - 1] as Row & { spend_raw?: unknown }; return "spend_raw" in r ? r.spend_raw : "absent"; };
 const ridOf = (h: string) => ledger(h).find((r) => r.request_id)!.request_id!;
 const receiptPath = (h: string, rid: string) => join(receiptsDir(h), `${rid}.json`);
 
@@ -122,7 +124,7 @@ const adapters: Record<string, (i: Json, want: Json) => Promise<Json> | Json> = 
     const h = await ready(i.cap ?? "1");
     const r = await cli(h, runArgs(["--max-tokens", "8"]), { provider: new P({ complete: i.complete, presendMessage: i.presend_message, costFlop: i.cost_flop, read: i.read }) });
     const rows = ledger(h);
-    const got: Json = { exit: r.code, states: rows.map((x) => x.state), last: lastOf(rows), reason: rows[rows.length - 1].reason };
+    const got: Json = { exit: r.code, states: rows.map((x) => x.state), last: lastOf(rows), reason: rows[rows.length - 1].reason, spend_raw: spendRawOf(rows) };
     if ("stderr_contains" in want) got.stderr_contains = (want.stderr_contains as string[]).filter((s) => r.err.includes(s));
     return pick(got, want);
   },
@@ -147,6 +149,7 @@ const adapters: Record<string, (i: Json, want: Json) => Promise<Json> | Json> = 
       exit: r.code,
       appended: rows.length - before,
       last: lastOf(rows),
+      spend_raw: spendRawOf(rows),
       stderr_disagree: r.err.includes(rules.constants.DISAGREE.value),
       file_absent: (want.file_absent ?? []).filter((k: string) => !(k in file)),
       file_present: (want.file_present ?? []).filter((k: string) => k in file),
