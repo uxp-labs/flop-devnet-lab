@@ -24,13 +24,16 @@
 # write, and only contents. It runs no code from the repository: it downloads this run's artifact,
 # checks every file against SHA256SUMS before anything else, publishes only a run that exited 0 or
 # 3, and then uses plain git. A fetched branch that holds anything but plain files (mode 100644: no
-# link, no executable, no submodule) fails the job before anything on it is read or written. It replaces latest/ with the folder, appends the snapshot line to
-# log/<UTC date>.jsonl, writes README.md when it is missing, and pushes to
-# refs/heads/observatory-data only, never with force. The line names the hash of the line it
-# follows: when that is not the last line of the branch as fetched (another run published in
-# between), or its day is before the log's last day file, the job fails and pushes nothing. The
-# next run reads the branch as it is then and builds on its last line. A refused push is fetched
-# again and retried once, then the job fails.
+# link, no executable, no submodule) fails the job before anything on it is read or written. It
+# replaces latest/ with the folder, appends the snapshot line to log/<UTC date>.jsonl, writes
+# README.md when it is missing, and pushes to refs/heads/observatory-data only, never with force.
+# The line names the hash of the line it follows: when that is not the last line of the branch as
+# fetched (another run published in between), or its day is before the log's last day file, the job
+# fails and pushes nothing. The next run reads the branch as it is then and builds on its last line,
+# so nothing has to be done by hand, but in one case: a log whose last line is dated after the real
+# clock. Every later reading is then held back by the day order check until the clock passes that
+# day, and carries a conflict, since the log runs backwards; the way out by hand is to move log/
+# aside (observatory/README.md). A refused push is fetched again and retried once, then the job fails.
 
 name: observatory live
 

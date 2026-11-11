@@ -789,7 +789,11 @@ everything the observatory reads.
   day file, and when its day is not before the last day file's. Otherwise the job fails and pushes
   nothing: another reading was published after the live job read the branch, or the line would
   break the chain. The reading is not published. The next run checks out the branch as it is then
-  and builds on its last line, so nothing has to be done by hand.
+  and builds on its last line, so nothing has to be done by hand, but in one case: a log whose last
+  line is dated after the real clock (a runner whose clock ran ahead). Every later reading is then
+  held back by the day order check until the clock passes that line's day, and every one carries a
+  conflict, since the log runs backwards (section 1.1). The way out by hand is the README's recipe:
+  move `log/` aside on the branch, in a commit of its own, and the next run starts a new log.
 - The commit is made by `github-actions[bot]`, and its message carries `observed_at` and the
   snapshot hash. A branch that does not exist starts as an orphan, with no parent.
 - The push names `refs/heads/observatory-data:refs/heads/observatory-data` and nothing else, and is

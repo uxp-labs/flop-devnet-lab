@@ -606,15 +606,27 @@ describe("open defects (memory review)", () => {
     expect(branch()).toEqual(odd);
   });
 
-  it("DEFECT 3: after a line dated past the clock, the next run does not build on the branch and publish: every later run is refused until the clock passes that day", async () => {
+  it("after a line dated past the clock, every later reading is held back by the day order check and carries a conflict, until the clock reaches that day; moving log/ aside is the way out by hand", async () => {
     const ahead = await read(live("published-2026-11-11-0808", DAY), checkout());
     published(publishJob(ahead));
     const before = branch();
     for (const tape of ["published-2026-11-11-0823", "memory-changed-hash", "memory-other-genesis"]) {
       const r = await read(live(tape), checkout());
-      expect(r.snapshot?.prev_hash).toBe(ahead.snapshot?.hash);
+      expect([r.code, r.snapshot?.prev_hash]).toEqual([EXIT.reset, ahead.snapshot?.hash]);
+      expect(r.snapshot?.status.conflicts).toContain(`an earlier snapshot was taken at ${ahead.snapshot?.observed_at}, later than this snapshot time ${r.snapshot?.observed_at}`);
       refusedAtPublish(publishJob(r), /the reading's UTC day is before the log's last day file/);
       expect(branch()).toEqual(before);
     }
+    // On that line's day, a reading still earlier than it is published, with its conflict.
+    const sameDay = await read(live("published-2026-11-11-0823", DAY - 3600), checkout());
+    expect([sameDay.code, sameDay.snapshot?.observed_at.slice(0, 10)]).toEqual([EXIT.reset, "2026-11-12"]);
+    published(publishJob(sameDay));
+    expect(branch().log).toEqual({ "2026-11-12.jsonl": dayFile(ahead, sameDay) });
+    // By hand, before that: log/ moved aside, and the next run starts a new log that is published.
+    seed({ "archive/log-1/2026-11-12.jsonl": dayFile(ahead, sameDay).join("\n") }, {}, ["log"]);
+    const fresh = await read(live("memory-rpc-down"), checkout());
+    expect([fresh.code, fresh.snapshot?.seq]).toEqual([EXIT.ok, 0]);
+    published(publishJob(fresh));
+    expect(branch().log).toEqual({ "2026-11-11.jsonl": dayFile(fresh) });
   });
 });
