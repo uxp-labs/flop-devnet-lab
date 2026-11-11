@@ -552,6 +552,16 @@ class Review1ALimitThatCannotBeCheckedIsNeverShownAsFine(unittest.TestCase):
         self.assertIn(spend_line("daily cap left", mono(0.202)) + f'<div class="flag">{PAYER_UNKNOWN}</div>', page)
         self.assertIn("payer: unknown", visible(page))
 
+    def test_review_unknown_payer_settlement_inside_the_daily_cap_keeps_its_green_chip_and_gains_the_payer_flag(self):
+        """The daily cap is the one limit that applies to this row, and it is worked out (0.5 - 0.1 - 0.05). So
+        the row goes green, as it did on main, and the spend flag says the payer is unknown."""
+        led = dict(without_payer(LED), state="settled", spend=0.05, cap_charge=0.05, spent_before=0.1)
+        rows, page = lane([led], {"req-1": dict(SETTLED, settled=0.05)})
+        self.assertEqual(rows[0]["chips"], SENT + [["green", "chain final"]])
+        self.assertEqual(rows[0].get("daily_left"), 0.35)
+        self.assertEqual(rows[0]["spend_flags"], [PAYER_UNKNOWN])
+        self.assertFalse(rows[0]["bad"])
+
     def test_review_control_known_payers_carry_no_payer_flag(self):
         """Passes before and after."""
         for led in (dict(LED), dict(REQ)):
