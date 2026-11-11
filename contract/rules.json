@@ -100,7 +100,7 @@
       "value": "booked past what the cap admitted; the day may end over its cap",
       "imd-flop": "src/settlement.ts PAST_ADMITTED (run and receipt --refresh stderr, and the reason of the row, when a booking puts the day in a state the cap did not admit: a released hold that comes back, or a charge raised above the call's padded quote; known defect KD-12, residual R-f)",
       "spend-guard": null,
-      "viewer": null
+      "viewer": "build-lane.py PAST_ADMITTED (read from this file): a row whose reason carries it gets it as a spend flag, is bad and never green (review fixes 3, item 6)"
     },
     "IDENTITY": {
       "value": "receipt identity mismatch; chain-final green blocked",

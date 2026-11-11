@@ -98,6 +98,14 @@ def below_hold(i):
     return {"below_hold": BELOW_HOLD in row["spend_flags"], "bad": row["bad"], "greens": greens(html)}
 
 
+def past_admitted(i):
+    """Item 6 (review fixes 3): whether the row carries the PAST_ADMITTED spend flag, whether it is bad, and its green chips."""
+    rid = i["ledger"]["request_id"]
+    rows, html = lane([i["ledger"]], {} if i["receipt"] is None else {rid: i["receipt"]})
+    (row,) = rows
+    return {"past_admitted": RULES["constants"]["PAST_ADMITTED"]["value"] in row["spend_flags"], "bad": row["bad"], "greens": greens(html)}
+
+
 def cap_charge_line(i):
     """The visible text of the row's cap charge line ("cap charge 0.3 (<ledger reason>)"), or "absent"."""
     return line_text(i, CAP_CHARGE_LINE)
@@ -136,7 +144,7 @@ def reconcile(i):
 
 ADAPTERS = {"amount.json": amount_json, "amount.exact": amount_exact, "rounding.floor6": rounding_floor6, "receipt.state": receipt_state, "identity": identity, "read.failed": read_failed, "viewer.label": label,
             "viewer.reservation_line": reservation_line, "viewer.cap_charge_line": cap_charge_line, "viewer.exact_spend": exact_spend, "viewer.below_hold": below_hold, "reconcile": reconcile,
-            "ledger.placement": ledger_placement}
+            "ledger.placement": ledger_placement, "viewer.past_admitted": past_admitted}
 
 
 class ContractVectors(unittest.TestCase):
@@ -150,6 +158,7 @@ class ContractVectors(unittest.TestCase):
         self.assertEqual(NS["FLOP_DECIMALS"], c["FLOP_DECIMALS"]["value"])
         self.assertEqual(NS["AMOUNT_MAX"], 2 ** 53 - 1)
         self.assertEqual(NS["AMOUNT_MAX"], c["AMOUNT_MAX"]["value"])
+        self.assertEqual(NS["PAST_ADMITTED"], c["PAST_ADMITTED"]["value"])
         # unresolved() holds its own literal. It must name exactly the states rules.json lists.
         for state in c["UNRESOLVED"]["value"]:
             self.assertTrue(NS["unresolved"]({"state": state}), state)

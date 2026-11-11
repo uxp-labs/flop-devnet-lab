@@ -11,23 +11,23 @@ PAST_ADMITTED = "booked past what the cap admitted; the day may end over its cap
 
 
 class ReviewHold(unittest.TestCase):
-    def test_DEFECT_6_the_lane_flags_a_day_imd_flop_marks_OVER_CAP(self):
-        """DEFECT 6: the lane flags a day imd-flop marks OVER CAP. Today: the ledger of review-fixes R3. Cap 0.3. A is sent (0.198), released by "nothing was sent",
-        B is admitted against the freed room (spent_before 0), then a trusted read brings A's hold back with
-        reason PAST_ADMITTED. imd-flop status says the day is 0.396 of 0.3, OVER CAP. The lane works out each
-        row's 'daily cap left' from the row's own spent_before, so both rows show 0.102 left, neither is bad,
-        and the PAST_ADMITTED reason is not on the page. Right: the lane flags a row whose reason carries
-        PAST_ADMITTED (or a day whose latest rows total above the cap) and never shows it as fine."""
+    def test_a_row_booked_past_what_the_cap_admitted_is_flagged_and_never_green(self):
+        """Item 6 (review fixes 3): the ledger of review-fixes R3. Cap 0.3. A is sent (0.198), released by "nothing
+        was sent", B is admitted against the freed room, then a trusted read brings A's hold back with reason
+        PAST_ADMITTED; imd-flop status says the day is 0.396 of 0.3, OVER CAP. The lane works out each row's
+        'daily cap left' from the row's own spent_before, so it cannot see the day. It reads the row's reason:
+        a row whose reason carries PAST_ADMITTED (rules.json) carries that text as a spend flag, is bad and never
+        green. B's row says nothing of the day. Shared vectors: viewer-labels.json past-admitted-*."""
         a = dict(LED, request_id="a", job="jA", daily_cap=0.3, per_call_cap=0.3)
         b = dict(LED, request_id="b", job="jB", daily_cap=0.3, per_call_cap=0.3)
         ledger = [a, dict(a, state="refused_local", cap_charge=0, reason="nothing sent: child key mint failed"),
                   b, dict(b, state="estimated"), dict(a, state="estimated", cap_charge=0.198, reason=PAST_ADMITTED)]
         rows, page = lane(ledger, {"a": dict(REC, request_id="a", job="jA"), "b": dict(REC, request_id="b", job="jB")})
-        latest = {e["request_id"]: e for e in ledger}
-        self.assertGreater(round(sum(e["cap_charge"] for e in latest.values()), 6), 0.3)  # what imd-flop counts
-        self.assertEqual([(r["label"], r["daily_left"], r["bad"]) for r in rows], [("jA", 0.102, False), ("jB", 0.102, False)])
-        self.assertNotIn("over the daily cap", visible(page))
-        self.assertNotIn(PAST_ADMITTED, visible(page))
+        by = {r["label"]: r for r in rows}
+        self.assertTrue(by["jA"]["bad"])
+        self.assertIn(PAST_ADMITTED, by["jA"]["spend_flags"])
+        self.assertIn(PAST_ADMITTED, visible(page))
+        self.assertFalse(by["jB"]["bad"])
 
     def test_DEFECT_7_a_ledger_line_imd_flop_cannot_read_is_an_unreadable_row_in_the_lane(self):
         """DEFECT 7: a ledger line imd-flop cannot read is an unreadable row in the lane. Today: Python's json reads NaN, Infinity and -Infinity; JavaScript's JSON.parse does not. A ledger

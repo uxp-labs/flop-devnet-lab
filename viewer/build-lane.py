@@ -28,6 +28,7 @@ DISAGREE = _C["DISAGREE"]["value"]
 IDENTITY = _C["IDENTITY"]["value"]
 SETTLES = tuple(_C["SETTLES"]["value"])
 LEDGER_PROVIDERS = tuple(_C["LEDGER_PROVIDERS"]["value"])
+PAST_ADMITTED = _C["PAST_ADMITTED"]["value"]
 STAGE_GATEWAY = _C["STAGE_GATEWAY"]["value"]
 ET = ZoneInfo("America/New_York")
 
@@ -225,6 +226,12 @@ def unplaced(e):
     if e.get("payer") == "requester": checks.append(("job", isinstance(e.get("job"), str) and bool(JOB_ID.fullmatch(e["job"]))))
     return [field for field, ok in checks if not ok]
 
+def past_admitted(e):
+    """The row's reason carries PAST_ADMITTED (contract/rules.json): imd-flop booked it past what the cap admitted.
+    Pinned by contract/vectors/viewer-labels.json past-admitted-*."""
+    reason = e.get("reason")
+    return isinstance(reason, str) and PAST_ADMITTED in reason
+
 def over_limit(e, r):
     """The first limit a settled receipt breaks, or None (KD-2, FIXER's order): the per-call cap, then the row's
     spend limits in checked order (the daily cap, then for a requester the job budget; left below 0), then the
@@ -418,6 +425,9 @@ def build_row(e, r):
     if below_hold(e): row["spend_flags"].append(BELOW_HOLD); row["bad"] = True
     missing = unplaced(e)
     if missing: row["spend_flags"].append(f"{UNPLACED} ({', '.join(missing)})"); row["bad"] = True
+    # Review fixes 3, item 6: imd-flop records PAST_ADMITTED in the reason of a booking that raised a known booked
+    # charge, so its day may be over its cap. The lane cannot see the day; it says so on the row, never green.
+    if past_admitted(e): row["spend_flags"].append(PAST_ADMITTED); row["bad"] = True
     cap_charge = amount(e.get("cap_charge"))
     reservation = cap_charge if cap_charge is not None else amount(e.get("quote_padded"))
     ROW_KINDS[kind](row, e, r, reservation, limit)
