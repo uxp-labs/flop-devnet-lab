@@ -8,11 +8,12 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { feedText } from "../src/feed.js";
 import { attemptLog, resetAttempts } from "../src/guard.js";
 import { EXIT, sumsText } from "../src/live-run.js";
-import { MAX_ANSWER_BYTES, MAX_STATED_ANSWER_BYTES, NetTransport, type SocketEvent, type SocketLike } from "../src/net.js";
+import { MAX_ANSWER_BYTES, MAX_STATED_ANSWER_BYTES } from "../src/net.js";
 import { RECORD_ANSWER_LIMITS, RECORD_SCHEMA, metadataOf, parseRecordArgs, recordNotice, runRecord } from "../src/record-run.js";
 import { REQUESTS_SCHEMA, type RequestCall } from "../src/requests.js";
 import { TAPE_SCHEMA, TapeTransport, parseTape } from "../src/tape.js";
 import type { Transport } from "../src/transport.js";
+import { type Reply, network } from "./helpers/answering.js";
 
 const CLOCK = () => "2026-11-11T12:00:00.000Z";
 const SHA = "0123456789abcdef0123456789abcdef01234567";
@@ -34,41 +35,6 @@ beforeEach(() => {
 afterEach(() => {
   rmSync(box, { recursive: true, force: true });
 });
-
-type Reply = { result: unknown } | { error: { code: number; message: string } } | { raw: (id: number) => string } | "silent";
-
-/**
- * The live transport over a fake socket class that opens at once and answers each call it is sent
- * with reply(method, params). Every socket made is kept, so a test can see none was.
- */
-function network(reply: (method: string, params: unknown[]) => Reply, o: { failOpen?: boolean; limits?: ReadonlyMap<string, number> } = {}) {
-  const made: string[][] = [];
-  class AnsweringSocket implements SocketLike {
-    readonly sent: string[] = [];
-    private readonly listeners: [string, (e: SocketEvent) => void][] = [];
-    constructor(_url: string) {
-      made.push(this.sent);
-      setTimeout(() => (o.failOpen ? this.emit("error", { message: "connection refused" }) : this.emit("open")), 0);
-    }
-    addEventListener(type: string, l: (e: SocketEvent) => void): void {
-      this.listeners.push([type, l]);
-    }
-    send(data: string): void {
-      this.sent.push(data);
-      const m = JSON.parse(data) as { id: number; method: string; params: unknown[] };
-      const r = reply(m.method, m.params);
-      if (r === "silent") return;
-      const text = "raw" in r ? r.raw(m.id) : JSON.stringify({ jsonrpc: "2.0", id: m.id, ...r });
-      setTimeout(() => this.emit("message", { data: text }), 0);
-    }
-    close(): void {}
-    emit(type: string, e: SocketEvent): void {
-      for (const [t, l] of this.listeners) if (t === type) l(e);
-    }
-  }
-  const t = new NetTransport({ socketClass: AnsweringSocket, httpCall: async () => Promise.reject(new Error("no GET in a recording")), answerLimits: o.limits ?? RECORD_ANSWER_LIMITS, timeoutMs: 50 });
-  return { t, made };
-}
 
 const answers = (method: string, params: unknown[]): Reply => {
   if (method === "chain_getFinalizedHead") return { result: H };

@@ -166,5 +166,85 @@
     "replace": "realTransport()",
     "test": "test/record-run.test.ts",
     "why": "the recorder's transport states the recording's answer limits"
+  },
+  {
+    "id": "recording-sums-skipped",
+    "file": "src/recording.ts",
+    "find": "  if (unsummed.length > 0) return refuse(...unsummed);",
+    "replace": "",
+    "test": "test/recording.test.ts",
+    "why": "a recording's files are exactly its three, each matching SHA256SUMS, before anything is read"
+  },
+  {
+    "id": "recording-unknown-run-key-allowed",
+    "file": "src/recording.ts",
+    "find": "!isRecord(r) || !keysAre(r, RUN_KEYS) || ",
+    "replace": "!isRecord(r) || ",
+    "test": "test/recording.test.ts",
+    "why": "run.json holds exactly the keys the recorder writes"
+  },
+  {
+    "id": "recording-any-exit",
+    "file": "src/recording.ts",
+    "find": "  if (r.exit_code !== 0) return refuse(",
+    "replace": "  if (false) return refuse(",
+    "test": "test/recording.test.ts",
+    "why": "only a run that exited 0 is a recording"
+  },
+  {
+    "id": "recording-time-form-unchecked",
+    "file": "src/recording.ts",
+    "find": "typeof r.started_at === \"string\" && RECORDER_TIME.test(r.started_at) ? parseZoned(r.started_at)",
+    "replace": "typeof r.started_at === \"string\" ? parseZoned(r.started_at)",
+    "test": "test/recording.test.ts",
+    "why": "run.json's start is in the one form the publish job builds the recording's id from"
+  },
+  {
+    "id": "recording-endpoint-unchecked",
+    "file": "src/recording.ts",
+    "find": "  if (r.endpoint !== endpoint) return refuse(",
+    "replace": "  if (false) return refuse(",
+    "test": "test/recording.test.ts",
+    "why": "a recording was read from the devnet endpoint, not replayed from a tape"
+  },
+  {
+    "id": "recording-counts-unchecked",
+    "file": "src/recording.ts",
+    "find": " || c.answered + c.failed !== c.asked) {",
+    "replace": ") {",
+    "test": "test/recording.test.ts",
+    "why": "run.json's counts add up"
+  },
+  {
+    "id": "recording-tape-counts-unchecked",
+    "file": "src/recording.ts",
+    "find": "  if (canonicalJson(held) !== canonicalJson(run.calls)) {",
+    "replace": "  if (false) {",
+    "test": "test/recording.test.ts",
+    "why": "the tape holds the counts run.json gives"
+  },
+  {
+    "id": "recording-refusal-on-tape-allowed",
+    "file": "src/recording.ts",
+    "find": " || \"refused\" in e.answer) return refuse(",
+    "replace": ") return refuse(",
+    "test": "test/recording.test.ts",
+    "why": "every call on a recording's tape was answered or failed on the way"
+  },
+  {
+    "id": "recording-list-hash-unchecked",
+    "file": "src/recording.ts",
+    "find": "  if (list.sha256 !== run.request_list_sha256) return refuse(",
+    "replace": "  if (false) return refuse(",
+    "test": "test/recording.test.ts",
+    "why": "a recording is judged against the request list its run.json names"
+  },
+  {
+    "id": "recording-call-order-unchecked",
+    "file": "src/recording.ts",
+    "find": "  if (off.length > 0 || list.calls.length !== calls.length) return refuse(",
+    "replace": "  if (false) return refuse(",
+    "test": "test/recording.test.ts",
+    "why": "the tape holds exactly the list's calls, in order"
   }
 ]

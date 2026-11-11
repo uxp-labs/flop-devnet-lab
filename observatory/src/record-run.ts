@@ -36,9 +36,6 @@ import { type Transport, TransportError } from "./transport.js";
 
 export const RECORD_SCHEMA = "flop-observatory/record-run@0";
 
-/** The files a recording holds but SHA256SUMS, in the order SHA256SUMS lists them. */
-export const RECORDING_FILES = ["run.json", "tape.jsonl"] as const;
-
 /**
  * The answer limits a recording states (src/net.ts): state_getMetadata's answer is about 964 KB
  * as hex today, just under the 1 MiB every other call keeps, and a runtime upgrade could pass it.
