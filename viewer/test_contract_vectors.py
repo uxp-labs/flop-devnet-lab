@@ -87,9 +87,43 @@ def exact_spend(i):
     return dict(line_text(i, EXACT_SPEND_LINE), spend_raw=row.get("spend_raw"), differs=NS["EXACT_DIFFERS"] in row["flags"])
 
 
+BELOW_HOLD = "charged below its hold"
+
+
+def below_hold(i):
+    """Hold floor: whether the row carries the 'charged below its hold' spend flag, whether it is bad, and its green chips."""
+    rid = i["ledger"]["request_id"]
+    rows, html = lane([i["ledger"]], {} if i["receipt"] is None else {rid: i["receipt"]})
+    (row,) = rows
+    return {"below_hold": BELOW_HOLD in row["spend_flags"], "bad": row["bad"], "greens": greens(html)}
+
+
+def past_admitted(i):
+    """Item 6 (review fixes 3): whether the row carries the PAST_ADMITTED spend flag, whether it is bad, and its green chips."""
+    rid = i["ledger"]["request_id"]
+    rows, html = lane([i["ledger"]], {} if i["receipt"] is None else {rid: i["receipt"]})
+    (row,) = rows
+    return {"past_admitted": RULES["constants"]["PAST_ADMITTED"]["value"] in row["spend_flags"], "bad": row["bad"], "greens": greens(html)}
+
+
 def cap_charge_line(i):
     """The visible text of the row's cap charge line ("cap charge 0.3 (<ledger reason>)"), or "absent"."""
     return line_text(i, CAP_CHARGE_LINE)
+
+
+PLACEMENT_FLAG = "ledger row cannot be placed in a total"
+
+
+def ledger_placement(i):
+    """Review fixes 2 (R6): the row's placement flag (the spend flag that names the fields that cannot be placed,
+    or None), whether the row is bad, and its green chips. "$today" stands for the current UTC day."""
+    from datetime import datetime, timezone
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    rows = [dict(r, day=today) if r.get("day") == "$today" else r for r in i["rows"]]
+    out, html = lane(rows, {rows[-1]["request_id"]: i["receipt"]})
+    (row,) = out
+    flags = [f for f in row["spend_flags"] if f.startswith(PLACEMENT_FLAG)]
+    return {"flag": flags[0] if flags else None, "bad": row["bad"], "greens": greens(html)}
 
 
 # classify() kinds in the four words reconcile.json uses. Every kind decided before the comparison is "not_compared".
@@ -109,7 +143,8 @@ def reconcile(i):
 
 
 ADAPTERS = {"amount.json": amount_json, "amount.exact": amount_exact, "rounding.floor6": rounding_floor6, "receipt.state": receipt_state, "identity": identity, "read.failed": read_failed, "viewer.label": label,
-            "viewer.reservation_line": reservation_line, "viewer.cap_charge_line": cap_charge_line, "viewer.exact_spend": exact_spend, "reconcile": reconcile}
+            "viewer.reservation_line": reservation_line, "viewer.cap_charge_line": cap_charge_line, "viewer.exact_spend": exact_spend, "viewer.below_hold": below_hold, "reconcile": reconcile,
+            "ledger.placement": ledger_placement, "viewer.past_admitted": past_admitted}
 
 
 class ContractVectors(unittest.TestCase):
@@ -121,6 +156,9 @@ class ContractVectors(unittest.TestCase):
         self.assertEqual(NS["EXACT_BOUND"], 2 ** 128)
         self.assertEqual(str(NS["EXACT_BOUND"]), c["EXACT_AMOUNT_BOUND"]["value"])
         self.assertEqual(NS["FLOP_DECIMALS"], c["FLOP_DECIMALS"]["value"])
+        self.assertEqual(NS["AMOUNT_MAX"], 2 ** 53 - 1)
+        self.assertEqual(NS["AMOUNT_MAX"], c["AMOUNT_MAX"]["value"])
+        self.assertEqual(NS["PAST_ADMITTED"], c["PAST_ADMITTED"]["value"])
         # unresolved() holds its own literal. It must name exactly the states rules.json lists.
         for state in c["UNRESOLVED"]["value"]:
             self.assertTrue(NS["unresolved"]({"state": state}), state)

@@ -8,18 +8,18 @@ import { existsSync, readFileSync, writeFileSync, appendFileSync } from "node:fs
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { FlopHTTPError } from "@flop-labs/client";
-import { EXACT_BOUND, exactAmount, knownAmount } from "../src/amount.js";
+import { AMOUNT_MAX, EXACT_BOUND, exactAmount, knownAmount } from "../src/amount.js";
 import { EXIT } from "../src/errors.js";
 import { PreSendError } from "../src/gateway.js";
-import { usableCapCharge } from "../src/ledger.js";
+import { LEDGER_PROVIDERS, usableCapCharge, utcDay } from "../src/ledger.js";
 import { matchReceipt, RECEIPT_IDENTITY_STATUS } from "../src/match.js";
 import { ledgerFile, receiptsDir } from "../src/paths.js";
 import type { CompleteReq, CompleteRes, Provider } from "../src/providers.js";
 import { classifyReceipt, RECEIPT_STATES, STAGE_GATEWAY, type GatewayReceipt } from "../src/receipts.js";
 import { MIN_CAP } from "../src/policy.js";
 import { padQuote, TEMPLATE_PAD } from "../src/run.js";
-import { floor6 } from "../src/rounding.js";
-import { DISAGREE, reconcile, SETTLES, UNRESOLVED } from "../src/settlement.js";
+import { ceil6, floor6 } from "../src/rounding.js";
+import { DISAGREE, PAST_ADMITTED, reconcile, SETTLES, UNRESOLVED } from "../src/settlement.js";
 import { cli, readLines, readySeat, tmpHome } from "./helpers.js";
 import { decode, forPart, rules, unreferencedLabelRules, unreferencedQuirks, vectors, type Json } from "./lib/contract-vectors.js";
 
@@ -58,6 +58,8 @@ async function ready(cap = "1") {
   return h;
 }
 const pick = (got: Json, want: Json) => Object.fromEntries(Object.keys(want).map((k) => [k, got[k]]));
+/** A row's reason with the PAST_ADMITTED text written as its name, as the vectors write it. */
+const reasonOf = (row: Row) => (row.reason === null ? null : row.reason.split(rules.constants.PAST_ADMITTED.value).join("PAST_ADMITTED"));
 const lastOf = (rows: Row[]) => { const r = rows[rows.length - 1]; return { state: r.state, spend: r.spend, cap_charge: r.cap_charge }; };
 /** The latest row's exact spend (money stage 1), or "absent" when the row has no such field. */
 const spendRawOf = (rows: Row[]) => { const r = rows[rows.length - 1] as Row & { spend_raw?: unknown }; return "spend_raw" in r ? r.spend_raw : "absent"; };
@@ -100,6 +102,7 @@ const adapters: Record<string, (i: Json, want: Json) => Promise<Json> | Json> = 
   },
   "amount.json": (i) => ({ known_settled: knownAmount(i.value), usable_cap_charge: usableCapCharge(i.value) }),
   "rounding.floor6": (i) => ({ floor: floor6(i.value) }),
+  "rounding.ceil6": (i) => ({ ceil: ceil6(i.value) }),
   // An input with no value key stands for a missing field: i.value is undefined.
   "amount.exact": (i) => ({ exact: exactAmount(i.value) }),
   "amount.reserved": (i) => ({ reserved: classifyReceipt({ request_id: "r", reserved_spend: i.value } as GatewayReceipt, { job: "j", provider: "mock" }).reserved }),
@@ -136,7 +139,7 @@ const adapters: Record<string, (i: Json, want: Json) => Promise<Json> | Json> = 
     const h = await ready(i.cap ?? "1");
     const r = await cli(h, runArgs(["--max-tokens", "8"]), { provider: new P({ complete: i.complete, presendMessage: i.presend_message, costFlop: i.cost_flop, read: i.read }) });
     const rows = ledger(h);
-    const got: Json = { exit: r.code, states: rows.map((x) => x.state), last: lastOf(rows), reason: rows[rows.length - 1].reason, spend_raw: spendRawOf(rows) };
+    const got: Json = { exit: r.code, states: rows.map((x) => x.state), last: lastOf(rows), reason: reasonOf(rows[rows.length - 1]), spend_raw: spendRawOf(rows), stderr_past_admitted: r.err.includes(rules.constants.PAST_ADMITTED.value) };
     if ("stderr_contains" in want) got.stderr_contains = (want.stderr_contains as string[]).filter((s) => r.err.includes(s));
     return pick(got, want);
   },
@@ -163,10 +166,25 @@ const adapters: Record<string, (i: Json, want: Json) => Promise<Json> | Json> = 
       last: lastOf(rows),
       spend_raw: spendRawOf(rows),
       stderr_disagree: r.err.includes(rules.constants.DISAGREE.value),
+      stderr_past_admitted: r.err.includes(rules.constants.PAST_ADMITTED.value),
+      reason: reasonOf(rows[rows.length - 1]),
       file_absent: (want.file_absent ?? []).filter((k: string) => !(k in file)),
       file_present: (want.file_present ?? []).filter((k: string) => k in file),
     };
     return pick(got, want);
+  },
+  // Review fixes 2 (R6): the rows are the ledger ("$today" is the current UTC day), then one run. A refusal
+  // names the ledger line of the row that cannot be placed.
+  "ledger.placement": async (i, want) => {
+    const h = await ready();
+    const day = utcDay();
+    writeFileSync(ledgerFile(h), i.rows.map((r: Json) => JSON.stringify(r.day === "$today" ? { ...r, day } : r)).join("\n") + "\n");
+    if (i.run.payer === "requester") await cli(h, ["config", "set", "payer", "requester"]);
+    const p = new P();
+    const args = ["run", "--seat", SEAT, "--job", i.run.job, "--prompt", "Say hi", "--provider", "mock", "--max-tokens", "8", "--json", ...(i.run.payer === "requester" ? ["--job-budget", "1"] : [])];
+    const r = await cli(h, args, { provider: p });
+    const line = /ledger line (\d+)/.exec(r.err);
+    return pick({ exit: r.code, sent: p.calls, names_line: line ? Number(line[1]) : null }, want);
   },
   // A stored receipt file beside the latest ledger row of its request: the one verdict, shared with the viewer.
   reconcile: (i) => ({ verdict: reconcile(i.ledger, i.receipt) }),
@@ -185,17 +203,20 @@ describe("contract files", () => {
     const c = rules.constants;
     expect(TEMPLATE_PAD).toBe(c.TEMPLATE_PAD.value);
     expect(MIN_CAP).toBe(c.MIN_CAP.value);
+    expect(AMOUNT_MAX).toBe(c.AMOUNT_MAX.value);
     expect([...RECEIPT_STATES]).toEqual(c.RECEIPT_STATES.value);
     expect(RECEIPT_IDENTITY_STATUS).toBe(c.IDENTITY.value);
     expect(STAGE_GATEWAY).toBe(c.STAGE_GATEWAY.value);
     expect(EXIT).toEqual(c.EXIT[PART]);
     expect(EXACT_BOUND.toString()).toBe(c.EXACT_AMOUNT_BOUND.value);
     expect(EXACT_BOUND).toBe(2n ** 128n);
+    expect([...LEDGER_PROVIDERS]).toEqual(c.LEDGER_PROVIDERS.value);
   });
-  it("settlement.ts SETTLES, UNRESOLVED and DISAGREE match rules.json", () => {
+  it("settlement.ts SETTLES, UNRESOLVED, DISAGREE and PAST_ADMITTED match rules.json", () => {
     expect([...SETTLES]).toEqual(rules.constants.SETTLES.value);
     expect([...UNRESOLVED]).toEqual(rules.constants.UNRESOLVED.value);
     expect(DISAGREE).toBe(rules.constants.DISAGREE.value);
+    expect(PAST_ADMITTED).toBe(rules.constants.PAST_ADMITTED.value);
   });
   it("reconcile vectors expect the same verdict from imd-flop and the viewer, except where a quirk says why not", () => {
     const shared = vectors.filter((v) => v.rule === "reconcile");

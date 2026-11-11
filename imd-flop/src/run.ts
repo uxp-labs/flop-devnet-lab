@@ -10,11 +10,11 @@ import { loadSigner, readIdentity, revokedDids } from "./keys.js";
 import { verifyLink, type LinkFile } from "./link.js";
 import { DEFAULT_MODEL, network, SEAT_COLLECTION } from "./networks.js";
 import { checkBudget, noRoom, padQuote, requireCap, validateJob, validatePayer, validateRunMaxTokens, type BudgetState } from "./policy.js";
-import { appendLedger, jobSpent, LedgerLockError, spentToday, UnusableLedgerCharge, utcDay, withLedgerLock, type LedgerEntry } from "./ledger.js";
+import { appendLedger, jobSpent, LedgerLockError, spentToday, UnusableLedgerRow, utcDay, withLedgerLock, type LedgerEntry } from "./ledger.js";
 import { classifyReceipt, type Classified } from "./receipts.js";
 import { bookFailure, bookRead } from "./booking.js";
-import { DISAGREE, isFreshRead, receiptIdentity, reportedCost, SETTLES } from "./settlement.js";
-import { receiptPath, receiptVerdicts, writeReceipt } from "./receipt-store.js";
+import { DISAGREE, PAST_ADMITTED, reportedCost, SETTLES } from "./settlement.js";
+import { receiptVerdicts, storeRead } from "./receipt-store.js";
 import { responsePath } from "./response-store.js";
 import type { Provider } from "./providers.js";
 import { assertPaidNetwork, checkImdJob, PaidGateError, PreSendError, readVerifiedSeatOwner, type Fetch } from "./gateway.js";
@@ -89,7 +89,10 @@ function keptByLedger(row: LedgerEntry): string {
   return SETTLES.has(row.state) ? `The ledger already holds a settlement for this request (${row.state}); it was kept.` : `The ledger kept its ${row.state} row for this request.`;
 }
 
-/** What run needs from its caller. `warn` receives the DISAGREE line when run's own receipt read is not booked. */
+/**
+ * What run needs from its caller. `warn` receives the DISAGREE line when run's own receipt read is not
+ * booked, and the PAST_ADMITTED line when its booking puts the day in a state the cap did not admit.
+ */
 export interface RunDeps {
   fetch?: Fetch;
   ethRpc?: string;
@@ -172,13 +175,15 @@ export async function runJob(h: string, provider: Provider, o: RunOpts, deps: Ru
   const NO_QUOTE = { raw: null, padded: null };
   // What the limits are checked against. The seat's spend today, for every payer: the seat's key pays for
   // the call, so the daily cap bounds it. For a requester also this job's spend, for the job budget.
-  // An unusable ledger charge refuses the run.
+  // A ledger row a total cannot use (an unusable charge, or a row that cannot be placed) refuses the run.
   const spentSoFar = (day: string, quote: { raw: number | null; padded: number | null }): Spent => {
     try {
       const spentBefore = spentToday(h, seat, provider.name, day);
       return payer === "requester" ? { spentBefore, jobSpentBefore: jobSpent(h, job, provider.name) } : { spentBefore };
     } catch (e) {
-      if (e instanceof UnusableLedgerCharge) refuse(e.message, EXIT.REFUSED_CAP, quote, null);
+      if (e instanceof UnusableLedgerRow) refuse(e.message, EXIT.REFUSED_CAP, quote, null);
+      // A busy ledger (a line in flight that could not be read again under the lock): nothing was sent.
+      if (e instanceof LedgerLockError) throw new CliError(`refused locally, nothing sent: ${e.message}`, EXIT.REFUSED_LOCK);
       throw e;
     }
   };
@@ -248,7 +253,9 @@ export async function runJob(h: string, provider: Provider, o: RunOpts, deps: Ru
     // settlement another process booked meanwhile, and "nothing was sent" never releases a row a trusted
     // read produced: then the report is only recorded, and the exit code below still says what this call
     // saw. The message also says what the ledger kept.
-    const { outcome, row } = bookFailure(h, requestId, timedOut ? "timeout_unknown" : preSend ? "refused_local" : "error", { reason, http }, sent);
+    const { outcome, row, pastAdmitted: seededPast } = bookFailure(h, requestId, timedOut ? "timeout_unknown" : preSend ? "refused_local" : "error", { reason, http }, sent);
+    // The booking step wrote the sent row again (the ledger lost it during the call): past what the cap admitted.
+    if (seededPast) deps.warn(PAST_ADMITTED);
     const kept = outcome === "recorded" ? keptByLedger(row) : null;
     const settled = kept !== null && SETTLES.has(row.state);
     const also = kept ? ` ${kept}` : "";
@@ -292,29 +299,22 @@ export async function runJob(h: string, provider: Provider, o: RunOpts, deps: Ru
 
   const rr = await provider.readReceipt(requestId);
   const classified = classifyReceipt(rr.receipt, { job, provider: provider.name, http: rr.http, error: rr.error, requestId, mock: provider.name === "mock" });
-  const { rawId, identityOk } = receiptIdentity(rr.receipt, requestId);
-  if (!identityOk) {
-    classified.settled = null;
-    classified.chain_final = false;
-    classified.request_id = typeof rawId === "string" ? rawId : "";
-  }
-  const receipt0 = { ...classified, seat, did: signer.identity.did };
-  const stored = writeReceipt(receiptPath(h, requestId), { ...classified, seat, did: signer.identity.did, ss58: signer.identity.ss58, network: net.name, ...(provider.name === "mock" ? { mock_scenario: (provider as { scenario?: string }).scenario ?? "ok" } : {}) });
-  const receiptRedacted = stored.redacted;
-  if (receiptRedacted) {
-    // stdout shows what was stored: every redacted field, not only error and settled_raw.
-    const cleaned = stored.body as Record<string, unknown>;
-    const r0 = receipt0 as unknown as Record<string, unknown>;
-    for (const k of Object.keys(r0)) if (k in cleaned) r0[k] = cleaned[k] ?? null;
-  }
+  // The receipt file goes through the same owner as receipt --refresh (receipt-store.ts storeRead): another
+  // process may have refreshed this request and stored its read while the call ran, and a failed read here
+  // keeps every gateway field that file holds.
+  const ident = { seat, did: signer.identity.did, ss58: signer.identity.ss58, network: net.name, ...(provider.name === "mock" ? { mock_scenario: (provider as { scenario?: string }).scenario ?? "ok" } : {}) };
+  const { saved, read } = storeRead(h, requestId, rr, classified, () => ident);
+  // stdout shows what was stored: every field of the receipt as the file holds it, redacted fields included.
+  const stored = saved as unknown as Record<string, unknown>;
+  const receipt0 = { ...(Object.fromEntries(Object.keys(classified).map((k) => [k, stored[k] ?? null])) as unknown as Classified), seat, did: signer.identity.did };
 
   // The same booking step as receipt --refresh, with the rules held in settlement.ts: a failed read (not
   // HTTP 200 with a receipt object) or a receipt body that had to be redacted proves nothing and never
   // releases the reservation. If the step throws, the answer is in the response file written above.
-  const read = { fresh: isFreshRead(rr), identityOk, redacted: receiptRedacted, state: classified.state, settled: classified.settled, settledRaw: classified.settled_raw };
   const own = { flag: classified.flag, cost_reported: reportedCost(res.usage?.cost_flop), http: rr.http };
-  const { outcome, row } = bookRead(h, requestId, read, own, sent);
+  const { outcome, row, pastAdmitted } = bookRead(h, requestId, read, own, sent);
   if (outcome === "disagree") deps.warn(DISAGREE);
+  if (pastAdmitted) deps.warn(PAST_ADMITTED);
 
   const receipt = { ...receipt0, ...(await receiptVerdicts(h, receipt0, row)) };
   return { request_id: requestId, job, provider: provider.name, payer, quote_padded: q.padded, cap_charge: row.cap_charge, receipt, response_file: responseFile, text, ...(withheld !== undefined ? { withheld } : {}), link_bypassed: linkBypassed };

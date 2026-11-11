@@ -12,8 +12,8 @@ import { network, SEAT_COLLECTION } from "./networks.js";
 import { checkGenesis, readVerifiedSeatOwner, enrollChallengeUrl, getEnrollChallenge, postEnroll, type Fetch } from "./gateway.js";
 import { FlopProvider, MOCK_SCENARIOS, MockProvider, type MockScenario, type Provider } from "./providers.js";
 import { checkLinkForRun, runJob } from "./run.js";
-import { padQuote, parseAmount } from "./policy.js";
-import { appendLedger, latestAttempts, spentToday } from "./ledger.js";
+import { overDailyCap, padQuote, parseAmount } from "./policy.js";
+import { appendLedger, latestAttempts, LedgerLockError, reportedSpendToday, spentToday, UnusableLedgerRow, type LedgerEntry } from "./ledger.js";
 import { listReceipts, readSavedReceipt, receiptVerdicts, refreshReceipt, type SavedReceipt } from "./receipt-store.js";
 import { blank, classifyReceipt, receiptLine } from "./receipts.js";
 import { registerSecret } from "./secrets.js";
@@ -357,6 +357,9 @@ export async function main(argv: string[], io: IO): Promise<number> {
           .slice(-5)
           .map((e) => ({ request_id: e.request_id, job: e.job, seat: e.seat, did: e.did, ledger_state: e.state, spend: e.spend, match: { match: "pending" as const, fields: [] as string[] } }));
         const cap = cfg.caps[seat] ?? null;
+        // today_utc counts against the cap: what each call was allowed to spend (the hold floor). Beside it,
+        // what the gateway reported as spent, and whether the day is above its cap.
+        const today = { flop: spentToday(h, seat, "flop"), mock: spentToday(h, seat, "mock") };
         const o = {
           network: cfg.network,
           seat,
@@ -367,7 +370,9 @@ export async function main(argv: string[], io: IO): Promise<number> {
           link: { flop_side_ok: lc.ok, wallet_signed: !!lfw, problems: lc.ok ? [] : lc.why },
           payer: cfg.payer,
           cap,
-          today_utc: { flop: spentToday(h, seat, "flop"), mock: spentToday(h, seat, "mock") },
+          today_utc: today,
+          gateway_spent_today_utc: { flop: reportedSpendToday(h, seat, "flop"), mock: reportedSpendToday(h, seat, "mock") },
+          over_cap_today_utc: { flop: overDailyCap(today.flop, cap), mock: overDailyCap(today.mock, cap) },
           attempts: latestAttempts(h).filter((e) => e.seat === seat).length,
           recent_receipts: recent,
           pending_receipts: pending,
@@ -381,7 +386,9 @@ export async function main(argv: string[], io: IO): Promise<number> {
           io.out(`  ss58  ${o.ss58 ?? ""}`);
           io.out(`  link  ${lc.ok ? "verifies" : "BROKEN: " + lc.why.join("; ")}${lfw ? " (wallet-signed)" : " (wallet signature pending)"}`);
           io.out(`  cap   ${cap ? `${cap.daily} FLOP/day, ${cap.perCall}/call` : "none (FLOP off)"}`);
-          io.out(`  today flop ${o.today_utc.flop}${cap ? ` / ${cap.daily}` : ""}   mock ${o.today_utc.mock}${cap ? ` / ${cap.daily}` : ""}`);
+          const charged = (p: "flop" | "mock") => `${p} ${o.today_utc[p]}${cap ? ` / ${cap.daily}` : ""}${o.over_cap_today_utc[p] ? " OVER CAP" : ""}`;
+          io.out(`  today, charged to the cap      ${charged("flop")}   ${charged("mock")}`);
+          io.out(`  today, gateway reported spent  flop ${o.gateway_spent_today_utc.flop}   mock ${o.gateway_spent_today_utc.mock}`);
           io.out(`  recent receipts:`);
           for (const r of recent) io.out(`    ${receiptLine(r)}`);
           if (recent.length === 0) io.out(`    (none)`);
@@ -396,8 +403,16 @@ export async function main(argv: string[], io: IO): Promise<number> {
         const rid = positionals[0];
         if (!rid || !/^[\x21-\x7e]{1,128}$/.test(rid) || rid.includes("/")) throw new CliError("usage: receipt <request_id>", EXIT.USAGE);
         let saved: SavedReceipt | null = readSavedReceipt(h, rid);
-        // Timeouts have a ledger row but no receipt file yet.
-        let ledgerRow = latestAttempts(h).find((e) => e.request_id === rid);
+        // Timeouts have a ledger row but no receipt file yet. A damaged ledger line, or a busy ledger, stops
+        // every receipt command except a refresh of a stored receipt: that one stores its read, then stops at
+        // the same line, or says the ledger is busy, when it comes to book (receipt-store.ts refreshReceipt),
+        // so the read is not lost.
+        let ledgerRow: LedgerEntry | undefined;
+        try {
+          ledgerRow = latestAttempts(h).find((e) => e.request_id === rid);
+        } catch (e) {
+          if (!((e instanceof UnusableLedgerRow || e instanceof LedgerLockError) && values.refresh && saved)) throw e;
+        }
         if (!saved && !ledgerRow) throw new CliError(`no receipt or ledger entry for ${rid}`, EXIT.USAGE);
         if (values.refresh) {
           const p = makeProvider(io, saved?.provider ?? ledgerRow!.provider, h, saved?.seat ?? ledgerRow!.seat, { live: values.live, scenario: saved?.mock_scenario });

@@ -27,6 +27,8 @@ _C = load_rules()["constants"]
 DISAGREE = _C["DISAGREE"]["value"]
 IDENTITY = _C["IDENTITY"]["value"]
 SETTLES = tuple(_C["SETTLES"]["value"])
+LEDGER_PROVIDERS = tuple(_C["LEDGER_PROVIDERS"]["value"])
+PAST_ADMITTED = _C["PAST_ADMITTED"]["value"]
 STAGE_GATEWAY = _C["STAGE_GATEWAY"]["value"]
 ET = ZoneInfo("America/New_York")
 
@@ -36,17 +38,21 @@ NOISE = 1e-6  # in scaled units, so 1e-12 FLOP
 def floor6(n):
     """Room left rounds down to 6 decimals, the twin of imd-flop's rounding.ts floor6; pinned for both by
     contract/vectors/rounding.json. A value within 1e-12 of a 1e-6 boundary counts as on it, so float noise
-    does not move a 6 decimal amount below 8192 FLOP. Rounding never adds room, so a row over its limit by
-    less than 1e-6 FLOP is still over it."""
+    does not move a 6 decimal amount below 8192 FLOP. Rounding adds no room beyond that tolerance, so a row over
+    its limit by more than 1e-12 FLOP and less than 1e-6 FLOP is still over it. A row over by at most 1e-12 FLOP
+    (only an amount off the 6 decimal grid makes one) reads as on its limit: residual R-g in rules.json."""
     scaled = n * SCALE
     nearest = round(scaled)
     return (nearest if abs(scaled - nearest) <= NOISE else math.floor(scaled)) / SCALE
 def esc(v): return html.escape("" if v is None else str(v), quote=True)
+AMOUNT_MAX = _C["AMOUNT_MAX"]["value"]  # 2^53 - 1, the largest integer a double holds exactly
 def amount(v):
-    """A file value used as an amount: a finite int/float that is not negative (and not a bool), else None
-    (blank, never 0). A negative number is not an amount, as in imd-flop and spend-guard: it is unknown, so
-    nothing shows it or subtracts it."""
-    if isinstance(v, bool) or not isinstance(v, (int, float)) or v != v or v in (float("inf"), float("-inf")) or v < 0: return None
+    """A file value used as an amount: a finite int/float that is not negative, not above AMOUNT_MAX and not a
+    bool, else None (blank, never 0). The twin of imd-flop's amount.ts knownAmount. A negative number is not an
+    amount, as in imd-flop and spend-guard: it is unknown, so nothing shows it or subtracts it. Above AMOUNT_MAX
+    Python keeps a JSON integer exact while JavaScript rounds it, so the two parts would read the same text as
+    different amounts: it is unknown in both (review fixes 2, R10)."""
+    if isinstance(v, bool) or not isinstance(v, (int, float)) or v != v or v in (float("inf"), float("-inf")) or v < 0 or v > AMOUNT_MAX: return None
     return v
 EXACT_BOUND = int(_C["EXACT_AMOUNT_BOUND"]["value"])  # 2^128: per FLOP's own sources (read 2026-11-11) the chain holds money in a u128
 EXACT_DIGITS = len(str(EXACT_BOUND - 1))  # 39
@@ -77,29 +83,72 @@ def unreadable(what, why):
                 est=None, per_call=None, daily_left=None, chips=[["red", "unreadable"]], outcome=["grey", "not read", None],
                 link=["grey", "not checked", None], bad=True)
 
+# The ledger text contract (contract/README.md, rules.json LEDGER_TEXT; review fixes 4, items 6 to 8): the one
+# reading of a ledger or receipt file's text, the same as imd-flop's ledger-text.ts. Pinned for both parts by the
+# byte fixtures in contract/fixtures/ledger-text/ (viewer/test_ledger_text.py).
+BLANK_CHARS = frozenset(chr(c) for c in _C["LEDGER_TEXT"]["value"]["blank"])
+REQUEST_ID_RULE = re.compile(_C["REQUEST_ID"]["value"])
+def _no_constant(name):
+    raise ValueError(f"{name} is not JSON")
+def _double_int(text):
+    """A JSON integer as JavaScript reads it, a double: float(text), kept as an int only when that double is
+    integral and at most AMOUNT_MAX (so it is exact). A 4300 digit integer is inf, as in JavaScript, and never
+    meets Python's limit on digits."""
+    f = float(text)
+    return int(f) if f.is_integer() and abs(f) <= AMOUNT_MAX else f
+def loads(text):
+    """One JSON value in JSON.parse's grammar: NaN, Infinity and -Infinity are not JSON, and every number is a
+    double. Raises ValueError for anything else (RecursionError on very deep nesting is treated the same)."""
+    try:
+        return json.loads(text, parse_constant=_no_constant, parse_int=_double_int)
+    except RecursionError as ex:
+        raise ValueError("nested too deep") from ex
+def decode(data):
+    """Bytes as text, the way Node decodes UTF-8: an invalid byte becomes U+FFFD, never an error."""
+    return data.decode("utf-8", "replace")
+def read_ledger_text(data):
+    """Every line of a ledger file's bytes as (n, kind, value), numbered from 1, blank lines included. Lines end
+    at \n only (a \r is an ordinary character), and a final empty piece after the last \n is not a line. kind
+    is "blank" (every character in BLANK_CHARS), "unreadable" (value: "not valid JSON" or "not a JSON object")
+    or "row" (value: the object)."""
+    pieces = data.split(b"\n")
+    if pieces[-1] == b"": pieces.pop()
+    out = []
+    for n, piece in enumerate(pieces, 1):
+        text = decode(piece)
+        if all(ch in BLANK_CHARS for ch in text): out.append((n, "blank", None)); continue
+        try:
+            value = loads(text)
+        except ValueError:
+            out.append((n, "unreadable", "not valid JSON")); continue
+        out.append((n, "row", value) if isinstance(value, dict) else (n, "unreadable", "not a JSON object"))
+    return out
+def group_key(e, n):
+    """The group of a row: its request id when it matches REQUEST_ID, else its own line ("line <n>")."""
+    rid = e.get("request_id")
+    return rid if isinstance(rid, str) and REQUEST_ID_RULE.fullmatch(rid) else f"line {n}"
+
 def read_ledger(led):
-    """One entry per attempt: the latest line per request_id wins (as imd-flop's ledger). Lines without a
-    request_id (local refusals) are each their own entry. Unreadable lines become unreadable rows."""
+    """One entry per group (group_key): the latest line of a request wins (as imd-flop's ledger), and a line
+    without a usable request id is its own entry. Unreadable lines become unreadable rows."""
     order, latest, bad = [], {}, []
-    with open(led) as fh:
-        for n, line in enumerate(fh, 1):
-            if not line.strip(): continue
-            try:
-                e = json.loads(line)
-                if not isinstance(e, dict): raise ValueError("not an object")
-            except ValueError as ex:
-                bad.append(unreadable(f"ledger line {n}", f"ledger.jsonl line {n}: {type(ex).__name__}")); continue
-            rid = e.get("request_id")
-            key = ("req", rid) if present(rid) else ("line", n)
-            if key not in latest: order.append(key)
-            latest[key] = e
+    with open(led, "rb") as fh: data = fh.read()
+    for n, kind, value in read_ledger_text(data):
+        if kind == "blank": continue
+        if kind == "unreadable":
+            bad.append(unreadable(f"ledger line {n}", f"ledger.jsonl line {n}: {value}")); continue
+        key = group_key(value, n)
+        if key not in latest: order.append(key)
+        latest[key] = value
     return [latest[k] for k in order], bad
 
 def read_receipts():
+    """Receipt files by request id. A file is one JSON value read the same way (decode, loads) and must be an
+    object; anything else is unreadable."""
     receipts = {}
     for f in glob.glob(os.path.join(RDIR, "*.json")):
         try:
-            with open(f) as fh: r = json.load(fh)
+            with open(f, "rb") as fh: r = loads(decode(fh.read()))
         except ValueError:
             r = None
         receipts[os.path.splitext(os.path.basename(f))[0]] = r if isinstance(r, dict) else {"_unreadable": True}
@@ -124,6 +173,7 @@ OVER_DAILY = "over the daily cap"
 OVER_JOB = "over the job budget"
 OVER_RESERVATION = "over the reservation"
 PAYER_UNKNOWN = "payer unknown"
+BELOW_HOLD = "charged below its hold"
 # A spend limit: the ledger field that holds the cap, the field that holds its own running total before the
 # call, the row key and page label of what is left, the 'over' wording, and the wording for a row it could
 # not be worked out for.
@@ -182,6 +232,48 @@ def limit_flags(e, applied):
     holder nor requester."""
     flags = [lim["over"] if left is not None else lim["unchecked"] for lim, left in applied if left is None or left < 0]
     return flags if known_payer(e) else flags + [PAYER_UNKNOWN]
+
+def below_hold(e):
+    """The hold floor (contract/rules.json KD-12): from the moment a call is sent, its cap charge is never below
+    the padded quote it was admitted with, the cap of the single use child key the gateway minted for it. True
+    for a row the call was sent for (any state but refused_local, "nothing was sent") whose cap charge is a known
+    amount below its known padded quote. imd-flop no longer books such a row, and rows an older version booked
+    are not migrated, so the lane flags them and never shows them as fine. Unknown on either side is not
+    flagged: never a guess."""
+    cap_charge, quote = amount(e.get("cap_charge")), amount(e.get("quote_padded"))
+    return e.get("state") != "refused_local" and None not in (cap_charge, quote) and cap_charge < quote
+
+UNPLACED = "ledger row cannot be placed in a total"
+SEAT_ID = re.compile(r"[0-9]{1,78}")
+JOB_ID = re.compile(r"[\x21-\x7e]{1,120}")
+REQUEST_ID = re.compile(r"[\x21-\x7e]{1,128}")
+def usable_day(v):
+    """A UTC day as imd-flop writes it: YYYY-MM-DD, and a real calendar date."""
+    if not isinstance(v, str) or not re.fullmatch(r"[0-9]{4}-[0-9]{2}-[0-9]{2}", v): return False
+    try: datetime.strptime(v, "%Y-%m-%d")
+    except ValueError: return False
+    return True
+def unplaced(e):
+    """The fields that keep this row out of the totals it belongs to (review fixes 2, R6), in this order: request_id
+    (review fixes 3: a row with no usable request id, unless it is a refusal written before one exists,
+    refused_local charged 0), day, seat, provider, and job on a requester row. imd-flop refuses the next call when such a row would count toward its
+    total (ledger.ts placed), so the lane never shows the row as fine. The twin of ledger.ts isUtcDay, isSeatId,
+    PROVIDERS and isJobId; pinned for both by contract/vectors/ledger-placement.json. A payer that is neither
+    holder nor requester already carries 'payer unknown'."""
+    rid = e.get("request_id")
+    refusal = e.get("state") == "refused_local" and e.get("cap_charge") == 0 and not isinstance(e.get("cap_charge"), bool)
+    checks = [("request_id", (isinstance(rid, str) and bool(REQUEST_ID.fullmatch(rid))) or refusal),
+              ("day", usable_day(e.get("day"))),
+              ("seat", isinstance(e.get("seat"), str) and (e["seat"] == "unassigned" or bool(SEAT_ID.fullmatch(e["seat"])))),
+              ("provider", e.get("provider") in LEDGER_PROVIDERS)]
+    if e.get("payer") == "requester": checks.append(("job", isinstance(e.get("job"), str) and bool(JOB_ID.fullmatch(e["job"]))))
+    return [field for field, ok in checks if not ok]
+
+def past_admitted(e):
+    """The row's reason carries PAST_ADMITTED (contract/rules.json): imd-flop booked it past what the cap admitted.
+    Pinned by contract/vectors/viewer-labels.json past-admitted-*."""
+    reason = e.get("reason")
+    return isinstance(reason, str) and PAST_ADMITTED in reason
 
 def over_limit(e, r):
     """The first limit a settled receipt breaks, or None (KD-2, FIXER's order): the per-call cap, then the row's
@@ -293,16 +385,17 @@ def row_disagree(row, e, r, reservation, limit, label=DISAGREE):
 def cap_charge_line(e):
     """The 'cap charge' line of a settled row whose cap charge is a known amount that is not its settled spend,
     with the ledger reason beside it when there is one. An empty list for any other row. imd-flop books such a
-    row when the completion reported a higher cost than the receipt settled (reason 'cap charge raised to
-    reported cost'). The limit figures already use the cap charge."""
+    row whenever the receipt settles below the hold: the cap charge keeps the padded quote (the hold floor,
+    contract/rules.json KD-12), or a higher reported cost (reason 'cap charge raised to reported cost'). So the
+    line shows what counts against the cap beside the observed spend. The limit figures already use it."""
     spend, cap_charge, reason = amount(e.get("spend")), amount(e.get("cap_charge")), e.get("reason")
     if e.get("state") not in SETTLES or None in (spend, cap_charge) or spend == cap_charge: return []
     return [["cap charge", f'{num(cap_charge)} <span class="note">({esc(reason)})</span>' if present(reason) else cap_charge]]
 
 def row_over_limit(row, e, r, reservation, limit):
     # Receipt and ledger agree, but the settlement breaks a limit: amber, the hold stays, never green (KD-2).
-    # On a settled row imd-flop books cap_charge as the settled amount, or as a higher reported cost
-    # (cap_charge_line). It is not the hold, so the held reservation shown is quote_padded first (FIXER).
+    # On a settled row imd-flop books cap_charge as the hold floor, raised by the settled amount or a reported
+    # cost (cap_charge_line), so it can be above the hold. The held reservation shown is quote_padded first (FIXER).
     quote = amount(e.get("quote_padded"))
     row["chips"] = [["amber", limit]]; row["bad"] = True
     row["flop"] += [["reservation", reservation if quote is None else quote], ["settled", amount(r.get("settled"))]] + cap_charge_line(e)
@@ -371,6 +464,13 @@ def build_row(e, r):
     for lim, left in applied: row[lim["key"]] = left
     kind, limit = classify(e, r)
     row["spend_flags"] += limit_flags(e, applied)
+    # Set before the kind renders, so a row charged below its hold, or one that cannot be placed in a total, never gets the green chip.
+    if below_hold(e): row["spend_flags"].append(BELOW_HOLD); row["bad"] = True
+    missing = unplaced(e)
+    if missing: row["spend_flags"].append(f"{UNPLACED} ({', '.join(missing)})"); row["bad"] = True
+    # Review fixes 3, item 6: imd-flop records PAST_ADMITTED in the reason of a booking that raised a known booked
+    # charge, so its day may be over its cap. The lane cannot see the day; it says so on the row, never green.
+    if past_admitted(e): row["spend_flags"].append(PAST_ADMITTED); row["bad"] = True
     cap_charge = amount(e.get("cap_charge"))
     reservation = cap_charge if cap_charge is not None else amount(e.get("quote_padded"))
     ROW_KINDS[kind](row, e, r, reservation, limit)

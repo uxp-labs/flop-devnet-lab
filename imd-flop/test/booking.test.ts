@@ -27,7 +27,7 @@ import { PreSendError } from "../src/gateway.js";
 import { utcDay } from "../src/ledger.js";
 import type { CompleteReq, CompleteRes, Provider } from "../src/providers.js";
 import { LEDGER_BUSY } from "../src/receipt-store.js";
-import { CHARGE_RAISED, decideBooking, decideFailure, DISAGREE, type Failure } from "../src/settlement.js";
+import { CHARGE_RAISED, decideBooking, decideFailure, DISAGREE, PAST_ADMITTED, type Failure } from "../src/settlement.js";
 import { cli, readLines, readySeat, tmpHome } from "./helpers.js";
 
 const SEAT = "9001";
@@ -96,64 +96,81 @@ describe("decideBooking: the one decision for every receipt read", () => {
   const trusted = (state: string | null, settled: unknown) => ({ fresh: true, identityOk: true, redacted: false, state, settled });
   const held = { state: "estimated", spend: null, cap_charge: 0.186 };
   const settled007 = { state: "settled", spend: 0.07, cap_charge: 0.07 };
+  // Neither row records a padded quote, so no booking here can pass what the cap admitted (pastAdmitted).
+  const ok = (booking: unknown) => ({ booking, disagree: false, pastAdmitted: false });
+  const refused = (booking: unknown) => ({ booking, disagree: true, pastAdmitted: false });
 
   it("only a trusted read changes state or spend: a failed, a redacted and a wrong identity read change nothing", () => {
     for (const untrusted of [{ fresh: false }, { redacted: true }, { identityOk: false }]) {
       const read = { ...trusted("settled", 0.05), ...untrusted };
-      expect(decideBooking(held, read, null), JSON.stringify(untrusted)).toEqual({ booking: held, disagree: false });
-      expect(decideBooking(settled007, read, null), JSON.stringify(untrusted)).toEqual({ booking: settled007, disagree: false });
+      expect(decideBooking(held, read, null), JSON.stringify(untrusted)).toEqual(ok(held));
+      expect(decideBooking(settled007, read, null), JSON.stringify(untrusted)).toEqual(ok(settled007));
     }
   });
 
   it("a read below a booked settlement disagrees: state and spend stay", () => {
     for (const read of [trusted("settled", 0.05), trusted("released", 0)]) {
-      expect(decideBooking(settled007, read, null)).toEqual({ booking: settled007, disagree: true });
+      expect(decideBooking(settled007, read, null)).toEqual(refused(settled007));
     }
   });
 
-  it("a proven settlement replaces the booked spend, and its charge replaces the hold", () => {
-    expect(decideBooking(held, trusted("settled", 0.05), null)).toEqual({ booking: { state: "settled", spend: 0.05, cap_charge: 0.05 }, disagree: false });
+  it("a proven settlement replaces the booked spend, and the charge keeps the hold floor", () => {
+    // Moved (hold floor): this was "its charge replaces the hold" and expected cap_charge 0.05. A gateway read
+    // only raises the charge: the hold stays charged, and the spend records what the gateway says was spent.
+    // Hold floor (R5): the read books a float spend the row did not hold, so it sets the pair: no exact amount.
+    expect(decideBooking(held, trusted("settled", 0.05), null)).toEqual(ok({ state: "settled", spend: 0.05, cap_charge: 0.186, spend_raw: null }));
     // Moved (money stage 1, decision 1): a read that books a different known spend brings its own exact
-    // spend, here unknown (null). The state, spend and charge are as before.
-    expect(decideBooking(settled007, trusted("released", 0.09), null)).toEqual({ booking: { state: "released", spend: 0.09, cap_charge: 0.09, spend_raw: null }, disagree: false });
+    // spend, here unknown (null). A settlement above the booked charge raises it.
+    // Moved (review fixes 3, item 1): a booking that raises a known booked charge passes what the cap admitted.
+    expect(decideBooking(settled007, trusted("released", 0.09), null)).toEqual({ booking: { state: "released", spend: 0.09, cap_charge: 0.09, spend_raw: null }, disagree: false, pastAdmitted: true });
   });
 
   it("the state moves only forward: a trusted pending read never takes a settling state back", () => {
     for (const state of ["reserved", "estimated"]) {
-      expect(decideBooking(settled007, trusted(state, null), null)).toEqual({ booking: settled007, disagree: false });
+      expect(decideBooking(settled007, trusted(state, null), null)).toEqual(ok(settled007));
       expect(decideBooking({ state: "sent", spend: null, cap_charge: 0.186 }, trusted(state, null), null).booking.state).toBe(state);
     }
     // A settling state with no amount moves the state and books no spend: the hold stays charged.
-    expect(decideBooking(held, trusted("released", null), null)).toEqual({ booking: { state: "released", spend: null, cap_charge: 0.186 }, disagree: false });
+    expect(decideBooking(held, trusted("released", null), null)).toEqual(ok({ state: "released", spend: null, cap_charge: 0.186 }));
   });
 
   it("a reported cost raises a charge and never lowers it, on a hold and on a settlement alike", () => {
     expect(decideBooking(held, trusted("estimated", null), 0.3).booking.cap_charge).toBe(0.3);
     expect(decideBooking(held, trusted("estimated", null), 0.1).booking.cap_charge).toBe(0.186);
     expect(decideBooking(held, { ...trusted("settled", 0.05), fresh: false }, 0.3).booking).toEqual({ state: "estimated", spend: null, cap_charge: 0.3 });
-    expect(decideBooking(held, trusted("settled", 0.05), 0.15).booking.cap_charge).toBe(0.15);
+    // Moved (hold floor): a cost of 0.15 raised a settled charge of 0.05 to 0.15. The charge now keeps the
+    // 0.186 hold, so only a cost above it raises the charge.
+    expect(decideBooking(held, trusted("settled", 0.05), 0.15).booking.cap_charge).toBe(0.186);
+    expect(decideBooking(held, trusted("settled", 0.05), 0.3).booking.cap_charge).toBe(0.3);
     // Also when the read itself is refused: the booked settlement stays, and its charge is raised.
-    expect(decideBooking(settled007, trusted("settled", 0.05), 0.15)).toEqual({ booking: { state: "settled", spend: 0.07, cap_charge: 0.15 }, disagree: true });
+    // Moved (review fixes 3, item 1): a booking that raises a known booked charge passes what the cap admitted.
+    expect(decideBooking(settled007, trusted("settled", 0.05), 0.15)).toEqual({ booking: { state: "settled", spend: 0.07, cap_charge: 0.15 }, disagree: true, pastAdmitted: true });
     expect(decideBooking(settled007, { ...trusted("settled", 0.05), fresh: false }, 0.15).booking).toEqual({ state: "settled", spend: 0.07, cap_charge: 0.15 });
   });
 
   it("fails on a3d71d6: a trusted read that moves a released reservation (refused_local) holds the padded quote again", () => {
     const released = { state: "refused_local", spend: null, cap_charge: 0, quote_padded: 0.186 };
-    expect(decideBooking(released, trusted("estimated", null), null)).toEqual({ booking: { state: "estimated", spend: null, cap_charge: 0.186 }, disagree: false });
-    expect(decideBooking(released, trusted("released", null), null)).toEqual({ booking: { state: "released", spend: null, cap_charge: 0.186 }, disagree: false });
+    // Moved (hold floor): a released hold that comes back puts the day in a state the cap did not admit, so
+    // each of these bookings reports pastAdmitted.
+    const back = (booking: unknown) => ({ booking, disagree: false, pastAdmitted: true });
+    expect(decideBooking(released, trusted("estimated", null), null)).toEqual(back({ state: "estimated", spend: null, cap_charge: 0.186 }));
+    expect(decideBooking(released, trusted("released", null), null)).toEqual(back({ state: "released", spend: null, cap_charge: 0.186 }));
     // The restored hold is raised by a reported cost, as any hold is.
     expect(decideBooking(released, trusted("reserved", null), 0.3).booking).toEqual({ state: "reserved", spend: null, cap_charge: 0.3 });
-    // A proven settlement is booked as usual.
-    expect(decideBooking(released, trusted("settled", 0.05), null)).toEqual({ booking: { state: "settled", spend: 0.05, cap_charge: 0.05 }, disagree: false });
-    // A read that does not move the row changes nothing: an untrusted read, and a trusted read with no state.
-    for (const read of [{ ...trusted("estimated", null), fresh: false }, trusted(null, null)]) {
-      expect(decideBooking(released, read, null)).toEqual({ booking: { state: "refused_local", spend: null, cap_charge: 0 }, disagree: false });
-    }
-    // A padded quote that is not a known amount: the charge is unknown, so nothing is guessed and the read disagrees.
+    // Moved (hold floor): a proven settlement was booked at its own amount, 0.05. It now books its spend and
+    // the hold comes back.
+    expect(decideBooking(released, trusted("settled", 0.05), null)).toEqual(back({ state: "settled", spend: 0.05, cap_charge: 0.186, spend_raw: null }));
+    // Moved (hold floor, R2): a trusted read with no state changed nothing here. It shows the gateway knows
+    // the request, so the hold comes back and the row is sent again, marked receipt_seen. An untrusted read
+    // still changes nothing.
+    expect(decideBooking(released, trusted(null, null), null)).toEqual(back({ state: "sent", spend: null, cap_charge: 0.186, receipt_seen: true }));
+    expect(decideBooking(released, { ...trusted("estimated", null), fresh: false }, null)).toEqual(ok({ state: "refused_local", spend: null, cap_charge: 0 }));
+    // A padded quote that is not a known amount: the hold is unknown, so nothing is guessed and the read disagrees.
+    // Moved (hold floor): a proven settlement was booked at its own amount here. Its charge is the hold too.
     for (const quote of [null, undefined, -1, "0.186"]) {
       const noQuote = { ...released, quote_padded: quote };
-      expect(decideBooking(noQuote, trusted("estimated", null), 0.3), String(quote)).toEqual({ booking: { state: "refused_local", spend: null, cap_charge: 0 }, disagree: true });
-      expect(decideBooking(noQuote, trusted("settled", 0.05), null), String(quote)).toEqual({ booking: { state: "settled", spend: 0.05, cap_charge: 0.05 }, disagree: false });
+      expect(decideBooking(noQuote, trusted("estimated", null), 0.3), String(quote)).toEqual(refused({ state: "refused_local", spend: null, cap_charge: 0 }));
+      expect(decideBooking(noQuote, trusted("settled", 0.05), null), String(quote)).toEqual(refused({ state: "refused_local", spend: null, cap_charge: 0 }));
     }
   });
 
@@ -161,13 +178,15 @@ describe("decideBooking: the one decision for every receipt read", () => {
     for (const charge of [null, undefined, -1, Number.NaN, "0.186"]) {
       const unknown = { state: "estimated", spend: null, cap_charge: charge };
       for (const read of [trusted("estimated", null), trusted("settled", null), { ...trusted("settled", 0.05), fresh: false }]) {
-        expect(decideBooking(unknown, read, 0.3), String(charge)).toEqual({ booking: unknown, disagree: true });
+        expect(decideBooking(unknown, read, 0.3), String(charge)).toEqual(refused(unknown));
       }
-      // A proven settlement is a known charge, so it is booked.
-      expect(decideBooking(unknown, trusted("settled", 0.05), null), String(charge)).toEqual({ booking: { state: "settled", spend: 0.05, cap_charge: 0.05 }, disagree: false });
+      // Moved (hold floor): a proven settlement was booked at its own amount. Its charge is the hold, so it is
+      // booked at the padded quote when the row records a known one, and disagrees when it does not.
+      expect(decideBooking({ ...unknown, quote_padded: 0.186 }, trusted("settled", 0.05), null), String(charge)).toEqual(ok({ state: "settled", spend: 0.05, cap_charge: 0.186, spend_raw: null }));
+      expect(decideBooking(unknown, trusted("settled", 0.05), null), String(charge)).toEqual(refused(unknown));
       // A read below the booked settlement stays refused, and the unknown charge stays as it is.
       const settledUnknown = { state: "settled", spend: 0.07, cap_charge: charge };
-      expect(decideBooking(settledUnknown, trusted("settled", 0.05), null), String(charge)).toEqual({ booking: settledUnknown, disagree: true });
+      expect(decideBooking(settledUnknown, trusted("settled", 0.05), null), String(charge)).toEqual(refused(settledUnknown));
     }
   });
 });
@@ -202,6 +221,8 @@ describe("decideFailure: the one decision for what run reports when its paid cal
       expect(decideFailure({ state, spend: null, cap_charge: 0.186 }, "refused_local"), state).toBeNull();
     }
     expect(decideFailure({ state: "settled", spend: 0.3, cap_charge: 0.3 }, "refused_local")).toBeNull();
+    // Hold floor (R2): a sent row a trusted read with no state reached is marked receipt_seen, and is not released.
+    expect(decideFailure({ state: "sent", spend: null, cap_charge: 0.186, receipt_seen: true }, "refused_local")).toBeNull();
   });
 
   it("a charge that is not a known amount is never replaced by a guess: the row stays, also for \"nothing was sent\"", () => {
@@ -224,7 +245,10 @@ describe("fails on dbffac0: a reported cost raises a charge on a hold and on a s
       const refreshed = await cli(h, refreshArgs(rid), { provider: new P({ read }) });
       expect(refreshed.code, refreshed.err).toBe(0);
       const last = ledger(h).at(-1)!;
-      expect({ ...booked(last), reason: last.reason, warned: refreshed.err.includes(DISAGREE) }).toEqual({ state: "settled", spend: 0.05, cap_charge: 0.15, reason: CHARGE_RAISED, warned: false });
+      // Moved (review fixes 2, D): the cost 0.15 is below the padded quote 0.186, so the reason no longer
+      // says the charge was raised to it. The charge still rises to 0.15 on this row booked below its hold.
+      // Moved (review fixes 3, item 1): a booking that raises a known booked charge passes what the cap admitted.
+      expect({ ...booked(last), reason: last.reason, warned: refreshed.err.includes(DISAGREE) }).toEqual({ state: "settled", spend: 0.05, cap_charge: 0.15, reason: PAST_ADMITTED, warned: false });
       expect(await today(h)).toBe(0.15);
     }
   });
@@ -250,53 +274,59 @@ describe("fails on dbffac0: run books its own read against the latest row, not t
     const rows = ledger(h);
     // The third row is run's own: it records the HTTP status of its read. The booking in it is the other reader's.
     expect(rows.map((r) => r.state)).toEqual(["sent", "settled", "settled"]);
-    expect(booked(rows.at(-1)!)).toEqual({ state: "settled", spend: 0.07, cap_charge: 0.07 });
+    // Moved (hold floor): the charge was the other reader's settlement, 0.07. It is now the 0.186 hold.
+    expect(booked(rows.at(-1)!)).toEqual({ state: "settled", spend: 0.07, cap_charge: 0.186 });
     expect({ warned: run.err.includes(DISAGREE), status: run.json().receipt.status, cap_charge: run.json().cap_charge, settled_read: run.json().receipt.settled })
-      .toEqual({ warned: true, status: DISAGREE, cap_charge: 0.07, settled_read: 0.05 });
-    expect(await today(h)).toBe(0.07);
+      .toEqual({ warned: true, status: DISAGREE, cap_charge: 0.186, settled_read: 0.05 });
+    expect(await today(h)).toBe(0.186);
   });
 
   it("(b) own read released 0: 0.07 stays booked and charged, and DISAGREE is on stderr and in the result", async () => {
     const h = await ready();
     const run = await cli(h, runArgs(), { provider: new P({ read: after(h, settledAt(0.07), releasedAt(0)) }) });
     expect(run.code, run.err).toBe(0);
-    expect(booked(ledger(h).at(-1)!)).toEqual({ state: "settled", spend: 0.07, cap_charge: 0.07 });
-    expect({ warned: run.err.includes(DISAGREE), status: run.json().receipt.status, cap_charge: run.json().cap_charge }).toEqual({ warned: true, status: DISAGREE, cap_charge: 0.07 });
-    expect(await today(h)).toBe(0.07);
+    // Moved (hold floor): charged 0.07 before, the hold now.
+    expect(booked(ledger(h).at(-1)!)).toEqual({ state: "settled", spend: 0.07, cap_charge: 0.186 });
+    expect({ warned: run.err.includes(DISAGREE), status: run.json().receipt.status, cap_charge: run.json().cap_charge }).toEqual({ warned: true, status: DISAGREE, cap_charge: 0.186 });
+    expect(await today(h)).toBe(0.186);
   });
 
   it("(c) own read pending: the settling state does not go back, and the result says the stored files disagree", async () => {
     const h = await ready();
     const run = await cli(h, runArgs(), { provider: new P({ read: after(h, settledAt(0.07), pending) }) });
     expect(run.code, run.err).toBe(0);
-    expect(booked(ledger(h).at(-1)!)).toEqual({ state: "settled", spend: 0.07, cap_charge: 0.07 });
+    // Moved (hold floor): charged 0.07 before, the hold now.
+    expect(booked(ledger(h).at(-1)!)).toEqual({ state: "settled", spend: 0.07, cap_charge: 0.186 });
     // A pending read refuses no settlement, so the booking step does not warn (as vector
     // refresh-settled-then-fresh-pending-keeps-booking pins for a refresh). The receipt file now holds the
     // pending read beside a settled row, and that is a disagreement of the stored files.
-    expect({ warned: run.err.includes(DISAGREE), status: run.json().receipt.status, cap_charge: run.json().cap_charge }).toEqual({ warned: false, status: DISAGREE, cap_charge: 0.07 });
-    expect(await today(h)).toBe(0.07);
+    expect({ warned: run.err.includes(DISAGREE), status: run.json().receipt.status, cap_charge: run.json().cap_charge }).toEqual({ warned: false, status: DISAGREE, cap_charge: 0.186 });
+    expect(await today(h)).toBe(0.186);
     // The text output carries the status too, on its receipt line.
     const h2 = await ready();
     const text = await cli(h2, runArgs().filter((a) => a !== "--json"), { provider: new P({ read: after(h2, settledAt(0.07), pending) }) });
     expect(text.out.split("\n").find((l) => l.includes("receipt:"))).toContain(`status=${DISAGREE}`);
   });
 
-  it("run records what only it knows even when its read is refused: the reported cost raises the other reader's charge", async () => {
+  it("run records what only it knows even when its read is refused: its reported cost and the HTTP status of its read", async () => {
+    // Moved (hold floor): a cost of 0.15 raised the other reader's 0.07 charge to 0.15. The charge is now
+    // the 0.186 hold, which a cost of 0.15 does not raise; the row still records the cost and the status.
     const h = await ready();
     const run = await cli(h, runArgs(), { provider: new P({ usage: usage(0.15), read: after(h, settledAt(0.07), settledAt(0.05)) }) });
     expect(run.code, run.err).toBe(0);
     const last = ledger(h).at(-1)!;
     expect({ ...booked(last), cost_reported: last.cost_reported, reason: last.reason, http: last.http })
-      .toEqual({ state: "settled", spend: 0.07, cap_charge: 0.15, cost_reported: 0.15, reason: CHARGE_RAISED, http: 200 });
+      .toEqual({ state: "settled", spend: 0.07, cap_charge: 0.186, cost_reported: 0.15, reason: null, http: 200 });
     expect(run.err).toContain(DISAGREE);
-    expect(await today(h)).toBe(0.15);
+    expect(await today(h)).toBe(0.186);
   });
 
   it("control: an own read above the other reader's is booked, and nothing disagrees", async () => {
     const h = await ready();
     const run = await cli(h, runArgs(), { provider: new P({ read: after(h, settledAt(0.05), settledAt(0.07)) }) });
     expect(run.code, run.err).toBe(0);
-    expect(booked(ledger(h).at(-1)!)).toEqual({ state: "settled", spend: 0.07, cap_charge: 0.07 });
+    // Moved (hold floor): charged 0.07 before, the hold now.
+    expect(booked(ledger(h).at(-1)!)).toEqual({ state: "settled", spend: 0.07, cap_charge: 0.186 });
     expect({ err: run.err, status: run.json().receipt.status }).toEqual({ err: "", status: undefined });
   });
 
@@ -305,7 +335,8 @@ describe("fails on dbffac0: run books its own read against the latest row, not t
     const run = await cli(h, runArgs(), { provider: new P({ read: settledAt(0.05) }) });
     expect(run.code, run.err).toBe(0);
     expect(ledger(h).map((r) => r.state)).toEqual(["sent", "settled"]);
-    expect(booked(ledger(h).at(-1)!)).toEqual({ state: "settled", spend: 0.05, cap_charge: 0.05 });
+    // Moved (hold floor): charged 0.05 before, the hold now.
+    expect(booked(ledger(h).at(-1)!)).toEqual({ state: "settled", spend: 0.05, cap_charge: 0.186 });
     expect({ err: run.err, status: run.json().receipt.status }).toEqual({ err: "", status: undefined });
   });
 });
@@ -339,7 +370,8 @@ describe("fails on 9adfd17: what run writes when its paid call fails goes throug
       // Moved (review of the booking step): this expected no third row. The report that is not booked is now
       // recorded on one row that keeps state, spend and charge exactly.
       expect(ledger(h).map(booked)).toEqual([{ state: "sent", spend: null, cap_charge: 0.186 }, { state: "settled", spend: 0.3, cap_charge: 0.3 }, { state: "settled", spend: 0.3, cap_charge: 0.3 }]);
-      expect({ reason: ledger(h).at(-1)!.reason, http: ledger(h).at(-1)!.http }).toEqual({ reason: f.kept, http: f.http });
+      // Moved (review fixes 4, item 3): the request was booked past what the cap admitted earlier, so every later row keeps the mark. (settled 0.3 is above the 0.186 hold.)
+      expect({ reason: ledger(h).at(-1)!.reason, http: ledger(h).at(-1)!.http }).toEqual({ reason: `${PAST_ADMITTED}; ${f.kept}`, http: f.http });
       expect(await today(h)).toBe(0.3);
       const shown = (await cli(h, ["receipt", ledger(h)[0].request_id!, "--json"])).json();
       expect({ ledger_state: shown.ledger_state, ledger_spend: shown.ledger_spend, status: shown.status }).toEqual({ ledger_state: "settled", ledger_spend: 0.3, status: undefined });
@@ -407,13 +439,17 @@ describe("fails on a3d71d6: a trusted read beats a \"nothing was sent\" report, 
     expect(await today(h)).toBe(0.186);
   });
 
-  it("control: report first, then a refresh reads a proven settlement: it is booked as usual", async () => {
+  it("control: report first, then a refresh reads a proven settlement: its spend is booked and the hold comes back", async () => {
+    // Moved (hold floor): this was "it is booked as usual", charged 0.05. The released hold comes back, and
+    // the refresh says it passed what the cap admitted.
     const h = await ready();
     expect((await cli(h, runArgs(), { provider: new P({ complete: preSend }) })).code).toBe(11);
     const rid = ledger(h)[0].request_id!;
-    expect((await cli(h, refreshArgs(rid), { provider: new P({ read: settledAt(0.05) }) })).code).toBe(0);
-    expect(booked(ledger(h).at(-1)!)).toEqual({ state: "settled", spend: 0.05, cap_charge: 0.05 });
-    expect(await today(h)).toBe(0.05);
+    const refreshed = await cli(h, refreshArgs(rid), { provider: new P({ read: settledAt(0.05) }) });
+    expect(refreshed.code).toBe(0);
+    expect(refreshed.err).toBe(PAST_ADMITTED);
+    expect(booked(ledger(h).at(-1)!)).toEqual({ state: "settled", spend: 0.05, cap_charge: 0.186 });
+    expect(await today(h)).toBe(0.186);
   });
 });
 
@@ -470,7 +506,7 @@ withLedgerLock(home, () => {
     const first = await cli(h, refreshArgs(rid), { provider: new P({ read: after(h, settledAt(0.07), settledAt(0.05)) }) });
     expect(first.code, first.err).toBe(0);
     expect({ appended: ledger(h).length - before, last: booked(ledger(h).at(-1)!), warned: first.err.includes(DISAGREE), status: first.json().status, ledger_spend: first.json().ledger_spend })
-      .toEqual({ appended: 1, last: { state: "settled", spend: 0.07, cap_charge: 0.07 }, warned: true, status: DISAGREE, ledger_spend: 0.07 });
+      .toEqual({ appended: 1, last: { state: "settled", spend: 0.07, cap_charge: 0.186 }, warned: true, status: DISAGREE, ledger_spend: 0.07 });
   });
 
   it("pin: the two orders of two refreshes book the same spend and charge", async () => {
@@ -481,8 +517,9 @@ withLedgerLock(home, () => {
       const last = ledger(h).at(-1)!;
       return { spend: last.spend, cap_charge: last.cap_charge, today: await today(h) };
     };
-    expect(await outcome(settledAt(0.05), settledAt(0.07))).toEqual({ spend: 0.07, cap_charge: 0.07, today: 0.07 });
-    expect(await outcome(settledAt(0.07), settledAt(0.05))).toEqual({ spend: 0.07, cap_charge: 0.07, today: 0.07 });
+    // Moved (hold floor): both orders charged 0.07. Both now keep the 0.186 hold.
+    expect(await outcome(settledAt(0.05), settledAt(0.07))).toEqual({ spend: 0.07, cap_charge: 0.186, today: 0.186 });
+    expect(await outcome(settledAt(0.07), settledAt(0.05))).toEqual({ spend: 0.07, cap_charge: 0.186, today: 0.186 });
   });
 });
 
@@ -495,7 +532,7 @@ describe("fails on dbffac0: a stored read below the booked amount is shown as a 
     const rid = run.json().request_id as string;
     const refreshed = await cli(h, refreshArgs(rid), { provider: new P({ read: settledAt(0.05) }) });
     expect({ code: refreshed.code, warned: refreshed.err.includes(DISAGREE), status: refreshed.json().status, last: booked(ledger(h).at(-1)!) })
-      .toEqual({ code: 0, warned: true, status: DISAGREE, last: { state: "settled", spend: 0.07, cap_charge: 0.07 } });
+      .toEqual({ code: 0, warned: true, status: DISAGREE, last: { state: "settled", spend: 0.07, cap_charge: 0.186 } });
     expect(JSON.parse(readFileSync(join(h, "receipts", `${rid}.json`), "utf8")).settled).toBe(0.05);
     return { h, rid };
   }
@@ -543,7 +580,7 @@ describe("fails on dbffac0: a stored read below the booked amount is shown as a 
     const rid = run.json().request_id as string;
     const refreshed = await cli(h, refreshArgs(rid), { provider: new P({ read: pending }) });
     expect({ code: refreshed.code, err: refreshed.err, status: refreshed.json().status, ledger_state: refreshed.json().ledger_state, last: booked(ledger(h).at(-1)!) })
-      .toEqual({ code: 0, err: "", status: DISAGREE, ledger_state: "settled", last: { state: "settled", spend: 0.05, cap_charge: 0.05 } });
+      .toEqual({ code: 0, err: "", status: DISAGREE, ledger_state: "settled", last: { state: "settled", spend: 0.05, cap_charge: 0.186 } });
   });
 
   it("a timed out call disagrees with a receipt stored for it until a read is booked", async () => {
@@ -578,7 +615,7 @@ describe("pin: a receipt shaped like the gateway's documented schema is stored w
     const file = JSON.parse(readFileSync(join(h, "receipts", `${run.json().request_id}.json`), "utf8"));
     expect({ settled: file.settled, settled_raw: file.settled_raw, terminal_event: file.terminal_event, chain_final: file.chain_final })
       .toEqual({ settled: 0.05, settled_raw: "50000000000000000", terminal_event: event, chain_final: false });
-    expect(booked(ledger(h).at(-1)!)).toEqual({ state: "settled", spend: 0.05, cap_charge: 0.05 });
+    expect(booked(ledger(h).at(-1)!)).toEqual({ state: "settled", spend: 0.05, cap_charge: 0.186 });
     expect(run.json().receipt.status).toBeUndefined();
   });
 
@@ -603,7 +640,8 @@ describe("pin: after the paid call, when the booking step cannot run", () => {
     const p = new P({ read });
     const run = await cli(h, runArgs(), { provider: p });
     rmSync(lock);
-    expect({ code: run.code, out: run.out, err: run.err, calls: p.calls }).toEqual({ code: 1, out: "", err: "imd-flop: ledger lock timeout", calls: 1 });
+    // Moved (review fixes 4, item 5): the timeout names the lock file and its age.
+    expect({ code: run.code, out: run.out, err: run.err, calls: p.calls }).toEqual({ code: 1, out: "", err: expect.stringMatching(/^imd-flop: ledger lock timeout: \S+ledger\.jsonl\.lock \(\d+ s old\) is held$/), calls: 1 });
     const rows = ledger(h);
     expect(rows.map(booked)).toEqual([{ state: "sent", spend: null, cap_charge: 0.186 }]);
     const rid = rows[0].request_id!;
@@ -612,7 +650,7 @@ describe("pin: after the paid call, when the booking step cannot run", () => {
     expect(await today(h)).toBe(0.186);
     // The read was stored and not booked. A later refresh books it.
     const refreshed = await cli(h, refreshArgs(rid), { provider: new P({ read: settledAt(0.05) }) });
-    expect({ code: refreshed.code, last: booked(ledger(h).at(-1)!) }).toEqual({ code: 0, last: { state: "settled", spend: 0.05, cap_charge: 0.05 } });
+    expect({ code: refreshed.code, last: booked(ledger(h).at(-1)!) }).toEqual({ code: 0, last: { state: "settled", spend: 0.05, cap_charge: 0.186 } });
   }, 30_000);
 
   it("the ledger append fails: exit 1, the sent row keeps the reservation, the answer is in the response file", async () => {
@@ -644,16 +682,19 @@ describe("fails on a3d71d6: a reported cost survives a booking step that could n
       writeFileSync(lock, JSON.stringify({ pid: process.pid, host: hostname(), token: "other" }));
       return settledAt(0.05)(id);
     };
-    const run = await cli(h, runArgs(), { provider: new P({ usage: usage(0.15), read }) });
+    // Moved (hold floor): the cost was 0.15. A cost below the 0.186 hold no longer raises the charge, so the
+    // cost here is above it, and the booking that raises the charge past the hold says so in its reason.
+    const run = await cli(h, runArgs(), { provider: new P({ usage: usage(0.3), read }) });
     rmSync(lock);
-    expect({ code: run.code, err: run.err }).toEqual({ code: 1, err: "imd-flop: ledger lock timeout" });
+    expect({ code: run.code, err: run.err }).toEqual({ code: 1, err: expect.stringMatching(/^imd-flop: ledger lock timeout: \S+\.lock \(\d+ s old\) is held$/) });
     expect(ledger(h).map(booked)).toEqual([{ state: "sent", spend: null, cap_charge: 0.186 }]);
     const rid = ledger(h)[0].request_id!;
     const refreshed = await cli(h, refreshArgs(rid), { provider: new P({ read: settledAt(0.05) }) });
     expect(refreshed.code, refreshed.err).toBe(0);
     const last = ledger(h).at(-1)!;
-    expect({ ...booked(last), cost_reported: last.cost_reported, reason: last.reason }).toEqual({ state: "settled", spend: 0.05, cap_charge: 0.15, cost_reported: 0.15, reason: CHARGE_RAISED });
-    expect(await today(h)).toBe(0.15);
+    expect({ ...booked(last), cost_reported: last.cost_reported, reason: last.reason }).toEqual({ state: "settled", spend: 0.05, cap_charge: 0.3, cost_reported: 0.3, reason: `${PAST_ADMITTED}; ${CHARGE_RAISED}` });
+    expect(refreshed.err).toBe(PAST_ADMITTED);
+    expect(await today(h)).toBe(0.3);
   }, 30_000);
 
   it("the ledger append fails after the call: a later refresh charges the reported cost and records it", async () => {
@@ -662,15 +703,16 @@ describe("fails on a3d71d6: a reported cost survives a booking step that could n
       chmodSync(ledgerPath(h), 0o400);
       return settledAt(0.05)(id);
     };
-    const run = await cli(h, runArgs(), { provider: new P({ usage: usage(0.15), read }) });
+    // Moved (hold floor): the cost was 0.15, below the hold. It is above it here.
+    const run = await cli(h, runArgs(), { provider: new P({ usage: usage(0.3), read }) });
     chmodSync(ledgerPath(h), 0o644);
     expect(run.code).toBe(1);
     const rid = ledger(h)[0].request_id!;
     const refreshed = await cli(h, refreshArgs(rid), { provider: new P({ read: settledAt(0.05) }) });
     expect(refreshed.code, refreshed.err).toBe(0);
     const last = ledger(h).at(-1)!;
-    expect({ ...booked(last), cost_reported: last.cost_reported }).toEqual({ state: "settled", spend: 0.05, cap_charge: 0.15, cost_reported: 0.15 });
-    expect(await today(h)).toBe(0.15);
+    expect({ ...booked(last), cost_reported: last.cost_reported }).toEqual({ state: "settled", spend: 0.05, cap_charge: 0.3, cost_reported: 0.3 });
+    expect(await today(h)).toBe(0.3);
   });
 });
 
@@ -681,7 +723,8 @@ describe("fails on 9adfd17: a refresh that cannot take the ledger lock says the 
   // since the booking step takes the lock before it decides, the old line was also printed for a read that
   // had nothing to book. DISAGREE on stderr stays for a read that was refused, and for an append that failed
   // (test/audit-v3.test.ts).
-  const BUSY = `${LEDGER_BUSY} (ledger lock timeout)`;
+  // Moved (review fixes 4, item 5): the timeout now names the lock file and its age.
+  const BUSY = expect.stringMatching(new RegExp(`^${LEDGER_BUSY.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")} \\(ledger lock timeout: \\S+\\.lock \\(\\d+ s old\\) is held\\)$`));
 
   it("a read with nothing to book: the busy line, no status, exit 0; then a read that settles: the busy line, and the files do disagree", async () => {
     const h = await ready();
@@ -697,10 +740,10 @@ describe("fails on 9adfd17: a refresh that cannot take the ledger lock says the 
     expect({ code: settles.code, err: settles.err, status: settles.json().status, settled: settles.json().settled, ledger_state: settles.json().ledger_state })
       .toEqual({ code: 0, err: BUSY, status: DISAGREE, settled: 0.05, ledger_state: "estimated" });
     expect(readFileSync(ledgerPath(h), "utf8")).toBe(before);
-    expect(BUSY).not.toContain("disagree");
+    expect(LEDGER_BUSY).not.toContain("disagree");
     // With the lock free the same refresh books the read and says nothing.
     const again = await cli(h, refreshArgs(rid), { provider: new P({ read: settledAt(0.05) }) });
-    expect({ code: again.code, err: again.err, status: again.json().status, last: booked(ledger(h).at(-1)!) }).toEqual({ code: 0, err: "", status: undefined, last: { state: "settled", spend: 0.05, cap_charge: 0.05 } });
+    expect({ code: again.code, err: again.err, status: again.json().status, last: booked(ledger(h).at(-1)!) }).toEqual({ code: 0, err: "", status: undefined, last: { state: "settled", spend: 0.05, cap_charge: 0.186 } });
   }, 30_000);
 });
 
@@ -715,9 +758,10 @@ describe("fails on dbffac0: after the paid call, when the ledger no longer holds
     };
     const run = await cli(h, runArgs(), { provider: new P({ read }) });
     expect(run.code, run.err).toBe(0);
-    expect(ledger(h).map(booked)).toEqual([{ state: "sent", spend: null, cap_charge: 0.186 }, { state: "settled", spend: 0.05, cap_charge: 0.05 }]);
-    expect({ cap_charge: run.json().cap_charge, text: run.json().text }).toEqual({ cap_charge: 0.05, text: "ok" });
-    expect(await today(h)).toBe(0.05);
+    // Moved (hold floor): charged 0.05 before, the hold now.
+    expect(ledger(h).map(booked)).toEqual([{ state: "sent", spend: null, cap_charge: 0.186 }, { state: "settled", spend: 0.05, cap_charge: 0.186 }]);
+    expect({ cap_charge: run.json().cap_charge, text: run.json().text }).toEqual({ cap_charge: 0.186, text: "ok" });
+    expect(await today(h)).toBe(0.186);
   });
 });
 
@@ -754,7 +798,7 @@ describe("bookRead: the one booking step", () => {
     const h = held();
     const r = bookRead(h, "r1", trusted("settled", 0.05), { flag: null });
     expect(r.outcome).toBe("appended");
-    expect(ledger(h).map(booked)).toEqual([{ state: "estimated", spend: null, cap_charge: 0.186 }, { state: "settled", spend: 0.05, cap_charge: 0.05 }]);
+    expect(ledger(h).map(booked)).toEqual([{ state: "estimated", spend: null, cap_charge: 0.186 }, { state: "settled", spend: 0.05, cap_charge: 0.186 }]);
     expect(rowOf(r)).toEqual(readLines(ledgerPath(h)).at(-1));
     expect(rowOf(r)!.ts).not.toBe("2026-11-11T00:00:00.000Z");
   });
@@ -783,9 +827,10 @@ describe("bookRead: the one booking step", () => {
     const h = held({ cap_charge: null });
     expect(bookRead(h, "r1", trusted("estimated", null), { flag: null }).outcome).toBe("disagree");
     expect(ledger(h).map(booked)).toEqual([{ state: "estimated", spend: null, cap_charge: null }]);
-    // A proven settlement is a known charge, so it is booked.
+    // Moved (hold floor): a proven settlement was booked at its own amount. It is booked at the row's
+    // padded quote, the hold.
     expect(bookRead(h, "r1", trusted("settled", 0.05), { flag: null }).outcome).toBe("appended");
-    expect(booked(ledger(h).at(-1)!)).toEqual({ state: "settled", spend: 0.05, cap_charge: 0.05 });
+    expect(booked(ledger(h).at(-1)!)).toEqual({ state: "settled", spend: 0.05, cap_charge: 0.186 });
   });
 
   it("no ledger row for the request: nothing appended", () => {
@@ -801,8 +846,10 @@ describe("bookRead: the one booking step", () => {
     const r = bookRead(h, "r2", trusted("settled", 0.05), { flag: null }, seed);
     expect(r.outcome).toBe("appended");
     const rows = readLines(ledgerPath(h)).filter((e: Row) => e.request_id === "r2");
-    expect(rows[0]).toEqual(seed);
-    expect(rows.map(booked)).toEqual([{ state: "sent", spend: null, cap_charge: 0.186 }, { state: "settled", spend: 0.05, cap_charge: 0.05 }]);
+    // Moved (review fixes 4, item 2): writing the seed again is a booking past what the cap admitted.
+    expect(rows[0]).toEqual({ ...seed, reason: PAST_ADMITTED });
+    expect(r.outcome !== "no_row" && r.pastAdmitted).toBe(true);
+    expect(rows.map(booked)).toEqual([{ state: "sent", spend: null, cap_charge: 0.186 }, { state: "settled", spend: 0.05, cap_charge: 0.186 }]);
     // With a row for the request the seed is not written.
     bookRead(h, "r1", trusted("settled", 0.05), { flag: null }, { ...seed, request_id: "r1" });
     expect(ledger(h).filter((e) => e.request_id === "r1").map((e) => e.state)).toEqual(["estimated", "settled"]);
@@ -822,17 +869,21 @@ describe("bookRead: the one booking step", () => {
     expect(r.outcome).toBe("disagree");
     expect(ledger(h)).toHaveLength(2);
     const last = ledger(h).at(-1)!;
-    expect({ ...booked(last), cost_reported: last.cost_reported, http: last.http, reason: last.reason }).toEqual({ state: "settled", spend: 0.07, cap_charge: 0.15, cost_reported: 0.15, http: 200, reason: CHARGE_RAISED });
+    // Moved (review fixes 2, D): the cost 0.15 is below the padded quote 0.186: no "raised" note.
+    // Moved (review fixes 3, item 1): a booking that raises a known booked charge passes what the cap admitted.
+    expect({ ...booked(last), cost_reported: last.cost_reported, http: last.http, reason: last.reason }).toEqual({ state: "settled", spend: 0.07, cap_charge: 0.15, cost_reported: 0.15, http: 200, reason: PAST_ADMITTED });
     expect(rowOf(r)).toEqual(readLines(ledgerPath(h)).at(-1));
   });
 
   it("a refresh uses the cost the row records, and ignores one that is not a finite number", () => {
-    const withCost = held({ cost_reported: 0.15 });
+    // Moved (hold floor): the cost was 0.15, which no longer raises a charge held at 0.186. A row holding
+    // 0.3 as its charge and its cost is what a raised hold looks like.
+    const withCost = held({ cost_reported: 0.3, cap_charge: 0.3 });
     bookRead(withCost, "r1", trusted("settled", 0.05), { flag: null });
-    expect({ ...booked(ledger(withCost).at(-1)!), reason: ledger(withCost).at(-1)!.reason }).toEqual({ state: "settled", spend: 0.05, cap_charge: 0.15, reason: CHARGE_RAISED });
-    const notANumber = held({ cost_reported: "0.15" });
+    expect({ ...booked(ledger(withCost).at(-1)!), reason: ledger(withCost).at(-1)!.reason }).toEqual({ state: "settled", spend: 0.05, cap_charge: 0.3, reason: CHARGE_RAISED });
+    const notANumber = held({ cost_reported: "0.3" });
     bookRead(notANumber, "r1", trusted("settled", 0.05), { flag: null });
-    expect(booked(ledger(notANumber).at(-1)!)).toEqual({ state: "settled", spend: 0.05, cap_charge: 0.05 });
+    expect({ ...booked(ledger(notANumber).at(-1)!), reason: ledger(notANumber).at(-1)!.reason }).toEqual({ state: "settled", spend: 0.05, cap_charge: 0.186, reason: null });
   });
 
   describe("fails on a3d71d6: the reported cost is resolved in the booking step: the caller's, else the row's, else the stored response file's", () => {
@@ -843,22 +894,27 @@ describe("bookRead: the one booking step", () => {
     const response = (usageField: unknown) => JSON.stringify({ request_id: "r1", usage: usageField, text: "ok" });
 
     it("the response file's cost raises the charge, and the appended row records it", () => {
+      // Moved (hold floor): the cost was 0.15, below the 0.186 hold. A cost above it raises the charge, and
+      // passes what the cap admitted, so the reason says that first.
       const h = held();
-      writeResponse(h, response({ cost_flop: 0.15 }));
-      expect(bookRead(h, "r1", trusted("settled", 0.05), { flag: null }).outcome).toBe("appended");
+      writeResponse(h, response({ cost_flop: 0.3 }));
+      const r = bookRead(h, "r1", trusted("settled", 0.05), { flag: null });
+      expect({ outcome: r.outcome, pastAdmitted: r.outcome !== "no_row" && r.pastAdmitted }).toEqual({ outcome: "appended", pastAdmitted: true });
       const last = ledger(h).at(-1)!;
-      expect({ ...booked(last), cost_reported: last.cost_reported, reason: last.reason }).toEqual({ state: "settled", spend: 0.05, cap_charge: 0.15, cost_reported: 0.15, reason: CHARGE_RAISED });
+      expect({ ...booked(last), cost_reported: last.cost_reported, reason: last.reason }).toEqual({ state: "settled", spend: 0.05, cap_charge: 0.3, cost_reported: 0.3, reason: `${PAST_ADMITTED}; ${CHARGE_RAISED}` });
     });
 
     it("the caller's cost comes first, then the row's: the response file is not asked", () => {
+      // Moved (hold floor): the charge was the cost, 0.15. It is now the 0.186 hold, which a cost of 0.15
+      // does not raise. The response file's 0.3 would have raised it, so the charge still shows it was not asked.
       const caller = held();
       writeResponse(caller, response({ cost_flop: 0.3 }));
       bookRead(caller, "r1", trusted("settled", 0.05), { flag: null, cost_reported: 0.15 });
-      expect({ cap_charge: ledger(caller).at(-1)!.cap_charge, cost_reported: ledger(caller).at(-1)!.cost_reported }).toEqual({ cap_charge: 0.15, cost_reported: 0.15 });
+      expect({ cap_charge: ledger(caller).at(-1)!.cap_charge, cost_reported: ledger(caller).at(-1)!.cost_reported }).toEqual({ cap_charge: 0.186, cost_reported: 0.15 });
       const row = held({ cost_reported: 0.15 });
       writeResponse(row, response({ cost_flop: 0.3 }));
       bookRead(row, "r1", trusted("settled", 0.05), { flag: null });
-      expect({ cap_charge: ledger(row).at(-1)!.cap_charge, cost_reported: ledger(row).at(-1)!.cost_reported }).toEqual({ cap_charge: 0.15, cost_reported: 0.15 });
+      expect({ cap_charge: ledger(row).at(-1)!.cap_charge, cost_reported: ledger(row).at(-1)!.cost_reported }).toEqual({ cap_charge: 0.186, cost_reported: 0.15 });
     });
 
     it("a response file that is missing, unreadable or has no usable cost gives no cost, never 0", () => {
@@ -869,7 +925,7 @@ describe("bookRead: the one booking step", () => {
         expect(ledger(h), String(body)).toHaveLength(1);
         bookRead(h, "r1", trusted("settled", 0.05), { flag: null });
         const last = ledger(h).at(-1)!;
-        expect({ ...booked(last), cost_reported: last.cost_reported }, String(body)).toEqual({ state: "settled", spend: 0.05, cap_charge: 0.05, cost_reported: null });
+        expect({ ...booked(last), cost_reported: last.cost_reported }, String(body)).toEqual({ state: "settled", spend: 0.05, cap_charge: 0.186, cost_reported: null });
       }
     });
   });
@@ -927,8 +983,9 @@ describe("bookFailure: a failed call goes through the same booking step", () => 
       expect({ ...booked(last), reason: last.reason, http: last.http }, report).toEqual({ state: "settled", spend: 0.3, cap_charge: 0.3, reason: `${words}; booked settlement kept`, http: info.http });
       expect(r.outcome !== "no_row" && r.row, report).toEqual(readLines(ledgerPath(h)).at(-1));
     }
-    // A charge raised to the reported cost keeps saying so.
-    const raised = ledgerWith({ state: "settled", spend: 0.05, cap_charge: 0.15, cost_reported: 0.15, reason: CHARGE_RAISED });
+    // A charge raised to the reported cost keeps saying so. Moved (review fixes 2, D): the cost is 0.3, above
+    // the padded quote 0.186, since a cost at or below it raises nothing.
+    const raised = ledgerWith({ state: "settled", spend: 0.05, cap_charge: 0.3, cost_reported: 0.3, reason: CHARGE_RAISED });
     bookFailure(raised, "r1", "timeout_unknown", timeout);
     expect(ledger(raised).at(-1)!.reason).toBe(`timeout reported; booked settlement kept; ${CHARGE_RAISED}`);
   });
@@ -962,7 +1019,9 @@ describe("bookFailure: a failed call goes through the same booking step", () => 
     const seed = { ...JSON.parse(JSON.stringify(readLines(ledgerPath(ledgerWith()))[0])) };
     const r = bookFailure(h, "r1", "timeout_unknown", timeout, seed);
     expect(r.outcome).toBe("appended");
-    expect(readLines(ledgerPath(h))[0]).toEqual(seed);
+    // Moved (review fixes 4, item 2): writing the seed again is a booking past what the cap admitted.
+    expect(readLines(ledgerPath(h))[0]).toEqual({ ...seed, reason: PAST_ADMITTED });
+    expect(r.outcome !== "no_row" && r.pastAdmitted).toBe(true);
     expect(ledger(h).map(booked)).toEqual([{ state: "sent", spend: null, cap_charge: 0.186 }, { state: "timeout_unknown", spend: null, cap_charge: 0.186 }]);
   });
 
@@ -970,7 +1029,7 @@ describe("bookFailure: a failed call goes through the same booking step", () => 
     const h = ledgerWith();
     bookFailure(h, "r1", "timeout_unknown", timeout);
     expect(bookRead(h, "r1", { fresh: true, identityOk: true, redacted: false, state: "settled", settled: 0.05 }, { flag: null }).outcome).toBe("appended");
-    expect(ledger(h).map(booked)).toEqual([{ state: "sent", spend: null, cap_charge: 0.186 }, { state: "timeout_unknown", spend: null, cap_charge: 0.186 }, { state: "settled", spend: 0.05, cap_charge: 0.05 }]);
+    expect(ledger(h).map(booked)).toEqual([{ state: "sent", spend: null, cap_charge: 0.186 }, { state: "timeout_unknown", spend: null, cap_charge: 0.186 }, { state: "settled", spend: 0.05, cap_charge: 0.186 }]);
   });
 });
 
@@ -990,7 +1049,7 @@ describe("money stage 1: the exact spend is recorded beside the float figures", 
     const h = await ready();
     const run = await cli(h, runArgs(), { provider: new P({ read: settledRaw(0.05, RAW) }) });
     expect(run.code, run.err).toBe(0);
-    expect({ ...booked(last(h)), spend_raw: last(h).spend_raw }).toEqual({ state: "settled", spend: 0.05, cap_charge: 0.05, spend_raw: RAW });
+    expect({ ...booked(last(h)), spend_raw: last(h).spend_raw }).toEqual({ state: "settled", spend: 0.05, cap_charge: 0.186, spend_raw: RAW });
   });
 
   it("arrives on a later refresh: one row appended, the float booking unchanged; a lower or equal one later changes nothing, a higher one is booked", async () => {
@@ -1001,13 +1060,13 @@ describe("money stage 1: the exact spend is recorded beside the float figures", 
     const before = ledger(h).length;
     expect((await cli(h, refreshArgs(rid), { provider: new P({ read: settledRaw(0.05, RAW) }) })).code).toBe(0);
     expect(ledger(h).length).toBe(before + 1);
-    expect({ ...booked(last(h)), spend_raw: last(h).spend_raw }).toEqual({ state: "settled", spend: 0.05, cap_charge: 0.05, spend_raw: RAW });
+    expect({ ...booked(last(h)), spend_raw: last(h).spend_raw }).toEqual({ state: "settled", spend: 0.05, cap_charge: 0.186, spend_raw: RAW });
     for (const raw of ["49999999999999999", RAW, "000" + RAW, null]) {
       const r = await cli(h, refreshArgs(rid), { provider: new P({ read: settledRaw(0.05, raw) }) });
       expect({ code: r.code, rows: ledger(h).length, spend_raw: last(h).spend_raw }, String(raw)).toEqual({ code: 0, rows: before + 1, spend_raw: RAW });
     }
     await cli(h, refreshArgs(rid), { provider: new P({ read: settledRaw(0.05, "50000000000000001") }) });
-    expect({ rows: ledger(h).length, ...booked(last(h)), spend_raw: last(h).spend_raw }).toEqual({ rows: before + 2, state: "settled", spend: 0.05, cap_charge: 0.05, spend_raw: "50000000000000001" });
+    expect({ rows: ledger(h).length, ...booked(last(h)), spend_raw: last(h).spend_raw }).toEqual({ rows: before + 2, state: "settled", spend: 0.05, cap_charge: 0.186, spend_raw: "50000000000000001" });
   });
 
   it("a redacted receipt holds the reservation and sets nothing, even when its raw value is a valid exact amount", async () => {
@@ -1031,7 +1090,7 @@ describe("money stage 1: the exact spend is recorded beside the float figures", 
       const h = await ready();
       const run = await cli(h, runArgs(), { provider: new P({ read: settledRaw(0.05, junk) }) });
       expect(run.code, run.err).toBe(0);
-      expect({ ...booked(last(h)), spend_raw: last(h).spend_raw }, JSON.stringify(junk)).toEqual({ state: "settled", spend: 0.05, cap_charge: 0.05, spend_raw: null });
+      expect({ ...booked(last(h)), spend_raw: last(h).spend_raw }, JSON.stringify(junk)).toEqual({ state: "settled", spend: 0.05, cap_charge: 0.186, spend_raw: null });
       expect(fileOf(h, run.json().request_id).settled_raw, JSON.stringify(junk)).toEqual(junk);
     }
   });
@@ -1043,7 +1102,7 @@ describe("money stage 1: the exact spend is recorded beside the float figures", 
     expect(fileOf(h, run.json().request_id).settled_raw).toBe("000" + RAW);
     const zero = await ready();
     await cli(zero, runArgs(), { provider: new P({ read: settledRaw(0, "0000") }) });
-    expect({ ...booked(last(zero)), spend_raw: last(zero).spend_raw }).toEqual({ state: "settled", spend: 0, cap_charge: 0, spend_raw: "0" });
+    expect({ ...booked(last(zero)), spend_raw: last(zero).spend_raw }).toEqual({ state: "settled", spend: 0, cap_charge: 0.186, spend_raw: "0" });
   });
 
   it("a read refused by the float rules (it would lower the booked spend) sets nothing, even with a higher exact amount", async () => {
@@ -1053,7 +1112,7 @@ describe("money stage 1: the exact spend is recorded beside the float figures", 
     const before = ledger(h).length;
     const r = await cli(h, refreshArgs(rid), { provider: new P({ read: settledRaw(0.05, "90000000000000000") }) });
     expect(r.err).toContain(DISAGREE);
-    expect({ rows: ledger(h).length, ...booked(last(h)), spend_raw: last(h).spend_raw }).toEqual({ rows: before, state: "settled", spend: 0.07, cap_charge: 0.07, spend_raw: null });
+    expect({ rows: ledger(h).length, ...booked(last(h)), spend_raw: last(h).spend_raw }).toEqual({ rows: before, state: "settled", spend: 0.07, cap_charge: 0.186, spend_raw: null });
   });
 
   it("a pending or released read: only a settling state sets it, released included", async () => {
@@ -1086,7 +1145,8 @@ describe("money stage 1: the exact spend is recorded beside the float figures", 
       await cli(h, runArgs(), { provider: new P({ read: pending }) });
       totals.push(await today(h));
     }
-    expect(totals).toEqual([0.236, 0.236, 0.236]);
+    // Moved (hold floor): the settled call was charged 0.05, so the day was 0.236. Both calls now keep their hold.
+    expect(totals).toEqual([0.372, 0.372, 0.372]);
   });
 });
 
@@ -1104,7 +1164,7 @@ describe("money stage 1: the stored receipt keeps the channel id", () => {
     const run = await cli(h, runArgs(), { provider: new P({ read: withChannel(channel) }) });
     expect(run.code, run.err).toBe(0);
     expect(fileOf(h, run.json().request_id).channel_id).toBe(channel);
-    expect(booked(ledger(h).at(-1)!)).toEqual({ state: "settled", spend: 0.05, cap_charge: 0.05 });
+    expect(booked(ledger(h).at(-1)!)).toEqual({ state: "settled", spend: 0.05, cap_charge: 0.186 });
   });
 
   it("the gateway's value when it is a non empty printable string of at most 128 characters, else null", async () => {
@@ -1150,12 +1210,15 @@ describe("money stage 1, decision 1: the exact spend describes the booked float 
     });
   }
 
-  it("the float spend unknown first and known later: the exact amount is kept", async () => {
+  it("the float spend unknown first and known later: the read that books the float spend sets the pair", async () => {
+    // Moved (hold floor, R5): this was "the exact amount is kept", and expected the first read's exact amount
+    // beside the 0.05 the second read booked. The exact spend is set only by the read that books the float
+    // spend, as a pair, so it is that read's own: here none.
     const h = await ready();
     const run = await cli(h, runArgs(), { provider: new P({ read: (id) => receiptFor(id, { settled_spend: null, settled_spend_raw: "50000000000000000", state: "released" }) }) });
     expect(pair(h)).toEqual({ spend: null, spend_raw: "50000000000000000" });
     await cli(h, refreshArgs(run.json().request_id), { provider: new P({ read: (id) => receiptFor(id, { settled_spend: 0.05, settled_spend_raw: null, state: "released" }) }) });
-    expect(pair(h)).toEqual({ spend: 0.05, spend_raw: "50000000000000000" });
+    expect(pair(h)).toEqual({ spend: 0.05, spend_raw: null });
   });
 
   it("a higher float spend with its own exact amount replaces both, even with a lower exact amount", async () => {

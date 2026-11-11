@@ -41,6 +41,10 @@ beside it when there is one. Nothing else on the row changes.
 
 Each test asserts the fixed outcome, so it fails on 8ddc5d2 and passes after the fix. The review tests fail
 on 36b23fe, the commit the review read. Controls say so.
+Hold floor (contract/rules.json KD-12): a settled row charged its settlement here carries a padded quote equal
+to it (quote_padded 0.05), so it is a row imd-flop writes today. Before, these rows kept the base row's 0.198
+padded quote, a charge below the hold that only an older version booked, which the lane now flags as
+'charged below its hold' (viewer-labels.json, the below-hold vectors). The limit figures are unchanged.
 Offline: build-lane.py is exec'd on temp dirs (lane_harness.lane).
 """
 import unittest
@@ -85,7 +89,8 @@ class Finding5RequesterRowsUseTheJobBudget(unittest.TestCase):
         Changed by the swarm audit of 8ddc5d2, finding 13: the daily cap bounds every call the seat's key pays
         for. This test expected no daily cap line or flag on a requester row. The row now shows both limits and
         the 'over the daily cap' flag, as a holder row with these figures does."""
-        led = dict(REQ, spent_before=0.93, job_spent_before=0.93, cap_charge=0.186, state="sent")
+        # Hold floor: a sent row is charged its padded quote, so the row records 0.186 as both.
+        led = dict(REQ, spent_before=0.93, job_spent_before=0.93, cap_charge=0.186, quote_padded=0.186, state="sent")
         rows, page = lane([led], {"req-1": dict(REC, state="estimated", http=200)})
         row, text = rows[0], visible(page)
         self.assertEqual(row["spend_flags"], [OVER_DAILY])
@@ -214,7 +219,7 @@ class Finding5RequesterRowsUseTheJobBudget(unittest.TestCase):
     def test_F5_any_other_payer_over_the_daily_cap_gets_the_amber_chip(self):
         """Changed by the review of the audit 8ddc5d2 fixes. This test was test_F5_any_other_payer_gets_no_limit_chip
         and expected no 'over' chip. A settlement over the daily cap (0.1 - 0.3 - 0.05) is amber, whatever the payer."""
-        led = dict(LED, payer="someone", job_budget=0.1, daily_cap=0.1, spent_before=0.3, state="settled", spend=0.05, cap_charge=0.05)
+        led = dict(LED, payer="someone", job_budget=0.1, daily_cap=0.1, spent_before=0.3, state="settled", spend=0.05, cap_charge=0.05, quote_padded=0.05)
         rows, page = lane([led], {"req-1": dict(SETTLED, settled=0.05)})
         self.assertEqual(rows[0]["chips"], [["amber", OVER_DAILY]])
         self.assertEqual(rows[0]["spend_flags"], [PAYER_UNKNOWN])
@@ -230,7 +235,7 @@ class Finding5RequesterRowsUseTheJobBudget(unittest.TestCase):
         self.assertEqual(rows[0]["spend_flags"], [OVER_DAILY])
         self.assertIn('<div><span class="k">daily cap left</span> <span class="mono">-0.098</span></div>', page)
         self.assertNotIn("job budget", visible(page))
-        led = dict(LED, state="settled", spend=0.05, cap_charge=0.05, daily_cap=0.1, spent_before=0.3, job_budget=5)
+        led = dict(LED, state="settled", spend=0.05, cap_charge=0.05, quote_padded=0.05, daily_cap=0.1, spent_before=0.3, job_budget=5)
         rows, page = lane([led], {"req-1": dict(SETTLED, settled=0.05)})
         self.assertEqual(rows[0]["chips"], [["amber", OVER_DAILY]])
         self.assertEqual(rows[0]["spend_flags"], [])
@@ -321,7 +326,7 @@ class Finding13TheDailyCapBoundsRequesterRows(unittest.TestCase):
         """Changed by the review of the audit 8ddc5d2 fixes. This test was
         test_F13_requester_row_without_job_spent_before_gets_no_limit_chip and expected no 'over' chip. The job
         budget is checked against spent_before (0.1 - 0.3 - 0.05). The daily cap is never named as broken."""
-        led = dict(OLD_REQ, job_budget=0.1, daily_cap=0.1, spent_before=0.3, state="settled", spend=0.05, cap_charge=0.05)
+        led = dict(OLD_REQ, job_budget=0.1, daily_cap=0.1, spent_before=0.3, state="settled", spend=0.05, cap_charge=0.05, quote_padded=0.05)
         rows, page = lane([led], {"req-1": dict(SETTLED, settled=0.05)})
         self.assertEqual(rows[0]["chips"], [["amber", OVER_JOB]])
         self.assertEqual(rows[0]["spend_flags"], [DAILY_NOT_CHECKED])
@@ -401,9 +406,9 @@ class Finding6SettledAmountUnknown(unittest.TestCase):
     def test_F6_control_every_other_disagreement_stays_one(self):
         """Passes before and after."""
         cases = {
-            "ledger has an amount, receipt has none": (dict(HELD_LED, spend=0.05, cap_charge=0.05), NO_AMOUNT),
+            "ledger has an amount, receipt has none": (dict(HELD_LED, spend=0.05, cap_charge=0.05, quote_padded=0.05), NO_AMOUNT),
             "receipt has an amount, ledger has none": (HELD_LED, dict(NO_AMOUNT, settled=0.05)),
-            "amounts differ": (dict(HELD_LED, spend=0.05, cap_charge=0.05), dict(NO_AMOUNT, settled=0.07)),
+            "amounts differ": (dict(HELD_LED, spend=0.05, cap_charge=0.05, quote_padded=0.05), dict(NO_AMOUNT, settled=0.07)),
             "ledger not settled, receipt settled without an amount": (dict(LED, state="estimated"), NO_AMOUNT),
             "ledger still sent, receipt settled without an amount": (dict(LED), NO_AMOUNT),
             "ledger settled without an amount, receipt still pending": (HELD_LED, dict(REC, http=200, error=None)),
@@ -418,7 +423,7 @@ class Finding6SettledAmountUnknown(unittest.TestCase):
 
     def test_F6_control_known_equal_amounts_still_match(self):
         """Passes before and after."""
-        rows, page = lane([dict(HELD_LED, spend=0.05, cap_charge=0.05)], {"req-1": dict(NO_AMOUNT, settled=0.05, chain_final=True)})
+        rows, page = lane([dict(HELD_LED, spend=0.05, cap_charge=0.05, quote_padded=0.05)], {"req-1": dict(NO_AMOUNT, settled=0.05, chain_final=True)})
         self.assertFalse(rows[0]["bad"])
         self.assertIn("matches", visible(page))
         self.assertIn("chain final", greens(page))
@@ -433,9 +438,12 @@ class Finding7NegativeAmountsAreUnknown(unittest.TestCase):
         for v in (-0.3, -1, -0.000001, -1e308):
             with self.subTest(value=v):
                 self.assertIsNone(amount(v))
-        for v in (0, 0.05, 7, 1e308):  # control: zero and positive amounts are still amounts
+        # Control: zero and positive amounts are still amounts. Moved (review fixes 2, R10): the largest one is
+        # now 2^53 - 1 (AMOUNT_MAX); 1e308 is above it and unknown.
+        for v in (0, 0.05, 7, 2 ** 53 - 1):
             with self.subTest(value=v):
                 self.assertEqual(amount(v), v)
+        self.assertIsNone(amount(1e308))
 
     def test_F7_negative_cap_charge_is_not_extra_headroom(self):
         """The audit's repro: cap_charge -0.3 under a 0.5 daily cap showed 'daily cap left 0.8', no flag."""
@@ -512,7 +520,7 @@ class Finding7NegativeAmountsAreUnknown(unittest.TestCase):
 
     def test_F7_control_known_amount_beside_a_negative_one_still_disagrees(self):
         """Passes before and after: one side knows the amount, the other does not."""
-        for name, led, rec in (("receipt negative", dict(HELD_LED, spend=0.05, cap_charge=0.05), dict(NO_AMOUNT, settled=-0.05)),
+        for name, led, rec in (("receipt negative", dict(HELD_LED, spend=0.05, cap_charge=0.05, quote_padded=0.05), dict(NO_AMOUNT, settled=-0.05)),
                                ("ledger negative", dict(HELD_LED, spend=-0.05), dict(NO_AMOUNT, settled=0.05))):
             with self.subTest(name):
                 rows, page = lane([led], {"req-1": dict(rec, chain_final=True)})
@@ -555,7 +563,7 @@ class Review1ALimitThatCannotBeCheckedIsNeverShownAsFine(unittest.TestCase):
     def test_review_unknown_payer_settlement_inside_the_daily_cap_keeps_its_green_chip_and_gains_the_payer_flag(self):
         """The daily cap is the one limit that applies to this row, and it is worked out (0.5 - 0.1 - 0.05). So
         the row goes green, as it did on main, and the spend flag says the payer is unknown."""
-        led = dict(without_payer(LED), state="settled", spend=0.05, cap_charge=0.05, spent_before=0.1)
+        led = dict(without_payer(LED), state="settled", spend=0.05, cap_charge=0.05, quote_padded=0.05, spent_before=0.1)
         rows, page = lane([led], {"req-1": dict(SETTLED, settled=0.05)})
         self.assertEqual(rows[0]["chips"], SENT + [["green", "chain final"]])
         self.assertEqual(rows[0].get("daily_left"), 0.35)
@@ -582,7 +590,7 @@ class Review1ALimitThatCannotBeCheckedIsNeverShownAsFine(unittest.TestCase):
     def test_review_requester_row_without_job_spent_before_never_goes_green(self):
         """Inside its job budget (5 - 0.98 - 0.05), settled and chain final. The daily cap cannot be checked, so
         one amber chip stands where the green one would be. The identity verdict stays."""
-        led = dict(OLD_REQ, spent_before=0.98, state="settled", spend=0.05, cap_charge=0.05)
+        led = dict(OLD_REQ, spent_before=0.98, state="settled", spend=0.05, cap_charge=0.05, quote_padded=0.05)
         rows, page = lane([led], {"req-1": dict(SETTLED, settled=0.05)})
         row, text = rows[0], visible(page)
         self.assertEqual(row["chips"], SENT + [["amber", DAILY_NOT_CHECKED]])
@@ -597,7 +605,7 @@ class Review1ALimitThatCannotBeCheckedIsNeverShownAsFine(unittest.TestCase):
 
     def test_review_holder_row_with_an_unknown_input_never_goes_green(self):
         """Settled, chain final, receipt and ledger agree, and the daily cap cannot be worked out."""
-        base = dict(LED, state="settled", spend=0.05, cap_charge=0.05)
+        base = dict(LED, state="settled", spend=0.05, cap_charge=0.05, quote_padded=0.05)
         for name, led in (("no daily_cap", dict(base, daily_cap=None)), ("unknown spent_before", dict(base, spent_before=None)),
                           ("negative spent_before", dict(base, spent_before=-1)), ("unknown cap_charge", dict(base, cap_charge=None))):
             with self.subTest(name):
@@ -646,8 +654,8 @@ class Review1ALimitThatCannotBeCheckedIsNeverShownAsFine(unittest.TestCase):
 
     def test_review_control_row_with_every_limit_worked_out_still_goes_green(self):
         """Passes before and after."""
-        for led in (dict(LED, state="settled", spend=0.05, cap_charge=0.05),
-                    dict(REQ, state="settled", spend=0.05, cap_charge=0.05)):
+        for led in (dict(LED, state="settled", spend=0.05, cap_charge=0.05, quote_padded=0.05),
+                    dict(REQ, state="settled", spend=0.05, cap_charge=0.05, quote_padded=0.05)):
             with self.subTest(payer=led["payer"]):
                 rows, page = lane([led], {"req-1": dict(SETTLED, settled=0.05)})
                 self.assertEqual(rows[0]["chips"], SENT + [["green", "chain final"]])

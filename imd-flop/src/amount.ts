@@ -7,11 +7,19 @@
  */
 
 /**
- * The float amount rule. A known amount is a finite number that is not negative. Null, a negative number,
- * a non-finite number and anything that is not a number are unknown, never 0.
+ * The largest float amount: 2^53 - 1, the largest integer a double holds exactly. Above it JSON.parse
+ * rounds an integer to the nearest double while the viewer's Python keeps it exact, so the two parts would
+ * read the same text as different amounts. contract/rules.json AMOUNT_MAX.
+ */
+export const AMOUNT_MAX = Number.MAX_SAFE_INTEGER;
+
+/**
+ * The float amount rule. A known amount is a finite number that is not negative and not above AMOUNT_MAX.
+ * Null, a negative number, a non-finite number, a number above AMOUNT_MAX and anything that is not a number
+ * are unknown, never 0. Exact amounts in base units are digit strings and follow exactAmount instead.
  */
 export function knownAmount(value: unknown): number | null {
-  return typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : null;
+  return typeof value === "number" && Number.isFinite(value) && value >= 0 && value <= AMOUNT_MAX ? value : null;
 }
 
 /**

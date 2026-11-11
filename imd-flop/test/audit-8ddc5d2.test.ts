@@ -36,7 +36,7 @@ import { checkBudget, noRoom, padQuote } from "../src/policy.js";
 import type { CompleteReq, CompleteRes, Provider } from "../src/providers.js";
 import { classifyReceipt, receiptLine, type GatewayReceipt } from "../src/receipts.js";
 import { ceil6, floor6 } from "../src/rounding.js";
-import { CHARGE_RAISED, decideBooking, DISAGREE, reportedCost, settledSpend } from "../src/settlement.js";
+import { CHARGE_RAISED, decideBooking, DISAGREE, PAST_ADMITTED, reportedCost, settledSpend } from "../src/settlement.js";
 import { cli, readLines, readySeat, tmpHome } from "./helpers.js";
 
 const SEAT = "9001";
@@ -115,13 +115,14 @@ describe("finding 1: receipt --refresh never settles from a receipt body that ha
     const rid = run.json().request_id as string;
     const refreshed = await cli(h, refreshArgs(rid), { provider: new P({ read: (id) => receiptFor(id, { settled_spend: 0.05, state: "settled" }) }) });
     expect(refreshed.code, refreshed.err).toBe(0);
-    expect(booked(ledger(h).at(-1)!)).toEqual({ state: "settled", spend: 0.05, cap_charge: 0.05 });
+    // Moved (hold floor): charged 0.05 before. The charge keeps the 0.186 hold.
+    expect(booked(ledger(h).at(-1)!)).toEqual({ state: "settled", spend: 0.05, cap_charge: 0.186 });
   });
 
   it("the rule lives in settlement.ts: a redacted read proves no settlement and moves no state", () => {
     const read = { fresh: true, identityOk: true, state: "settled", settled: 0.05 };
     expect(settledSpend({ ...read, redacted: true })).toBeNull();
-    expect(decideBooking({ state: "estimated", spend: null, cap_charge: 0.186 }, { ...read, redacted: true }, null)).toEqual({ booking: { state: "estimated", spend: null, cap_charge: 0.186 }, disagree: false });
+    expect(decideBooking({ state: "estimated", spend: null, cap_charge: 0.186 }, { ...read, redacted: true }, null)).toEqual({ booking: { state: "estimated", spend: null, cap_charge: 0.186 }, disagree: false, pastAdmitted: false });
     expect(settledSpend({ ...read, redacted: false })).toBe(0.05);
   });
 });
@@ -140,20 +141,24 @@ describe("finding 2: a later read never lowers a booked settlement, and a report
     });
 
     it("decideBooking: the same read is a disagreement, not a new row", () => {
-      expect(decideBooking(settled005, read("released", 0), null)).toEqual({ booking: settled005, disagree: true });
-      expect(decideBooking(settled005, read("settled", 0.049999), null)).toEqual({ booking: settled005, disagree: true });
+      expect(decideBooking(settled005, read("released", 0), null)).toEqual({ booking: settled005, disagree: true, pastAdmitted: false });
+      expect(decideBooking(settled005, read("settled", 0.049999), null)).toEqual({ booking: settled005, disagree: true, pastAdmitted: false });
     });
 
     it("an equal amount may still move the state, and a higher amount is booked", () => {
-      expect(decideBooking(settled005, read("released", 0.05), null)).toEqual({ booking: { state: "released", spend: 0.05, cap_charge: 0.05 }, disagree: false });
+      expect(decideBooking(settled005, read("released", 0.05), null)).toEqual({ booking: { state: "released", spend: 0.05, cap_charge: 0.05 }, disagree: false, pastAdmitted: false });
       // Moved (money stage 1, decision 1): a read that books a different known spend brings its own exact
-      // spend, here unknown (null). The state, spend and charge are as before.
-      expect(decideBooking(settled005, read("settled", 0.07), null)).toEqual({ booking: { state: "settled", spend: 0.07, cap_charge: 0.07, spend_raw: null }, disagree: false });
+      // spend, here unknown (null). The state, spend and charge are as before. settled005 is a row an older
+      // version booked below its hold: it is not migrated, and a higher settlement raises its charge.
+      // Moved (review fixes 3, item 1): a booking that raises a known booked charge passes what the cap admitted.
+      expect(decideBooking(settled005, read("settled", 0.07), null)).toEqual({ booking: { state: "settled", spend: 0.07, cap_charge: 0.07, spend_raw: null }, disagree: false, pastAdmitted: true });
     });
 
     it("control: a settling state with no known spend still learns its settlement, whatever the amount", () => {
-      expect(decideBooking({ state: "settled", spend: null, cap_charge: 0.186 }, read("settled", 0.01), null).booking).toEqual({ state: "settled", spend: 0.01, cap_charge: 0.01 });
-      expect(decideBooking({ state: "estimated", spend: null, cap_charge: 0.186 }, read("released", 0), null).booking).toEqual({ state: "released", spend: 0, cap_charge: 0 });
+      // Moved (hold floor): the charge followed the settlement down to 0.01 and 0. It keeps the hold, and the
+      // read sets the pair of float and exact spend (no exact amount here).
+      expect(decideBooking({ state: "settled", spend: null, cap_charge: 0.186 }, read("settled", 0.01), null).booking).toEqual({ state: "settled", spend: 0.01, cap_charge: 0.186, spend_raw: null });
+      expect(decideBooking({ state: "estimated", spend: null, cap_charge: 0.186 }, read("released", 0), null).booking).toEqual({ state: "released", spend: 0, cap_charge: 0.186, spend_raw: null });
     });
 
     for (const [name, later] of [["released 0", releasedAt(0)], ["settled 0.01", settledAt(0.01)]] as const) {
@@ -162,61 +167,70 @@ describe("finding 2: a later read never lowers a booked settlement, and a report
         const run = await cli(h, runArgs(), { provider: new P({ read: settledAt(0.05) }) });
         expect(run.code, run.err).toBe(0);
         const rid = run.json().request_id as string;
-        expect(booked(ledger(h).at(-1)!)).toEqual({ state: "settled", spend: 0.05, cap_charge: 0.05 });
+        // Moved (hold floor): charged 0.05 before, the hold now.
+        expect(booked(ledger(h).at(-1)!)).toEqual({ state: "settled", spend: 0.05, cap_charge: 0.186 });
         const before = ledger(h).length;
         const refreshed = await cli(h, refreshArgs(rid), { provider: new P({ read: later }) });
         expect(refreshed.code, refreshed.err).toBe(0);
         expect({ appended: ledger(h).length - before, last: booked(ledger(h).at(-1)!), warned: refreshed.err.includes(DISAGREE), status: refreshed.json().status, ledger_spend: refreshed.json().ledger_spend })
-          .toEqual({ appended: 0, last: { state: "settled", spend: 0.05, cap_charge: 0.05 }, warned: true, status: DISAGREE, ledger_spend: 0.05 });
+          .toEqual({ appended: 0, last: { state: "settled", spend: 0.05, cap_charge: 0.186 }, warned: true, status: DISAGREE, ledger_spend: 0.05 });
       });
     }
   });
 
-  describe("(b) the charge of a proven settlement is max(settled, reported cost); spend stays the settled figure", () => {
+  // Moved (hold floor): this section was "the charge of a proven settlement is max(settled, reported cost)",
+  // with a cost of 0.15 raising a settled charge of 0.05. The charge now keeps the 0.186 hold, so it is
+  // max(hold, settled, reported cost), and the costs that raise it here are above the hold.
+  describe("(b) the charge of a proven settlement is max(hold, settled, reported cost); spend stays the settled figure", () => {
     it("decideBooking: a reported cost raises the settled charge and never lowers it", () => {
       const sent = { state: "sent", spend: null, cap_charge: 0.186 };
-      expect(decideBooking(sent, read("released", 0), 0.15).booking).toEqual({ state: "released", spend: 0, cap_charge: 0.15 });
-      expect(decideBooking(sent, read("settled", 0.05), 0.15).booking).toEqual({ state: "settled", spend: 0.05, cap_charge: 0.15 });
-      expect(decideBooking(sent, read("settled", 0.05), 0.01).booking).toEqual({ state: "settled", spend: 0.05, cap_charge: 0.05 });
-      expect(decideBooking(sent, read("settled", 0.05), null).booking).toEqual({ state: "settled", spend: 0.05, cap_charge: 0.05 });
+      expect(decideBooking(sent, read("released", 0), 0.3).booking).toEqual({ state: "released", spend: 0, cap_charge: 0.3, spend_raw: null });
+      expect(decideBooking(sent, read("settled", 0.05), 0.3).booking).toEqual({ state: "settled", spend: 0.05, cap_charge: 0.3, spend_raw: null });
+      expect(decideBooking(sent, read("settled", 0.05), 0.15).booking).toEqual({ state: "settled", spend: 0.05, cap_charge: 0.186, spend_raw: null });
+      expect(decideBooking(sent, read("settled", 0.05), null).booking).toEqual({ state: "settled", spend: 0.05, cap_charge: 0.186, spend_raw: null });
     });
 
-    it("a reported cost counts only when reportedCost reads a finite number: 0.15 raises the settled charge, and anything else leaves it", () => {
+    it("a reported cost counts only when reportedCost reads a finite number: 0.3 raises the settled charge, and anything else leaves it", () => {
       const prev = { state: "estimated", spend: null, cap_charge: 0.186 };
-      expect(decideBooking(prev, read("settled", 0.05), reportedCost(0.15))).toEqual({ booking: { state: "settled", spend: 0.05, cap_charge: 0.15 }, disagree: false });
-      for (const bad of [null, undefined, "0.15", Number.NaN, Number.POSITIVE_INFINITY]) {
-        expect(decideBooking(prev, read("settled", 0.05), reportedCost(bad)), String(bad)).toEqual({ booking: { state: "settled", spend: 0.05, cap_charge: 0.05 }, disagree: false });
+      // Moved (review fixes 3, item 1): a booking that raises a known booked charge passes what the cap admitted.
+      expect(decideBooking(prev, read("settled", 0.05), reportedCost(0.3))).toEqual({ booking: { state: "settled", spend: 0.05, cap_charge: 0.3, spend_raw: null }, disagree: false, pastAdmitted: true });
+      for (const bad of [null, undefined, "0.3", Number.NaN, Number.POSITIVE_INFINITY]) {
+        expect(decideBooking(prev, read("settled", 0.05), reportedCost(bad)), String(bad)).toEqual({ booking: { state: "settled", spend: 0.05, cap_charge: 0.186, spend_raw: null }, disagree: false, pastAdmitted: false });
       }
     });
 
-    it("run: usage.cost_flop 0.15 and a released / 0 receipt books spend 0 with cap_charge 0.15, and says why", async () => {
+    it("run: usage.cost_flop 0.3 and a released / 0 receipt books spend 0 with cap_charge 0.3, and says why", async () => {
+      // The cost is above the 0.186 padded quote, so the booking also says it passed what the cap admitted.
       const h = await ready();
-      const run = await cli(h, runArgs(), { provider: new P({ usage: usage(0.15), read: releasedAt(0) }) });
+      const run = await cli(h, runArgs(), { provider: new P({ usage: usage(0.3), read: releasedAt(0) }) });
       expect(run.code, run.err).toBe(0);
       const last = ledger(h).at(-1)!;
-      expect({ ...booked(last), cost_reported: last.cost_reported, reason: last.reason }).toEqual({ state: "released", spend: 0, cap_charge: 0.15, cost_reported: 0.15, reason: CHARGE_RAISED });
-      expect(run.json().cap_charge).toBe(0.15);
-      expect((await cli(h, ["status", "--seat", SEAT, "--json"])).json().today_utc.mock).toBe(0.15);
+      expect({ ...booked(last), cost_reported: last.cost_reported, reason: last.reason }).toEqual({ state: "released", spend: 0, cap_charge: 0.3, cost_reported: 0.3, reason: `${PAST_ADMITTED}; ${CHARGE_RAISED}` });
+      expect(run.err).toBe(PAST_ADMITTED);
+      expect(run.json().cap_charge).toBe(0.3);
+      expect((await cli(h, ["status", "--seat", SEAT, "--json"])).json().today_utc.mock).toBe(0.3);
     });
 
-    it("control: a reported cost below the settlement leaves the settled charge and no reason", async () => {
+    it("control: a reported cost below the hold leaves the charge at the hold and no reason", async () => {
       const h = await ready();
       const run = await cli(h, runArgs(), { provider: new P({ usage: usage(0.01), read: settledAt(0.05) }) });
       expect(run.code, run.err).toBe(0);
       const last = ledger(h).at(-1)!;
-      expect({ ...booked(last), reason: last.reason }).toEqual({ state: "settled", spend: 0.05, cap_charge: 0.05, reason: null });
+      expect({ ...booked(last), reason: last.reason }).toEqual({ state: "settled", spend: 0.05, cap_charge: 0.186, reason: null });
     });
 
     it("run then refresh: the settlement learned later is charged at the reported cost, once", async () => {
       const h = await ready();
-      const run = await cli(h, runArgs(), { provider: new P({ usage: usage(0.15) }) });
+      const run = await cli(h, runArgs(), { provider: new P({ usage: usage(0.3) }) });
       expect(run.code, run.err).toBe(0);
       const rid = run.json().request_id as string;
-      expect(booked(ledger(h).at(-1)!)).toEqual({ state: "estimated", spend: null, cap_charge: 0.186 });
+      // The cost is above the hold, so it raises the held charge already, and run says it passed what the cap admitted.
+      expect({ ...booked(ledger(h).at(-1)!), warned: run.err }).toEqual({ state: "estimated", spend: null, cap_charge: 0.3, warned: PAST_ADMITTED });
       const refreshed = await cli(h, refreshArgs(rid), { provider: new P({ read: settledAt(0.05) }) });
-      expect(refreshed.code, refreshed.err).toBe(0);
+      expect({ code: refreshed.code, err: refreshed.err }).toEqual({ code: 0, err: "" });
       const last = ledger(h).at(-1)!;
-      expect({ ...booked(last), cost_reported: last.cost_reported, reason: last.reason }).toEqual({ state: "settled", spend: 0.05, cap_charge: 0.15, cost_reported: 0.15, reason: CHARGE_RAISED });
+      // Moved (review fixes 4, item 3): the request was booked past what the cap admitted earlier, so every later row keeps the mark.
+      expect({ ...booked(last), cost_reported: last.cost_reported, reason: last.reason }).toEqual({ state: "settled", spend: 0.05, cap_charge: 0.3, cost_reported: 0.3, reason: `${PAST_ADMITTED}; ${CHARGE_RAISED}` });
       expect(refreshed.json().ledger_spend).toBe(0.05);
       const before = ledger(h).length;
       const again = await cli(h, refreshArgs(rid), { provider: new P({ read: settledAt(0.05) }) });
@@ -643,12 +657,14 @@ describe("finding 13: the seat's daily cap bounds every call the seat's key pays
       { payer: "requester", state: "estimated", spent_before: 0.186, job_spent_before: 0 },
       { payer: "requester", state: "sent", spent_before: 0.372, job_spent_before: 0.186 },
       { payer: "requester", state: "settled", spent_before: 0.372, job_spent_before: 0.186 },
-      { payer: "requester", state: "sent", spent_before: 0.422, job_spent_before: 0 },
-      { payer: "requester", state: "estimated", spent_before: 0.422, job_spent_before: 0 },
-      { payer: "requester", state: "settled", spent_before: 0.422, job_spent_before: 0 },
+      { payer: "requester", state: "sent", spent_before: 0.558, job_spent_before: 0 },
+      { payer: "requester", state: "estimated", spent_before: 0.558, job_spent_before: 0 },
+      { payer: "requester", state: "settled", spent_before: 0.558, job_spent_before: 0 },
     ]);
-    // status reports the seat's total for the day, all payers: 0.186 + 0.186 + 0.05 + 0.1.
-    expect((await cli(h, ["status", "--seat", SEAT, "--json"])).json().today_utc.mock).toBe(0.522);
+    // status reports the seat's total for the day, all payers. Moved (hold floor): this was 0.186 + 0.186 +
+    // 0.05 + 0.1 = 0.522. Every call keeps its 0.186 hold, so it is 4 x 0.186; the gateway reported 0.15.
+    const st = (await cli(h, ["status", "--seat", SEAT, "--json"])).json();
+    expect({ charged: st.today_utc.mock, reported: st.gateway_spent_today_utc.mock }).toEqual({ charged: 0.744, reported: 0.15 });
   });
 
   it("an unusable ledger charge on any of the seat's rows today refuses the next call, whoever either call is for (exit 3, no estimate)", async () => {

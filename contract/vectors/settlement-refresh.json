@@ -1,6 +1,6 @@
 {
  "file": "settlement-refresh.json",
- "description": "imd-flop `receipt <id> --refresh` after a mock run: rows appended, the latest ledger row, the DISAGREE line on stderr, and the stored receipt file. run_read is the run's own receipt read (http 200); run_cost_flop is the usage.cost_flop its completion reported; run_complete timeout leaves no receipt file. prev_cap_charge replaces the latest row's cap_charge before the refresh. strip_receipt_fields deletes keys from the stored file before the refresh. spend_raw (money stage 1) is the latest row's exact spend, or \"absent\" when the row has no such field.",
+ "description": "imd-flop `receipt <id> --refresh` after a mock run: rows appended, the latest ledger row, the DISAGREE line on stderr, and the stored receipt file. run_read is the run's own receipt read (http 200); run_cost_flop is the usage.cost_flop its completion reported; run_complete timeout leaves no receipt file. prev_cap_charge replaces the latest row's cap_charge before the refresh. strip_receipt_fields deletes keys from the stored file before the refresh. spend_raw (money stage 1) is the latest row's exact spend, or \"absent\" when the row has no such field. Hold floor (KD-12, KD-13, KD-14): the cap charge is max(padded quote, settled spend, reported cost), and run_complete presend releases the hold before the refresh. reason is the latest row's reason, with the PAST_ADMITTED text written as \"PAST_ADMITTED\"; stderr_past_admitted says whether stderr carries it.",
  "status": "current behavior at 3ae1cdf",
  "vectors": [
   {
@@ -35,7 +35,7 @@
      "last": {
       "state": "settled",
       "spend": 0.05,
-      "cap_charge": 0.05
+      "cap_charge": 0.186
      },
      "stderr_disagree": false
     },
@@ -45,7 +45,8 @@
     "viewer": {
      "not_applicable": "viewer renders ledger rows; it never writes them"
     }
-   }
+   },
+   "note": "Moved (hold floor): cap_charge was 0.05. A gateway read only raises the charge, so it keeps the 0.186 hold."
   },
   {
    "id": "refresh-settled-then-failed-read-keeps-spend",
@@ -72,7 +73,7 @@
      "last": {
       "state": "settled",
       "spend": 0.05,
-      "cap_charge": 0.05
+      "cap_charge": 0.186
      },
      "stderr_disagree": false
     },
@@ -82,7 +83,8 @@
     "viewer": {
      "not_applicable": "viewer renders ledger rows; it never writes them"
     }
-   }
+   },
+   "note": "Moved (hold floor): cap_charge was 0.05. A gateway read only raises the charge, so it keeps the 0.186 hold."
   },
   {
    "id": "refresh-pending-then-failed-read-keeps-reservation",
@@ -153,7 +155,7 @@
      "last": {
       "state": "settled",
       "spend": 0.05,
-      "cap_charge": 0.05
+      "cap_charge": 0.186
      },
      "stderr_disagree": false
     },
@@ -167,7 +169,7 @@
    "quirks": [
     "R-a"
    ],
-   "note": "[fix: TS-M1 + residual-a] renamed from refresh-settled-then-fresh-pending-nulls-spend; was appended 1, last {estimated, null, 0.05}"
+   "note": "[fix: TS-M1 + residual-a] renamed from refresh-settled-then-fresh-pending-nulls-spend; was appended 1, last {estimated, null, 0.05} Moved (hold floor): cap_charge was 0.05. A gateway read only raises the charge, so it keeps the 0.186 hold."
   },
   {
    "id": "refresh-settled-then-fresh-wrong-identity-keeps-booking",
@@ -201,7 +203,7 @@
      "last": {
       "state": "settled",
       "spend": 0.05,
-      "cap_charge": 0.05
+      "cap_charge": 0.186
      },
      "stderr_disagree": false
     },
@@ -215,7 +217,7 @@
    "quirks": [
     "R-a"
    ],
-   "note": "[fix: TS-M1 + residual-a] renamed from refresh-settled-then-fresh-wrong-identity-nulls-spend; was appended 1, last {settled, null, 0.05}"
+   "note": "[fix: TS-M1 + residual-a] renamed from refresh-settled-then-fresh-wrong-identity-nulls-spend; was appended 1, last {settled, null, 0.05} Moved (hold floor): cap_charge was 0.05. A gateway read only raises the charge, so it keeps the 0.186 hold."
   },
   {
    "id": "refresh-pending-to-released-zero",
@@ -249,7 +251,7 @@
      "last": {
       "state": "released",
       "spend": 0,
-      "cap_charge": 0
+      "cap_charge": 0.186
      },
      "stderr_disagree": false
     },
@@ -259,7 +261,8 @@
     "viewer": {
      "not_applicable": "viewer renders ledger rows; it never writes them"
     }
-   }
+   },
+   "note": "Moved (hold floor): cap_charge was 0. A gateway read only raises the charge, so it keeps the 0.186 hold."
   },
   {
    "id": "refresh-unusable-cap-charge-prints-disagree",
@@ -331,7 +334,7 @@
      "last": {
       "state": "settled",
       "spend": 0.05,
-      "cap_charge": 0.05
+      "cap_charge": 0.186
      },
      "stderr_disagree": false
     },
@@ -341,7 +344,8 @@
     "viewer": {
      "not_applicable": "viewer renders ledger rows; it never writes them"
     }
-   }
+   },
+   "note": "Moved (hold floor): cap_charge was 0.05. A gateway read only raises the charge, so it keeps the 0.186 hold."
   },
   {
    "id": "refresh-file-without-seat-did-migrated-from-ledger",
@@ -510,7 +514,7 @@
      "last": {
       "state": "settled",
       "spend": 0.05,
-      "cap_charge": 0.05
+      "cap_charge": 0.186
      },
      "stderr_disagree": true
     },
@@ -521,7 +525,7 @@
      "not_applicable": "viewer renders ledger rows; it never writes them"
     }
    },
-   "note": "[swarm audit of 8ddc5d2, finding 2] a booked known settlement is never lowered by a later read: nothing appended, DISAGREE printed; was appended 1, last {released, 0, 0}, no DISAGREE"
+   "note": "[swarm audit of 8ddc5d2, finding 2] a booked known settlement is never lowered by a later read: nothing appended, DISAGREE printed; was appended 1, last {released, 0, 0}, no DISAGREE Moved (hold floor): cap_charge was 0.05. A gateway read only raises the charge, so it keeps the 0.186 hold."
   },
   {
    "id": "refresh-settled-then-equal-released-moves-state",
@@ -555,7 +559,7 @@
      "last": {
       "state": "released",
       "spend": 0.05,
-      "cap_charge": 0.05
+      "cap_charge": 0.186
      },
      "stderr_disagree": false
     },
@@ -566,7 +570,7 @@
      "not_applicable": "viewer renders ledger rows; it never writes them"
     }
    },
-   "note": "[swarm audit of 8ddc5d2, finding 2] control: an equal amount may still move the state between settling states"
+   "note": "[swarm audit of 8ddc5d2, finding 2] control: an equal amount may still move the state between settling states Moved (hold floor): cap_charge was 0.05. A gateway read only raises the charge, so it keeps the 0.186 hold."
   },
   {
    "id": "refresh-settled-then-higher-read-is-booked",
@@ -600,7 +604,7 @@
      "last": {
       "state": "settled",
       "spend": 0.07,
-      "cap_charge": 0.07
+      "cap_charge": 0.186
      },
      "stderr_disagree": false
     },
@@ -611,7 +615,7 @@
      "not_applicable": "viewer renders ledger rows; it never writes them"
     }
    },
-   "note": "[swarm audit of 8ddc5d2, finding 2] control: a later read with a higher settlement is booked"
+   "note": "[swarm audit of 8ddc5d2, finding 2] control: a later read with a higher settlement is booked Moved (hold floor): cap_charge was 0.07. A gateway read only raises the charge, so it keeps the 0.186 hold."
   },
   {
    "id": "refresh-pending-to-settled-below-reported-cost",
@@ -646,7 +650,7 @@
      "last": {
       "state": "settled",
       "spend": 0.05,
-      "cap_charge": 0.15
+      "cap_charge": 0.186
      },
      "stderr_disagree": false
     },
@@ -657,7 +661,7 @@
      "not_applicable": "viewer renders ledger rows; it never writes them"
     }
    },
-   "note": "[swarm audit of 8ddc5d2, finding 2] refresh applies the ledger row's cost_reported: cap_charge is max(settled, cost_reported); was last {settled, 0.05, 0.05}"
+   "note": "[swarm audit of 8ddc5d2, finding 2] refresh applies the ledger row's cost_reported: cap_charge is max(settled, cost_reported); was last {settled, 0.05, 0.05} Moved (hold floor): cap_charge was 0.15. A gateway read only raises the charge, so it keeps the 0.186 hold. A cost of 0.15 does not raise it."
   },
   {
    "id": "refresh-exact-arrives-later",
@@ -693,7 +697,7 @@
      "last": {
       "state": "settled",
       "spend": 0.05,
-      "cap_charge": 0.05
+      "cap_charge": 0.186
      },
      "spend_raw": "50000000000000000",
      "stderr_disagree": false
@@ -705,7 +709,7 @@
      "not_applicable": "viewer renders ledger rows; it never writes them"
     }
    },
-   "note": "money stage 1: an exact spend that arrives on a later trusted settling read is a recorded change: one row appended."
+   "note": "money stage 1: an exact spend that arrives on a later trusted settling read is a recorded change: one row appended. Moved (hold floor): cap_charge was 0.05. A gateway read only raises the charge, so it keeps the 0.186 hold."
   },
   {
    "id": "refresh-exact-lower",
@@ -741,7 +745,7 @@
      "last": {
       "state": "settled",
       "spend": 0.05,
-      "cap_charge": 0.05
+      "cap_charge": 0.186
      },
      "spend_raw": "50000000000000000",
      "stderr_disagree": false
@@ -753,7 +757,7 @@
      "not_applicable": "viewer renders ledger rows; it never writes them"
     }
    },
-   "note": "money stage 1: a lower exact amount than the one booked changes nothing."
+   "note": "money stage 1: a lower exact amount than the one booked changes nothing. Moved (hold floor): cap_charge was 0.05. A gateway read only raises the charge, so it keeps the 0.186 hold."
   },
   {
    "id": "refresh-exact-higher",
@@ -789,7 +793,7 @@
      "last": {
       "state": "settled",
       "spend": 0.05,
-      "cap_charge": 0.05
+      "cap_charge": 0.186
      },
      "spend_raw": "50000000000000001",
      "stderr_disagree": false
@@ -801,7 +805,7 @@
      "not_applicable": "viewer renders ledger rows; it never writes them"
     }
    },
-   "note": "money stage 1: a higher exact amount is booked."
+   "note": "money stage 1: a higher exact amount is booked. Moved (hold floor): cap_charge was 0.05. A gateway read only raises the charge, so it keeps the 0.186 hold."
   },
   {
    "id": "refresh-exact-refused-read",
@@ -837,7 +841,7 @@
      "last": {
       "state": "settled",
       "spend": 0.07,
-      "cap_charge": 0.07
+      "cap_charge": 0.186
      },
      "spend_raw": null,
      "stderr_disagree": true
@@ -849,7 +853,235 @@
      "not_applicable": "viewer renders ledger rows; it never writes them"
     }
    },
-   "note": "money stage 1: a read refused by the float rules (it would lower the booked spend) sets nothing."
+   "note": "money stage 1: a read refused by the float rules (it would lower the booked spend) sets nothing. Moved (hold floor): cap_charge was 0.07. A gateway read only raises the charge, so it keeps the 0.186 hold."
+  },
+  {
+   "id": "refresh-presend-then-pending-hold-comes-back",
+   "rule": "settlement.refresh",
+   "input": {
+    "run_complete": "presend",
+    "refresh_read": {
+     "http": 200,
+     "error": null,
+     "receipt": {
+      "request_id": "$rid",
+      "correlation_id": "imd-job-j1",
+      "model": "m",
+      "reserved_spend": 0.186,
+      "settled_spend": null,
+      "state": "estimated"
+     }
+    }
+   },
+   "expect": {
+    "imd-flop": {
+     "exit": 0,
+     "appended": 1,
+     "last": {
+      "state": "estimated",
+      "spend": null,
+      "cap_charge": 0.186
+     },
+     "reason": "PAST_ADMITTED",
+     "stderr_disagree": false,
+     "stderr_past_admitted": true
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard is a dry run: it writes spend 0 and keeps no reservation or settlement"
+    },
+    "viewer": {
+     "not_applicable": "viewer renders ledger rows; it never writes them"
+    }
+   },
+   "note": "Hold floor (R3): \"nothing was sent\" released the hold (refused_local, charge 0). A trusted read shows the gateway holds the request after all, so the hold comes back. The day may end over its cap, so the booking prints PAST_ADMITTED and records it in the row's reason. \"PAST_ADMITTED\" stands for the rules.json constant.",
+   "quirks": [
+    "R-f"
+   ]
+  },
+  {
+   "id": "refresh-presend-then-no-state-hold-comes-back",
+   "rule": "settlement.refresh",
+   "input": {
+    "run_complete": "presend",
+    "refresh_read": {
+     "http": 200,
+     "error": null,
+     "receipt": {
+      "request_id": "$rid",
+      "correlation_id": "imd-job-j1",
+      "model": "m",
+      "reserved_spend": 0.186,
+      "settled_spend": null,
+      "state": null
+     }
+    }
+   },
+   "expect": {
+    "imd-flop": {
+     "exit": 0,
+     "appended": 1,
+     "last": {
+      "state": "sent",
+      "spend": null,
+      "cap_charge": 0.186
+     },
+     "reason": "PAST_ADMITTED",
+     "stderr_disagree": false,
+     "stderr_past_admitted": true
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard is a dry run: it writes spend 0 and keeps no reservation or settlement"
+    },
+    "viewer": {
+     "not_applicable": "viewer renders ledger rows; it never writes them"
+    }
+   },
+   "note": "Hold floor (R2): a trusted receipt with no state shows the gateway knows the request, as any trusted read does. The hold comes back and the row is sent again; the state moves no further.",
+   "quirks": [
+    "R-f"
+   ]
+  },
+  {
+   "id": "refresh-settled-low-then-hold-read",
+   "rule": "settlement.refresh",
+   "input": {
+    "run_read": {
+     "request_id": "$rid",
+     "correlation_id": "imd-job-j1",
+     "model": "m",
+     "reserved_spend": 0.186,
+     "settled_spend": 0.01,
+     "state": "settled"
+    },
+    "refresh_read": {
+     "http": 200,
+     "error": null,
+     "receipt": {
+      "request_id": "$rid",
+      "correlation_id": "imd-job-j1",
+      "model": "m",
+      "reserved_spend": 0.186,
+      "settled_spend": 0.186,
+      "state": "settled"
+     }
+    }
+   },
+   "expect": {
+    "imd-flop": {
+     "exit": 0,
+     "appended": 1,
+     "last": {
+      "state": "settled",
+      "spend": 0.186,
+      "cap_charge": 0.186
+     },
+     "stderr_disagree": false,
+     "stderr_past_admitted": false
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard is a dry run: it writes spend 0 and keeps no reservation or settlement"
+    },
+    "viewer": {
+     "not_applicable": "viewer renders ledger rows; it never writes them"
+    }
+   },
+   "note": "Hold floor (R9): a settlement below the hold did not free room, so a later higher read changes the spend and not the day's total."
+  },
+  {
+   "id": "refresh-released-no-float-then-settled-sets-pair",
+   "rule": "settlement.refresh",
+   "input": {
+    "run_read": {
+     "request_id": "$rid",
+     "correlation_id": "imd-job-j1",
+     "model": "m",
+     "reserved_spend": 0.186,
+     "settled_spend": null,
+     "settled_spend_raw": "60000000000000000",
+     "state": "released"
+    },
+    "refresh_read": {
+     "http": 200,
+     "error": null,
+     "receipt": {
+      "request_id": "$rid",
+      "correlation_id": "imd-job-j1",
+      "model": "m",
+      "reserved_spend": 0.186,
+      "settled_spend": 0.05,
+      "settled_spend_raw": "50000000000000000",
+      "state": "settled"
+     }
+    }
+   },
+   "expect": {
+    "imd-flop": {
+     "exit": 0,
+     "appended": 1,
+     "last": {
+      "state": "settled",
+      "spend": 0.05,
+      "cap_charge": 0.186
+     },
+     "spend_raw": "50000000000000000",
+     "stderr_disagree": false
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard is a dry run: it writes spend 0 and keeps no reservation or settlement"
+    },
+    "viewer": {
+     "not_applicable": "viewer renders ledger rows; it never writes them"
+    }
+   },
+   "note": "Hold floor (R5): the exact spend is set only by the read that books the float spend, as a pair. The released read had no float amount; the settled read books 0.05 with its own exact amount."
+  },
+  {
+   "id": "refresh-settled-then-released-no-float-keeps-pair",
+   "rule": "settlement.refresh",
+   "input": {
+    "run_read": {
+     "request_id": "$rid",
+     "correlation_id": "imd-job-j1",
+     "model": "m",
+     "reserved_spend": 0.186,
+     "settled_spend": 0.05,
+     "settled_spend_raw": "50000000000000000",
+     "state": "settled"
+    },
+    "refresh_read": {
+     "http": 200,
+     "error": null,
+     "receipt": {
+      "request_id": "$rid",
+      "correlation_id": "imd-job-j1",
+      "model": "m",
+      "reserved_spend": 0.186,
+      "settled_spend": null,
+      "settled_spend_raw": "60000000000000000",
+      "state": "released"
+     }
+    }
+   },
+   "expect": {
+    "imd-flop": {
+     "exit": 0,
+     "appended": 1,
+     "last": {
+      "state": "released",
+      "spend": 0.05,
+      "cap_charge": 0.186
+     },
+     "spend_raw": "50000000000000000",
+     "stderr_disagree": false
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard is a dry run: it writes spend 0 and keeps no reservation or settlement"
+    },
+    "viewer": {
+     "not_applicable": "viewer renders ledger rows; it never writes them"
+    }
+   },
+   "note": "Hold floor (R5): a read whose float amount is unknown never sets or changes the exact spend beside a known float spend. It still moves the state."
   }
  ]
 }

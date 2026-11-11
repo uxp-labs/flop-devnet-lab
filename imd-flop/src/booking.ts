@@ -7,13 +7,15 @@
  * them differently. The lock makes each one decide against what the other already booked.
  * When the ledger no longer holds the request's row (the file was moved or removed during the call), `run`
  * gives the step the row it wrote before the call as a seed, and the step writes it again under the same
- * lock before it decides. So `run` appends no ledger row of its own after the paid call.
+ * lock before it decides, marked PAST_ADMITTED (calls admitted meanwhile did not count it). So `run` appends no
+ * ledger row of its own after the paid call. Every row it appends for a request already booked past what the
+ * cap admitted keeps that mark (settlement.ts carryPastAdmitted).
  * The decisions themselves are settlement.ts decideBooking and decideFailure. The network read and the
  * receipt file write happen before this step, outside the lock.
  */
 import { appendLedger, latestAttempts, withLedgerLock, type LedgerEntry } from "./ledger.js";
 import { storedReportedCost } from "./response-store.js";
-import { bookingReason, decideBooking, decideFailure, keptReason, reportedCost, type Failure, type ReadOutcome } from "./settlement.js";
+import { bookingReason, carriesPastAdmitted, carryPastAdmitted, decideBooking, decideFailure, keptReason, reportedCost, type Failure, type ReadOutcome } from "./settlement.js";
 
 /** What the caller knows beside the read. */
 export interface ReadInfo {
@@ -42,15 +44,20 @@ export interface FailureInfo {
  *  - no_row: the ledger holds no row for the request and the caller gave no seed row. Nothing was appended.
  */
 export type BookResult = { outcome: "no_row" } | Booked;
-/** What the booking step did when the ledger held a row for the request, or was given a seed row for it. */
-export type Booked = { outcome: "appended" | "unchanged" | "disagree" | "recorded"; row: LedgerEntry };
+/**
+ * What the booking step did when the ledger held a row for the request, or was given a seed row for it.
+ * pastAdmitted: the appended row puts the day in a state the cap did not admit (settlement.ts
+ * decideBooking). The caller prints settlement.ts PAST_ADMITTED on stderr; the row's reason already records it.
+ */
+export type Booked = { outcome: "appended" | "unchanged" | "disagree" | "recorded"; row: LedgerEntry; pastAdmitted: boolean };
 
 /**
  * The row fields the booking step can change. A row is appended when one of them does, or when it records a
  * report. spend_raw is the exact spend (money stage 1): an exact amount that arrives on a later read is a
- * recorded change, and a row that lacks the field stays as it is until a read sets it.
+ * recorded change, and a row that lacks the field stays as it is until a read sets it. receipt_seen (the
+ * hold floor) is set by a trusted read that leaves the row in state sent.
  */
-const RECORDED = ["state", "spend", "cap_charge", "spend_raw", "cost_reported", "http"] as const;
+const RECORDED = ["state", "spend", "cap_charge", "spend_raw", "receipt_seen", "cost_reported", "http"] as const;
 
 /**
  * The step itself. Under the ledger lock: read the latest row of the request, or write the seed row when
@@ -58,19 +65,27 @@ const RECORDED = ["state", "spend", "cap_charge", "spend_raw", "cost_reported", 
  * recorded field changes or `decide` records a report that was not booked. Throws what the lock or the append throws (LedgerLockError when the lock cannot
  * be taken), and then no booking was appended: the latest row stays, and with it the reservation it holds.
  */
-function book(h: string, requestId: string, seed: LedgerEntry | undefined, decide: (prev: LedgerEntry) => { next: LedgerEntry; disagree?: boolean; recorded?: boolean }): BookResult {
+function book(h: string, requestId: string, seed: LedgerEntry | undefined, decide: (prev: LedgerEntry) => { next: LedgerEntry; disagree?: boolean; recorded?: boolean; pastAdmitted?: boolean }): BookResult {
   return withLedgerLock<BookResult>(h, () => {
     let prev = latestAttempts(h).find((e) => e.request_id === requestId);
+    // The ledger lost the request's row: calls admitted meanwhile did not count it. Writing it again raises
+    // the request's charge from nothing, so it is a booking past what the cap admitted.
+    let seeded = false;
     if (!prev && seed) {
-      appendLedger(h, seed);
-      prev = seed;
+      prev = { ...seed, reason: carryPastAdmitted(seed.reason, true) };
+      appendLedger(h, prev);
+      seeded = true;
     }
     if (!prev) return { outcome: "no_row" };
-    const { next, disagree = false, recorded = false } = decide(prev);
-    if (!recorded && RECORDED.every((k) => next[k] === prev[k])) return { outcome: disagree ? "disagree" : "unchanged", row: prev };
+    const decided = decide(prev);
+    const { disagree = false, recorded = false } = decided;
+    const pastAdmitted = seeded || decided.pastAdmitted === true;
+    // The one carry: every later row of a request booked past what the cap admitted keeps the mark.
+    const next: LedgerEntry = { ...decided.next, reason: carryPastAdmitted(decided.next.reason, decided.pastAdmitted === true || carriesPastAdmitted(prev.reason)) };
+    if (!recorded && RECORDED.every((k) => next[k] === prev[k])) return { outcome: disagree ? "disagree" : "unchanged", row: prev, pastAdmitted: seeded };
     const row: LedgerEntry = { ...next, ts: new Date().toISOString() };
     appendLedger(h, row);
-    return { outcome: recorded ? "recorded" : disagree ? "disagree" : "appended", row };
+    return { outcome: recorded ? "recorded" : disagree ? "disagree" : "appended", row, pastAdmitted };
   });
 }
 
@@ -88,8 +103,9 @@ export function bookRead(h: string, requestId: string, read: ReadOutcome, info: 
     const { flag, cost_reported: own, ...seen } = info;
     const cost = reportedCost(own) ?? reportedCost(prev.cost_reported) ?? storedReportedCost(h, requestId);
     const known: LedgerEntry = { ...prev, ...seen, cost_reported: cost ?? prev.cost_reported };
-    const { booking, disagree } = decideBooking(known, read, cost);
-    return { next: { ...known, ...booking, reason: bookingReason(booking, flag) }, disagree };
+    const { booking, disagree, pastAdmitted } = decideBooking(known, read, cost);
+    const next = { ...known, ...booking };
+    return { next: { ...next, reason: bookingReason(next, flag, pastAdmitted) }, disagree, pastAdmitted };
   });
 }
 

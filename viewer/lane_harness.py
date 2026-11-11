@@ -20,7 +20,7 @@ def load_lane():
     return ns
 
 
-LED = {"job": "j", "request_id": "req-1", "seat": "1234", "did": "did:key:z", "provider": "mock", "network": "devnet",
+LED = {"job": "j", "request_id": "req-1", "seat": "1234", "did": "did:key:z", "provider": "mock", "network": "devnet", "day": "2026-11-10",
        "ts": "2026-11-10T00:00:00.000Z", "payer": "holder", "quote_padded": 0.198, "cap_charge": 0.198, "per_call_cap": 0.25,
        "daily_cap": 0.5, "spent_before": 0, "state": "sent", "spend": None, "reason": None}
 REC = {"request_id": "req-1", "job": "j", "seat": "1234", "did": "did:key:z", "state": "estimated", "settled": None,

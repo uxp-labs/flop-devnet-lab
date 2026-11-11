@@ -151,7 +151,8 @@ describe("audit claim 2 settled zero before settlement", () => {
     expect(run.code, run.err).toBe(0);
     const rows = readLines(join(home, "ledger.jsonl")) as { request_id: string | null; cap_charge: number | null; spend: number | null }[];
     const latest = rows.filter((row) => row.request_id === run.json().request_id).at(-1);
-    expect(latest).toMatchObject({ cap_charge: 0.01, spend: 0 });
+    // Moved (hold floor): the charge was the reported 0.01. It keeps the 0.186 hold; the spend stays 0.
+    expect(latest).toMatchObject({ cap_charge: 0.186, spend: 0 });
   });
 });
 
@@ -188,7 +189,8 @@ describe("audit claim 3 receipt request id", () => {
     const printed = run.json() as { request_id: string; cap_charge: number; receipt: { request_id: string; match: { match: string } } };
     expect(printed.receipt.request_id).toBe(printed.request_id);
     expect(printed.receipt.match.match).toBe("matches");
-    expect(printed.cap_charge).toBe(0.05);
+    // Moved (hold floor): charged 0.05 before, the 0.186 hold now.
+    expect(printed.cap_charge).toBe(0.186);
   });
 });
 
@@ -332,9 +334,10 @@ describe("audit identity request_id", () => {
     const printed = run.json() as { request_id: string; cap_charge: number; receipt: { request_id: string; match: { match: string } } };
     expect(printed.receipt.request_id).toBe(printed.request_id);
     expect(printed.receipt.match.match).toBe("matches");
-    expect(printed.cap_charge).toBe(0.05);
+    // Moved (hold floor): charged 0.05 before, the 0.186 hold now.
+    expect(printed.cap_charge).toBe(0.186);
     const rows = readLines(join(home, "ledger.jsonl")) as { request_id: string | null; cap_charge: number | null; spend: number | null }[];
-    expect(rows.filter((entry) => entry.request_id === printed.request_id).at(-1)).toMatchObject({ cap_charge: 0.05, spend: 0.05 });
+    expect(rows.filter((entry) => entry.request_id === printed.request_id).at(-1)).toMatchObject({ cap_charge: 0.186, spend: 0.05 });
   });
 });
 

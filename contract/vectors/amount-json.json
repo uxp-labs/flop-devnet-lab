@@ -220,17 +220,81 @@
    },
    "expect": {
     "imd-flop": {
-     "known_settled": 1e+308,
-     "usable_cap_charge": true
+     "known_settled": null,
+     "usable_cap_charge": false
     },
     "spend-guard": {
      "spend_amount": 1e+308,
      "json_number": 1e+308
     },
     "viewer": {
-     "amount": 1e+308
+     "amount": null
     }
-   }
+   },
+   "note": "Review fixes 2 (R10): above AMOUNT_MAX (2^53 - 1, the largest integer a double holds exactly) an amount is unknown in imd-flop and the viewer. Before, 1e308 was a known amount. spend-guard is outside R10 and keeps its own rule."
+  },
+  {
+   "id": "amount-json-max-safe-integer",
+   "rule": "amount.json",
+   "input": {
+    "value": 9007199254740991
+   },
+   "expect": {
+    "imd-flop": {
+     "known_settled": 9007199254740991,
+     "usable_cap_charge": true
+    },
+    "spend-guard": {
+     "spend_amount": 9007199254740991,
+     "json_number": 9007199254740991
+    },
+    "viewer": {
+     "amount": 9007199254740991
+    }
+   },
+   "note": "Review fixes 2 (R10): AMOUNT_MAX itself, 2^53 - 1, is a known amount in both parts."
+  },
+  {
+   "id": "amount-json-2-53",
+   "rule": "amount.json",
+   "input": {
+    "value": 9007199254740992
+   },
+   "expect": {
+    "imd-flop": {
+     "known_settled": null,
+     "usable_cap_charge": false
+    },
+    "spend-guard": {
+     "spend_amount": 9007199254740992,
+     "json_number": 9007199254740992
+    },
+    "viewer": {
+     "amount": null
+    }
+   },
+   "note": "Review fixes 2 (R10): 2^53 is above AMOUNT_MAX, so it is unknown in both parts, never a guess."
+  },
+  {
+   "id": "amount-json-above-2-53-odd",
+   "rule": "amount.json",
+   "input": {
+    "value": 9007199254740993
+   },
+   "expect": {
+    "imd-flop": {
+     "known_settled": null,
+     "usable_cap_charge": false
+    },
+    "spend-guard": {
+     "spend_amount": 9007199254740993,
+     "json_number": 9007199254740993
+    },
+    "viewer": {
+     "amount": null
+    }
+   },
+   "note": "Review fixes 2 (R10): 2^53 + 1. Python reads this JSON integer exactly; JavaScript's JSON.parse reads it as 2^53. Both are above AMOUNT_MAX, so both parts call it unknown and give the same verdict on the same text."
   },
   {
    "id": "amount-reserved-positive",

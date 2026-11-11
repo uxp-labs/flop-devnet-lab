@@ -1,6 +1,6 @@
 {
  "file": "settlement-run.json",
- "description": "imd-flop run: reservation and settlement rows in the ledger. Mock provider (estimate 0.066/3/8, padded 0.186), cap 1 unless input.cap. read.receipt.request_id \"$rid\" means the run's own request_id. complete: ok (default) | presend (PreSendError) | timeout (abort) | http500 (FlopHTTPError 500). spend_raw (money stage 1) is the latest row's exact spend, or \"absent\" when the row has no such field.",
+ "description": "imd-flop run: reservation and settlement rows in the ledger. Mock provider (estimate 0.066/3/8, padded 0.186), cap 1 unless input.cap. read.receipt.request_id \"$rid\" means the run's own request_id. complete: ok (default) | presend (PreSendError) | timeout (abort) | http500 (FlopHTTPError 500). spend_raw (money stage 1) is the latest row's exact spend, or \"absent\" when the row has no such field. Hold floor (KD-12): the cap charge is max(padded quote, settled spend, reported cost). reason is the latest row's reason, with the PAST_ADMITTED text written as \"PAST_ADMITTED\"; stderr_past_admitted says whether stderr carries it.",
  "status": "current behavior at 3ae1cdf",
  "vectors": [
   {
@@ -68,7 +68,7 @@
      "last": {
       "state": "settled",
       "spend": 0.05,
-      "cap_charge": 0.05
+      "cap_charge": 0.186
      }
     },
     "spend-guard": {
@@ -77,7 +77,8 @@
     "viewer": {
      "not_applicable": "viewer renders ledger rows; it never writes them"
     }
-   }
+   },
+   "note": "Moved (hold floor): cap_charge was 0.05, the settled amount. A gateway read only raises the charge, so it keeps the 0.186 hold."
   },
   {
    "id": "run-settled-null-spend",
@@ -144,7 +145,7 @@
      "last": {
       "state": "settled",
       "spend": 0,
-      "cap_charge": 0
+      "cap_charge": 0.186
      }
     },
     "spend-guard": {
@@ -153,7 +154,8 @@
     "viewer": {
      "not_applicable": "viewer renders ledger rows; it never writes them"
     }
-   }
+   },
+   "note": "Moved (hold floor): cap_charge was 0, the settled amount. A gateway read only raises the charge, so it keeps the 0.186 hold."
   },
   {
    "id": "run-released",
@@ -182,7 +184,7 @@
      "last": {
       "state": "released",
       "spend": 0.01,
-      "cap_charge": 0.01
+      "cap_charge": 0.186
      }
     },
     "spend-guard": {
@@ -191,7 +193,8 @@
     "viewer": {
      "not_applicable": "viewer renders ledger rows; it never writes them"
     }
-   }
+   },
+   "note": "Moved (hold floor): cap_charge was 0.01, the settled amount. A gateway read only raises the charge, so it keeps the 0.186 hold."
   },
   {
    "id": "run-settled-negative",
@@ -683,9 +686,9 @@
      "last": {
       "state": "released",
       "spend": 0,
-      "cap_charge": 0.15
+      "cap_charge": 0.186
      },
-     "reason": "cap charge raised to reported cost"
+     "reason": null
     },
     "spend-guard": {
      "not_applicable": "spend-guard is a dry run: it writes spend 0 and keeps no reservation or settlement"
@@ -694,7 +697,7 @@
      "not_applicable": "viewer renders ledger rows; it never writes them"
     }
    },
-   "note": "[swarm audit of 8ddc5d2, finding 2] a reported cost may raise the charge and never lower it, also after settlement: cap_charge is max(settled, usage.cost_flop) and spend stays the settled figure; was last {released, 0, 0}, reason null"
+   "note": "[swarm audit of 8ddc5d2, finding 2] a reported cost may raise the charge and never lower it, also after settlement: cap_charge is max(settled, usage.cost_flop) and spend stays the settled figure; was last {released, 0, 0}, reason null Moved (hold floor): cap_charge was 0.15, the reported cost, with reason 'cap charge raised to reported cost'. The charge keeps the 0.186 hold, which a cost of 0.15 does not raise, so there is no reason."
   },
   {
    "id": "run-settled-above-reported-cost",
@@ -724,7 +727,7 @@
      "last": {
       "state": "settled",
       "spend": 0.05,
-      "cap_charge": 0.05
+      "cap_charge": 0.186
      },
      "reason": null
     },
@@ -735,7 +738,90 @@
      "not_applicable": "viewer renders ledger rows; it never writes them"
     }
    },
-   "note": "[swarm audit of 8ddc5d2, finding 2] control: a reported cost below the settlement leaves the settled charge"
+   "note": "[swarm audit of 8ddc5d2, finding 2] control: a reported cost below the settlement leaves the settled charge Moved (hold floor): cap_charge was 0.05, the settled amount. A gateway read only raises the charge, so it keeps the 0.186 hold."
+  },
+  {
+   "id": "run-settled-below-reported-cost-equal-to-hold",
+   "rule": "settlement.run",
+   "input": {
+    "cost_flop": 0.186,
+    "read": {
+     "http": 200,
+     "error": null,
+     "receipt": {
+      "request_id": "$rid",
+      "correlation_id": "imd-job-j1",
+      "model": "m",
+      "reserved_spend": 0.186,
+      "settled_spend": 0.05,
+      "state": "settled"
+     }
+    }
+   },
+   "expect": {
+    "imd-flop": {
+     "exit": 0,
+     "states": [
+      "sent",
+      "settled"
+     ],
+     "last": {
+      "state": "settled",
+      "spend": 0.05,
+      "cap_charge": 0.186
+     },
+     "reason": null
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard is a dry run: it writes spend 0 and keeps no reservation or settlement"
+    },
+    "viewer": {
+     "not_applicable": "viewer renders ledger rows; it never writes them"
+    }
+   },
+   "note": "Review fixes 2 (D): the completion reports 0.186, exactly the padded quote, and the receipt settles 0.05. The charge stays at the hold, 0.186, which the cost does not raise, so the reason does not say 'cap charge raised to reported cost'."
+  },
+  {
+   "id": "run-settled-below-reported-cost-above-hold",
+   "rule": "settlement.run",
+   "input": {
+    "cost_flop": 0.3,
+    "read": {
+     "http": 200,
+     "error": null,
+     "receipt": {
+      "request_id": "$rid",
+      "correlation_id": "imd-job-j1",
+      "model": "m",
+      "reserved_spend": 0.186,
+      "settled_spend": 0.05,
+      "state": "settled"
+     }
+    }
+   },
+   "expect": {
+    "imd-flop": {
+     "exit": 0,
+     "states": [
+      "sent",
+      "settled"
+     ],
+     "last": {
+      "state": "settled",
+      "spend": 0.05,
+      "cap_charge": 0.3
+     },
+     "reason": "PAST_ADMITTED; cap charge raised to reported cost",
+     "stderr_past_admitted": true
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard is a dry run: it writes spend 0 and keeps no reservation or settlement"
+    },
+    "viewer": {
+     "not_applicable": "viewer renders ledger rows; it never writes them"
+    }
+   },
+   "note": "Review fixes 2 (D): the completion reports 0.3, above the padded quote 0.186, and the receipt settles 0.05. The cost raised the charge, so the reason says so, after PAST_ADMITTED."
   },
   {
    "id": "run-settled-exact",
@@ -765,7 +851,7 @@
      "last": {
       "state": "settled",
       "spend": 0.05,
-      "cap_charge": 0.05
+      "cap_charge": 0.186
      },
      "spend_raw": "50000000000000000"
     },
@@ -776,7 +862,7 @@
      "not_applicable": "viewer renders ledger rows; it never writes them"
     }
    },
-   "note": "money stage 1: the exact spend is carried on a first settlement. The float booking is the same as without it."
+   "note": "money stage 1: the exact spend is carried on a first settlement. The float booking is the same as without it. Moved (hold floor): cap_charge was 0.05, the settled amount. A gateway read only raises the charge, so it keeps the 0.186 hold."
   },
   {
    "id": "run-settled-exact-leading-zeros",
@@ -802,7 +888,7 @@
      "last": {
       "state": "settled",
       "spend": 0.05,
-      "cap_charge": 0.05
+      "cap_charge": 0.186
      },
      "spend_raw": "50000000000000000"
     },
@@ -813,7 +899,7 @@
      "not_applicable": "viewer renders ledger rows; it never writes them"
     }
    },
-   "note": "money stage 1: the ledger row holds the canonical form."
+   "note": "money stage 1: the ledger row holds the canonical form. Moved (hold floor): cap_charge was 0.05, the settled amount. A gateway read only raises the charge, so it keeps the 0.186 hold."
   },
   {
    "id": "run-settled-exact-junk",
@@ -839,7 +925,7 @@
      "last": {
       "state": "settled",
       "spend": 0.05,
-      "cap_charge": 0.05
+      "cap_charge": 0.186
      },
      "spend_raw": null
     },
@@ -850,7 +936,7 @@
      "not_applicable": "viewer renders ledger rows; it never writes them"
     }
    },
-   "note": "money stage 1: a raw value that is not an exact amount is unknown, and the float settlement is still booked."
+   "note": "money stage 1: a raw value that is not an exact amount is unknown, and the float settlement is still booked. Moved (hold floor): cap_charge was 0.05, the settled amount. A gateway read only raises the charge, so it keeps the 0.186 hold."
   },
   {
    "id": "run-pending-exact",
@@ -888,6 +974,132 @@
     }
    },
    "note": "money stage 1: only a settling state sets the exact spend."
+  },
+  {
+   "id": "run-settled-above-hold-prints-past-admitted",
+   "rule": "settlement.run",
+   "input": {
+    "read": {
+     "http": 200,
+     "error": null,
+     "receipt": {
+      "request_id": "$rid",
+      "correlation_id": "imd-job-j1",
+      "model": "m",
+      "reserved_spend": 0.186,
+      "settled_spend": 0.3,
+      "state": "settled"
+     }
+    }
+   },
+   "expect": {
+    "imd-flop": {
+     "exit": 0,
+     "states": [
+      "sent",
+      "settled"
+     ],
+     "last": {
+      "state": "settled",
+      "spend": 0.3,
+      "cap_charge": 0.3
+     },
+     "reason": "PAST_ADMITTED",
+     "stderr_past_admitted": true
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard is a dry run: it writes spend 0 and keeps no reservation or settlement"
+    },
+    "viewer": {
+     "not_applicable": "viewer renders ledger rows; it never writes them"
+    }
+   },
+   "note": "Hold floor (R3): a settled amount above the padded quote raises the charge above what the call was allowed to spend. The booking prints PAST_ADMITTED (rules.json constants) on stderr and records it in the row's reason. \"PAST_ADMITTED\" stands for that constant.",
+   "quirks": [
+    "R-f"
+   ]
+  },
+  {
+   "id": "run-reported-cost-above-hold-prints-past-admitted",
+   "rule": "settlement.run",
+   "input": {
+    "cost_flop": 0.3,
+    "read": {
+     "http": 200,
+     "error": null,
+     "receipt": {
+      "request_id": "$rid",
+      "correlation_id": "imd-job-j1",
+      "model": "m",
+      "reserved_spend": 0.186,
+      "settled_spend": null,
+      "state": "estimated"
+     }
+    }
+   },
+   "expect": {
+    "imd-flop": {
+     "exit": 0,
+     "states": [
+      "sent",
+      "estimated"
+     ],
+     "last": {
+      "state": "estimated",
+      "spend": null,
+      "cap_charge": 0.3
+     },
+     "reason": "PAST_ADMITTED",
+     "stderr_past_admitted": true
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard is a dry run: it writes spend 0 and keeps no reservation or settlement"
+    },
+    "viewer": {
+     "not_applicable": "viewer renders ledger rows; it never writes them"
+    }
+   },
+   "note": "Hold floor (R3): a reported cost above the padded quote raises the hold above what the call was allowed to spend: the same line. \"PAST_ADMITTED\" stands for the rules.json constant.",
+   "quirks": [
+    "R-f"
+   ]
+  },
+  {
+   "id": "run-settled-below-hold-prints-nothing",
+   "rule": "settlement.run",
+   "input": {
+    "read": {
+     "http": 200,
+     "error": null,
+     "receipt": {
+      "request_id": "$rid",
+      "correlation_id": "imd-job-j1",
+      "model": "m",
+      "reserved_spend": 0.186,
+      "settled_spend": 0.05,
+      "state": "settled"
+     }
+    }
+   },
+   "expect": {
+    "imd-flop": {
+     "exit": 0,
+     "last": {
+      "state": "settled",
+      "spend": 0.05,
+      "cap_charge": 0.186
+     },
+     "reason": null,
+     "stderr_past_admitted": false
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard is a dry run: it writes spend 0 and keeps no reservation or settlement"
+    },
+    "viewer": {
+     "not_applicable": "viewer renders ledger rows; it never writes them"
+    }
+   },
+   "note": "Hold floor: a settlement below the hold books its spend and keeps the hold charged. Nothing passed what the cap admitted, so no line."
   }
  ]
 }

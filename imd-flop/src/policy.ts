@@ -4,7 +4,7 @@
  * order of checks and their exit codes. Behavior is pinned by contract/vectors (quote, cap-compare,
  * cap-payer, amount-text, max-tokens) and the older run/cap tests.
  */
-import { knownAmount } from "./amount.js";
+import { AMOUNT_MAX, knownAmount } from "./amount.js";
 import { CliError, EXIT } from "./errors.js";
 import type { Payer, SeatCap } from "./config.js";
 import { ceil6, floor6 } from "./rounding.js";
@@ -52,14 +52,26 @@ export function parseAmount(v: string | undefined, name: string): number | undef
   const n = Number(v);
   if (!Number.isFinite(n) || n <= 0) throw new CliError(`${name} must be a positive number`, EXIT.USAGE);
   if (n < MIN_CAP) throw new CliError(`${name} must be at least ${MIN_CAP} FLOP: a padded quote is never below that, so a smaller limit would refuse every call`, EXIT.USAGE);
+  if (!usableLimit(n)) throw new CliError(`${name} must be at most ${AMOUNT_MAX} FLOP (AMOUNT_MAX): a larger amount is not a known amount`, EXIT.USAGE);
   return n;
+}
+
+/** A spend limit (daily cap, per call cap, job budget) is a known amount (amount.ts knownAmount, so at most AMOUNT_MAX) at or above MIN_CAP. */
+export function usableLimit(v: unknown): v is number {
+  const n = knownAmount(v);
+  return n !== null && n >= MIN_CAP;
+}
+
+/** The shape of a job id: 1 to 120 printable ASCII characters, no space. */
+export function isJobId(job: unknown): job is string {
+  return typeof job === "string" && /^[\x21-\x7e]{1,120}$/.test(job);
 }
 
 /** Rule 4 (real work only): a non-empty, printable, non-key-shaped IMD job id. Returns the trimmed id. */
 export function validateJob(raw: string | undefined): string {
   const job = (raw ?? "").trim();
   if (!job) throw new CliError("--job <imd job id> is required: FLOP calls only serve real IMD jobs (rule 4)", EXIT.REFUSED_RULE);
-  if (!/^[\x21-\x7e]{1,120}$/.test(job)) throw new CliError("--job must be 1-120 printable characters", EXIT.USAGE);
+  if (!isJobId(job)) throw new CliError("--job must be 1-120 printable characters", EXIT.USAGE);
   // Every ledger row carries the job id, so a key-shaped id could never be recorded. Refuse it up front.
   if (scanForSecrets({ job }).length > 0) throw new CliError("--job looks key-shaped (for example 64+ hex characters) and cannot be written to the ledger; use a different job id", EXIT.USAGE);
   return job;
@@ -71,12 +83,12 @@ export function validateRunMaxTokens(n: number): number {
   return n;
 }
 
-/** The seat's cap. Missing, or without finite positive numbers with perCall <= daily, is no cap: fail closed. */
+/** The seat's cap. Missing, or without usable limits (usableLimit) with perCall <= daily, is no cap: fail closed. */
 export function requireCap(caps: Record<string, SeatCap>, seat: string): SeatCap {
   const cap = caps[seat];
   if (!cap) throw new CliError(`no daily cap for seat ${seat}: FLOP stays off. Set one with \`imd-flop cap set <FLOP/day>\``, EXIT.REFUSED_CAP);
-  if (!posFinite(cap.daily) || !posFinite(cap.perCall) || cap.perCall > cap.daily) {
-    throw new CliError(`cap for seat ${seat} is malformed (daily and perCall must be positive numbers, perCall <= daily): FLOP stays off. Set it again with \`imd-flop cap set <FLOP/day>\``, EXIT.REFUSED_CAP);
+  if (!usableLimit(cap.daily) || !usableLimit(cap.perCall) || cap.perCall > cap.daily) {
+    throw new CliError(`cap for seat ${seat} is malformed (daily and perCall must be known amounts from ${MIN_CAP} to ${AMOUNT_MAX} FLOP, perCall <= daily): FLOP stays off. Set it again with \`imd-flop cap set <FLOP/day>\``, EXIT.REFUSED_CAP);
   }
   return cap;
 }
@@ -155,7 +167,8 @@ function limitsFor(a: BudgetState): SpendLimit[] | null {
 
 /**
  * Room left under a limit: what it allows, less what is already charged. Rounded down to 6 decimals, so
- * rounding never adds room. A figure that is missing is unknown, never 0: the room is then not a number.
+ * rounding adds no room beyond the 1e-12 FLOP tolerance of rounding.ts, which only amounts off the 6 decimal
+ * grid can use (residual R-g). A figure that is missing is unknown, never 0: the room is then not a number.
  */
 export function roomLeft(limit: { allowed: number | undefined; spent: number | undefined }): number {
   if (typeof limit.allowed !== "number" || typeof limit.spent !== "number") return Number.NaN;
@@ -180,6 +193,15 @@ export function noRoom(a: BudgetState): BudgetRefusal | null {
     if (left <= 0) return refusedCap(limit.reached);
   }
   return null;
+}
+
+/**
+ * The day's total that counts against the cap (ledger.ts spentToday) is above the daily cap. `status` marks
+ * such a day. The cap check never admits a call past the cap, so a day gets there only after admission: a
+ * booking that passed what the cap admitted (settlement.ts PAST_ADMITTED), or a cap set lower during the day.
+ */
+export function overDailyCap(spent: number, cap: SeatCap | null): boolean {
+  return cap !== null && spent > cap.daily;
 }
 
 /**
