@@ -248,14 +248,14 @@ describe("review defect 5, fixed: a lost lock at an append is a failed append, n
   }, 30_000);
 });
 
-describe("DEFECT 6: two copies of lock.ts in one thread", () => {
-  // The own pid rule trusts that `held` lists every token this process holds. `held` is module state, so
-  // it lists only the tokens of one copy of lock.ts. Two copies in one process (here src/lock.ts through
-  // vitest and dist/lock.js, the same as a package loaded from two paths) each see the other's live lock
-  // as "our own pid, a token we do not hold": provably dead. The second copy reclaims the first copy's
-  // live lock and enters while the first is still inside. No worker thread is involved, so the planned
-  // "main thread only" rule does not cover it.
-  it("DEFECT 6 (low): a second copy of lock.ts in the same thread reclaims the first copy's live lock, and both are inside at once", async () => {
+describe("review defect 6, fixed: two copies of lock.ts in one thread", () => {
+  // Was: `held` was module state, so it listed only the tokens of one copy of lock.ts. Two copies in one
+  // process (here src/lock.ts through vitest and dist/lock.js, the same as a package loaded from two paths)
+  // each saw the other's live lock as "our own pid, a token we do not hold": provably dead. The second copy
+  // reclaimed the first copy's live lock and entered while the first was still inside.
+  // Decided: one registry of held tokens and depth per thread, on globalThis under a Symbol.for key, shared
+  // by every copy. The second take is re-entrant, never a reclaim.
+  it("review defect 6, fixed: a second copy of lock.ts in the same thread re-enters, and the first copy's lock stays", async () => {
     const h = tmpHome();
     const dist = (await import(join(root, "dist", "ledger.js"))) as typeof import("../src/ledger.js");
     const inside: string[] = [];
@@ -263,11 +263,28 @@ describe("DEFECT 6: two copies of lock.ts in one thread", () => {
       inside.push("src");
       const mine = readFileSync(lockPath(h), "utf8");
       dist.withLedgerLock(h, () => {
-        inside.push(`dist while src holds the lock: ${inside.includes("src")}`);
-        // dist's lock replaced src's: the first holder's lock is gone while it is still inside.
-        expect(readFileSync(lockPath(h), "utf8")).not.toBe(mine);
+        inside.push("dist, re-entrant");
+        expect(readFileSync(lockPath(h), "utf8")).toBe(mine);
       });
+      expect(readFileSync(lockPath(h), "utf8")).toBe(mine);
     });
-    expect(inside).toEqual(["src", "dist while src holds the lock: true"]);
+    expect(inside).toEqual(["src", "dist, re-entrant"]);
+    expect(lockFiles(h)).toEqual([]);
+  });
+
+  it("off the main thread a take is refused with a lock error that says so", async () => {
+    const h = tmpHome();
+    const { Worker } = await import("node:worker_threads");
+    const code = `
+const { parentPort, workerData } = require("node:worker_threads");
+import(workerData.dist).then(({ withLedgerLock, LedgerLockError }) => {
+  try { withLedgerLock(workerData.home, () => {}); parentPort.postMessage("TAKEN"); }
+  catch (e) { parentPort.postMessage((e instanceof LedgerLockError ? "LedgerLockError " : "other ") + e.message); }
+});`;
+    const w = new Worker(code, { eval: true, workerData: { dist: `file://${join(root, "dist", "ledger.js")}`, home: h } });
+    const msg = await new Promise<string>((resolve, reject) => { w.once("message", resolve); w.once("error", reject); });
+    await w.terminate();
+    expect(msg).toBe("LedgerLockError the ledger lock is taken on the main thread only, and this is a worker thread");
+    expect(lockFiles(h)).toEqual([]);
   });
 });

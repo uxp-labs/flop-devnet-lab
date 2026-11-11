@@ -7,7 +7,9 @@
  *  - Release unlinks the lock only if it still carries our token.
  *  - Nothing renames or moves the lock. A waiter removes it only when both hold:
  *    a. its recorded owner is provably dead: same host and the pid is gone (ESRCH), or the pid is our own
- *       pid and the token is not one this process holds now;
+ *       pid and the token is not one this process holds now. "Holds now" is complete: the tokens are kept
+ *       in one registry on globalThis, shared by every copy of this module in the thread, and only the
+ *       main thread takes the lock. One host name is trusted to mean one process table;
  *    b. the waiter holds the reclaim right for that exact token: the file `<lock>.reclaim.<token>.<n>`,
  *       created the same exclusive way and carrying the waiter's own owner. Level 1 first. If level n
  *       exists and its owner is provably dead, the right passes to level n+1. If its owner is alive or
@@ -44,6 +46,7 @@ import { closeSync, linkSync, lstatSync, openSync, readdirSync, readFileSync, un
 import { randomBytes } from "node:crypto";
 import { hostname } from "node:os";
 import { basename, dirname, join } from "node:path";
+import { isMainThread } from "node:worker_threads";
 
 /** The ledger lock could not be taken. Thrown before the guarded work runs, so nothing in it happened. */
 export class LedgerLockError extends Error {}
@@ -389,13 +392,23 @@ export function timeoutMessage(lock: string, blocked: Blocked = {}): string {
   return `ledger lock timeout: ${lock} (${ageOf(lock)}) ${owner}. If no imd-flop process is using this home any more, remove that file and run again.`;
 }
 
-/** The tokens this process holds now: its lock while it waits for it or holds it. Never provably dead. */
-const held = new Set<string>();
-/** Re-entry depth per ledger file. Read by ledger.ts ledgerLines. */
-const depth = new Map<string, number>();
+/**
+ * One registry per thread, shared by every copy of this module in it (a package loaded from two paths, or
+ * src and dist side by side): it lives on globalThis under a Symbol.for key. The lock is taken on the main
+ * thread only, so the registry of the main thread lists every token the process holds.
+ */
+interface Registry {
+  /** The tokens this process holds now: its lock while it waits for it or holds it. Never provably dead. */
+  held: Set<string>;
+  /** Re-entry depth per ledger file. Read by ledger.ts ledgerLines. */
+  depth: Map<string, number>;
+  /** The token of the lock this process holds, per ledger file. */
+  tokens: Map<string, string>;
+}
+const REGISTRY = Symbol.for("imd-flop.ledger-lock.registry.v1");
+const registry = ((globalThis as Record<symbol, unknown>)[REGISTRY] ??= { held: new Set(), depth: new Map(), tokens: new Map() }) as Registry;
+const { held, depth, tokens } = registry;
 export const lockDepth: ReadonlyMap<string, number> = depth;
-/** The token of the lock this process holds, per ledger file. */
-const tokens = new Map<string, string>();
 
 function self(token: string): Self {
   return { pid: process.pid, host: hostname(), token, held };
@@ -475,6 +488,8 @@ export function withLock<T>(key: string, fn: () => T): T {
     try { return syncResult(fn()); }
     finally { depth.set(key, d); }
   }
+  // The own pid rule needs every token the process holds in one registry: only the main thread takes the lock.
+  if (!isMainThread) throw new LedgerLockError("the ledger lock is taken on the main thread only, and this is a worker thread");
   const lock = `${key}.lock`;
   const token = takeLock(lock);
   tokens.set(key, token);
