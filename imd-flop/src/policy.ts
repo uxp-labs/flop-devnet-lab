@@ -85,28 +85,44 @@ export function validatePayer(payer: unknown, jobBudget: number | undefined): Pa
 
 export interface BudgetRefusal { reason: string; code: number }
 
-/** Room left under a limit after what is already charged. Rounded down to 6 decimals, so rounding never adds room. */
-export function roomLeft(limit: number, charged: number): number {
-  return floor6(limit - charged);
+/** What a budget check needs besides the quote. `spentBefore` is the ledger total, already rounded up (ledger.ts). */
+export interface BudgetState { cap: SeatCap; payer: Payer; spentBefore: number; jobBudget?: number }
+
+const refusedCap = (reason: string): BudgetRefusal => ({ reason, code: EXIT.REFUSED_CAP });
+
+/**
+ * Room left for this payer: the daily cap (holder) or the job budget (requester), less what is already
+ * charged. Rounded down to 6 decimals, so rounding never adds room.
+ */
+export function roomLeft(a: BudgetState): number {
+  return floor6((a.payer === "holder" ? a.cap.daily : a.jobBudget!) - a.spentBefore);
 }
 
 /**
- * The cap check made under the ledger lock. Holder: per-call cap, then the remaining daily cap.
- * Requester: per-call cap, then the remaining job budget. Null means the padded quote fits.
- * `spentBefore` is the ledger total, already rounded up (ledger.ts).
+ * A refusal that needs no quote: nothing can fit, whatever the estimate says. Holder: no daily room left.
+ * Requester: no job budget left, or no usable budget. Null means a quote may still fit.
+ * `run` asks this before the estimate, so the prompt does not leave the machine for nothing, and
+ * checkBudget asks it again under the ledger lock.
  */
-export function checkBudget(a: { padded: number; cap: SeatCap; payer: Payer; spentBefore: number; jobBudget?: number }): BudgetRefusal | null {
-  const { padded, cap, payer, spentBefore } = a;
-  if (padded > cap.perCall) return { reason: `padded quote ${padded} FLOP is over the per-call cap ${cap.perCall}`, code: EXIT.REFUSED_CAP };
-  if (payer === "holder") {
-    const left = roomLeft(cap.daily, spentBefore);
-    if (left <= 0) return { reason: `daily cap reached (${spentBefore}/${cap.daily} FLOP today, UTC)`, code: EXIT.REFUSED_CAP };
-    if (padded > left) return { reason: `padded quote ${padded} FLOP is over the remaining daily cap ${left}`, code: EXIT.REFUSED_CAP };
-    return null;
-  }
+export function noRoom(a: BudgetState): BudgetRefusal | null {
+  const left = roomLeft(a);
+  if (a.payer === "holder") return left <= 0 ? refusedCap(`daily cap reached (${a.spentBefore}/${a.cap.daily} FLOP today, UTC)`) : null;
   // A non-finite budget left would skip the cap, so refuse it (and any payer other than requester).
-  const left = roomLeft(a.jobBudget!, spentBefore);
-  if (payer !== "requester" || !Number.isFinite(left)) return { reason: `no usable requester budget for payer ${JSON.stringify(payer)}`, code: EXIT.REFUSED_CAP };
-  if (padded > left) return { reason: `padded quote ${padded} FLOP is over this job's remaining requester budget ${left}`, code: EXIT.REFUSED_CAP };
+  if (a.payer !== "requester" || !Number.isFinite(left)) return refusedCap(`no usable requester budget for payer ${JSON.stringify(a.payer)}`);
+  return left <= 0 ? refusedCap(`requester budget reached (${a.spentBefore}/${a.jobBudget} FLOP on this job)`) : null;
+}
+
+/**
+ * The cap check made under the ledger lock. First the refusal that needs no quote (noRoom), then the
+ * per-call cap, then the room left: the daily cap for the holder, the job budget for the requester.
+ * Null means the padded quote fits.
+ */
+export function checkBudget(a: BudgetState & { padded: number }): BudgetRefusal | null {
+  const { padded, cap, payer } = a;
+  const none = noRoom(a);
+  if (none) return none;
+  if (padded > cap.perCall) return refusedCap(`padded quote ${padded} FLOP is over the per-call cap ${cap.perCall}`);
+  const left = roomLeft(a);
+  if (padded > left) return refusedCap(payer === "holder" ? `padded quote ${padded} FLOP is over the remaining daily cap ${left}` : `padded quote ${padded} FLOP is over this job's remaining requester budget ${left}`);
   return null;
 }

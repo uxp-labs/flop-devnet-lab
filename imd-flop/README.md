@@ -16,7 +16,7 @@ no network and no spend.
 | `link verify <file> [--wallet-sig <sig> --wallet <addr>] [--save] [--eth-rpc <url>]` | Checks the Ed25519 signature, that the SS58 and the DID are the same key, that `genesisHash` is the FLOP network's genesis, that the EIP-712 data matches the statement, and the wallet signature if given. With `--eth-rpc` (or `ETH_RPC_URL`) it reads `eth_chainId` and, only when that is 1, `ownerOf(tokenId)` on the seat collection. It fails unless the signer still owns the seat, so a sale kills the link. A wrong, missing, or malformed chain id fails the verify. |
 | `cap set <FLOP/day> [--per-call <FLOP>]`, `cap show` | Required. No cap means `run` refuses. The day resets at 00:00 UTC. |
 | `config set payer <holder\|requester>`, `config show` | Who pays. Every ledger row records it. |
-| `run --job <id> --prompt <text> \| --prompt-file <path>` | Gets a quote, pads it, checks the caps, makes the call, and saves the response and receipt. Nothing is sent to imd. Options: `--max-tokens`, `--system`, `--provider mock\|flop`, `--live`, `--job-budget`, `--timeout-ms`, `--check-job`, `--no-link` (mock only), `--mock-scenario`. `--provider flop` requires `ETH_RPC_URL` to report chain id 1 and the live faucet and RPC genesis to equal the pinned hash, and it refuses before any quote or paid call when they do not. The mock provider does not make those calls. |
+| `run --job <id> --prompt <text> \| --prompt-file <path>` | Refuses before asking for a quote when the daily cap (or the job budget) is already used up. Otherwise gets a quote, pads it, checks the caps, makes the call, and saves the response and receipt. Nothing is sent to imd. Options: `--max-tokens`, `--system`, `--provider mock\|flop`, `--live`, `--job-budget`, `--timeout-ms`, `--check-job`, `--no-link` (mock only), `--mock-scenario`. `--provider flop` requires `ETH_RPC_URL` to report chain id 1 and the live faucet and RPC genesis to equal the pinned hash, and it refuses before any quote or paid call when they do not. The mock provider does not make those calls. |
 | `status [--json]` | Network, seat, address, link state, payer, today's spend against the cap, and recent receipts with their `match` field. |
 | `receipt <request_id> [--refresh] [--json]` | Shows one receipt and its `match` field. |
 | `quote --prompt <text> [--provider flop]` | Free cost estimate. With `--provider flop`, it calls the gateway's free `/models/estimate`. |
@@ -34,7 +34,7 @@ The process exit code is the `EXIT` value in `src/errors.ts`. `src/bin.ts` assig
 | 0 | `OK` | The command finished successfully. |
 | 1 | `ERROR` | A general failure. Used for a failed `init --check-genesis`, a failed `enroll --live`, a failed child-key mint or a run aborted before send (`nothing sent`), a gateway HTTP error after the call was sent, and any unexpected error that is not a `CliError`. A ledger lock timeout *after* the paid call also exits 1: `appendLedger` takes the lock itself, and a `LedgerLockError` is not a `CliError`. |
 | 2 | `USAGE` | Bad arguments, a missing seat or key, or a value the command will not accept. |
-| 3 | `REFUSED_CAP` | Refused locally, nothing sent. Used when there is no usable cap, the padded quote is over the per-call, daily, or job budget, or a ledger `cap_charge` is unusable. |
+| 3 | `REFUSED_CAP` | Refused locally, nothing sent. Used when there is no usable cap, the daily cap or the job budget is already used up (refused before the quote), the padded quote is over the per-call cap or over what is left of the daily cap or the job budget, or a ledger `cap_charge` is unusable. |
 | 4 | `REFUSED_LINK` | The seat-to-DID link is missing or does not verify, or `--no-link` was used with a non-mock provider. |
 | 5 | `REFUSED_RULE` | A section E rule (including a second key for a seat, a secret scan hit, a missing job id, or a live-run gate) or a paid-run chain/genesis refusal, at the first check and at the recheck before the child-key mint alike (`nothing sent`). |
 | 6 | `TIMEOUT_UNKNOWN` | The paid call timed out. Spend is recorded as unknown and is not retried. |
@@ -45,7 +45,7 @@ The process exit code is the `EXIT` value in `src/errors.ts`. `src/bin.ts` assig
 
 Lock-timeout rule: if the ledger lock cannot be taken before the paid call, the CLI exits 10 and nothing is sent. If the lock cannot be taken after the paid call, while writing the result row, the CLI exits 1. Exit 3 stays cap refusals only. Exit 4 stays a broken link. Codes 0–10 are the only values the CLI returns.
 
-Known gap: if the estimate step fails while another process holds the ledger lock, the CLI exits 1, not 10. Exit 10 covers only a lock that could not be taken before the paid call.
+Known gap: if the estimate step fails, or the run is refused before the estimate, while another process holds the ledger lock, the CLI exits 1, not 10. Exit 10 covers only a lock that could not be taken before the paid call.
 
 ## Mocked vs live
 
@@ -71,6 +71,7 @@ Known gap: if the estimate step fails while another process holds the ledger loc
 
 Spend-guard rules, ported from `spend-guard/`:
 - The quote is padded by 20 tokens for the Qwen chat template. On a paid flop run, the chain-id and genesis checks come before that quote. If the estimate fails, nothing is sent.
+- A refusal that needs no quote comes before the estimate, so the prompt is not posted for nothing: the daily cap (holder) or the job budget (requester) is already used up, or a ledger `cap_charge` is unusable. The ledger row is the usual `refused_local` with a null quote. The cap check under the ledger lock still runs after the quote and stays the authority.
 - If the pre-mint chain-id or genesis recheck fails, the latest ledger line is `refused_local` with cap charge 0. Status does not list that attempt as pending. The earlier `sent` line is the crash marker written before the call; the latest line is the one the cap uses. A crash between those two lines can leave `sent` as the latest line.
 - A call is refused locally if it's over the per-call cap or what's left of the daily cap. The total already charged is rounded up to 6 decimals and the room left is rounded down, so rounding never admits a call. `status` and `cap show` print that rounded-up total.
 - A timeout is never retried. Its spend is recorded as `null` with its `request_id`. For the cap, unknown spend counts as the padded quote.

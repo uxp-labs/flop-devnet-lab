@@ -10,7 +10,7 @@ import { readJson, writeJsonSafe } from "./store.js";
 import { loadSigner, readIdentity, revokedDids } from "./keys.js";
 import { verifyLink, type LinkFile } from "./link.js";
 import { DEFAULT_MODEL, network, SEAT_COLLECTION } from "./networks.js";
-import { checkBudget, padQuote, requireCap, validateJob, validatePayer, validateRunMaxTokens } from "./policy.js";
+import { checkBudget, noRoom, padQuote, requireCap, validateJob, validatePayer, validateRunMaxTokens } from "./policy.js";
 import { appendLedger, jobSpent, LedgerLockError, spentToday, UnusableLedgerCharge, utcDay, withLedgerLock, type LedgerEntry } from "./ledger.js";
 import { classifyReceipt, type Classified } from "./receipts.js";
 import { bookingReason, holdCharge, isFreshRead, nextBooking, receiptIdentity, reportedCost } from "./settlement.js";
@@ -150,26 +150,38 @@ export async function runJob(h: string, provider: Provider, o: RunOpts, deps: { 
     throw new CliError(`refused locally, nothing sent: ${reason}`, code);
   };
 
-  // Quote first; fail closed.
+  const NO_QUOTE = { raw: null, padded: null };
+  // What the cap is checked against: today's holder-paid total, or this job's requester-paid total.
+  // An unusable ledger charge refuses the run.
+  const spentSoFar = (day: string, quote: { raw: number | null; padded: number | null }): number => {
+    try {
+      return payer === "holder" ? spentToday(h, seat, provider.name, day) : jobSpent(h, job, provider.name);
+    } catch (e) {
+      if (e instanceof UnusableLedgerCharge) refuse(e.message, EXIT.REFUSED_CAP, quote, null);
+      throw e;
+    }
+  };
+
+  // A refusal that needs no quote comes before the estimate, so the prompt does not leave the machine
+  // for nothing. The check under the ledger lock below stays the authority.
+  const spentEarly = spentSoFar(base.day, NO_QUOTE);
+  const early = noRoom({ cap, payer, spentBefore: spentEarly, jobBudget: o.jobBudget });
+  if (early) refuse(early.reason, early.code, NO_QUOTE, spentEarly);
+
+  // Then the quote; fail closed.
   let q: { raw: number; padded: number } | null = null;
   try {
     q = padQuote(await provider.estimate({ model, prompt: estPrompt, max_tokens: o.maxTokens }));
   } catch (e) {
-    refuse(`estimate failed (${(e as Error).message})`, EXIT.ESTIMATE_FAILED, { raw: null, padded: null }, null);
+    refuse(`estimate failed (${(e as Error).message})`, EXIT.ESTIMATE_FAILED, NO_QUOTE, null);
   }
-  if (!q) return refuse("estimate returned no usable cost", EXIT.ESTIMATE_FAILED, { raw: null, padded: null }, null);
+  if (!q) return refuse("estimate returned no usable cost", EXIT.ESTIMATE_FAILED, NO_QUOTE, null);
 
   const requestId = `${provider.name === "mock" ? "mock" : "imdflop"}-${seat}-${bytesToHex(randomBytes(8))}`;
   const lockedCheck = (): LedgerEntry => {
     // The UTC day is read once, inside the lock, and used for both the cap check and the rows.
     const day = utcDay();
-    let spentBefore: number;
-    try {
-      spentBefore = payer === "holder" ? spentToday(h, seat, provider.name, day) : jobSpent(h, job, provider.name);
-    } catch (e) {
-      if (e instanceof UnusableLedgerCharge) refuse(e.message, EXIT.REFUSED_CAP, q, null);
-      throw e;
-    }
+    const spentBefore = spentSoFar(day, q);
     const refusal = checkBudget({ padded: q.padded, cap, payer, spentBefore, jobBudget: o.jobBudget });
     if (refusal) refuse(refusal.reason, refusal.code, q, spentBefore);
     const row: LedgerEntry = { ...base, day, request_id: requestId, quote_raw: q.raw, quote_padded: q.padded, spent_before: spentBefore, state: "sent", reason: null, spend: null, cost_reported: null, cap_charge: q.padded, http: null };

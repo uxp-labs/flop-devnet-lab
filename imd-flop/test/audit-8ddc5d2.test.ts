@@ -5,6 +5,7 @@
  *   2  a later read never lowers a booked settlement, and a settlement is never charged below the
  *      cost the completion itself reported
  *   3  the cap is checked against a total rounded up and room rounded down, never to nearest
+ *   4  a refusal that needs no quote happens before the estimate, so the prompt is not posted for nothing
  * Findings 5, 6 and 7 are the viewer's. Finding 12 is a documented residual. Finding 13 is a product
  * decision. Stub providers only; no network (test/setup.ts disables fetch).
  */
@@ -12,7 +13,7 @@ import { appendFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { jobSpent, spentToday, utcDay } from "../src/ledger.js";
-import { checkBudget } from "../src/policy.js";
+import { checkBudget, noRoom } from "../src/policy.js";
 import type { CompleteReq, CompleteRes, Provider } from "../src/providers.js";
 import { ceil6, floor6 } from "../src/rounding.js";
 import { CHARGE_RAISED, DISAGREE, nextBooking, refreshBooking, settledSpend } from "../src/settlement.js";
@@ -265,5 +266,86 @@ describe("finding 3: money already spent rounds up and room left rounds down, so
     // 1 - 0.4999996 is 0.5000004: the room is 0.5, not 0.500001.
     expect(checkBudget({ padded: 0.500001, cap, payer: "holder", spentBefore: 0.4999996 })).toMatchObject({ code: 3, reason: "padded quote 0.500001 FLOP is over the remaining daily cap 0.5" });
     expect(checkBudget({ padded: 0.5, cap, payer: "holder", spentBefore: 0.4999996 })).toBeNull();
+  });
+});
+
+describe("finding 4: a refusal that needs no quote happens before the estimate", () => {
+  const lastRow = (h: string) => {
+    const r = ledger(h).at(-1)!;
+    return { request_id: r.request_id, state: r.state, reason: r.reason, quote_raw: r.quote_raw, quote_padded: r.quote_padded, spent_before: r.spent_before, cap_charge: r.cap_charge };
+  };
+
+  it("holder: with the daily cap used up, run refuses (exit 3) without calling estimate, and books the usual refused_local row", async () => {
+    const h = await ready("0.186");
+    expect((await cli(h, runArgs("a"), { provider: new P() })).code).toBe(0);
+    const p = new P();
+    const r = await cli(h, runArgs("b"), { provider: p });
+    expect({ code: r.code, estimates: p.estimates, calls: p.calls }).toEqual({ code: 3, estimates: 0, calls: 0 });
+    expect(r.err).toBe("imd-flop: refused locally, nothing sent: daily cap reached (0.186/0.186 FLOP today, UTC)");
+    expect(lastRow(h)).toEqual({ request_id: null, state: "refused_local", reason: "daily cap reached (0.186/0.186 FLOP today, UTC)", quote_raw: null, quote_padded: null, spent_before: 0.186, cap_charge: 0 });
+  });
+
+  it("requester: with the job budget used up, run refuses (exit 3) without calling estimate", async () => {
+    const h = await ready("5");
+    await cli(h, ["config", "set", "payer", "requester"]);
+    const budget = ["--job-budget", "0.186"];
+    expect((await cli(h, runArgs("j1", budget), { provider: new P() })).code).toBe(0);
+    const p = new P();
+    const r = await cli(h, runArgs("j1", budget), { provider: p });
+    expect({ code: r.code, estimates: p.estimates, calls: p.calls }).toEqual({ code: 3, estimates: 0, calls: 0 });
+    expect(lastRow(h)).toEqual({ request_id: null, state: "refused_local", reason: "requester budget reached (0.186/0.186 FLOP on this job)", quote_raw: null, quote_padded: null, spent_before: 0.186, cap_charge: 0 });
+    // Another job has its own budget, so it still gets a quote and runs.
+    const other = new P();
+    expect((await cli(h, runArgs("j2", budget), { provider: other })).code).toBe(0);
+    expect(other.estimates).toBe(1);
+  });
+
+  it("an unusable ledger charge refuses as before (exit 3), now without calling estimate", async () => {
+    const h = await ready("5");
+    appendFileSync(join(h, "ledger.jsonl"), JSON.stringify({ day: utcDay(), request_id: "seed-bad", seat: SEAT, job: "seed", provider: "mock", payer: "holder", state: "sent", cap_charge: null }) + "\n");
+    const p = new P();
+    const r = await cli(h, runArgs("a"), { provider: p });
+    expect({ code: r.code, estimates: p.estimates, calls: p.calls }).toEqual({ code: 3, estimates: 0, calls: 0 });
+    expect(r.err).toMatch(/ledger cap_charge unusable; next call refused/);
+    expect(lastRow(h)).toMatchObject({ request_id: null, state: "refused_local", quote_raw: null, quote_padded: null, spent_before: null, cap_charge: 0 });
+  });
+
+  it("control: with room left but not enough for this quote, the estimate is asked and the refusal names the quote", async () => {
+    const h = await ready("0.2");
+    expect((await cli(h, runArgs("a"), { provider: new P() })).code).toBe(0);
+    const p = new P();
+    const r = await cli(h, runArgs("b"), { provider: p });
+    expect({ code: r.code, estimates: p.estimates, calls: p.calls }).toEqual({ code: 3, estimates: 1, calls: 0 });
+    expect(lastRow(h)).toEqual({ request_id: null, state: "refused_local", reason: "padded quote 0.186 FLOP is over the remaining daily cap 0.014", quote_raw: 0.066, quote_padded: 0.186, spent_before: 0.186, cap_charge: 0 });
+  });
+
+  it("control: the check under the ledger lock stays the authority when the room goes during the estimate", async () => {
+    const h = await ready("0.186");
+    const p = new P();
+    // Another process books 0.186 while this run waits for its quote.
+    p.estimate = async () => {
+      p.estimates += 1;
+      seedCharge(h, "other-process", 0.186);
+      return QUOTE as never;
+    };
+    const r = await cli(h, runArgs("a"), { provider: p });
+    expect({ code: r.code, estimates: p.estimates, calls: p.calls }).toEqual({ code: 3, estimates: 1, calls: 0 });
+    expect(lastRow(h)).toEqual({ request_id: null, state: "refused_local", reason: "daily cap reached (0.186/0.186 FLOP today, UTC)", quote_raw: 0.066, quote_padded: 0.186, spent_before: 0.186, cap_charge: 0 });
+  });
+
+  it("noRoom is the one rule: checkBudget gives the same refusal, whatever the quote", () => {
+    const cap = { daily: 1, perCall: 0.5 };
+    const holder = { cap, payer: "holder" as const, spentBefore: 1 };
+    expect(noRoom(holder)).toEqual({ reason: "daily cap reached (1/1 FLOP today, UTC)", code: 3 });
+    const requester = { cap, payer: "requester" as const, spentBefore: 0.3, jobBudget: 0.3 };
+    expect(noRoom(requester)).toEqual({ reason: "requester budget reached (0.3/0.3 FLOP on this job)", code: 3 });
+    for (const state of [holder, requester]) {
+      for (const padded of [0.000001, 0.186, 0.9]) expect(checkBudget({ ...state, padded })).toEqual(noRoom(state));
+    }
+    expect(noRoom({ cap, payer: "requester", spentBefore: 0, jobBudget: Number.POSITIVE_INFINITY })).toEqual({ reason: 'no usable requester budget for payer "requester"', code: 3 });
+    expect(noRoom({ ...holder, spentBefore: 0.999999 })).toBeNull();
+    expect(noRoom({ ...requester, spentBefore: 0.299999 })).toBeNull();
+    // 0.0000008 of room is no room: the smallest quote is 0.000001.
+    expect(noRoom({ ...holder, spentBefore: 0.9999992 })).toMatchObject({ code: 3 });
   });
 });
