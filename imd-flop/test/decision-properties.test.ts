@@ -481,19 +481,22 @@ describe("the hold floor", () => {
 
   it("a booking says it passed what the cap admitted exactly when it makes the day total grow, since a booking is never an admission", () => {
     // Moved (review fixes 3, item 1): the rule is read from the rows, not from the code. A day of two rows:
-    // another call already booked at 0.3, and this request's row. The cap check reads that day total each
-    // time it admits a call, and only when every charge in it is a known amount (else it refuses every call,
-    // so nothing was admitted against it). A booking is never an admission check. So it passes what the cap
-    // admitted exactly when the day total was readable before it and is larger after it: a released hold
-    // that comes back, a charge raised above the padded quote, and an older row climbing back to its hold
-    // alike.
+    // another call already booked at 0.3, and this request's row. The cap check admitted calls against that
+    // day total, counting this request at the charge it last held as a known amount. A row whose charge is
+    // not a known amount was sent at its padded quote, and calls were admitted against that before its line
+    // was damaged (review fixes 4, item 1). A booking is never an admission check. So it passes what the cap
+    // admitted exactly when the day total is larger after it than the total the cap last counted: a released
+    // hold that comes back, a charge raised above the padded quote, an older row climbing back to its hold,
+    // and a repair of an unknown charge above the hold alike.
     const OTHER = 0.3;
-    const dayTotal = (rows: Row[]): number | null => (rows.every((r) => known(r.cap_charge)) ? rows.reduce((t, r) => t + r.cap_charge!, 0) : null);
+    const counted = (r: Row): number | null => (known(r.cap_charge) ? r.cap_charge : known(r.quote_padded) ? r.quote_padded : null);
+    const dayTotal = (rows: Row[]): number | null => (rows.every((r) => counted(r) !== null) ? rows.reduce((t, r) => t + counted(r)!, 0) : null);
     let passed = 0;
     const r = walk(READS, (c, read, next) => {
       const other = { ...c.prev, cap_charge: OTHER } as Row;
       const before = dayTotal([other, c.prev]);
-      const after = dayTotal([other, { ...c.prev, ...next } as Row]);
+      const nextRow = { ...c.prev, ...next } as Row;
+      const after = known(nextRow.cap_charge) ? dayTotal([other, nextRow]) : null;
       const want = before !== null && after !== null && after > before;
       if (want) passed += 1;
       return decideBooking(c.prev, read, c.cost).pastAdmitted !== want;
@@ -501,7 +504,9 @@ describe("the hold floor", () => {
     // Item B moved 125: 50 released rows a redacted read for the request now brings back (+), and 75 released
     // rows with no known padded quote, where a redacted read used to let the reported cost raise the released
     // charge and now disagrees and changes nothing (-).
-    expect({ ...r, passed }).toEqual({ walked: 224 * 100, failures: [], failed: 0, passed: 2814 });
+    // Review fixes 4, item 1 moved 96 (2814 before): repairs of a damaged charge that a reported cost of 0.3
+    // books above the 0.186 hold.
+    expect({ ...r, passed }).toEqual({ walked: 224 * 100, failures: [], failed: 0, passed: 2910 });
   });
 });
 

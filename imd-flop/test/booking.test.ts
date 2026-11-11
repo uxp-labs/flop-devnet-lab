@@ -370,7 +370,8 @@ describe("fails on 9adfd17: what run writes when its paid call fails goes throug
       // Moved (review of the booking step): this expected no third row. The report that is not booked is now
       // recorded on one row that keeps state, spend and charge exactly.
       expect(ledger(h).map(booked)).toEqual([{ state: "sent", spend: null, cap_charge: 0.186 }, { state: "settled", spend: 0.3, cap_charge: 0.3 }, { state: "settled", spend: 0.3, cap_charge: 0.3 }]);
-      expect({ reason: ledger(h).at(-1)!.reason, http: ledger(h).at(-1)!.http }).toEqual({ reason: f.kept, http: f.http });
+      // Moved (review fixes 4, item 3): the request was booked past what the cap admitted earlier, so every later row keeps the mark. (settled 0.3 is above the 0.186 hold.)
+      expect({ reason: ledger(h).at(-1)!.reason, http: ledger(h).at(-1)!.http }).toEqual({ reason: `${PAST_ADMITTED}; ${f.kept}`, http: f.http });
       expect(await today(h)).toBe(0.3);
       const shown = (await cli(h, ["receipt", ledger(h)[0].request_id!, "--json"])).json();
       expect({ ledger_state: shown.ledger_state, ledger_spend: shown.ledger_spend, status: shown.status }).toEqual({ ledger_state: "settled", ledger_spend: 0.3, status: undefined });
@@ -843,7 +844,9 @@ describe("bookRead: the one booking step", () => {
     const r = bookRead(h, "r2", trusted("settled", 0.05), { flag: null }, seed);
     expect(r.outcome).toBe("appended");
     const rows = readLines(ledgerPath(h)).filter((e: Row) => e.request_id === "r2");
-    expect(rows[0]).toEqual(seed);
+    // Moved (review fixes 4, item 2): writing the seed again is a booking past what the cap admitted.
+    expect(rows[0]).toEqual({ ...seed, reason: PAST_ADMITTED });
+    expect(r.outcome !== "no_row" && r.pastAdmitted).toBe(true);
     expect(rows.map(booked)).toEqual([{ state: "sent", spend: null, cap_charge: 0.186 }, { state: "settled", spend: 0.05, cap_charge: 0.186 }]);
     // With a row for the request the seed is not written.
     bookRead(h, "r1", trusted("settled", 0.05), { flag: null }, { ...seed, request_id: "r1" });
@@ -1014,7 +1017,9 @@ describe("bookFailure: a failed call goes through the same booking step", () => 
     const seed = { ...JSON.parse(JSON.stringify(readLines(ledgerPath(ledgerWith()))[0])) };
     const r = bookFailure(h, "r1", "timeout_unknown", timeout, seed);
     expect(r.outcome).toBe("appended");
-    expect(readLines(ledgerPath(h))[0]).toEqual(seed);
+    // Moved (review fixes 4, item 2): writing the seed again is a booking past what the cap admitted.
+    expect(readLines(ledgerPath(h))[0]).toEqual({ ...seed, reason: PAST_ADMITTED });
+    expect(r.outcome !== "no_row" && r.pastAdmitted).toBe(true);
     expect(ledger(h).map(booked)).toEqual([{ state: "sent", spend: null, cap_charge: 0.186 }, { state: "timeout_unknown", spend: null, cap_charge: 0.186 }]);
   });
 

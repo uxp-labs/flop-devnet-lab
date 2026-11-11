@@ -229,7 +229,8 @@ describe("finding 2: a later read never lowers a booked settlement, and a report
       const refreshed = await cli(h, refreshArgs(rid), { provider: new P({ read: settledAt(0.05) }) });
       expect({ code: refreshed.code, err: refreshed.err }).toEqual({ code: 0, err: "" });
       const last = ledger(h).at(-1)!;
-      expect({ ...booked(last), cost_reported: last.cost_reported, reason: last.reason }).toEqual({ state: "settled", spend: 0.05, cap_charge: 0.3, cost_reported: 0.3, reason: CHARGE_RAISED });
+      // Moved (review fixes 4, item 3): the request was booked past what the cap admitted earlier, so every later row keeps the mark.
+      expect({ ...booked(last), cost_reported: last.cost_reported, reason: last.reason }).toEqual({ state: "settled", spend: 0.05, cap_charge: 0.3, cost_reported: 0.3, reason: `${PAST_ADMITTED}; ${CHARGE_RAISED}` });
       expect(refreshed.json().ledger_spend).toBe(0.05);
       const before = ledger(h).length;
       const again = await cli(h, refreshArgs(rid), { provider: new P({ read: settledAt(0.05) }) });

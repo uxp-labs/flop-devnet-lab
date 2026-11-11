@@ -239,16 +239,16 @@ function holdFloor(prev: PrevBooking<unknown>, o: ReadOutcome, proven: boolean):
 }
 
 /**
- * The booking puts the day in a state the cap did not admit: it raises the request's known booked charge.
- * The charge a row holds is what every later admission counted, so any booking that makes it larger passes
- * what the cap admitted. A released hold that comes back (from 0), a charge raised above the padded quote,
- * and a row an older version booked below its hold climbing back to it are all this one rule. A booked
- * charge that is not a known amount is not raised but repaired, and is outside the rule: such a row refuses
- * every call, so nothing was admitted against it.
+ * The booking puts the day in a state the cap did not admit. What the cap admitted for a request is its known
+ * booked charge, which every later admission counted, or, when that is not a known amount, its padded quote,
+ * the charge the call was sent with. A booking above that passes what the cap admitted. A released hold that
+ * comes back (from 0), a charge raised above the padded quote, a row an older version booked below its hold
+ * climbing back to it, and a repair of an unknown charge above the hold are all this one rule. A repair to
+ * exactly the hold says nothing. False when neither is a known amount.
  */
 function pastAdmitted(prev: PrevBooking<unknown>, charge: number): boolean {
-  const booked = knownAmount(prev.cap_charge);
-  return booked !== null && charge > booked;
+  const admitted = knownAmount(prev.cap_charge) ?? knownAmount(prev.quote_padded);
+  return admitted !== null && charge > admitted;
 }
 
 /** What a read does to a booking: the next booking, whether the read disagrees with what is booked, and whether the booking passes what the cap admitted. */
@@ -339,6 +339,21 @@ export function decideFailure<C>(prev: Booking<C>, failure: Failure): Booking<C 
   if (SETTLES.has(prev.state) || knownAmount(prev.cap_charge) === null) return null;
   if (failure === "refused_local") return prev.state === "sent" && prev.receipt_seen !== true ? { state: failure, spend: prev.spend, cap_charge: 0 } : null;
   return { state: failure, spend: prev.spend, cap_charge: prev.cap_charge };
+}
+
+/** The reason carries PAST_ADMITTED: this request was booked past what the cap admitted. */
+export function carriesPastAdmitted(reason: unknown): boolean {
+  return typeof reason === "string" && reason.includes(PAST_ADMITTED);
+}
+
+/**
+ * The reason of the next row of a request, given the reason of its previous row (or a past booking): once a
+ * request was booked past what the cap admitted, every later row of it keeps PAST_ADMITTED first in its
+ * reason. booking.ts book is its one caller, for every row it appends.
+ */
+export function carryPastAdmitted(reason: string | null, past: boolean): string | null {
+  if (!past || carriesPastAdmitted(reason)) return reason;
+  return reason ? `${PAST_ADMITTED}; ${reason}` : PAST_ADMITTED;
 }
 
 /** Ledger reason for a settled row whose cap charge the reported cost raised above its padded quote and its settled spend. */

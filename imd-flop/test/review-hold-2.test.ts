@@ -63,7 +63,7 @@ const r6 = (n: number) => Math.round(n * 1e6) / 1e6;
 /** The day's total as the ledger's latest row per request has it. */
 const dayTotal = (home: string, day: string) => r6([...new Map(ledger(home).filter((r) => r.request_id).map((r) => [r.request_id, r])).values()].filter((r) => r.day === day).reduce((t, r) => t + (r.cap_charge as number), 0));
 
-describe("review hold 2: rule 1, PAST_ADMITTED", () => {
+describe("review hold 2, items 1 to 3: PAST_ADMITTED", () => {
   // Rule 1 says a charge that is not a known amount "is repaired and stays outside the rule ... such a row
   // refuses every call, so nothing was admitted against it". Calls were admitted against the request's earlier
   // known charge (its padded quote) before the line that holds the unknown charge was written. The repair
@@ -72,7 +72,9 @@ describe("review hold 2: rule 1, PAST_ADMITTED", () => {
   // is a regression of the third fix pass.
   // Right: a repair that books a charge above what the cap admitted for the request (its padded quote, or the
   // last known charge of the request) prints PAST_ADMITTED and records it in the row's reason.
-  it("DEFECT 1: a repair of an unknown charge that books a settlement above the hold should print PAST_ADMITTED (today it takes the day to 0.436 of 0.4 silently)", async () => {
+  // Decided (review fixes 4, item 1): what the cap admitted for a request is its known booked charge, or, when
+  // that is not a known amount, its padded quote. A booking above that prints PAST_ADMITTED.
+  it("1: a repair of an unknown charge that books a settlement above the hold prints PAST_ADMITTED and records it", async () => {
     const h = await ready("0.4");
     const a = await cli(h, runArgs("jA"), { provider: new P() });
     expect(a.code, a.err).toBe(0);
@@ -87,7 +89,19 @@ describe("review hold 2: rule 1, PAST_ADMITTED", () => {
     expect(refreshed.code, refreshed.err).toBe(0);
     const s = await status(h);
     expect({ total: s.today_utc.mock, over: s.over_cap_today_utc.mock }).toEqual({ total: 0.436, over: true });
-    // Wrong today: no line on stderr, no row carries it.
+    expect(refreshed.err).toContain(PAST_ADMITTED);
+    expect(ledger(h).at(-1)!.reason).toContain(PAST_ADMITTED);
+  });
+
+  it("1: a repair of an unknown charge to exactly the hold says nothing", async () => {
+    const h = await ready("1");
+    const a = await cli(h, runArgs("jA"), { provider: new P() });
+    const rid = a.json().request_id as string;
+    const latest = ledger(h).at(-1)!;
+    appendFileSync(ledgerPath(h), JSON.stringify({ ...latest, ts: new Date().toISOString(), cap_charge: null }) + "\n");
+    const refreshed = await cli(h, refreshArgs(rid), { provider: new P({ read: settledAt(0.05) }) });
+    expect(refreshed.code, refreshed.err).toBe(0);
+    expect(ledger(h).at(-1)!.cap_charge).toBe(0.186);
     expect(refreshed.err).not.toContain(PAST_ADMITTED);
     expect(anyPastAdmitted(h)).toBe(false);
   });
@@ -99,7 +113,8 @@ describe("review hold 2: rule 1, PAST_ADMITTED", () => {
   // nothing says so.
   // Right: writing the seed row again is a raise of the request's charge (from no row, 0) and prints
   // PAST_ADMITTED and records it (in the seed's or the booking's reason).
-  it("DEFECT 2: the seed row written again after the ledger was moved during the call should print PAST_ADMITTED (today the day ends at 0.372 of 0.3 silently)", async () => {
+  // Decided (review fixes 4, item 2): writing the seed again is a booking past what the cap admitted.
+  it("2: the seed row written again after the ledger was moved during the call prints PAST_ADMITTED and records it", async () => {
     const h = await ready("0.3");
     let inner: Awaited<ReturnType<typeof cli>> | null = null;
     const complete = async (req: CompleteReq): Promise<CompleteRes> => {
@@ -112,8 +127,9 @@ describe("review hold 2: rule 1, PAST_ADMITTED", () => {
     expect(inner!.code, inner!.err).toBe(0);
     const s = await status(h);
     expect({ total: s.today_utc.mock, over: s.over_cap_today_utc.mock }).toEqual({ total: 0.372, over: true });
-    expect(a.err).not.toContain(PAST_ADMITTED);
-    expect(anyPastAdmitted(h)).toBe(false);
+    expect(a.err).toContain(PAST_ADMITTED);
+    const rid = a.json().request_id as string;
+    expect(ledger(h).filter((r) => r.request_id === rid).every((r) => String(r.reason).includes(PAST_ADMITTED))).toBe(true);
   });
 
   // README: "A hold that comes back on an earlier day is shown by its row, whose reason carries the past
@@ -123,7 +139,9 @@ describe("review hold 2: rule 1, PAST_ADMITTED", () => {
   // and the latest row no longer says anything.
   // Right: once a request's booking passed what the cap admitted, every later row of it keeps PAST_ADMITTED in
   // its reason (or the viewer reads the request's history), so the earlier day stays visible.
-  it("DEFECT 3: a later booking of a revived request on an earlier day should keep PAST_ADMITTED on its latest row (today the mark is dropped and yesterday's 0.372 of 0.3 is shown nowhere)", async () => {
+  // Decided (review fixes 4, item 3): once a request was booked past what the cap admitted, every later row of
+  // it keeps PAST_ADMITTED in its reason.
+  it("3: a later booking of a revived request on an earlier day keeps PAST_ADMITTED on its latest row", async () => {
     const h = await ready("0.3");
     expect((await cli(h, runArgs("jA"), { provider: new P({ complete: preSend }) })).code).toBe(11);
     expect((await cli(h, runArgs("jB"), { provider: new P() })).code).toBe(0);
@@ -140,8 +158,7 @@ describe("review hold 2: rule 1, PAST_ADMITTED", () => {
     const latest = ledger(h).filter((r) => r.request_id === rid).at(-1)!;
     expect({ state: latest.state, cap_charge: latest.cap_charge }).toEqual({ state: "settled", cap_charge: 0.186 });
     expect(dayTotal(h, yesterday)).toBe(0.372);
-    // Wrong today: the latest row of the request no longer carries the mark, and status shows nothing.
-    expect(String(latest.reason ?? "")).not.toContain(PAST_ADMITTED);
+    expect(String(latest.reason ?? "")).toContain(PAST_ADMITTED);
     expect((await status(h)).over_cap_today_utc).toEqual({ flop: false, mock: false });
   });
 });

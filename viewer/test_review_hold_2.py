@@ -78,23 +78,22 @@ class ReviewHold2(unittest.TestCase):
         self.assertEqual(len(rows), 1)
         self.assertFalse(any(f.startswith(UNPLACED) for r in rows for f in r["spend_flags"]))
 
-    def test_DEFECT_3_a_revived_row_booked_again_should_stay_flagged(self):
-        """The ledger imd-flop writes for DEFECT 3: cap 0.3, A released by "nothing was sent", B admitted, a trusted
-        read brings A's hold back (reason PAST_ADMITTED), then a later read settles A at 0.05 with no raise: the
-        new latest row's reason is recomputed without the mark. The day is 0.396 of 0.3. The lane reads the latest
-        row only, so A is no longer flagged and not bad. Right: once a request was booked past what the cap
-        admitted, the lane keeps flagging it (imd-flop keeps the mark on later rows, or the lane reads the
-        request's history)."""
+    def test_a_revived_row_booked_again_stays_flagged(self):
+        """Item 3 (review fixes 4): the ledger imd-flop writes now. Cap 0.3, A released by "nothing was sent", B
+        admitted, a trusted read brings A's hold back (reason PAST_ADMITTED), then a later read settles A at 0.05
+        with no raise. imd-flop's booking step is the one owner of the carry: the later row keeps PAST_ADMITTED
+        in its reason (imd-flop/test/review-hold-2.test.ts, item 3). The lane reads the latest row, so A stays
+        flagged and bad."""
         a = dict(LED, request_id="a", job="jA", daily_cap=0.3, per_call_cap=0.3)
         b = dict(LED, request_id="b", job="jB", daily_cap=0.3, per_call_cap=0.3)
         ledger = [a, dict(a, state="refused_local", cap_charge=0, reason="nothing sent: child key mint failed"),
                   b, dict(b, state="estimated"), dict(a, state="estimated", cap_charge=0.198, reason=PAST_ADMITTED),
-                  dict(a, state="settled", spend=0.05, cap_charge=0.198, reason=None)]
+                  dict(a, state="settled", spend=0.05, cap_charge=0.198, reason=PAST_ADMITTED)]
         rows, _ = lane(ledger, {"a": dict(REC, request_id="a", job="jA", state="settled", settled=0.05),
                                 "b": dict(REC, request_id="b", job="jB")})
         by = {r["label"]: r for r in rows}
-        self.assertNotIn(PAST_ADMITTED, by["jA"]["spend_flags"])
-        self.assertFalse(by["jA"]["bad"])
+        self.assertIn(PAST_ADMITTED, by["jA"]["spend_flags"])
+        self.assertTrue(by["jA"]["bad"])
 
     def test_DEFECT_8_an_invalid_UTF8_byte_inside_a_string_aborts_the_whole_rebuild(self):
         """imd-flop reads ledger.jsonl with readFileSync(..., "utf8"), which replaces an invalid byte with U+FFFD:

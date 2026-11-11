@@ -253,7 +253,9 @@ export async function runJob(h: string, provider: Provider, o: RunOpts, deps: Ru
     // settlement another process booked meanwhile, and "nothing was sent" never releases a row a trusted
     // read produced: then the report is only recorded, and the exit code below still says what this call
     // saw. The message also says what the ledger kept.
-    const { outcome, row } = bookFailure(h, requestId, timedOut ? "timeout_unknown" : preSend ? "refused_local" : "error", { reason, http }, sent);
+    const { outcome, row, pastAdmitted: seededPast } = bookFailure(h, requestId, timedOut ? "timeout_unknown" : preSend ? "refused_local" : "error", { reason, http }, sent);
+    // The booking step wrote the sent row again (the ledger lost it during the call): past what the cap admitted.
+    if (seededPast) deps.warn(PAST_ADMITTED);
     const kept = outcome === "recorded" ? keptByLedger(row) : null;
     const settled = kept !== null && SETTLES.has(row.state);
     const also = kept ? ` ${kept}` : "";
