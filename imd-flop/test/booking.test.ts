@@ -392,6 +392,31 @@ describe("fails on dbffac0: a stored read below the booked amount is shown as a 
   });
 });
 
+describe("pin: a receipt shaped like the gateway's documented schema is stored whole and settles", () => {
+  // Per the gateway's OpenAPI (CredentialReceipt), read 2026-11-11: settled_spend_raw is the exact amount as
+  // a decimal digit string of base units (10^18 per FLOP), and terminal_event is a channel event id. Neither
+  // is key shaped to the secret scan, so the stored copy needs no redaction. Not seen on a live receipt yet.
+  it("settled_spend_raw as decimal digits and terminal_event as 0x and 64 hex: no redaction, the settlement is booked", async () => {
+    const h = await ready();
+    const event = "0x" + "ab".repeat(32);
+    const run = await cli(h, runArgs(), { provider: new P({ read: (id) => receiptFor(id, { settled_spend: 0.05, settled_spend_raw: "50000000000000000", terminal_event: event, state: "settled" }) }) });
+    expect(run.code, run.err).toBe(0);
+    const file = JSON.parse(readFileSync(join(h, "receipts", `${run.json().request_id}.json`), "utf8"));
+    expect({ settled: file.settled, settled_raw: file.settled_raw, terminal_event: file.terminal_event, chain_final: file.chain_final })
+      .toEqual({ settled: 0.05, settled_raw: "50000000000000000", terminal_event: event, chain_final: false });
+    expect(booked(ledger(h).at(-1)!)).toEqual({ state: "settled", spend: 0.05, cap_charge: 0.05 });
+    expect(run.json().receipt.status).toBeUndefined();
+  });
+
+  it("a released receipt with no amount moves the state and keeps the hold: null is never read as 0", async () => {
+    const h = await ready();
+    const run = await cli(h, runArgs(), { provider: new P({ read: (id) => receiptFor(id, { settled_spend: null, settled_spend_raw: null, state: "released" }) }) });
+    expect(run.code, run.err).toBe(0);
+    expect(booked(ledger(h).at(-1)!)).toEqual({ state: "released", spend: null, cap_charge: 0.186 });
+    expect(await today(h)).toBe(0.186);
+  });
+});
+
 describe("pin: after the paid call, when the booking step cannot run", () => {
   it("the ledger lock cannot be taken: exit 1, the sent row keeps the reservation, the answer is in the response file", async () => {
     const h = await ready();

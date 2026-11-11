@@ -7,16 +7,21 @@
  */
 import { knownAmount } from "./amount.js";
 
+/** A receipt as the gateway returns it. Field notes are per the gateway's OpenAPI (CredentialReceipt), read 2026-11-11. */
 export interface GatewayReceipt {
   request_id: string;
   correlation_id?: string;
   model?: string;
   reserved_spend?: number | null;
+  /** A number or null from the gateway's legacy floating point ledger. Null means unknown, including for a released reservation. */
   settled_spend?: number | null;
+  /** The exact amount as a decimal digit string of base units (10^18 per FLOP). Null means unavailable, never an inferred zero. Stored, not booked from. */
   settled_spend_raw?: string | null;
+  /** A channel event id that may cover several requests. It is not a payment hash for one request. */
   terminal_event?: string | null;
   channel_id?: string | null;
   created_at?: number;
+  /** reserved and estimated are unresolved. settled and released are terminal ledger states. */
   state?: "reserved" | "estimated" | "settled" | "released" | null;
   response_status?: number | null;
 }
@@ -62,7 +67,7 @@ export function classifyReceipt(
     settled: knownAmount(r?.settled_spend),
     settled_raw: r?.settled_spend_raw ?? null,
     stage: ctx.chainVerified === true ? STAGE_CHAIN : STAGE_GATEWAY,
-    chain_final: ctx.chainVerified === true, // terminal_event may be pooled; not proof of finality
+    chain_final: ctx.chainVerified === true, // terminal_event may cover several requests; it is not proof of finality for this one
     terminal_event: r?.terminal_event ?? null,
     flag: ctx.http === 401 && err === "api_key_expired" ? "key_expired" : null,
     http: ctx.http ?? null,
