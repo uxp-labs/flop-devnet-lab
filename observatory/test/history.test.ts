@@ -94,10 +94,14 @@ describe("readHistory", () => {
     expect(usable(h)).toBe(true);
   });
 
-  it("empty: the folder holds no snapshot", () => {
-    const h = readHistory(logDir({ "2026-01-01.jsonl": "" }));
-    expect(h).toEqual({ state: "empty", detail: "the log folder holds no snapshot, so this snapshot starts the log", files: ["2026-01-01.jsonl"], snapshots: [] });
+  it("empty: the folder holds no day file; a day file with no line is refused, never read as empty", () => {
+    const h = readHistory(logDir({}));
+    expect(h).toEqual({ state: "empty", detail: "the log folder holds no snapshot, so this snapshot starts the log", files: [], snapshots: [] });
     expect(usable(h)).toBe(true);
+    rmSync(join(box, "log"), { recursive: true });
+    const blank = readHistory(logDir({ "2026-01-01.jsonl": "" }));
+    expect(blank).toEqual({ state: "unreadable", detail: "2026-01-01.jsonl holds no line", files: [], snapshots: [] });
+    expect(usable(blank)).toBe(false);
   });
 
   it("read: every line, across day files, in one chain", () => {

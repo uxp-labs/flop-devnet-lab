@@ -716,9 +716,10 @@ it adds.
   its `seq` is one more and its `prev_hash` is that line's hash. Its `reset_detected` speaks for
   that history, not for one reading.
 - Two cases give no earlier snapshot: a log folder that does not exist (a first run) and one that
-  holds no line. The new snapshot then starts the log at `seq` 0. Every other case refuses the log:
-  a name in the folder that is no day file of a real date, a link or anything but a regular file, a
-  line the store's reader refuses, a line that does not follow the one before it, and a line that
+  holds no day file. The new snapshot then starts the log at `seq` 0. Every other case refuses the
+  log: a name in the folder that is no day file of a real date, a link or anything but a regular
+  file, a day file that holds no line (the publish job never writes one), a line the store's reader
+  refuses, a line that does not follow the one before it, and a line that
   breaks a check of section 5 (a snapshot this code cannot check). A refused log is never read as
   no log: the run reads nothing from the network, writes no snapshot, exits 1, and never starts a
   new log over it. `run.json` names the case: `absent`, `empty`, `read`, `unreadable`, `broken` or

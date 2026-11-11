@@ -182,7 +182,7 @@ function isDayFile(name: string): boolean {
  * when the folder does not exist: no earlier snapshot. Throws LogRefused, naming the day file by
  * its name only, so the reason reads the same on any machine, when anything
  * in it is not what the publish job writes: the folder is a link or no folder, it holds a name that
- * is no day file, a day file is a link or not a regular file, or a line fails a check readSnapshots
+ * is no day file, a day file is a link, not a regular file or holds no line, or a line fails a check readSnapshots
  * makes (all "unreadable"); or a line does not follow the one before it (verifyChain's rule, across
  * files: "broken").
  *
@@ -215,7 +215,10 @@ export function readDayLog(dir: string): DayLog | null {
     const path = join(dir, name);
     if (!isDayFile(name)) throw new LogRefused("unreadable", `the log folder holds ${JSON.stringify(name)}, which is no <UTC date>.jsonl day file`);
     if (!read(name, () => lstatSync(path)).isFile()) throw new LogRefused("unreadable", `${name} is not a regular file`);
-    for (const [i, line] of read(name, () => lines(path)).entries()) {
+    const fileLines = read(name, () => lines(path));
+    // The publish job never writes a day file without a line: an empty one is no log it wrote.
+    if (fileLines.length === 0) throw new LogRefused("unreadable", `${name} holds no line`);
+    for (const [i, line] of fileLines.entries()) {
       const s = parseLine(line);
       if (typeof s === "string") throw new LogRefused("unreadable", `${name} line ${i} ${s}`);
       const last = snapshots.at(-1);

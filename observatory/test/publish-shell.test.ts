@@ -565,22 +565,19 @@ describe("a log moved aside by hand (README: to start a new log on purpose)", ()
 // turned round to assert the fix. (scripts/test-report-check.mjs refuses a test that passes on
 // failure, so these assert the defective behaviour itself.)
 describe("open defects (memory review)", () => {
-  it("DEFECT 1: a day file with no line is read as part of the log by the live run, which writes a truthful snapshot, and refused by the publish job, every run", async () => {
+  it("a day file with no line is refused by the live run: it reads nothing, writes no snapshot, and nothing reaches the branch", async () => {
     const r1 = await read(live("published-2026-11-11-0808"), checkout());
     published(publishJob(r1));
     seed({ "log/2026-11-12.jsonl": "" });
     const before = branch();
-    for (const tape of ["published-2026-11-11-0823", "memory-rpc-down"]) {
-      const log = checkout();
-      const h = readHistory(log);
-      // The live run builds on it: "read", exit 0, a line that follows the last line.
-      expect([h.state, h.files]).toEqual(["read", ["2026-11-11.jsonl", "2026-11-12.jsonl"]]);
-      const r = await read(live(tape), log);
-      expect([r.code, r.snapshot?.prev_hash]).toEqual([EXIT.ok, r1.snapshot?.hash]);
-      // The publish job reads the last line of the last day file, finds none, and fails.
-      refusedAtPublish(publishJob(r), /the last line of the published log holds no hash/);
-      expect(branch()).toEqual(before);
-    }
+    const log = checkout();
+    const h = readHistory(log);
+    expect([h.state, h.detail]).toEqual(["unreadable", "2026-11-12.jsonl holds no line"]);
+    const r = await read(live("published-2026-11-11-0823"), log);
+    expect([r.code, r.snapshot, readdirSync(r.out).sort()]).toEqual([EXIT.crashed, null, ["SHA256SUMS", "run.json", "tape.jsonl"]]);
+    const j = publishJob(r);
+    expect([j.check.status, j.publish, j.outputs]).toEqual([0, null, { publish: "false" }]);
+    expect(branch()).toEqual(before);
   });
 
   it("DEFECT 2: a day file on the branch that is a link into latest/ makes the job push a latest/ that is not the reading and no line in log/", async () => {

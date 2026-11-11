@@ -8,7 +8,7 @@
 // readHistory reads the published log (a folder of day files, src/store.ts readDayLog) and says
 // which of these it found. Only the first three give a run something to build on:
 //   absent      the folder does not exist: no earlier snapshot, a first run
-//   empty       the folder holds no snapshot: no earlier snapshot either
+//   empty       the folder holds no day file: no earlier snapshot either
 //   read        every line was read, the chain verifies, and every snapshot passes the checks the
 //               MCP binary holds a snapshot to (src/snapshot-check.ts)
 //   unreadable  a file or a line is not what the publish job writes

@@ -328,10 +328,9 @@ describe("a log split by day", () => {
     expect(readDayLog(dir)).toEqual({ files: ["2026-01-01.jsonl", "2026-01-02.jsonl"], snapshots: [a, b, c] });
   });
 
-  it("is no earlier snapshot when the folder does not exist, and none when it holds no line", () => {
+  it("is no earlier snapshot when the folder does not exist, and none when it holds no day file", () => {
     expect(readDayLog(join(tmp(), "none"))).toBeNull();
     expect(readDayLog(dayLog({}))).toEqual({ files: [], snapshots: [] });
-    expect(readDayLog(dayLog({ "2026-01-01.jsonl": "" }))).toEqual({ files: ["2026-01-01.jsonl"], snapshots: [] });
   });
 
   it("refuses a line that does not follow the one before it, across day files too", () => {
@@ -364,10 +363,13 @@ describe("a log split by day", () => {
     expect(refusal(dayLog({ "2026-01-01.jsonl": logLine(a) + logLine(b), "2026-01-02.jsonl": logLine(restart) }))).toEqual(["broken", "2026-01-02.jsonl line 0 has seq 0, not 2"]);
   });
 
-  it("refuses anything the publish job does not write: a line it cannot read, another name, a link, a folder", () => {
+  it("refuses anything the publish job does not write: a line it cannot read, a day file with no line, another name, a link, a folder", () => {
     const [a] = chain(1) as [Snapshot];
     expect(refusal(dayLog({ "2026-01-01.jsonl": logLine(a) + "not json\n" }))).toEqual(["unreadable", "2026-01-01.jsonl line 1 is not JSON"]);
     expect(refusal(dayLog({ "2026-01-01.jsonl": logLine(a).slice(0, -1) }))).toEqual(["unreadable", "2026-01-01.jsonl line 0 does not end with a newline (a line cut short)"]);
+    // A day file with no line, alone or after one that holds lines: the publish job never writes one.
+    expect(refusal(dayLog({ "2026-01-01.jsonl": "" }))).toEqual(["unreadable", "2026-01-01.jsonl holds no line"]);
+    expect(refusal(dayLog({ "2026-01-01.jsonl": logLine(a), "2026-01-02.jsonl": "" }))).toEqual(["unreadable", "2026-01-02.jsonl holds no line"]);
     expect(refusal(dayLog({ "2026-01-01.jsonl": logLine(a), "README.md": "x" }))).toEqual(["unreadable", 'the log folder holds "README.md", which is no <UTC date>.jsonl day file']);
     expect(refusal(dayLog({ "2026-02-30.jsonl": logLine(a) }))).toEqual(["unreadable", 'the log folder holds "2026-02-30.jsonl", which is no <UTC date>.jsonl day file']);
     const linked = dayLog({});

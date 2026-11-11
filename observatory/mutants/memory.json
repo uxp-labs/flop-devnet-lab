@@ -72,6 +72,14 @@
     "why": "a line that cannot be read is said to be unreadable, not a broken chain"
   },
   {
+    "id": "day-log-empty-file-read",
+    "file": "src/store.ts",
+    "find": "    if (fileLines.length === 0) throw new LogRefused(",
+    "replace": "    if (false) throw new LogRefused(",
+    "test": "test/store.test.ts",
+    "why": "a day file with no line is refused: the publish job never writes one, so the two halves find the same last line"
+  },
+  {
     "id": "history-unchecked-skipped",
     "file": "src/history.ts",
     "find": "    if (broken.length > 0) return refused(\"unchecked\",",

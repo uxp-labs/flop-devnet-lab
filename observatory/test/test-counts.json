@@ -25,7 +25,7 @@
   },
   "history.test.ts": {
     "tests": 6,
-    "names": "9a55348c1ff4a4102db0f81aa41467d392909bbf81e30f906e9418fd3a4a05e3"
+    "names": "6623cbc984d353a085253b39f92e932d957de52f3ddf9ab4038ff58d50fbb24e"
   },
   "live-run.test.ts": {
     "tests": 30,
@@ -57,7 +57,7 @@
   },
   "publish-shell.test.ts": {
     "tests": 35,
-    "names": "adb91e0b4c751b13cc19c3967718f13781ce5cdaa768239a46528884131842d2"
+    "names": "845be9891c01aa17912ade32c8a78e51f2fc1233d7ade4f9f3354d62863dd81d"
   },
   "published.test.ts": {
     "tests": 21,
@@ -97,7 +97,7 @@
   },
   "store.test.ts": {
     "tests": 23,
-    "names": "19d1ec7638e6a0dd1ebdbbeb5ef2a149ba8950eefd37481768e4658a2bf34739"
+    "names": "897939b606f7868656f7f3b196a3af533a530dab47e9131cdf4b6ffa1bfb7c99"
   },
   "strict.test.ts": {
     "tests": 66,

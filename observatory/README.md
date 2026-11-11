@@ -120,9 +120,9 @@ What it does, once per run:
 | State | What the run does |
 |---|---|
 | `absent` | the folder does not exist: a first run, `seq` 0 |
-| `empty` | the folder holds no line: the same as a first run |
+| `empty` | the folder holds no day file: the same as a first run |
 | `read` | every line read, the chain verifies, every snapshot passes `src/snapshot-check.ts`: the new snapshot follows the last line |
-| `unreadable` | a name that is no day file, a link, or a line that is not what the store writes: refused |
+| `unreadable` | a name that is no day file, a link, a day file with no line, or a line that is not what the store writes: refused |
 | `broken` | a line does not follow the one before it: refused |
 | `unchecked` | a line in the chain is no snapshot this code can check: refused |
 
