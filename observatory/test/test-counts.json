@@ -135,6 +135,10 @@
     "tests": 135,
     "names": "f506539e625f34d2e5dbcc02905f37f4476f82be59bbbb87237679ba396929c0"
   },
+  "storage-key.test.ts": {
+    "tests": 9,
+    "names": "ab64b240e88749709fd11d06c91eab4cc365ce23e6e12c745ec5c75a051e6dc6"
+  },
   "store.test.ts": {
     "tests": 23,
     "names": "897939b606f7868656f7f3b196a3af533a530dab47e9131cdf4b6ffa1bfb7c99"
