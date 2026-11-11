@@ -106,7 +106,7 @@ imd-flop and the viewer read the same ledger.jsonl. They read its text by one ru
 - Rows are grouped by `REQUEST_ID` (1 to 128 printable ASCII characters, no space). A row without such a request
   id is a group of its own, keyed by its line.
 - A receipt file is the whole file decoded the same way: one JSON value in `JSON.parse`'s grammar that must be an
-  object.
+  object, nested at most 32 levels like a line (`fixtures/receipt-text/`, read by both parts).
 - The writer rule: imd-flop starts every row it appends on a fresh line, so when the file is not empty and its
   last byte is not `\n`, it writes `\n` before the row in the same write (`imd-flop/src/store.ts`
   `appendJsonlSafe`).

@@ -59,10 +59,27 @@ class Defect1Properties(unittest.TestCase):
 
 
 class Defect8(unittest.TestCase):
-    """DEFECT 8 (info): receipt files are outside the depth rule. A receipt nested 10000 deep is read by imd-flop
-    (JSON.parse) and is unreadable to the viewer (json raises RecursionError, turned into ValueError)."""
+    """review defect 8 (info), fixed: receipt files follow the depth rule. Every file in
+    contract/fixtures/receipt-text is read as the lane reads receipts; imd-flop checks the same files."""
 
-    def test_DEFECT_8_info_a_deep_receipt_is_unreadable_to_the_viewer(self):
+    def test_review_defect_8_fixed_receipt_fixtures(self):
+        import shutil, tempfile
+        d = HERE.parent / "contract" / "fixtures" / "receipt-text"
+        files = json.loads((d / "expectations.json").read_text())["files"]
+        self.assertEqual(sorted(p.name for p in d.iterdir() if p.name != "expectations.json"), sorted(files))
+        for name, want in files.items():
+            with self.subTest(name):
+                with tempfile.TemporaryDirectory() as tmp:
+                    shutil.copy(d / name, Path(tmp, "r1.json"))
+                    old = sys.argv
+                    sys.argv = ["build-lane.py", tmp]
+                    try:
+                        got = load_lane()["read_receipts"]()["r1"]
+                    finally:
+                        sys.argv = old
+                self.assertEqual(not got.get("_unreadable", False), want["readable"])
+
+    def test_review_defect_8_fixed_a_deep_receipt_is_unreadable_and_a_shallow_one_is_read(self):
         deep = '{"request_id":"req-1","job":"j","seat":"1234","did":"did:key:z","state":"settled","settled":0.198,"x":' + "[" * 10000 + "]" * 10000 + "}"
         shallow = deep.replace("[" * 10000 + "]" * 10000, "[[1]]")
         chips = lambda receipt: lane([dict(LED, state="settled", spend=0.198)], {"req-1": receipt})[0][0]["chips"]

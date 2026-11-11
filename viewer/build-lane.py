@@ -180,12 +180,14 @@ def read_ledger(led):
     return [latest[k] for k in order], bad
 
 def read_receipts():
-    """Receipt files by request id. A file is one JSON value read the same way (decode, loads) and must be an
-    object; anything else is unreadable."""
+    """Receipt files by request id. A file is one JSON value read the same way (decode, nested at most MAX_DEPTH
+    levels, loads) and must be an object; anything else is unreadable."""
     receipts = {}
     for f in glob.glob(os.path.join(RDIR, "*.json")):
         try:
-            with open(f, "rb") as fh: r = loads(decode(fh.read()))
+            with open(f, "rb") as fh: text = decode(fh.read())
+            # The depth rule of the ledger text contract applies to a receipt file too (review defect 8).
+            r = None if nested_too_deep(text) else loads(text)
         except ValueError:
             r = None
         receipts[os.path.splitext(os.path.basename(f))[0]] = r if isinstance(r, dict) else {"_unreadable": True}

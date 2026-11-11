@@ -131,7 +131,7 @@
         "numbers": "every number is read as a double; in the viewer an integer is parsed as float(text) and kept as an int only when that double is integral and at most 2^53 - 1, so a 4300 digit integer is Infinity in both parts and never meets Python's digit limit",
         "booleans": "a boolean is never a number",
         "grouping": "rows are grouped by REQUEST_ID; a row without a usable request id is a group of its own, keyed by its line",
-        "receipts": "a receipt file is the whole file decoded the same way, one JSON value in JSON.parse's grammar that must be an object; anything else is unreadable"
+        "receipts": "a receipt file is the whole file decoded the same way, one JSON value in JSON.parse's grammar that must be an object; anything else is unreadable; the depth rule applies to it too, counted on the whole file (review of the audit 33f3b9f fixes, defect 8; pinned by contract/fixtures/receipt-text/)"
       },
       "imd-flop": "src/ledger-text.ts readLedgerText and groupRows, used by ledger.ts for every read of the ledger",
       "spend-guard": null,

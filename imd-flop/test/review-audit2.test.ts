@@ -4,7 +4,7 @@
  * the defect is fixed. Stub providers, stub fetch and library calls only; no network (test/setup.ts).
  * The viewer's side of DEFECT 1 and DEFECT 8 is viewer/test_review_audit2.py.
  */
-import { chmodSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { appendLedger, jobSpent, spentToday, utcDay, type LedgerEntry } from "../src/ledger.js";
@@ -289,13 +289,26 @@ describe("review defect 7 (low), fixed: a job total above AMOUNT_MAX names the j
   });
 });
 
-describe("DEFECT 8 (info): a receipt nested 10000 deep is read by imd-flop and unreadable to the viewer", () => {
-  it("DEFECT 8 (info): listReceipts reads it as a receipt (viewer side in test_review_audit2.py)", () => {
+describe("review defect 8 (info), fixed: receipt files follow the depth rule in both readers", () => {
+  const DIR = join(import.meta.dirname, "..", "..", "contract", "fixtures", "receipt-text");
+  it("review defect 8, fixed: every receipt fixture is read as contract/fixtures/receipt-text/expectations.json says (the viewer reads the same files)", () => {
+    const files = JSON.parse(readFileSync(join(DIR, "expectations.json"), "utf8")).files as Record<string, { readable: boolean }>;
+    expect(readdirSync(DIR).filter((f) => f !== "expectations.json").sort()).toEqual(Object.keys(files).sort());
+    for (const [name, want] of Object.entries(files)) {
+      const h = tmpHome();
+      mkdirSync(receiptsDir(h), { recursive: true });
+      writeFileSync(join(receiptsDir(h), "r1.json"), readFileSync(join(DIR, name)));
+      const l = listReceipts(h);
+      expect({ name, read: l.receipts.length === 1 }).toEqual({ name, read: want.readable });
+    }
+  });
+
+  it("review defect 8, fixed: listReceipts lists a receipt nested 10000 deep as unreadable", () => {
     const h = tmpHome();
     mkdirSync(receiptsDir(h), { recursive: true });
     writeFileSync(join(receiptsDir(h), "mock-7-deep.json"), `{"request_id":"mock-7-deep","seat":"7","job":"j1","x":${"[".repeat(10000)}${"]".repeat(10000)}}`);
     const l = listReceipts(h);
-    expect({ read: l.receipts.length, unreadable: l.unreadable }).toEqual({ read: 1, unreadable: [] });
+    expect({ read: l.receipts.length, unreadable: l.unreadable }).toEqual({ read: 0, unreadable: ["mock-7-deep.json"] });
   });
 });
 
