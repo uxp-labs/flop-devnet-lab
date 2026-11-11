@@ -1,9 +1,13 @@
 # Shared rules contract (PR6 refactor step 1)
 
 `rules.json` and `vectors/*.json` record how imd-flop (TS), spend-guard (Python) and the viewer
-(`build-lane.py`) behave **today, at 3ae1cdf**. Every expectation was taken from running today's code.
-This is a behavior lock for the refactor, not a specification: quirks and residuals (a)-(e) are listed
-in `rules.json` as `current behavior`, not as fixes.
+(`build-lane.py`) behave. They were first written at 3ae1cdf as a behavior lock for the refactor, not a
+specification: every expectation was taken from running that day's code, and quirks and residuals (a)-(e)
+were listed in `rules.json` as `current behavior`, not as fixes.
+
+Since then the files also record fixes. A fix moves the expectations it changes and marks its quirk or
+known defect `fixed`, with the new behavior next to the old summary. An entry still marked
+`current behavior` is a snapshot of the code, not a statement of intent.
 
 This folder holds data and its format only; the loaders are test code outside it. Each part loads these same files:
 

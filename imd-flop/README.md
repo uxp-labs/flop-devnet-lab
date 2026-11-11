@@ -81,8 +81,8 @@ Spend-guard rules, ported from `spend-guard/`:
 - Receipts are labeled `gateway observed` and `chain_final=false`, because nothing verifies chain settlement yet. An amount on a receipt (reserved or settled) counts only when it is a finite number that is not negative. Anything else is unknown and shows blank, never 0. A 401 `api_key_expired` gets its own `key_expired` flag.
 - A receipt read settles an attempt only when it is an HTTP 200 answer for this request id and its stored copy needed no redaction by the secret scan. `run` and `receipt --refresh` share that rule (`src/settlement.ts`). Any other read keeps the reservation.
 - A booked settlement is never lowered by a later read. `receipt --refresh` prints `receipt and ledger disagree; reservation held, chain-final green blocked` and appends nothing. An equal amount may still move the state, and a higher amount is booked.
-- The cost a completion reports (`usage.cost_flop`) may raise the cap charge and never lower it, before and after settlement. A settled call is charged the higher of its settled spend and that cost, and the ledger `reason` then reads `cap charge raised to reported cost`. The `spend` field stays the settled figure.
-- The `match` field says whether a receipt agrees with its records. It's `matches` only when the receipt's job, seat and DID all equal the ledger row and the seat's current link, and that link verifies. Otherwise it's `mismatch`, listing the fields that disagree, or `pending` if there's no receipt yet.
+- The cost a completion reports (`usage.cost_flop`) may raise the cap charge and never lower it, before and after settlement. A settled call is charged the higher of its settled spend and that cost, and the ledger `reason` then reads `cap charge raised to reported cost`. The `spend` field stays the settled figure. A settled row that was booked before this rule with a cap charge below its reported cost is raised to that cost by the next `receipt --refresh` that reads a trusted settlement for it. The refresh appends a new line, and the old line stays in the ledger.
+- The `match` field compares identity fields only: the request id, job, seat and DID. It does not compare amounts or state. It's `matches` only when those fields equal the ledger row, the seat and DID also equal the seat's current link, and that link verifies. Otherwise it's `mismatch`, listing the fields that disagree, or `pending` if there's no receipt yet.
 
 ## Payer assumption
 
@@ -99,6 +99,12 @@ The job budget is supplied by the caller for each job id. It never replaces the 
 Each ledger row records two running totals. `spent_before` is the seat's spend today before the call, for every payer. `job_spent_before` is the job's requester spend before the call, and `null` on a holder row. Rows written before this rule have no `job_spent_before`. On those requester rows `spent_before` was the job's spend. The viewer works out their job budget left from it and shows their daily cap as not checked, so such a row never gets the green chain final chip.
 
 Not built: when FLOP ships proxies or escrow pools and a call is funded by another account, that call will be bounded by that account's limit and will not count against the seat's cap.
+
+## Known gaps
+
+- **Two processes booking the same request.** `run` books its own receipt read against the row it wrote before the call. `receipt --refresh` reads the previous row and then appends, and those two steps are not under one ledger lock. If another process refreshes a request while `run` is waiting, and the gateway answers the two reads differently, a booked settlement can be lowered, or a settling state replaced, and nothing reports that receipt and ledger disagree. The fix is one booking step under the ledger lock for both callers. Not built yet.
+- **A read below a booked settlement leaves two amounts.** After a read that would lower a booked settlement, the receipt file holds the lower read while the ledger keeps the booked amount. `receipt <id>` and `status` then print the lower amount with `match=matches`. The viewer labels the same files as a disagreement between receipt and ledger. Not fixed yet.
+- **Redacted receipts never settle.** A receipt body with a key shaped field (for example a 64 hex `settled_spend_raw`) is redacted, and a redacted receipt never proves a settlement. If live receipts carry such a field as a matter of course, no call would ever settle, and every call would stay charged at its reservation: the padded quote, or the reported cost when that is higher. The live receipt shape has not been checked.
 
 ## Run it
 

@@ -1,6 +1,6 @@
 {
-  "contract": "flop-devnet-lab shared rules, as they behave at 3ae1cdfa55707dd8e02678acdba57faec5aa50bf",
-  "status": "current behavior: a snapshot of today's code, not a specification of intent. Nothing here is a fix.",
+  "contract": "flop-devnet-lab shared rules, first recorded as the code behaved at 3ae1cdfa55707dd8e02678acdba57faec5aa50bf",
+  "status": "A record of how the code behaves, not a specification of intent. It began at 3ae1cdf as a snapshot with no fixes in it. Since then fixes are recorded here too, with their vectors: an entry marked fixed says what changed and how it behaves now, and an entry marked current behavior is still a snapshot.",
   "parts": [
     "imd-flop",
     "spend-guard",
@@ -188,7 +188,7 @@
         "spend-guard",
         "viewer"
       ],
-      "summary": "imd-flop counted only holder paid rows against the seat's daily cap (spentToday). With payer requester the daily cap did not apply: the only limits were the per-call cap and the job budget the caller supplies per job id, while the FLOP still came out of the seat's own gateway key. The viewer checked a requester row against its job budget only (finding 5). spend-guard has no payer.",
+      "summary": "imd-flop counted only holder paid rows against the seat's daily cap (spentToday). With payer requester the daily cap did not apply: the only limits were the per-call cap and the job budget the caller supplies per job id, while the FLOP still came out of the seat's own gateway key. The viewer checked every row against the daily cap using spent_before, which on a requester row was the job's spend, and never showed the job budget (finding 5). spend-guard has no payer.",
       "fixed_behavior": "The seat's daily cap bounds every call the seat's key pays for, whoever the call is for. Today the gateway has no third party payment, so the seat's key pays for every call, and every call counts. Requester is an attribution label plus a second, narrower limit, the job budget. Limits by payer, in checked order: holder: daily cap. requester: daily cap, then job budget. imd-flop: spentToday sums every row of the seat for that provider and UTC day, with no payer filter. noRoom refuses on the first limit with nothing left. checkBudget, after noRoom and the per-call cap, refuses on the first limit the padded quote does not fit. Ledger rows: spent_before is the seat's spend today before the call, for every payer. job_spent_before is the job's requester spend before the call, and null on a holder row. viewer: SPEND_LIMITS lists the same limits in the same order, each with its own running total field. Review of the audit 8ddc5d2 fixes: the daily cap applies to every row, whatever its payer. A row whose payer is neither holder nor requester is checked against the daily cap, its spent_before read as the seat's total, and carries the spend flag 'payer unknown'. A requester row with no job_spent_before key was written before this rule, when its spent_before was the job's spend: its job budget left is job_budget - spent_before - cap_charge, and its daily cap cannot be checked. A limit that applies to a row and cannot be worked out (an input is unknown, or that case) shows a blank figure and '<limit> not checked'. That wording is a spend flag, or one amber chip in the place of the green chain final chip, which such a row never gets. The row keeps 'matches'. spend-guard has no payer and keeps no running total: it checks one call against one cap, so nothing changed there. Not built: when FLOP ships proxies or escrow pools and a call is funded by another account, that account's limit will bound the call and it will not count against the seat's cap. Pinned by cap-payer.json (imd-flop) and, in viewer-labels.json (viewer), the label-requester vectors, the label-unknown-payer vectors and label-holder-unknown-spent-before-daily-cap-not-checked."
     },
     {
@@ -246,7 +246,7 @@
       "parts": [
         "imd-flop"
       ],
-      "summary": "A pre-send error message with a 0x + 64 hex hash is stored as [hash] in the ledger reason but printed raw on stderr."
+      "summary": "A pre-send error message with a 0x + 64 hex hash is stored as [hash] in the ledger reason but printed raw on stderr. The swarm audit of 8ddc5d2 reported this again as its finding 12 (info). It stays as it is. The ledger reason is rewritten so that the secret scan can store the refused_local row, which is what releases the reservation (src/run.ts). The message on stderr is not rewritten. Pinned by vector run-pre-send-hash-on-stderr."
     }
   ],
   "viewer_label_rules": {

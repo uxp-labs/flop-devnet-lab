@@ -12,7 +12,7 @@
  *  11  padQuote refuses a negative token count instead of letting it inflate the pad
  *  13  the seat's daily cap bounds every call the seat's key pays for, whoever the call is for. A requester
  *      call must fit the per-call cap, the seat's daily cap and its job budget (the owner's decision)
- * Findings 5, 6 and 7 are the viewer's. Finding 12 is a documented residual.
+ * Findings 5, 6 and 7 are the viewer's. Finding 12 is a documented residual: R-e in contract/rules.json.
  * The blocks named "review" are the review of the audit 8ddc5d2 fixes. They fail on 36b23fe, the commit the
  * review read, and pass with their fix:
  *   item 3  status keeps working when a receipt file cannot be matched, and names the file

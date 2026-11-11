@@ -132,7 +132,8 @@ const jobBudget = (a: BudgetState): SpendLimit => ({
  * attribution label plus a second, narrower limit: the job budget. So a holder call must fit the daily cap,
  * and a requester call must fit the daily cap and then the job budget.
  * When FLOP ships proxies or escrow pools and a call is funded by another account, that account's limit will
- * bound the call and the seat's daily cap will not. That change belongs here.
+ * bound the call and the seat's daily cap will not. Which limits apply is decided here, so that change
+ * starts here. It is not the only code that reads the payer: validatePayer and run.ts branch on it too.
  * Null for a payer that is neither: no limit is known for it.
  */
 function limitsFor(a: BudgetState): SpendLimit[] | null {
