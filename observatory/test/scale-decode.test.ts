@@ -81,7 +81,7 @@ describe("integers: the type decides the form", () => {
     expect(dec(41, compact(3))).toEqual({ v: 3 });
     expect(refusal(38, compact(256))).toBe("type 38, a Compact<u8> at byte 0: 256 does not fit a u8");
     expect(refusal(22, compact(1n << 32n))).toBe("type 22, a Compact<u32> at byte 0: 4294967296 does not fit a u32");
-    expect(refusal(39, compact(1))).toBe("type 39: a compact of type 26 (Point) is not read, only of an unsigned integer or one field around one");
+    expect(refusal(39, compact(1))).toBe("type 39: a compact of type 26 (Point) is not read, only of an unsigned integer, the empty tuple, or one field around one");
   });
 });
 

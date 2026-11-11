@@ -7,7 +7,8 @@
 //   u8, u16, u32, i8, i16, i32    a number
 //   u64, u128, u256, i64, i128, i256   a decimal string, whatever its size ("0", "-5", "1140000000000000")
 //   char, str                     a string (strict UTF-8; a char must be a Unicode scalar value)
-//   Compact<T>                    as T would be, read from its compact form, which must fit T
+//   Compact<T>                    as T would be, read from its compact form, which must fit T;
+//                                 Compact<()> is null, read from no bytes
 //   [u8; N], Vec<u8>              hex: 0x and two lower case digits a byte
 //   other arrays, sequences, tuples   a list (an empty tuple is null)
 //   fields, of a composite or a variant: none is null, all named an object, one unnamed the field
@@ -118,12 +119,14 @@ function compactOf(d: Decoding, id: number, label: string, depth: number): Decod
     if (v >= 1n << BigInt(8 * widthOf(p))) throw new ScaleError(`${label}, a Compact<${p}> at byte ${at}: ${v} does not fit a ${p}`);
     return integer(p, v);
   }
+  // Compact<()> is the empty tuple in no bytes, as parity-scale-codec writes it.
+  if (t.def.kind === "tuple" && t.def.types.length === 0) return null;
   if (t.def.kind === "composite" && t.def.fields.length === 1) {
     const f = t.def.fields.at(0) as Field;
     const inner = compactOf(d, f.type, typeLabel(d.md, f.type), depth + 1);
     return f.name === null ? inner : Object.fromEntries([[f.name, inner]]);
   }
-  throw new ScaleError(`${label}: a compact of ${typeLabel(d.md, id)} is not read, only of an unsigned integer or one field around one`);
+  throw new ScaleError(`${label}: a compact of ${typeLabel(d.md, id)} is not read, only of an unsigned integer, the empty tuple, or one field around one`);
 }
 
 /** The value of type id at the reader's position. depth counts the types around this one. */

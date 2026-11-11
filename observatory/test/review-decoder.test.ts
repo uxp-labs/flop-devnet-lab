@@ -181,17 +181,18 @@ describe("work that is not bounded by a constant a step", () => {
 });
 
 describe("values decoded wrong, or valid values refused", () => {
-  it("DEFECT 4: Compact<()> (type 73, MultiAddress::Index in this runtime) is refused; the reference reads it from no bytes", () => {
+  it("review defect 4, fixed: Compact<()> (type 73, MultiAddress::Index in this runtime) is null from no bytes, as the reference reads it", () => {
     const c = MD.types.at(73)?.def;
     expect(c).toEqual({ kind: "compact", type: 36 });
     expect(MD.types.at(36)?.def).toEqual({ kind: "tuple", types: [] });
     expect(BUILDER.buildDefinition(73).dec(new Uint8Array())).toBeUndefined();
     expect(BUILDER.buildDefinition(73).enc(undefined).length).toBe(0);
-    expect(thrown(() => decodeValue(MD, 73, new Uint8Array()))).toEqual({ cls: "ScaleError", message: "type 73: a compact of type 36 is not read, only of an unsigned integer or one field around one" });
-    // MultiAddress::Index(Compact<()>) is variant 1 of type 72: one byte, valid, refused.
+    expect(decodeValue(MD, 73, new Uint8Array())).toBe(null);
+    expect(thrown(() => decodeValue(MD, 73, bytes(0))).cls).toBe("ScaleError");
+    // MultiAddress::Index(Compact<()>) is variant 1 of type 72: one byte, valid, read.
     const multi = idOf((t) => t.path.at(-1) === "MultiAddress");
     expect(BUILDER.buildDefinition(multi).dec(bytes(1))).toEqual({ type: "Index", value: undefined });
-    expect(thrown(() => decodeValue(MD, multi, bytes(1))).cls).toBe("ScaleError");
+    expect(decodeValue(MD, multi, bytes(1))).toEqual({ variant: "Index", fields: null });
   });
 
   it("review defect 5, fixed: decodeEvents refuses a record of the two fields event and 'phase,topics': it must hold exactly phase, event and topics", () => {
@@ -231,9 +232,9 @@ describe("values decoded wrong, or valid values refused", () => {
     expect(plain(MD, "reference", u64, 5n)).toBe("5");
   });
 
-  it("HELD: on the recorded metadata, random valid values of every type decode as the reference decodes them, but for Compact<()> and a leading BOM", () => {
+  it("HELD: on the recorded metadata, random valid values of every type decode as the reference decodes them, ours refusing none, but for a leading BOM", () => {
     const w = writer(MD, 7);
-    const tally = { same: 0, differ: 0, bom: 0, oursOnly: 0, compactUnit: 0 };
+    const tally = { same: 0, differ: 0, bom: 0, oursOnly: 0 };
     for (const t of MD.types) {
       let codec: { dec: (b: Uint8Array) => unknown };
       try {
@@ -249,16 +250,9 @@ describe("values decoded wrong, or valid values refused", () => {
           if (e instanceof TooDeep) break;
           throw e;
         }
-        let ours: unknown;
-        try {
-          ours = decodeValue(MD, t.id, b);
-        } catch (e) {
-          if (e instanceof ScaleError && e.message.includes("a compact of type 36 is not read")) {
-            tally.compactUnit++;
-            continue;
-          }
-          throw e;
-        }
+        // Ours refuses no valid value: the only kind it does not read, a bit sequence, is not in
+        // this metadata.
+        const ours: unknown = decodeValue(MD, t.id, b);
         let ref: unknown;
         try {
           ref = codec.dec(b.slice());
@@ -285,7 +279,6 @@ describe("values decoded wrong, or valid values refused", () => {
     expect(tally.same).toBeGreaterThan(4000);
     // Ours keeps a leading U+FEFF of a str, as Rust does; the reference's TextDecoder drops it.
     expect(tally.bom).toBeGreaterThan(0);
-    expect(tally.compactUnit).toBeGreaterThan(0);
   });
 
   it("HELD: mutated values (a bit flipped, cut short, a byte added) are never accepted by ours and read differently by the reference", () => {
