@@ -14,7 +14,7 @@ import { usableCapCharge } from "../src/ledger.js";
 import { matchReceipt, RECEIPT_IDENTITY_STATUS } from "../src/match.js";
 import { ledgerFile, receiptsDir } from "../src/paths.js";
 import type { CompleteReq, CompleteRes, Provider } from "../src/providers.js";
-import { classifyReceipt, knownSettledSpend, RECEIPT_STATES, STAGE_GATEWAY, type GatewayReceipt } from "../src/receipts.js";
+import { classifyReceipt, knownAmount, RECEIPT_STATES, STAGE_GATEWAY, type GatewayReceipt } from "../src/receipts.js";
 import { padQuote, TEMPLATE_PAD } from "../src/run.js";
 import { DISAGREE, SETTLES } from "../src/settlement.js";
 import { cli, readLines, readySeat, tmpHome } from "./helpers.js";
@@ -73,7 +73,8 @@ const adapters: Record<string, (i: Json, want: Json) => Promise<Json> | Json> = 
     if (r.code !== EXIT.OK) return { accepted: false, exit: r.code };
     return { accepted: true, value: (await cli(h, ["cap", "show", "--json"])).json().cap.daily };
   },
-  "amount.json": (i) => ({ known_settled: knownSettledSpend(i.value), usable_cap_charge: usableCapCharge(i.value) }),
+  "amount.json": (i) => ({ known_settled: knownAmount(i.value), usable_cap_charge: usableCapCharge(i.value) }),
+  "amount.reserved": (i) => ({ reserved: classifyReceipt({ request_id: "r", reserved_spend: i.value } as GatewayReceipt, { job: "j", provider: "mock" }).reserved }),
   max_tokens: async (i) => {
     const h = await ready();
     const r = await cli(h, runArgs([`--max-tokens=${i.text}`]), { provider: new P() });

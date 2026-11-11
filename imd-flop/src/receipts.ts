@@ -2,7 +2,7 @@
  * Receipt rules, ported from spend-guard/guard.py classify_receipt and receipts.py, matching the viewer:
  *  - stage is "gateway observed" until chain settlement is checked (never "gateway settled");
  *  - chain_final is false unless verified (nothing verifies it yet: InferenceReceipt not observed);
- *  - settled_spend counts only when it is finite and >= 0; null, negative, and non-finite stay null and show blank, never 0;
+ *  - an amount (reserved_spend, settled_spend) counts only when it is finite and >= 0; null, negative, and non-finite stay null and show blank, never 0;
  *  - a 401 api_key_expired gets its own key_expired flag (and keeps the last known receipt).
  */
 export interface GatewayReceipt {
@@ -28,7 +28,7 @@ export interface Classified {
   job: string | null;
   provider: string;
   state: string | null;
-  reserved: number | null;
+  reserved: number | null; // null = unknown, shown blank
   settled: number | null; // null = unknown, shown blank
   settled_raw: string | null;
   stage: string;
@@ -41,8 +41,8 @@ export interface Classified {
   mock: boolean;
 }
 
-/** A known settlement is a finite amount >= 0. Negative, non-finite, and non-numeric values are unknown, not zero. */
-export function knownSettledSpend(value: unknown): number | null {
+/** The one amount rule: a known amount is a finite number >= 0. Negative, non-finite, and non-numeric values are unknown, not zero. */
+export function knownAmount(value: unknown): number | null {
   return typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : null;
 }
 
@@ -61,8 +61,8 @@ export function classifyReceipt(
     job: ctx.job,
     provider: ctx.provider,
     state: knownState(r?.state),
-    reserved: typeof r?.reserved_spend === "number" ? r.reserved_spend : null,
-    settled: knownSettledSpend(r?.settled_spend),
+    reserved: knownAmount(r?.reserved_spend),
+    settled: knownAmount(r?.settled_spend),
     settled_raw: r?.settled_spend_raw ?? null,
     stage: ctx.chainVerified === true ? STAGE_CHAIN : STAGE_GATEWAY,
     chain_final: ctx.chainVerified === true, // terminal_event may be pooled; not proof of finality

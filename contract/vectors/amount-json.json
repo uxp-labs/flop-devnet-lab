@@ -231,6 +231,192 @@
      "amount": 1e+308
     }
    }
+  },
+  {
+   "id": "amount-reserved-positive",
+   "rule": "amount.reserved",
+   "input": {
+    "value": 0.186
+   },
+   "expect": {
+    "imd-flop": {
+     "reserved": 0.186
+    },
+    "spend-guard": {
+     "reserved": 0.186,
+     "invalid": false
+    },
+    "viewer": {
+     "not_applicable": "viewer never reads a receipt's reserved amount; its reservation line comes from the ledger row (cap_charge, else quote_padded)"
+    }
+   },
+   "note": "[swarm audit of 8ddc5d2, finding 10] rule amount.reserved: a receipt's reserved_spend through each part's receipt classifier. imd-flop: classifyReceipt(r).reserved (knownAmount). spend-guard: classify_receipt(r).reserved and whether reserved_spend is listed under invalid."
+  },
+  {
+   "id": "amount-reserved-zero",
+   "rule": "amount.reserved",
+   "input": {
+    "value": 0
+   },
+   "expect": {
+    "imd-flop": {
+     "reserved": 0
+    },
+    "spend-guard": {
+     "reserved": 0,
+     "invalid": false
+    },
+    "viewer": {
+     "not_applicable": "viewer never reads a receipt's reserved amount; its reservation line comes from the ledger row (cap_charge, else quote_padded)"
+    }
+   },
+   "note": "[swarm audit of 8ddc5d2, finding 10] rule amount.reserved: a receipt's reserved_spend through each part's receipt classifier. imd-flop: classifyReceipt(r).reserved (knownAmount). spend-guard: classify_receipt(r).reserved and whether reserved_spend is listed under invalid."
+  },
+  {
+   "id": "amount-reserved-null",
+   "rule": "amount.reserved",
+   "input": {
+    "value": null
+   },
+   "expect": {
+    "imd-flop": {
+     "reserved": null
+    },
+    "spend-guard": {
+     "reserved": null,
+     "invalid": false
+    },
+    "viewer": {
+     "not_applicable": "viewer never reads a receipt's reserved amount; its reservation line comes from the ledger row (cap_charge, else quote_padded)"
+    }
+   },
+   "note": "[swarm audit of 8ddc5d2, finding 10] rule amount.reserved: a receipt's reserved_spend through each part's receipt classifier. imd-flop: classifyReceipt(r).reserved (knownAmount). spend-guard: classify_receipt(r).reserved and whether reserved_spend is listed under invalid."
+  },
+  {
+   "id": "amount-reserved-negative",
+   "rule": "amount.reserved",
+   "input": {
+    "value": -0.5
+   },
+   "expect": {
+    "imd-flop": {
+     "reserved": null
+    },
+    "spend-guard": {
+     "reserved": null,
+     "invalid": true
+    },
+    "viewer": {
+     "not_applicable": "viewer never reads a receipt's reserved amount; its reservation line comes from the ledger row (cap_charge, else quote_padded)"
+    }
+   },
+   "note": "[swarm audit of 8ddc5d2, finding 10] rule amount.reserved: a receipt's reserved_spend through each part's receipt classifier. imd-flop: classifyReceipt(r).reserved (knownAmount). spend-guard: classify_receipt(r).reserved and whether reserved_spend is listed under invalid. imd-flop was reserved -0.5."
+  },
+  {
+   "id": "amount-reserved-nan",
+   "rule": "amount.reserved",
+   "input": {
+    "value": {
+     "$float": "nan"
+    }
+   },
+   "expect": {
+    "imd-flop": {
+     "reserved": null
+    },
+    "spend-guard": {
+     "reserved": null,
+     "invalid": true
+    },
+    "viewer": {
+     "not_applicable": "viewer never reads a receipt's reserved amount; its reservation line comes from the ledger row (cap_charge, else quote_padded)"
+    }
+   },
+   "note": "[swarm audit of 8ddc5d2, finding 10] rule amount.reserved: a receipt's reserved_spend through each part's receipt classifier. imd-flop: classifyReceipt(r).reserved (knownAmount). spend-guard: classify_receipt(r).reserved and whether reserved_spend is listed under invalid. imd-flop was reserved NaN."
+  },
+  {
+   "id": "amount-reserved-inf",
+   "rule": "amount.reserved",
+   "input": {
+    "value": {
+     "$float": "inf"
+    }
+   },
+   "expect": {
+    "imd-flop": {
+     "reserved": null
+    },
+    "spend-guard": {
+     "reserved": null,
+     "invalid": true
+    },
+    "viewer": {
+     "not_applicable": "viewer never reads a receipt's reserved amount; its reservation line comes from the ledger row (cap_charge, else quote_padded)"
+    }
+   },
+   "note": "[swarm audit of 8ddc5d2, finding 10] rule amount.reserved: a receipt's reserved_spend through each part's receipt classifier. imd-flop: classifyReceipt(r).reserved (knownAmount). spend-guard: classify_receipt(r).reserved and whether reserved_spend is listed under invalid. imd-flop was reserved Infinity."
+  },
+  {
+   "id": "amount-reserved-neg-inf",
+   "rule": "amount.reserved",
+   "input": {
+    "value": {
+     "$float": "-inf"
+    }
+   },
+   "expect": {
+    "imd-flop": {
+     "reserved": null
+    },
+    "spend-guard": {
+     "reserved": null,
+     "invalid": true
+    },
+    "viewer": {
+     "not_applicable": "viewer never reads a receipt's reserved amount; its reservation line comes from the ledger row (cap_charge, else quote_padded)"
+    }
+   },
+   "note": "[swarm audit of 8ddc5d2, finding 10] rule amount.reserved: a receipt's reserved_spend through each part's receipt classifier. imd-flop: classifyReceipt(r).reserved (knownAmount). spend-guard: classify_receipt(r).reserved and whether reserved_spend is listed under invalid. imd-flop was reserved -Infinity."
+  },
+  {
+   "id": "amount-reserved-string-number",
+   "rule": "amount.reserved",
+   "input": {
+    "value": "0.186"
+   },
+   "expect": {
+    "imd-flop": {
+     "reserved": null
+    },
+    "spend-guard": {
+     "reserved": null,
+     "invalid": true
+    },
+    "viewer": {
+     "not_applicable": "viewer never reads a receipt's reserved amount; its reservation line comes from the ledger row (cap_charge, else quote_padded)"
+    }
+   },
+   "note": "[swarm audit of 8ddc5d2, finding 10] rule amount.reserved: a receipt's reserved_spend through each part's receipt classifier. imd-flop: classifyReceipt(r).reserved (knownAmount). spend-guard: classify_receipt(r).reserved and whether reserved_spend is listed under invalid."
+  },
+  {
+   "id": "amount-reserved-bool-true",
+   "rule": "amount.reserved",
+   "input": {
+    "value": true
+   },
+   "expect": {
+    "imd-flop": {
+     "reserved": null
+    },
+    "spend-guard": {
+     "reserved": null,
+     "invalid": true
+    },
+    "viewer": {
+     "not_applicable": "viewer never reads a receipt's reserved amount; its reservation line comes from the ledger row (cap_charge, else quote_padded)"
+    }
+   },
+   "note": "[swarm audit of 8ddc5d2, finding 10] rule amount.reserved: a receipt's reserved_spend through each part's receipt classifier. imd-flop: classifyReceipt(r).reserved (knownAmount). spend-guard: classify_receipt(r).reserved and whether reserved_spend is listed under invalid."
   }
  ]
 }

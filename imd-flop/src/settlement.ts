@@ -3,7 +3,7 @@
  * booking. Pure: no file, network or ledger access. `run` (after its call) and `receipt --refresh` both
  * use it. Behavior is pinned by contract/vectors/settlement-run.json and settlement-refresh.json.
  */
-import { knownSettledSpend } from "./receipts.js";
+import { knownAmount } from "./receipts.js";
 import { usableCapCharge } from "./ledger.js";
 
 /** Receipt states that settle an attempt. */
@@ -45,7 +45,7 @@ export function trustedRead(o: ReadOutcome): boolean {
 
 /** A known settlement: a trusted read in a settling state with a finite spend >= 0 (explicit 0 included). */
 export function settledSpend(o: ReadOutcome): number | null {
-  return trustedRead(o) && o.state !== null && SETTLES.has(o.state) ? knownSettledSpend(o.settled) : null;
+  return trustedRead(o) && o.state !== null && SETTLES.has(o.state) ? knownAmount(o.settled) : null;
 }
 
 /** The ledger fields a read can change. */
@@ -80,7 +80,7 @@ export function settledCharge(settled: number, costReported: number | null): num
  * with a known spend and a trusted read settles below it.
  */
 export function lowersSettlement(prev: { state: string; spend: unknown }, o: ReadOutcome): boolean {
-  const booked = SETTLES.has(prev.state) ? knownSettledSpend(prev.spend) : null;
+  const booked = SETTLES.has(prev.state) ? knownAmount(prev.spend) : null;
   const settled = settledSpend(o);
   return booked !== null && settled !== null && settled < booked;
 }

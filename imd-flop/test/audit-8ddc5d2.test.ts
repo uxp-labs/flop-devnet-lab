@@ -8,10 +8,11 @@
  *   4  a refusal that needs no quote happens before the estimate, so the prompt is not posted for nothing
  *   8  status keeps working when a receipt file is unreadable, and names the file
  *   9  "nothing was sent" has its own exit code (11), apart from "sent, spend unknown" (1)
+ *  10  reserved_spend is held to the one amount rule: finite and >= 0, else unknown and shown blank
  * Findings 5, 6 and 7 are the viewer's. Finding 12 is a documented residual. Finding 13 is a product
  * decision. Stub providers only; no network (test/setup.ts disables fetch).
  */
-import { appendFileSync, existsSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { FlopHTTPError } from "@flop-labs/client";
@@ -21,6 +22,7 @@ import { jobSpent, spentToday, utcDay } from "../src/ledger.js";
 import { network } from "../src/networks.js";
 import { checkBudget, noRoom } from "../src/policy.js";
 import type { CompleteReq, CompleteRes, Provider } from "../src/providers.js";
+import { classifyReceipt, knownAmount, receiptLine, type GatewayReceipt } from "../src/receipts.js";
 import { ceil6, floor6 } from "../src/rounding.js";
 import { CHARGE_RAISED, DISAGREE, nextBooking, refreshBooking, settledSpend } from "../src/settlement.js";
 import { cli, readLines, readySeat, tmpHome } from "./helpers.js";
@@ -446,4 +448,47 @@ describe("finding 9: a provider failure before anything was sent exits 11 (NOT_S
     expect((EXIT as Record<string, number>).NOT_SENT).toBe(11);
     expect(new Set(values).size).toBe(values.length);
   });
+});
+
+describe("finding 10: reserved_spend is held to the amount rule (finite and >= 0, else unknown)", () => {
+  const classify = (reserved: unknown) => classifyReceipt({ request_id: "r", reserved_spend: reserved, state: "estimated" } as GatewayReceipt, { job: "j", provider: "mock" });
+  const notAmounts: [string, unknown][] = [["-0.5", -0.5], ["NaN", Number.NaN], ["Infinity", Number.POSITIVE_INFINITY], ["-Infinity", Number.NEGATIVE_INFINITY], ["the string 0.186", "0.186"], ["true", true]];
+
+  for (const [name, value] of notAmounts) {
+    it(`reserved_spend ${name} is unknown: reserved null, and the receipt line shows it blank`, () => {
+      const c = classify(value);
+      expect(c.reserved).toBeNull();
+      expect(receiptLine(c)).toContain("reserved=  settled=");
+    });
+  }
+
+  it("control: 0 and 0.186 are amounts and are kept", () => {
+    expect([classify(0).reserved, classify(0.186).reserved, classify(null).reserved]).toEqual([0, 0.186, null]);
+    expect(receiptLine(classify(0.186))).toContain("reserved=0.186  settled=");
+  });
+
+  it("knownAmount is the one rule, for reserved and for settled", () => {
+    for (const [name, value] of notAmounts) expect(knownAmount(value), name).toBeNull();
+    expect([knownAmount(0), knownAmount(0.05), knownAmount(null), knownAmount(undefined)]).toEqual([0, 0.05, null, null]);
+    const c = classifyReceipt({ request_id: "r", reserved_spend: -1, settled_spend: -1, state: "settled" } as GatewayReceipt, { job: "j", provider: "mock" });
+    expect({ reserved: c.reserved, settled: c.settled }).toEqual({ reserved: null, settled: null });
+  });
+
+  for (const [name, value] of notAmounts.slice(0, 3)) {
+    it(`run with reserved_spend ${name}: stdout, the receipt file and receipt <id> never show it`, async () => {
+      const h = await ready();
+      const read = (id: string) => receiptFor(id, { reserved_spend: value });
+      const run = await cli(h, runArgs(), { provider: new P({ read }) });
+      expect(run.code, run.err).toBe(0);
+      const rid = run.json().request_id as string;
+      expect(run.json().receipt.reserved).toBeNull();
+      expect(JSON.parse(readFileSync(join(h, "receipts", `${rid}.json`), "utf8")).reserved).toBeNull();
+      const text = await cli(h, ["run", "--seat", SEAT, "--job", "j1", "--prompt", "Say hi", "--provider", "mock", "--max-tokens", "8"], { provider: new P({ read }) });
+      const shown = await cli(h, ["receipt", rid, "--seat", SEAT]);
+      for (const out of [text.out, shown.out]) {
+        expect(out).toContain("reserved=  settled=");
+        expect(out).not.toContain(`reserved=${name}`);
+      }
+    });
+  }
 });
