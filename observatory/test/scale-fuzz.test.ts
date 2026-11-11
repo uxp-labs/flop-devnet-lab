@@ -4,10 +4,10 @@
 // never another exception and never a hang, and every decode must stay inside its bound on work:
 // valueBudget(bytes) steps, one for each type it visits (src/scale/decode.ts).
 import { describe, expect, it } from "vitest";
-import { MAX_DEPTH, type Decoded, decodeAt, decoding, valueBudget } from "../src/scale/decode.js";
+import { MAX_DEPTH, type Decoded, decodeAt, decodeValue, decoding, valueBudget } from "../src/scale/decode.js";
 import { decodeEvents } from "../src/scale/events.js";
 import { type Metadata, parseMetadata } from "../src/scale/metadata.js";
-import { ScaleError } from "../src/scale/reader.js";
+import { MAX_INPUT_BYTES, ScaleError } from "../src/scale/reader.js";
 import { deriveShape, typeName } from "../src/scale/shape.js";
 import { storageKey } from "../src/scale/storage-key.js";
 import { seeded } from "./helpers/random.js";
@@ -215,6 +215,20 @@ describe("lengths and counts that claim more than the input holds", () => {
     expect(() => parseMetadata(cat(bytes(0x6d, 0x65, 0x74, 0x61, 14), compact((1n << 32n) - 1n), bytes(0, 0)))).toThrow(new ScaleError("the types at byte 5: 4294967295 cannot fit in the 2 bytes left"));
     const head = metadata([{ def: def.primitive("u8") }], []).subarray(0, 12);
     expect(onlyScaleError(() => parseMetadata(cat(head, compact(1), compact(1), u8(65), u8(1), compact(1), u8(65), compact(1n << 30n))))).toBe("refused");
+  });
+});
+
+describe("the size caps", () => {
+  it("refuses metadata, a value and System.Events of more than 16 MiB before reading a byte, and takes 16 MiB exactly as far as it reads", () => {
+    const over = new Uint8Array(MAX_INPUT_BYTES + 1);
+    expect(MAX_INPUT_BYTES).toBe(16777216);
+    expect(() => parseMetadata(over)).toThrow(new ScaleError("the metadata is 16777217 bytes, more than the 16777216 this decoder reads"));
+    expect(() => decodeValue(MD, EVENTS, over)).toThrow(new ScaleError("the value is 16777217 bytes, more than the 16777216 this decoder reads"));
+    expect(() => decodeEvents(MD, over)).toThrow(new ScaleError("System.Events is 16777217 bytes, more than the 16777216 this decoder reads"));
+    // At the cap the size is not what refuses: the bytes are read, and refused for what they hold.
+    const at = new Uint8Array(MAX_INPUT_BYTES);
+    expect(() => parseMetadata(at)).toThrow(new ScaleError("not metadata: the first four bytes are 0x00000000, not 0x6d657461 (meta)"));
+    expect(() => decodeValue(MD, EVENTS, at)).toThrow(/ends at byte 1, 16777215 bytes before the end$/);
   });
 });
 

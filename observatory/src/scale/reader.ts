@@ -23,6 +23,17 @@ export class ScaleError extends Error {
 export type What = string | (() => string);
 const say = (w: What): string => (typeof w === "string" ? w : w());
 
+/**
+ * The most bytes one metadata or one value may be: 16 MiB. A larger input is refused before it is
+ * read, so no string the decoder builds from it can reach the engine's own limit.
+ */
+export const MAX_INPUT_BYTES = 16 * 1024 * 1024;
+
+/** A refusal of an input past MAX_INPUT_BYTES, or nothing. */
+export function withinSize(bytes: Uint8Array, what: string): void {
+  if (bytes.length > MAX_INPUT_BYTES) throw new ScaleError(`${what} is ${bytes.length} bytes, more than the ${MAX_INPUT_BYTES} this decoder reads`);
+}
+
 /** The widths in bytes a fixed width integer may have: u8 to u256. */
 export type Width = 1 | 2 | 4 | 8 | 16 | 32;
 

@@ -20,9 +20,9 @@
 // more elements than there are bytes left, whatever its element type; one decode takes at most
 // 1024 steps and 8 a byte, where each type it visits is one step, the inner type of a compact
 // included; a compact must fit its type; a variant index must be one of the type's. decodeValue
-// must end exactly at the end of its bytes.
+// must end exactly at the end of its bytes, and refuses more than MAX_INPUT_BYTES (16 MiB) of them.
 import type { Field, Metadata, Primitive, TypeEntry } from "./metadata.js";
-import { Reader, ScaleError, type Width, toHex } from "./reader.js";
+import { Reader, ScaleError, type Width, toHex, withinSize } from "./reader.js";
 
 export type Decoded = null | boolean | number | string | Decoded[] | { [name: string]: Decoded };
 
@@ -189,6 +189,7 @@ export function decodeAt(d: Decoding, id: number, depth = 0): Decoded {
 
 /** The whole value of type id in these bytes, ending exactly at their end, or a ScaleError. */
 export function decodeValue(md: Metadata, id: number, bytes: Uint8Array): Decoded {
+  withinSize(bytes, "the value");
   const d = decoding(md, bytes);
   const v = decodeAt(d, id);
   d.r.end(labelOf(md, id));

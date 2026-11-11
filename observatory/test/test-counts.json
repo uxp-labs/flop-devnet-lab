@@ -116,8 +116,8 @@
     "names": "0b168ec619ef14fd8b796701f91a27c88995c47722b02e47c97476f682cedcc8"
   },
   "scale-fuzz.test.ts": {
-    "tests": 22,
-    "names": "e548fa96bd52a357642109096ae50458459906d274ed20e78ce6a1f7d0a585ef"
+    "tests": 23,
+    "names": "ab793c511a13efb3d12938c5ef13bac013563137c1e84c95cd690f6c178ef5d3"
   },
   "scale-metadata.test.ts": {
     "tests": 23,

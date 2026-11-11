@@ -10,7 +10,7 @@
 // phase. The whole value must be read to its last byte. Every refusal is a ScaleError.
 import { type Decoded, decodeValue } from "./decode.js";
 import type { Metadata, Variant } from "./metadata.js";
-import { ScaleError } from "./reader.js";
+import { ScaleError, withinSize } from "./reader.js";
 import { storageEntryOf } from "./storage-key.js";
 
 export interface BlockEvent {
@@ -75,6 +75,7 @@ function variantOf(v: Decoded | undefined, what: string): { name: string; fields
 
 /** The events in the bytes of System.Events, read with this metadata, to the last byte. */
 export function decodeEvents(md: Metadata, bytes: Uint8Array): BlockEvent[] {
+  withinSize(bytes, "System.Events");
   const layout = layoutOf(md);
   const all = decodeValue(md, layout.value, bytes);
   if (!Array.isArray(all)) throw new ScaleError("System.Events did not decode as a list");
