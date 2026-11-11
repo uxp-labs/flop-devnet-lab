@@ -13,6 +13,9 @@
  *  13  the seat's daily cap bounds every call the seat's key pays for, whoever the call is for. A requester
  *      call must fit the per-call cap, the seat's daily cap and its job budget (the owner's decision)
  * Findings 5, 6 and 7 are the viewer's. Finding 12 is a documented residual.
+ * The blocks named "review" are the review of the audit 8ddc5d2 fixes. They fail on 36b23fe, the commit the
+ * review read, and pass with their fix:
+ *   item 3  status keeps working when a receipt file cannot be matched, and names the file
  * Stub providers only; no network (test/setup.ts disables fetch).
  */
 import { appendFileSync, existsSync, readFileSync, writeFileSync } from "node:fs";
@@ -22,6 +25,7 @@ import { FlopHTTPError } from "@flop-labs/client";
 import { EXIT } from "../src/errors.js";
 import { mintChildKey, PaidGateError, PreSendError } from "../src/gateway.js";
 import { jobSpent, spentToday, utcDay } from "../src/ledger.js";
+import { matchable } from "../src/match.js";
 import { network } from "../src/networks.js";
 import { checkBudget, noRoom, padQuote } from "../src/policy.js";
 import type { CompleteReq, CompleteRes, Provider } from "../src/providers.js";
@@ -723,5 +727,67 @@ describe("finding 13: the seat's daily cap bounds every call the seat's key pays
     const h = await ready();
     const r = await cli(h, ["config", "set", "payer", "requester"]);
     expect({ code: r.code, out: r.out }).toEqual({ code: 0, out: "payer = requester (run needs --job-budget; the seat's daily cap still applies)" });
+  });
+});
+
+describe("review: status survives a receipt it cannot match", () => {
+  // matchReceipt builds the link path from the receipt's seat. A seat that is not a string made it throw
+  // (quirk Q-IDENTITY-FIELDS), so one such file aborted status and hid every other receipt.
+  const BAD = "x.json";
+  const withSeat = (seat: unknown) => JSON.stringify({ request_id: "x", seat, did: "d", job: "j" });
+  async function oneRun() {
+    const h = await ready();
+    const run = await cli(h, runArgs(), { provider: new P() });
+    expect(run.code, run.err).toBe(0);
+    return { h, rid: run.json().request_id as string };
+  }
+
+  for (const [what, seat] of [["a number", 5], ["an object", {}]] as const) {
+    it(`a receipt file whose seat is ${what}: status --json exits 0, lists the other receipt and names the file`, async () => {
+      const { h, rid } = await oneRun();
+      writeFileSync(join(h, "receipts", BAD), withSeat(seat));
+      const st = await cli(h, ["status", "--seat", SEAT, "--json"]);
+      expect({ code: st.code, err: st.err }).toEqual({ code: 0, err: "" });
+      const o = st.json();
+      expect(o.unreadable_receipts).toEqual([BAD]);
+      expect(o.recent_receipts.map((r: { request_id: string }) => r.request_id)).toEqual([rid]);
+      expect(o.today_utc.mock).toBe(0.186);
+    });
+  }
+
+  it("text output: the overview is printed, and the one line names the file beside an unreadable one", async () => {
+    const { h, rid } = await oneRun();
+    writeFileSync(join(h, "receipts", BAD), withSeat(5));
+    writeFileSync(join(h, "receipts", "mock-9001-deadbeef.json"), "{not json");
+    const st = await cli(h, ["status", "--seat", SEAT]);
+    expect({ code: st.code, err: st.err }).toEqual({ code: 0, err: "" });
+    expect(st.out).toContain(`seat ${SEAT}`);
+    expect(st.out).toContain(rid);
+    expect(st.out.split("\n").filter((l) => l.includes("unreadable"))).toEqual(["  unreadable receipt files (not shown): mock-9001-deadbeef.json, x.json"]);
+  });
+
+  it("matchable: a receipt can be matched when its seat is a string or absent, and not otherwise", () => {
+    for (const seat of ["9001", "", null, undefined]) expect(matchable({ seat }), JSON.stringify(seat)).toBe(true);
+    expect(matchable({})).toBe(true);
+    for (const seat of [5, 0, {}, [], ["9001"], true, false]) expect(matchable({ seat }), JSON.stringify(seat)).toBe(false);
+  });
+
+  it("control: a receipt whose other identity fields are malformed can be matched, and is shown as a mismatch", async () => {
+    const { h, rid } = await oneRun();
+    writeFileSync(join(h, "receipts", "y.json"), JSON.stringify({ request_id: "y", seat: SEAT, did: 5, job: {}, observed_at: "2000-01-01T00:00:00.000Z" }));
+    const st = await cli(h, ["status", "--seat", SEAT, "--json"]);
+    expect(st.code, st.err).toBe(0);
+    const o = st.json();
+    expect(o.unreadable_receipts).toEqual([]);
+    expect(o.recent_receipts.map((r: { request_id: string; match: { match: string } }) => [r.request_id, r.match.match])).toEqual([[rid, "matches"], ["y", "mismatch"]]);
+  });
+
+  it("control: receipt <id> on that file is unchanged, it still fails with exit 1", async () => {
+    const { h } = await oneRun();
+    writeFileSync(join(h, "receipts", BAD), withSeat(5));
+    const r = await cli(h, ["receipt", "x"]);
+    expect(r.code).toBe(EXIT.ERROR);
+    expect(r.err).toContain('The "path" argument must be of type string');
+    expect(r.out).toBe("");
   });
 });

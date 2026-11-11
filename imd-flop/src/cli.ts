@@ -345,7 +345,7 @@ export async function main(argv: string[], io: IO): Promise<number> {
         const lc = existsSync(linkFile(h, seat)) ? await checkLinkForRun(h, seat, false) : { ok: false, why: ["no link"] };
         const lfw = readJson<LinkFile>(linkFile(h, seat))?.wallet ?? null;
         const rows = latestAttempts(h);
-        // A receipt file that cannot be read is named, not fatal: the overview still prints.
+        // A receipt file that cannot be read or matched is named, not fatal: the overview still prints.
         const listed = listReceipts(h);
         const recent = await Promise.all(
           listed.receipts

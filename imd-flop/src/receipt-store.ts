@@ -8,6 +8,7 @@ import { join } from "node:path";
 import { CliError, EXIT } from "./errors.js";
 import { readIdentity } from "./keys.js";
 import { appendLedger, latestAttempts, type LedgerEntry } from "./ledger.js";
+import { matchable } from "./match.js";
 import { receiptsDir } from "./paths.js";
 import type { Provider } from "./providers.js";
 import { classifyReceipt, type Classified } from "./receipts.js";
@@ -23,11 +24,14 @@ export function readSavedReceipt(h: string, requestId: string): SavedReceipt | n
   return readJson<SavedReceipt>(receiptPath(h, requestId));
 }
 
-/** One receipt file as an object, or null when it cannot be read as one (not JSON, or not a JSON object). */
+/**
+ * One receipt file as a receipt that can be listed, or null when it cannot: it is not JSON, it is not a
+ * JSON object, or its seat is one matchReceipt cannot use (match.ts matchable).
+ */
 function readReceiptFile(path: string): Classified | null {
   try {
     const body = readJson<unknown>(path);
-    return body !== null && typeof body === "object" && !Array.isArray(body) ? (body as Classified) : null;
+    return body !== null && typeof body === "object" && !Array.isArray(body) && matchable(body) ? (body as Classified) : null;
   } catch {
     return null;
   }
@@ -36,8 +40,8 @@ function readReceiptFile(path: string): Classified | null {
 const observedAt = (c: Classified): string => (typeof c.observed_at === "string" ? c.observed_at : "");
 
 /**
- * Every readable receipt, newest first, and the names of the receipt files that could not be read.
- * One bad file never hides the others.
+ * Every receipt that can be read and matched, newest first, and the names of the receipt files that
+ * cannot (see readReceiptFile). Such a file is named and never hides the others.
  */
 export function listReceipts(h: string): { receipts: Classified[]; unreadable: string[] } {
   const dir = receiptsDir(h);

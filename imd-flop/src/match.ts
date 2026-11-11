@@ -21,6 +21,15 @@ export interface ReceiptIds {
   request_id?: string | null;
 }
 
+/**
+ * Whether a stored receipt can be handed to matchReceipt. matchReceipt builds the link path from the
+ * receipt's seat, so the seat must be a string when there is one. A number or an object in its place makes
+ * matchReceipt throw (quirk Q-IDENTITY-FIELDS). The other identity fields are only compared.
+ */
+export function matchable(receipt: { seat?: unknown }): boolean {
+  return receipt.seat === undefined || receipt.seat === null || typeof receipt.seat === "string";
+}
+
 export async function matchReceipt(h: string, receipt: ReceiptIds | null, row: LedgerEntry | null): Promise<MatchResult> {
   if (!receipt) return { match: "pending", fields: [] };
   const fields: string[] = [];
