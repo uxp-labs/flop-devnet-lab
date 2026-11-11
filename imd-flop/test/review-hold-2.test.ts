@@ -1,7 +1,7 @@
 /**
- * Independent review 2 of the hold floor branch: the third fix pass, 26cac18..5678633. Each DEFECT test asserts
- * the wrong behavior of 5678633, so it passes today and fails once the defect is fixed. The right behavior is
- * in each test's comment. Stub providers only; test/setup.ts disables fetch. The stress block uses real child
+ * Independent review 2 of the hold floor branch: the third fix pass, 26cac18..5678633, fixed by review fixes 4.
+ * The reviewer wrote each finding as a test asserting the wrong behavior of 5678633; each is rewritten under a
+ * plain name to the decided rule. Stub providers only; test/setup.ts disables fetch. The stress block uses real child
  * processes (dist/cli.js, built by `npm test`) on one ledger.
  */
 import { spawn } from "node:child_process";
@@ -246,14 +246,15 @@ describe("review hold 2, items 4 and 5: ledgerLines and the lock", () => {
   }, 30_000);
 });
 
-describe("review hold 2: imd-flop against the viewer on the same text", () => {
+describe("review hold 2, items 6 to 8: imd-flop against the viewer on the same text", () => {
   // The viewer (build-lane.py read_ledger) opens ledger.jsonl in text mode, so Python's universal newlines
   // split a line at a bare \r. imd-flop splits at \n only. Same text, different lines. The viewer side of each
   // case is viewer/test_review_hold_2.py, on text of the same shape.
-  // Right: both parts frame lines the same way (split at \n only; the viewer opens with newline="").
+  // Decided (review fixes 4): the ledger text contract (contract/README.md, rules.json LEDGER_TEXT), pinned for
+  // both parts by contract/fixtures/ledger-text/. These tests are the CLI's side of each case.
   const row = (i: number, extra: Record<string, unknown> = {}) => ({ ts: new Date().toISOString(), day: new Date().toISOString().slice(0, 10), request_id: `mock-${SEAT}-r${i}`, seat: SEAT, did: "did:key:z", job: `j${i}`, provider: "mock", network: "devnet", payer: "holder", model: "m", max_tokens: 8, prompt_sha256: "0", quote_raw: 0.066, quote_padded: 0.186, per_call_cap: 1, daily_cap: 1, job_budget: null, spent_before: 0, job_spent_before: null, state: "estimated", reason: null, spend: null, cost_reported: null, cap_charge: 0.186, http: 200, mock: true, ...extra });
 
-  it("DEFECT 6: two rows joined by a bare \\r on one line should be one verdict in both parts (today imd-flop names ledger line 1 and refuses, the viewer shows two good rows)", async () => {
+  it("6: two rows joined by a bare \\r are one unreadable line: imd-flop names ledger line 1 and refuses, as the viewer shows it", async () => {
     const h = await ready("1");
     writeFileSync(ledgerPath(h), JSON.stringify(row(1)) + "\r" + JSON.stringify(row(2)) + "\n");
     const st = await cli(h, ["status", "--seat", SEAT, "--json"]);
@@ -263,7 +264,7 @@ describe("review hold 2: imd-flop against the viewer on the same text", () => {
     expect({ code: r.code, sent: p.calls }).toEqual({ code: 3, sent: 0 });
   });
 
-  it("DEFECT 6b: a row with a bare \\r between its tokens is one good row to imd-flop, and the damaged line after it is line 2 (the viewer calls it line 3)", async () => {
+  it("6b: a row with a bare \\r between its tokens is one good row, and the damaged line after it is line 2 in both parts", async () => {
     const h = await ready("1");
     const text = JSON.stringify(row(1)).replace(',"seat"', ',\r"seat"') + "\n" + "not json\n";
     writeFileSync(ledgerPath(h), text);
@@ -271,7 +272,7 @@ describe("review hold 2: imd-flop against the viewer on the same text", () => {
     expect({ code: st.code, named: st.err.includes("ledger line 2 cannot be read") }).toEqual({ code: 1, named: true });
   });
 
-  it("DEFECT 6c: a line holding only \\x1f is damaged to imd-flop, which names ledger line 2 and refuses (the viewer skips it as blank)", async () => {
+  it("6c: a line holding only \\x1f is not blank: imd-flop names ledger line 2 and refuses, as the viewer shows it", async () => {
     const h = await ready("1");
     writeFileSync(ledgerPath(h), JSON.stringify(row(1)) + "\n\x1f\n");
     const p = new P();
@@ -281,8 +282,8 @@ describe("review hold 2: imd-flop against the viewer on the same text", () => {
 
   // imd-flop reads ledger.jsonl as UTF-8 with replacement: a row with an invalid byte inside a string parses and
   // counts. build-lane.py raises UnicodeDecodeError out of from_files and builds no lane at all
-  // (viewer/test_review_hold_2.py DEFECT 8). Right: both read the row, or the viewer shows one unreadable row.
-  it("DEFECT 8: a row with an invalid UTF-8 byte in its model string is read and counted by imd-flop (the viewer aborts its whole rebuild)", async () => {
+  // (viewer/test_review_hold_2.py, item 8). Decided: both read the row (the ledger text contract).
+  it("8: a row with an invalid UTF-8 byte in its model string is read and counted, in both parts", async () => {
     const h = await ready("1");
     const bad = Buffer.from(JSON.stringify(row(2, { model: "m-X" })).replace("m-X", "m-\u0000"), "utf8");
     bad[bad.indexOf(0)] = 0xff;
@@ -298,7 +299,7 @@ describe("review hold 2: imd-flop against the viewer on the same text", () => {
   // a line cannot be placed.
   // Right: the viewer groups by the same request id rule (REQUEST_ID), so each such line is its own entry and
   // the sent line is flagged "ledger row cannot be placed in a total (request_id)".
-  it("DEFECT 7: a sent line and then a refusal under the request id \"a b\" refuse the next call naming line 1 (the viewer flags neither: viewer/test_review_hold_2.py)", async () => {
+  it("7: a sent line and then a refusal under the request id \"a b\" refuse the next call naming line 1, and the viewer flags the sent line", async () => {
     const h = await ready("1");
     writeFileSync(ledgerPath(h), JSON.stringify(row(1, { request_id: "a b", state: "sent", http: null })) + "\n" + JSON.stringify(row(1, { request_id: "a b", state: "refused_local", cap_charge: 0, reason: "nothing sent" })) + "\n");
     const p = new P();

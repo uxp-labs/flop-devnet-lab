@@ -74,6 +74,56 @@
       "spend-guard": null,
       "viewer": "build-lane.py LEDGER_PROVIDERS (read from this file): a row whose provider is not one of these carries the placement flag"
     },
+    "REQUEST_ID": {
+      "value": "^[\\x21-\\x7e]{1,128}$",
+      "imd-flop": "src/ledger-text.ts REQUEST_ID (its own literal; test/ledger-text.test.ts checks it against this value): rows group by a request id that matches it, and a row without one is a group of its own",
+      "spend-guard": null,
+      "viewer": "build-lane.py REQUEST_ID (read from this file), the same grouping in read_ledger"
+    },
+    "LEDGER_TEXT": {
+      "value": {
+        "bytes": "the file is bytes, decoded as UTF-8 the way Node does it: an invalid byte becomes U+FFFD and never aborts the file",
+        "line_end": "lines end at \\n (0x0A) only; a \\r is an ordinary character, and JSON whitespace between tokens",
+        "numbering": "lines are numbered from 1, blank ones included; a final empty piece after the last \\n is not a line",
+        "blank": [
+          9,
+          10,
+          11,
+          12,
+          13,
+          32,
+          160,
+          5760,
+          8192,
+          8193,
+          8194,
+          8195,
+          8196,
+          8197,
+          8198,
+          8199,
+          8200,
+          8201,
+          8202,
+          8232,
+          8233,
+          8239,
+          8287,
+          12288,
+          65279
+        ],
+        "blank_note": "a line is blank when every character is one of these code points: exactly the characters JavaScript's String.prototype.trim removes, which is what imd-flop did before this contract",
+        "line": "a line that is not blank is one JSON value in JSON.parse's grammar (NaN, Infinity and -Infinity are not JSON) and must be an object; anything else is unreadable, \"not valid JSON\" or \"not a JSON object\"",
+        "numbers": "every number is read as a double; in the viewer an integer is parsed as float(text) and kept as an int only when that double is integral and at most 2^53 - 1, so a 4300 digit integer is Infinity in both parts and never meets Python's digit limit",
+        "booleans": "a boolean is never a number",
+        "grouping": "rows are grouped by REQUEST_ID; a row without a usable request id is a group of its own, keyed by its line",
+        "receipts": "a receipt file is the whole file decoded the same way, one JSON value in JSON.parse's grammar that must be an object; anything else is unreadable"
+      },
+      "imd-flop": "src/ledger-text.ts readLedgerText and groupRows, used by ledger.ts for every read of the ledger",
+      "spend-guard": null,
+      "viewer": "build-lane.py read_ledger_text and loads, used by read_ledger and read_receipts",
+      "pinned_by": "contract/fixtures/ledger-text/ with expectations.json, read by imd-flop/test/ledger-text.test.ts and viewer/test_ledger_text.py"
+    },
     "UNRESOLVED": {
       "value": [
         "timeout_unknown",

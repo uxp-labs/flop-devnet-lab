@@ -354,8 +354,8 @@ describe("D (review fixes 3): status marks today over its cap, in text and --jso
 
 describe("7 (review fixes 3): a ledger line with NaN, Infinity or -Infinity is unreadable, in both parts", () => {
   // JSON.parse refuses those constants, so imd-flop names the line; the viewer now reads with the same grammar
-  // (viewer/test_review_hold.py, item 7). Both read the same lines: contract/fixtures/json-constants.jsonl.
-  const FIXTURE = join(import.meta.dirname, "..", "..", "contract", "fixtures", "json-constants.jsonl");
+  // (viewer/test_review_hold.py, item 7). Both read the same lines: contract/fixtures/ledger-text/json-constants.jsonl.
+  const FIXTURE = join(import.meta.dirname, "..", "..", "contract", "fixtures", "ledger-text", "json-constants.jsonl");
   it("each fixture line: status exits 1 and run refuses with exit 3, both naming ledger line 1", async () => {
     const lines = readFileSync(FIXTURE, "utf8").split("\n").filter(Boolean);
     expect(lines.length).toBe(3);

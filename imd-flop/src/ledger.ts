@@ -9,6 +9,7 @@ import { randomBytes } from "node:crypto";
 import { hostname } from "node:os";
 import { knownAmount } from "./amount.js";
 import { isSeatId } from "./keys.js";
+import { groupKey, isRequestId, readLedgerText } from "./ledger-text.js";
 import { ledgerFile } from "./paths.js";
 import { isJobId } from "./policy.js";
 import { ceil6 } from "./rounding.js";
@@ -108,34 +109,28 @@ function parsedLines(h: string): Line[] {
   const path = ledgerFile(h);
   if (!existsSync(path)) return [];
   const lines: Line[] = [];
-  readFileSync(path, "utf8").split("\n").forEach((text, i) => {
-    if (text.trim().length === 0) return;
-    const damaged = (why: string) => new UnreadableLedgerLine(`ledger line ${i + 1} cannot be read: ${why}; next call refused. Repair or remove that line.`);
-    let row: unknown;
-    try {
-      row = JSON.parse(text);
-    } catch {
-      throw damaged("not valid JSON");
-    }
-    if (row === null || typeof row !== "object" || Array.isArray(row)) throw damaged("not a JSON object");
-    lines.push({ n: i + 1, row: row as LedgerEntry });
-  });
+  // The ledger text contract (ledger-text.ts): the one reading of the file's text, shared with the viewer.
+  for (const line of readLedgerText(readFileSync(path, "utf8"))) {
+    if (line.kind === "unreadable") throw new UnreadableLedgerLine(`ledger line ${line.n} cannot be read: ${line.why}; next call refused. Repair or remove that line.`);
+    if (line.kind === "row") lines.push({ n: line.n, row: line.row as unknown as LedgerEntry });
+  }
   return lines;
 }
 
-/** A usable request id: 1 to 128 printable ASCII characters, no space (the ids `run` writes, and what `receipt <id>` accepts). */
-export function isRequestId(v: unknown): v is string {
-  return typeof v === "string" && /^[\x21-\x7e]{1,128}$/.test(v);
-}
+export { isRequestId } from "./ledger-text.js";
 
 /** Latest line per usable request_id, with its line number. Lines with no usable request_id are left out. */
 function latestLines(h: string): Line[] {
-  return latestOf(ledgerLines(h));
+  return latestOfGroups(ledgerLines(h)).filter((line) => isRequestId(line.row.request_id));
 }
 
-function latestOf(lines: Line[]): Line[] {
+/**
+ * The latest line of every group, by the ledger text contract's one grouping rule (ledger-text.ts groupKey):
+ * a usable request id groups the rows of a request, and a row without one is a group of its own.
+ */
+function latestOfGroups(lines: Line[]): Line[] {
   const m = new Map<string, Line>();
-  for (const line of lines) if (isRequestId(line.row.request_id)) m.set(line.row.request_id, line);
+  for (const line of lines) m.set(groupKey(line.row as unknown as Record<string, unknown>, line.n), line);
   return [...m.values()];
 }
 
@@ -218,7 +213,7 @@ const onPayer = (payer: string): Filter => ({ field: "payer", want: payer, usabl
 function placed(h: string, filters: Filter[], total: string): Line[] {
   const all = ledgerLines(h);
   const lines: Line[] = [];
-  for (const line of [...latestOf(all), ...all.filter((l) => withoutRequestId(l.row))]) {
+  for (const line of latestOfGroups(all).filter((l) => isRequestId(l.row.request_id) || withoutRequestId(l.row))) {
     const row = line.row as unknown as Record<string, unknown>;
     const values = filters.map((f) => ({ f, v: row[f.field] }));
     if (values.some(({ f, v }) => f.usable(v) && v !== f.want)) continue;

@@ -1,0 +1,534 @@
+{
+ "description": "The ledger text contract (contract/README.md, rules.json LEDGER_TEXT). For each byte fixture in this folder: how many lines it has, which are blank, which are unreadable and why, how the readable rows group (key: the usable request id, or \"line <n>\" for a row without one; lines in file order, groups in first appearance order), and each readable row's cap_charge as a known amount (null when it is not one). imd-flop/test/ledger-text.test.ts and viewer/test_ledger_text.py read every fixture and check these same expectations.",
+ "fixtures": {
+  "empty.jsonl": {
+   "note": "an empty file has no lines",
+   "lines": 0,
+   "blank": [],
+   "unreadable": [],
+   "groups": [],
+   "charges": {}
+  },
+  "one-row.jsonl": {
+   "note": "control: one row",
+   "lines": 1,
+   "blank": [],
+   "unreadable": [],
+   "groups": [
+    [
+     "r1",
+     [
+      1
+     ]
+    ]
+   ],
+   "charges": {
+    "1": 0.186
+   }
+  },
+  "no-final-newline.jsonl": {
+   "note": "a last line with no \\n is still a line",
+   "lines": 1,
+   "blank": [],
+   "unreadable": [],
+   "groups": [
+    [
+     "r1",
+     [
+      1
+     ]
+    ]
+   ],
+   "charges": {
+    "1": 0.186
+   }
+  },
+  "torn-last-line.jsonl": {
+   "note": "a torn last line (a writer that died mid line) is unreadable under its own number",
+   "lines": 2,
+   "blank": [],
+   "unreadable": [
+    {
+     "line": 2,
+     "why": "not valid JSON"
+    }
+   ],
+   "groups": [
+    [
+     "r1",
+     [
+      1
+     ]
+    ]
+   ],
+   "charges": {
+    "1": 0.186
+   }
+  },
+  "cr-joined.jsonl": {
+   "note": "finding 6: lines end at \\n only, so two rows joined by a bare \\r are one line, and it is not valid JSON",
+   "lines": 1,
+   "blank": [],
+   "unreadable": [
+    {
+     "line": 1,
+     "why": "not valid JSON"
+    }
+   ],
+   "groups": [],
+   "charges": {}
+  },
+  "cr-between-tokens.jsonl": {
+   "note": "finding 6b: a \\r between tokens is JSON whitespace; the damaged line after it is line 2",
+   "lines": 2,
+   "blank": [],
+   "unreadable": [
+    {
+     "line": 2,
+     "why": "not valid JSON"
+    }
+   ],
+   "groups": [
+    [
+     "r1",
+     [
+      1
+     ]
+    ]
+   ],
+   "charges": {
+    "1": 0.186
+   }
+  },
+  "crlf.jsonl": {
+   "note": "a \\r before the \\n is JSON whitespace: both rows read",
+   "lines": 2,
+   "blank": [],
+   "unreadable": [],
+   "groups": [
+    [
+     "r1",
+     [
+      1
+     ]
+    ],
+    [
+     "r2",
+     [
+      2
+     ]
+    ]
+   ],
+   "charges": {
+    "1": 0.186,
+    "2": 0.186
+   }
+  },
+  "unit-separators.jsonl": {
+   "note": "finding 6c: \\x1c to \\x1f are not in the blank set, so a line of one of them is unreadable",
+   "lines": 5,
+   "blank": [],
+   "unreadable": [
+    {
+     "line": 2,
+     "why": "not valid JSON"
+    },
+    {
+     "line": 3,
+     "why": "not valid JSON"
+    },
+    {
+     "line": 4,
+     "why": "not valid JSON"
+    },
+    {
+     "line": 5,
+     "why": "not valid JSON"
+    }
+   ],
+   "groups": [
+    [
+     "r1",
+     [
+      1
+     ]
+    ]
+   ],
+   "charges": {
+    "1": 0.186
+   }
+  },
+  "nel.jsonl": {
+   "note": "U+0085 (C2 85) is not in the blank set; a bare 0x85 byte decodes to U+FFFD, not blank either",
+   "lines": 3,
+   "blank": [],
+   "unreadable": [
+    {
+     "line": 2,
+     "why": "not valid JSON"
+    },
+    {
+     "line": 3,
+     "why": "not valid JSON"
+    }
+   ],
+   "groups": [
+    [
+     "r1",
+     [
+      1
+     ]
+    ]
+   ],
+   "charges": {
+    "1": 0.186
+   }
+  },
+  "blank-set.jsonl": {
+   "note": "every character of the blank set makes a blank line; blank lines are numbered",
+   "lines": 17,
+   "blank": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15,
+    16
+   ],
+   "unreadable": [],
+   "groups": [
+    [
+     "r1",
+     [
+      17
+     ]
+    ]
+   ],
+   "charges": {
+    "17": 0.186
+   }
+  },
+  "bom.jsonl": {
+   "note": "a BOM before a row: JSON.parse does not skip it, so line 1 is unreadable",
+   "lines": 2,
+   "blank": [],
+   "unreadable": [
+    {
+     "line": 1,
+     "why": "not valid JSON"
+    }
+   ],
+   "groups": [
+    [
+     "r2",
+     [
+      2
+     ]
+    ]
+   ],
+   "charges": {
+    "2": 0.186
+   }
+  },
+  "invalid-utf8-in-string.jsonl": {
+   "note": "finding 8: an invalid byte inside a string becomes U+FFFD; the row reads and counts",
+   "lines": 2,
+   "blank": [],
+   "unreadable": [],
+   "groups": [
+    [
+     "r1",
+     [
+      1
+     ]
+    ],
+    [
+     "r2",
+     [
+      2
+     ]
+    ]
+   ],
+   "charges": {
+    "1": 0.186,
+    "2": 0.186
+   }
+  },
+  "invalid-utf8-between-tokens.jsonl": {
+   "note": "an invalid byte between tokens becomes U+FFFD, which is not JSON: that line only is unreadable",
+   "lines": 2,
+   "blank": [],
+   "unreadable": [
+    {
+     "line": 2,
+     "why": "not valid JSON"
+    }
+   ],
+   "groups": [
+    [
+     "r1",
+     [
+      1
+     ]
+    ]
+   ],
+   "charges": {
+    "1": 0.186
+   }
+  },
+  "json-constants.jsonl": {
+   "note": "item 7 of pass 3: NaN, Infinity and -Infinity are not JSON",
+   "lines": 3,
+   "blank": [],
+   "unreadable": [
+    {
+     "line": 1,
+     "why": "not valid JSON"
+    },
+    {
+     "line": 2,
+     "why": "not valid JSON"
+    },
+    {
+     "line": 3,
+     "why": "not valid JSON"
+    }
+   ],
+   "groups": [],
+   "charges": {}
+  },
+  "numbers-as-doubles.jsonl": {
+   "note": "a number is a double: a 4300 digit integer and 1e400 are Infinity, 2^53 + 1 is 2^53; none of those is a known amount. 2^53 - 1 is",
+   "lines": 4,
+   "blank": [],
+   "unreadable": [],
+   "groups": [
+    [
+     "r1",
+     [
+      1
+     ]
+    ],
+    [
+     "r2",
+     [
+      2
+     ]
+    ],
+    [
+     "r3",
+     [
+      3
+     ]
+    ],
+    [
+     "r4",
+     [
+      4
+     ]
+    ]
+   ],
+   "charges": {
+    "1": null,
+    "2": null,
+    "3": null,
+    "4": 9007199254740991
+   }
+  },
+  "booleans.jsonl": {
+   "note": "a boolean is never a number: false is not 0",
+   "lines": 3,
+   "blank": [],
+   "unreadable": [],
+   "groups": [
+    [
+     "r1",
+     [
+      1
+     ]
+    ],
+    [
+     "r2",
+     [
+      2
+     ]
+    ],
+    [
+     "r3",
+     [
+      3
+     ]
+    ]
+   ],
+   "charges": {
+    "1": null,
+    "2": null,
+    "3": 0
+   }
+  },
+  "not-objects.jsonl": {
+   "note": "valid JSON that is not an object is unreadable as not a JSON object",
+   "lines": 5,
+   "blank": [],
+   "unreadable": [
+    {
+     "line": 1,
+     "why": "not a JSON object"
+    },
+    {
+     "line": 2,
+     "why": "not a JSON object"
+    },
+    {
+     "line": 3,
+     "why": "not a JSON object"
+    },
+    {
+     "line": 4,
+     "why": "not a JSON object"
+    },
+    {
+     "line": 5,
+     "why": "not a JSON object"
+    }
+   ],
+   "groups": [],
+   "charges": {}
+  },
+  "control-char-in-string.jsonl": {
+   "note": "a raw control character inside a string is not JSON",
+   "lines": 1,
+   "blank": [],
+   "unreadable": [
+    {
+     "line": 1,
+     "why": "not valid JSON"
+    }
+   ],
+   "groups": [],
+   "charges": {}
+  },
+  "escapes.jsonl": {
+   "note": "escaped lone surrogates, U+2028 and NUL are valid JSON strings",
+   "lines": 1,
+   "blank": [],
+   "unreadable": [],
+   "groups": [
+    [
+     "r1",
+     [
+      1
+     ]
+    ]
+   ],
+   "charges": {
+    "1": 0.186
+   }
+  },
+  "request-id-groups.jsonl": {
+   "note": "rows group by a usable request id",
+   "lines": 3,
+   "blank": [],
+   "unreadable": [],
+   "groups": [
+    [
+     "r1",
+     [
+      1,
+      3
+     ]
+    ],
+    [
+     "r2",
+     [
+      2
+     ]
+    ]
+   ],
+   "charges": {
+    "1": 0.186,
+    "2": 0.186,
+    "3": 0.3
+   }
+  },
+  "request-id-unusable.jsonl": {
+   "note": "finding 7: a request id that is not REQUEST_ID (a space, null, empty, 129 characters, a number) groups nothing: each line is its own group",
+   "lines": 6,
+   "blank": [],
+   "unreadable": [],
+   "groups": [
+    [
+     "line 1",
+     [
+      1
+     ]
+    ],
+    [
+     "line 2",
+     [
+      2
+     ]
+    ],
+    [
+     "line 3",
+     [
+      3
+     ]
+    ],
+    [
+     "line 4",
+     [
+      4
+     ]
+    ],
+    [
+     "line 5",
+     [
+      5
+     ]
+    ],
+    [
+     "line 6",
+     [
+      6
+     ]
+    ]
+   ],
+   "charges": {
+    "1": 0.186,
+    "2": 0.186,
+    "3": 0.186,
+    "4": 0.186,
+    "5": 0.186,
+    "6": 0.186
+   }
+  },
+  "duplicate-keys.jsonl": {
+   "note": "a duplicate key: the last one wins in both parts",
+   "lines": 1,
+   "blank": [],
+   "unreadable": [],
+   "groups": [
+    [
+     "r2",
+     [
+      1
+     ]
+    ]
+   ],
+   "charges": {
+    "1": 0.186
+   }
+  }
+ }
+}
