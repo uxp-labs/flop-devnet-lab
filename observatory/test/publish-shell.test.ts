@@ -24,6 +24,7 @@ import { PUBLISHED_FILES } from "../src/published.js";
 import { logLine } from "../src/store.js";
 import { sumsOf } from "../src/sums.js";
 import { TapeTransport } from "../src/tape.js";
+import { anchoredAs } from "./helpers/tapes.js";
 import type { Transport } from "../src/transport.js";
 import type { Snapshot } from "../src/types.js";
 import { runShell } from "./setup.js";
@@ -50,9 +51,13 @@ const fixture = (dir: string, name: string) => readFileSync(new URL(`${dir}/${na
 const CLOCK = () => "2026-11-11T09:00:00.000Z";
 const DAY = 86_400;
 
-/** A tape that says it is the network, as the live one does, with every time it gives moved by seconds. */
+/**
+ * A tape that says it is the network, as the live one does, with every time it gives moved by seconds.
+ * Each tape was recorded before runs read an anchor back: on a log, the anchor is answered as the
+ * fixture's own chain would answer it, synthetic (test/helpers/tapes.ts).
+ */
 function live(dir: string, seconds = 0): Transport {
-  const inner = TapeTransport.parse(fixture(dir, "tape.jsonl"), `tape:${dir}`);
+  const inner = anchoredAs(dir, TapeTransport.parse(fixture(dir, "tape.jsonl"), `tape:${dir}`));
   return {
     trust: "trusted RPC",
     label: "rpc wss://rpc.devnet.flop.network",

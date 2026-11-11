@@ -26,6 +26,8 @@ export interface SnapshotOptions {
   earlierBest?: StatusOptions["earlierBest"];
   /** Every earlier snapshot's runtime version and RPC genesis, oldest first (RULES.md 1.1). */
   earlierSpec?: StatusOptions["earlierSpec"];
+  /** The latest finalized head logged on the pinned genesis (RULES.md 1.1, the anchor). */
+  anchor?: StatusOptions["anchor"];
 }
 
 /** The weakest trust among the parts: one fixture input makes the whole snapshot "fixture". */
@@ -41,6 +43,7 @@ export async function buildSnapshot(parts: SnapshotParts, o: SnapshotOptions): P
     earlierTimes: o.earlierTimes ?? null,
     earlierBest: o.earlierBest ?? null,
     earlierSpec: o.earlierSpec ?? null,
+    anchor: o.anchor ?? null,
   });
   // RULES.md section 2: a finalized height bounds escrow evidence only from a usable RPC head on
   // the pinned genesis (assessNetwork says what usable means). Another chain's height, or a

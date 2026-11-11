@@ -6,10 +6,10 @@ import { census } from "../src/census.js";
 import { escrowStates } from "../src/escrow.js";
 import { LiveSource } from "../src/live-source.js";
 import { DEVNET_GENESIS, networkStatus } from "../src/status.js";
-import { TapeError, TapeTransport } from "../src/tape.js";
+import { type TapeAnswer, TapeError, TapeTransport } from "../src/tape.js";
 import type { Transport } from "../src/transport.js";
 import type { NetworkStatus, Trust } from "../src/types.js";
-import { withAnchorAnswer } from "./helpers/tapes.js";
+import { answeringAnchor } from "./helpers/tapes.js";
 
 const FIXTURES = new URL("../fixtures/", import.meta.url);
 const OTHER = "0x1111111111111111111111111111111111111111111111111111111111111111";
@@ -213,17 +213,16 @@ describe("LiveSource over synthetic tapes", () => {
   });
 
   describe("the anchor: one earlier finalized block read back by its height, after the head (RULES.md 1.1)", () => {
-    // live-healthy is a first run's tape: it holds no anchor call. Each test adds the answer, synthetic.
-    const text = () => readFileSync(new URL("live-healthy/tape.jsonl", FIXTURES), "utf8");
-    const anchored = (answer: Parameters<typeof withAnchorAnswer>[2]) => TapeTransport.parse(withAnchorAnswer(text(), 3429000, answer), "tape:live-healthy+anchor");
+    // live-healthy is a first run's tape: it holds no anchor call. Each test gives the answer, synthetic.
+    const anchored = (answer: TapeAnswer) => answeringAnchor(tapeOf("live-healthy"), () => answer);
 
     it("with an anchor, calls chain_getBlockHash at its height after every head call, and only then", async () => {
       const calls: string[] = [];
-      const t = anchored({ result: F });
+      const t = tapeOf("live-healthy");
       const spy: Transport = { ...withTrust(t, "fixture"), rpc: (m, p) => (calls.push(`${m} ${JSON.stringify(p)}`), t.rpc(m, p)) };
-      const s = new LiveSource(spy, 3429000);
+      const s = new LiveSource(answeringAnchor(spy, (h) => (calls.push(`answered ${h}`), { result: F })), 3429000);
       await s.read();
-      expect(calls).toEqual(["system_chain []", "chain_getBlockHash [0]", "chain_getFinalizedHead []", `chain_getHeader ["${F}"]`, "chain_getHeader []", `state_getRuntimeVersion ["${F}"]`, "chain_getBlockHash [3429000]"]);
+      expect(calls).toEqual(["system_chain []", "chain_getBlockHash [0]", "chain_getFinalizedHead []", `chain_getHeader ["${F}"]`, "chain_getHeader []", `state_getRuntimeVersion ["${F}"]`, "answered 3429000"]);
       expect(await s.anchorBlock()).toEqual({ height: 3429000, hash: F, error: null });
       // Only the snapshot clock read is left.
       expect(t.remaining()).toBe(1);
