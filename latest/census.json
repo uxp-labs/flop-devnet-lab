@@ -1,7 +1,7 @@
 {
   "census": null,
-  "observed_at": "2026-11-11T19:38:47.010Z",
+  "observed_at": "2026-11-11T21:38:41.520Z",
   "schema": "flop-observatory/feed-census@0",
-  "snapshot_hash": "4721a4b2d5afe548a3f7b08cdbcbbf22f7206c7e7627b2e9a6d9ce20002b1d76",
+  "snapshot_hash": "c0d086a8432a245a2dd833a6b8676136048664bcd38ec414d47ffabe024c049f",
   "trust": "trusted RPC"
 }
