@@ -529,6 +529,35 @@
    "charges": {
     "1": 0.186
    }
+  },
+  "torn-line-then-row.jsonl": {
+   "note": "the writer rule: a row appended after a torn last line starts on a fresh line, so the torn line stays unreadable under its own number and the new row is whole",
+   "lines": 3,
+   "blank": [],
+   "unreadable": [
+    {
+     "line": 2,
+     "why": "not valid JSON"
+    }
+   ],
+   "groups": [
+    [
+     "r1",
+     [
+      1
+     ]
+    ],
+    [
+     "r3",
+     [
+      3
+     ]
+    ]
+   ],
+   "charges": {
+    "1": 0.186,
+    "3": 0.186
+   }
   }
  }
 }

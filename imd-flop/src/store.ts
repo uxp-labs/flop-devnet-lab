@@ -1,4 +1,4 @@
-import { appendFileSync, chmodSync, existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { appendFileSync, chmodSync, closeSync, existsSync, fstatSync, mkdirSync, openSync, readFileSync, readSync, renameSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import { assertNoSecrets } from "./secrets.js";
 
@@ -15,10 +15,35 @@ export function writeJsonSafe(path: string, obj: unknown, what = path): void {
   renameSync(tmp, path);
 }
 
+/**
+ * Append one JSON row as one line. Every row starts on a fresh line: when the file is not empty and its last
+ * byte is not \n (a last write that lost its newline, or a torn line), the row is written as "\n" + JSON + "\n"
+ * in one write. So a row is never glued onto the line before it (swarm audit 33f3b9f, finding 2).
+ */
 export function appendJsonlSafe(path: string, obj: unknown, what = path): void {
   assertNoSecrets(obj, what);
   ensureDir(dirname(path));
-  appendFileSync(path, JSON.stringify(obj) + "\n", { mode: 0o644 });
+  appendFileSync(path, (endsOnFreshLine(path) ? "" : "\n") + JSON.stringify(obj) + "\n", { mode: 0o644 });
+}
+
+/** True when the file is missing, empty, or ends with \n. */
+function endsOnFreshLine(path: string): boolean {
+  let fd: number;
+  try {
+    fd = openSync(path, "r");
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException).code === "ENOENT") return true;
+    throw e;
+  }
+  try {
+    const size = fstatSync(fd).size;
+    if (size === 0) return true;
+    const last = Buffer.alloc(1);
+    readSync(fd, last, 0, 1, size - 1);
+    return last[0] === 0x0a;
+  } finally {
+    closeSync(fd);
+  }
 }
 
 export function readJson<T>(path: string): T | null {

@@ -95,12 +95,15 @@ imd-flop and the viewer read the same ledger.jsonl. They read its text by one ru
   id is a group of its own, keyed by its line.
 - A receipt file is the whole file decoded the same way: one JSON value in `JSON.parse`'s grammar that must be an
   object.
+- The writer rule: imd-flop starts every row it appends on a fresh line, so when the file is not empty and its
+  last byte is not `\n`, it writes `\n` before the row in the same write (`imd-flop/src/store.ts`
+  `appendJsonlSafe`).
 
 `fixtures/ledger-text/` holds the cases as raw bytes, one file each, and `expectations.json` says for each file
 how many lines it has, which are blank, which are unreadable and why, how the readable rows group, and each
 readable row's `cap_charge` as a known amount. `imd-flop/test/ledger-text.test.ts` and
 `viewer/test_ledger_text.py` both read every fixture and check those expectations. The cases: an empty file, a
-torn last line, a last line with no newline, a bare `\r` joining two rows and between tokens, `\r\n`, `\x1c` to
+torn last line, a torn line with a row the writer appended after it, a last line with no newline, a bare `\r` joining two rows and between tokens, `\r\n`, `\x1c` to
 `\x1f`, U+0085 and a bare 0x85 byte, every blank character, a BOM, invalid UTF-8 inside a string and between
 tokens, NaN and Infinity, numbers past a double (4300 digits, 2^53 + 1, 1e400), booleans, values that are not
 objects, a raw control character in a string, escaped surrogates, grouping, unusable request ids and duplicate

@@ -476,10 +476,12 @@ setInterval(() => {}, 1000);
     const p = new P();
     const refused = await cli(h, runArgs("jB"), { provider: p });
     expect({ code: refused.code, sent: p.calls, named: refused.err.includes(`ledger line ${nLines + 1} cannot be read`) }).toEqual({ code: 3, sent: 0, named: true });
-    // The refusal row was appended to the torn line (it had no newline): the holder removes that one line.
+    // The refusal row starts on a fresh line after the torn one (swarm audit 33f3b9f, finding 2): the holder
+    // removes the torn line alone, and the refusal row stays.
     const lines = readFileSync(ledgerPath(h), "utf8").split("\n");
-    expect(lines.filter(Boolean).length).toBe(nLines + 1);
-    writeFileSync(ledgerPath(h), lines.slice(0, nLines).join("\n") + "\n");
+    expect(lines.filter(Boolean).length).toBe(nLines + 2);
+    expect(JSON.parse(lines[nLines + 1]).state).toBe("refused_local");
+    writeFileSync(ledgerPath(h), [...lines.slice(0, nLines), ...lines.slice(nLines + 1)].join("\n"));
     const p2 = new P();
     const again = await cli(h, runArgs("jB"), { provider: p2 });
     expect({ code: again.code, sent: p2.calls }, again.err).toEqual({ code: 0, sent: 1 });
