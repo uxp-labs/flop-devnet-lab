@@ -797,6 +797,8 @@ const PURE_BAD = [
   // A global hidden under a local name, so the free name rule could not see it.
   "function f(Date: { now(): number }): number { return Date.now(); }",
   "const queueMicrotask = 1;",
+  // A global no other rule bans, hidden under a parameter: only the rule against declaring a global's name sees it.
+  "function g(Intl: { x: number }): number { return Intl.x; }",
   'import { blake2b } from "@noble/hashes/blake2.js";',
   'import { readFileSync } from "node:fs";',
   'import { join } from "node:path";',

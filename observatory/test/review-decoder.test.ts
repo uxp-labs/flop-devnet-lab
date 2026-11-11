@@ -164,6 +164,23 @@ describe("work that is not bounded by a constant a step", () => {
     expect(large / small).toBeLessThan(8);
   });
 
+  it("review defect 2, fixed: a type's path is not read on a step that succeeds, only for a refusal", () => {
+    const md = parseMetadata(metadata([{ path: ["P"], def: def.primitive("bool") }, { def: def.array(50, 0) }], []));
+    const reads = { n: 0 };
+    const t = md.types.at(0) as Metadata["types"][number];
+    const path = t.path;
+    Object.defineProperty(t, "path", {
+      get() {
+        reads.n++;
+        return path;
+      },
+    });
+    expect(decodeValue(md, 1, new Uint8Array(50))).toEqual(new Array(50).fill(false));
+    expect(reads.n).toBe(0);
+    expect(thrown(() => decodeValue(md, 1, cat(new Uint8Array(49), u8(2)))).message).toBe("type 0 (P), a bool at byte 49: 2 is neither 0 nor 1");
+    expect(reads.n).toBeGreaterThan(0);
+  });
+
   it("review defect 2, fixed: the value of 1600 bytes and 20000 bytes of metadata decodes, and a refusal shows at most 120 characters of the path", () => {
     expect(pathCase(20_000, 1_600)()).toEqual([Array(1_600).fill(null), `0x${"00".repeat(1_600)}`]);
     const md = parseMetadata(metadata([{ path: ["a".repeat(100_000), "b"], def: def.primitive("bool") }], []));
@@ -431,6 +448,10 @@ describe("the shape pin", () => {
     const c = tricky(SWAPPED, R.metadata);
     expect(pinShape(c.input).pinned).toBe(false);
     expect(c.seen.reads).toBe(1);
+    // pinShape on its own too: it parses the one copy it hashed.
+    const d = tricky(R.metadata, SWAPPED);
+    expect(pinShape(d.input).pinned).toBe(true);
+    expect(d.seen.reads).toBe(1);
   });
 
   it("review defect 6, fixed: the bytes are copied, so a caller who changes its buffer after the call changes nothing pinned", () => {
