@@ -266,20 +266,26 @@ describe("review defect 6 (low), fixed: receipt --refresh uses a seat only when 
   });
 });
 
-describe("DEFECT 7 (low): a job total above AMOUNT_MAX refuses that job on every later day, and the message names no line and no way back", () => {
-  it("DEFECT 7 (low): requester rows of past days lock job j1 today; the exit 3 message has no ledger line and no repair step", async () => {
+describe("review defect 7 (low), fixed: a job total above AMOUNT_MAX names the job, its rows and lines, and the way back", () => {
+  it("review defect 7, fixed: the exit 3 message names job j1, two rows on lines 1 and 2, and a new job id or a repair", async () => {
     const h = tmpHome();
     expect((await cli(h, ["init", "--seat", "7"])).code).toBe(0);
     expect((await cli(h, ["cap", "set", "1", "--seat", "7"])).code).toBe(0);
     expect((await cli(h, ["config", "set", "payer", "requester"])).code).toBe(0);
-    // Two sent rows of earlier days whose charges a gateway amount raised (each a known amount, at most AMOUNT_MAX).
     appendLedger(h, row("mock-7-old-a", { day: "2026-01-01", payer: "requester", job_budget: 1e9, cap_charge: 6e8 }));
     appendLedger(h, row("mock-7-old-b", { day: "2026-01-02", payer: "requester", job_budget: 1e9, cap_charge: 6e8 }));
-    expect(() => jobSpent(h, "j1", "mock")).toThrow(/above 1000000000 FLOP/);
     const r = await cli(h, ["run", "--job", "j1", "--prompt", "hi", "--seat", "7", "--no-link", "--job-budget", "1"]);
     expect(r.code).toBe(3);
-    expect(r.err).not.toMatch(/ledger line \d+/);
-    expect(r.err).not.toMatch(/repair|remove|new job/i);
+    expect(r.err).toContain("the requester total of job j1 (mock) is above 1000000000 FLOP");
+    expect(r.err).toContain("It is made of 2 rows, ledger lines 1 and 2. The way back: use a new job id, or repair those lines.");
+    const other = await cli(h, ["run", "--job", "j2", "--prompt", "hi", "--seat", "7", "--no-link", "--job-budget", "1"]);
+    expect(other.code, other.err).toBe(0);
+  });
+
+  it("review defect 7, fixed: more than five rows are named by the first and the last line", () => {
+    const h = tmpHome();
+    for (let i = 0; i < 7; i++) appendLedger(h, row(`mock-7-r${i}`, { day: `2026-01-0${i + 1}`, payer: "requester", job_budget: 1e9, cap_charge: 2e8 }));
+    expect(() => jobSpent(h, "j1", "mock")).toThrow("It is made of 7 rows, ledger lines 1 (the first) to 7 (the last).");
   });
 });
 

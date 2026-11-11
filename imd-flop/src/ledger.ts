@@ -187,22 +187,32 @@ const TOTAL_MAX_MICRO = BigInt(AMOUNT_MAX) * 1_000_000n;
 /**
  * An exact total from the integer numerators of known amounts (rounding.ts ceilMicro: each rounded up to 6
  * decimals, so the total never understates what was spent). They are added as BigInt, never as floats, and
- * the total is that integer over 1e6 (swarm audit 33f3b9f, finding 5). A total above AMOUNT_MAX throws.
+ * the total is that integer over 1e6 (swarm audit 33f3b9f, finding 5). A total above AMOUNT_MAX throws, and
+ * its message names how many rows make it up, their lines, and the way back (review defect 7).
  */
-function exactTotal(amounts: number[], total: string): number {
+function exactTotal(items: { n: number; amount: number }[], total: string, wayBack: string): number {
   let micro = 0n;
-  for (const a of amounts) micro += BigInt(ceilMicro(a));
-  if (micro > TOTAL_MAX_MICRO) throw new UnusableLedgerTotal(`${total} is above ${AMOUNT_MAX} FLOP, the largest amount this tool compares, so it is not a known amount; next call refused.`);
+  for (const { amount } of items) micro += BigInt(ceilMicro(amount));
+  if (micro > TOTAL_MAX_MICRO) {
+    const lines = items.map(({ n }) => n);
+    const named = lines.length <= 5 ? `ledger ${lines.length === 1 ? "line" : "lines"} ${listed(lines)}` : `ledger lines ${lines[0]} (the first) to ${lines[lines.length - 1]} (the last)`;
+    throw new UnusableLedgerTotal(`${total} is above ${AMOUNT_MAX} FLOP, the largest amount this tool compares, so it is not a known amount; next call refused. It is made of ${lines.length} ${lines.length === 1 ? "row" : "rows"}, ${named}. ${wayBack}`);
+  }
   return Number(micro) / 1e6;
 }
 
+/** 1, 2 and 3. */
+const listed = (ns: number[]): string => (ns.length === 1 ? String(ns[0]) : `${ns.slice(0, -1).join(", ")} and ${ns[ns.length - 1]}`);
+
 /** The total of these rows' cap charges, exact (exactTotal). A charge that is not a known amount throws, naming its line. */
-function sumCharges(lines: Line[], total: string): number {
+function sumCharges(lines: Line[], total: string, wayBack: string): number {
   for (const { n, row } of lines) {
     if (!usableCapCharge(row.cap_charge)) throw new UnusableLedgerCharge(`ledger cap_charge unusable; next call refused (ledger line ${n}). Repair or remove that line.`);
   }
-  return exactTotal(lines.map(({ row }) => row.cap_charge), total);
+  return exactTotal(lines.map(({ n, row }) => ({ n, amount: row.cap_charge })), total, wayBack);
 }
+
+const REPAIR = "Repair those lines.";
 
 /** A UTC day as utcDay writes it: YYYY-MM-DD, and a real calendar date from year 0001 on (the viewer's Python dates start there). */
 function isUtcDay(v: unknown): v is string {
@@ -261,7 +271,7 @@ function placed(h: string, filters: Filter[], total: string): Line[] {
  * account's limit will bound the call and it will not count here.
  */
 export function spentToday(h: string, seat: string, provider: string, day = utcDay()): number {
-  return sumCharges(seatDay(h, seat, provider, day), dailyTotal(seat, provider, day));
+  return sumCharges(seatDay(h, seat, provider, day), dailyTotal(seat, provider, day), REPAIR);
 }
 
 const dailyTotal = (seat: string, provider: string, day: string) => `the daily total of seat ${seat} (${provider}, ${day})`;
@@ -281,21 +291,21 @@ function seatDay(h: string, seat: string, provider: string, day: string): Line[]
  * against the cap. No cap or booking decision reads them.
  */
 export function reportedSpendToday(h: string, seat: string, provider: string, day = utcDay()): { spent: number | null; unknownRows: number } {
-  const spends: number[] = [];
+  const spends: { n: number; amount: number }[] = [];
   let unknownRows = 0;
-  for (const { row } of seatDay(h, seat, provider, day)) {
+  for (const { n, row } of seatDay(h, seat, provider, day)) {
     const spend = knownAmount(row.spend);
-    if (spend !== null) spends.push(spend);
+    if (spend !== null) spends.push({ n, amount: spend });
     else if (row.state !== "refused_local") unknownRows += 1;
   }
   if (spends.length === 0 && unknownRows > 0) return { spent: null, unknownRows };
-  return { spent: exactTotal(spends, `the reported spend of seat ${seat} (${provider}, ${day})`), unknownRows };
+  return { spent: exactTotal(spends, `the reported spend of seat ${seat} (${provider}, ${day})`, REPAIR), unknownRows };
 }
 
 /** The requester spend on one job, on any day: the job budget's running total. */
 export function jobSpent(h: string, job: string, provider: string): number {
   const total = `the requester total of job ${job} (${provider})`;
-  return sumCharges(placed(h, [onJob(job), onProvider(provider), onPayer("requester")], total), total);
+  return sumCharges(placed(h, [onJob(job), onProvider(provider), onPayer("requester")], total), total, "The way back: use a new job id, or repair those lines.");
 }
 
 /** The ledger lock could not be taken. Thrown before the guarded work runs, so nothing in it happened. */
