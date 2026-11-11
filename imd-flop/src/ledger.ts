@@ -170,7 +170,8 @@ function syncResult<T>(r: T): T {
 
 /**
  * Exclusive lock over a read of the ledger and the append that follows from it: the cap check with its
- * `sent` row (run.ts), and the booking of a receipt read (booking.ts). Re-enters in this process.
+ * `sent` row (run.ts), and the booking step for everything written after the call (booking.ts). Re-enters
+ * in this process.
  * Synchronous bodies only.
  */
 export function withLedgerLock<T>(h: string, fn: () => T): T {
