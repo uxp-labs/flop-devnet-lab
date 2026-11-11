@@ -46,7 +46,7 @@ export interface AttemptIds {
  * The identity fields of a stored receipt that differ from a ledger row, in this order: job, seat, did,
  * request_id. Empty when the receipt is for the row's attempt. The job and the seat must be equal, the DID
  * must be there and equal, and the request id follows receiptIdentity. match.ts builds the `match` verdict
- * on this, and reconcile compares state and amounts only when it is empty.
+ * on this. reconcile uses the viewer's stricter rule, sameAttempt.
  */
 export function identityDiff(receipt: AttemptIds, row: AttemptIds): ("job" | "seat" | "did" | "request_id")[] {
   const diff: ("job" | "seat" | "did" | "request_id")[] = [];
@@ -55,6 +55,17 @@ export function identityDiff(receipt: AttemptIds, row: AttemptIds): ("job" | "se
   if (!receipt.did || receipt.did !== row.did) diff.push("did");
   if (!receiptIdentity(receipt, typeof row.request_id === "string" ? row.request_id : null).identityOk) diff.push("request_id");
   return diff;
+}
+
+const present = (v: unknown): boolean => typeof v === "string" && v.length > 0;
+
+/**
+ * The viewer's identity rule for a stored receipt beside a ledger row (build-lane.py identity_ok): the
+ * request_id, job, seat and did are each a non-empty string on both sides, and equal. It is stricter than
+ * identityDiff, where a job or a seat that is null on both sides is equal; `match` keeps that rule.
+ */
+function sameAttempt(receipt: AttemptIds, row: AttemptIds): boolean {
+  return (["request_id", "job", "seat", "did"] as const).every((k) => present(receipt[k]) && present(row[k]) && receipt[k] === row[k]);
 }
 
 /** What a receipt read tells the ledger. `fresh`, `identityOk` and `redacted` say whether it may prove a settlement. */
@@ -269,7 +280,7 @@ function storedReadFailed(receipt: StoredReceipt): boolean {
 /**
  * What a stored receipt and the latest ledger row of its request say about each other.
  *  - not_compared: there is nothing to compare. No row, no receipt, a locally refused row, a stored read
- *    that failed, or a receipt that is not for the row's attempt (identityDiff).
+ *    that failed, or a receipt whose identity does not match the row's by the viewer's rule (sameAttempt).
  *  - disagree: receipt and ledger cannot both be right.
  *  - settled_unknown: both say the call settled and neither knows the amount. They agree.
  *  - agree: they agree.
@@ -280,8 +291,7 @@ export type Verdict = "not_compared" | "disagree" | "settled_unknown" | "agree";
  * The one verdict for a stored receipt beside the latest ledger row of its request. It is worked out from
  * the two files each time and never stored. It is the decision the viewer makes for the same files
  * (build-lane.py classify, disagrees and settled_unknown), pinned for both by contract/vectors/reconcile.json.
- * The two differ only where their identity checks differ (quirk Q-IDENTITY-FIELDS in contract/rules.json).
- * Like the viewer, it compares only once the receipt was read and is for the row's attempt.
+ * Like the viewer, it compares only once the receipt was read and its identity matches by the viewer's rule.
  *  - A settled or released receipt needs a settled or released row with the same spend. An amount on one
  *    side only is a disagreement. No amount on either side is settled_unknown.
  *  - A receipt in any other state needs a row that claims no settlement, and it cannot be chain final.
@@ -290,7 +300,7 @@ export type Verdict = "not_compared" | "disagree" | "settled_unknown" | "agree";
  */
 export function reconcile(row: BookedRow | null | undefined, receipt: StoredReceipt | null | undefined): Verdict {
   if (!row || !receipt || row.state === "refused_local") return "not_compared";
-  if (storedReadFailed(receipt) || identityDiff(receipt, row).length > 0) return "not_compared";
+  if (storedReadFailed(receipt) || !sameAttempt(receipt, row)) return "not_compared";
   const rowSettles = SETTLES.has(row.state);
   const receiptSettles = typeof receipt.state === "string" && SETTLES.has(receipt.state);
   const spend = knownAmount(row.spend);
