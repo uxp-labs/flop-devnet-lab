@@ -719,3 +719,42 @@ it adds.
   that snapshot holds a reset signal (`reset_detected` true or any conflict), 4 when the guard or
   the transport refused a request, 1 when the run broke before a snapshot was written, and 2 for
   wrong flags or an output folder that is not empty. A run never writes over an earlier one.
+
+### 7.1 Publishing to observatory-data
+
+The second live step publishes each reading to the branch `observatory-data` of this repository.
+It writes to that one branch and nothing else, and never to the chain. Section 4 still holds for
+everything the observatory reads.
+
+- Only the `publish` job in `.github/workflows/observatory-live.yml` may write, and only
+  `contents`. The live job keeps `contents: read` and checkout keeps no credentials.
+- The job runs only for `refs/heads/main`, for every event that runs the live job, and only when
+  the live job uploaded its output folder. It runs when the live job failed, so a run that exited 3
+  for a reset signal is published. It does not run when the run was cancelled. The run stays red
+  when the live job failed: nothing continues on error.
+- It runs no code from the repository: no checkout, no install, no build, no node and no script
+  file. It downloads this run's artifact by the id the live job gave, then uses `sha256sum`, `jq`,
+  `date` and plain git.
+- File names come from one fixed list, the same as `PUBLISHED_FILES` in `src/published.ts`, never
+  from the artifact. The artifact must hold only regular files from that list and `SHA256SUMS`, and
+  `SHA256SUMS` must be exactly the sums of those files. That is checked before any file is read.
+  A difference stops the job.
+- Only a run that exited 0 or 3 is published, with all nine files. A run that broke or was refused
+  is not published, and the branch stays as it was.
+- `observed_at` and the snapshot hash are checked against fixed patterns before use, reach the
+  publishing step only through environment variables, and are used only inside double quotes. No
+  `${{ }}` value appears in a shell command.
+- The layout: `latest/` is replaced whole by the output folder. The snapshot line from
+  `snapshots.jsonl` is appended to `log/<UTC date of observed_at>.jsonl`, unless that file already
+  holds it. `README.md` at the root is written when it is missing. Nothing else is written.
+- The commit is made by `github-actions[bot]`, and its message carries `observed_at` and the
+  snapshot hash. A branch that does not exist starts as an orphan, with no parent.
+- The push names `refs/heads/observatory-data:refs/heads/observatory-data` and nothing else, and is
+  never forced. When it is refused, the job fetches the branch again, lays the reading on top and
+  pushes once more. A second refusal fails the job.
+- The sums show the files are the ones the live job wrote. They do not show the reading is true:
+  its trust is still `"trusted RPC"`. A reader judges `latest/` with `judgeLatest` in
+  `src/published.ts`: exactly the nine files, each matching `SHA256SUMS`, the snapshot passing
+  every check of section 5 and its hash check with trust `"trusted RPC"`, every feed, the log line
+  and `run.json` the ones the snapshot gives, and `observed_at` of the snapshot and of its status
+  neither after the reader's now nor older than the limit the reader passes.
