@@ -519,7 +519,7 @@
    },
    "expect": {
     "imd-flop": {
-     "exit": 1,
+     "exit": 11,
      "states": [
       "sent",
       "refused_local"
@@ -536,7 +536,8 @@
     "viewer": {
      "not_applicable": "viewer renders ledger rows; it never writes them"
     }
-   }
+   },
+   "note": "[swarm audit of 8ddc5d2, finding 9] a provider failure before anything was sent, other than a gate refusal, exits 11 (NOT_SENT) so it is told apart from a gateway error on the paid call (1); was exit 1"
   },
   {
    "id": "run-timeout",
@@ -627,7 +628,7 @@
    },
    "expect": {
     "imd-flop": {
-     "exit": 1,
+     "exit": 11,
      "states": [
       "sent",
       "refused_local"
@@ -651,7 +652,90 @@
    },
    "quirks": [
     "R-e"
-   ]
+   ],
+   "note": "[swarm audit of 8ddc5d2, finding 9] a provider failure before anything was sent, other than a gate refusal, exits 11 (NOT_SENT) so it is told apart from a gateway error on the paid call (1); was exit 1"
+  },
+  {
+   "id": "run-released-zero-below-reported-cost",
+   "rule": "settlement.run",
+   "input": {
+    "cost_flop": 0.15,
+    "read": {
+     "http": 200,
+     "error": null,
+     "receipt": {
+      "request_id": "$rid",
+      "correlation_id": "imd-job-j1",
+      "model": "m",
+      "reserved_spend": 0.186,
+      "settled_spend": 0,
+      "state": "released"
+     }
+    }
+   },
+   "expect": {
+    "imd-flop": {
+     "exit": 0,
+     "states": [
+      "sent",
+      "released"
+     ],
+     "last": {
+      "state": "released",
+      "spend": 0,
+      "cap_charge": 0.15
+     },
+     "reason": "cap charge raised to reported cost"
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard is a dry run: it writes spend 0 and keeps no reservation or settlement"
+    },
+    "viewer": {
+     "not_applicable": "viewer renders ledger rows; it never writes them"
+    }
+   },
+   "note": "[swarm audit of 8ddc5d2, finding 2] a reported cost may raise the charge and never lower it, also after settlement: cap_charge is max(settled, usage.cost_flop) and spend stays the settled figure; was last {released, 0, 0}, reason null"
+  },
+  {
+   "id": "run-settled-above-reported-cost",
+   "rule": "settlement.run",
+   "input": {
+    "cost_flop": 0.01,
+    "read": {
+     "http": 200,
+     "error": null,
+     "receipt": {
+      "request_id": "$rid",
+      "correlation_id": "imd-job-j1",
+      "model": "m",
+      "reserved_spend": 0.186,
+      "settled_spend": 0.05,
+      "state": "settled"
+     }
+    }
+   },
+   "expect": {
+    "imd-flop": {
+     "exit": 0,
+     "states": [
+      "sent",
+      "settled"
+     ],
+     "last": {
+      "state": "settled",
+      "spend": 0.05,
+      "cap_charge": 0.05
+     },
+     "reason": null
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard is a dry run: it writes spend 0 and keeps no reservation or settlement"
+    },
+    "viewer": {
+     "not_applicable": "viewer renders ledger rows; it never writes them"
+    }
+   },
+   "note": "[swarm audit of 8ddc5d2, finding 2] control: a reported cost below the settlement leaves the settled charge"
   }
  ]
 }

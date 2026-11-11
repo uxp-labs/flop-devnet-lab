@@ -51,6 +51,11 @@ def amount_json(i):
     return {"spend_amount": guard.spend_amount(i["value"]), "json_number": guard.json_number(i["value"])}
 
 
+def amount_reserved(i):
+    out = guard.classify_receipt({"request_id": "r", "reserved_spend": i["value"]})
+    return {"reserved": out["reserved"], "invalid": "reserved_spend" in out.get("invalid", [])}
+
+
 def max_tokens(i):
     code, rec, estimates = guard_cli({"estimated_cost_flop": 0.066, "estimated_input_tokens": 3, "estimated_output_tokens": 8},
                                      [f"--max-tokens={i['text']}", "--cap", "1"])
@@ -86,7 +91,7 @@ def read_failed(i):
 
 
 ADAPTERS = {"quote.pad": quote_pad, "cap.compare": cap_compare, "amount.text": amount_text, "amount.json": amount_json,
-            "max_tokens": max_tokens, "receipt.state": receipt_state, "read.failed": read_failed}
+            "amount.reserved": amount_reserved, "max_tokens": max_tokens, "receipt.state": receipt_state, "read.failed": read_failed}
 
 
 class ContractVectors(unittest.TestCase):

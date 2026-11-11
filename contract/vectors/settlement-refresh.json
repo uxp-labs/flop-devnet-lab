@@ -1,6 +1,6 @@
 {
  "file": "settlement-refresh.json",
- "description": "imd-flop `receipt <id> --refresh` after a mock run: rows appended, the latest ledger row, the DISAGREE line on stderr, and the stored receipt file. run_read is the run's own receipt read (http 200); run_complete timeout leaves no receipt file. prev_cap_charge replaces the latest row's cap_charge before the refresh. strip_receipt_fields deletes keys from the stored file before the refresh.",
+ "description": "imd-flop `receipt <id> --refresh` after a mock run: rows appended, the latest ledger row, the DISAGREE line on stderr, and the stored receipt file. run_read is the run's own receipt read (http 200); run_cost_flop is the usage.cost_flop its completion reported; run_complete timeout leaves no receipt file. prev_cap_charge replaces the latest row's cap_charge before the refresh. strip_receipt_fields deletes keys from the stored file before the refresh.",
  "status": "current behavior at 3ae1cdf",
  "vectors": [
   {
@@ -431,6 +431,233 @@
      "not_applicable": "viewer renders ledger rows; it never writes them"
     }
    }
+  },
+  {
+   "id": "refresh-redacted-read-keeps-reservation",
+   "rule": "settlement.refresh",
+   "input": {
+    "run_read": {
+     "request_id": "$rid",
+     "correlation_id": "imd-job-j1",
+     "model": "m",
+     "reserved_spend": 0.186,
+     "settled_spend": null,
+     "state": "estimated"
+    },
+    "refresh_read": {
+     "http": 200,
+     "error": null,
+     "receipt": {
+      "request_id": "$rid",
+      "correlation_id": "imd-job-j1",
+      "model": "m",
+      "reserved_spend": 0.186,
+      "settled_spend": 0.05,
+      "settled_spend_raw": "abababababababababababababababababababababababababababababababab",
+      "state": "settled"
+     }
+    }
+   },
+   "expect": {
+    "imd-flop": {
+     "exit": 0,
+     "appended": 0,
+     "last": {
+      "state": "estimated",
+      "spend": null,
+      "cap_charge": 0.186
+     },
+     "stderr_disagree": false
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard is a dry run: it writes spend 0 and keeps no reservation or settlement"
+    },
+    "viewer": {
+     "not_applicable": "viewer renders ledger rows; it never writes them"
+    }
+   },
+   "note": "[swarm audit of 8ddc5d2, finding 1] a receipt body that had to be redacted (key-shaped settled_spend_raw) never proves a settlement, on refresh as in run; was appended 1, last {settled, 0.05, 0.05}"
+  },
+  {
+   "id": "refresh-settled-then-lower-read-disagrees",
+   "rule": "settlement.refresh",
+   "input": {
+    "run_read": {
+     "request_id": "$rid",
+     "correlation_id": "imd-job-j1",
+     "model": "m",
+     "reserved_spend": 0.186,
+     "settled_spend": 0.05,
+     "state": "settled"
+    },
+    "refresh_read": {
+     "http": 200,
+     "error": null,
+     "receipt": {
+      "request_id": "$rid",
+      "correlation_id": "imd-job-j1",
+      "model": "m",
+      "reserved_spend": 0.186,
+      "settled_spend": 0,
+      "state": "released"
+     }
+    }
+   },
+   "expect": {
+    "imd-flop": {
+     "exit": 0,
+     "appended": 0,
+     "last": {
+      "state": "settled",
+      "spend": 0.05,
+      "cap_charge": 0.05
+     },
+     "stderr_disagree": true
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard is a dry run: it writes spend 0 and keeps no reservation or settlement"
+    },
+    "viewer": {
+     "not_applicable": "viewer renders ledger rows; it never writes them"
+    }
+   },
+   "note": "[swarm audit of 8ddc5d2, finding 2] a booked known settlement is never lowered by a later read: nothing appended, DISAGREE printed; was appended 1, last {released, 0, 0}, no DISAGREE"
+  },
+  {
+   "id": "refresh-settled-then-equal-released-moves-state",
+   "rule": "settlement.refresh",
+   "input": {
+    "run_read": {
+     "request_id": "$rid",
+     "correlation_id": "imd-job-j1",
+     "model": "m",
+     "reserved_spend": 0.186,
+     "settled_spend": 0.05,
+     "state": "settled"
+    },
+    "refresh_read": {
+     "http": 200,
+     "error": null,
+     "receipt": {
+      "request_id": "$rid",
+      "correlation_id": "imd-job-j1",
+      "model": "m",
+      "reserved_spend": 0.186,
+      "settled_spend": 0.05,
+      "state": "released"
+     }
+    }
+   },
+   "expect": {
+    "imd-flop": {
+     "exit": 0,
+     "appended": 1,
+     "last": {
+      "state": "released",
+      "spend": 0.05,
+      "cap_charge": 0.05
+     },
+     "stderr_disagree": false
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard is a dry run: it writes spend 0 and keeps no reservation or settlement"
+    },
+    "viewer": {
+     "not_applicable": "viewer renders ledger rows; it never writes them"
+    }
+   },
+   "note": "[swarm audit of 8ddc5d2, finding 2] control: an equal amount may still move the state between settling states"
+  },
+  {
+   "id": "refresh-settled-then-higher-read-is-booked",
+   "rule": "settlement.refresh",
+   "input": {
+    "run_read": {
+     "request_id": "$rid",
+     "correlation_id": "imd-job-j1",
+     "model": "m",
+     "reserved_spend": 0.186,
+     "settled_spend": 0.05,
+     "state": "settled"
+    },
+    "refresh_read": {
+     "http": 200,
+     "error": null,
+     "receipt": {
+      "request_id": "$rid",
+      "correlation_id": "imd-job-j1",
+      "model": "m",
+      "reserved_spend": 0.186,
+      "settled_spend": 0.07,
+      "state": "settled"
+     }
+    }
+   },
+   "expect": {
+    "imd-flop": {
+     "exit": 0,
+     "appended": 1,
+     "last": {
+      "state": "settled",
+      "spend": 0.07,
+      "cap_charge": 0.07
+     },
+     "stderr_disagree": false
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard is a dry run: it writes spend 0 and keeps no reservation or settlement"
+    },
+    "viewer": {
+     "not_applicable": "viewer renders ledger rows; it never writes them"
+    }
+   },
+   "note": "[swarm audit of 8ddc5d2, finding 2] control: a later read with a higher settlement is booked"
+  },
+  {
+   "id": "refresh-pending-to-settled-below-reported-cost",
+   "rule": "settlement.refresh",
+   "input": {
+    "run_cost_flop": 0.15,
+    "run_read": {
+     "request_id": "$rid",
+     "correlation_id": "imd-job-j1",
+     "model": "m",
+     "reserved_spend": 0.186,
+     "settled_spend": null,
+     "state": "estimated"
+    },
+    "refresh_read": {
+     "http": 200,
+     "error": null,
+     "receipt": {
+      "request_id": "$rid",
+      "correlation_id": "imd-job-j1",
+      "model": "m",
+      "reserved_spend": 0.186,
+      "settled_spend": 0.05,
+      "state": "settled"
+     }
+    }
+   },
+   "expect": {
+    "imd-flop": {
+     "exit": 0,
+     "appended": 1,
+     "last": {
+      "state": "settled",
+      "spend": 0.05,
+      "cap_charge": 0.15
+     },
+     "stderr_disagree": false
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard is a dry run: it writes spend 0 and keeps no reservation or settlement"
+    },
+    "viewer": {
+     "not_applicable": "viewer renders ledger rows; it never writes them"
+    }
+   },
+   "note": "[swarm audit of 8ddc5d2, finding 2] refresh applies the ledger row's cost_reported: cap_charge is max(settled, cost_reported); was last {settled, 0.05, 0.05}"
   }
  ]
 }

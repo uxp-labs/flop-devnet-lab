@@ -1,6 +1,6 @@
 {
  "file": "viewer-labels.json",
- "description": "Viewer lane labels for one ledger row and its receipt file (FIXER rules V-PRECEDENCE, V-FAILED-READ, V-UNKNOWN-SETTLED, V-LINK-GREY, plus known defects KD-1/KD-2). receipt: an object, a raw string (written as is) or null (no file). Chip text \"DISAGREE\" stands for rules.constants.DISAGREE. reservation: the value on the row's 'reservation' line, or \"absent\". greens: every c-green chip in the row. label_rules names the FIXER rules (rules.json viewer_label_rules) a vector pins; on a known_defect vector they are the rules its target follows and today's output breaks. Vectors with status known_defect assert today's output in expect; target is not asserted.",
+ "description": "Viewer lane labels for one ledger row and its receipt file (FIXER rules V-PRECEDENCE, V-FAILED-READ, V-UNKNOWN-SETTLED, V-LINK-GREY, plus known defects KD-1/KD-2). receipt: an object, a raw string (written as is) or null (no file). Chip text \"DISAGREE\" stands for rules.constants.DISAGREE. reservation: the value on the row's 'reservation' line, or \"absent\". greens: every c-green chip in the row. label_rules names the FIXER rules (rules.json viewer_label_rules) a vector pins; on a known_defect vector they are the rules its target follows and today's output breaks. The label-requester vectors pin the limits of a requester paid row. Swarm audit of 8ddc5d2, finding 5: the row has a job budget, worked out from the job's own running total. Finding 13: the daily cap bounds every call the seat's key pays for, so the row is checked against the seat's daily cap (spent_before, the seat's spend today), then its job budget (job_spent_before, the job's requester spend). A requester row with no job_spent_before was written before finding 13: its spent_before is the job's spend. Review of the audit 8ddc5d2 fixes: the daily cap applies to every row, whatever its payer. A payer that is neither holder nor requester is checked against the daily cap. A limit that applies and cannot be worked out bars the green chain final chip: one amber '<limit> not checked' chip stands in its place and the row keeps 'matches'. On the row with no job_spent_before the job budget is worked out from spent_before and the daily cap is not checked. The label-settled-amount-unknown vectors and the two label-disagree controls after them pin finding 6: settled on both sides with both amounts unknown is agreement, with its own amber label. The label-negative vectors pin finding 7: a negative amount is unknown. The cap-charge vectors pin item 2 of the review of the audit 8ddc5d2 fixes: a settled row whose cap charge is a known amount that is not its settled spend shows a 'cap charge' line, with the ledger reason beside it when there is one, and nothing else on the row changes. Their rule viewer.cap_charge_line gives line: the visible text of the row's 'cap charge' line, or \"absent\". Vectors with status known_defect assert today's output in expect; target is not asserted.",
  "status": "current behavior at 3ae1cdf",
  "vectors": [
   {
@@ -1101,6 +1101,1145 @@
    "defect": "KD-2",
    "label_rules": [
     "V-PRECEDENCE"
+   ]
+  },
+  {
+   "id": "label-requester-row-counts-against-daily-cap",
+   "rule": "viewer.label",
+   "input": {
+    "ledger": {
+     "ts": "2026-11-10T15:00:00Z",
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zSONAR",
+     "provider": "mock",
+     "network": "devnet",
+     "payer": "requester",
+     "state": "settled",
+     "spend": 0.05,
+     "cap_charge": 0.05,
+     "quote_padded": 0.186,
+     "per_call_cap": 1,
+     "daily_cap": 1,
+     "job_budget": 5,
+     "spent_before": 0.98,
+     "job_spent_before": 0.98
+    },
+    "receipt": {
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zSONAR",
+     "state": "settled",
+     "settled": 0.05,
+     "chain_final": true,
+     "http": 200,
+     "error": null
+    }
+   },
+   "expect": {
+    "imd-flop": {
+     "not_applicable": "imd-flop does not render the viewer lane"
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard does not render the viewer lane"
+    },
+    "viewer": {
+     "chips": [
+      [
+       "amber",
+       "over the daily cap"
+      ]
+     ],
+     "reservation": 0.186,
+     "matches_shown": false,
+     "greens": [],
+     "link": [
+      "grey",
+      "not checked",
+      null
+     ]
+    }
+   },
+   "note": "swarm audit of 8ddc5d2, finding 13: the daily cap bounds every call the seat's key pays for. A requester paid row is checked against the seat's daily cap (1 - 0.98 - 0.05 < 0), then its job budget (5 - 0.98 - 0.05 left). So this settlement shows one amber chip 'over the daily cap', reservation held, a separate settled line, never 'matches', no green. Was label-requester-row-ignores-daily-cap (finding 5), which pinned the old rule: the row counted against job_budget only and showed grey sent + green chain final, matches. The ledger row gained job_spent_before, the job budget's own running total. spent_before is now the seat's spend today."
+  },
+  {
+   "id": "label-requester-over-job-budget",
+   "rule": "viewer.label",
+   "input": {
+    "ledger": {
+     "ts": "2026-11-10T15:00:00Z",
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zSONAR",
+     "provider": "mock",
+     "network": "devnet",
+     "payer": "requester",
+     "state": "settled",
+     "spend": 0.2,
+     "cap_charge": 0.2,
+     "quote_padded": 0.2,
+     "per_call_cap": 1,
+     "daily_cap": 100,
+     "job_budget": 5,
+     "spent_before": 4.9,
+     "job_spent_before": 4.9
+    },
+    "receipt": {
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zSONAR",
+     "state": "settled",
+     "settled": 0.2,
+     "chain_final": true,
+     "http": 200,
+     "error": null
+    }
+   },
+   "expect": {
+    "imd-flop": {
+     "not_applicable": "imd-flop does not render the viewer lane"
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard does not render the viewer lane"
+    },
+    "viewer": {
+     "chips": [
+      [
+       "amber",
+       "over the job budget"
+      ]
+     ],
+     "reservation": 0.2,
+     "matches_shown": false,
+     "greens": [],
+     "link": [
+      "grey",
+      "not checked",
+      null
+     ]
+    }
+   },
+   "note": "swarm audit of 8ddc5d2, finding 5: a requester paid settlement that leaves the job budget below 0 (5 - 4.9 - 0.2) shows one amber chip 'over the job budget', shown as the daily cap case is: reservation held, a separate settled line, never 'matches', no green. Was grey sent + green chain final, matches. Finding 13 (the daily cap bounds every call the seat's key pays for) left the expectation as it was: the row is inside the seat's daily cap (100 - 4.9 - 0.2 left). The ledger row gained job_spent_before, the job budget's own running total. spent_before is now the seat's spend today."
+  },
+  {
+   "id": "label-requester-over-daily-cap-inside-job-budget",
+   "rule": "viewer.label",
+   "input": {
+    "ledger": {
+     "ts": "2026-11-10T15:00:00Z",
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zSONAR",
+     "provider": "mock",
+     "network": "devnet",
+     "payer": "requester",
+     "state": "settled",
+     "spend": 0.186,
+     "cap_charge": 0.186,
+     "quote_padded": 0.186,
+     "per_call_cap": 0.2,
+     "daily_cap": 0.2,
+     "job_budget": 1,
+     "spent_before": 0.186,
+     "job_spent_before": 0
+    },
+    "receipt": {
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zSONAR",
+     "state": "settled",
+     "settled": 0.186,
+     "chain_final": true,
+     "http": 200,
+     "error": null
+    }
+   },
+   "expect": {
+    "imd-flop": {
+     "not_applicable": "imd-flop does not render the viewer lane"
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard does not render the viewer lane"
+    },
+    "viewer": {
+     "chips": [
+      [
+       "amber",
+       "over the daily cap"
+      ]
+     ],
+     "reservation": 0.186,
+     "matches_shown": false,
+     "greens": [],
+     "link": [
+      "grey",
+      "not checked",
+      null
+     ]
+    }
+   },
+   "note": "swarm audit of 8ddc5d2, finding 13: the daily cap bounds every call the seat's key pays for. The audit's repro, second call: cap 0.2, 0.186 already spent today on another job, a job budget of 1 with nothing spent. Over the seat's daily cap (0.2 - 0.186 - 0.186 < 0) and inside its job budget (1 - 0 - 0.186 left): one amber chip 'over the daily cap', reservation held, never 'matches', no green. Under the old rule the row was checked against its job budget only and went green."
+  },
+  {
+   "id": "label-requester-inside-daily-cap-over-job-budget",
+   "rule": "viewer.label",
+   "input": {
+    "ledger": {
+     "ts": "2026-11-10T15:00:00Z",
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zSONAR",
+     "provider": "mock",
+     "network": "devnet",
+     "payer": "requester",
+     "state": "settled",
+     "spend": 0.186,
+     "cap_charge": 0.186,
+     "quote_padded": 0.186,
+     "per_call_cap": 5,
+     "daily_cap": 5,
+     "job_budget": 0.3,
+     "spent_before": 0.372,
+     "job_spent_before": 0.186
+    },
+    "receipt": {
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zSONAR",
+     "state": "settled",
+     "settled": 0.186,
+     "chain_final": true,
+     "http": 200,
+     "error": null
+    }
+   },
+   "expect": {
+    "imd-flop": {
+     "not_applicable": "imd-flop does not render the viewer lane"
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard does not render the viewer lane"
+    },
+    "viewer": {
+     "chips": [
+      [
+       "amber",
+       "over the job budget"
+      ]
+     ],
+     "reservation": 0.186,
+     "matches_shown": false,
+     "greens": [],
+     "link": [
+      "grey",
+      "not checked",
+      null
+     ]
+    }
+   },
+   "note": "swarm audit of 8ddc5d2, finding 13: the daily cap bounds every call the seat's key pays for. The job budget is the second, narrower limit. Inside the seat's daily cap (5 - 0.372 - 0.186 left) and over its job budget (0.3 - 0.186 - 0.186 < 0): one amber chip 'over the job budget'. The seat's spend today (0.372) is more than the job's (0.186) because another job ran too."
+  },
+  {
+   "id": "label-requester-over-both-limits-names-the-daily-cap",
+   "rule": "viewer.label",
+   "input": {
+    "ledger": {
+     "ts": "2026-11-10T15:00:00Z",
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zSONAR",
+     "provider": "mock",
+     "network": "devnet",
+     "payer": "requester",
+     "state": "settled",
+     "spend": 0.186,
+     "cap_charge": 0.186,
+     "quote_padded": 0.186,
+     "per_call_cap": 0.2,
+     "daily_cap": 0.2,
+     "job_budget": 0.3,
+     "spent_before": 0.186,
+     "job_spent_before": 0.186
+    },
+    "receipt": {
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zSONAR",
+     "state": "settled",
+     "settled": 0.186,
+     "chain_final": true,
+     "http": 200,
+     "error": null
+    }
+   },
+   "expect": {
+    "imd-flop": {
+     "not_applicable": "imd-flop does not render the viewer lane"
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard does not render the viewer lane"
+    },
+    "viewer": {
+     "chips": [
+      [
+       "amber",
+       "over the daily cap"
+      ]
+     ],
+     "reservation": 0.186,
+     "matches_shown": false,
+     "greens": [],
+     "link": [
+      "grey",
+      "not checked",
+      null
+     ]
+    }
+   },
+   "note": "swarm audit of 8ddc5d2, finding 13: the daily cap bounds every call the seat's key pays for. A requester paid settlement over both of its limits (0.2 - 0.186 - 0.186 and 0.3 - 0.186 - 0.186 are below 0) names the first one in imd-flop's order on the chip: the daily cap, then the job budget. The job budget keeps a spend flag on the row."
+  },
+  {
+   "id": "label-requester-each-limit-uses-its-own-total",
+   "rule": "viewer.label",
+   "input": {
+    "ledger": {
+     "ts": "2026-11-10T15:00:00Z",
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zSONAR",
+     "provider": "mock",
+     "network": "devnet",
+     "payer": "requester",
+     "state": "settled",
+     "spend": 0.05,
+     "cap_charge": 0.05,
+     "quote_padded": 0.186,
+     "per_call_cap": 1,
+     "daily_cap": 1,
+     "job_budget": 0.3,
+     "spent_before": 0.9,
+     "job_spent_before": 0.05
+    },
+    "receipt": {
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zSONAR",
+     "state": "settled",
+     "settled": 0.05,
+     "chain_final": true,
+     "http": 200,
+     "error": null
+    }
+   },
+   "expect": {
+    "imd-flop": {
+     "not_applicable": "imd-flop does not render the viewer lane"
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard does not render the viewer lane"
+    },
+    "viewer": {
+     "chips": [
+      [
+       "grey",
+       "sent"
+      ],
+      [
+       "green",
+       "chain final"
+      ]
+     ],
+     "reservation": "absent",
+     "matches_shown": true,
+     "greens": [
+      "chain final"
+     ],
+     "link": [
+      "grey",
+      "not checked",
+      null
+     ]
+    }
+   },
+   "note": "swarm audit of 8ddc5d2, finding 13: the daily cap bounds every call the seat's key pays for. Each limit is measured against its own running total: the daily cap against spent_before, the seat's spend today (1 - 0.9 - 0.05 left), and the job budget against job_spent_before, the job's requester spend (0.3 - 0.05 - 0.05 left). Inside both, so the row matches and goes green. Measured against the seat's spend the job budget would be below 0."
+  },
+  {
+   "id": "label-requester-row-without-job-spent-before-daily-cap-not-checked",
+   "rule": "viewer.label",
+   "input": {
+    "ledger": {
+     "ts": "2026-11-10T15:00:00Z",
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zSONAR",
+     "provider": "mock",
+     "network": "devnet",
+     "payer": "requester",
+     "state": "settled",
+     "spend": 0.05,
+     "cap_charge": 0.05,
+     "quote_padded": 0.186,
+     "per_call_cap": 1,
+     "daily_cap": 1,
+     "job_budget": 5,
+     "spent_before": 0.98
+    },
+    "receipt": {
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zSONAR",
+     "state": "settled",
+     "settled": 0.05,
+     "chain_final": true,
+     "http": 200,
+     "error": null
+    }
+   },
+   "expect": {
+    "imd-flop": {
+     "not_applicable": "imd-flop does not render the viewer lane"
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard does not render the viewer lane"
+    },
+    "viewer": {
+     "chips": [
+      [
+       "grey",
+       "sent"
+      ],
+      [
+       "amber",
+       "daily cap not checked"
+      ]
+     ],
+     "reservation": "absent",
+     "matches_shown": true,
+     "greens": [],
+     "link": [
+      "grey",
+      "not checked",
+      null
+     ]
+    }
+   },
+   "note": "review of the audit 8ddc5d2 fixes: a row whose spend limit cannot be checked is never shown as fine. This vector was label-requester-row-without-job-spent-before-shows-no-limit and expected grey sent plus green chain final, with no limit shown. A requester row with no job_spent_before key was written before finding 13, when its spent_before was the job's spend and not the seat's. Its job budget left is exact (5 - 0.98 - 0.05) and is shown. Its daily cap applies and cannot be worked out, so the figure is blank and one amber chip 'daily cap not checked' stands where the green chain final chip would be. Receipt and ledger agree, so 'matches' stays. This is the ledger row of label-requester-row-counts-against-daily-cap as finding 5 pinned it, without the new field."
+  },
+  {
+   "id": "label-unknown-payer-over-daily-cap",
+   "rule": "viewer.label",
+   "input": {
+    "ledger": {
+     "ts": "2026-11-10T15:00:00Z",
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zSONAR",
+     "provider": "mock",
+     "network": "devnet",
+     "state": "settled",
+     "spend": 0.198,
+     "cap_charge": 0.198,
+     "quote_padded": 0.198,
+     "per_call_cap": 0.25,
+     "daily_cap": 0.5,
+     "spent_before": 0.45
+    },
+    "receipt": {
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zSONAR",
+     "state": "settled",
+     "settled": 0.198,
+     "chain_final": true,
+     "http": 200,
+     "error": null
+    }
+   },
+   "expect": {
+    "imd-flop": {
+     "not_applicable": "imd-flop does not render the viewer lane"
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard does not render the viewer lane"
+    },
+    "viewer": {
+     "chips": [
+      [
+       "amber",
+       "over the daily cap"
+      ]
+     ],
+     "reservation": 0.198,
+     "matches_shown": false,
+     "greens": [],
+     "link": [
+      "grey",
+      "not checked",
+      null
+     ]
+    }
+   },
+   "note": "review of the audit 8ddc5d2 fixes: the seat's key pays for every call, so the seat's daily cap applies to every row, whatever its payer. This row has no payer. Its spent_before is read as the seat's total: 0.5 - 0.45 - 0.198 is below 0, so the row is amber 'over the daily cap' and never green, as it was before finding 5. Between finding 5 and the review a row with no payer had no limit and went green. The row also carries the spend flag 'payer unknown'."
+  },
+  {
+   "id": "label-unknown-payer-string-over-daily-cap",
+   "rule": "viewer.label",
+   "input": {
+    "ledger": {
+     "ts": "2026-11-10T15:00:00Z",
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zSONAR",
+     "provider": "mock",
+     "network": "devnet",
+     "payer": "someone",
+     "state": "settled",
+     "spend": 0.198,
+     "cap_charge": 0.198,
+     "quote_padded": 0.198,
+     "per_call_cap": 0.25,
+     "daily_cap": 0.5,
+     "spent_before": 0.45
+    },
+    "receipt": {
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zSONAR",
+     "state": "settled",
+     "settled": 0.198,
+     "chain_final": true,
+     "http": 200,
+     "error": null
+    }
+   },
+   "expect": {
+    "imd-flop": {
+     "not_applicable": "imd-flop does not render the viewer lane"
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard does not render the viewer lane"
+    },
+    "viewer": {
+     "chips": [
+      [
+       "amber",
+       "over the daily cap"
+      ]
+     ],
+     "reservation": 0.198,
+     "matches_shown": false,
+     "greens": [],
+     "link": [
+      "grey",
+      "not checked",
+      null
+     ]
+    }
+   },
+   "note": "review of the audit 8ddc5d2 fixes: label-unknown-payer-over-daily-cap with a payer that is a string and neither holder nor requester. The same row."
+  },
+  {
+   "id": "label-holder-unknown-spent-before-daily-cap-not-checked",
+   "rule": "viewer.label",
+   "input": {
+    "ledger": {
+     "ts": "2026-11-10T15:00:00Z",
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zSONAR",
+     "provider": "mock",
+     "network": "devnet",
+     "payer": "holder",
+     "state": "settled",
+     "spend": 0.05,
+     "cap_charge": 0.05,
+     "quote_padded": 0.186,
+     "per_call_cap": 1,
+     "daily_cap": 5,
+     "spent_before": null
+    },
+    "receipt": {
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zSONAR",
+     "state": "settled",
+     "settled": 0.05,
+     "chain_final": true,
+     "http": 200,
+     "error": null
+    }
+   },
+   "expect": {
+    "imd-flop": {
+     "not_applicable": "imd-flop does not render the viewer lane"
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard does not render the viewer lane"
+    },
+    "viewer": {
+     "chips": [
+      [
+       "grey",
+       "sent"
+      ],
+      [
+       "amber",
+       "daily cap not checked"
+      ]
+     ],
+     "reservation": "absent",
+     "matches_shown": true,
+     "greens": [],
+     "link": [
+      "grey",
+      "not checked",
+      null
+     ]
+    }
+   },
+   "note": "review of the audit 8ddc5d2 fixes: a limit that applies to a row and cannot be worked out bars the green chain final chip. spent_before is unknown, so 'daily cap left' is blank and one amber chip 'daily cap not checked' stands where the green chip would be. Receipt and ledger agree, so 'matches' stays. With spent_before 0 this row is label-green-row-link-still-grey and goes green."
+  },
+  {
+   "id": "cap-charge-line-above-settled-spend",
+   "rule": "viewer.cap_charge_line",
+   "input": {
+    "ledger": {
+     "ts": "2026-11-10T15:00:00Z",
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zSONAR",
+     "provider": "mock",
+     "network": "devnet",
+     "payer": "holder",
+     "state": "settled",
+     "spend": 0.05,
+     "cost_reported": 0.3,
+     "cap_charge": 0.3,
+     "reason": "cap charge raised to reported cost",
+     "quote_padded": 0.198,
+     "per_call_cap": 0.25,
+     "daily_cap": 0.5,
+     "spent_before": 0
+    },
+    "receipt": {
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zSONAR",
+     "state": "settled",
+     "settled": 0.05,
+     "chain_final": true,
+     "http": 200,
+     "error": null
+    }
+   },
+   "expect": {
+    "imd-flop": {
+     "not_applicable": "imd-flop does not render the viewer lane"
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard does not render the viewer lane"
+    },
+    "viewer": {
+     "line": "cap charge 0.3 (cap charge raised to reported cost)"
+    }
+   },
+   "note": "review of the audit 8ddc5d2 fixes, item 2: the completion reported 0.3 and the receipt settled 0.05, so imd-flop booked spend 0.05 and cap_charge 0.3 (settlement-run.json, reason 'cap charge raised to reported cost'). The viewer showed 'observed spend 0.05' only. The row now also shows the cap charge and the ledger reason."
+  },
+  {
+   "id": "label-cap-charge-above-settled-spend-stays-green",
+   "rule": "viewer.label",
+   "input": {
+    "ledger": {
+     "ts": "2026-11-10T15:00:00Z",
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zSONAR",
+     "provider": "mock",
+     "network": "devnet",
+     "payer": "holder",
+     "state": "settled",
+     "spend": 0.05,
+     "cost_reported": 0.3,
+     "cap_charge": 0.3,
+     "reason": "cap charge raised to reported cost",
+     "quote_padded": 0.198,
+     "per_call_cap": 0.25,
+     "daily_cap": 0.5,
+     "spent_before": 0
+    },
+    "receipt": {
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zSONAR",
+     "state": "settled",
+     "settled": 0.05,
+     "chain_final": true,
+     "http": 200,
+     "error": null
+    }
+   },
+   "expect": {
+    "imd-flop": {
+     "not_applicable": "imd-flop does not render the viewer lane"
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard does not render the viewer lane"
+    },
+    "viewer": {
+     "chips": [
+      [
+       "grey",
+       "sent"
+      ],
+      [
+       "green",
+       "chain final"
+      ]
+     ],
+     "reservation": "absent",
+     "matches_shown": true,
+     "greens": [
+      "chain final"
+     ],
+     "link": [
+      "grey",
+      "not checked",
+      null
+     ]
+    }
+   },
+   "note": "review of the audit 8ddc5d2 fixes, item 2: the row of cap-charge-line-above-settled-spend. Nothing else on it changes: receipt and ledger agree on 0.05, no limit is broken (0.5 - 0 - 0.3 is left of the daily cap, worked out from the cap charge), so it keeps 'matches' and goes green. Held before and after."
+  },
+  {
+   "id": "cap-charge-line-absent-when-it-is-the-settled-spend",
+   "rule": "viewer.cap_charge_line",
+   "input": {
+    "ledger": {
+     "ts": "2026-11-10T15:00:00Z",
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zSONAR",
+     "provider": "mock",
+     "network": "devnet",
+     "payer": "holder",
+     "state": "settled",
+     "spend": 0.05,
+     "cost_reported": 0.05,
+     "cap_charge": 0.05,
+     "reason": null,
+     "quote_padded": 0.198,
+     "per_call_cap": 0.25,
+     "daily_cap": 0.5,
+     "spent_before": 0
+    },
+    "receipt": {
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zSONAR",
+     "state": "settled",
+     "settled": 0.05,
+     "chain_final": true,
+     "http": 200,
+     "error": null
+    }
+   },
+   "expect": {
+    "imd-flop": {
+     "not_applicable": "imd-flop does not render the viewer lane"
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard does not render the viewer lane"
+    },
+    "viewer": {
+     "line": "absent"
+    }
+   },
+   "note": "review of the audit 8ddc5d2 fixes, item 2: control. The cap charge is the settled spend, so there is no 'cap charge' line. Held before and after."
+  },
+  {
+   "id": "label-settled-amount-unknown",
+   "rule": "viewer.label",
+   "input": {
+    "ledger": {
+     "ts": "2026-11-10T15:00:00Z",
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zSONAR",
+     "provider": "mock",
+     "network": "devnet",
+     "payer": "holder",
+     "state": "settled",
+     "spend": null,
+     "cap_charge": 0.186,
+     "quote_padded": 0.186,
+     "per_call_cap": 1,
+     "daily_cap": 5,
+     "spent_before": 0
+    },
+    "receipt": {
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zSONAR",
+     "state": "settled",
+     "settled": null,
+     "chain_final": false,
+     "http": 200,
+     "error": null
+    }
+   },
+   "expect": {
+    "imd-flop": {
+     "not_applicable": "imd-flop does not render the viewer lane"
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard does not render the viewer lane"
+    },
+    "viewer": {
+     "chips": [
+      [
+       "amber",
+       "settled, amount unknown; reservation held"
+      ]
+     ],
+     "reservation": 0.186,
+     "matches_shown": false,
+     "greens": [],
+     "link": [
+      "grey",
+      "not checked",
+      null
+     ]
+    }
+   },
+   "note": "swarm audit of 8ddc5d2, finding 6: receipt and ledger are both in a settling state and neither knows the amount. That is agreement on an unknown amount, the row imd-flop books for such a receipt (settlement-run.json run-settled-null-spend: settled, spend null, cap_charge 0.186). Amber 'settled, amount unknown; reservation held' as chip and flag, reservation line kept, never 'matches', no green. Was amber DISAGREE."
+  },
+  {
+   "id": "label-settled-amount-unknown-blocks-chain-final-green",
+   "rule": "viewer.label",
+   "input": {
+    "ledger": {
+     "ts": "2026-11-10T15:00:00Z",
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zSONAR",
+     "provider": "mock",
+     "network": "devnet",
+     "payer": "holder",
+     "state": "settled",
+     "spend": null,
+     "cap_charge": 0.186,
+     "quote_padded": 0.186,
+     "per_call_cap": 1,
+     "daily_cap": 5,
+     "spent_before": 0
+    },
+    "receipt": {
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zSONAR",
+     "state": "settled",
+     "settled": null,
+     "chain_final": true,
+     "http": 200,
+     "error": null
+    }
+   },
+   "expect": {
+    "imd-flop": {
+     "not_applicable": "imd-flop does not render the viewer lane"
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard does not render the viewer lane"
+    },
+    "viewer": {
+     "chips": [
+      [
+       "amber",
+       "settled, amount unknown; reservation held"
+      ]
+     ],
+     "reservation": 0.186,
+     "matches_shown": false,
+     "greens": [],
+     "link": [
+      "grey",
+      "not checked",
+      null
+     ]
+    }
+   },
+   "note": "swarm audit of 8ddc5d2, finding 6: chain_final true on the receipt does not turn a settled row with an unknown amount green. Was amber DISAGREE."
+  },
+  {
+   "id": "label-disagree-ledger-amount-receipt-none",
+   "rule": "viewer.label",
+   "input": {
+    "ledger": {
+     "ts": "2026-11-10T15:00:00Z",
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zSONAR",
+     "provider": "mock",
+     "network": "devnet",
+     "payer": "holder",
+     "state": "settled",
+     "spend": 0.05,
+     "cap_charge": 0.05,
+     "quote_padded": 0.186,
+     "per_call_cap": 1,
+     "daily_cap": 5,
+     "spent_before": 0
+    },
+    "receipt": {
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zSONAR",
+     "state": "settled",
+     "settled": null,
+     "chain_final": false,
+     "http": 200,
+     "error": null
+    }
+   },
+   "expect": {
+    "imd-flop": {
+     "not_applicable": "imd-flop does not render the viewer lane"
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard does not render the viewer lane"
+    },
+    "viewer": {
+     "chips": [
+      [
+       "amber",
+       "DISAGREE"
+      ]
+     ],
+     "reservation": 0.05,
+     "matches_shown": false,
+     "greens": [],
+     "link": [
+      "grey",
+      "not checked",
+      null
+     ]
+    }
+   },
+   "note": "swarm audit of 8ddc5d2, finding 6, control: the ledger has an amount and the settled receipt has none. Still DISAGREE, before and after the fix."
+  },
+  {
+   "id": "label-disagree-receipt-amount-ledger-none",
+   "rule": "viewer.label",
+   "input": {
+    "ledger": {
+     "ts": "2026-11-10T15:00:00Z",
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zSONAR",
+     "provider": "mock",
+     "network": "devnet",
+     "payer": "holder",
+     "state": "settled",
+     "spend": null,
+     "cap_charge": 0.186,
+     "quote_padded": 0.186,
+     "per_call_cap": 1,
+     "daily_cap": 5,
+     "spent_before": 0
+    },
+    "receipt": {
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zSONAR",
+     "state": "settled",
+     "settled": 0.05,
+     "chain_final": false,
+     "http": 200,
+     "error": null
+    }
+   },
+   "expect": {
+    "imd-flop": {
+     "not_applicable": "imd-flop does not render the viewer lane"
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard does not render the viewer lane"
+    },
+    "viewer": {
+     "chips": [
+      [
+       "amber",
+       "DISAGREE"
+      ]
+     ],
+     "reservation": 0.186,
+     "matches_shown": false,
+     "greens": [],
+     "link": [
+      "grey",
+      "not checked",
+      null
+     ]
+    }
+   },
+   "note": "swarm audit of 8ddc5d2, finding 6, control: the settled receipt has an amount and the settled ledger row has none. Still DISAGREE, before and after the fix."
+  },
+  {
+   "id": "label-negative-cap-charge-is-unknown",
+   "rule": "viewer.label",
+   "input": {
+    "ledger": {
+     "ts": "2026-11-10T15:00:00Z",
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zSONAR",
+     "provider": "mock",
+     "network": "devnet",
+     "payer": "holder",
+     "state": "sent",
+     "spend": null,
+     "cap_charge": -0.3,
+     "quote_padded": 0.186,
+     "per_call_cap": 1,
+     "daily_cap": 5,
+     "spent_before": 0
+    },
+    "receipt": {
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zSONAR",
+     "state": "estimated",
+     "settled": null,
+     "chain_final": false,
+     "http": 200,
+     "error": null
+    }
+   },
+   "expect": {
+    "imd-flop": {
+     "not_applicable": "imd-flop does not render the viewer lane"
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard does not render the viewer lane"
+    },
+    "viewer": {
+     "chips": [
+      [
+       "grey",
+       "sent"
+      ]
+     ],
+     "reservation": 0.186,
+     "matches_shown": true,
+     "greens": [],
+     "link": [
+      "grey",
+      "not checked",
+      null
+     ]
+    }
+   },
+   "note": "swarm audit of 8ddc5d2, finding 7: a negative amount is not an amount. A cap_charge of -0.3 is unknown, so the held reservation shown is the padded quote (0.186), as for a null cap_charge. Was reservation -0.3.",
+   "quirks": [
+    "Q-AMOUNT-JSON"
+   ]
+  },
+  {
+   "id": "label-negative-settled-amounts-are-unknown",
+   "rule": "viewer.label",
+   "input": {
+    "ledger": {
+     "ts": "2026-11-10T15:00:00Z",
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zSONAR",
+     "provider": "mock",
+     "network": "devnet",
+     "payer": "holder",
+     "state": "settled",
+     "spend": -0.05,
+     "cap_charge": 0.186,
+     "quote_padded": 0.186,
+     "per_call_cap": 1,
+     "daily_cap": 5,
+     "spent_before": 0
+    },
+    "receipt": {
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zSONAR",
+     "state": "settled",
+     "settled": -0.05,
+     "chain_final": true,
+     "http": 200,
+     "error": null
+    }
+   },
+   "expect": {
+    "imd-flop": {
+     "not_applicable": "imd-flop does not render the viewer lane"
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard does not render the viewer lane"
+    },
+    "viewer": {
+     "chips": [
+      [
+       "amber",
+       "settled, amount unknown; reservation held"
+      ]
+     ],
+     "reservation": 0.186,
+     "matches_shown": false,
+     "greens": [],
+     "link": [
+      "grey",
+      "not checked",
+      null
+     ]
+    }
+   },
+   "note": "swarm audit of 8ddc5d2, finding 7: equal negative amounts on the ledger row and the receipt are two unknown amounts, so the row is 'settled, amount unknown' (finding 6), never 'matches' or green. Was grey sent + green chain final, matches, observed spend -0.05.",
+   "quirks": [
+    "Q-AMOUNT-JSON"
    ]
   }
  ]

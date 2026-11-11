@@ -2,10 +2,12 @@
  * Validation and spend policy. Pure: no file, network or ledger access. Each check either returns the
  * accepted value or throws a CliError with the exit code the CLI has always used, so callers keep their
  * order of checks and their exit codes. Behavior is pinned by contract/vectors (quote, cap-compare,
- * amount-text, max-tokens) and the older run/cap tests.
+ * cap-payer, amount-text, max-tokens) and the older run/cap tests.
  */
+import { knownAmount } from "./amount.js";
 import { CliError, EXIT } from "./errors.js";
 import type { Payer, SeatCap } from "./config.js";
+import { ceil6, floor6 } from "./rounding.js";
 import { scanForSecrets } from "./secrets.js";
 
 export const TEMPLATE_PAD = 20; // measured: Qwen chat wrap 23 tokens vs 3 raw for "Be brief.\nHi"
@@ -13,17 +15,9 @@ export const TEMPLATE_PAD = 20; // measured: Qwen chat wrap 23 tokens vs 3 raw f
 /** A finite, positive number. */
 export const posFinite = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v) && v > 0;
 
-function finiteTokenCount(value: unknown): number | null {
-  if (typeof value !== "number" || !Number.isFinite(value)) return null;
-  return value;
-}
-
-/** Round up to 6 decimals. A value already on a 1e-6 boundary stays put. */
-function ceil6(n: number): number {
-  const scaled = n * 1e6;
-  const nearest = Math.round(scaled);
-  if (Math.abs(scaled - nearest) <= 1e-6) return nearest / 1e6;
-  return Math.ceil(scaled) / 1e6;
+/** A usable token count is a known amount (amount.ts): a finite number that is not negative. A negative count would shrink the divisor and inflate the pad. */
+function usableTokenCount(value: unknown): number | null {
+  return knownAmount(value);
 }
 
 export function padQuote(est: { estimated_cost_flop?: number; estimated_input_tokens?: number; estimated_output_tokens?: number }): { raw: number; padded: number } | null {
@@ -31,8 +25,8 @@ export function padQuote(est: { estimated_cost_flop?: number; estimated_input_to
   if (typeof raw !== "number" || !Number.isFinite(raw) || !(raw > 0)) return null;
   const tinIn = (est as { estimated_input_tokens?: unknown }).estimated_input_tokens;
   const toutIn = (est as { estimated_output_tokens?: unknown }).estimated_output_tokens;
-  const tin = tinIn === undefined ? 0 : finiteTokenCount(tinIn);
-  const tout = toutIn === undefined ? 0 : finiteTokenCount(toutIn);
+  const tin = tinIn === undefined ? 0 : usableTokenCount(tinIn);
+  const tout = toutIn === undefined ? 0 : usableTokenCount(toutIn);
   if (tin === null || tout === null || tin + tout <= 0) return null;
   const perTok = raw / (tin + tout);
   const unrounded = raw + TEMPLATE_PAD * perTok;
@@ -77,8 +71,9 @@ export function requireCap(caps: Record<string, SeatCap>, seat: string): SeatCap
 }
 
 /**
- * Only "holder" (daily cap) and "requester" (job budget) have a spend limit. Anything else in config.json
- * (a hand edit, another writer) would skip both checks: fail closed, nothing sent.
+ * Only "holder" and "requester" have spend limits (limitsFor). Anything else in config.json (a hand edit,
+ * another writer) would skip every check: fail closed, nothing sent. A requester call also needs a job
+ * budget, its second limit.
  */
 export function validatePayer(payer: unknown, jobBudget: number | undefined): Payer {
   if (payer !== "holder" && payer !== "requester") {
@@ -93,21 +88,103 @@ export function validatePayer(payer: unknown, jobBudget: number | undefined): Pa
 export interface BudgetRefusal { reason: string; code: number }
 
 /**
- * The cap check made under the ledger lock. Holder: per-call cap, then the remaining daily cap.
- * Requester: per-call cap, then the remaining job budget. Null means the padded quote fits.
+ * What a budget check needs besides the quote. `spentBefore` is the seat's spend today, for every payer
+ * (ledger.ts spentToday). A requester state also carries the job budget and `jobSpentBefore`, the job's
+ * requester spend (ledger.ts jobSpent). Both totals are already rounded up.
  */
-export function checkBudget(a: { padded: number; cap: SeatCap; payer: Payer; spentBefore: number; jobBudget?: number }): BudgetRefusal | null {
-  const { padded, cap, payer, spentBefore } = a;
-  if (padded > cap.perCall) return { reason: `padded quote ${padded} FLOP is over the per-call cap ${cap.perCall}`, code: EXIT.REFUSED_CAP };
-  if (payer === "holder") {
-    const left = Math.round((cap.daily - spentBefore) * 1e6) / 1e6;
-    if (left <= 0) return { reason: `daily cap reached (${spentBefore}/${cap.daily} FLOP today, UTC)`, code: EXIT.REFUSED_CAP };
-    if (padded > left) return { reason: `padded quote ${padded} FLOP is over the remaining daily cap ${left}`, code: EXIT.REFUSED_CAP };
-    return null;
+export interface BudgetState { cap: SeatCap; payer: Payer; spentBefore: number; jobBudget?: number; jobSpentBefore?: number }
+
+const refusedCap = (reason: string): BudgetRefusal => ({ reason, code: EXIT.REFUSED_CAP });
+const noUsableBudget = (payer: unknown): string => `no usable requester budget for payer ${JSON.stringify(payer)}`;
+
+/** One spend limit: what it allows, what is already charged against it, and the wording of its refusals. */
+interface SpendLimit {
+  allowed: number | undefined;
+  spent: number | undefined;
+  /** Its room left is not a finite number, so it cannot be checked. */
+  unusable: string;
+  /** Nothing is left of it. */
+  reached: string;
+  /** The padded quote is more than what is left of it. */
+  over: (padded: number, left: number) => string;
+}
+
+const dailyCap = (a: BudgetState): SpendLimit => ({
+  allowed: a.cap.daily,
+  spent: a.spentBefore,
+  unusable: `no usable daily cap (${a.spentBefore}/${a.cap.daily} FLOP today, UTC)`,
+  reached: `daily cap reached (${a.spentBefore}/${a.cap.daily} FLOP today, UTC)`,
+  over: (padded, left) => `padded quote ${padded} FLOP is over the remaining daily cap ${left}`,
+});
+
+const jobBudget = (a: BudgetState): SpendLimit => ({
+  allowed: a.jobBudget,
+  spent: a.jobSpentBefore,
+  unusable: noUsableBudget(a.payer),
+  reached: `requester budget reached (${a.jobSpentBefore}/${a.jobBudget} FLOP on this job)`,
+  over: (padded, left) => `padded quote ${padded} FLOP is over this job's remaining requester budget ${left}`,
+});
+
+/**
+ * The limits that apply to this payer, in the order they are checked.
+ * The seat's daily cap bounds every call the seat's key pays for, whoever the call is for. Today the gateway
+ * has no third party payment, so the seat's key pays for every call, and every call counts. "Requester" is an
+ * attribution label plus a second, narrower limit: the job budget. So a holder call must fit the daily cap,
+ * and a requester call must fit the daily cap and then the job budget.
+ * When FLOP ships proxies or escrow pools and a call is funded by another account, that account's limit will
+ * bound the call and the seat's daily cap will not. Which limits apply is decided here, so that change
+ * starts here. It is not the only code that reads the payer: validatePayer and run.ts branch on it too.
+ * Null for a payer that is neither: no limit is known for it.
+ */
+function limitsFor(a: BudgetState): SpendLimit[] | null {
+  if (a.payer === "holder") return [dailyCap(a)];
+  if (a.payer === "requester") return [dailyCap(a), jobBudget(a)];
+  return null;
+}
+
+/**
+ * Room left under a limit: what it allows, less what is already charged. Rounded down to 6 decimals, so
+ * rounding never adds room. A figure that is missing is unknown, never 0: the room is then not a number.
+ */
+export function roomLeft(limit: { allowed: number | undefined; spent: number | undefined }): number {
+  if (typeof limit.allowed !== "number" || typeof limit.spent !== "number") return Number.NaN;
+  return floor6(limit.allowed - limit.spent);
+}
+
+/**
+ * A refusal that needs no quote: nothing can fit, whatever the estimate says. It is the first limit of this
+ * payer with nothing left: the daily cap, then for a requester the job budget. A limit whose room is not a
+ * finite number is refused too, and so is a payer with no limits. Null means a quote may still fit.
+ * `run` asks this before the estimate, so the prompt does not leave the machine for nothing, and
+ * checkBudget asks it again under the ledger lock.
+ */
+export function noRoom(a: BudgetState): BudgetRefusal | null {
+  const limits = limitsFor(a);
+  // A payer with no limits would skip every check, so refuse it.
+  if (!limits) return refusedCap(noUsableBudget(a.payer));
+  for (const limit of limits) {
+    const left = roomLeft(limit);
+    // Room that is not a finite number would skip the limit, so refuse it.
+    if (!Number.isFinite(left)) return refusedCap(limit.unusable);
+    if (left <= 0) return refusedCap(limit.reached);
   }
-  // A non-finite budget left would skip the cap, so refuse it (and any payer other than requester).
-  const left = Math.round((a.jobBudget! - spentBefore) * 1e6) / 1e6;
-  if (payer !== "requester" || !Number.isFinite(left)) return { reason: `no usable requester budget for payer ${JSON.stringify(payer)}`, code: EXIT.REFUSED_CAP };
-  if (padded > left) return { reason: `padded quote ${padded} FLOP is over this job's remaining requester budget ${left}`, code: EXIT.REFUSED_CAP };
+  return null;
+}
+
+/**
+ * The cap check made under the ledger lock. First the refusal that needs no quote (noRoom), then the
+ * per-call cap, then the first limit of this payer that the padded quote does not fit: the daily cap, then
+ * for a requester the job budget. Null means the padded quote fits.
+ */
+export function checkBudget(a: BudgetState & { padded: number }): BudgetRefusal | null {
+  const { padded, cap } = a;
+  const none = noRoom(a);
+  if (none) return none;
+  if (padded > cap.perCall) return refusedCap(`padded quote ${padded} FLOP is over the per-call cap ${cap.perCall}`);
+  // noRoom has already refused a payer with no limits.
+  for (const limit of limitsFor(a) ?? []) {
+    const left = roomLeft(limit);
+    if (padded > left) return refusedCap(limit.over(padded, left));
+  }
   return null;
 }

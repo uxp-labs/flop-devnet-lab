@@ -50,17 +50,29 @@ def label(i):
 
 
 RESERVATION_LINE = re.compile(r'<div><span class="k">(reservation[^<]*)</span> (.*?)</div>')
+CAP_CHARGE_LINE = re.compile(r'<div><span class="k">(cap charge)</span> (.*?)</div>')
 
 
-def reservation_line(i):
-    """The visible text of the row's reservation line ("reservation 0.186" today), or "absent"."""
+def line_text(i, pattern):
+    """The visible text of the row's first line whose key matches pattern, or "absent"."""
     rid = i["ledger"]["request_id"]
     _, html = lane([i["ledger"]], {} if i["receipt"] is None else {rid: i["receipt"]})
-    m = RESERVATION_LINE.findall(html)
+    m = pattern.findall(html)
     return {"line": f"{m[0][0]} {visible(m[0][1])}" if m else "absent"}
 
 
-ADAPTERS = {"amount.json": amount_json, "receipt.state": receipt_state, "identity": identity, "read.failed": read_failed, "viewer.label": label, "viewer.reservation_line": reservation_line}
+def reservation_line(i):
+    """The visible text of the row's reservation line ("reservation 0.186 (held)"), or "absent"."""
+    return line_text(i, RESERVATION_LINE)
+
+
+def cap_charge_line(i):
+    """The visible text of the row's cap charge line ("cap charge 0.3 (<ledger reason>)"), or "absent"."""
+    return line_text(i, CAP_CHARGE_LINE)
+
+
+ADAPTERS = {"amount.json": amount_json, "receipt.state": receipt_state, "identity": identity, "read.failed": read_failed, "viewer.label": label,
+            "viewer.reservation_line": reservation_line, "viewer.cap_charge_line": cap_charge_line}
 
 
 class ContractVectors(unittest.TestCase):

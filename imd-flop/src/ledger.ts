@@ -7,7 +7,9 @@
 import { closeSync, linkSync, openSync, readFileSync, renameSync, statSync, unlinkSync, writeSync } from "node:fs";
 import { randomBytes } from "node:crypto";
 import { hostname } from "node:os";
+import { knownAmount } from "./amount.js";
 import { ledgerFile } from "./paths.js";
+import { ceil6 } from "./rounding.js";
 import { appendJsonlSafe, readJsonl } from "./store.js";
 import type { Payer } from "./config.js";
 
@@ -29,12 +31,16 @@ export interface LedgerEntry {
   per_call_cap: number | null;
   daily_cap: number | null;
   job_budget: number | null;
-  spent_before: number | null; // holder: today's spend; requester: this job's spend
+  spent_before: number | null; // the seat's spend today before this call, for every payer: the daily cap's running total. Null is unknown
+  // Requester row: this job's requester spend before this call, the job budget's running total. Null on a holder row.
+  // Rows written before the daily cap bounded requester calls (audit 8ddc5d2, finding 13) lack the field, and on
+  // those requester rows spent_before held the job's spend. A missing value is unknown, never 0.
+  job_spent_before?: number | null;
   state: string;
   reason: string | null;
   spend: number | null; // finite settled spend >= 0; null = unknown (negative, non-finite, and missing are unknown, never coerced to 0)
   cost_reported: number | null; // usage.cost_flop from the completion, if any. Recorded as reported; not a settlement.
-  cap_charge: number; // known finite settled spend, including explicit 0; while spend is unknown, the padded quote, raised if reported cost is higher
+  cap_charge: number; // known finite settled spend (explicit 0 included), or while spend is unknown the padded quote; either is raised to the reported cost when that is higher
   http: number | null;
   mock: boolean;
 }
@@ -56,28 +62,35 @@ export function latestAttempts(h: string): LedgerEntry[] {
   return [...m.values()];
 }
 
-const round6 = (n: number) => Math.round(n * 1e6) / 1e6;
-
 export class UnusableLedgerCharge extends Error {}
 
-/** A cap charge counts only when it is a finite number and not negative. Null is not 0. */
+/** A cap charge counts only when it is a known amount (amount.ts): a finite number and not negative. Null is not 0. */
 export function usableCapCharge(value: unknown): boolean {
-  return typeof value === "number" && Number.isFinite(value) && value >= 0;
+  return knownAmount(value) !== null;
 }
 
+/** The total of these rows' cap charges. Money already spent rounds up to 6 decimals, so the total never understates it. */
 function sumCharges(rows: LedgerEntry[]): number {
   let sum = 0;
   for (const row of rows) {
     if (!usableCapCharge(row.cap_charge)) throw new UnusableLedgerCharge("ledger cap_charge unusable; next call refused");
     sum += row.cap_charge;
   }
-  return round6(sum);
+  return ceil6(sum);
 }
 
+/**
+ * The seat's spend on one UTC day: the daily cap's running total.
+ * The seat's daily cap bounds every call the seat's key pays for, whoever the call is for. Today the gateway
+ * has no third party payment, so the seat's key pays for every call, and every row of the seat counts: there
+ * is no payer filter. When FLOP ships proxies or escrow pools and a call is funded by another account, that
+ * account's limit will bound the call and it will not count here.
+ */
 export function spentToday(h: string, seat: string, provider: string, day = utcDay()): number {
-  return sumCharges(latestAttempts(h).filter((e) => e.seat === seat && e.provider === provider && e.payer === "holder" && e.day === day));
+  return sumCharges(latestAttempts(h).filter((e) => e.seat === seat && e.provider === provider && e.day === day));
 }
 
+/** The requester spend on one job, on any day: the job budget's running total. */
 export function jobSpent(h: string, job: string, provider: string): number {
   return sumCharges(latestAttempts(h).filter((e) => e.job === job && e.provider === provider && e.payer === "requester"));
 }

@@ -8,13 +8,14 @@ import { existsSync, readFileSync, writeFileSync, appendFileSync } from "node:fs
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { FlopHTTPError } from "@flop-labs/client";
+import { knownAmount } from "../src/amount.js";
 import { EXIT } from "../src/errors.js";
 import { PreSendError } from "../src/gateway.js";
 import { usableCapCharge } from "../src/ledger.js";
 import { matchReceipt, RECEIPT_IDENTITY_STATUS } from "../src/match.js";
 import { ledgerFile, receiptsDir } from "../src/paths.js";
 import type { CompleteReq, CompleteRes, Provider } from "../src/providers.js";
-import { classifyReceipt, knownSettledSpend, RECEIPT_STATES, STAGE_GATEWAY, type GatewayReceipt } from "../src/receipts.js";
+import { classifyReceipt, RECEIPT_STATES, STAGE_GATEWAY, type GatewayReceipt } from "../src/receipts.js";
 import { padQuote, TEMPLATE_PAD } from "../src/run.js";
 import { DISAGREE, SETTLES } from "../src/settlement.js";
 import { cli, readLines, readySeat, tmpHome } from "./helpers.js";
@@ -66,6 +67,17 @@ const adapters: Record<string, (i: Json, want: Json) => Promise<Json> | Json> = 
     const r = await cli(h, runArgs(["--max-tokens", String(i.max_tokens)]), { provider: new P({ estimate: i.estimate }) });
     return { exit: r.code };
   },
+  // Each run sets the payer, then runs its own job. The answer is every exit code and the seat's total for the day.
+  "cap.payer": async (i) => {
+    const h = await ready(i.cap);
+    const exits: number[] = [];
+    for (const run of i.runs) {
+      await cli(h, ["config", "set", "payer", run.payer]);
+      const args = ["run", "--seat", SEAT, "--job", run.job, "--prompt", "Say hi", "--provider", "mock", "--max-tokens", String(i.max_tokens), "--json", ...(run.job_budget === undefined ? [] : ["--job-budget", run.job_budget])];
+      exits.push((await cli(h, args, { provider: new P({ estimate: i.estimate }) })).code);
+    }
+    return { exits, spent_today: (await cli(h, ["cap", "show", "--seat", SEAT, "--json"])).json().spent_today_mock };
+  },
   "amount.text": async (i) => {
     const h = tmpHome();
     await cli(h, ["init", "--seat", SEAT]);
@@ -73,7 +85,8 @@ const adapters: Record<string, (i: Json, want: Json) => Promise<Json> | Json> = 
     if (r.code !== EXIT.OK) return { accepted: false, exit: r.code };
     return { accepted: true, value: (await cli(h, ["cap", "show", "--json"])).json().cap.daily };
   },
-  "amount.json": (i) => ({ known_settled: knownSettledSpend(i.value), usable_cap_charge: usableCapCharge(i.value) }),
+  "amount.json": (i) => ({ known_settled: knownAmount(i.value), usable_cap_charge: usableCapCharge(i.value) }),
+  "amount.reserved": (i) => ({ reserved: classifyReceipt({ request_id: "r", reserved_spend: i.value } as GatewayReceipt, { job: "j", provider: "mock" }).reserved }),
   max_tokens: async (i) => {
     const h = await ready();
     const r = await cli(h, runArgs([`--max-tokens=${i.text}`]), { provider: new P() });
@@ -113,7 +126,7 @@ const adapters: Record<string, (i: Json, want: Json) => Promise<Json> | Json> = 
   },
   "settlement.refresh": async (i, want) => {
     const h = await ready();
-    await cli(h, runArgs(["--max-tokens", "8"]), { provider: new P(i.run_complete ? { complete: i.run_complete } : { read: { http: 200, error: null, receipt: i.run_read } }) });
+    await cli(h, runArgs(["--max-tokens", "8"]), { provider: new P(i.run_complete ? { complete: i.run_complete } : { costFlop: i.run_cost_flop, read: { http: 200, error: null, receipt: i.run_read } }) });
     const rid = ridOf(h);
     if ("prev_cap_charge" in i) {
       const rows = ledger(h);

@@ -1,7 +1,9 @@
 /**
  * While spend is unresolved, reported usage must not lower the pre-call reservation.
  * A higher report raises exposure. An explicit settled amount, including settled 0,
- * is the charge. Withholding the response text does not prove nothing was charged.
+ * is the booked spend. It is also the charge, unless the reported cost is higher
+ * (swarm audit of 8ddc5d2, finding 2). Withholding the response text does not prove
+ * nothing was charged.
  * The 64-hex marker is synthetic and is not a key.
  */
 import { readFileSync } from "node:fs";
@@ -172,9 +174,12 @@ describe("known settlement", () => {
     await expectExposure(home, result, printed, { state: "settled", spend: 0.05, cost_reported: 0.01, cap_charge: 0.05 });
   });
 
-  it("an explicit settled zero still charges zero over a higher usage report", async () => {
+  // Swarm audit of 8ddc5d2, finding 2: this test was "an explicit settled zero still charges zero over a
+  // higher usage report" and expected cap_charge 0. A reported cost may raise the charge and never lower
+  // it, also after settlement. Spend stays the settled 0 and the cap charge is the reported 0.25.
+  it("an explicit settled zero is the spend, and a higher usage report is the cap charge", async () => {
     const { home, result, printed } = await runWithheld("settled-zero", HIGHER, 0);
-    await expectExposure(home, result, printed, { state: "settled", spend: 0, cost_reported: HIGHER, cap_charge: 0 });
+    await expectExposure(home, result, printed, { state: "settled", spend: 0, cost_reported: HIGHER, cap_charge: HIGHER });
   });
 });
 

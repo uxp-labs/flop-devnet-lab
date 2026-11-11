@@ -1,0 +1,199 @@
+{
+ "file": "cap-payer.json",
+ "description": "The payer and the seat's daily cap (swarm audit of 8ddc5d2, finding 13): the seat's daily cap bounds every call the seat's key pays for, whoever the call is for. A requester call must fit the per-call cap, the seat's daily cap and its job budget. imd-flop: `cap set <cap>` on a fresh ledger, then each run in order: `config set payer <payer>`, then `run --job <job>` (mock, the estimate {0.066 FLOP, 3 in, 8 out, max-tokens 8}, padded 0.186), with `--job-budget <job_budget>` when the run gives one. exits: the exit code of each run. spent_today: `cap show --json` spent_today_mock after the last run. spend-guard has no payer. The viewer decides no caps.",
+ "status": "current behavior since the fix for finding 13 of the swarm audit of 8ddc5d2",
+ "vectors": [
+  {
+   "id": "payer-requester-daily-cap-bounds-every-job",
+   "rule": "cap.payer",
+   "input": {
+    "estimate": {
+     "estimated_cost_flop": 0.066,
+     "estimated_input_tokens": 3,
+     "estimated_output_tokens": 8
+    },
+    "max_tokens": 8,
+    "cap": "0.2",
+    "runs": [
+     {
+      "payer": "requester",
+      "job": "job-1",
+      "job_budget": "1"
+     },
+     {
+      "payer": "requester",
+      "job": "job-2",
+      "job_budget": "1"
+     },
+     {
+      "payer": "requester",
+      "job": "job-3",
+      "job_budget": "1"
+     },
+     {
+      "payer": "requester",
+      "job": "job-4",
+      "job_budget": "1"
+     },
+     {
+      "payer": "requester",
+      "job": "job-5",
+      "job_budget": "1"
+     }
+    ]
+   },
+   "expect": {
+    "imd-flop": {
+     "exits": [
+      0,
+      3,
+      3,
+      3,
+      3
+     ],
+     "spent_today": 0.186
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard has no payer and keeps no running total; it checks one call against one cap"
+    },
+    "viewer": {
+     "not_applicable": "viewer does not decide caps; its side of this rule is pinned by the label-requester vectors in viewer-labels.json"
+    }
+   },
+   "quirks": [
+    "Q-PAYER-DAILY-CAP"
+   ],
+   "note": "The audit's repro. Each job brings its own budget of 1, and the seat's daily cap still bounds them all. Was exits [0, 0, 0, 0, 0], 0.93 FLOP reserved in one UTC day against a 0.2 FLOP/day cap, and spent_today 0."
+  },
+  {
+   "id": "payer-requester-inside-daily-cap-over-job-budget",
+   "rule": "cap.payer",
+   "input": {
+    "estimate": {
+     "estimated_cost_flop": 0.066,
+     "estimated_input_tokens": 3,
+     "estimated_output_tokens": 8
+    },
+    "max_tokens": 8,
+    "cap": "5",
+    "runs": [
+     {
+      "payer": "requester",
+      "job": "job-1",
+      "job_budget": "0.3"
+     },
+     {
+      "payer": "requester",
+      "job": "job-1",
+      "job_budget": "0.3"
+     }
+    ]
+   },
+   "expect": {
+    "imd-flop": {
+     "exits": [
+      0,
+      3
+     ],
+     "spent_today": 0.186
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard has no payer and keeps no running total; it checks one call against one cap"
+    },
+    "viewer": {
+     "not_applicable": "viewer does not decide caps; its side of this rule is pinned by the label-requester vectors in viewer-labels.json"
+    }
+   },
+   "quirks": [
+    "Q-PAYER-DAILY-CAP"
+   ],
+   "note": "The second, narrower limit: the day has room (5), the job budget (0.3) does not fit a second 0.186. The exits were the same before finding 13. spent_today was 0."
+  },
+  {
+   "id": "payer-holder-call-after-requester-call-sees-its-charge",
+   "rule": "cap.payer",
+   "input": {
+    "estimate": {
+     "estimated_cost_flop": 0.066,
+     "estimated_input_tokens": 3,
+     "estimated_output_tokens": 8
+    },
+    "max_tokens": 8,
+    "cap": "0.2",
+    "runs": [
+     {
+      "payer": "requester",
+      "job": "job-1",
+      "job_budget": "1"
+     },
+     {
+      "payer": "holder",
+      "job": "job-2"
+     }
+    ]
+   },
+   "expect": {
+    "imd-flop": {
+     "exits": [
+      0,
+      3
+     ],
+     "spent_today": 0.186
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard has no payer and keeps no running total; it checks one call against one cap"
+    },
+    "viewer": {
+     "not_applicable": "viewer does not decide caps; its side of this rule is pinned by the label-requester vectors in viewer-labels.json"
+    }
+   },
+   "quirks": [
+    "Q-PAYER-DAILY-CAP"
+   ],
+   "note": "One daily total for the seat, all payers: the requester call's 0.186 leaves 0.014 for the holder call. Was exits [0, 0] and spent_today 0.186 (the holder call alone)."
+  },
+  {
+   "id": "payer-requester-call-after-holder-call-sees-its-charge",
+   "rule": "cap.payer",
+   "input": {
+    "estimate": {
+     "estimated_cost_flop": 0.066,
+     "estimated_input_tokens": 3,
+     "estimated_output_tokens": 8
+    },
+    "max_tokens": 8,
+    "cap": "0.2",
+    "runs": [
+     {
+      "payer": "holder",
+      "job": "job-1"
+     },
+     {
+      "payer": "requester",
+      "job": "job-2",
+      "job_budget": "1"
+     }
+    ]
+   },
+   "expect": {
+    "imd-flop": {
+     "exits": [
+      0,
+      3
+     ],
+     "spent_today": 0.186
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard has no payer and keeps no running total; it checks one call against one cap"
+    },
+    "viewer": {
+     "not_applicable": "viewer does not decide caps; its side of this rule is pinned by the label-requester vectors in viewer-labels.json"
+    }
+   },
+   "quirks": [
+    "Q-PAYER-DAILY-CAP"
+   ],
+   "note": "The same total read from the other side: the holder call's 0.186 leaves 0.014 for the requester call. Was exits [0, 0]."
+  }
+ ]
+}

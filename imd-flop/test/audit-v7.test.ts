@@ -169,7 +169,11 @@ describe("TS-L5 refresh books a settlement learned under an unchanged state", ()
 });
 
 describe("TS-L6 refresh has a redaction fallback", () => {
-  it("TS-L6 key-shaped settled_spend_raw: refresh exits 0, raw nulled, settlement booked", async () => {
+  // Swarm audit of 8ddc5d2, finding 1: this test used to expect the settlement to be booked
+  // ({ state: "settled", spend: 0.05, cap_charge: 0.05 }). A receipt body that had to be redacted never
+  // proves a settlement, in receipt --refresh as in run, so the reservation stays. The fallback itself
+  // (exit 0, raw nulled, file written) is unchanged.
+  it("TS-L6 key-shaped settled_spend_raw: refresh exits 0, raw nulled, reservation held", async () => {
     const home = tmpHome();
     await readySeat(home, SEAT, "5");
     const opened = await cliP(home, runArgs(), new P());
@@ -180,7 +184,7 @@ describe("TS-L6 refresh has a redaction fallback", () => {
     }
     const file = JSON.parse(readFileSync(join(home, "receipts", `${id}.json`), "utf8"));
     expect(file.settled_raw).toBeNull();
-    expect(rows(home, id).at(-1)).toMatchObject({ state: "settled", spend: 0.05, cap_charge: 0.05 });
+    expect(rows(home, id).at(-1)).toMatchObject({ state: "estimated", spend: null, cap_charge: 0.186 });
   });
 });
 

@@ -13,6 +13,7 @@
  * This file holds the two that were still open at b6f4e0f. Each test asserts the safe outcome, so it
  * fails there and passes with its fix:
  *   6  a refusal at the pre-mint gate exits 5, as the same refusal does at the first gate
+ *      (the two controls exited 1 then. Since the swarm audit of 8ddc5d2, finding 9, they exit 11.)
  *   7  the Ethereum RPC URL, which often carries a key, never reaches stderr or the ledger
  * Stub providers and scripted fetches only; no network (test/setup.ts disables fetch).
  */
@@ -49,12 +50,15 @@ const runArgs = (job: string) => ["run", "--seat", SEAT, "--job", job, "--prompt
 type Row = { request_id: string | null; state: string; cap_charge: number; reason: string | null };
 const ledger = (home: string) => (existsSync(join(home, "ledger.jsonl")) ? (readLines(join(home, "ledger.jsonl")) as Row[]) : []);
 
-describe("finding 6: a pre-mint gate refusal exits 5 (REFUSED_RULE), other pre-send failures exit 1", () => {
+// Swarm audit of 8ddc5d2, finding 9: the two controls pinned exit 1 (EXIT.ERROR), the same code as a gateway
+// error on the paid call. A pre-send failure that is not a gate refusal now has its own code, NOT_SENT (11).
+// The gate refusal itself is unchanged: exit 5.
+describe("finding 6: a pre-mint gate refusal exits 5 (REFUSED_RULE), other pre-send failures exit 11 (NOT_SENT)", () => {
   const GATE = "FLOP genesis check failed: pinned a vs faucet b vs rpc c (genesis mismatch). Devnet may have reset.";
   const cases: { name: string; error: () => Error; code: number }[] = [
     { name: "the gate refuses", error: () => new PaidGateError(GATE), code: EXIT.REFUSED_RULE },
-    { name: "the child-key mint fails (control)", error: () => new PreSendError("child key mint HTTP 500"), code: EXIT.ERROR },
-    { name: "the run is aborted before send (control)", error: () => new PreSendError("aborted before send (after the network check): no answer within 50 ms"), code: EXIT.ERROR },
+    { name: "the child-key mint fails (control)", error: () => new PreSendError("child key mint HTTP 500"), code: EXIT.NOT_SENT },
+    { name: "the run is aborted before send (control)", error: () => new PreSendError("aborted before send (after the network check): no answer within 50 ms"), code: EXIT.NOT_SENT },
   ];
   for (const c of cases) {
     it(`${c.name}: exit ${c.code}, the reservation is released, and the next run is not capped`, async () => {

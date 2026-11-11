@@ -3,7 +3,7 @@ import { readJson, writeJsonSafe } from "./store.js";
 
 export type Payer = "holder" | "requester";
 export interface SeatCap {
-  daily: number; // FLOP per UTC day, holder-paid spend
+  daily: number; // FLOP per UTC day, for every call the seat's key pays for
   perCall: number; // FLOP per call (padded quote)
 }
 export interface Config {

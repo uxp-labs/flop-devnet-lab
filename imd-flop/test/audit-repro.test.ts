@@ -134,6 +134,9 @@ describe("audit claim 2 settled zero before settlement", () => {
     ]);
   });
 
+  // Swarm audit of 8ddc5d2, finding 2: this test expected cap_charge 0. The completion reported
+  // cost_flop 0.01, and a reported cost may raise the charge and never lower it, also after settlement.
+  // The settled zero is still honoured as the spend. The cap charge is the reported 0.01.
   it("honours an explicit settled zero when the receipt state is settled", async () => {
     const home = tmpHome();
     await readySeat(home, SEAT, "5");
@@ -148,7 +151,7 @@ describe("audit claim 2 settled zero before settlement", () => {
     expect(run.code, run.err).toBe(0);
     const rows = readLines(join(home, "ledger.jsonl")) as { request_id: string | null; cap_charge: number | null; spend: number | null }[];
     const latest = rows.filter((row) => row.request_id === run.json().request_id).at(-1);
-    expect(latest).toMatchObject({ cap_charge: 0, spend: 0 });
+    expect(latest).toMatchObject({ cap_charge: 0.01, spend: 0 });
   });
 });
 
