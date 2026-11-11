@@ -140,18 +140,25 @@ function stateAfter(prev: string, o: ReadOutcome): string {
 }
 
 /**
- * The exact spend after a read (money stage 1): the row's spend_raw, the exact spend in base units (10^18
- * per FLOP) as a canonical digit string, or null for unknown. Only a trusted read in a settling state sets
- * it, from its raw value through the exact amount rule (amount.ts exactAmount). Like the float spend it is
- * never lowered: an exact amount lower than or equal to the booked one changes nothing, and a higher one is
- * booked. A booked value that is not an exact amount (a row written before money stage 1 has none) is
- * unknown, never 0, so any exact amount is above it. decideBooking does not ask this for a read it refuses.
+ * The exact spend after a read that is booked (money stage 1): the row's spend_raw, the exact spend in base
+ * units (10^18 per FLOP) as a canonical digit string, or null for unknown. It describes the booked float
+ * spend, so it moves with it. `spend` is the float spend the read books.
+ *  - When the read changes the float spend from one known amount to a different known amount, the exact
+ *    spend is that read's own: its exact amount (amount.ts exactAmount), or unknown.
+ *  - Otherwise it only rises: only a trusted read in a settling state brings an exact amount, an unknown
+ *    booked one is filled, a higher one replaces a lower one, and an equal or lower one changes nothing. A
+ *    booked value that is not an exact amount (a row written before money stage 1 has none) is unknown,
+ *    never 0.
+ * decideBooking does not ask this for a read it refuses: that read sets nothing.
  * Per FLOP's own sources, read 2026-11-11: the chain counts money in whole base units in a u128, and the
  * gateway's settled_spend_raw is the exact amount, while settled_spend comes from a legacy floating point
  * ledger. The float and exact figures are not compared yet: the right tolerance needs a live receipt.
  */
-function exactAfter(booked: string | null | undefined, o: ReadOutcome): string | null | undefined {
+function exactAfter(prev: { spend: unknown; spend_raw?: string | null }, o: ReadOutcome, spend: number | null): string | null | undefined {
+  const booked = prev.spend_raw;
   const incoming = trustedRead(o) && o.state !== null && SETTLES.has(o.state) ? exactAmount(o.settledRaw) : null;
+  const before = knownAmount(prev.spend);
+  if (before !== null && spend !== null && spend !== before) return incoming;
   if (incoming === null) return booked;
   const known = exactAmount(booked);
   return known === null || BigInt(incoming) > BigInt(known) ? incoming : booked;
@@ -194,14 +201,15 @@ export interface Decision<C> {
  *  - A charge that is not a known amount is never replaced by a guess, and never by 0. That is a booked
  *    charge that is not a known amount, or a padded quote that is not one on a refused_local row a trusted
  *    read moves. Unless a proven settlement replaces it, the read disagrees and nothing changes.
- *  - The exact spend (money stage 1) follows exactAfter on every read that is not refused. A read that
- *    disagrees sets nothing, exact spend included. The exact spend never changes state, spend or charge.
+ *  - The exact spend (money stage 1) follows exactAfter on every read that is not refused: it is replaced
+ *    with the float spend it describes and otherwise only rises. A read that disagrees sets nothing, exact
+ *    spend included. The exact spend never changes state, spend or charge.
  * Two reads of one request can differ, and that is normal, not an attack: per the gateway's OpenAPI
  * (CredentialReceipt), read 2026-11-11, later reconciliation can change the gateway's ledger observation.
  * So two trusted reads book the same spend and charge in either order (test/decision-properties.test.ts).
- * They book the same exact spend in either order too, except for two shapes that test counts: one read is
- * refused only because the charge it would hold is unknown, or the read that settles higher carries no
- * exact amount while the lower one does. Both come from the rule that a refused read sets nothing.
+ * They book the same pair of spend and exact spend in either order too, except for one shape that test
+ * counts: one read is refused only because the charge it would hold is unknown, which only a damaged row
+ * or a released reservation with an unknown padded quote can meet.
  * The rule this encodes for the future: a gateway read alone never lowers a booked settlement. On FLOP a
  * refund comes from an upheld fraud verdict, which is proven on chain: per FLOP's docs, a session's payment
  * sits in escrow against the proof, and an upheld fraud verdict refunds the agent. Nothing in imd-flop
@@ -212,10 +220,10 @@ export function decideBooking<C>(prev: PrevBooking<C>, o: ReadOutcome, costRepor
   const lowers = lowersSettlement(prev, o);
   const state = lowers ? prev.state : stateAfter(prev.state, o);
   const settled = settledSpend(o);
-  if (settled !== null && !lowers) return { booking: { state, spend: settled, cap_charge: raisedBy(settled, costReported), spend_raw: exactAfter(prev.spend_raw, o) }, disagree: false };
+  if (settled !== null && !lowers) return { booking: { state, spend: settled, cap_charge: raisedBy(settled, costReported), spend_raw: exactAfter(prev, o, settled) }, disagree: false };
   const held = heldCharge(prev, state);
   if (held === null) return { booking: { state: prev.state, spend: prev.spend, cap_charge: prev.cap_charge, spend_raw: prev.spend_raw }, disagree: true };
-  return { booking: { state, spend: prev.spend, cap_charge: raisedBy(held, costReported), spend_raw: lowers ? prev.spend_raw : exactAfter(prev.spend_raw, o) }, disagree: lowers };
+  return { booking: { state, spend: prev.spend, cap_charge: raisedBy(held, costReported), spend_raw: lowers ? prev.spend_raw : exactAfter(prev, o, prev.spend) }, disagree: lowers };
 }
 
 /**

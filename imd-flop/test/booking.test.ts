@@ -113,7 +113,9 @@ describe("decideBooking: the one decision for every receipt read", () => {
 
   it("a proven settlement replaces the booked spend, and its charge replaces the hold", () => {
     expect(decideBooking(held, trusted("settled", 0.05), null)).toEqual({ booking: { state: "settled", spend: 0.05, cap_charge: 0.05 }, disagree: false });
-    expect(decideBooking(settled007, trusted("released", 0.09), null)).toEqual({ booking: { state: "released", spend: 0.09, cap_charge: 0.09 }, disagree: false });
+    // Moved (money stage 1, decision 1): a read that books a different known spend brings its own exact
+    // spend, here unknown (null). The state, spend and charge are as before.
+    expect(decideBooking(settled007, trusted("released", 0.09), null)).toEqual({ booking: { state: "released", spend: 0.09, cap_charge: 0.09, spend_raw: null }, disagree: false });
   });
 
   it("the state moves only forward: a trusted pending read never takes a settling state back", () => {
@@ -1126,6 +1128,41 @@ describe("money stage 1: the stored receipt keeps the channel id", () => {
     const none = await ready();
     const plain = await cli(none, runArgs(), { provider: new P({ read: withChannel(null) }) });
     expect((await cli(none, ["receipt", plain.json().request_id])).out).not.toContain("channel_id");
+  });
+});
+
+describe("money stage 1, decision 1: the exact spend describes the booked float spend", () => {
+  // Coordinator's decision: when a booked read changes the float spend from one known amount to a
+  // different one, the exact amount comes from that read alone (its exact amount, or unknown). Otherwise it
+  // only rises. "A then B" (A: 0.05 with an exact amount, B: 0.07 with none) and the higher spend with a lower
+  // exact amount failed before: A then B left spend 0.07 beside the exact amount of the 0.05 read. "B then
+  // A" and the float spend unknown first passed before too: they are pins of the rule's other half.
+  const A = (id: string) => receiptFor(id, { settled_spend: 0.05, settled_spend_raw: "50000000000000000", state: "settled" });
+  const B = (id: string) => receiptFor(id, { settled_spend: 0.07, settled_spend_raw: null, state: "settled" });
+  const pair = (h: string) => { const r = ledger(h).at(-1)! as Row & { spend_raw?: unknown }; return { spend: r.spend, spend_raw: r.spend_raw ?? null }; };
+
+  for (const [name, first, second] of [["A then B", A, B], ["B then A", B, A]] as const) {
+    it(`${name}: the row ends with spend 0.07 and no exact amount`, async () => {
+      const h = await ready();
+      const run = await cli(h, runArgs(), { provider: new P({ read: first }) });
+      await cli(h, refreshArgs(run.json().request_id), { provider: new P({ read: second }) });
+      expect(pair(h)).toEqual({ spend: 0.07, spend_raw: null });
+    });
+  }
+
+  it("the float spend unknown first and known later: the exact amount is kept", async () => {
+    const h = await ready();
+    const run = await cli(h, runArgs(), { provider: new P({ read: (id) => receiptFor(id, { settled_spend: null, settled_spend_raw: "50000000000000000", state: "released" }) }) });
+    expect(pair(h)).toEqual({ spend: null, spend_raw: "50000000000000000" });
+    await cli(h, refreshArgs(run.json().request_id), { provider: new P({ read: (id) => receiptFor(id, { settled_spend: 0.05, settled_spend_raw: null, state: "released" }) }) });
+    expect(pair(h)).toEqual({ spend: 0.05, spend_raw: "50000000000000000" });
+  });
+
+  it("a higher float spend with its own exact amount replaces both, even with a lower exact amount", async () => {
+    const h = await ready();
+    const run = await cli(h, runArgs(), { provider: new P({ read: A }) });
+    await cli(h, refreshArgs(run.json().request_id), { provider: new P({ read: (id) => receiptFor(id, { settled_spend: 0.07, settled_spend_raw: "7", state: "settled" }) }) });
+    expect(pair(h)).toEqual({ spend: 0.07, spend_raw: "7" });
   });
 });
 
