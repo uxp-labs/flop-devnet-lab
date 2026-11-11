@@ -889,3 +889,49 @@ describe("third IMD audit: a head with keys left out, a /chain status that is no
     expect(s.status.reset_detected).toBe(true);
   });
 });
+
+describe("the spec floor: the runtime version never goes down on a genesis (RULES.md 1.1, anchor step)", () => {
+  // status-healthy reads runtime spec 1014002 at its finalized head.
+  const spec = (runtime_version: number, genesis: string = DEVNET_GENESIS) => ({ genesis, runtime_version });
+  const assess = (earlierSpec: unknown, patch: Record<string, unknown> = {}) => {
+    const src = fx("status-healthy");
+    return assessNetwork(new FixtureSource({ ...src.data, ...patch } as never), { pinnedGenesis: DEVNET_GENESIS, now: NOW, earlierSpec: earlierSpec as never });
+  };
+
+  it("a version below the highest one an earlier snapshot saw on this genesis is a conflict, and the head is not usable", async () => {
+    const base = (await assess(null)).status;
+    const { status, rpcUsable } = await assess([spec(1011000), spec(1014003), spec(1014002)]);
+    expect(status).toEqual({
+      ...base,
+      reset_detected: null,
+      conflicts: ["runtime version 1014002 is below the version 1014003 an earlier snapshot saw on this genesis"],
+      rpc: { ...base.rpc, health: "degraded", detail: "runtime version went backwards" },
+    });
+    expect(rpcUsable).toBe(false);
+  });
+
+  it("a higher or equal version is no conflict and changes nothing: the runtime is upgraded in place on one genesis", async () => {
+    const base = await assess(null);
+    expect(base.status.reset_detected).toBe(false);
+    expect(await assess([spec(1011000), spec(1011003)])).toEqual(base);
+    expect(await assess([spec(1014002)])).toEqual(base);
+  });
+
+  it("versions read on another genesis set no floor", async () => {
+    expect(await assess([spec(9_000_000, OTHER)])).toEqual(await assess(null));
+  });
+
+  it("an unknown version is no verdict, and does not keep reset_detected from false by itself", async () => {
+    const src = fx("status-healthy");
+    const rpcHead = { ...(src.data.rpcHead as object), runtime_spec_version: null };
+    const unknown = await assess([spec(1014003)], { rpcHead });
+    expect(unknown).toEqual(await assess(null, { rpcHead }));
+    expect([unknown.status.reset_detected, unknown.status.conflicts, unknown.status.runtime_version]).toEqual([false, [], null]);
+  });
+
+  it("200,000 earlier versions give the floor a short history does", async () => {
+    const many = Array.from({ length: 200_000 }, (_, i) => spec(1011000 + (i % 3000)));
+    many[123_456] = spec(1014003);
+    expect((await assess(many)).status.conflicts).toEqual(["runtime version 1014002 is below the version 1014003 an earlier snapshot saw on this genesis"]);
+  });
+});

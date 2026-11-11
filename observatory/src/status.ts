@@ -43,6 +43,11 @@ export interface StatusOptions {
    * than the lag limit on the same genesis).
    */
   earlierBest?: readonly EarlierBest[] | null;
+  /**
+   * The runtime version every earlier snapshot in the log read, with its RPC genesis, oldest first
+   * (RULES.md 1.1: the spec floor). The runtime is upgraded in place, so a lower one is a reset.
+   */
+  earlierSpec?: readonly EarlierSpec[] | null;
 }
 
 /** One earlier snapshot's runtime version and the RPC genesis it read it on (RULES.md 1.1, the spec floor). */
@@ -263,6 +268,7 @@ export function classifyRpc(
   flags: HeadFlags = { contradicted: false, stuck: false },
   earlierTimes: StatusOptions["earlierTimes"] = null,
   earlierBest: StatusOptions["earlierBest"] = null,
+  earlierSpec: StatusOptions["earlierSpec"] = null,
 ): NetworkStatus["rpc"] {
   // Every earlier head on this genesis counts, in log order, so a snapshot in between with no RPC
   // reading (or one on another genesis) cannot hide a rollback.
@@ -352,6 +358,18 @@ export function classifyRpc(
   if (highestBest !== null && best !== null && best < highestBest - o.maxFinalityLag) {
     conflicts.push(`best block ${best} is more than ${o.maxFinalityLag} blocks below the best block ${highestBest} an earlier snapshot saw on this genesis`);
     problems.push("best height fell further than the lag limit below an earlier best height");
+    flags.contradicted = true;
+  }
+  // The spec floor: the runtime is upgraded in place on one genesis, never downgraded, so a version
+  // below the highest one an earlier snapshot saw on this genesis is a reset or a rollback. A higher
+  // one is an upgrade and changes nothing. An unknown one is no verdict: the head rules already
+  // judge a head that read nothing. A fold, as for the heights.
+  const spec = nonNegativeInt(head.runtime_spec_version);
+  const specSeen = genesis === null ? [] : (earlierSpec ?? []).filter((p) => p.genesis === genesis).map((p) => p.runtime_version);
+  const highestSpec = specSeen.length > 0 ? specSeen.reduce((m, v) => Math.max(m, v), -Infinity) : null;
+  if (highestSpec !== null && spec !== null && spec < highestSpec) {
+    conflicts.push(`runtime version ${spec} is below the version ${highestSpec} an earlier snapshot saw on this genesis`);
+    problems.push("runtime version went backwards");
     flags.contradicted = true;
   }
   if (finalized && highest !== null) {
@@ -516,7 +534,7 @@ export async function assessNetwork(source: Source, opts: StatusOptions): Promis
   }
 
   const flags: HeadFlags = { contradicted: false, stuck: false };
-  const rpc = classifyRpc(head, o, conflicts, opts.previous ?? null, rpcGenesis, flags, opts.earlierTimes ?? null, opts.earlierBest ?? null);
+  const rpc = classifyRpc(head, o, conflicts, opts.previous ?? null, rpcGenesis, flags, opts.earlierTimes ?? null, opts.earlierBest ?? null, opts.earlierSpec ?? null);
   const finalizedValid =
     head.finalized && nonNegativeInt(head.finalized.number) !== null && normalizeHash(head.finalized.hash) !== null;
   const finalizedHeight = finalizedValid ? (head.finalized as { number: number }).number : null;
