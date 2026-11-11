@@ -13,7 +13,7 @@ import { checkGenesis, readVerifiedSeatOwner, enrollChallengeUrl, getEnrollChall
 import { FlopProvider, MOCK_SCENARIOS, MockProvider, type MockScenario, type Provider } from "./providers.js";
 import { checkLinkForRun, runJob } from "./run.js";
 import { overDailyCap, padQuote, parseAmount } from "./policy.js";
-import { appendLedger, latestAttempts, reportedSpendToday, spentToday } from "./ledger.js";
+import { appendLedger, latestAttempts, reportedSpendToday, spentToday, UnusableLedgerRow, type LedgerEntry } from "./ledger.js";
 import { listReceipts, readSavedReceipt, receiptVerdicts, refreshReceipt, type SavedReceipt } from "./receipt-store.js";
 import { blank, classifyReceipt, receiptLine } from "./receipts.js";
 import { registerSecret } from "./secrets.js";
@@ -403,8 +403,15 @@ export async function main(argv: string[], io: IO): Promise<number> {
         const rid = positionals[0];
         if (!rid || !/^[\x21-\x7e]{1,128}$/.test(rid) || rid.includes("/")) throw new CliError("usage: receipt <request_id>", EXIT.USAGE);
         let saved: SavedReceipt | null = readSavedReceipt(h, rid);
-        // Timeouts have a ledger row but no receipt file yet.
-        let ledgerRow = latestAttempts(h).find((e) => e.request_id === rid);
+        // Timeouts have a ledger row but no receipt file yet. A damaged ledger line stops every receipt
+        // command except a refresh of a stored receipt: that one stores its read, then stops at the same
+        // line when it comes to book (receipt-store.ts refreshReceipt), so the read is not lost.
+        let ledgerRow: LedgerEntry | undefined;
+        try {
+          ledgerRow = latestAttempts(h).find((e) => e.request_id === rid);
+        } catch (e) {
+          if (!(e instanceof UnusableLedgerRow && values.refresh && saved)) throw e;
+        }
         if (!saved && !ledgerRow) throw new CliError(`no receipt or ledger entry for ${rid}`, EXIT.USAGE);
         if (values.refresh) {
           const p = makeProvider(io, saved?.provider ?? ledgerRow!.provider, h, saved?.seat ?? ledgerRow!.seat, { live: values.live, scenario: saved?.mock_scenario });

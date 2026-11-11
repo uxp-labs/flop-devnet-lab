@@ -72,13 +72,27 @@ interface Line {
   row: LedgerEntry;
 }
 
-/** Every row of ledger.jsonl with its line number. */
+/**
+ * Every row of ledger.jsonl with its line number. A line that is not valid JSON, or is JSON but not an object,
+ * is damaged: it throws UnusableLedgerRow naming the line, and nothing that reads the ledger goes on as if
+ * it were not there. `run` refuses (exit 3, nothing sent), and every other command exits 1 with the same
+ * message. A damaged ledger is not a disagreement between a receipt and the ledger.
+ */
 function ledgerLines(h: string): Line[] {
   const path = ledgerFile(h);
   if (!existsSync(path)) return [];
   const lines: Line[] = [];
   readFileSync(path, "utf8").split("\n").forEach((text, i) => {
-    if (text.trim().length > 0) lines.push({ n: i + 1, row: JSON.parse(text) as LedgerEntry });
+    if (text.trim().length === 0) return;
+    const damaged = (why: string) => new UnusableLedgerRow(`ledger line ${i + 1} cannot be read: ${why}; next call refused. Repair or remove that line.`);
+    let row: unknown;
+    try {
+      row = JSON.parse(text);
+    } catch {
+      throw damaged("not valid JSON");
+    }
+    if (row === null || typeof row !== "object" || Array.isArray(row)) throw damaged("not a JSON object");
+    lines.push({ n: i + 1, row: row as LedgerEntry });
   });
   return lines;
 }
@@ -100,8 +114,9 @@ export function latestAttempts(h: string): LedgerEntry[] {
 }
 
 /**
- * A ledger row a total cannot use, so the next call is refused (exit 3, nothing sent). The message names the
- * ledger line so the holder can repair it. run.ts refuses on any of these.
+ * A ledger line that cannot be used: it cannot be read (ledgerLines), it cannot be placed in a total
+ * (placed), or its charge is not a known amount (sumCharges). The message names the ledger line so the
+ * holder can repair it. run.ts refuses on any of these (exit 3, nothing sent).
  */
 export class UnusableLedgerRow extends Error {}
 /** The row's cap_charge is not a known amount. */

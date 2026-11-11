@@ -9,7 +9,7 @@ import { join } from "node:path";
 import { CliError, EXIT } from "./errors.js";
 import { readIdentity } from "./keys.js";
 import { bookRead } from "./booking.js";
-import { latestAttempts, LedgerLockError, type LedgerEntry } from "./ledger.js";
+import { latestAttempts, LedgerLockError, UnusableLedgerRow, type LedgerEntry } from "./ledger.js";
 import { matchable, matchReceipt, type ReceiptIds } from "./match.js";
 import { receiptsDir } from "./paths.js";
 import type { Provider, ReceiptRead } from "./providers.js";
@@ -167,7 +167,8 @@ export const LEDGER_BUSY = "ledger busy; the receipt read was stored and nothing
  * `receipt <id> --refresh`: read the receipt again, store it, and book what it proves through the booking
  * step, against the latest ledger row of the request. `warn` receives one line when the read is not
  * booked: LEDGER_BUSY when the ledger lock could not be taken (LedgerLockError), and DISAGREE when the
- * booking step refused the read or threw anything else, a failed append for one. It also receives
+ * booking step refused the read or threw anything else, a failed append for one, except a damaged ledger
+ * line (UnusableLedgerRow), which it throws after the read is stored. It also receives
  * PAST_ADMITTED when the booking puts the day in a state the cap did not admit. Whether the stored receipt
  * and the ledger disagree afterwards is not decided here: receiptVerdicts reads it from the files.
  */
@@ -197,6 +198,9 @@ export async function refreshReceipt(
     if (booked.pastAdmitted) warn(PAST_ADMITTED);
     return { saved, ledgerRow: booked.row };
   } catch (e) {
+    // A damaged ledger is not a disagreement: the read is stored, nothing is booked, and the error names the
+    // damaged line (exit 1).
+    if (e instanceof UnusableLedgerRow) throw e;
     // The booking step could not run. The read is stored and not booked, and the latest row keeps its
     // reservation. A lock that could not be taken says nothing about the read, so it gets its own line.
     // Any other exception, a failed append for one, may mean a booking was due and is not in the ledger.

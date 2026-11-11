@@ -340,12 +340,48 @@ describe("R8 (words): a refresh against a ledger with a damaged line exits 1, no
   // it prints receipt and ledger disagree". With an unparsable ledger line the booking step throws a
   // SyntaxError, and the catch block in refreshReceipt calls latestAttempts again, which throws the same
   // error out of the catch: exit 1, no DISAGREE. Failing closed is fine; the words say otherwise.
-  it.fails("one unparsable ledger line: the refresh stores the read, books nothing, prints DISAGREE and exits 0", async () => {
+  // Decided (review fixes 2): a damaged ledger is not a disagreement. The refresh stores the read, books
+  // nothing, exits 1 and names the damaged line. status, receipt and run name the same line.
+  const settled = (id: string) => receiptFor(id, { state: "settled", settled_spend: 0.05 });
+  async function damaged(text: string) {
     const h = await ready();
     const rid = await pendingRun(h);
-    appendFileSync(ledgerPath(h), "{\"request_id\": \n");
-    const r = await cli(h, refreshArgs(rid), { provider: new P({ read: pending }) });
-    expect({ code: r.code, warned: r.err.includes(DISAGREE) }).toEqual({ code: 0, warned: true });
+    appendFileSync(ledgerPath(h), text + "\n");
+    const lines = readFileSync(ledgerPath(h), "utf8").split("\n").filter(Boolean);
+    return { h, rid, line: lines.length, rows: lines.length - 1 };
+  }
+  const rowsOf = (h: string) => readFileSync(ledgerPath(h), "utf8").split("\n").filter(Boolean).length;
+
+  it("one unparsable ledger line: the refresh stores the read, books nothing, names the line, prints no DISAGREE and exits 1", async () => {
+    const { h, rid, line } = await damaged('{"request_id": ');
+    const before = rowsOf(h);
+    const r = await cli(h, refreshArgs(rid), { provider: new P({ read: settled }) });
+    expect({ code: r.code, warned: r.err.includes(DISAGREE), named: r.err.includes(`ledger line ${line} cannot be read: not valid JSON`) }, r.err).toEqual({ code: 1, warned: false, named: true });
+    expect(JSON.parse(readFileSync(join(h, "receipts", `${rid}.json`), "utf8")).state).toBe("settled");
+    expect(rowsOf(h)).toBe(before);
+  });
+
+  it("a line that is JSON but not an object (null) is damaged the same way", async () => {
+    const { h, rid, line } = await damaged("null");
+    const r = await cli(h, refreshArgs(rid), { provider: new P({ read: settled }) });
+    expect({ code: r.code, named: r.err.includes(`ledger line ${line} cannot be read: not a JSON object`) }, r.err).toEqual({ code: 1, named: true });
+  });
+
+  it("status, receipt and cap show exit 1 and run refuses with exit 3, nothing sent; each names the same line", async () => {
+    const { h, rid, line } = await damaged('{"request_id": ');
+    const message = `ledger line ${line} cannot be read: not valid JSON`;
+    const status = await cli(h, ["status", "--seat", SEAT, "--json"]);
+    const receipt = await cli(h, ["receipt", rid, "--json", "--seat", SEAT]);
+    const capShow = await cli(h, ["cap", "show", "--seat", SEAT]);
+    const p = new P();
+    const run = await cli(h, runArgs("jB"), { provider: p });
+    expect([status, receipt, capShow, run].map((r) => ({ code: r.code, named: r.err.includes(message) }))).toEqual([
+      { code: 1, named: true },
+      { code: 1, named: true },
+      { code: 1, named: true },
+      { code: 3, named: true },
+    ]);
+    expect(p.calls).toBe(0);
   });
 });
 
