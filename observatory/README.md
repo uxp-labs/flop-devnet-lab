@@ -205,7 +205,7 @@ building and testing decoders against real data. It is evidence, never proof of 
 
 - The request list is `recordings/requests.json`: a `flop-observatory/requests@0` in the written
   form (sorted keys, two space indent, a newline at the end), with no other key and no key twice,
-  and 1 to 256 calls, each `method`, `params` (a list) and `why` (one plain line). It is reviewed
+  and 1 to 64 calls, each `method`, `params` (a list) and `why` (one plain line). It is reviewed
   like code. The first list asks the finalized head and the genesis hash, then for each of twelve
   blocks with compute channel events its hash by height, its header, `System.Events` and
   `System.LastRuntimeUpgrade` at its hash, then the runtime version and the metadata at the last.

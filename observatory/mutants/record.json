@@ -69,7 +69,7 @@
     "find": " || v.calls.length > MAX_CALLS)",
     "replace": ")",
     "test": "test/requests.test.ts",
-    "why": "a list asks at most 256 calls"
+    "why": "a list asks at most 64 calls"
   },
   {
     "id": "requests-hash-of-parsed-value",

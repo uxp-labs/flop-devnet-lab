@@ -16,8 +16,8 @@ import { strictJson } from "./transport.js";
 
 export const REQUESTS_SCHEMA = "flop-observatory/requests@0";
 
-/** The most calls one list may ask: a run makes them one at a time, each with its 15 s limit. */
-export const MAX_CALLS = 256;
+/** The most calls one list may ask: a run makes them one at a time, each within its 15 s limit, so the record job ends within its time limit. */
+export const MAX_CALLS = 64;
 
 export interface RequestCall {
   method: string;
