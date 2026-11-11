@@ -16,16 +16,25 @@
  *    Then it removes its own right file. The lock first, the right file second.
  *  - No age rule. A provably dead owner is reclaimable at once. A lock with no readable owner, a lock of
  *    another host and a lock whose owner is alive are never removed: the waiter times out with a message
- *    that names the owner and the way back.
- *  - Right after taking the lock, the holder removes leftover right files and temporary files whose
- *    owners are provably dead. Never the lock.
+ *    that names the owner, any right file in the way, and the way back.
+ *  - Only ENOENT means the lock is absent. A lock path that cannot be read or is not a regular file has
+ *    no readable owner. An attempt answers "again" only right after this process removed the lock itself;
+ *    every other outcome waits, so the deadline is reached whatever is at the path.
+ *  - Right after taking the lock, the holder removes every right file whose token is not its own, and
+ *    every temporary file whose owner is provably dead. Never the lock.
  *
  * Why it is exclusive. Tokens are random and never reused, so a lock that stops carrying a token never
- * carries it again. While the lock carries token T, no right file of T is removed: its holder removes it
- * only after the lock stopped carrying T, and the sweep runs only under a lock that carries another
- * token. So while the lock carries T the right files of T only grow, and at most one live process holds
- * a right of T. Only that process can unlink the lock, and its re-read and unlink see the same lock.
- * test/lock-model.test.ts checks this over every interleaving of three waiters, with a crash.
+ * carries it again. While the lock carries token T, a right file of T is removed only by its own creator:
+ * the sweep runs only under a lock that carries another token, so it never removes a right of T while the
+ * lock carries T. A right of T is created exclusively and passes to the next level only when its owner is
+ * provably dead. So while the lock carries T, at most one live process holds a right of T. Only a process
+ * that holds a right of T unlinks the lock, and only after a re-read under the right shows T. So at most
+ * one process can remove the lock that carries T, and when it does the lock carried T.
+ * The sweep may remove a right of an older token whose creator is still alive. That creator's re-read shows
+ * the lock no longer carries that token, so it unlinks nothing. Its own removal of the right file then finds
+ * ENOENT, or removes a right a later reclaimer made for that same old token, which is just as harmless: the
+ * old token never comes back, so no right of it can remove anything.
+ * test/lock-model.test.ts checks this over every interleaving of three waiters, with crashes.
  *
  * The algorithm is written as generators that yield before every file operation. The driver here runs
  * them on the real file system. The model check runs them over an in memory file system and interleaves
@@ -180,19 +189,27 @@ export function* release(self: Self, lock: string): Step<Unlinked> {
   return yield* unlink(lock);
 }
 
-const isRightName = (lock: string, path: string) => path.startsWith(`${lock}.reclaim.`) && !path.endsWith(".tmp");
+/** The token a right file name is for, or null when the path is not a right file of this lock. */
+export function rightToken(lock: string, path: string): string | null {
+  const m = path.startsWith(`${lock}.reclaim.`) ? /^([^.]+)\.\d+$/.exec(path.slice(`${lock}.reclaim.`.length)) : null;
+  return m ? m[1] : null;
+}
 const isTmpName = (lock: string, path: string) => path.startsWith(`${lock}.`) && path.endsWith(".tmp");
 
 /**
- * Under the lock: remove leftover right files and temporary files whose owners are provably dead. Best
- * effort. Never the lock. Safe because the lock carries our own live token, so no right of an older
- * token can still unlink it.
+ * Under the lock: remove every right file whose token is not the lock's token, which is our own, and
+ * every temporary file whose owner is provably dead. Best effort. Never the lock. Why a right of another
+ * token may go whoever holds it: see the header.
  */
 export function* sweep(self: Self, lock: string): Step<void> {
   for (const path of yield* list(`${lock}.`)) {
-    if (!isRightName(lock, path) && !isTmpName(lock, path)) continue;
-    const o = parseOwner(yield* read(path));
-    if (o !== null && (yield* provablyDead(self, o))) yield* unlink(path, true);
+    if (isTmpName(lock, path)) {
+      const o = parseOwner(yield* read(path));
+      if (o !== null && (yield* provablyDead(self, o))) yield* unlink(path, true);
+      continue;
+    }
+    const t = rightToken(lock, path);
+    if (t !== null && t !== self.token) yield* unlink(path, true);
   }
 }
 
@@ -331,6 +348,20 @@ export interface Blocked {
 }
 
 /**
+ * The right file in the way of a reclaim of the lock that carries token: the first level whose owner is
+ * not provably dead or cannot be read. Null when there is none.
+ */
+function rightInTheWay(me: Self, lock: string, token: string): { path: string; owner: LockOwner | null } | null {
+  for (let n = 1; ; n++) {
+    const path = rightPath(lock, token, n);
+    const text = readText(path);
+    if (text === null) return null;
+    const o = parseOwner(text);
+    if (o === null || !runOnDisk(provablyDead(me, o), () => {})) return { path, owner: o };
+  }
+}
+
+/**
  * The timeout message: the lock file, its age, the recorded owner and the way back, so a holder can see
  * what is in the way and how to clear it.
  */
@@ -338,11 +369,17 @@ export function timeoutMessage(lock: string, blocked: Blocked = {}): string {
   const text = readText(lock);
   const o = parseOwner(text);
   const what = text === null ? null : whatItIs(lock);
+  const me = self("");
   let owner: string;
   if (text === null) owner = "is gone now";
   else if (o === null) owner = `has no readable owner${what ? `: ${what}` : ""}`;
+  else if (!runOnDisk(provablyDead(me, o), () => {})) owner = `is held by pid ${o.pid} on host ${o.host}`;
   else if (blocked.denied) owner = `was held by pid ${o.pid} on host ${o.host}, which is gone, and this user cannot remove that file (${blocked.denied}; it belongs to ${uidOf(lock)})`;
-  else owner = `is held by pid ${o.pid} on host ${o.host}`;
+  else {
+    const right = rightInTheWay(me, lock, o.token);
+    const who = right?.owner ? `is held by pid ${right.owner.pid} on host ${right.owner.host}` : "has no readable owner";
+    owner = `was held by pid ${o.pid} on host ${o.host}, which is gone${right ? `, and its reclaim right ${right.path} (${ageOf(right.path)}) ${who}` : ""}`;
+  }
   return `ledger lock timeout: ${lock} (${ageOf(lock)}) ${owner}. If no imd-flop process is using this home any more, remove that file and run again.`;
 }
 

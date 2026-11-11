@@ -15,7 +15,9 @@
  *  - never two live processes inside at once;
  *  - a lock whose owner is alive and holds it is never unlinked by another process, and a lock the tool
  *    must not remove (no readable owner, another host) is never unlinked;
- *  - a right file or temporary file whose owner is alive is never unlinked by another process;
+ *  - a right file of token T is never unlinked by another process than its creator while the lock carries
+ *    T (the sweep may remove a right of another token, whoever holds it), and a temporary file whose owner
+ *    is alive is never unlinked by another process;
  *  - a process that enters finds the lock carrying its own token;
  *  - in a terminal state every live process has finished, unless the lock is one the tool must not
  *    remove, and then no process got in and the lock is unchanged;
@@ -31,7 +33,7 @@
  */
 import { createHash } from "node:crypto";
 import { describe, expect, it } from "vitest";
-import { attempt, ownerText, parseOwner, provablyDead, reclaim, release, rightPath, sweep, type Attempt, type FileOp, type LockOwner, type Self, type Step, type Unlinked } from "../src/lock.js";
+import { attempt, ownerText, parseOwner, provablyDead, reclaim, release, rightPath, rightToken, sweep, type Attempt, type FileOp, type LockOwner, type Self, type Step, type Unlinked } from "../src/lock.js";
 
 const HOST = "here";
 const MAX_STATES = 3_000_000;
@@ -166,8 +168,13 @@ class Checker {
             this.fail(s, "live lock removed", `${p.name} unlinked the lock of ${holder?.name ?? `pid ${o.pid}`}, which is alive and holds it`);
           }
         }
-        if (op.path !== LOCK && s.fs.has(op.path)) {
-          // A right file or a temporary file: only its owner removes it while that owner is alive.
+        const t = rightToken(LOCK, op.path);
+        if (t !== null && s.fs.has(op.path)) {
+          // A right file of token T: only its own creator removes it while the lock carries T.
+          const o = parseOwner(s.fs.get(op.path)!);
+          if (parseOwner(s.fs.get(LOCK) ?? null)?.token === t && o?.token !== p.token) this.fail(s, "live right removed", `${p.name} unlinked ${op.path} while the lock carries its token`);
+        } else if (op.path !== LOCK && s.fs.has(op.path)) {
+          // A temporary file: only its owner removes it while that owner is alive.
           const o = parseOwner(s.fs.get(op.path)!);
           if (o !== null && o.token !== p.token && o.pid !== p.pid && this.alive(s, o.pid)) this.fail(s, "live file removed", `${p.name} unlinked ${op.path}, whose owner is alive`);
         }
@@ -502,6 +509,18 @@ const NO_LEVELS = withReclaim(function* (self, lock, token) {
   return removed;
 });
 
+/**
+ * Wrong: the sweep run by a waiter before it holds the lock, with the waiter's own token. It removes a right
+ * of the token the lock still carries, so two waiters can each hold a right of it.
+ */
+const SWEEP_BEFORE_TAKE: Algo = {
+  *attempt(self, lock) {
+    yield* sweep(self, lock);
+    return yield* attempt(self, lock);
+  },
+  release,
+};
+
 /** Wrong (review M21): "again" after any reclaim try, whether or not this process removed the lock. */
 const AGAIN_AFTER_ANY_TRY: Algo = {
   *attempt(self, lock) {
@@ -570,6 +589,11 @@ describe("ledger lock model check (src/lock.ts)", () => {
     const found = violations(RIGHT_FIRST, STARTS[0]);
     expect(found.get("live lock removed")).toMatch(/unlinked the lock of w\d, which is alive and holds it/);
     expect(found.get("two holders")).toBeDefined();
+  });
+
+  it("the sweep run before the lock is taken removes a right of the token the lock carries", () => {
+    const found = violations(SWEEP_BEFORE_TAKE, STARTS[0]);
+    expect(found.get("live right removed")).toMatch(/unlinked \S+reclaim\.td\.1 while the lock carries its token/);
   });
 
   it("liveness: answering again after any reclaim try (review M21) spins at a dead holder's lock", () => {

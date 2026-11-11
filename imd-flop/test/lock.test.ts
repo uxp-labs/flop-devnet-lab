@@ -13,7 +13,7 @@ import { hostname } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import { appendLedger, LedgerLockError, withLedgerLock, type LedgerEntry } from "../src/ledger.js";
-import { provablyDead, reclaim, rightPath, runOnDisk, timeoutMessage, type Self, type Step } from "../src/lock.js";
+import { provablyDead, reclaim, rightPath, runOnDisk, sweep, timeoutMessage, type Self, type Step } from "../src/lock.js";
 import { cli, readLines, readySeat, tmpHome } from "./helpers.js";
 
 const SEAT = "9001";
@@ -80,7 +80,10 @@ describe("finding 11 item (1): the re-check under the reclaim right", () => {
 });
 
 describe("L6: the sweep under the lock", () => {
-  it("removes leftovers of dead processes and leaves those of live processes, unreadable ones and the lock", () => {
+  // Moved (review of the lock reclaim, defect 4): right files of a live process, with no readable owner, or of
+  // another host were kept. The sweep now removes every right file whose token is not the current lock's,
+  // whoever holds it (the lock.ts header says why that is safe). Temporary files are judged by their owner.
+  it("removes every right file of another token, temporary files of dead processes, and leaves live temporary files, other names and the lock", () => {
     const h = tmpHome();
     const lock = lockPath(h);
     const dead = deadPid();
@@ -90,14 +93,24 @@ describe("L6: the sweep under the lock", () => {
       [`${rightPath(lock, "old", 2)}.${dead}.bb.tmp`]: owner(dead, "t2"),
       [rightPath(lock, "busy", 1)]: owner(process.ppid, "live-right"),
       [`${lock}.${process.ppid}.cc.tmp`]: owner(process.ppid, "live-tmp"),
+      [`${lock}.${dead}.dd.tmp`]: "",
       [rightPath(lock, "odd", 1)]: "not json",
       [rightPath(lock, "far", 1)]: owner(dead, "far", "some-other-host"),
       [`${lock}.stale.123.ab`]: owner(dead, "stale"),
     };
     for (const [path, body] of Object.entries(files)) writeFileSync(path, body);
-    const kept = ["ledger.jsonl.lock.reclaim.busy.1", `ledger.jsonl.lock.${process.ppid}.cc.tmp`, "ledger.jsonl.lock.reclaim.odd.1", "ledger.jsonl.lock.reclaim.far.1", "ledger.jsonl.lock.stale.123.ab"].sort();
+    const kept = [`ledger.jsonl.lock.${process.ppid}.cc.tmp`, `ledger.jsonl.lock.${dead}.dd.tmp`, "ledger.jsonl.lock.stale.123.ab"].sort();
     withLedgerLock(h, () => expect(lockFiles(h)).toEqual(["ledger.jsonl.lock", ...kept].sort()));
     expect(lockFiles(h)).toEqual(kept);
+  });
+
+  it("keeps a right file of the holder's own token", () => {
+    const h = tmpHome();
+    const lock = lockPath(h);
+    writeFileSync(rightPath(lock, "mine", 1), owner(deadPid(), "x"));
+    writeFileSync(rightPath(lock, "other", 1), owner(deadPid(), "y"));
+    runOnDisk(sweep(self(process.pid, "mine"), lock), noWait);
+    expect(lockFiles(h)).toEqual(["ledger.jsonl.lock.reclaim.mine.1"]);
   });
 });
 

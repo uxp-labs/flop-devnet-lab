@@ -156,25 +156,24 @@ describe("review defect 3, fixed: a write error while creating the lock leaves n
   }, 60_000);
 });
 
-describe("DEFECT 4: a right file held by a live unrelated process", () => {
+describe("review defect 4, fixed: a right file held by a live unrelated process", () => {
   // The lock's owner is dead, but the level 1 right file names a live pid (a reclaimer that died and
-  // whose pid was reused). By rule the waiter has no right and waits. The timeout then says the lock "is
-  // held by pid <the dead owner>": it blames a process that is gone and does not name the file that is
-  // really in the way. The way back (remove the lock) works, but the right file stays after it, through
-  // every sweep, for as long as the unrelated process lives.
-  it("DEFECT 4 (info): the timeout names a dead pid as the holder and not the right file in the way, and that right file is never swept", () => {
+  // whose pid was reused). By rule the waiter has no right and waits. Was: the timeout said the lock "is
+  // held by pid <the dead owner>", blamed a process that is gone, and did not name the right file in the
+  // way, which then stayed through every sweep.
+  // Decided: the timeout names the right file and its owner beside the lock, and the sweep removes every
+  // right file whose token is not the current lock's.
+  it("review defect 4, fixed: the timeout says the owner is gone and names the right file in the way and its owner, and the next holder sweeps it", () => {
     const h = tmpHome();
     const dead = deadPid();
     writeFileSync(lockPath(h), owner(dead, "T"));
     writeFileSync(`${lockPath(h)}.reclaim.T.1`, owner(process.ppid, "reused"));
     let msg = "";
     try { withLedgerLock(h, () => {}); } catch (e) { msg = (e as Error).message; }
-    expect(msg).toMatch(new RegExp(`^ledger lock timeout: \\S+ \\(\\d+ s old\\) is held by pid ${dead} on host `));
-    expect(msg).not.toContain("reclaim");
+    expect(msg).toMatch(new RegExp(`^ledger lock timeout: \\S+ledger\\.jsonl\\.lock \\(\\d+ s old\\) was held by pid ${dead} on host \\S+, which is gone, and its reclaim right \\S+ledger\\.jsonl\\.lock\\.reclaim\\.T\\.1 \\(\\d+ s old\\) is held by pid ${process.ppid} on host \\S+\\. If no imd-flop process is using this home any more, remove that file and run again\\.$`));
     unlinkSync(lockPath(h));
     withLedgerLock(h, () => {});
-    expect(existsSync(`${lockPath(h)}.reclaim.T.1`)).toBe(true);
-    expect(lockFiles(h)).toEqual(["ledger.jsonl.lock.reclaim.T.1"]);
+    expect(lockFiles(h)).toEqual([]);
   }, 30_000);
 });
 
