@@ -186,8 +186,8 @@
   {
     "id": "decode-depth-unchecked",
     "file": "src/scale/decode.ts",
-    "find": "  const label = typeLabel(d.md, id);\n  if (depth >= MAX_DEPTH) throw",
-    "replace": "  const label = typeLabel(d.md, id);\n  if (depth >= MAX_DEPTH + 64) throw",
+    "find": "  const label = labelOf(d.md, id);\n  if (depth >= MAX_DEPTH) throw",
+    "replace": "  const label = labelOf(d.md, id);\n  if (depth >= MAX_DEPTH + 64) throw",
     "test": "test/scale-decode.test.ts",
     "why": "a type nests at most MAX_DEPTH levels"
   },
@@ -330,8 +330,8 @@
   {
     "id": "events-record-fields-unchecked",
     "file": "src/scale/events.ts",
-    "find": "names.join(\",\") !== RECORD_FIELDS.join(\",\")",
-    "replace": "names.length < 2",
+    "find": "if (record?.kind !== \"composite\" || !exact) {",
+    "replace": "if (record?.kind !== \"composite\" || names.length < 2) {",
     "test": "test/events.test.ts",
     "why": "an event record has exactly phase, event and topics"
   },
@@ -354,8 +354,8 @@
   {
     "id": "shape-any-spec-version",
     "file": "src/scale/shape.ts",
-    "find": "(r) => r.specName === input.specName && r.specVersion === input.specVersion",
-    "replace": "(r) => r.specName === input.specName",
+    "find": "(r) => r.specName === i.specName && r.specVersion === i.specVersion",
+    "replace": "(r) => r.specName === i.specName",
     "test": "test/shape.test.ts",
     "why": "only a reviewed spec version is decoded"
   },
@@ -370,7 +370,7 @@
   {
     "id": "shape-file-hash-unchecked",
     "file": "src/scale/shape.ts",
-    "find": "  if (sha256(input.shapeText) !== reviewed.shapeSha256) return refuse(`the shape file given is not the reviewed ${reviewed.shapeFile}`);\n",
+    "find": "  if (sha256(i.shapeText) !== reviewed.shapeSha256) return refuse(`the shape file given is not the reviewed ${reviewed.shapeFile}`);\n",
     "replace": "",
     "test": "test/shape.test.ts",
     "why": "the shape file must be the reviewed file"
@@ -378,8 +378,8 @@
   {
     "id": "shape-channel-fields-dropped",
     "file": "src/scale/shape.ts",
-    "find": "      channels: { ...entryShape(md, channels), fields: fieldsOf(md, channel) },",
-    "replace": "      channels: { ...entryShape(md, channels) },",
+    "find": "      channels: { ...entryShape(n, channels), fields: fieldsOf(n, channel) },",
+    "replace": "      channels: { ...entryShape(n, channels) },",
     "test": "test/shape.test.ts",
     "why": "the shape holds the fields of the channel value, and the file is held to the shape derived again"
   },
@@ -394,16 +394,16 @@
   {
     "id": "shape-name-depth-off-by-one",
     "file": "src/scale/shape.ts",
-    "find": "if (depth >= MAX_NAME_DEPTH || steps.left < 0) throw",
-    "replace": "if (depth > MAX_NAME_DEPTH || steps.left < 0) throw",
+    "find": "if (depth >= MAX_NAME_DEPTH || visits.left < 0) throw",
+    "replace": "if (depth > MAX_NAME_DEPTH || visits.left < 0) throw",
     "test": "test/shape.test.ts",
     "why": "a type name nests at most MAX_NAME_DEPTH levels"
   },
   {
     "id": "block-pin-ignored",
     "file": "src/scale/block.ts",
-    "find": "  const pin = pinShape(input);",
-    "replace": "  const pin = pinShape({ ...input, specVersion: 1014014 });",
+    "find": "  const pin = pinShape(pinInput);",
+    "replace": "  const pin = pinShape({ ...pinInput, specVersion: 1014014 });",
     "test": "test/shape.test.ts",
     "why": "a block's events are decoded only once its own spec is pinned"
   },
@@ -424,14 +424,6 @@
     "why": "a pure folder imports no other src module, which could read a file"
   },
   {
-    "id": "scan-pure-names-allowed",
-    "file": "scripts/source-scan.mjs",
-    "find": "        if (isPure(file) && PURE_BANNED.has(n.name)) out.push",
-    "replace": "        if (isPure(file) && PURE_BANNED.has(n.name + \"x\")) out.push",
-    "test": "scripts/source-scan.mjs",
-    "why": "a pure folder names no clock, timer or process"
-  },
-  {
     "id": "scan-pure-random-allowed",
     "file": "scripts/source-scan.mjs",
     "find": "        if (isPure(file) && member === \"random\") out.push",
@@ -442,8 +434,8 @@
   {
     "id": "scan-reference-in-src",
     "file": "src/scale/decode.ts",
-    "find": "import { Reader, ScaleError, type Width, toHex } from \"./reader.js\";",
-    "replace": "import { Reader, ScaleError, type Width, toHex } from \"./reader.js\";\nimport { Twox128 } from \"@polkadot-api/substrate-bindings\";\nexport const referenceTwox128 = Twox128;",
+    "find": "import { Reader, ScaleError, type Width, toHex, withinSize } from \"./reader.js\";",
+    "replace": "import { Reader, ScaleError, type Width, toHex, withinSize } from \"./reader.js\";\nimport { Twox128 } from \"@polkadot-api/substrate-bindings\";\nexport const referenceTwox128 = Twox128;",
     "test": "scripts/source-scan.mjs",
     "why": "the reference decoder is for tests only: a src module that imports it fails the scan"
   },
@@ -454,5 +446,285 @@
     "replace": "export const MAX_DEPTH = 32 + Math.min(0, Date.now());",
     "test": "scripts/source-scan.mjs",
     "why": "a decoder module that reads the clock fails the scan"
+  },
+  {
+    "id": "r18-decode-char-top-edge",
+    "file": "src/scale/decode.ts",
+    "find": "if (c > 0x10ffff ||",
+    "replace": "if (c > 0x110000 ||",
+    "test": "test/review-decoder.test.ts",
+    "why": "U+110000 is no char"
+  },
+  {
+    "id": "r18-decode-surrogate-low-edge",
+    "file": "src/scale/decode.ts",
+    "find": "(c >= 0xd800 && c <= 0xdfff)",
+    "replace": "(c >= 0xd800 && c < 0xdfff)",
+    "test": "test/review-decoder.test.ts",
+    "why": "U+DFFF, the last surrogate, is no char"
+  },
+  {
+    "id": "r18-metadata-param-dangling",
+    "file": "src/scale/metadata.ts",
+    "find": "    for (const p of t.params) exists(p.type, `type ${t.id}`);\n",
+    "replace": "",
+    "test": "test/review-decoder.test.ts",
+    "why": "a type parameter that names no type is refused"
+  },
+  {
+    "id": "r18-metadata-extension-dangling",
+    "file": "src/scale/metadata.ts",
+    "find": "    exists(s.additionalSigned, `the signed extension ${s.identifier}`);\n",
+    "replace": "",
+    "test": "test/review-decoder.test.ts",
+    "why": "a signed extension's additional type must exist"
+  },
+  {
+    "id": "r18-metadata-modifier-bound",
+    "file": "src/scale/metadata.ts",
+    "find": "if (m > 1) throw",
+    "replace": "if (m > 2) throw",
+    "test": "test/review-decoder.test.ts",
+    "why": "a storage modifier is 0 or 1"
+  },
+  {
+    "id": "r18-shape-name-steps-off-by-one",
+    "file": "src/scale/shape.ts",
+    "find": "if (depth >= MAX_NAME_DEPTH || visits.left < 0) throw",
+    "replace": "if (depth >= MAX_NAME_DEPTH || visits.left < -1) throw",
+    "test": "test/review-decoder.test.ts",
+    "why": "a name visits at most 256 types"
+  },
+  {
+    "id": "r18-events-unnamed-wrapper",
+    "file": "src/scale/events.ts",
+    "find": "if (only === undefined || only.name !== null || p.event === null",
+    "replace": "if (only === undefined || p.event === null",
+    "test": "test/review-decoder.test.ts",
+    "why": "a pallet's events sit in an unnamed field of the outer enum"
+  },
+  {
+    "id": "r18-shape-steps-unbounded",
+    "file": "src/scale/shape.ts",
+    "find": "  if (n.steps.left < 0) throw new ScaleError(`the shape takes more than",
+    "replace": "  if (n.steps.left < -1e12) throw new ScaleError(`the shape takes more than",
+    "test": "test/review-decoder.test.ts",
+    "why": "one deriveShape takes at most MAX_SHAPE_STEPS steps"
+  },
+  {
+    "id": "r18-shape-chars-unbounded",
+    "file": "src/scale/shape.ts",
+    "find": "  if (n.chars.left < 0) throw",
+    "replace": "  if (n.chars.left < -1e12) throw",
+    "test": "test/review-decoder.test.ts",
+    "why": "one deriveShape writes at most MAX_SHAPE_CHARS characters"
+  },
+  {
+    "id": "r18-shape-name-length-unbounded",
+    "file": "src/scale/shape.ts",
+    "find": "export const MAX_NAME_LENGTH = 2048;",
+    "replace": "export const MAX_NAME_LENGTH = 2 ** 30;",
+    "test": "test/review-decoder.test.ts",
+    "why": "a name past its stated length is a ScaleError, never the engine's RangeError"
+  },
+  {
+    "id": "r18-shape-memo-dropped",
+    "file": "src/scale/shape.ts",
+    "find": "    if (known !== undefined) return known;\n",
+    "replace": "",
+    "test": "test/review-decoder.test.ts",
+    "why": "a name is built once per type id, so the shape's work is linear"
+  },
+  {
+    "id": "r18-shape-params-free",
+    "file": "src/scale/shape.ts",
+    "find": "        // Every parameter costs a step, one of no type too.\n        spend(n, t);\n",
+    "replace": "",
+    "test": "test/review-decoder.test.ts",
+    "why": "every type parameter costs a step"
+  },
+  {
+    "id": "r18-decode-label-eager",
+    "file": "src/scale/decode.ts",
+    "find": "const labelOf = (md: Metadata, id: number): Label => () => typeLabel(md, id);",
+    "replace": "const labelOf = (md: Metadata, id: number): Label => {\n  const l = typeLabel(md, id);\n  return () => l;\n};",
+    "test": "test/review-decoder.test.ts",
+    "why": "a label is built only when a refusal is thrown"
+  },
+  {
+    "id": "r18-decode-label-unbounded",
+    "file": "src/scale/decode.ts",
+    "find": "    if (next.length > MAX_LABEL_PATH) return `type ${id} (${next.slice(0, MAX_LABEL_PATH)}...)`;\n",
+    "replace": "",
+    "test": "test/review-decoder.test.ts",
+    "why": "a refusal shows at most MAX_LABEL_PATH characters of a path"
+  },
+  {
+    "id": "r18-pin-parses-input-again",
+    "file": "src/scale/shape.ts",
+    "find": "    const md = parseMetadata(i.metadata);",
+    "replace": "    const md = parseMetadata(input.metadata);",
+    "test": "test/review-decoder.test.ts",
+    "why": "pinShape parses the one copy it hashed"
+  },
+  {
+    "id": "r18-pin-bytes-not-copied",
+    "file": "src/scale/shape.ts",
+    "find": "  return new Uint8Array(v);",
+    "replace": "  return v;",
+    "test": "test/review-decoder.test.ts",
+    "why": "the pin copies the bytes it is given"
+  },
+  {
+    "id": "r18-events-record-joined",
+    "file": "src/scale/events.ts",
+    "find": "  const exact = names.length === RECORD_FIELDS.length && names.every((n, i) => n === RECORD_FIELDS.at(i));",
+    "replace": "  const exact = names.join(\",\") === RECORD_FIELDS.join(\",\");",
+    "test": "test/review-decoder.test.ts",
+    "why": "an event record holds exactly three fields, compared one by one"
+  },
+  {
+    "id": "r18-metadata-constant-twice",
+    "file": "src/scale/metadata.ts",
+    "find": "    if (named.has(c.name)) throw",
+    "replace": "    if (named.has(\"\\u0000\")) throw",
+    "test": "test/review-decoder.test.ts",
+    "why": "a constant name has one meaning in a pallet"
+  },
+  {
+    "id": "r18-metadata-extension-twice",
+    "file": "src/scale/metadata.ts",
+    "find": "    if (identifiers.has(s.identifier)) throw",
+    "replace": "    if (identifiers.has(\"\\u0000\")) throw",
+    "test": "test/review-decoder.test.ts",
+    "why": "a signed extension is listed once"
+  },
+  {
+    "id": "r18-metadata-prefix-shared",
+    "file": "src/scale/metadata.ts",
+    "find": "    if (other !== undefined) throw",
+    "replace": "    if (other === \"\\u0000\") throw",
+    "test": "test/review-decoder.test.ts",
+    "why": "two pallets never share a storage prefix"
+  },
+  {
+    "id": "r18-metadata-digit-names",
+    "file": "src/scale/metadata.ts",
+    "find": "const DIGITS = /^[0-9]+$/;",
+    "replace": "const DIGITS = /^$/;",
+    "test": "test/review-decoder.test.ts",
+    "why": "a field or variant name of only digits is refused"
+  },
+  {
+    "id": "r18-size-cap-raised",
+    "file": "src/scale/reader.ts",
+    "find": "export const MAX_INPUT_BYTES = 16 * 1024 * 1024;",
+    "replace": "export const MAX_INPUT_BYTES = 16 * 1024 * 1024 + 1;",
+    "test": "test/scale-fuzz.test.ts",
+    "why": "the cap is 16 MiB"
+  },
+  {
+    "id": "r18-size-cap-value-dropped",
+    "file": "src/scale/decode.ts",
+    "find": "  withinSize(bytes, \"the value\");\n",
+    "replace": "",
+    "test": "test/scale-fuzz.test.ts",
+    "why": "decodeValue refuses more than 16 MiB"
+  },
+  {
+    "id": "r18-size-cap-metadata-dropped",
+    "file": "src/scale/metadata.ts",
+    "find": "  withinSize(bytes, \"the metadata\");\n",
+    "replace": "",
+    "test": "test/scale-fuzz.test.ts",
+    "why": "parseMetadata refuses more than 16 MiB"
+  },
+  {
+    "id": "r18-size-cap-events-dropped",
+    "file": "src/scale/events.ts",
+    "find": "  withinSize(bytes, \"System.Events\");\n",
+    "replace": "",
+    "test": "test/scale-fuzz.test.ts",
+    "why": "decodeEvents refuses more than 16 MiB"
+  },
+  {
+    "id": "r18-compact-unit-refused",
+    "file": "src/scale/decode.ts",
+    "find": "  if (t.def.kind === \"tuple\" && t.def.types.length === 0) return null;\n",
+    "replace": "",
+    "test": "test/review-decoder.test.ts",
+    "why": "Compact<()> is null from no bytes"
+  },
+  {
+    "id": "r18-hasher-unknown-undefined",
+    "file": "src/scale/storage-key.ts",
+    "find": "      throw new ScaleError(`${JSON.stringify(String(hasher))} is no storage hasher`);",
+    "replace": "      return undefined as never;",
+    "test": "test/review-decoder.test.ts",
+    "why": "an unknown hasher is a ScaleError"
+  },
+  {
+    "id": "r18-closure-variants-unnamed",
+    "file": "src/scale/shape.ts",
+    "find": "    return { index: v.index, name: v.name, fields: fieldsOf(n, v.fields) };",
+    "replace": "    return { index: v.index, fields: fieldsOf(n, v.fields) };",
+    "test": "test/shape.test.ts",
+    "why": "variant names are in the shape, so ModelPrecision's variants swapped change it"
+  },
+  {
+    "id": "r18-closure-array-len-dropped",
+    "file": "src/scale/shape.ts",
+    "find": "      return { desc: { ...base, element: nameOf(n, d.type), len: d.len }, names: [...params, d.type] };",
+    "replace": "      return { desc: { ...base, element: nameOf(n, d.type) }, names: [...params, d.type] };",
+    "test": "test/shape.test.ts",
+    "why": "an array's length is in the shape, so H256 turned into [u8; 20] changes it"
+  },
+  {
+    "id": "r18-closure-composite-undescribed",
+    "file": "src/scale/shape.ts",
+    "find": "      return { desc: { ...base, fields: fieldsOf(n, d.fields) }, names: [...params, ...d.fields.map((f) => f.type)] };",
+    "replace": "      return { desc: { ...base }, names: [...params, ...d.fields.map((f) => f.type)] };",
+    "test": "test/shape.test.ts",
+    "why": "a composite's fields are in the shape, so Sla.max_turns turned into u128 changes it"
+  },
+  {
+    "id": "r18-closure-root-dropped",
+    "file": "src/scale/shape.ts",
+    "find": "  const roots = [events.value, upgrade.value, channels.value, ...(channels.key === null ? [] : [channels.key]), version.type];",
+    "replace": "  const roots = [events.value, upgrade.value, channels.value];",
+    "test": "test/shape.test.ts",
+    "why": "the closure starts from every root the observatory relies on"
+  },
+  {
+    "id": "r18-scan-free-names-unread",
+    "file": "scripts/source-scan.mjs",
+    "find": "  if (isPure(file)) out.push(...pureProblems(ast, file));",
+    "replace": "",
+    "test": "scripts/source-scan.mjs",
+    "why": "a pure module names only the globals on PURE_GLOBALS"
+  },
+  {
+    "id": "r18-scan-shadow-allowed",
+    "file": "scripts/source-scan.mjs",
+    "find": "  for (const b of binds) if (GLOBAL_NAMES.has(b)) out.push",
+    "replace": "  for (const b of binds) if (b === \"\\u0000\") out.push",
+    "test": "scripts/source-scan.mjs",
+    "why": "a pure module declares no name of a global, so no local hides one"
+  },
+  {
+    "id": "r18-scan-destructured-random",
+    "file": "scripts/source-scan.mjs",
+    "find": "  for (const k of keys) if (PURE_MEMBERS.has(k)) out.push",
+    "replace": "  for (const k of keys) if (k === \"\\u0000\") out.push",
+    "test": "scripts/source-scan.mjs",
+    "why": "a key taken by destructuring is held to the member rule"
+  },
+  {
+    "id": "r18-scan-scale-entry-any",
+    "file": "scripts/source-scan.mjs",
+    "find": "    return into.startsWith(\"scale/\") && into !== SCALE_ENTRY ?",
+    "replace": "    return false ?",
+    "test": "scripts/source-scan.mjs",
+    "why": "outside src/scale only block.ts may be imported from it"
   }
 ]
