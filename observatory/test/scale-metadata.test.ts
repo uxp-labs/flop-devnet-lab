@@ -68,7 +68,8 @@ describe("the recorded metadata", () => {
   });
 
   it("refuses the metadata cut by one byte, or with one byte more", () => {
-    expect(refusal(REAL.subarray(0, REAL.length - 1))).toMatch(/needs 1 bytes, 0 left|cut short|needs \d+ bytes/);
+    // The runtime type is the last value, a compact of two bytes: cut by one, it is cut short.
+    expect(refusal(REAL.subarray(0, REAL.length - 1))).toBe("the runtime type at byte 482130: needs 2 bytes, 1 left");
     expect(refusal(cat(REAL, bytes(0)))).toBe("the metadata ends at byte 482132, 1 bytes before the end");
   });
 });

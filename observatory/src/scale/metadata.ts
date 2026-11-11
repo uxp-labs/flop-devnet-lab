@@ -8,7 +8,7 @@
 // named and unnamed fields or names a field twice, a variant index or name used twice, two pallets
 // with one name or index, a storage entry named twice in a pallet, a map with no hasher, and a map
 // of several hashers whose key is not a tuple of as many types. It knows no pallet and no type by
-// name: what the observatory relies on is the shape's to say (src/shape.ts).
+// name: what the observatory relies on is the shape pin's to say (src/scale/shape.ts).
 import { Reader, ScaleError, toHex } from "./reader.js";
 
 export const PRIMITIVES = ["bool", "char", "str", "u8", "u16", "u32", "u64", "u128", "u256", "i8", "i16", "i32", "i64", "i128", "i256"] as const;

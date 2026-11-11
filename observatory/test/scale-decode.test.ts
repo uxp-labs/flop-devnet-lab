@@ -162,6 +162,9 @@ describe("limits and refusals", () => {
     expect(refusal(T.u32, le(1, 5))).toBe("type 5 ends at byte 4, 1 bytes before the end");
     expect(refusal(26, le(1, 4))).toBe("type 7, a u128 at byte 4: needs 16 bytes, 0 left");
     expect(refusal(99, u8(0))).toBe("type 99 does not exist");
+    // at() would read -1 as the last type: an id below 0 names nothing, in the refusal too.
+    expect(refusal(-1, u8(0))).toBe("type -1 does not exist");
+    expect(refusal(1.5, u8(0))).toBe("type 1.5 does not exist");
   });
 });
 

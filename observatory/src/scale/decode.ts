@@ -16,9 +16,10 @@
 //   a bit sequence                refused: the reviewed metadata holds none, so none is read
 //
 // Limits, each a refusal: a type nests at most MAX_DEPTH levels; a sequence or an array holds no
-// more elements than there are bytes left, whatever its element type; one value builds at most
-// 1024 + 8 values a byte; a compact must fit its type; a variant index must be one of the type's.
-// decodeValue must end exactly at the end of its bytes.
+// more elements than there are bytes left, whatever its element type; one decode takes at most
+// 1024 steps and 8 a byte, where each type it visits is one step, the inner type of a compact
+// included; a compact must fit its type; a variant index must be one of the type's. decodeValue
+// must end exactly at the end of its bytes.
 import type { Field, Metadata, Primitive, TypeEntry } from "./metadata.js";
 import { Reader, ScaleError, type Width, toHex } from "./reader.js";
 
@@ -26,7 +27,10 @@ export type Decoded = null | boolean | number | string | Decoded[] | { [name: st
 
 /** The deepest a type may nest while it is decoded. Real event records nest 8 levels. */
 export const MAX_DEPTH = 32;
-/** The most values one decode may build: 1024, and 8 for each byte it reads from. */
+/**
+ * The most steps one decode may take: 1024, and 8 for each byte it reads from. A step is one type
+ * visited, and each step does a bounded amount of other work (one pass over its fields or variants).
+ */
 export const valueBudget = (bytes: number): number => 1024 + 8 * bytes;
 
 /** One decode in progress: the metadata, the reader, and the values it may still build. */
@@ -48,13 +52,14 @@ const AS_NUMBER = new Set<Primitive>(["u8", "u16", "u32", "i8", "i16", "i32"]);
 
 /** A type's name in a refusal: its id, and its path when it has one. */
 export function typeLabel(md: Metadata, id: number): string {
-  const path = md.types.at(id)?.path ?? [];
+  // at() counts a negative id from the end, so only a whole id from 0 is looked up.
+  const path = (Number.isSafeInteger(id) && id >= 0 ? md.types.at(id)?.path : undefined) ?? [];
   return path.length > 0 ? `type ${id} (${path.join("::")})` : `type ${id}`;
 }
 
 function entry(md: Metadata, id: number): TypeEntry {
-  const t = md.types.at(id);
-  if (t === undefined || id < 0) throw new ScaleError(`type ${id} does not exist`);
+  const t = Number.isSafeInteger(id) && id >= 0 ? md.types.at(id) : undefined;
+  if (t === undefined) throw new ScaleError(`type ${id} does not exist`);
   return t;
 }
 
@@ -95,9 +100,16 @@ function count(d: Decoding, n: number, label: string): void {
   if (n > d.r.left) throw new ScaleError(`${label} at byte ${d.r.pos}: ${n} elements cannot fit in the ${d.r.left} bytes left`);
 }
 
+/** One step of work: each type a decode visits costs one value of the budget, and none is free. */
+function step(d: Decoding, label: string): void {
+  d.budget.left -= 1;
+  if (d.budget.left < 0) throw new ScaleError(`${label} at byte ${d.r.pos}: more values than the bytes can hold (at most 1024 and 8 a byte)`);
+}
+
 /** The compact form of type id, as that type's value: an unsigned integer, or fields around one. */
 function compactOf(d: Decoding, id: number, label: string, depth: number): Decoded {
   if (depth >= MAX_DEPTH) throw new ScaleError(`${label} nests deeper than ${MAX_DEPTH} levels`);
+  step(d, label);
   const t = entry(d.md, id);
   if (t.def.kind === "primitive" && t.def.primitive.startsWith("u")) {
     const p = t.def.primitive;
@@ -118,8 +130,7 @@ function compactOf(d: Decoding, id: number, label: string, depth: number): Decod
 export function decodeAt(d: Decoding, id: number, depth = 0): Decoded {
   const label = typeLabel(d.md, id);
   if (depth >= MAX_DEPTH) throw new ScaleError(`${label} nests deeper than ${MAX_DEPTH} levels`);
-  d.budget.left -= 1;
-  if (d.budget.left < 0) throw new ScaleError(`${label} at byte ${d.r.pos}: more values than the bytes can hold (at most 1024 and 8 a byte)`);
+  step(d, label);
   const t = entry(d.md, id);
   const def = t.def;
   const next = depth + 1;
