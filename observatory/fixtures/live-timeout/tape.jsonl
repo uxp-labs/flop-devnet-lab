@@ -1,0 +1,10 @@
+{"schema":"flop-observatory/tape@0"}
+{"answer":{"result":{"body":{"connected":true,"limits":{"addressCooldownMs":86400000,"dailyCapExemptionConfigured":true,"dailyCapFlop":10000000,"ipCooldownMs":10000,"ipGrantsPerDay":300},"live":true,"ready":true,"status":"ok"},"error":null,"fetched_at":"2026-11-11T06:00:00.120Z","http":200}},"request":{"kind":"http","method":"GET","url":"https://faucet.flop.network/health"},"seq":0}
+{"answer":{"result":{"body":null,"error":"GET timed out after 15000 ms","fetched_at":null,"http":null}},"request":{"kind":"http","method":"GET","url":"https://faucet.flop.network/chain"},"seq":1}
+{"answer":{"result":{"body":{"data":[{"id":"qwen/qwen3-8b"}],"object":"list"},"error":null,"fetched_at":"2026-11-11T06:00:00.360Z","http":200}},"request":{"kind":"http","method":"GET","url":"https://api.flop.network/v1/models"},"seq":2}
+{"answer":{"result":"2026-11-11T06:00:00.400Z"},"request":{"kind":"now"},"seq":3}
+{"answer":{"result":"FLOP Devnet"},"request":{"kind":"rpc","method":"system_chain","params":[]},"seq":4}
+{"answer":{"result":"0x99c172c095340ace980631f9123544c6bebd4839f3437e463533422d8be2d631"},"request":{"kind":"rpc","method":"chain_getBlockHash","params":[0]},"seq":5}
+{"answer":{"error":"rpc chain_getFinalizedHead timed out after 15000 ms"},"request":{"kind":"rpc","method":"chain_getFinalizedHead","params":[]},"seq":6}
+{"answer":{"result":{"digest":{"logs":[]},"extrinsicsRoot":"0x5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c","number":"0x345672","parentHash":"0x7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a","stateRoot":"0x5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c"}},"request":{"kind":"rpc","method":"chain_getHeader","params":[]},"seq":7}
+{"answer":{"result":"2026-11-11T06:00:01.000Z"},"request":{"kind":"now"},"seq":8}

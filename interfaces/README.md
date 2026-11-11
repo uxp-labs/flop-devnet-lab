@@ -4,8 +4,10 @@ Shared contracts in uxp-labs/flop-devnet-lab. FLOP Observatory produces these. i
 Court may import them. A schema change is its own commit, with the consumers changed in the same
 pull request.
 
-Status: v0, M0. Everything is computed from saved fixtures. No live chain read exists yet, so every
-result today has `trust: "fixture"`. Do not use a fixture result to decide a real spend or release.
+Status: v0. The observatory's live command reads `networkStatus()` from FLOP devnet, read only, with
+`trust: "trusted RPC"` (observatory/README.md, Live network status). Every escrow state is still
+computed from saved fixtures, so it has `trust: "fixture"`. Do not use a fixture result to decide a
+real spend or release.
 
 | File | Produced by | For |
 |---|---|---|
@@ -140,8 +142,9 @@ Known limits (v0):
   a finality stall, a long fork that falls away reads the same way, since a restart looks the
   same: `reset_detected` stays `null` until the best height is back within the limit.
 - Those checks against earlier snapshots run in the snapshot command, which reads its log. The
-  `status` command reads no log: its `reset_detected` speaks for that one reading only, so a gate
-  should read the snapshot's status.
+  `status` command reads no log, and neither does the live command, which keeps nothing between
+  runs: their `reset_detected` speaks for that one reading only, so a gate should read the status
+  the snapshot command writes.
 - A field of the wrong type (a number for `observed_at`, a string for `http`, a nested object in
   `limits`) reads as `null`, and so does a field an RPC head leaves out.
 - A saved reading that cannot be read (not strict UTF-8 JSON, a key twice in one object, nested

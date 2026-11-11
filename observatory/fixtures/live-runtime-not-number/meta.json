@@ -1,0 +1,6 @@
+{
+  "scenario": "live-runtime-not-number",
+  "description": "The runtime version's specVersion is a string, not a number, so the runtime version is unknown. Every value is made up for this test, shaped after the devnet as read on 2026-11-11.",
+  "now": "2026-11-11T06:00:01.000Z",
+  "synthetic": true
+}

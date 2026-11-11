@@ -36,6 +36,11 @@
 //   reach anything: every property src reads or writes is named in the code, where the rules above
 //   read it. src reads a data record by a run time key through own() in src/own.ts, which walks the
 //   record's own entries and never hands back a function.
+// - One exemption, for the composition root of the live read (RULES.md section 4): src/live-bin.ts
+//   may name the global WebSocket class and fetch, each exactly once, and only as the value of a
+//   plain property (no shorthand, no computed key, no method or getter) of the object literal that
+//   is the one argument of `new NetTransport(...)`. Every other rule still holds there, and no other
+//   module, nor a live-bin.ts in a subfolder, gets the exemption.
 // Before it scans src it proves itself: every BAD sample must fail and every GOOD sample must pass.
 // Known limit: the scan reads what src names, not what an allowed module does with the arguments
 // it is given; the runtime guard in the tests covers that.
@@ -162,6 +167,11 @@ const WRITE_RPC = /author_submit|eth_send(?:Raw)?Transaction|eth_sign|personal_s
 
 const SRC = join(pkg, "src");
 
+// The one exemption: the composition root of the live read, by its path inside src, and the two
+// globals it hands to the transport it makes.
+const COMPOSITION_ROOT = "live-bin.ts";
+const ROOT_GLOBALS = new Set(["WebSocket", "fetch"]);
+
 /**
  * A relative module must land on a scanned module: a `.js` name whose `.ts` file is in src. So a
  * path out of src (into scripts, node_modules or anywhere else) and a `.mjs` or `.cjs` module that
@@ -203,6 +213,21 @@ function problems(code, file = "sample.ts", scanned = SCANNED) {
   const up = new Map();
   // Every identifier, for the reader rule below, which reads them once the whole tree is known.
   const ids = [];
+  // How often each exempted global has been named, in the composition root only.
+  const rootUses = new Map();
+  /**
+   * The exemption's one form: in src/live-bin.ts, WebSocket or fetch as the value of a plain
+   * property of the object literal that is the one argument of new NetTransport(...).
+   */
+  const rootGlobal = (n, parent, key) => {
+    if (file !== COMPOSITION_ROOT || !ROOT_GLOBALS.has(n.name)) return false;
+    if (key !== "value" || parent?.type !== "Property" || parent.computed || parent.shorthand || parent.method || parent.kind !== "init") return false;
+    const inObject = up.get(parent);
+    if (inObject?.key !== "properties" || inObject.parent?.type !== "ObjectExpression") return false;
+    const inCall = up.get(inObject.parent);
+    const call = inCall?.parent;
+    return inCall?.key === "arguments" && call?.type === "NewExpression" && call.callee?.type === "Identifier" && call.callee.name === "NetTransport" && call.arguments.length === 1;
+  };
   const visit = (n, parent, key) => {
     if (Array.isArray(n)) {
       for (const x of n) visit(x, parent, key);
@@ -253,7 +278,12 @@ function problems(code, file = "sample.ts", scanned = SCANNED) {
       case "Identifier": {
         ids.push(n);
         const ownConstructor = key === "key" && parent?.type === "MethodDefinition" && parent.kind === "constructor";
-        if (BANNED.has(n.name) && !ownConstructor) out.push(`uses ${n.name}`);
+        const exempt = rootGlobal(n, parent, key);
+        if (exempt) {
+          rootUses.set(n.name, (rootUses.get(n.name) ?? 0) + 1);
+          if (rootUses.get(n.name) > 1) out.push(`names ${n.name} more than once in the composition root`);
+        }
+        if (BANNED.has(n.name) && !ownConstructor && !exempt) out.push(`uses ${n.name}`);
         else if (/mnemonic/i.test(n.name)) out.push(`uses ${n.name}`);
         else if (INTERNAL.test(n.name)) out.push(`uses the internal ${n.name}`);
         if (n.name === "process") {
@@ -539,6 +569,32 @@ const GOOD = [
   "for (const [k, v] of Object.entries(o)) use(k, v);",
 ];
 
+// The composition root's exemption, in its one form, and every way it could widen: another use of
+// either global there, a second transport, another callee or argument list, a shorthand, computed,
+// method or getter property, another global, and the same form in any other module.
+const ROOT_FORM = "const t = new NetTransport({ socketClass: WebSocket, httpCall: fetch });";
+const ROOT_GOOD = [ROOT_FORM, "const t = new NetTransport({ httpCall: fetch, socketClass: WebSocket, rpcUrl: url });"];
+const ROOT_BAD = [
+  "const f = fetch;",
+  "const r = await fetch(url);",
+  "const w = new WebSocket(url);",
+  `${ROOT_FORM} const r = await fetch(url);`,
+  `${ROOT_FORM} const u = new NetTransport({ socketClass: WebSocket, httpCall: fetch });`,
+  "const t = new NetTransport({ socketClass: WebSocket, httpCall: fetch, again: fetch });",
+  "const t = new Other({ socketClass: WebSocket, httpCall: fetch });",
+  "const t = NetTransport({ socketClass: WebSocket, httpCall: fetch });",
+  "const t = new NetTransport({ socketClass: WebSocket, httpCall: fetch }, extra);",
+  "const t = new NetTransport({ socketClass: WebSocket, fetch });",
+  'const t = new NetTransport({ socketClass: WebSocket, ["httpCall"]: fetch });',
+  "const t = new NetTransport({ socketClass: WebSocket, httpCall() { return fetch; } });",
+  "const t = new NetTransport({ socketClass: WebSocket, get httpCall() { return fetch; } });",
+  "const t = new NetTransport({ socketClass: WebSocket, httpCall: fetch.call });",
+  "const t = new NetTransport({ socketClass: WebSocket, httpCall: globalThis.fetch });",
+  "const t = new NetTransport({ socketClass: EventSource, httpCall: fetch });",
+  'const t = new NetTransport({ socketClass: WebSocket, httpCall: fetch }); const s = "fetch";',
+  "const t = new NetTransport({ socketClass: WebSocket, httpCall: (u, o) => fetch(u, o) });",
+];
+
 const results = [];
 let bad = 0;
 const record = (check, pass, stderr) => {
@@ -552,6 +608,18 @@ for (const code of BAD) {
 for (const code of GOOD) {
   const p = problems(code);
   record(`allows: ${code}`, p.length === 0, p.join("; "));
+}
+for (const code of ROOT_GOOD) {
+  const p = problems(code, COMPOSITION_ROOT);
+  record(`allows in src/${COMPOSITION_ROOT}: ${code}`, p.length === 0, p.join("; "));
+}
+for (const code of ROOT_BAD) {
+  const p = problems(code, COMPOSITION_ROOT);
+  record(`catches in src/${COMPOSITION_ROOT}: ${code}`, p.length > 0 && !p.some((x) => x.startsWith("does not parse")), p.length ? p.join("; ") : "nothing found");
+}
+for (const file of ["cli.ts", "net.ts", "live/live-bin.ts", "live-bin.mts.ts", "xlive-bin.ts"]) {
+  const p = problems(ROOT_FORM, file);
+  record(`catches in src/${file}, which is not the composition root: ${ROOT_FORM}`, p.some((x) => x === "uses WebSocket") && p.some((x) => x === "uses fetch"), p.length ? p.join("; ") : "nothing found");
 }
 // The file list check, proved on a throwaway folder: a .mts module, a .js file and a link to a
 // .ts file are each something tsc may compile that no scan would read.

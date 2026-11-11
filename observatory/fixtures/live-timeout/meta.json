@@ -1,0 +1,6 @@
+{
+  "scenario": "live-timeout",
+  "description": "The finalized head call timed out, so the finalized header and the runtime version are never asked for, and the faucet /chain GET timed out with no response. Every value is made up for this test, shaped after the devnet as read on 2026-11-11.",
+  "now": "2026-11-11T06:00:01.000Z",
+  "synthetic": true
+}

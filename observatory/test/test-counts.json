@@ -20,16 +20,36 @@
     "names": "bd439ca49837d3e62977352e9315883dd115a9abd92613ad412e6457ee0f7bc5"
   },
   "guard.test.ts": {
-    "tests": 64,
-    "names": "f9bbc307371e1af586aff3796eb96210c0a396fb29331eb3c7ab939dc72bcd81"
+    "tests": 72,
+    "names": "f8d6de057ce89bfc00855b55f688aeb1f006775521ecb210cf8a93d437258b1a"
+  },
+  "live-run.test.ts": {
+    "tests": 28,
+    "names": "79a13dbf2f6c74ac902ff5e8d98d18357e21df0326d12e78c422662b4b60bf69"
+  },
+  "live-source.test.ts": {
+    "tests": 26,
+    "names": "552addede8f03700f304243e1513b90c4a452d170f4633c5db01d92bd1d2f653"
+  },
+  "live-workflow.test.ts": {
+    "tests": 5,
+    "names": "9a60efb81c3084c4b3655598dafc6c30a52182d32d25709db3741a7707049fe2"
   },
   "mcp.test.ts": {
     "tests": 13,
     "names": "386c37c6722d7c6b8032fa68be18daf2f1e8fdd3a9b4e6fb438036ff79a6cb5a"
   },
+  "net.test.ts": {
+    "tests": 31,
+    "names": "6c475f5284b85a6146e58adad5571ced6c7eac01d956a15ddbf0fb109c5d836e"
+  },
   "page.test.ts": {
     "tests": 40,
     "names": "c1629a5c9e7fa1134a7e062494c93ae5e762fbe1cc26328108e74d808eb49693"
+  },
+  "rpc-head.test.ts": {
+    "tests": 19,
+    "names": "91fe904982e61644eeb892bfad19b911f8c48c2e803742e26397ca7da72677fa"
   },
   "snapshot-check-grid.test.ts": {
     "tests": 43,
@@ -62,5 +82,9 @@
   "strict.test.ts": {
     "tests": 66,
     "names": "feb547fca27c35b8f15b2d53db50c47d5b0a630fc9e1414cf987ad060f51f401"
+  },
+  "tape.test.ts": {
+    "tests": 26,
+    "names": "8930de395c29d17c77813be51e2c5ec36cd04b7d46a1e906592736ab8ac5da72"
   }
 }
