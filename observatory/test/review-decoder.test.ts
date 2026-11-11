@@ -194,11 +194,11 @@ describe("values decoded wrong, or valid values refused", () => {
     expect(thrown(() => decodeValue(MD, multi, bytes(1))).cls).toBe("ScaleError");
   });
 
-  it("DEFECT 5: decodeEvents takes a record of the two fields event and 'phase,topics' for one of phase, event and topics, and drops a field's value", () => {
+  it("review defect 5, fixed: decodeEvents refuses a record of the two fields event and 'phase,topics': it must hold exactly phase, event and topics", () => {
     const md = parseMetadata(shapeMetadata({ record: [{ name: "event", type: 7 }, { name: "phase,topics", type: 2 }] }));
     const b = cat(compact(1), u8(1), u8(0), u32(7));
     expect(decodeValue(md, 6, b)).toEqual([{ event: { variant: "ComputeChannel", fields: { variant: "E", fields: null } }, "phase,topics": 7 }]);
-    expect(decodeEvents(md, b)).toEqual([{ index: 0, phase: null, pallet: "ComputeChannel", palletIndex: 1, event: "E", eventIndex: 0, fields: null, topics: null }]);
+    expect(thrown(() => decodeEvents(md, b))).toEqual({ cls: "ScaleError", message: "an event record of System.Events does not have exactly the fields phase, event and topics" });
   });
 
   it("DEFECT 8: two constants of one name in a pallet are accepted, and deriveShape reads the spec from the first", () => {

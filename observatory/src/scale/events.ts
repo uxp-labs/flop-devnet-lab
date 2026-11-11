@@ -43,7 +43,8 @@ function layoutOf(md: Metadata): EventsLayout {
   if (list?.kind !== "sequence") throw new ScaleError("System.Events is not a list");
   const record = md.types.at(list.type)?.def;
   const names = record?.kind === "composite" ? record.fields.map((f) => f.name ?? "").sort() : [];
-  if (record?.kind !== "composite" || names.join(",") !== RECORD_FIELDS.join(",")) {
+  const exact = names.length === RECORD_FIELDS.length && names.every((n, i) => n === RECORD_FIELDS.at(i));
+  if (record?.kind !== "composite" || !exact) {
     throw new ScaleError("an event record of System.Events does not have exactly the fields phase, event and topics");
   }
   const eventField = record.fields.find((f) => f.name === "event");
