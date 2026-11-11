@@ -131,10 +131,27 @@ function stateAfter(prev: string, o: ReadOutcome): string {
   return SETTLES.has(prev) && !SETTLES.has(o.state) ? prev : o.state;
 }
 
+/** The previous row as decideBooking sees it: its booking and its padded quote. */
+export interface PrevBooking<C> extends Booking<C> {
+  /** The hold of the request, as the row records it. A file can hold anything in it. */
+  quote_padded: unknown;
+}
+
+/**
+ * The charge held when no settlement is booked from a read: the booked charge, or null when that is not a
+ * known amount. One exception: a trusted read that moves a refused_local row shows the gateway holds the
+ * request after all, so the reservation comes back. That hold is the row's padded quote, or null when the
+ * padded quote is not a known amount.
+ */
+function heldCharge(prev: PrevBooking<unknown>, state: string): number | null {
+  const booked = knownAmount(prev.cap_charge);
+  return booked !== null && prev.state === "refused_local" && state !== prev.state ? knownAmount(prev.quote_padded) : booked;
+}
+
 /** What a read does to a booking: the next booking, and whether the read disagrees with what is booked. */
 export interface Decision<C> {
   booking: Booking<C | number>;
-  /** The read was not booked: it would lower a booked settlement, or the booked charge is not a known amount. */
+  /** The read was not booked: it would lower a booked settlement, or the charge it would hold is not a known amount. */
   disagree: boolean;
 }
 
@@ -146,8 +163,11 @@ export interface Decision<C> {
  *  - A trusted read that would lower a booked known settlement disagrees. State and spend stay.
  *  - Otherwise a proven settlement replaces the booked spend, and its charge replaces the hold. The state
  *    moves only forward: never from a settling state to a non settling one.
- *  - A booked charge that is not a known amount is never replaced by a guess, and never by 0. Unless a
- *    proven settlement replaces it, the read disagrees and nothing changes.
+ *  - A trusted read that moves a refused_local row ("nothing was sent", charge 0) shows the gateway holds
+ *    the request after all: the reservation comes back, the row's padded quote.
+ *  - A charge that is not a known amount is never replaced by a guess, and never by 0. That is a booked
+ *    charge that is not a known amount, or a padded quote that is not one on a refused_local row a trusted
+ *    read moves. Unless a proven settlement replaces it, the read disagrees and nothing changes.
  * Two reads of one request can differ, and that is normal, not an attack: per the gateway's OpenAPI
  * (CredentialReceipt), read 2026-11-11, later reconciliation can change the gateway's ledger observation.
  * So two trusted reads book the same spend and charge in either order (test/decision-properties.test.ts).
@@ -157,12 +177,12 @@ export interface Decision<C> {
  * verifies the chain yet. When chain verification exists, a chain proven refund is the one thing that may
  * lower a booking, and that change belongs in this function.
  */
-export function decideBooking<C>(prev: Booking<C>, o: ReadOutcome, costReported: number | null): Decision<C> {
+export function decideBooking<C>(prev: PrevBooking<C>, o: ReadOutcome, costReported: number | null): Decision<C> {
   const lowers = lowersSettlement(prev, o);
   const state = lowers ? prev.state : stateAfter(prev.state, o);
   const settled = settledSpend(o);
   if (settled !== null && !lowers) return { booking: { state, spend: settled, cap_charge: settledCharge(settled, costReported) }, disagree: false };
-  const held = knownAmount(prev.cap_charge);
+  const held = heldCharge(prev, state);
   if (held === null) return { booking: { state: prev.state, spend: prev.spend, cap_charge: prev.cap_charge }, disagree: true };
   return { booking: { state, spend: prev.spend, cap_charge: holdCharge(held, costReported) }, disagree: lowers };
 }
@@ -183,14 +203,16 @@ export type Failure = "timeout_unknown" | "error" | "refused_local";
  *    own exit code and message for what it saw.
  *  - A timeout or a gateway error moves a row that does not settle to timeout_unknown or error. The spend
  *    stays and the charge stays, so the reservation is held.
- *  - "Nothing was sent" releases the reservation: refused_local, charge 0. Only from a row that does not
- *    settle. A booking is never lowered on a report.
+ *  - "Nothing was sent" releases the reservation: refused_local, charge 0. Only from a row still in state
+ *    sent. Any other row came from a trusted gateway read or another report, and a trusted read beats a
+ *    "nothing was sent" report: the row stays. A booking is never lowered on a report otherwise.
  *  - A charge that is not a known amount is never replaced by a guess, as in decideBooking: the row stays.
  * A report is not a receipt read. Only a read books a settlement, and that is decideBooking.
  */
 export function decideFailure<C>(prev: Booking<C>, failure: Failure): Booking<C | number> | null {
   if (SETTLES.has(prev.state) || knownAmount(prev.cap_charge) === null) return null;
-  return { state: failure, spend: prev.spend, cap_charge: failure === "refused_local" ? 0 : prev.cap_charge };
+  if (failure === "refused_local") return prev.state === "sent" ? { state: failure, spend: prev.spend, cap_charge: 0 } : null;
+  return { state: failure, spend: prev.spend, cap_charge: prev.cap_charge };
 }
 
 /** Ledger reason for a settled row whose cap charge is the reported cost, above its settled spend. */

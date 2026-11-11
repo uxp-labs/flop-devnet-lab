@@ -134,6 +134,26 @@ describe("decideBooking: the one decision for every receipt read", () => {
     expect(decideBooking(settled007, { ...trusted("settled", 0.05), fresh: false }, 0.15).booking).toEqual({ state: "settled", spend: 0.07, cap_charge: 0.15 });
   });
 
+  it("fails on a3d71d6: a trusted read that moves a released reservation (refused_local) holds the padded quote again", () => {
+    const released = { state: "refused_local", spend: null, cap_charge: 0, quote_padded: 0.186 };
+    expect(decideBooking(released, trusted("estimated", null), null)).toEqual({ booking: { state: "estimated", spend: null, cap_charge: 0.186 }, disagree: false });
+    expect(decideBooking(released, trusted("released", null), null)).toEqual({ booking: { state: "released", spend: null, cap_charge: 0.186 }, disagree: false });
+    // The restored hold is raised by a reported cost, as any hold is.
+    expect(decideBooking(released, trusted("reserved", null), 0.3).booking).toEqual({ state: "reserved", spend: null, cap_charge: 0.3 });
+    // A proven settlement is booked as usual.
+    expect(decideBooking(released, trusted("settled", 0.05), null)).toEqual({ booking: { state: "settled", spend: 0.05, cap_charge: 0.05 }, disagree: false });
+    // A read that does not move the row changes nothing: an untrusted read, and a trusted read with no state.
+    for (const read of [{ ...trusted("estimated", null), fresh: false }, trusted(null, null)]) {
+      expect(decideBooking(released, read, null)).toEqual({ booking: { state: "refused_local", spend: null, cap_charge: 0 }, disagree: false });
+    }
+    // A padded quote that is not a known amount: the charge is unknown, so nothing is guessed and the read disagrees.
+    for (const quote of [null, undefined, -1, "0.186"]) {
+      const noQuote = { ...released, quote_padded: quote };
+      expect(decideBooking(noQuote, trusted("estimated", null), 0.3), String(quote)).toEqual({ booking: { state: "refused_local", spend: null, cap_charge: 0 }, disagree: true });
+      expect(decideBooking(noQuote, trusted("settled", 0.05), null), String(quote)).toEqual({ booking: { state: "settled", spend: 0.05, cap_charge: 0.05 }, disagree: false });
+    }
+  });
+
   it("a charge that is not a known amount is never replaced by a guess: disagree, nothing changes, never 0", () => {
     for (const charge of [null, undefined, -1, Number.NaN, "0.186"]) {
       const unknown = { state: "estimated", spend: null, cap_charge: charge };
@@ -171,9 +191,12 @@ describe("decideFailure: the one decision for what run reports when its paid cal
     }
   });
 
-  it("\"nothing was sent\" releases the reservation, only from a row that does not settle", () => {
-    for (const state of ["sent", "reserved", "estimated"]) {
-      expect(decideFailure({ state, spend: null, cap_charge: 0.186 }, "refused_local")).toEqual({ state: "refused_local", spend: null, cap_charge: 0 });
+  it("\"nothing was sent\" releases the reservation only from a row still in state sent", () => {
+    expect(decideFailure({ state: "sent", spend: null, cap_charge: 0.186 }, "refused_local")).toEqual({ state: "refused_local", spend: null, cap_charge: 0 });
+    // Moved (review of the booking step): this expected a release from reserved and estimated too. Only a
+    // trusted gateway read produces those states, and such a read beats a "nothing was sent" report.
+    for (const state of ["reserved", "estimated", "timeout_unknown", "error"]) {
+      expect(decideFailure({ state, spend: null, cap_charge: 0.186 }, "refused_local"), state).toBeNull();
     }
     expect(decideFailure({ state: "settled", spend: 0.3, cap_charge: 0.3 }, "refused_local")).toBeNull();
   });
@@ -314,12 +337,21 @@ describe("fails on 9adfd17: what run writes when its paid call fails goes throug
       expect({ ledger_state: shown.ledger_state, ledger_spend: shown.ledger_spend, status: shown.status }).toEqual({ ledger_state: "settled", ledger_spend: 0.3, status: undefined });
     });
 
-    it(`control: ${name} after another reader booked a pending read: the report is booked against that row`, async () => {
+    it(`control: ${name} after another reader booked a pending read: the report is booked against that row, except "nothing was sent"`, async () => {
       const h = await ready();
       const run = await cli(h, runArgs(["--timeout-ms", "50"]), { provider: new P({ complete: failsAfter(h, pending, f.fail) }) });
       expect(run.code, run.err).toBe(f.code);
-      expect(ledger(h).map(booked)).toEqual([{ state: "sent", spend: null, cap_charge: 0.186 }, { state: "estimated", spend: null, cap_charge: 0.186 }, { state: f.state, spend: null, cap_charge: f.charge }]);
-      expect(await today(h)).toBe(f.charge);
+      const rows = ledger(h).map(booked);
+      expect(rows.slice(0, 2)).toEqual([{ state: "sent", spend: null, cap_charge: 0.186 }, { state: "estimated", spend: null, cap_charge: 0.186 }]);
+      if (f.state === "refused_local") {
+        // Moved (review of the booking step): this expected refused_local, charge 0, today 0. A trusted
+        // pending read shows the gateway holds the request, so "nothing was sent" does not release it.
+        expect(rows.at(-1)).toEqual({ state: "estimated", spend: null, cap_charge: 0.186 });
+        expect(await today(h)).toBe(0.186);
+      } else {
+        expect(rows.slice(2)).toEqual([{ state: f.state, spend: null, cap_charge: f.charge }]);
+        expect(await today(h)).toBe(f.charge);
+      }
     });
 
     it(`control: ${name} with no other reader: the row is written as before`, async () => {
@@ -333,6 +365,47 @@ describe("fails on 9adfd17: what run writes when its paid call fails goes throug
       );
     });
   }
+});
+
+describe("fails on a3d71d6: a trusted read beats a \"nothing was sent\" report, in both orders", () => {
+  const preSend = async () => {
+    throw new PreSendError("child key mint failed");
+  };
+
+  it("read first: a refresh books a trusted pending read, then the call fails before send: the reservation stays held", async () => {
+    // The reviewer's reproduction. The rows were sent 0.186, estimated 0.186, refused_local 0, and today was 0.
+    const h = await ready();
+    const complete = async (req: CompleteReq) => {
+      const r = await cli(h, refreshArgs(req.requestId), { provider: new P({ read: pending }) });
+      expect(r.code, r.err).toBe(0);
+      return preSend();
+    };
+    const run = await cli(h, runArgs(), { provider: new P({ complete }) });
+    expect(run.code, run.err).toBe(11);
+    expect(booked(ledger(h).at(-1)!)).toEqual({ state: "estimated", spend: null, cap_charge: 0.186 });
+    expect(await today(h)).toBe(0.186);
+  });
+
+  it("report first: the call fails before send, then a refresh reads a trusted pending receipt: the padded quote is held again", async () => {
+    const h = await ready();
+    const run = await cli(h, runArgs(), { provider: new P({ complete: preSend }) });
+    expect(run.code, run.err).toBe(11);
+    expect(booked(ledger(h).at(-1)!)).toEqual({ state: "refused_local", spend: null, cap_charge: 0 });
+    const rid = ledger(h)[0].request_id!;
+    const refreshed = await cli(h, refreshArgs(rid), { provider: new P({ read: pending }) });
+    expect(refreshed.code, refreshed.err).toBe(0);
+    expect(booked(ledger(h).at(-1)!)).toEqual({ state: "estimated", spend: null, cap_charge: 0.186 });
+    expect(await today(h)).toBe(0.186);
+  });
+
+  it("control: report first, then a refresh reads a proven settlement: it is booked as usual", async () => {
+    const h = await ready();
+    expect((await cli(h, runArgs(), { provider: new P({ complete: preSend }) })).code).toBe(11);
+    const rid = ledger(h)[0].request_id!;
+    expect((await cli(h, refreshArgs(rid), { provider: new P({ read: settledAt(0.05) }) })).code).toBe(0);
+    expect(booked(ledger(h).at(-1)!)).toEqual({ state: "settled", spend: 0.05, cap_charge: 0.05 });
+    expect(await today(h)).toBe(0.05);
+  });
 });
 
 describe("a refresh racing a refresh", () => {
