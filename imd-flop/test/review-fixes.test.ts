@@ -17,7 +17,7 @@ import { PreSendError } from "../src/gateway.js";
 import type { CompleteReq, CompleteRes, Provider } from "../src/providers.js";
 import { checkBudget } from "../src/policy.js";
 import { ceil6 } from "../src/rounding.js";
-import { decideBooking, DISAGREE, PAST_ADMITTED, reconcile } from "../src/settlement.js";
+import { CHARGE_RAISED, decideBooking, DISAGREE, PAST_ADMITTED, reconcile } from "../src/settlement.js";
 import { cli, readLines, readySeat, tmpHome } from "./helpers.js";
 
 const SEAT = "9001";
@@ -129,6 +129,29 @@ describe("C (review fixes 2): last_known_at after failed reads in a row", () => 
     await tick();
     expect((await cli(h, refreshArgs(rid), { provider: new P({ read: pending }) })).code).toBe(0);
     expect("last_known_at" in stored(h, rid)).toBe(false);
+  });
+});
+
+describe("D (review fixes 2): the \"raised to reported cost\" note only when the charge was raised", () => {
+  // bookingReason wrote "cap charge raised to reported cost" when the charge equalled the recorded cost and
+  // was above the spend. With the hold floor a cost equal to the padded quote leaves the charge at the hold,
+  // and the note said it was raised. Decided: the note appears only when the reported cost is above the
+  // padded quote, so the charge really was raised.
+  const settled005 = (id: string) => receiptFor(id, { state: "settled", settled_spend: 0.05 });
+  const withCost = (cost: number) => async (req: CompleteReq): Promise<CompleteRes> => ({ request_id: req.requestId, text: "ok", usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2, cost_flop: cost } });
+
+  it("cost 0.186, the padded quote, and a settlement of 0.05: the charge stays at the hold and the reason says nothing", async () => {
+    const h = await ready();
+    expect((await cli(h, runArgs(), { provider: new P({ complete: withCost(0.186), read: settled005 }) })).code).toBe(0);
+    const last = ledger(h).at(-1)!;
+    expect({ ...booked(last), reason: last.reason }).toEqual({ state: "settled", spend: 0.05, cap_charge: 0.186, reason: null });
+  });
+
+  it("cost 0.3, above the padded quote: the charge is raised, and the reason says so beside PAST_ADMITTED", async () => {
+    const h = await ready();
+    expect((await cli(h, runArgs(), { provider: new P({ complete: withCost(0.3), read: settled005 }) })).code).toBe(0);
+    const last = ledger(h).at(-1)!;
+    expect({ ...booked(last), reason: last.reason }).toEqual({ state: "settled", spend: 0.05, cap_charge: 0.3, reason: `${PAST_ADMITTED}; ${CHARGE_RAISED}` });
   });
 });
 

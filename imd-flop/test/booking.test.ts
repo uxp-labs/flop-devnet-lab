@@ -243,7 +243,9 @@ describe("fails on dbffac0: a reported cost raises a charge on a hold and on a s
       const refreshed = await cli(h, refreshArgs(rid), { provider: new P({ read }) });
       expect(refreshed.code, refreshed.err).toBe(0);
       const last = ledger(h).at(-1)!;
-      expect({ ...booked(last), reason: last.reason, warned: refreshed.err.includes(DISAGREE) }).toEqual({ state: "settled", spend: 0.05, cap_charge: 0.15, reason: CHARGE_RAISED, warned: false });
+      // Moved (review fixes 2, D): the cost 0.15 is below the padded quote 0.186, so the reason no longer
+      // says the charge was raised to it. The charge still rises to 0.15 on this row booked below its hold.
+      expect({ ...booked(last), reason: last.reason, warned: refreshed.err.includes(DISAGREE) }).toEqual({ state: "settled", spend: 0.05, cap_charge: 0.15, reason: null, warned: false });
       expect(await today(h)).toBe(0.15);
     }
   });
@@ -859,7 +861,8 @@ describe("bookRead: the one booking step", () => {
     expect(r.outcome).toBe("disagree");
     expect(ledger(h)).toHaveLength(2);
     const last = ledger(h).at(-1)!;
-    expect({ ...booked(last), cost_reported: last.cost_reported, http: last.http, reason: last.reason }).toEqual({ state: "settled", spend: 0.07, cap_charge: 0.15, cost_reported: 0.15, http: 200, reason: CHARGE_RAISED });
+    // Moved (review fixes 2, D): the cost 0.15 is below the padded quote 0.186: no "raised" note.
+    expect({ ...booked(last), cost_reported: last.cost_reported, http: last.http, reason: last.reason }).toEqual({ state: "settled", spend: 0.07, cap_charge: 0.15, cost_reported: 0.15, http: 200, reason: null });
     expect(rowOf(r)).toEqual(readLines(ledgerPath(h)).at(-1));
   });
 
@@ -971,8 +974,9 @@ describe("bookFailure: a failed call goes through the same booking step", () => 
       expect({ ...booked(last), reason: last.reason, http: last.http }, report).toEqual({ state: "settled", spend: 0.3, cap_charge: 0.3, reason: `${words}; booked settlement kept`, http: info.http });
       expect(r.outcome !== "no_row" && r.row, report).toEqual(readLines(ledgerPath(h)).at(-1));
     }
-    // A charge raised to the reported cost keeps saying so.
-    const raised = ledgerWith({ state: "settled", spend: 0.05, cap_charge: 0.15, cost_reported: 0.15, reason: CHARGE_RAISED });
+    // A charge raised to the reported cost keeps saying so. Moved (review fixes 2, D): the cost is 0.3, above
+    // the padded quote 0.186, since a cost at or below it raises nothing.
+    const raised = ledgerWith({ state: "settled", spend: 0.05, cap_charge: 0.3, cost_reported: 0.3, reason: CHARGE_RAISED });
     bookFailure(raised, "r1", "timeout_unknown", timeout);
     expect(ledger(raised).at(-1)!.reason).toBe(`timeout reported; booked settlement kept; ${CHARGE_RAISED}`);
   });

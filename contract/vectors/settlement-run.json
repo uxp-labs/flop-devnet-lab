@@ -741,6 +741,89 @@
    "note": "[swarm audit of 8ddc5d2, finding 2] control: a reported cost below the settlement leaves the settled charge Moved (hold floor): cap_charge was 0.05, the settled amount. A gateway read only raises the charge, so it keeps the 0.186 hold."
   },
   {
+   "id": "run-settled-below-reported-cost-equal-to-hold",
+   "rule": "settlement.run",
+   "input": {
+    "cost_flop": 0.186,
+    "read": {
+     "http": 200,
+     "error": null,
+     "receipt": {
+      "request_id": "$rid",
+      "correlation_id": "imd-job-j1",
+      "model": "m",
+      "reserved_spend": 0.186,
+      "settled_spend": 0.05,
+      "state": "settled"
+     }
+    }
+   },
+   "expect": {
+    "imd-flop": {
+     "exit": 0,
+     "states": [
+      "sent",
+      "settled"
+     ],
+     "last": {
+      "state": "settled",
+      "spend": 0.05,
+      "cap_charge": 0.186
+     },
+     "reason": null
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard is a dry run: it writes spend 0 and keeps no reservation or settlement"
+    },
+    "viewer": {
+     "not_applicable": "viewer renders ledger rows; it never writes them"
+    }
+   },
+   "note": "Review fixes 2 (D): the completion reports 0.186, exactly the padded quote, and the receipt settles 0.05. The charge stays at the hold, 0.186, which the cost does not raise, so the reason does not say 'cap charge raised to reported cost'."
+  },
+  {
+   "id": "run-settled-below-reported-cost-above-hold",
+   "rule": "settlement.run",
+   "input": {
+    "cost_flop": 0.3,
+    "read": {
+     "http": 200,
+     "error": null,
+     "receipt": {
+      "request_id": "$rid",
+      "correlation_id": "imd-job-j1",
+      "model": "m",
+      "reserved_spend": 0.186,
+      "settled_spend": 0.05,
+      "state": "settled"
+     }
+    }
+   },
+   "expect": {
+    "imd-flop": {
+     "exit": 0,
+     "states": [
+      "sent",
+      "settled"
+     ],
+     "last": {
+      "state": "settled",
+      "spend": 0.05,
+      "cap_charge": 0.3
+     },
+     "reason": "PAST_ADMITTED; cap charge raised to reported cost",
+     "stderr_past_admitted": true
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard is a dry run: it writes spend 0 and keeps no reservation or settlement"
+    },
+    "viewer": {
+     "not_applicable": "viewer renders ledger rows; it never writes them"
+    }
+   },
+   "note": "Review fixes 2 (D): the completion reports 0.3, above the padded quote 0.186, and the receipt settles 0.05. The cost raised the charge, so the reason says so, after PAST_ADMITTED."
+  },
+  {
    "id": "run-settled-exact",
    "rule": "settlement.run",
    "input": {

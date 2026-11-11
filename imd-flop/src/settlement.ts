@@ -316,19 +316,30 @@ export function decideFailure<C>(prev: Booking<C>, failure: Failure): Booking<C 
   return { state: failure, spend: prev.spend, cap_charge: prev.cap_charge };
 }
 
-/** Ledger reason for a settled row whose cap charge is the reported cost, above its settled spend. */
+/** Ledger reason for a settled row whose cap charge the reported cost raised above its padded quote and its settled spend. */
 export const CHARGE_RAISED = "cap charge raised to reported cost";
 
-/** A booking with the cost its row records, as bookingReason reads it. */
-export type ReasonRow = Booking & { cost_reported?: number | null };
+/** A booking with the cost and the padded quote its row records, as bookingReason reads them. */
+export type ReasonRow = Booking & { cost_reported?: number | null; quote_padded?: unknown };
+
+/**
+ * The reported cost raised this settled row's charge: the charge is the reported cost, and that cost is
+ * above the padded quote (the hold floor) and above the settled spend. A cost at or below the padded quote
+ * leaves the charge at the hold, so it raised nothing. False when the padded quote is not a known amount.
+ */
+function raisedByCost(b: ReasonRow): boolean {
+  const quote = knownAmount(b.quote_padded);
+  const cost = b.cost_reported ?? null;
+  return b.spend !== null && cost !== null && quote !== null && cost > quote && b.cap_charge === cost && b.cap_charge > b.spend;
+}
 
 /**
  * The ledger reason for a booking. PAST_ADMITTED first when the booking passes what the cap admitted
- * (Decision.pastAdmitted). Then the receipt flag when there is one, else a note when the charge of a settled
- * row is the reported cost, above its settled spend. Null when there is nothing to say.
+ * (Decision.pastAdmitted). Then the receipt flag when there is one, else CHARGE_RAISED when the reported
+ * cost raised the charge of a settled row (raisedByCost). Null when there is nothing to say.
  */
 export function bookingReason(b: ReasonRow, flag: string | null, past = false): string | null {
-  const raised = b.spend !== null && b.cap_charge > b.spend && b.cap_charge === b.cost_reported ? CHARGE_RAISED : null;
+  const raised = raisedByCost(b) ? CHARGE_RAISED : null;
   const parts = [past ? PAST_ADMITTED : null, flag ?? raised].filter((p): p is string => p !== null);
   return parts.length > 0 ? parts.join("; ") : null;
 }
