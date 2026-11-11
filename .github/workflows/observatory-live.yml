@@ -1,0 +1,76 @@
+# Live network status for FLOP devnet, read only. Each run reads the devnet RPC, the faucet's
+# GET /health and GET /chain and the gateway's GET /v1/models once, writes a networkStatus snapshot
+# whose trust is "trusted RPC" (it trusts one RPC endpoint; it is not proof), a tape of exactly what
+# it read, run.json and SHA256SUMS, and uploads them as an artifact. Nothing is kept between runs.
+#
+# It never calls an RPC write method, never sends anything but GET, uses no secrets, pushes nothing,
+# opens no issue or comment, and uses no cache. Permissions are contents: read only, and checkout
+# does not persist credentials. The read only guard in observatory/src/guard.ts refuses any write
+# before it is sent, and the transport reaches only rpc.devnet.flop.network, faucet.flop.network
+# and api.flop.network.
+#
+# The command exits 0 when a truthful snapshot was written, even with a service down or unknown,
+# 3 for a reset signal (reset_detected true, or a conflict), 4 when a request was refused, and 1
+# when the run broke. A push that changes this file or the live source files gives a smoke run.
+
+name: observatory live
+
+on:
+  schedule:
+    - cron: "7,37 * * * *"
+  workflow_dispatch:
+  push:
+    paths:
+      - ".github/workflows/observatory-live.yml"
+      - "observatory/src/transport.ts"
+      - "observatory/src/tape.ts"
+      - "observatory/src/net.ts"
+      - "observatory/src/rpc-head.ts"
+      - "observatory/src/live-source.ts"
+      - "observatory/src/live-run.ts"
+      - "observatory/src/live-bin.ts"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: observatory-live
+  cancel-in-progress: false
+
+jobs:
+  live:
+    name: observatory live network status
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      # The same Node version as the offline check, so the snapshot's pin.node matches it.
+      - name: Use Node.js 22.23.4
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22.23.4"
+
+      - name: Install
+        working-directory: observatory
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
+      - name: Build
+        working-directory: observatory
+        run: npm run build
+
+      - name: Read devnet status
+        working-directory: observatory
+        run: node dist/live-bin.js --out "$RUNNER_TEMP/observatory-live" --source-sha "$GITHUB_SHA"
+
+      - name: Upload what was read
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: observatory-live-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/observatory-live
+          retention-days: 14
+          if-no-files-found: error

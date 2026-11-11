@@ -12,6 +12,8 @@ on:
       # observatory/test/status.test.ts reads the genesis pin from this file.
       - "imd-flop/src/networks.ts"
       - ".github/workflows/observatory-check.yml"
+      # observatory/test/live-workflow.test.ts reads the live workflow.
+      - ".github/workflows/observatory-live.yml"
   pull_request:
     paths:
       - "observatory/**"
@@ -19,6 +21,8 @@ on:
       # observatory/test/status.test.ts reads the genesis pin from this file.
       - "imd-flop/src/networks.ts"
       - ".github/workflows/observatory-check.yml"
+      # observatory/test/live-workflow.test.ts reads the live workflow.
+      - ".github/workflows/observatory-live.yml"
 
 permissions:
   contents: read

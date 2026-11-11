@@ -31,6 +31,10 @@
     "tests": 26,
     "names": "552addede8f03700f304243e1513b90c4a452d170f4633c5db01d92bd1d2f653"
   },
+  "live-workflow.test.ts": {
+    "tests": 5,
+    "names": "9a60efb81c3084c4b3655598dafc6c30a52182d32d25709db3741a7707049fe2"
+  },
   "mcp.test.ts": {
     "tests": 13,
     "names": "386c37c6722d7c6b8032fa68be18daf2f1e8fdd3a9b4e6fb438036ff79a6cb5a"
