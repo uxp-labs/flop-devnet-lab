@@ -39,6 +39,7 @@ on:
       - "observatory/src/live-source.ts"
       - "observatory/src/live-run.ts"
       - "observatory/src/live-bin.ts"
+      - "observatory/src/sums.ts"
 
 permissions:
   contents: read
