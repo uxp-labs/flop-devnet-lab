@@ -13,6 +13,7 @@
 import { base58, base64, base64url } from "@scure/base";
 import { bytesToHex } from "@noble/hashes/utils.js";
 import { CliError, EXIT } from "./errors.js";
+import { NETWORKS } from "./networks.js";
 
 const registry = new Set<string>();
 
@@ -48,6 +49,17 @@ export const PUBLIC_HEX_FIELDS = new Set([
   "nonce",
 ]);
 
+/**
+ * Hex values that are public and ours: the pinned genesis hash of each network (networks.ts). The 64 hex rule
+ * never flags them and outsideText never turns them into [hash], so a message can print the pinned genesis in
+ * full (review of the audit 33f3b9f fixes). Exact values only: any other 64 hex run is still key shaped.
+ */
+const PUBLIC_HEX_VALUES: ReadonlySet<string> = new Set(Object.values(NETWORKS).map((n) => n.genesisHash.toLowerCase()));
+/** A 0x and 64 hex run, as [hash] unless it is one of PUBLIC_HEX_VALUES. */
+const hashed = (s: string): string => s.replace(/0x[0-9a-fA-F]{64}/g, (h) => (PUBLIC_HEX_VALUES.has(h.toLowerCase()) ? h : "[hash]"));
+/** The text without the public values, for the 64 hex rule. */
+const withoutPublicHex = (s: string): string => s.replace(/(?:0x)?[0-9a-fA-F]{64,}/g, (h) => (PUBLIC_HEX_VALUES.has((h.startsWith("0x") ? h : `0x${h}`).toLowerCase()) ? "" : h));
+
 const SECRET_FIELD = /^(private[_-]?key|privkey|secret|secret[_-]?key|seed|seed[_-]?phrase|mnemonic|api[_-]?key|apikey|bearer|authorization|access[_-]?token|token|password|passphrase|key)$/i;
 const HEX64 = /(?<![0-9a-fA-F])(?:0x)?[0-9a-fA-F]{64,}(?![0-9a-fA-F])/;
 /** Ed25519 and EIP-712 signatures are longer than a 32-byte key and are stored under these names. */
@@ -72,7 +84,7 @@ export function scanForSecrets(value: unknown): Finding[] {
       if (BEARER.test(v)) hit("bearer token");
       if (FLOP_TOKEN.test(v)) hit("FLOP gateway token");
       if (PEM.test(v)) hit("PEM private key");
-      if (!PUBLIC_HEX_FIELDS.has(field) && !SIGNATURE_FIELDS.has(field) && HEX64.test(v)) hit("64-or-more-hex (key-shaped) value");
+      if (!PUBLIC_HEX_FIELDS.has(field) && !SIGNATURE_FIELDS.has(field) && HEX64.test(withoutPublicHex(v))) hit("64-or-more-hex (key-shaped) value");
       if (SECRET_FIELD.test(field) && v.length > 0) hit(`secret-named field "${field}"`);
       return;
     }
@@ -153,13 +165,13 @@ export interface Mark { forms: string[]; mark: string }
 export function outsideText(text: unknown, opts: { marks?: Mark[]; max?: number } = {}): string {
   let s = typeof text === "string" ? text : String(text);
   // The scan runs on the text as it came first: a mark replaced inside a key would split it and hide it.
-  if (scanForSecrets({ reason: s.replace(/0x[0-9a-fA-F]{64}/g, "[hash]") }).length > 0) return OUTSIDE_WITHHELD;
+  if (scanForSecrets({ reason: hashed(s) }).length > 0) return OUTSIDE_WITHHELD;
   const forms = (opts.marks ?? []).flatMap((m) => m.forms.filter((f) => f.length >= MARK_MIN).map((form) => ({ form, mark: m.mark })));
   for (const { form, mark } of forms.sort((a, b) => b.form.length - a.form.length)) s = s.split(form).join(mark);
   // Control and format characters, line and paragraph separators and lone surrogates each become one space, so
   // outside text cannot write its own lines or terminal escapes (review defect 10). Before the cut.
   s = s.replace(UNSHOWN, " ");
-  s = s.replace(/0x[0-9a-fA-F]{64}/g, "[hash]");
+  s = hashed(s);
   if (scanForSecrets({ reason: s }).length > 0) return OUTSIDE_WITHHELD;
   const max = opts.max ?? OUTSIDE_TEXT_MAX;
   // The cut is on code point boundaries, so it never leaves half of a surrogate pair (review defect 11).

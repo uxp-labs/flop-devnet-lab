@@ -363,6 +363,14 @@ export async function assertPaidNetwork(net: NetworkInfo, ethRpc: string | undef
   }
 }
 
+/**
+ * A genesis hash a server reported, for a message: its first 10 and last 6 characters with "..." between, enough
+ * to compare with the pinned one by eye. The pinned genesis is ours and public, so it is printed in full.
+ */
+function shortHash(h: string | null): string {
+  return h === null ? "?" : `${h.slice(0, 10)}...${h.slice(-6)}`;
+}
+
 async function checkPaidNetwork(net: NetworkInfo, ethRpc: string | undefined, f: Fetch): Promise<void> {
   if (!ethRpc || ethRpc.trim() === "") {
     throw new Error(`paid FLOP calls need ETH_RPC_URL (an Ethereum JSON-RPC URL whose eth_chainId is ${SEAT_CHAIN_ID})`);
@@ -374,7 +382,7 @@ async function checkPaidNetwork(net: NetworkInfo, ethRpc: string | undefined, f:
   const g = await checkGenesis(net, f);
   if (!g.ok) {
     throw new Error(
-      `FLOP genesis check failed: pinned ${g.pinnedGenesis} vs faucet ${g.faucetGenesis ?? "?"} vs rpc ${g.rpcGenesis ?? "?"}${g.error ? ` (${g.error})` : ""}. Devnet may have reset.`,
+      `FLOP genesis check failed: pinned ${g.pinnedGenesis} vs faucet ${shortHash(g.faucetGenesis)} vs rpc ${shortHash(g.rpcGenesis)}${g.error ? ` (${g.error})` : ""}. Devnet may have reset.`,
     );
   }
 }

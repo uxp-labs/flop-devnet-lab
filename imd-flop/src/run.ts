@@ -125,7 +125,8 @@ export async function runJob(h: string, provider: Provider, o: RunOpts, deps: Ru
     try {
       await assertPaidNetwork(net, deps.ethRpc, deps.fetch);
     } catch (e) {
-      throw new CliError(`refused locally, nothing sent: ${(e as Error).message}`, EXIT.REFUSED_RULE);
+      // The gate's message carries server text: through outsideText, as the same refusal is at the recheck.
+      throw new CliError(`refused locally, nothing sent: ${outsideText((e as Error).message, { marks: [ethRpcUrlMark(deps.ethRpc)].filter((m) => m !== null) })}`, EXIT.REFUSED_RULE);
     }
   }
 

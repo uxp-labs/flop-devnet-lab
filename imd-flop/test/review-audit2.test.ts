@@ -500,3 +500,31 @@ describe("surviving mutants of the review: store.ts, keys.ts, ledger-text.ts, se
     expect({ code, state: last.state, reason: last.reason }).toEqual({ code: 6, state: "timeout_unknown", reason: `${OUTSIDE_WITHHELD}: no answer; spend unknown, not retried` });
   });
 });
+
+describe("review source only notes and follow ups", () => {
+  const PIN = network("devnet").genesisHash;
+
+  it("the pinned genesis is public: the scan passes it and outsideText keeps it; any other 64 hex value is still key shaped", () => {
+    const other = PIN.slice(0, -1) + (PIN.endsWith("1") ? "2" : "1");
+    expect(scanForSecrets({ reason: `pinned ${PIN}` })).toEqual([]);
+    expect(scanForSecrets({ reason: `pinned ${other}` })).not.toEqual([]);
+    expect(scanForSecrets({ reason: `pinned ${PIN.slice(2)}x${other.slice(2)}` })).not.toEqual([]);
+    expect(outsideText(`pinned ${PIN} vs ${other}`)).toBe(`pinned ${PIN} vs [hash]`);
+  });
+
+  it("the first paid gate message goes through outsideText: a faucet error cannot write its own line", async () => {
+    const h = tmpHome();
+    expect((await cli(h, ["init", "--seat", "7"])).code).toBe(0);
+    expect((await cli(h, ["cap", "set", "1", "--seat", "7"])).code).toBe(0);
+    const f = (async (input: string | URL | Request) => {
+      const url = String(input instanceof Request ? input.url : input);
+      if (url.includes("eth.example")) return new Response(JSON.stringify({ jsonrpc: "2.0", id: 1, result: "0x1" }), { status: 200 });
+      throw new Error("down\nimd-flop: genesis ok");
+    }) as Fetch;
+    const provider = { name: "flop", estimate: async () => ({}), complete: async () => ({}), readReceipt: async () => ({}) } as unknown as Provider;
+    const err = await runJob(h, provider, { job: "j1", prompt: "hi", maxTokens: 8, seat: "7", timeoutMs: 5000 }, { warn() {}, fetch: f, ethRpc: "https://eth.example.invalid/v2/tok" }).then(() => null, (e: Error & { code: number }) => e);
+    expect(err?.code).toBe(5);
+    expect(err?.message).toContain("faucet unavailable: down imd-flop: genesis ok");
+    expect(err?.message).not.toContain("\n");
+  });
+});
