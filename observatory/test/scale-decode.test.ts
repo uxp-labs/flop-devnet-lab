@@ -154,6 +154,23 @@ describe("limits and refusals", () => {
     expect(refusal(35, new Uint8Array(1000))).toMatch(/^type 28 \(Unit\) at byte 0: more values than the bytes can hold \(at most 1024 and 8 a byte\)$/);
   });
 
+  it("counts each type a compact wraps as a step, so wrappers around one byte cannot run past the bound", () => {
+    // Vec<Compact<Wrap0>>, Wrap0(Wrap1), ..., Wrap20(u32): each element is one byte and 23 steps.
+    const n = 21;
+    const types: TypeSpec[] = [
+      { def: def.primitive("u32") }, // 0
+      ...Array.from({ length: n }, (_v, i) => ({ path: [`Wrap${i}`], def: def.composite([{ type: i + 2 }]) })), // 1..21: Wrap_i(Wrap_{i+1}), the last around u32
+      { def: def.compact(1) }, // 22 Compact<Wrap0>
+      { def: def.sequence(22) }, // 23 Vec<Compact<Wrap0>>
+    ];
+    types[n] = { path: [`Wrap${n - 1}`], def: def.composite([{ type: 0 }]) };
+    const md = parseMetadata(metadata(types, []));
+    const items = (k: number) => cat(compact(k), ...new Array(k).fill(compact(7)));
+    expect(decodeValue(md, 23, items(10))).toEqual(new Array(10).fill(7));
+    // 200 elements of 23 steps each from 202 bytes: 4601 steps, past the bound of 2640.
+    expect(() => decodeValue(md, 23, items(200))).toThrow(/more values than the bytes can hold/);
+  });
+
   it("refuses a bit sequence, which it does not read", () => {
     expect(refusal(37, cat(compact(8), u8(0xff)))).toBe("type 37: a bit sequence, which this decoder does not read");
   });
