@@ -199,6 +199,9 @@ export interface Decision<C> {
  * Two reads of one request can differ, and that is normal, not an attack: per the gateway's OpenAPI
  * (CredentialReceipt), read 2026-11-11, later reconciliation can change the gateway's ledger observation.
  * So two trusted reads book the same spend and charge in either order (test/decision-properties.test.ts).
+ * They book the same exact spend in either order too, except for two shapes that test counts: one read is
+ * refused only because the charge it would hold is unknown, or the read that settles higher carries no
+ * exact amount while the lower one does. Both come from the rule that a refused read sets nothing.
  * The rule this encodes for the future: a gateway read alone never lowers a booked settlement. On FLOP a
  * refund comes from an upheld fraud verdict, which is proven on chain: per FLOP's docs, a session's payment
  * sits in escrow against the proof, and an upheld fraud verdict refunds the agent. Nothing in imd-flop
