@@ -1,16 +1,16 @@
 {
-  "ended_at": "2026-11-11T15:24:23.294Z",
+  "ended_at": "2026-11-11T16:09:36.658Z",
   "exit_code": 0,
   "exit_reason": "a truthful snapshot was written",
   "history": {
-    "detail": "read 9 snapshots from 1 day file, and the chain verifies",
+    "detail": "read 10 snapshots from 1 day file, and the chain verifies",
     "files": 1,
-    "last_hash": "9e2dc69ec2e13bca15bc6a8bff59909af86949eb25b63a7559c383cb3a824692",
-    "snapshots": 9,
+    "last_hash": "72ff2fa6657cde76b8099b18ae0056a826a4bb221b4d782202dc22302342422d",
+    "snapshots": 10,
     "state": "read"
   },
   "schema": "flop-observatory/live-run@1",
-  "snapshot_hash": "72ff2fa6657cde76b8099b18ae0056a826a4bb221b4d782202dc22302342422d",
-  "source_sha": "33f3b9f147f46a305fe189951289c5d58590a314",
-  "started_at": "2026-11-11T15:23:57.729Z"
+  "snapshot_hash": "390855648c13fb54edb863f42a2fdd3a26b682f401a5c380f0d88f3a6e17d9bb",
+  "source_sha": "c79dd6d4c02343fdae8025fb6381fb378eb6d6e9",
+  "started_at": "2026-11-11T16:09:19.956Z"
 }
