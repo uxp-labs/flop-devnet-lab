@@ -751,7 +751,8 @@ it adds.
   HTTP method through `guardHttp`. Only these are reached: `wss://rpc.devnet.flop.network`,
   `https://faucet.flop.network` and `https://api.flop.network`, with no port, user or password. A URL
   off that list is refused and recorded as a network attempt, a redirect is refused, every request
-  has a 15 second limit, every answer a 1 MiB limit counted in bytes, and the run uses one socket.
+  has a 15 second limit, every answer a 1 MiB limit counted in bytes (the live run states no larger
+  limit for any method; section 8 says who may), and the run uses one socket.
   An RPC answer that cannot be held to one call (too large, not text, not strict JSON, not an
   object) fails the
   socket, and every call after it.
