@@ -89,7 +89,7 @@ function refreshSeat(h: string, rid: string, saved: SavedReceipt | null, ledgerR
 function activeSeat(h: string, explicit?: string): string {
   const s = explicit ?? loadConfig(h).seat;
   if (!s) throw new CliError("no seat yet: run `imd-flop init --seat <tokenId>`", EXIT.USAGE);
-  return validateSeat(s);
+  return validateSeat(s, explicit === undefined ? "config.json" : "the command line");
 }
 
 function makeProvider(io: IO, name: string, h: string, seat: string, opts: { live?: boolean; scenario?: string }): Provider {
@@ -129,6 +129,7 @@ export async function main(argv: string[], io: IO): Promise<number> {
         cfg.seat = seat;
         saveConfig(h, cfg);
         const out: Record<string, unknown> = { seat, network: net, did: r.identity.did, ss58: r.identity.ss58, ss58Prefix: r.identity.ss58Prefix, keyFile: "seats/" + seat + "/flop.key (mode 600, never printed)" };
+        if (r.completed) out.completed = "this seat had a key file and no identity.json; its identity was made from that key";
         if (r.rotated) out.rotated = { revokedDid: r.rotated.revokedDid, note: "revocation written to revocations.jsonl; re-run `link`" };
         if (values["check-genesis"]) {
           const g = await checkGenesis(network(net), io.fetch);

@@ -195,20 +195,21 @@ describe("finding 13 (info): an unknown spend is never shown as 0", () => {
 
 describe("finding 4 (medium): one spelling per seat", () => {
   const rules = JSON.parse(readFileSync(join(CONTRACT, "rules.json"), "utf8"));
-  const MAX = (2n ** 256n - 1n).toString();
-  const OVER = (2n ** 256n).toString();
+  // Moved (review defect 9): the bound is 63 digits, not 2^256 - 1.
+  const MAX = "9".repeat(63);
+  const OVER = "1" + "0".repeat(63);
 
-  it("isSeatId accepts the placeholder and canonical decimal tokenIds up to 2^256 - 1, nothing else", () => {
+  it("isSeatId accepts the placeholder and canonical decimal tokenIds of up to 63 digits, nothing else", () => {
     for (const ok of [UNASSIGNED, "0", "7", "42", "9001", MAX]) expect(isSeatId(ok), ok).toBe(true);
-    for (const bad of ["042", "00", "0042", "", "-1", "+1", "4 2", " 42", "42 ", "1e3", "0x2a", OVER, "9".repeat(79), 42, null]) expect(isSeatId(bad), String(bad)).toBe(false);
+    for (const bad of ["042", "00", "0042", "", "-1", "+1", "4 2", " 42", "42 ", "1e3", "0x2a", OVER, (2n ** 256n - 1n).toString(), "9".repeat(79), 42, null]) expect(isSeatId(bad), String(bad)).toBe(false);
   });
 
   it("rules.json SEAT_ID is the rule keys.ts holds", () => {
     const seat = rules.constants.SEAT_ID.value;
     expect(seat.placeholder).toBe(UNASSIGNED);
-    expect(seat.max).toBe(MAX);
+    expect(seat.max_digits).toBe(63);
     const digits = new RegExp(seat.digits);
-    for (const v of ["0", "42", "042", "00", MAX, OVER]) expect(isSeatId(v), v).toBe(digits.test(v) && BigInt(v) <= BigInt(seat.max));
+    for (const v of ["0", "42", "042", "00", MAX, OVER]) expect(isSeatId(v), v).toBe(digits.test(v) && v.length <= seat.max_digits);
   });
 
   it("validateSeat refuses a non canonical seat with exit 2, and shows the canonical spelling for leading zeros", () => {

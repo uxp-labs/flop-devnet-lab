@@ -85,12 +85,12 @@
       "value": {
         "placeholder": "unassigned",
         "digits": "^(0|[1-9][0-9]*)$",
-        "max": "115792089237316195423570985008687907853269984665640564039457584007913129639935"
+        "max_digits": 63
       },
-      "imd-flop": "src/keys.ts isSeatId and validateSeat (their own literals; test/audit-33f3b9f.test.ts checks them against this value). A seat on the command line that is not canonical is a usage error (exit 2), and the message shows the canonical spelling when the input only has leading zeros. A ledger row whose seat is not canonical cannot be placed in a total (ledger.ts placed)",
+      "imd-flop": "src/keys.ts isSeatId and validateSeat (their own literals; test/audit-33f3b9f.test.ts checks them against this value). A seat on the command line or in config.json that is not canonical is a usage error (exit 2), and the message names where it came from and shows the canonical spelling when the input only has leading zeros. A ledger row whose seat is not canonical cannot be placed in a total (ledger.ts placed)",
       "spend-guard": null,
       "viewer": "build-lane.py SEAT_ID and usable_seat (read from this file): a row whose seat is not canonical carries the flag 'ledger row cannot be placed in a total (seat)'",
-      "note": "swarm audit 33f3b9f, finding 4: one spelling per seat. A seat id is the unassigned placeholder, or decimal digits with no leading zero (0 alone is allowed) whose value is at most 2^256 - 1. The chain reads a tokenId as a number, so 42 and 042 are one seat there. Before, both spellings were accepted and compared as text, so one seat could hold two keys, two caps and two daily totals. Pinned by contract/vectors/ledger-placement.json placement-seat-*"
+      "note": "swarm audit 33f3b9f, finding 4: one spelling per seat. A seat id is the unassigned placeholder, or decimal digits with no leading zero (0 alone is allowed) of at most 63 digits. The chain reads a tokenId as a number, so 42 and 042 are one seat there. Before, both spellings were accepted and compared as text, so one seat could hold two keys, two caps and two daily totals. The 63 digit limit (review of the audit 33f3b9f fixes, defect 9; it replaces at most 2^256 - 1): a number of 64 digits or more cannot be told from a key by the secret scan, so no file of such a seat could be written. Pinned by contract/vectors/ledger-placement.json placement-seat-*"
     },
     "LEDGER_TEXT": {
       "value": {

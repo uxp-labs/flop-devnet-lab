@@ -4,11 +4,11 @@
  * the defect is fixed. Stub providers, stub fetch and library calls only; no network (test/setup.ts).
  * The viewer's side of DEFECT 1 and DEFECT 8 is viewer/test_review_audit2.py.
  */
-import { chmodSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, readdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { appendLedger, jobSpent, spentToday, utcDay, type LedgerEntry } from "../src/ledger.js";
-import { keyFile, ledgerFile, receiptsDir } from "../src/paths.js";
+import { identityFile, keyFile, ledgerFile, receiptsDir } from "../src/paths.js";
 import { ceilMicro, floorMicro } from "../src/rounding.js";
 import { checkBudget, roomLeft } from "../src/policy.js";
 import { assertPaidNetwork, ethRpcUrlMark, readEthereumChainId, type Fetch } from "../src/gateway.js";
@@ -312,19 +312,39 @@ describe("review defect 8 (info), fixed: receipt files follow the depth rule in 
   });
 });
 
-describe("DEFECT 9 (low): a canonical seat of 64 to 78 digits passes the seat rule, then the secret scan blocks it and leaves a seat no command can use", () => {
-  it("DEFECT 9 (low): init exits 5, leaves flop.key without identity.json, then init says pass --rotate and --rotate says run init", async () => {
+describe("review defect 9 (low), fixed: a seat has at most 63 digits, and init never strands a seat", () => {
+  it("review defect 9, fixed: a seat of 64 to 78 digits is exit 2 with the reason in plain words, and writes nothing", async () => {
+    for (const seat of [(2n ** 256n - 1n).toString(), "1" + "0".repeat(63)]) {
+      const h = tmpHome();
+      const r = await cli(h, ["init", "--seat", seat]);
+      expect({ code: r.code, says: r.err.includes("a number that long cannot be told from a key by the secret scan") }).toEqual({ code: 2, says: true });
+      expect(existsSync(keyFile(h, seat))).toBe(false);
+    }
+    expect((await cli(tmpHome(), ["init", "--seat", "9".repeat(63)])).code).toBe(0);
+  });
+
+  it("review defect 9, fixed: a key file with no identity.json is completed from that key, with no second key", async () => {
     const h = tmpHome();
-    const seat = (2n ** 256n - 1n).toString();
-    const first = await cli(h, ["init", "--seat", seat]);
-    expect({ code: first.code, blocked: first.err.includes("secret scan blocked writing identity.json: seat") }).toEqual({ code: 5, blocked: true });
-    expect(readFileSync(keyFile(h, seat), "utf8")).toContain("seed_b64");
-    const again = await cli(h, ["init", "--seat", seat]);
-    expect({ code: again.code, says: again.err.includes("pass --rotate") }).toEqual({ code: 5, says: true });
-    const rotate = await cli(h, ["init", "--seat", seat, "--rotate"]);
-    expect({ code: rotate.code, says: rotate.err.includes(`run \`imd-flop init --seat ${seat}\``) }).toEqual({ code: 2, says: true });
-    // The shortest such seat: 64 digits.
-    expect((await cli(tmpHome(), ["init", "--seat", "1" + "0".repeat(63)])).code).toBe(5);
+    const first = await cli(h, ["init", "--seat", "7", "--json"]);
+    expect(first.code).toBe(0);
+    const did = first.json().did as string;
+    const key = readFileSync(keyFile(h, "7"), "utf8");
+    unlinkSync(identityFile(h, "7"));
+    const again = await cli(h, ["init", "--seat", "7", "--json"]);
+    expect({ code: again.code, did: again.json().did, completed: typeof again.json().completed }).toEqual({ code: 0, did, completed: "string" });
+    expect(readFileSync(keyFile(h, "7"), "utf8")).toBe(key);
+    // Now whole: a second init refuses as for any seat with a key.
+    expect((await cli(h, ["init", "--seat", "7"])).code).toBe(5);
+    expect((await cli(h, ["link", "--token", "7"])).code).toBe(0);
+  });
+
+  it("review defect 9, fixed: a seat that is not canonical says where it came from", async () => {
+    const h = tmpHome();
+    expect((await cli(h, ["cap", "set", "1", "--seat", "042"])).err).toContain("seat from the command line must be written without leading zeros");
+    expect((await cli(h, ["init", "--seat", "7"])).code).toBe(0);
+    const cfg = JSON.parse(readFileSync(join(h, "config.json"), "utf8"));
+    writeFileSync(join(h, "config.json"), JSON.stringify({ ...cfg, seat: "07" }));
+    expect((await cli(h, ["cap", "show"])).err).toContain("seat from config.json must be written without leading zeros: write 7, not 07");
   });
 });
 
