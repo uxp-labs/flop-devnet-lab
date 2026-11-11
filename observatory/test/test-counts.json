@@ -67,6 +67,10 @@
     "tests": 21,
     "names": "903d704885ae6f13255754cd80c7df684a1f721cb9c697dc7dd4a3825d546ce8"
   },
+  "real-recording.test.ts": {
+    "tests": 3,
+    "names": "fbb55db87c6aa5772251733c776a9ab07d30c43e3fb49956c14772490373a33c"
+  },
   "record-run.test.ts": {
     "tests": 22,
     "names": "cff429df7715470029ca532f56d1411e057beec2f7b90e731217031ef9909c0b"
