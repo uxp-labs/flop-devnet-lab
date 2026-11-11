@@ -4,9 +4,9 @@
 // src/scale/sample.ts, and reports whether the scan let the sample pass. Vitest blocks the native
 // parser the scan needs (process.dlopen), so this runs with plain node:
 //   node test/helpers/review-scan-misses.mjs
-// Each DEFECT line below is a form that reaches a clock, a timer or stdout from a pure folder and
-// that the scan passes today. It exits 0 while every DEFECT sample still passes the scan and every
-// CONTROL sample is still caught, so it fails once the scan is fixed (or if the harness breaks).
+// Each "review defect 9" line below is a form that reaches a clock, a timer or stdout from a pure
+// folder, and that the scan passed before round 18. Each is now caught. It exits 0 when every
+// sample, those and the controls, is caught by the scan, and 1 otherwise (or if the harness breaks).
 import { cpSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
@@ -16,12 +16,12 @@ import { spawnSync } from "node:child_process";
 const pkg = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
 
 export const MISSES = [
-  ["DEFECT 9a: a clock through Event.timeStamp", "export const now = (): number => new Event(\"x\").timeStamp;"],
-  ["DEFECT 9b: a clock through Intl.DateTimeFormat", "export const today = (): string => new Intl.DateTimeFormat(\"en\", { dateStyle: \"full\" }).format();"],
-  ["DEFECT 9c: a timer through AbortSignal.timeout", "export const later = (): AbortSignal => AbortSignal.timeout(10);"],
-  ["DEFECT 9d: a timer through Atomics.waitAsync", "export const wait = (): unknown => Atomics.waitAsync(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 10);"],
-  ["DEFECT 9e: stdout and a clock through console.time", "export function t(): void { console.time(\"a\"); console.timeEnd(\"a\"); }"],
-  ["DEFECT 9f: Math.random by destructuring", "const { random: r } = Math; export const pick = (): number => r();"],
+  ["review defect 9a, fixed: a clock through Event.timeStamp", "export const now = (): number => new Event(\"x\").timeStamp;"],
+  ["review defect 9b, fixed: a clock through Intl.DateTimeFormat", "export const today = (): string => new Intl.DateTimeFormat(\"en\", { dateStyle: \"full\" }).format();"],
+  ["review defect 9c, fixed: a timer through AbortSignal.timeout", "export const later = (): AbortSignal => AbortSignal.timeout(10);"],
+  ["review defect 9d, fixed: a timer through Atomics.waitAsync", "export const wait = (): unknown => Atomics.waitAsync(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 10);"],
+  ["review defect 9e, fixed: stdout and a clock through console.time", "export function t(): void { console.time(\"a\"); console.timeEnd(\"a\"); }"],
+  ["review defect 9f, fixed: Math.random by destructuring", "const { random: r } = Math; export const pick = (): number => r();"],
 ];
 const CONTROLS = [
   ["CONTROL: Date.now is caught", "export const now = (): number => Date.now();"],
@@ -57,9 +57,9 @@ function scanWith(sample) {
 let wrong = 0;
 for (const [name, code] of MISSES) {
   const r = scanWith(code);
-  const ok = r.outcome === "pass";
+  const ok = r.outcome === "fail";
   if (!ok) wrong++;
-  console.log(`${ok ? "still missed" : "now caught  "}  ${name}${ok ? "" : `: ${r.stderr}`}`);
+  console.log(`${ok ? "caught      " : "STILL MISSED"}  ${name}${ok ? `: ${r.stderr}` : ""}`);
 }
 for (const [name, code] of CONTROLS) {
   const r = scanWith(code);
