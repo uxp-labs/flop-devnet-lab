@@ -1,0 +1,125 @@
+{
+  "what": "A devnet probe: may a FlopSessionKeys session call the ComputeChannel pallet?",
+  "answer": "Yes, as far as the session's pallet filter goes. A session whose allowed pallets are [ComputeChannel] passed ComputeChannel.timeout through to the ComputeChannel pallet (it failed there with ChannelNotFound, as it must for a made up channel id). The same session refused System.remark with PalletNotAllowed. So ComputeChannel is not on the session pallet's deny list, and the allow list takes the metadata's pallet name.",
+  "not_shown": "That open_channel or top_up_escrow succeed through a session, how the session's spend meter counts the escrow they move, and what the hosted gateway does. No channel was opened and no inference was bought.",
+  "chain": {
+    "name": "FLOP Devnet",
+    "genesis": "0x99c172c095340ace980631f9123544c6bebd4839f3437e463533422d8be2d631",
+    "spec_version": 1014014,
+    "transaction_version": 2,
+    "metadata_sha256": "f4fd2addba7fff1129483d0e66b8e6bc69141292f56443e201d3f073aab03444",
+    "rpc": "wss://rpc.devnet.flop.network"
+  },
+  "owner": {
+    "ss58": "5HEA8QECFwBg1F9cxoXzvQzryu2d5qj5zASJS7owNW2zebBz",
+    "public_key": "0xe462d014cab1239a123233647052f4e3b572322e982441d6b7a5c1694d8419e2",
+    "role": "the agent's FLOP identity; it created the session"
+  },
+  "device": {
+    "ss58": "5Cm4uUXzfKUWWpi9xJgrCaMupmnZ1UiAhMD1XW6WvMFLkDvB",
+    "public_key": "0x1ec8abdfa88707679f8a2fbfc0bcd80184e2f731d91bb9fa152b750210556c7f",
+    "role": "a new key made for this probe (wallets/flop-probe-device.key); the session's delegate"
+  },
+  "made_up_channel_id": "0x696d642d666c6f702d73657373696f6e2d70726f62652d32303236313131312e (the text imd-flop-session-probe-20261111.)",
+  "steps": [
+    {
+      "step": "1-fund-device",
+      "signed_by": "owner",
+      "signer": "5HEA8QECFwBg1F9cxoXzvQzryu2d5qj5zASJS7owNW2zebBz",
+      "account_nonce": "0",
+      "what": "Balances.transfer_keep_alive: send 100000000000000000 raw (0.1 FLOP) to 0x1ec8abdfa88707679f8a2fbfc0bcd80184e2f731d91bb9fa152b750210556c7f",
+      "call": "0x0403001ec8abdfa88707679f8a2fbfc0bcd80184e2f731d91bb9fa152b750210556c7f1300008a5d78456301",
+      "extrinsic_hash": "0xa81fa61a7dad134b19feb98d417b91419a67d479e6df66abbffaf5f08335b3e6",
+      "finalized_in_block": 3492693,
+      "block_hash": "0xefb6e73aeb6ad9bb55465e73ead4987e1bbe9f8b305be737a0451f080ac73428",
+      "extrinsic_index": 2,
+      "result": "ExtrinsicSuccess",
+      "fee_raw": "2723545745000000",
+      "note": "0.1 FLOP moved from the owner to the new device account, so the device can pay its own fees"
+    },
+    {
+      "step": "2-create-session",
+      "signed_by": "owner",
+      "signer": "5HEA8QECFwBg1F9cxoXzvQzryu2d5qj5zASJS7owNW2zebBz",
+      "account_nonce": "1",
+      "what": "FlopSessionKeys.create_session: let 0x1ec8abdfa88707679f8a2fbfc0bcd80184e2f731d91bb9fa152b750210556c7f spend from the signer's account, lifetime cap 100000000000000000 raw (0.1 FLOP), per call 50000000000000000 raw (0.05 FLOP), per day 100000000000000000 raw (0.1 FLOP), for 7200 blocks, allowed pallets ComputeChannel",
+      "call": "0x5e001ec8abdfa88707679f8a2fbfc0bcd80184e2f731d91bb9fa152b750210556c7f00008a5d7845630100000000000000000000c52ebca2b100000000000000000000008a5d784563010000000000000000201c00000438436f6d707574654368616e6e656c",
+      "extrinsic_hash": "0x398d05a348e73cbe699fc7ecf4c9d1ea6e8acea420c1e22f59b8fcc88f28b756",
+      "finalized_in_block": 3492718,
+      "block_hash": "0xc5276d1898ce0048d6eea4e868a026f380cf4f8292ba77d554da14e42db104ee",
+      "extrinsic_index": 2,
+      "result": "ExtrinsicSuccess",
+      "fee_raw": "5151486035000000",
+      "note": "FlopSessionKeys.SessionCreated: lifetime cap 0.1 FLOP, per call 0.05 FLOP, per day 0.1 FLOP, expires at block 3499918, allowed pallets ComputeChannel"
+    },
+    {
+      "step": "3-timeout-via-session",
+      "signed_by": "device",
+      "signer": "5Cm4uUXzfKUWWpi9xJgrCaMupmnZ1UiAhMD1XW6WvMFLkDvB",
+      "account_nonce": "0",
+      "what": "FlopSessionKeys.execute_via_session: as owner 0xe462d014cab1239a123233647052f4e3b572322e982441d6b7a5c1694d8419e2, declared spend 0 raw (0 FLOP), session nonce 0, run: ComputeChannel.timeout on channel 0x696d642d666c6f702d73657373696f6e2d70726f62652d32303236313131312e",
+      "call": "0x5e02e462d014cab1239a123233647052f4e3b572322e982441d6b7a5c1694d8419e26705696d642d666c6f702d73657373696f6e2d70726f62652d32303236313131312e000000000000000000000000000000000000000000000000",
+      "extrinsic_hash": "0x5bd95685eea2e05203a86a3c28b915b39114acb1f66132deee2ad311e62f48ca",
+      "finalized_in_block": 3492760,
+      "block_hash": "0x818d5a0569dbefbfd8194d1169fab268b75050ce236f71a47ba64dcef4df1751",
+      "extrinsic_index": 2,
+      "result": "ExtrinsicFailed: Module error, pallet 103 error 7 = ComputeChannel.ChannelNotFound",
+      "fee_raw": "9748455985000000",
+      "note": "the session let the call through and the ComputeChannel pallet answered. The channel id is made up, so no channel was touched. After it the session nonce is still 0 and the session and breaker counters are unchanged: the whole call was rolled back. The device still paid the fee."
+    },
+    {
+      "step": "4-remark-via-session",
+      "signed_by": "device",
+      "signer": "5Cm4uUXzfKUWWpi9xJgrCaMupmnZ1UiAhMD1XW6WvMFLkDvB",
+      "account_nonce": "1",
+      "what": "FlopSessionKeys.execute_via_session: as owner 0xe462d014cab1239a123233647052f4e3b572322e982441d6b7a5c1694d8419e2, declared spend 0 raw (0 FLOP), session nonce 0, run: System.remark \"imd-flop session probe\"",
+      "call": "0x5e02e462d014cab1239a123233647052f4e3b572322e982441d6b7a5c1694d8419e2000058696d642d666c6f702073657373696f6e2070726f6265000000000000000000000000000000000000000000000000",
+      "extrinsic_hash": "0x34cef914dc245245ac562c7f8f6a4e59bd9291fefa3dbe93f6b9c545a5bb1489",
+      "finalized_in_block": 3492808,
+      "block_hash": "0xb0712e68445cce6875c1ebddf7656da45bf982f424724411284afdd7f456d1b4",
+      "extrinsic_index": 3,
+      "result": "ExtrinsicFailed: Module error, pallet 94 error 7 = FlopSessionKeys.PalletNotAllowed",
+      "fee_raw": "4303715650000000",
+      "note": "the control: a call to a pallet that is not on the session's list is refused by the session pallet itself"
+    },
+    {
+      "step": "5-revoke-session",
+      "signed_by": "owner",
+      "signer": "5HEA8QECFwBg1F9cxoXzvQzryu2d5qj5zASJS7owNW2zebBz",
+      "account_nonce": "2",
+      "what": "FlopSessionKeys.revoke_session: end the session of delegate 0x1ec8abdfa88707679f8a2fbfc0bcd80184e2f731d91bb9fa152b750210556c7f",
+      "call": "0x5e011ec8abdfa88707679f8a2fbfc0bcd80184e2f731d91bb9fa152b750210556c7f",
+      "extrinsic_hash": "0x59aeef0133edda3110624dc745c9768491d02b1be846daf5cc328439c9cb1548",
+      "finalized_in_block": 3492879,
+      "block_hash": "0x8789d38843a400719db0be8c02cc290ebc79408dd83aa01a759c4abcddf583ca",
+      "extrinsic_index": 3,
+      "result": "ExtrinsicSuccess",
+      "fee_raw": "3906000695000000",
+      "note": "FlopSessionKeys.SessionRevoked. The session record stays in storage with active false. DelegateSessions of the device is empty."
+    },
+    {
+      "step": "6-return-funds",
+      "signed_by": "device",
+      "signer": "5Cm4uUXzfKUWWpi9xJgrCaMupmnZ1UiAhMD1XW6WvMFLkDvB",
+      "account_nonce": "2",
+      "what": "Balances.transfer_all: send everything the signer has to 0xe462d014cab1239a123233647052f4e3b572322e982441d6b7a5c1694d8419e2 (keep_alive false)",
+      "call": "0x040400e462d014cab1239a123233647052f4e3b572322e982441d6b7a5c1694d8419e200",
+      "extrinsic_hash": "0xf249948bf45db23964bdfaaa3ddf52146c33299bd4b53d3b198de90f55212e5f",
+      "finalized_in_block": 3492906,
+      "block_hash": "0x8729e82d64f92829686b8b4b11b8fa21a1d6790b9ee653fc504a917d88444fcd",
+      "extrinsic_index": 2,
+      "result": "ExtrinsicSuccess",
+      "fee_raw": "2770030705000000",
+      "note": "the device sent everything it had left back to the owner (83177797660000000 raw). The device account no longer exists on chain."
+    }
+  ],
+  "fees_total_raw": "28603234815000000",
+  "owner_balance": {
+    "before_raw": "25000000000000000000",
+    "after_raw": "24971396765185000000",
+    "difference_raw": "28603234815000000"
+  },
+  "left_on_chain": "Sessions(owner, device) holds the revoked session (active false, nothing spent, expiry 3499918). CircuitBreakers(device) holds an empty record. The owner's account nonce is 3.",
+  "how": "Each call was built and signed offline by tools/flop-session-probe/flop-sign.mjs in the desktop shell (the keys stay on the PC), checked with TaggedTransactionQueue_validate_transaction, sent with author_submitAndWatchExtrinsic through the browser, and read back from System.Events at the finalized block. Calls and storage keys were checked against the polkadot-api reference encoder first. Events were decoded with the polkadot-api reference decoder and our recorded metadata.",
+  "when_utc": "2026-11-11, about 18:10 to 18:20"
+}
