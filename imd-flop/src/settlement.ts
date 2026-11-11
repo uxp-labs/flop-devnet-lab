@@ -1,9 +1,10 @@
 /**
  * Reservation and settlement: the one copy of the rules that turn a receipt read into the next ledger
- * booking (decideBooking), and the one verdict for a stored receipt beside the latest ledger row of its
- * request (reconcile). Pure: no file, network or ledger access. `run` (after its call) and
- * `receipt --refresh` both book through decideBooking, in booking.ts. `run`, `receipt <id>` and `status`
- * all show the reconcile verdict. Behavior is pinned by contract/vectors/settlement-run.json,
+ * booking (decideBooking), the rules for what `run` reports when its paid call fails (decideFailure), and
+ * the one verdict for a stored receipt beside the latest ledger row of its request (reconcile). Pure: no
+ * file, network or ledger access. `run` (after its call) and `receipt --refresh` both book through
+ * decideBooking, and `run` books a failed call through decideFailure, all in booking.ts. `run`,
+ * `receipt <id>` and `status` all show the reconcile verdict. Behavior is pinned by contract/vectors/settlement-run.json,
  * settlement-refresh.json and reconcile.json, and the decision's properties by
  * test/decision-properties.test.ts.
  */

@@ -1,14 +1,15 @@
 /**
- * The booking step: the only code that reads a request's latest ledger row, decides and appends. `run`
- * (its own receipt read after the paid call) and `receipt --refresh` both book through bookRead, under one
- * ledger lock. In real use one seat has several processes at once: workers running jobs, and something
- * refreshing open receipts. Two of them can read the same request, and the gateway may answer them
- * differently. The lock makes each one decide against what the other already booked.
- * The decision itself is settlement.ts decideBooking. The network read and the receipt file write happen
- * before this step, outside the lock.
+ * The booking step: the only code that reads a request's latest ledger row, decides and appends. Every
+ * row written for a request after its paid call goes through it, under one ledger lock: `run`'s own
+ * receipt read and `receipt --refresh` through bookRead, and what `run` saw when the call itself failed
+ * through bookFailure. In real use one seat has several processes at once: workers running jobs, and
+ * something refreshing open receipts. Two of them can book the same request, and the gateway may answer
+ * them differently. The lock makes each one decide against what the other already booked.
+ * The decisions themselves are settlement.ts decideBooking and decideFailure. The network read and the
+ * receipt file write happen before this step, outside the lock.
  */
 import { appendLedger, latestAttempts, withLedgerLock, type LedgerEntry } from "./ledger.js";
-import { bookingReason, decideBooking, reportedCost, type ReadOutcome } from "./settlement.js";
+import { bookingReason, decideBooking, decideFailure, reportedCost, type Failure, type ReadOutcome } from "./settlement.js";
 
 /** What the caller knows beside the read. */
 export interface ReadInfo {
@@ -18,6 +19,12 @@ export interface ReadInfo {
   cost_reported?: number | null;
   /** Only `run` records the HTTP status of its receipt read. A refresh leaves it out and the row keeps what it records. */
   http?: number | null;
+}
+
+/** What `run` records beside a failure report: why the call failed, and the HTTP status if the gateway answered. */
+export interface FailureInfo {
+  reason: string;
+  http: number | null;
 }
 
 /**
@@ -34,22 +41,44 @@ export type BookResult = { outcome: "no_row" } | { outcome: "appended" | "unchan
 const RECORDED = ["state", "spend", "cap_charge", "cost_reported", "http"] as const;
 
 /**
- * Book one receipt read: under the ledger lock, read the latest row of the request, decide, and append one
- * row when a recorded field changes. The reported cost is the caller's when it has one, else the one the
- * row records. Throws what the lock or the append throws (LedgerLockError when the lock cannot be taken),
- * and then nothing was appended: the latest row stays, and with it the reservation it holds.
+ * The step itself. Under the ledger lock: read the latest row of the request, let `decide` say what the
+ * row becomes, and append one row when a recorded field changes. Throws what the lock or the append throws
+ * (LedgerLockError when the lock cannot be taken), and then nothing was appended: the latest row stays,
+ * and with it the reservation it holds.
  */
-export function bookRead(h: string, requestId: string, read: ReadOutcome, info: ReadInfo): BookResult {
+function book(h: string, requestId: string, decide: (prev: LedgerEntry) => { next: LedgerEntry; disagree: boolean }): BookResult {
   return withLedgerLock<BookResult>(h, () => {
     const prev = latestAttempts(h).find((e) => e.request_id === requestId);
     if (!prev) return { outcome: "no_row" };
+    const { next, disagree } = decide(prev);
+    if (RECORDED.every((k) => next[k] === prev[k])) return { outcome: disagree ? "disagree" : "unchanged", row: prev };
+    const row: LedgerEntry = { ...next, ts: new Date().toISOString() };
+    appendLedger(h, row);
+    return { outcome: disagree ? "disagree" : "appended", row };
+  });
+}
+
+/**
+ * Book one receipt read (settlement.ts decideBooking). The reported cost is the caller's when it has one,
+ * else the one the row records.
+ */
+export function bookRead(h: string, requestId: string, read: ReadOutcome, info: ReadInfo): BookResult {
+  return book(h, requestId, (prev) => {
     const { flag, ...own } = info;
     const known: LedgerEntry = { ...prev, ...own };
     const { booking, disagree } = decideBooking(known, read, reportedCost(known.cost_reported));
-    const next: LedgerEntry = { ...known, ...booking };
-    if (RECORDED.every((k) => next[k] === prev[k])) return { outcome: disagree ? "disagree" : "unchanged", row: prev };
-    const row: LedgerEntry = { ...next, ts: new Date().toISOString(), reason: bookingReason(booking, flag) };
-    appendLedger(h, row);
-    return { outcome: disagree ? "disagree" : "appended", row };
+    return { next: { ...known, ...booking, reason: bookingReason(booking, flag) }, disagree };
+  });
+}
+
+/**
+ * Book what `run` saw when its paid call failed (settlement.ts decideFailure). When the report is not
+ * booked, because the row already settles or its charge is not a known amount, nothing is appended: the
+ * reason and the HTTP status belong to the report, and are recorded only on a row the report moves.
+ */
+export function bookFailure(h: string, requestId: string, failure: Failure, info: FailureInfo): BookResult {
+  return book(h, requestId, (prev) => {
+    const booking = decideFailure(prev, failure);
+    return { next: booking ? { ...prev, ...booking, ...info } : prev, disagree: false };
   });
 }

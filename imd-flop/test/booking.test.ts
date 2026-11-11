@@ -4,11 +4,13 @@
  * same request, and that a stored read below the booked amount printed as fine. The fix is:
  *   - one decision for every receipt read (settlement.ts decideBooking),
  *   - one booking step under the ledger lock for `run` and `receipt --refresh` (booking.ts bookRead),
+ *     which also takes what `run` saw when its paid call failed (bookFailure, settlement.ts decideFailure),
  *   - one verdict for a stored receipt beside its ledger row (settlement.ts reconcile), shown by `run`,
  *     `receipt <id>` and `status`. Its cases are the shared vectors in contract/vectors/reconcile.json.
  * Each test asserts the safe outcome. The blocks named "fails on dbffac0" failed on that commit, the one the
- * review read, and pass with the booking step. The blocks named "pin" passed there too: they hold a behavior
- * the booking step must keep.
+ * review read, and pass with the booking step. The blocks named "fails on 9adfd17" failed on the first
+ * build of the booking step, which covered receipt reads only. The blocks named "pin" passed on dbffac0 too:
+ * they hold a behavior the booking step must keep.
  * Stub providers only; no network (test/setup.ts disables fetch). A second process is stood in for by a
  * stub whose readReceipt runs the other reader before it answers, or by a child process that holds the real
  * ledger lock.
@@ -18,7 +20,9 @@ import { appendFileSync, chmodSync, existsSync, mkdirSync, readFileSync, rmSync,
 import { hostname } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { bookRead } from "../src/booking.js";
+import { FlopHTTPError } from "@flop-labs/client";
+import { bookFailure, bookRead } from "../src/booking.js";
+import { PreSendError } from "../src/gateway.js";
 import { utcDay } from "../src/ledger.js";
 import type { CompleteReq, CompleteRes, Provider } from "../src/providers.js";
 import { CHARGE_RAISED, decideBooking, decideFailure, DISAGREE, type Failure } from "../src/settlement.js";
@@ -279,6 +283,57 @@ describe("fails on dbffac0: run books its own read against the latest row, not t
   });
 });
 
+describe("fails on 9adfd17: what run writes when its paid call fails goes through the booking step too", () => {
+  // The call fails while another reader refreshes the same request and books a settlement. On 9adfd17 (and
+  // on dbffac0) run wrote its timeout_unknown, error or refused_local row from the row it wrote before the
+  // call, so the booked settlement was replaced by the 0.186 hold, or by 0, and an unresolved state.
+  const hang = (req: CompleteReq) => new Promise<CompleteRes>((_, reject) => req.signal.addEventListener("abort", () => reject(req.signal.reason), { once: true }));
+  /** A completion that first lets another reader refresh the request and book this read, then fails. */
+  const failsAfter = (home: string, other: Reader, fail: (req: CompleteReq) => Promise<CompleteRes>) => async (req: CompleteReq) => {
+    const r = await cli(home, refreshArgs(req.requestId), { provider: new P({ read: other }) });
+    expect(r.code, r.err).toBe(0);
+    return fail(req);
+  };
+  const failures = {
+    "the call times out": { fail: hang, code: 6, says: /^imd-flop: no answer within 50 ms/, state: "timeout_unknown", charge: 0.186 },
+    "the gateway answers HTTP 500": { fail: async () => { throw new FlopHTTPError(500, {}, null); }, code: 1, says: /^imd-flop: gateway refused the call \(HTTP 500\)/, state: "error", charge: 0.186 },
+    "nothing was sent (a pre send failure)": { fail: async () => { throw new PreSendError("child key mint failed"); }, code: 11, says: /^imd-flop: nothing sent: child key mint failed/, state: "refused_local", charge: 0 },
+  };
+
+  for (const [name, f] of Object.entries(failures)) {
+    it(`${name} after another reader booked settled 0.3: the settlement stays, nothing is appended, run keeps its exit code and message`, async () => {
+      const h = await ready();
+      const run = await cli(h, runArgs(["--timeout-ms", "50"]), { provider: new P({ complete: failsAfter(h, settledAt(0.3), f.fail) }) });
+      expect(run.code, run.err).toBe(f.code);
+      expect(run.err).toMatch(f.says);
+      // 0.3 is above the 0.186 hold: writing the failure row from the sent row lowered both spend and charge.
+      expect(ledger(h).map(booked)).toEqual([{ state: "sent", spend: null, cap_charge: 0.186 }, { state: "settled", spend: 0.3, cap_charge: 0.3 }]);
+      expect(await today(h)).toBe(0.3);
+      const shown = (await cli(h, ["receipt", ledger(h)[0].request_id!, "--json"])).json();
+      expect({ ledger_state: shown.ledger_state, ledger_spend: shown.ledger_spend, status: shown.status }).toEqual({ ledger_state: "settled", ledger_spend: 0.3, status: undefined });
+    });
+
+    it(`control: ${name} after another reader booked a pending read: the report is booked against that row`, async () => {
+      const h = await ready();
+      const run = await cli(h, runArgs(["--timeout-ms", "50"]), { provider: new P({ complete: failsAfter(h, pending, f.fail) }) });
+      expect(run.code, run.err).toBe(f.code);
+      expect(ledger(h).map(booked)).toEqual([{ state: "sent", spend: null, cap_charge: 0.186 }, { state: "estimated", spend: null, cap_charge: 0.186 }, { state: f.state, spend: null, cap_charge: f.charge }]);
+      expect(await today(h)).toBe(f.charge);
+    });
+
+    it(`control: ${name} with no other reader: the row is written as before`, async () => {
+      const h = await ready();
+      const run = await cli(h, runArgs(["--timeout-ms", "50"]), { provider: new P({ complete: f.fail }) });
+      expect(run.code, run.err).toBe(f.code);
+      expect(ledger(h).map(booked)).toEqual([{ state: "sent", spend: null, cap_charge: 0.186 }, { state: f.state, spend: null, cap_charge: f.charge }]);
+      const last = ledger(h).at(-1)!;
+      expect({ http: last.http, reason: last.reason }).toEqual(
+        f.state === "error" ? { http: 500, reason: "HTTP 500" } : f.state === "refused_local" ? { http: null, reason: "nothing sent: child key mint failed" } : { http: null, reason: "TimeoutError: no answer; spend unknown, not retried" },
+      );
+    });
+  }
+});
+
 describe("a refresh racing a refresh", () => {
   /** A process that takes the real ledger lock, holds it, then books settled 0.07 for the request and lets go. */
   function holderThatBooks(home: string, rid: string, holdMs: number) {
@@ -523,6 +578,21 @@ describe("after the paid call, when the ledger no longer holds the request's row
   });
 });
 
+describe("after a failed call, when the ledger no longer holds the request's row", () => {
+  it("run writes the row again and books the timeout against it, so the reservation is held", async () => {
+    // On 9adfd17 run appended one full timeout row, built from the row it held in memory. The booking is the same.
+    const h = await ready();
+    const complete = (req: CompleteReq) => {
+      rmSync(ledgerPath(h));
+      return new Promise<CompleteRes>((_, reject) => req.signal.addEventListener("abort", () => reject(req.signal.reason), { once: true }));
+    };
+    const run = await cli(h, runArgs(["--timeout-ms", "50"]), { provider: new P({ complete }) });
+    expect(run.code, run.err).toBe(6);
+    expect(ledger(h).map(booked)).toEqual([{ state: "sent", spend: null, cap_charge: 0.186 }, { state: "timeout_unknown", spend: null, cap_charge: 0.186 }]);
+    expect(await today(h)).toBe(0.186);
+  });
+});
+
 describe("bookRead: the one booking step", () => {
   const trusted = (state: string | null, settled: unknown) => ({ fresh: true, identityOk: true, redacted: false, state, settled });
   /** A ledger with one held row for request r1, as a run leaves it while its receipt is pending. */
@@ -614,5 +684,69 @@ describe("bookRead: the one booking step", () => {
     expect(ledger(h)).toHaveLength(1);
     bookRead(h, "r1", trusted("reserved", null), { flag: "key_expired" });
     expect({ state: ledger(h).at(-1)!.state, reason: ledger(h).at(-1)!.reason }).toEqual({ state: "reserved", reason: "key_expired" });
+  });
+});
+
+describe("bookFailure: a failed call goes through the same booking step", () => {
+  /** A ledger with one row for request r1. */
+  function ledgerWith(fields: Record<string, unknown> = {}) {
+    const h = tmpHome();
+    const row = { ts: "2026-11-11T00:00:00.000Z", day: utcDay(), request_id: "r1", seat: SEAT, did: "did:key:zseed", job: "j1", provider: "mock", network: "devnet", payer: "holder", model: "m", max_tokens: 8,
+      prompt_sha256: "ab".repeat(32), quote_raw: 0.066, quote_padded: 0.186, per_call_cap: 1, daily_cap: 1, job_budget: null, spent_before: 0, job_spent_before: null, state: "sent", reason: null,
+      spend: null, cost_reported: null, cap_charge: 0.186, http: null, mock: true, ...fields };
+    appendFileSync(ledgerPath(h), JSON.stringify(row) + "\n");
+    return h;
+  }
+  const timeout = { reason: "TimeoutError: no answer; spend unknown, not retried", http: null };
+
+  it("a timeout or a gateway error on a row that does not settle: one row, the state moved, the hold kept, the reason and status recorded", () => {
+    const h = ledgerWith();
+    const r = bookFailure(h, "r1", "timeout_unknown", timeout);
+    expect(r.outcome).toBe("appended");
+    const last = ledger(h).at(-1)!;
+    expect({ ...booked(last), reason: last.reason, http: last.http }).toEqual({ state: "timeout_unknown", spend: null, cap_charge: 0.186, ...timeout });
+    expect(r.outcome !== "no_row" && r.row).toEqual(readLines(ledgerPath(h)).at(-1));
+    const g = ledgerWith({ state: "estimated", http: 200, cap_charge: 0.3, cost_reported: 0.3 });
+    bookFailure(g, "r1", "error", { reason: "HTTP 500", http: 500 });
+    const row = ledger(g).at(-1)!;
+    expect({ ...booked(row), reason: row.reason, http: row.http, cost_reported: row.cost_reported }).toEqual({ state: "error", spend: null, cap_charge: 0.3, reason: "HTTP 500", http: 500, cost_reported: 0.3 });
+  });
+
+  it("\"nothing was sent\" on a row that does not settle: refused_local, charge 0", () => {
+    const h = ledgerWith();
+    expect(bookFailure(h, "r1", "refused_local", { reason: "nothing sent: mint failed", http: null }).outcome).toBe("appended");
+    const last = ledger(h).at(-1)!;
+    expect({ ...booked(last), reason: last.reason }).toEqual({ state: "refused_local", spend: null, cap_charge: 0, reason: "nothing sent: mint failed" });
+  });
+
+  it("a settling row stays, whatever is reported: nothing is appended, not even the report's reason or HTTP status", () => {
+    const h = ledgerWith({ state: "settled", spend: 0.3, cap_charge: 0.3 });
+    const before = readFileSync(ledgerPath(h), "utf8");
+    for (const [report, info] of [["timeout_unknown", timeout], ["error", { reason: "HTTP 500", http: 500 }], ["refused_local", { reason: "nothing sent: mint failed", http: null }]] as const) {
+      const r = bookFailure(h, "r1", report, info);
+      expect(r.outcome, report).toBe("unchanged");
+      expect(r.outcome !== "no_row" && booked(r.row as Row), report).toEqual({ state: "settled", spend: 0.3, cap_charge: 0.3 });
+    }
+    expect(readFileSync(ledgerPath(h), "utf8")).toBe(before);
+  });
+
+  it("a charge that is not a known amount: the row stays as it is, also for \"nothing was sent\"", () => {
+    const h = ledgerWith({ cap_charge: null });
+    const before = readFileSync(ledgerPath(h), "utf8");
+    for (const report of ["timeout_unknown", "error", "refused_local"] as const) expect(bookFailure(h, "r1", report, timeout).outcome, report).toBe("unchanged");
+    expect(readFileSync(ledgerPath(h), "utf8")).toBe(before);
+  });
+
+  it("no ledger row for the request: nothing appended", () => {
+    const h = ledgerWith();
+    expect(bookFailure(h, "other", "timeout_unknown", timeout)).toEqual({ outcome: "no_row" });
+    expect(ledger(h)).toHaveLength(1);
+  });
+
+  it("a later trusted read books over a booked failure report as over any hold", () => {
+    const h = ledgerWith();
+    bookFailure(h, "r1", "timeout_unknown", timeout);
+    expect(bookRead(h, "r1", { fresh: true, identityOk: true, redacted: false, state: "settled", settled: 0.05 }, { flag: null }).outcome).toBe("appended");
+    expect(ledger(h).map(booked)).toEqual([{ state: "sent", spend: null, cap_charge: 0.186 }, { state: "timeout_unknown", spend: null, cap_charge: 0.186 }, { state: "settled", spend: 0.05, cap_charge: 0.05 }]);
   });
 });
