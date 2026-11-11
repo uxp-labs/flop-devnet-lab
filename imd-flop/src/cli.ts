@@ -5,7 +5,7 @@ import { bytesToHex, utf8ToBytes } from "@noble/hashes/utils.js";
 import { CliError, EXIT } from "./errors.js";
 import { home, gatewayKeyFile, linkFile, receiptsDir, keyFile } from "./paths.js";
 import { loadConfig, saveConfig, type Payer } from "./config.js";
-import { claimUnassigned, initSeat, loadSigner, readIdentity, UNASSIGNED, validateSeat } from "./keys.js";
+import { claimUnassigned, initSeat, isSeatId, loadSigner, readIdentity, UNASSIGNED, validateSeat } from "./keys.js";
 import { buildLink, verifyLink, type LinkFile } from "./link.js";
 import { readJson, writeJsonSafe, writeSecretFile } from "./store.js";
 import { network, SEAT_COLLECTION } from "./networks.js";
@@ -13,10 +13,10 @@ import { checkGenesis, readVerifiedSeatOwner, enrollChallengeUrl, getEnrollChall
 import { FlopProvider, MOCK_SCENARIOS, MockProvider, type MockScenario, type Provider } from "./providers.js";
 import { checkLinkForRun, runJob } from "./run.js";
 import { overDailyCap, padQuote, parseAmount } from "./policy.js";
-import { appendLedger, latestAttempts, LedgerLockError, reportedSpendToday, spentToday, UnusableLedgerRow, type LedgerEntry } from "./ledger.js";
+import { appendLedger, latestAttempts, latestLineOf, LedgerLockError, reportedSpendToday, spentToday, UnusableLedgerRow, type LedgerEntry } from "./ledger.js";
 import { listReceipts, readSavedReceipt, receiptVerdicts, refreshReceipt, type SavedReceipt } from "./receipt-store.js";
 import { blank, classifyReceipt, receiptLine } from "./receipts.js";
-import { outsideText, registerSecret } from "./secrets.js";
+import { outsideText, outsideValue, registerSecret } from "./secrets.js";
 
 export interface IO {
   out: (s: string) => void;
@@ -71,6 +71,19 @@ function shownField(v: unknown): number | string | null {
   if (v === undefined || v === null) return null;
   if (typeof v === "number" && Number.isFinite(v)) return v;
   return outsideText(typeof v === "string" ? v : JSON.stringify(v), { max: 200 });
+}
+
+/**
+ * The seat a refresh reads with: the stored receipt's, else the ledger row's. It is used only when it is a usable
+ * seat id (isSeatId), since it picks the gateway key file. Anything else refuses with exit 3 and names the file
+ * or the line it came from; there is no fallback to another seat (review defect 6).
+ */
+function refreshSeat(h: string, rid: string, saved: SavedReceipt | null, ledgerRow: LedgerEntry | undefined): string {
+  const fromFile = saved?.seat !== undefined && saved?.seat !== null;
+  const seat = fromFile ? saved!.seat : ledgerRow?.seat;
+  if (isSeatId(seat)) return seat;
+  const from = fromFile ? `the receipt file of ${rid}` : `ledger line ${latestLineOf(h, rid) ?? "?"}`;
+  throw new CliError(`${from} has seat ${outsideValue(seat)}, which is not a usable seat id; refresh refused, nothing read. Repair that ${fromFile ? "file" : "line"}.`, EXIT.REFUSED_CAP);
 }
 
 function activeSeat(h: string, explicit?: string): string {
@@ -429,7 +442,7 @@ export async function main(argv: string[], io: IO): Promise<number> {
         }
         if (!saved && !ledgerRow) throw new CliError(`no receipt or ledger entry for ${rid}`, EXIT.USAGE);
         if (values.refresh) {
-          const p = makeProvider(io, saved?.provider ?? ledgerRow!.provider, h, saved?.seat ?? ledgerRow!.seat, { live: values.live, scenario: saved?.mock_scenario });
+          const p = makeProvider(io, saved?.provider ?? ledgerRow!.provider, h, refreshSeat(h, rid, saved, ledgerRow), { live: values.live, scenario: saved?.mock_scenario });
           ({ saved, ledgerRow } = await refreshReceipt(h, rid, p, { saved, ledgerRow }, io.err));
         }
         const verdicts = await receiptVerdicts(h, saved ?? null, ledgerRow ?? null);

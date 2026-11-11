@@ -152,6 +152,11 @@ export function latestAttempts(h: string): LedgerEntry[] {
   return latestLines(h).map((line) => line.row);
 }
 
+/** The line number of the latest row of a request, or null when the ledger holds none. */
+export function latestLineOf(h: string, requestId: string): number | null {
+  return latestLines(h).find((line) => line.row.request_id === requestId)?.n ?? null;
+}
+
 /**
  * A ledger line that cannot be used: it cannot be read (ledgerLines), it cannot be placed in a total
  * (placed), or its charge is not a known amount (sumCharges). The message names the ledger line so the

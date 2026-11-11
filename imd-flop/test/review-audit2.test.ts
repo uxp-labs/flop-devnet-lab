@@ -235,22 +235,34 @@ describe("review defect 5 (low), fixed: enroll --live shows the gateway's text o
   });
 });
 
-describe("DEFECT 6 (low): receipt --refresh takes its seat from a ledger row without the seat rule and picks the gateway key by that text", () => {
-  it("DEFECT 6 (low): a row whose seat is '../elsewhere' sends the bearer stored at <home>/elsewhere/gateway.key", async () => {
+describe("review defect 6 (low), fixed: receipt --refresh uses a seat only when it passes the seat rule", () => {
+  for (const seat of ["../elsewhere", "042"]) {
+    it(`review defect 6, fixed: a row whose seat is ${JSON.stringify(seat)} is refused with exit 3, names the line, and sends nothing`, async () => {
+      const h = tmpHome();
+      expect((await cli(h, ["init", "--seat", "42"])).code).toBe(0);
+      mkdirSync(join(h, "elsewhere"), { recursive: true });
+      writeFileSync(join(h, "elsewhere", "gateway.key"), "flop_ek_OTHERSEATBEARER0123456789\n", { mode: 0o600 });
+      const rid = "imdflop-42-00112233aabbccdd";
+      appendLedger(h, row(rid, { seat, provider: "flop", mock: false }));
+      const auth: (string | null)[] = [];
+      const fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+        auth.push(new Request(input, init).headers.get("authorization"));
+        return new Response(JSON.stringify({ error: "not_found" }), { status: 404 });
+      }) as Fetch;
+      const r = await cli(h, ["receipt", rid, "--refresh", "--live"], { fetch });
+      expect({ code: r.code, auth, named: r.err.includes("ledger line 1 has seat") }, r.err).toEqual({ code: 3, auth: [], named: true });
+    });
+  }
+
+  it("review defect 6, fixed: a stored receipt whose seat is not usable is refused the same way and named", async () => {
     const h = tmpHome();
     expect((await cli(h, ["init", "--seat", "42"])).code).toBe(0);
-    mkdirSync(join(h, "elsewhere"), { recursive: true });
-    writeFileSync(join(h, "elsewhere", "gateway.key"), "flop_ek_OTHERSEATBEARER0123456789\n", { mode: 0o600 });
-    const rid = "imdflop-42-00112233aabbccdd";
-    appendLedger(h, row(rid, { seat: "../elsewhere", provider: "flop", mock: false }));
-    const auth: (string | null)[] = [];
-    const fetch = (async (input: string | URL | Request, init?: RequestInit) => {
-      auth.push(new Request(input, init).headers.get("authorization"));
-      return new Response(JSON.stringify({ error: "not_found" }), { status: 404 });
-    }) as Fetch;
-    const r = await cli(h, ["receipt", rid, "--refresh", "--live"], { fetch });
-    expect(r.code).toBe(0);
-    expect(auth).toEqual(["Bearer flop_ek_OTHERSEATBEARER0123456789"]);
+    const rid = "mock-42-00112233aabbccdd";
+    appendLedger(h, row(rid, { seat: "42" }));
+    mkdirSync(receiptsDir(h), { recursive: true });
+    writeFileSync(join(receiptsDir(h), `${rid}.json`), JSON.stringify({ request_id: rid, job: "j1", seat: "../x", provider: "mock", state: "estimated" }));
+    const r = await cli(h, ["receipt", rid, "--refresh"]);
+    expect({ code: r.code, named: r.err.includes(`the receipt file of ${rid} has seat "../x"`) }, r.err).toEqual({ code: 3, named: true });
   });
 });
 
