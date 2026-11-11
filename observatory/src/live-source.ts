@@ -3,14 +3,16 @@
 //
 // It reads once, in a fixed order, one request at a time, so a tape of the reading has one order
 // and replays exactly: the faucet's /health and /chain, the gateway's model list, the clock (the
-// head's observed_at), then the head (src/rpc-head.ts says which calls). Every Source method
-// answers from that one reading.
+// head's observed_at), then the head (src/rpc-head.ts says which calls), then, when the run builds
+// on a log that holds one, the anchor: the block hash at the latest finalized height logged on the
+// pinned genesis (RULES.md 1.1). Its height comes from the log (src/history.ts); the source only
+// reads it, and src/status.ts judges it. Every Source method answers from that one reading.
 //
 // This step reads network status only. It reads no event pages and no runtime constants: event
 // pages are none and their errors none, as for a scenario with no event-pages folder, so a census
 // over them is partial over its whole range and every escrow unverified, never "no events"
 // (RULES.md sections 2 and 3). Runtime constants are null, as for a scenario without them.
-import { type Answer, finalizedHashOf, headFrom } from "./rpc-head.js";
+import { type Answer, anchorFrom, finalizedHashOf, headFrom } from "./rpc-head.js";
 import type { Source } from "./source.js";
 import { type Transport, TransportError } from "./transport.js";
 import type { AnchorReading, EventPage, FaucetChainBody, FaucetHealthBody, HttpResult, RpcHead, RuntimeConstants, Trust } from "./types.js";
@@ -27,6 +29,8 @@ export interface LiveReading {
   faucetChain: HttpResult<unknown>;
   gatewayModels: HttpResult<unknown>;
   rpcHead: RpcHead;
+  /** The anchor read back, or null when the run was given none to read. */
+  anchor: AnchorReading | null;
 }
 
 export class LiveSource implements Source {
@@ -34,10 +38,13 @@ export class LiveSource implements Source {
   readonly trust: Trust;
   readonly label: string;
   private readonly transport: Transport;
+  private readonly anchorHeight: number | null;
   private reading: Promise<LiveReading> | null = null;
 
-  constructor(transport: Transport) {
+  /** anchorHeight: the height of the anchor to read back, from the log; null for none. */
+  constructor(transport: Transport, anchorHeight: number | null = null) {
     this.transport = transport;
+    this.anchorHeight = anchorHeight;
     this.trust = transport.trust;
     this.label = `live:${transport.label}`;
   }
@@ -53,7 +60,10 @@ export class LiveSource implements Source {
     const faucetChain = await this.transport.httpGet(LIVE_URLS.faucetChain);
     const gatewayModels = await this.transport.httpGet(LIVE_URLS.gatewayModels);
     const rpcHead = await this.readHead();
-    return { faucetHealth, faucetChain, gatewayModels, rpcHead };
+    // After the head calls, and only when the log gave one: a first run reads no anchor.
+    const h = this.anchorHeight;
+    const anchor = h === null ? null : anchorFrom(h, await this.call("chain_getBlockHash", [h]));
+    return { faucetHealth, faucetChain, gatewayModels, rpcHead, anchor };
   }
 
   /** One call. A failure on the way is an answer; anything else (a refusal, a bad tape) stops the run. */
@@ -98,7 +108,7 @@ export class LiveSource implements Source {
   }
 
   async anchorBlock(): Promise<AnchorReading | null> {
-    return null;
+    return (await this.read()).anchor;
   }
 
   async runtimeConstants(): Promise<RuntimeConstants | null> {
