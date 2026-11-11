@@ -1,0 +1,34 @@
+[
+  {
+    "id": "net-stated-limit-ignored",
+    "file": "src/net.ts",
+    "find": "limit: this.answerLimits.get(method) ?? this.maxAnswerBytes,",
+    "replace": "limit: this.maxAnswerBytes,",
+    "test": "test/net.test.ts",
+    "why": "a method the caller states a larger limit for gets an answer up to that limit"
+  },
+  {
+    "id": "net-ceiling-ignores-waiting-calls",
+    "file": "src/net.ts",
+    "find": "    for (const w of this.waiting.values()) if (w.limit > c) c = w.limit;\n",
+    "replace": "",
+    "test": "test/net.test.ts",
+    "why": "a message is read up to the largest limit of a waiting call, so a stated limit can be reached"
+  },
+  {
+    "id": "net-call-limit-unchecked",
+    "file": "src/net.ts",
+    "find": "    if (bytes.length > w.limit) {",
+    "replace": "    if (false) {",
+    "test": "test/net.test.ts",
+    "why": "an answer larger than its own call's limit fails that call, even while a larger limit is waiting"
+  },
+  {
+    "id": "net-stated-limit-unbounded",
+    "file": "src/net.ts",
+    "find": " || limit > MAX_STATED_ANSWER_BYTES) {",
+    "replace": ") {",
+    "test": "test/net.test.ts",
+    "why": "no caller may state a limit above 8 MiB"
+  }
+]

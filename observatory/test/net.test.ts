@@ -8,6 +8,7 @@ import {
   DEVNET_RPC_URL,
   type HttpCall,
   MAX_ANSWER_BYTES,
+  MAX_STATED_ANSWER_BYTES,
   NetTransport,
   REQUEST_TIMEOUT_MS,
   type RequestSettings,
@@ -278,6 +279,48 @@ describe("NetTransport", () => {
     // One socket for the run: every later call fails at once, and no second socket is made.
     await expect(t.rpc("system_chain", [])).rejects.toEqual(new TransportError("an rpc answer is larger than 1048576 bytes"));
     expect(sockets.made.length).toBe(1);
+  });
+
+  it("gives a method a larger limit only when the caller states one, at most 8 MiB, and no other call is changed by it", async () => {
+    expect(MAX_STATED_ANSWER_BYTES).toBe(8 * 1_048_576);
+    const { t, sockets } = transport({ answerLimits: new Map([["state_getMetadata", MAX_STATED_ANSWER_BYTES]]) });
+    const meta = t.rpc("state_getMetadata", ["0xab"]);
+    const s = sockets.made.at(0)!;
+    s.emit("open");
+    const frame = (n: number, pad: number) => `{"jsonrpc":"2.0","id":${s.idOf(n)},"result":"${"x".repeat(pad)}"}`;
+    const base = frame(0, 0).length;
+    // While the metadata call waits, a large answer to another call fails that call alone: it can
+    // be told apart by its id, so the socket stays in use.
+    const other = t.rpc("state_getStorage", ["0x26aa"]);
+    s.emit("message", { data: frame(1, MAX_ANSWER_BYTES - base + 1) });
+    await expect(other).rejects.toEqual(new TransportError("the rpc answer to state_getStorage is larger than 1048576 bytes"));
+    s.emit("message", { data: frame(0, MAX_STATED_ANSWER_BYTES - base) });
+    expect(((await meta) as string).length).toBe(MAX_STATED_ANSWER_BYTES - base);
+    // With no call waiting under the larger limit, 1 MiB holds for every message, as for the live run.
+    const after = t.rpc("chain_getHeader", []);
+    s.emit("message", { data: frame(2, MAX_ANSWER_BYTES - base + 1) });
+    await expect(after).rejects.toEqual(new TransportError("an rpc answer is larger than 1048576 bytes"));
+    expect(s.closed).toBe(true);
+  });
+
+  it("refuses an answer one byte over a stated limit, as a failed call", async () => {
+    const { t, sockets } = transport({ answerLimits: new Map([["state_getMetadata", MAX_STATED_ANSWER_BYTES]]) });
+    const meta = t.rpc("state_getMetadata", []);
+    const s = sockets.made.at(0)!;
+    s.emit("open");
+    const frame = (pad: number) => `{"jsonrpc":"2.0","id":${s.idOf(0)},"result":"${"x".repeat(pad)}"}`;
+    s.emit("message", { data: frame(MAX_STATED_ANSWER_BYTES - frame(0).length + 1) });
+    await expect(meta).rejects.toEqual(new TransportError("an rpc answer is larger than 8388608 bytes"));
+  });
+
+  it.each([
+    ["above 8 MiB", MAX_STATED_ANSWER_BYTES + 1],
+    ["zero", 0],
+    ["not a whole number", 1.5],
+  ])("refuses a stated limit that is %s when it is made", (_what, limit) => {
+    expect(() => transport({ answerLimits: new Map([["state_getMetadata", limit]]) })).toThrow(
+      new TypeError(`NetTransport: the answer limit for state_getMetadata must be a whole number of bytes from 1 to ${MAX_STATED_ANSWER_BYTES}`),
+    );
   });
 
   it("counts the size limit in bytes, not characters", async () => {
