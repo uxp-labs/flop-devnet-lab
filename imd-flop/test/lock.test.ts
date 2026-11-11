@@ -240,9 +240,26 @@ describe("the liveness probe: EPERM means alive (review M29)", () => {
     expect(ask(false)).toBe(true);
   });
 
-  // The real EPERM path, in every environment: an ordinary user may not signal pid 1 (root's init on every
-  // Linux), and root may, so root uses a child of a second OS user probing this process. One of the two
-  // always runs, and the third test says so.
+  // The real driver's own mapping, in every environment: the system's answer is put in place of
+  // process.kill, so no second user and no foreign process is needed.
+  it("the real driver: a refused probe (EPERM) is alive, an answered probe is alive, only a pid that is gone (ESRCH) is dead", () => {
+    const me = self(process.pid, "me");
+    const judge = (answer: "EPERM" | "ESRCH" | null) => {
+      const spy = vi.spyOn(process, "kill").mockImplementation((() => {
+        if (answer === null) return true;
+        throw Object.assign(new Error(`kill ${answer}`), { code: answer });
+      }) as typeof process.kill);
+      try { return runOnDisk(provablyDead(me, { pid: 4_000_012, host: hostname(), token: "o" }), noWait); }
+      finally { spy.mockRestore(); }
+    };
+    expect(judge("EPERM")).toBe(false);
+    expect(judge(null)).toBe(false);
+    expect(judge("ESRCH")).toBe(true);
+  });
+
+  // The same with a real EPERM from the system, where the environment gives one: an ordinary user may not
+  // signal a pid 1 that is root's, and root with a second OS user has a child of that user probe this
+  // process. Where neither applies both are skipped, and the test above still holds the rule.
   const pid1Refused = (() => { try { process.kill(1, 0); return false; } catch (e) { return (e as NodeJS.ErrnoException).code === "EPERM"; } })();
 
   it.skipIf(!pid1Refused)("the real driver, as a user that may not signal pid 1: it gets EPERM and judges pid 1 alive", () => {
@@ -269,10 +286,6 @@ process.stdout.write(JSON.stringify({ uid: process.getuid(), eperm, dead, gone }
     const r = spawnSync("setpriv", [`--reuid=${OTHER_UID}`, `--regid=${OTHER_UID}`, "--clear-groups", process.execPath, script, String(process.pid), String(deadPid())], { encoding: "utf8", timeout: 30_000 });
     expect(JSON.parse(r.stdout || "null"), r.stderr).toEqual({ uid: OTHER_UID, eperm: true, dead: false, gone: true });
   }, 30_000);
-
-  it("one of the two real EPERM tests runs here", () => {
-    expect(pid1Refused || canActAsAnotherUser()).toBe(true);
-  });
 });
 
 describe("a right file with no readable owner means no right (review M2)", () => {
