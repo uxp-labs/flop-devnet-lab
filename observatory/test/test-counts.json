@@ -43,6 +43,10 @@
     "tests": 40,
     "names": "c1629a5c9e7fa1134a7e062494c93ae5e762fbe1cc26328108e74d808eb49693"
   },
+  "rpc-head.test.ts": {
+    "tests": 19,
+    "names": "91fe904982e61644eeb892bfad19b911f8c48c2e803742e26397ca7da72677fa"
+  },
   "snapshot-check-grid.test.ts": {
     "tests": 43,
     "names": "5a272b240add649be9d418c419bfdc6a65b76e7db13154803460d63bc7cb4b41"
