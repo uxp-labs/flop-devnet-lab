@@ -98,8 +98,6 @@ const floorOf = (prev: Row, read: ReadOutcome): number | null => {
 };
 /** The read is not booked: it lowers a booked settlement, or its hold floor is unknown. */
 const notBooked = (prev: Row, read: ReadOutcome) => below(prev, read) || floorOf(prev, read) === null;
-/** The charge the cap admitted for the row: nothing for a released reservation, else its padded quote. Null is unknown. */
-const admittedOf = (prev: Row): number | null => (prev.state === "refused_local" ? 0 : known(prev.quote_padded) ? prev.quote_padded : null);
 const show = (c: Case, ...reads: ReadOutcome[]) => JSON.stringify({ ...c, reads });
 /** The row after a read, as the booking step appends it: the row with the decided booking in it. */
 const afterRead = (prev: Row, read: ReadOutcome, cost: number | null): Row => ({ ...prev, ...decideBooking(prev, read, cost).booking }) as Row;
@@ -471,18 +469,26 @@ describe("the hold floor", () => {
     expect({ walked, failures: failures.slice(0, 5), failed: failures.length }).toEqual({ walked: 112 * 100, failures: [], failed: 0 });
   });
 
-  it("a booking says it passed what the cap admitted exactly when its charge rises above what the cap admitted for the row and above what the row had booked", () => {
-    // What the cap admitted: the padded quote for a call it let through, nothing for a released
-    // reservation. So this is a released hold that comes back, or a charge raised above the padded quote by
-    // a settled amount or a reported cost. Nothing else passes it.
+  it("a booking says it passed what the cap admitted exactly when it makes the day total grow, since a booking is never an admission", () => {
+    // Moved (review fixes 3, item 1): the rule is read from the rows, not from the code. A day of two rows:
+    // another call already booked at 0.3, and this request's row. The cap check reads that day total each
+    // time it admits a call, and only when every charge in it is a known amount (else it refuses every call,
+    // so nothing was admitted against it). A booking is never an admission check. So it passes what the cap
+    // admitted exactly when the day total was readable before it and is larger after it: a released hold
+    // that comes back, a charge raised above the padded quote, and an older row climbing back to its hold
+    // alike.
+    const OTHER = 0.3;
+    const dayTotal = (rows: Row[]): number | null => (rows.every((r) => known(r.cap_charge)) ? rows.reduce((t, r) => t + r.cap_charge!, 0) : null);
     let passed = 0;
     const r = walk(READS, (c, read, next) => {
-      const admitted = admittedOf(c.prev);
-      const want = known(next.cap_charge) && admitted !== null && next.cap_charge! > admitted && (!known(c.prev.cap_charge) || next.cap_charge! > c.prev.cap_charge!);
+      const other = { ...c.prev, cap_charge: OTHER } as Row;
+      const before = dayTotal([other, c.prev]);
+      const after = dayTotal([other, { ...c.prev, ...next } as Row]);
+      const want = before !== null && after !== null && after > before;
       if (want) passed += 1;
       return decideBooking(c.prev, read, c.cost).pastAdmitted !== want;
     });
-    expect({ ...r, passed }).toEqual({ walked: 224 * 100, failures: [], failed: 0, passed: 2303 });
+    expect({ ...r, passed }).toEqual({ walked: 224 * 100, failures: [], failed: 0, passed: 2839 });
   });
 });
 

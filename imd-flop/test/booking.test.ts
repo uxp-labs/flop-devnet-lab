@@ -121,7 +121,8 @@ describe("decideBooking: the one decision for every receipt read", () => {
     expect(decideBooking(held, trusted("settled", 0.05), null)).toEqual(ok({ state: "settled", spend: 0.05, cap_charge: 0.186, spend_raw: null }));
     // Moved (money stage 1, decision 1): a read that books a different known spend brings its own exact
     // spend, here unknown (null). A settlement above the booked charge raises it.
-    expect(decideBooking(settled007, trusted("released", 0.09), null)).toEqual(ok({ state: "released", spend: 0.09, cap_charge: 0.09, spend_raw: null }));
+    // Moved (review fixes 3, item 1): a booking that raises a known booked charge passes what the cap admitted.
+    expect(decideBooking(settled007, trusted("released", 0.09), null)).toEqual({ booking: { state: "released", spend: 0.09, cap_charge: 0.09, spend_raw: null }, disagree: false, pastAdmitted: true });
   });
 
   it("the state moves only forward: a trusted pending read never takes a settling state back", () => {
@@ -142,7 +143,8 @@ describe("decideBooking: the one decision for every receipt read", () => {
     expect(decideBooking(held, trusted("settled", 0.05), 0.15).booking.cap_charge).toBe(0.186);
     expect(decideBooking(held, trusted("settled", 0.05), 0.3).booking.cap_charge).toBe(0.3);
     // Also when the read itself is refused: the booked settlement stays, and its charge is raised.
-    expect(decideBooking(settled007, trusted("settled", 0.05), 0.15)).toEqual(refused({ state: "settled", spend: 0.07, cap_charge: 0.15 }));
+    // Moved (review fixes 3, item 1): a booking that raises a known booked charge passes what the cap admitted.
+    expect(decideBooking(settled007, trusted("settled", 0.05), 0.15)).toEqual({ booking: { state: "settled", spend: 0.07, cap_charge: 0.15 }, disagree: true, pastAdmitted: true });
     expect(decideBooking(settled007, { ...trusted("settled", 0.05), fresh: false }, 0.15).booking).toEqual({ state: "settled", spend: 0.07, cap_charge: 0.15 });
   });
 
@@ -245,7 +247,8 @@ describe("fails on dbffac0: a reported cost raises a charge on a hold and on a s
       const last = ledger(h).at(-1)!;
       // Moved (review fixes 2, D): the cost 0.15 is below the padded quote 0.186, so the reason no longer
       // says the charge was raised to it. The charge still rises to 0.15 on this row booked below its hold.
-      expect({ ...booked(last), reason: last.reason, warned: refreshed.err.includes(DISAGREE) }).toEqual({ state: "settled", spend: 0.05, cap_charge: 0.15, reason: null, warned: false });
+      // Moved (review fixes 3, item 1): a booking that raises a known booked charge passes what the cap admitted.
+      expect({ ...booked(last), reason: last.reason, warned: refreshed.err.includes(DISAGREE) }).toEqual({ state: "settled", spend: 0.05, cap_charge: 0.15, reason: PAST_ADMITTED, warned: false });
       expect(await today(h)).toBe(0.15);
     }
   });
@@ -862,7 +865,8 @@ describe("bookRead: the one booking step", () => {
     expect(ledger(h)).toHaveLength(2);
     const last = ledger(h).at(-1)!;
     // Moved (review fixes 2, D): the cost 0.15 is below the padded quote 0.186: no "raised" note.
-    expect({ ...booked(last), cost_reported: last.cost_reported, http: last.http, reason: last.reason }).toEqual({ state: "settled", spend: 0.07, cap_charge: 0.15, cost_reported: 0.15, http: 200, reason: null });
+    // Moved (review fixes 3, item 1): a booking that raises a known booked charge passes what the cap admitted.
+    expect({ ...booked(last), cost_reported: last.cost_reported, http: last.http, reason: last.reason }).toEqual({ state: "settled", spend: 0.07, cap_charge: 0.15, cost_reported: 0.15, http: 200, reason: PAST_ADMITTED });
     expect(rowOf(r)).toEqual(readLines(ledgerPath(h)).at(-1));
   });
 

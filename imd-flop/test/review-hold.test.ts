@@ -60,16 +60,17 @@ async function ready(cap = "1") {
 }
 const settledAt = (spend: number) => (id: string) => receiptFor(id, { state: "settled", settled_spend: spend });
 
-describe("DEFECT 1 (high): a row an older version booked below its hold is raised back silently", () => {
+describe("1 (high): a row an older version booked below its hold is raised back, and says so", () => {
   // The README and KD-12 say rows an older version booked below their hold are not migrated: they keep their
   // charge, "and a later read only raises it". pastAdmitted (settlement.ts) takes what the cap admitted for a
   // sent row to be its padded quote. For such an older row the cap admitted every later call against the
   // lower booked charge, so a later read that raises it back toward the padded quote puts the day over the
   // cap, and pastAdmitted says nothing: the charge never passes the padded quote. No refusal, no
   // PAST_ADMITTED line, no row carries it. R-f ("the daily cap can be passed only when ...") is false here.
-  // Right: what the cap admitted for a row is the lower of its padded quote and its booked charge, so this
-  // booking prints PAST_ADMITTED and records it in the row's reason.
-  it("DEFECT 1: a refresh that raises a row an older version charged below its hold, taking the day to 0.372 of 0.3, prints PAST_ADMITTED and records it in the row's reason", async () => {
+  // Decided (review fixes 3): a booking is past what the cap admitted whenever it raises a request's known
+  // booked charge, since that charge is what every later admission counted. So this booking prints
+  // PAST_ADMITTED and records it in the row's reason.
+  it("a refresh that raises a row an older version charged below its hold, taking the day to 0.372 of 0.3, prints PAST_ADMITTED and records it in the row's reason", async () => {
     const h = await ready("0.3");
     const a = await cli(h, runArgs("jA"), { provider: new P({ read: settledAt(0.01) }) });
     expect(a.code, a.err).toBe(0);
@@ -82,12 +83,11 @@ describe("DEFECT 1 (high): a row an older version booked below its hold is raise
     expect(refreshed.code, refreshed.err).toBe(0);
     const s = await status(h);
     expect({ total: s.today_utc.mock, over: s.over_cap_today_utc.mock }).toEqual({ total: 0.372, over: true });
-    // Wrong today: the booking that took the day over the cap printed nothing and no row says so.
-    expect(refreshed.err).not.toContain(PAST_ADMITTED);
-    expect(anyPastAdmitted(h)).toBe(false);
+    expect(refreshed.err).toContain(PAST_ADMITTED);
+    expect(ledger(h).at(-1)!.reason).toContain(PAST_ADMITTED);
   });
 
-  it("DEFECT 1 (job budget): a refresh that takes a requester job over its budget by raising an older row's charge prints PAST_ADMITTED", async () => {
+  it("job budget: a refresh that takes a requester job over its budget by raising an older row's charge prints PAST_ADMITTED", async () => {
     const h = await ready("5");
     await cli(h, ["config", "set", "payer", "requester"]);
     const req = (job: string) => [...runArgs(job), "--job-budget", "0.3"];
@@ -101,8 +101,8 @@ describe("DEFECT 1 (high): a row an older version booked below its hold is raise
     const latestPerRequest = [...new Map(ledger(h).map((r) => [r.request_id, r])).values()];
     const jobTotal = latestPerRequest.filter((r) => r.job === "jA").reduce((t, r) => t + (r.cap_charge as number), 0);
     expect(Math.round(jobTotal * 1e6) / 1e6).toBe(0.372);
-    expect(refreshed.err).not.toContain(PAST_ADMITTED);
-    expect(anyPastAdmitted(h)).toBe(false);
+    expect(refreshed.err).toContain(PAST_ADMITTED);
+    expect(anyPastAdmitted(h)).toBe(true);
   });
 });
 

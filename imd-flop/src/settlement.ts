@@ -21,8 +21,7 @@ export const SETTLES: ReadonlySet<string> = new Set(["settled", "released"]);
 export const DISAGREE = "receipt and ledger disagree; reservation held, chain-final green blocked";
 /**
  * Printed on stderr, and recorded in the row's reason, by a booking that puts the day in a state the cap did
- * not admit (decideBooking, pastAdmitted). There are two such bookings: a released hold that comes back, and
- * a charge raised above the call's padded quote.
+ * not admit (decideBooking, pastAdmitted): any booking that raises the request's known booked charge.
  */
 export const PAST_ADMITTED = "booked past what the cap admitted; the day may end over its cap";
 
@@ -196,7 +195,7 @@ export interface PrevBooking<C> extends Booking<C> {
  * The hold floor: the least the cap charge can be after a read, before a settlement or a reported cost
  * raises it. Null when it is not a known amount, and then the read is not booked.
  *  - On a row the call was sent for, the booked charge. From the moment a call is sent its charge is the
- *    padded quote it was admitted with, and a read only raises it. A row an older version booked below
+ *    padded quote it was admitted with, and a read only raises it (and a raise says PAST_ADMITTED). A row an older version booked below
  *    its hold keeps its booked charge: it is not migrated.
  *  - On a released row (refused_local, "nothing was sent"), a trusted read shows the gateway knows the
  *    request after all, so the hold comes back: the row's padded quote (or the booked charge if that is
@@ -214,16 +213,16 @@ function holdFloor(prev: PrevBooking<unknown>, o: ReadOutcome, proven: boolean):
 }
 
 /**
- * The booking puts the day in a state the cap did not admit: its charge rises above what the cap admitted
- * for the row and above what the row had booked. The cap admitted the padded quote for a call it let
- * through, and nothing for a released row. So this is a released hold that comes back, or a charge raised
- * above the call's padded quote (a settled amount or a reported cost above what the call was allowed to
- * spend). False when what the cap admitted is not a known amount.
+ * The booking puts the day in a state the cap did not admit: it raises the request's known booked charge.
+ * The charge a row holds is what every later admission counted, so any booking that makes it larger passes
+ * what the cap admitted. A released hold that comes back (from 0), a charge raised above the padded quote,
+ * and a row an older version booked below its hold climbing back to it are all this one rule. A booked
+ * charge that is not a known amount is not raised but repaired, and is outside the rule: such a row refuses
+ * every call, so nothing was admitted against it.
  */
 function pastAdmitted(prev: PrevBooking<unknown>, charge: number): boolean {
-  const admitted = prev.state === "refused_local" ? 0 : knownAmount(prev.quote_padded);
   const booked = knownAmount(prev.cap_charge);
-  return admitted !== null && charge > admitted && (booked === null || charge > booked);
+  return booked !== null && charge > booked;
 }
 
 /** What a read does to a booking: the next booking, whether the read disagrees with what is booked, and whether the booking passes what the cap admitted. */

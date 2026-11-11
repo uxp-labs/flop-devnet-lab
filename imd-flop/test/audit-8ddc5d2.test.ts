@@ -150,7 +150,8 @@ describe("finding 2: a later read never lowers a booked settlement, and a report
       // Moved (money stage 1, decision 1): a read that books a different known spend brings its own exact
       // spend, here unknown (null). The state, spend and charge are as before. settled005 is a row an older
       // version booked below its hold: it is not migrated, and a higher settlement raises its charge.
-      expect(decideBooking(settled005, read("settled", 0.07), null)).toEqual({ booking: { state: "settled", spend: 0.07, cap_charge: 0.07, spend_raw: null }, disagree: false, pastAdmitted: false });
+      // Moved (review fixes 3, item 1): a booking that raises a known booked charge passes what the cap admitted.
+      expect(decideBooking(settled005, read("settled", 0.07), null)).toEqual({ booking: { state: "settled", spend: 0.07, cap_charge: 0.07, spend_raw: null }, disagree: false, pastAdmitted: true });
     });
 
     it("control: a settling state with no known spend still learns its settlement, whatever the amount", () => {
@@ -191,7 +192,8 @@ describe("finding 2: a later read never lowers a booked settlement, and a report
 
     it("a reported cost counts only when reportedCost reads a finite number: 0.3 raises the settled charge, and anything else leaves it", () => {
       const prev = { state: "estimated", spend: null, cap_charge: 0.186 };
-      expect(decideBooking(prev, read("settled", 0.05), reportedCost(0.3))).toEqual({ booking: { state: "settled", spend: 0.05, cap_charge: 0.3, spend_raw: null }, disagree: false, pastAdmitted: false });
+      // Moved (review fixes 3, item 1): a booking that raises a known booked charge passes what the cap admitted.
+      expect(decideBooking(prev, read("settled", 0.05), reportedCost(0.3))).toEqual({ booking: { state: "settled", spend: 0.05, cap_charge: 0.3, spend_raw: null }, disagree: false, pastAdmitted: true });
       for (const bad of [null, undefined, "0.3", Number.NaN, Number.POSITIVE_INFINITY]) {
         expect(decideBooking(prev, read("settled", 0.05), reportedCost(bad)), String(bad)).toEqual({ booking: { state: "settled", spend: 0.05, cap_charge: 0.186, spend_raw: null }, disagree: false, pastAdmitted: false });
       }
