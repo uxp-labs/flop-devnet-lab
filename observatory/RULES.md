@@ -404,6 +404,12 @@ Tests fail if any attempt is left in the log.
   `dgram.Socket` send, bind and connect, `dns.Resolver` queries, `ChildProcess.prototype.spawn`,
   `process.binding`, `process.dlopen` and `inspector.open`. The block covers the ways out named
   here and is tried against each of them; it is no proof that Node has no other.
+- One exemption: `runShell` in `test/setup.ts`, which holds the real `spawnSync` taken before the
+  block and never exports it, so `test/publish-shell.test.ts` can run the publish job's shell. It
+  serves that one test file only, runs `bash` only, in an environment built from the caller's
+  values and `PATH` alone, with git limited to `file://` remotes (`GIT_ALLOW_PROTOCOL=file`, no
+  system or global git config) and a `GITHUB_SERVER_URL` that is not `file://` refused. A call from
+  any other file is recorded as a process attempt and throws, as every other process call does.
 - A source scan fails any `src` module, other than `guard.ts`, that imports one of those modules or
   calls fetch, WebSocket, a signing API or a key API (`src/live-bin.ts` names fetch and WebSocket
   in the one form the exemption below allows, and calls neither). It also fails the indirect forms:

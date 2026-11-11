@@ -1,4 +1,5 @@
-// Tests never touch the network or start processes, and nothing may sign, spend or write.
+// Tests never touch the network or start processes, and nothing may sign, spend or write. The one
+// exemption, runShell below, lets test/publish-shell.test.ts alone run bash against file:// remotes.
 //
 // Every way out is replaced before any test runs: fetch and WebSocket, node:http, node:https and
 // node:http2 requests and servers, node:net and node:tls connections and listeners, node:dgram

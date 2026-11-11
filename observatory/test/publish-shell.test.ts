@@ -245,6 +245,24 @@ describe("the publish shell, taken from the workflow", () => {
   });
 });
 
+describe("the one exemption from the process block", () => {
+  it("runs bash with git limited to file:// remotes, and refuses a server URL that is not file://", () => {
+    expect(() => runShell(["-c", "true"], { GITHUB_SERVER_URL: "https://github.com" }, box)).toThrow("runShell: GITHUB_SERVER_URL must be a file:// URL, not https://github.com");
+    // git refuses the transport before it opens any connection.
+    const r = runShell(["-c", 'git ls-remote "$1"', "x", "https://example.invalid/x.git"], { HOME: box }, box);
+    expect([r.status, r.stderr]).toEqual([128, "fatal: transport 'https' not allowed\n"]);
+    // Nothing of the test process's environment but PATH reaches it, and git's limits are set.
+    process.env.OBS_SHELL_SENTINEL = "leaked";
+    try {
+      const env = runShell(["-c", "env"], { HOME: box }, box).stdout.split("\n");
+      expect(env.filter((l) => l.startsWith("OBS_"))).toEqual([]);
+      for (const v of ["GIT_ALLOW_PROTOCOL=file", "GIT_CONFIG_NOSYSTEM=1", "GIT_CONFIG_GLOBAL=/dev/null", "GIT_TERMINAL_PROMPT=0", `HOME=${box}`]) expect(env).toContain(v);
+    } finally {
+      delete process.env.OBS_SHELL_SENTINEL;
+    }
+  });
+});
+
 describe("readings that follow the branch", () => {
   it("a first reading on no branch starts it as an orphan: latest/, one line in log/<UTC date>.jsonl and README.md", async () => {
     const r1 = await read(live("published-2026-11-11-0808"), checkout());

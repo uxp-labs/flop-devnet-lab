@@ -15,7 +15,7 @@ import * as net from "node:net";
 import * as tls from "node:tls";
 import { Worker } from "node:worker_threads";
 import { describe, expect, it } from "vitest";
-import { earlyBindings } from "./setup.js";
+import { earlyBindings, runShell } from "./setup.js";
 import {
   READ_ONLY_RPC_METHODS,
   ReadOnlyViolation,
@@ -112,6 +112,8 @@ describe("every network and process path is blocked at runtime (RULES section 4)
     ["process.binding spawn_sync", () => (process as unknown as { binding: (n: string) => unknown }).binding("spawn_sync"), "process", "process.binding"],
     ["process.dlopen", () => process.dlopen({ exports: {} } as never, "/nonexistent/canary.node"), "process", "process.dlopen"],
     ["inspector.open", () => inspector.open(0, "127.0.0.1"), "network", "inspector.open"],
+    // The one exemption serves test/publish-shell.test.ts only (RULES.md section 4).
+    ["runShell from a file other than the publish shell test", () => runShell(["-c", "true"], {}, tmpdir()), "process", "runShell"],
   ];
   // The label proves the block sits where it claims to, not only at some deeper layer.
   it.each(cases)("%s throws and is recorded", (_name, call, kind, label) => {

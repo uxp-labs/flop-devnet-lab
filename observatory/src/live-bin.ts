@@ -5,8 +5,9 @@
 //
 //   node dist/live-bin.js --out <a new folder> --log <the published log folder> [--source-sha <revision>]
 //
-// It reads the published log, then FLOP devnet read only, writes the output folder src/live-run.ts describes, prints one
-// GitHub Actions notice line with what the snapshot says, and exits with the code live-run gives.
+// It reads the published log, then FLOP devnet read only, writes the output folder src/live-run.ts
+// describes, prints one GitHub Actions notice line with what the snapshot says, and exits with the
+// code live-run gives.
 import { EXIT, commandText, parseLiveArgs, runLive } from "./live-run.js";
 import { NetTransport } from "./net.js";
 
