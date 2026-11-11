@@ -83,6 +83,14 @@ def unreadable(what, why):
                 est=None, per_call=None, daily_left=None, chips=[["red", "unreadable"]], outcome=["grey", "not read", None],
                 link=["grey", "not checked", None], bad=True)
 
+def _no_constant(name):
+    raise ValueError(f"{name} is not JSON")
+def loads(text):
+    """Parse a ledger line or a receipt file with the grammar of JavaScript's JSON.parse, which imd-flop uses:
+    Python's json also reads NaN, Infinity and -Infinity, and those make the text unreadable here too (review
+    fixes 3, item 7; contract/fixtures/json-constants.jsonl, read by both parts' tests)."""
+    return json.loads(text, parse_constant=_no_constant)
+
 def read_ledger(led):
     """One entry per attempt: the latest line per request_id wins (as imd-flop's ledger). Lines without a
     request_id (local refusals) are each their own entry. Unreadable lines become unreadable rows."""
@@ -91,7 +99,7 @@ def read_ledger(led):
         for n, line in enumerate(fh, 1):
             if not line.strip(): continue
             try:
-                e = json.loads(line)
+                e = loads(line)
                 if not isinstance(e, dict): raise ValueError("not an object")
             except ValueError as ex:
                 bad.append(unreadable(f"ledger line {n}", f"ledger.jsonl line {n}: {type(ex).__name__}")); continue
@@ -105,7 +113,7 @@ def read_receipts():
     receipts = {}
     for f in glob.glob(os.path.join(RDIR, "*.json")):
         try:
-            with open(f) as fh: r = json.load(fh)
+            with open(f) as fh: r = loads(fh.read())
         except ValueError:
             r = None
         receipts[os.path.splitext(os.path.basename(f))[0]] = r if isinstance(r, dict) else {"_unreadable": True}

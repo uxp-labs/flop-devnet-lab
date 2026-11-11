@@ -65,3 +65,11 @@ the float figures. The cap still runs on the float figures.
   viewer flags the row and never shows it green.
 - `vectors/rounding.json` rule `rounding.ceil6` pins the total already charged rounding up, and residual
   `R-g` says what the 1e-12 FLOP rounding tolerance can do to amounts off the 6 decimal grid.
+
+## Review fixes 3
+
+- `fixtures/json-constants.jsonl` holds ledger lines with `NaN`, `Infinity` and `-Infinity`, which JSON
+  cannot carry inside a vector. imd-flop (`test/review-hold.test.ts`, item 7) and the viewer
+  (`test_review_hold.py`, item 7) both read it: each line is unreadable to both parts.
+- `vectors/ledger-placement.json` gains the request id and year 0000 vectors, and `vectors/viewer-labels.json`
+  the `viewer.past_admitted` rule.

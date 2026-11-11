@@ -330,6 +330,25 @@ describe("4 (low): a reported cost is a known amount or it is unknown", () => {
   });
 });
 
+describe("7 (review fixes 3): a ledger line with NaN, Infinity or -Infinity is unreadable, in both parts", () => {
+  // JSON.parse refuses those constants, so imd-flop names the line; the viewer now reads with the same grammar
+  // (viewer/test_review_hold.py, item 7). Both read the same lines: contract/fixtures/json-constants.jsonl.
+  const FIXTURE = join(import.meta.dirname, "..", "..", "contract", "fixtures", "json-constants.jsonl");
+  it("each fixture line: status exits 1 and run refuses with exit 3, both naming ledger line 1", async () => {
+    const lines = readFileSync(FIXTURE, "utf8").split("\n").filter(Boolean);
+    expect(lines.length).toBe(3);
+    for (const line of lines) {
+      const h = await ready("1");
+      writeFileSync(ledgerPath(h), line + "\n");
+      const message = "ledger line 1 cannot be read: not valid JSON";
+      const st = await cli(h, ["status", "--seat", SEAT, "--json"]);
+      const p = new P();
+      const run = await cli(h, runArgs("jB"), { provider: p });
+      expect({ status: st.code, statusNamed: st.err.includes(message), run: run.code, runNamed: run.err.includes(message), sent: p.calls }, line).toEqual({ status: 1, statusNamed: true, run: 3, runNamed: true, sent: 0 });
+    }
+  });
+});
+
 describe("DEFECT 5 (low, words): status marks only today, so a past day put over its cap is never marked", () => {
   // README: a booking past what the cap admitted prints the line, and "`status` then marks the day OVER CAP"
   // (also R-f). status computes over_cap_today_utc for today only. A released hold of an earlier UTC day that

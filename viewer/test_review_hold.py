@@ -5,7 +5,11 @@ fails once the defect is fixed; its docstring says what the right behavior is an
 same files (imd-flop's side is pinned by imd-flop/test/review-hold.test.ts and review-fixes.test.ts R3)."""
 import unittest
 
+from pathlib import Path
+
 from lane_harness import LED, REC, lane, visible
+
+FIXTURE = Path(__file__).resolve().parent.parent / "contract" / "fixtures" / "json-constants.jsonl"
 
 PAST_ADMITTED = "booked past what the cap admitted; the day may end over its cap"
 
@@ -29,21 +33,24 @@ class ReviewHold(unittest.TestCase):
         self.assertIn(PAST_ADMITTED, visible(page))
         self.assertFalse(by["jB"]["bad"])
 
-    def test_DEFECT_7_a_ledger_line_imd_flop_cannot_read_is_an_unreadable_row_in_the_lane(self):
-        """DEFECT 7: a ledger line imd-flop cannot read is an unreadable row in the lane. Today: Python's json reads NaN, Infinity and -Infinity; JavaScript's JSON.parse does not. A ledger
-        line with "cap_charge": NaN is, for imd-flop, "ledger line 1 cannot be read: not valid JSON": status
-        exits 1 and every run is refused with exit 3. The lane reads it as an ordinary row: not unreadable, not
-        bad, only 'daily cap not checked'. Right: the viewer parses ledger lines with the same grammar as
-        imd-flop (json.loads with parse_constant raising), so the line is an unreadable red row naming line 1."""
-        line = ('{"job":"j","request_id":"req-1","seat":"1234","did":"did:key:z","provider":"mock","network":"devnet",'
-                '"day":"2026-11-10","ts":"2026-11-10T00:00:00.000Z","payer":"holder","quote_padded":0.198,"cap_charge":NaN,'
-                '"per_call_cap":0.25,"daily_cap":0.5,"spent_before":0,"state":"sent","spend":null,"reason":null}')
-        rows, page = lane([line], {"req-1": REC})
-        self.assertEqual(len(rows), 1)
-        self.assertNotIn("unreadable: not shown as OK", rows[0]["flags"])
-        self.assertNotIn("ledger line 1", visible(page))
-        self.assertFalse(rows[0]["bad"])
-        self.assertEqual(rows[0]["spend_flags"], ["daily cap not checked"])
+    def test_a_ledger_line_with_NaN_or_Infinity_is_unreadable_as_it_is_to_imd_flop(self):
+        """Item 7 (review fixes 3): Python's json reads NaN, Infinity and -Infinity; JavaScript's JSON.parse does
+        not, so imd-flop names such a line "ledger line 1 cannot be read: not valid JSON". The lane reads ledger
+        and receipt lines with the same grammar (build-lane.py loads), so each line of
+        contract/fixtures/json-constants.jsonl is an unreadable red row naming line 1. imd-flop's side reads the
+        same file (imd-flop/test/review-hold.test.ts, item 7)."""
+        for line in FIXTURE.read_text().splitlines():
+            with self.subTest(line=line[150:200]):
+                rows, page = lane([line], {"req-1": REC})
+                self.assertEqual(len(rows), 1)
+                self.assertEqual(rows[0]["flags"], ["unreadable: not shown as OK"])
+                self.assertTrue(rows[0]["bad"])
+                self.assertIn("ledger line 1", visible(page))
+
+    def test_a_receipt_file_with_NaN_is_unreadable(self):
+        """Item 7: the same grammar for a receipt file: settled NaN makes the file unreadable, never a number."""
+        rows, _ = lane([dict(LED, state="settled", spend=0.05)], {"req-1": '{"request_id":"req-1","state":"settled","settled":NaN}'})
+        self.assertEqual(rows[0]["chips"], [["grey", "sent"], ["red", "unreadable"]])
 
     def test_a_held_row_with_no_request_id_cannot_be_placed(self):
         """Item 3 (review fixes 3): a held row whose request_id was lost is a row that cannot be placed, in both
