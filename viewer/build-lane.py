@@ -124,6 +124,7 @@ OVER_DAILY = "over the daily cap"
 OVER_JOB = "over the job budget"
 OVER_RESERVATION = "over the reservation"
 PAYER_UNKNOWN = "payer unknown"
+BELOW_HOLD = "charged below its hold"
 # A spend limit: the ledger field that holds the cap, the field that holds its own running total before the
 # call, the row key and page label of what is left, the 'over' wording, and the wording for a row it could
 # not be worked out for.
@@ -182,6 +183,16 @@ def limit_flags(e, applied):
     holder nor requester."""
     flags = [lim["over"] if left is not None else lim["unchecked"] for lim, left in applied if left is None or left < 0]
     return flags if known_payer(e) else flags + [PAYER_UNKNOWN]
+
+def below_hold(e):
+    """The hold floor (contract/rules.json KD-12): from the moment a call is sent, its cap charge is never below
+    the padded quote it was admitted with, the cap of the single use child key the gateway minted for it. True
+    for a row the call was sent for (any state but refused_local, "nothing was sent") whose cap charge is a known
+    amount below its known padded quote. imd-flop no longer books such a row, and rows an older version booked
+    are not migrated, so the lane flags them and never shows them as fine. Unknown on either side is not
+    flagged: never a guess."""
+    cap_charge, quote = amount(e.get("cap_charge")), amount(e.get("quote_padded"))
+    return e.get("state") != "refused_local" and None not in (cap_charge, quote) and cap_charge < quote
 
 def over_limit(e, r):
     """The first limit a settled receipt breaks, or None (KD-2, FIXER's order): the per-call cap, then the row's
@@ -371,6 +382,8 @@ def build_row(e, r):
     for lim, left in applied: row[lim["key"]] = left
     kind, limit = classify(e, r)
     row["spend_flags"] += limit_flags(e, applied)
+    # Set before the kind renders, so a row charged below its hold never gets the green chip.
+    if below_hold(e): row["spend_flags"].append(BELOW_HOLD); row["bad"] = True
     cap_charge = amount(e.get("cap_charge"))
     reservation = cap_charge if cap_charge is not None else amount(e.get("quote_padded"))
     ROW_KINDS[kind](row, e, r, reservation, limit)

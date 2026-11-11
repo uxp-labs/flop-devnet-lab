@@ -37,7 +37,7 @@
    "ledger": {
     "state": "settled",
     "spend": 0.05,
-    "cap_charge": 0.05
+    "cap_charge": 0.186
    },
    "receipt_file": {
     "merge": {
@@ -52,7 +52,7 @@
    "fixed": [
     "KD-5"
    ],
-   "note": "[fix: KD-5] the held reservation line carries the trailing '(held)' note."
+   "note": "[fix: KD-5] the held reservation line carries the trailing '(held)' note. [hold floor] cap_charge was 0.05, the settled spend, a charge below the 0.186 hold that only an older version booked. It is the hold, as imd-flop books it today (contract/rules.json KD-12)."
   },
   {
    "id": "02-F2",
@@ -265,7 +265,7 @@
    "ledger": {
     "state": "settled",
     "spend": 0.05,
-    "cap_charge": 0.05
+    "cap_charge": 0.186
    },
    "receipt_file": {
     "merge": {
@@ -274,7 +274,8 @@
      "chain_final": true
     }
    },
-   "snapshot": "snapshots/c7-matrix/14-G1.html"
+   "snapshot": "snapshots/c7-matrix/14-G1.html",
+   "note": "[hold floor] cap_charge was 0.05, the settled spend, a charge below the 0.186 hold that only an older version booked. It is the hold, as imd-flop books it today (contract/rules.json KD-12)."
   },
   {
    "id": "15-G2",
@@ -282,7 +283,7 @@
    "ledger": {
     "state": "settled",
     "spend": 0.05,
-    "cap_charge": 0.05
+    "cap_charge": 0.186
    },
    "receipt_file": {
     "merge": {
@@ -295,7 +296,7 @@
    "fixed": [
     "KD-5"
    ],
-   "note": "[fix: KD-5] the held reservation line carries the trailing '(held)' note."
+   "note": "[fix: KD-5] the held reservation line carries the trailing '(held)' note. [hold floor] cap_charge was 0.05, the settled spend, a charge below the 0.186 hold that only an older version booked. It is the hold, as imd-flop books it today (contract/rules.json KD-12)."
   },
   {
    "id": "16-G3",
@@ -318,7 +319,7 @@
    "ledger": {
     "state": "settled",
     "spend": 0.05,
-    "cap_charge": 0.05
+    "cap_charge": 0.186
    },
    "receipt_file": {
     "merge": {
@@ -332,7 +333,7 @@
    "fixed": [
     "KD-5"
    ],
-   "note": "[fix: KD-5] the held reservation line carries the trailing '(held)' note."
+   "note": "[fix: KD-5] the held reservation line carries the trailing '(held)' note. [hold floor] cap_charge was 0.05, the settled spend, a charge below the 0.186 hold that only an older version booked. It is the hold, as imd-flop books it today (contract/rules.json KD-12)."
   },
   {
    "id": "18-G5",

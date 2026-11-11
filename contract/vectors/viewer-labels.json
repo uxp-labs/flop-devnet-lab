@@ -1,6 +1,6 @@
 {
  "file": "viewer-labels.json",
- "description": "Viewer lane labels for one ledger row and its receipt file (FIXER rules V-PRECEDENCE, V-FAILED-READ, V-UNKNOWN-SETTLED, V-LINK-GREY, plus known defects KD-1/KD-2). receipt: an object, a raw string (written as is) or null (no file). Chip text \"DISAGREE\" stands for rules.constants.DISAGREE. reservation: the value on the row's 'reservation' line, or \"absent\". greens: every c-green chip in the row. label_rules names the FIXER rules (rules.json viewer_label_rules) a vector pins; on a known_defect vector they are the rules its target follows and today's output breaks. The label-requester vectors pin the limits of a requester paid row. Swarm audit of 8ddc5d2, finding 5: the row has a job budget, worked out from the job's own running total. Finding 13: the daily cap bounds every call the seat's key pays for, so the row is checked against the seat's daily cap (spent_before, the seat's spend today), then its job budget (job_spent_before, the job's requester spend). A requester row with no job_spent_before was written before finding 13: its spent_before is the job's spend. Review of the audit 8ddc5d2 fixes: the daily cap applies to every row, whatever its payer. A payer that is neither holder nor requester is checked against the daily cap. A limit that applies and cannot be worked out bars the green chain final chip: one amber '<limit> not checked' chip stands in its place and the row keeps 'matches'. On the row with no job_spent_before the job budget is worked out from spent_before and the daily cap is not checked. The label-settled-amount-unknown vectors and the two label-disagree controls after them pin finding 6: settled on both sides with both amounts unknown is agreement, with its own amber label. The label-negative vectors pin finding 7: a negative amount is unknown. The cap-charge vectors pin item 2 of the review of the audit 8ddc5d2 fixes: a settled row whose cap charge is a known amount that is not its settled spend shows a 'cap charge' line, with the ledger reason beside it when there is one, and nothing else on the row changes. Their rule viewer.cap_charge_line gives line: the visible text of the row's 'cap charge' line, or \"absent\". Vectors with status known_defect assert today's output in expect; target is not asserted. The exact-spend vectors (money stage 1) use rule viewer.exact_spend: line is the visible text of the row's 'exact spend' line, or \"absent\"; spend_raw is the base unit digits in the row data, or null; differs says whether the row carries the flag that the exact amount differs from the receipt.",
+ "description": "Viewer lane labels for one ledger row and its receipt file (FIXER rules V-PRECEDENCE, V-FAILED-READ, V-UNKNOWN-SETTLED, V-LINK-GREY, plus known defects KD-1/KD-2). receipt: an object, a raw string (written as is) or null (no file). Chip text \"DISAGREE\" stands for rules.constants.DISAGREE. reservation: the value on the row's 'reservation' line, or \"absent\". greens: every c-green chip in the row. label_rules names the FIXER rules (rules.json viewer_label_rules) a vector pins; on a known_defect vector they are the rules its target follows and today's output breaks. The label-requester vectors pin the limits of a requester paid row. Swarm audit of 8ddc5d2, finding 5: the row has a job budget, worked out from the job's own running total. Finding 13: the daily cap bounds every call the seat's key pays for, so the row is checked against the seat's daily cap (spent_before, the seat's spend today), then its job budget (job_spent_before, the job's requester spend). A requester row with no job_spent_before was written before finding 13: its spent_before is the job's spend. Review of the audit 8ddc5d2 fixes: the daily cap applies to every row, whatever its payer. A payer that is neither holder nor requester is checked against the daily cap. A limit that applies and cannot be worked out bars the green chain final chip: one amber '<limit> not checked' chip stands in its place and the row keeps 'matches'. On the row with no job_spent_before the job budget is worked out from spent_before and the daily cap is not checked. The label-settled-amount-unknown vectors and the two label-disagree controls after them pin finding 6: settled on both sides with both amounts unknown is agreement, with its own amber label. The label-negative vectors pin finding 7: a negative amount is unknown. The cap-charge vectors pin item 2 of the review of the audit 8ddc5d2 fixes: a settled row whose cap charge is a known amount that is not its settled spend shows a 'cap charge' line, with the ledger reason beside it when there is one, and nothing else on the row changes. Their rule viewer.cap_charge_line gives line: the visible text of the row's 'cap charge' line, or \"absent\". Vectors with status known_defect assert today's output in expect; target is not asserted. The exact-spend vectors (money stage 1) use rule viewer.exact_spend: line is the visible text of the row's 'exact spend' line, or \"absent\"; spend_raw is the base unit digits in the row data, or null; differs says whether the row carries the flag that the exact amount differs from the receipt. The below-hold vectors (hold floor, rules.json KD-12) use rule viewer.below_hold: below_hold says whether the row carries the spend flag 'charged below its hold', bad whether the row is marked bad, and greens every c-green chip in it.",
  "status": "current behavior at 3ae1cdf",
  "vectors": [
   {
@@ -714,7 +714,7 @@
      "state": "settled",
      "spend": 0.05,
      "cap_charge": 0.05,
-     "quote_padded": 0.186,
+     "quote_padded": 0.05,
      "per_call_cap": 1,
      "daily_cap": 5,
      "spent_before": 0
@@ -763,7 +763,8 @@
    },
    "label_rules": [
     "V-LINK-GREY"
-   ]
+   ],
+   "note": "Moved (hold floor): the ledger row's quote_padded was 0.186 with a settled charge of 0.05, a charge below the hold that only an older version booked and that the lane now flags as 'charged below its hold'. It is 0.05 here, a row imd-flop writes today; the labels this vector pins are unchanged."
   },
   {
    "id": "label-ledger-link-bypassed",
@@ -781,7 +782,7 @@
      "state": "settled",
      "spend": 0.05,
      "cap_charge": 0.05,
-     "quote_padded": 0.186,
+     "quote_padded": 0.05,
      "per_call_cap": 1,
      "daily_cap": 5,
      "spent_before": 0,
@@ -831,7 +832,7 @@
    },
    "status": "fixed",
    "defect": "KD-4",
-   "note": "[fix: link-not-checked] the link column is grey 'not checked' even with link_bypassed: true; was (known_defect) grey 'bypassed (mock)'",
+   "note": "[fix: link-not-checked] the link column is grey 'not checked' even with link_bypassed: true; was (known_defect) grey 'bypassed (mock)' Moved (hold floor): the ledger row's quote_padded was 0.186 with a settled charge of 0.05, a charge below the hold that only an older version booked and that the lane now flags as 'charged below its hold'. It is 0.05 here, a row imd-flop writes today; the labels this vector pins are unchanged.",
    "label_rules": [
     "V-LINK-GREY"
    ]
@@ -1424,7 +1425,7 @@
      "state": "settled",
      "spend": 0.05,
      "cap_charge": 0.05,
-     "quote_padded": 0.186,
+     "quote_padded": 0.05,
      "per_call_cap": 1,
      "daily_cap": 1,
      "job_budget": 0.3,
@@ -1473,7 +1474,7 @@
      ]
     }
    },
-   "note": "swarm audit of 8ddc5d2, finding 13: the daily cap bounds every call the seat's key pays for. Each limit is measured against its own running total: the daily cap against spent_before, the seat's spend today (1 - 0.9 - 0.05 left), and the job budget against job_spent_before, the job's requester spend (0.3 - 0.05 - 0.05 left). Inside both, so the row matches and goes green. Measured against the seat's spend the job budget would be below 0."
+   "note": "swarm audit of 8ddc5d2, finding 13: the daily cap bounds every call the seat's key pays for. Each limit is measured against its own running total: the daily cap against spent_before, the seat's spend today (1 - 0.9 - 0.05 left), and the job budget against job_spent_before, the job's requester spend (0.3 - 0.05 - 0.05 left). Inside both, so the row matches and goes green. Measured against the seat's spend the job budget would be below 0. Moved (hold floor): the ledger row's quote_padded was 0.186 with a settled charge of 0.05, a charge below the hold that only an older version booked and that the lane now flags as 'charged below its hold'. It is 0.05 here, a row imd-flop writes today; the labels this vector pins are unchanged."
   },
   {
    "id": "label-requester-row-without-job-spent-before-daily-cap-not-checked",
@@ -2890,6 +2891,374 @@
     }
    },
    "note": "money stage 1: the line is the ledger's own figure. A receipt whose identity does not match is not compared, so no flag."
+  },
+  {
+   "id": "below-hold-settled-charged-its-settlement",
+   "rule": "viewer.below_hold",
+   "input": {
+    "ledger": {
+     "ts": "2026-11-10T15:00:00Z",
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zSONAR",
+     "provider": "mock",
+     "network": "devnet",
+     "payer": "holder",
+     "quote_padded": 0.198,
+     "per_call_cap": 0.25,
+     "daily_cap": 0.5,
+     "spent_before": 0,
+     "state": "settled",
+     "spend": 0.05,
+     "cap_charge": 0.05
+    },
+    "receipt": {
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zSONAR",
+     "state": "settled",
+     "settled": 0.05,
+     "chain_final": true,
+     "http": 200,
+     "error": null
+    }
+   },
+   "expect": {
+    "imd-flop": {
+     "not_applicable": "imd-flop does not render the viewer lane; it never books a charge below the hold (decision-properties.test.ts, the hold floor)"
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard does not render the viewer lane"
+    },
+    "viewer": {
+     "below_hold": true,
+     "bad": true,
+     "greens": []
+    }
+   },
+   "note": "Hold floor (KD-12): an older version booked a settlement below the hold as the cap charge. imd-flop no longer books such a row and does not migrate it, so the lane flags it in plain words and never shows it as fine: no green chip even with chain_final true."
+  },
+  {
+   "id": "below-hold-control-settled-charged-the-hold",
+   "rule": "viewer.below_hold",
+   "input": {
+    "ledger": {
+     "ts": "2026-11-10T15:00:00Z",
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zSONAR",
+     "provider": "mock",
+     "network": "devnet",
+     "payer": "holder",
+     "quote_padded": 0.198,
+     "per_call_cap": 0.25,
+     "daily_cap": 0.5,
+     "spent_before": 0,
+     "state": "settled",
+     "spend": 0.05,
+     "cap_charge": 0.198
+    },
+    "receipt": {
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zSONAR",
+     "state": "settled",
+     "settled": 0.05,
+     "chain_final": true,
+     "http": 200,
+     "error": null
+    }
+   },
+   "expect": {
+    "imd-flop": {
+     "not_applicable": "imd-flop does not render the viewer lane; it never books a charge below the hold (decision-properties.test.ts, the hold floor)"
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard does not render the viewer lane"
+    },
+    "viewer": {
+     "below_hold": false,
+     "bad": false,
+     "greens": [
+      "chain final"
+     ]
+    }
+   },
+   "note": "Hold floor: the row imd-flop books for the same settlement keeps the hold charged. Nothing is flagged."
+  },
+  {
+   "id": "below-hold-released-zero",
+   "rule": "viewer.below_hold",
+   "input": {
+    "ledger": {
+     "ts": "2026-11-10T15:00:00Z",
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zSONAR",
+     "provider": "mock",
+     "network": "devnet",
+     "payer": "holder",
+     "quote_padded": 0.198,
+     "per_call_cap": 0.25,
+     "daily_cap": 0.5,
+     "spent_before": 0,
+     "state": "released",
+     "spend": 0,
+     "cap_charge": 0
+    },
+    "receipt": {
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zSONAR",
+     "state": "released",
+     "settled": 0,
+     "chain_final": true,
+     "http": 200,
+     "error": null
+    }
+   },
+   "expect": {
+    "imd-flop": {
+     "not_applicable": "imd-flop does not render the viewer lane; it never books a charge below the hold (decision-properties.test.ts, the hold floor)"
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard does not render the viewer lane"
+    },
+    "viewer": {
+     "below_hold": true,
+     "bad": true,
+     "greens": []
+    }
+   },
+   "note": "Hold floor: a released read of 0 freed the whole hold on an older row. Flagged."
+  },
+  {
+   "id": "below-hold-pending-row",
+   "rule": "viewer.below_hold",
+   "input": {
+    "ledger": {
+     "ts": "2026-11-10T15:00:00Z",
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zSONAR",
+     "provider": "mock",
+     "network": "devnet",
+     "payer": "holder",
+     "quote_padded": 0.198,
+     "per_call_cap": 0.25,
+     "daily_cap": 0.5,
+     "spent_before": 0,
+     "state": "estimated",
+     "spend": null,
+     "cap_charge": 0.1
+    },
+    "receipt": {
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zSONAR",
+     "state": "estimated",
+     "settled": null,
+     "chain_final": false,
+     "http": 200,
+     "error": null
+    }
+   },
+   "expect": {
+    "imd-flop": {
+     "not_applicable": "imd-flop does not render the viewer lane; it never books a charge below the hold (decision-properties.test.ts, the hold floor)"
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard does not render the viewer lane"
+    },
+    "viewer": {
+     "below_hold": true,
+     "bad": true,
+     "greens": []
+    }
+   },
+   "note": "Hold floor: from the moment a call is sent its cap charge is never below its padded quote, whatever the state. A pending row charged less is flagged."
+  },
+  {
+   "id": "below-hold-sent-row-no-receipt",
+   "rule": "viewer.below_hold",
+   "input": {
+    "ledger": {
+     "ts": "2026-11-10T15:00:00Z",
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zSONAR",
+     "provider": "mock",
+     "network": "devnet",
+     "payer": "holder",
+     "quote_padded": 0.198,
+     "per_call_cap": 0.25,
+     "daily_cap": 0.5,
+     "spent_before": 0,
+     "state": "sent",
+     "spend": null,
+     "cap_charge": 0.1
+    },
+    "receipt": null
+   },
+   "expect": {
+    "imd-flop": {
+     "not_applicable": "imd-flop does not render the viewer lane; it never books a charge below the hold (decision-properties.test.ts, the hold floor)"
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard does not render the viewer lane"
+    },
+    "viewer": {
+     "below_hold": true,
+     "bad": true,
+     "greens": []
+    }
+   },
+   "note": "Hold floor: the sent row too, with no receipt file yet."
+  },
+  {
+   "id": "below-hold-refused-local-is-not-flagged",
+   "rule": "viewer.below_hold",
+   "input": {
+    "ledger": {
+     "ts": "2026-11-10T15:00:00Z",
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zSONAR",
+     "provider": "mock",
+     "network": "devnet",
+     "payer": "holder",
+     "quote_padded": 0.198,
+     "per_call_cap": 0.25,
+     "daily_cap": 0.5,
+     "spent_before": 0,
+     "state": "refused_local",
+     "spend": null,
+     "cap_charge": 0
+    },
+    "receipt": null
+   },
+   "expect": {
+    "imd-flop": {
+     "not_applicable": "imd-flop does not render the viewer lane; it never books a charge below the hold (decision-properties.test.ts, the hold floor)"
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard does not render the viewer lane"
+    },
+    "viewer": {
+     "below_hold": false,
+     "bad": true,
+     "greens": []
+    }
+   },
+   "note": "Hold floor: \"nothing was sent\" is the one release, so a refused_local row charged 0 is not below its hold. The row is bad as every refused row is."
+  },
+  {
+   "id": "below-hold-unknown-quote-is-not-flagged",
+   "rule": "viewer.below_hold",
+   "input": {
+    "ledger": {
+     "ts": "2026-11-10T15:00:00Z",
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zSONAR",
+     "provider": "mock",
+     "network": "devnet",
+     "payer": "holder",
+     "quote_padded": null,
+     "per_call_cap": 0.25,
+     "daily_cap": 0.5,
+     "spent_before": 0,
+     "state": "settled",
+     "spend": 0.05,
+     "cap_charge": 0.05
+    },
+    "receipt": {
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zSONAR",
+     "state": "settled",
+     "settled": 0.05,
+     "chain_final": true,
+     "http": 200,
+     "error": null
+    }
+   },
+   "expect": {
+    "imd-flop": {
+     "not_applicable": "imd-flop does not render the viewer lane; it never books a charge below the hold (decision-properties.test.ts, the hold floor)"
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard does not render the viewer lane"
+    },
+    "viewer": {
+     "below_hold": false,
+     "bad": false,
+     "greens": [
+      "chain final"
+     ]
+    }
+   },
+   "note": "Hold floor: with no known padded quote the lane cannot say the charge is below it, so it says nothing. Never a guess."
+  },
+  {
+   "id": "below-hold-unknown-charge-is-not-flagged",
+   "rule": "viewer.below_hold",
+   "input": {
+    "ledger": {
+     "ts": "2026-11-10T15:00:00Z",
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zSONAR",
+     "provider": "mock",
+     "network": "devnet",
+     "payer": "holder",
+     "quote_padded": 0.198,
+     "per_call_cap": 0.25,
+     "daily_cap": 0.5,
+     "spent_before": 0,
+     "state": "settled",
+     "spend": 0.05,
+     "cap_charge": null
+    },
+    "receipt": {
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zSONAR",
+     "state": "settled",
+     "settled": 0.05,
+     "chain_final": true,
+     "http": 200,
+     "error": null
+    }
+   },
+   "expect": {
+    "imd-flop": {
+     "not_applicable": "imd-flop does not render the viewer lane; it never books a charge below the hold (decision-properties.test.ts, the hold floor)"
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard does not render the viewer lane"
+    },
+    "viewer": {
+     "below_hold": false,
+     "bad": true,
+     "greens": []
+    }
+   },
+   "note": "Hold floor: with no known cap charge the lane cannot say it is below the hold. The row is bad for its unknown daily cap left, not for this."
   }
  ]
 }

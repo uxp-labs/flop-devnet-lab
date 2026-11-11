@@ -53,7 +53,9 @@ class OverLimit(unittest.TestCase):
         self.assertIn(["reservation", 0.3], rows[0]["flop"])
 
     def test_within_limits_still_matches(self):
-        rows, page = over(0.05, daily_cap=5)
+        # Hold floor: a settlement charged at its own 0.05 is a row imd-flop writes only when 0.05 was its padded
+        # quote. Below the base row's 0.198 the lane would flag it 'charged below its hold'.
+        rows, page = over(0.05, daily_cap=5, quote_padded=0.05)
         self.assertIn("matches", visible(page))
         self.assertIn("chain final", greens(page))
 
