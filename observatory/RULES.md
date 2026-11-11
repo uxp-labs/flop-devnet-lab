@@ -947,43 +947,94 @@ checks. Section 4 holds for everything it reads.
 ## 9. The decoder
 
 The decoder turns the bytes of a recording into values: `src/scale/` and `src/hash/`. No command
-uses it yet. It reads bytes that came from the network, so every input is hostile.
+uses it yet. It reads bytes that came from the network, so every input is hostile, the metadata
+included. At a runtime upgrade someone derives a shape from metadata nobody has reviewed yet, so
+hostile metadata reaches the parser, the namer and `deriveShape` too. The promise: every exported
+function of `src/scale/`, on any bytes, ends in a value or a `ScaleError`, within the bounds on work
+below.
 
 - What it decodes: the runtime metadata, version 14 only, read whole to its last byte; any value of
   a type that metadata defines, by the type and never by its name; the storage key of an entry,
   with the hashers the metadata states for it, each map key one whole value of its key type; and a
   block's System.Events, by the type the metadata gives that entry. Each event gets its pallet name
   and index, its name and variant index, its fields and its phase.
+- What the metadata parser refuses beyond the encoding: type ids out of order, a type id or a type
+  parameter or a signed extension type that names no type, mixed or repeated field names, a field
+  or variant name of only digits (no Rust name is one), a variant index or name used twice, two
+  pallets with one name, one index or one storage prefix, a storage entry or a constant named twice
+  in a pallet, a signed extension listed twice, a modifier other than 0 or 1, a map with no hasher,
+  and a map of several hashers whose key is no tuple of as many types.
 - Values are JSON safe. u8 to u32 and i8 to i32 are numbers. Every wider integer is a decimal
   string, whatever its size, so no value is a float or past 2^53. Bytes are hex. A variant is
-  `{ variant, fields }`. A bit sequence is refused, since the reviewed metadata holds none.
+  `{ variant, fields }`. `Compact<()>` is null, read from no bytes. A bit sequence is refused, since
+  the reviewed metadata holds none.
+- A decoded value does not say its own type. A composite with the fields `variant` and `fields`
+  decodes to the same form as an enum value. A reader goes by the type's kind in the metadata,
+  never by the form of the value. A decoded object does not carry the order of its fields either:
+  the shape file does.
 - A decoded value is evidence, not proof. It is what one RPC endpoint answered (section 8), read.
   Nothing in it is checked against the chain.
-- Pure: no module there reads a file, the network, a clock or a random source, or names process.
-  It imports only from `src/scale/`, `src/hash/` and createHash from node:crypto. The source scan
-  holds it to this (section 4).
+- Pure: no module there reads a file, the network, a clock or a random source, or names process. A
+  module there imports only from `src/scale/`, `src/hash/` and createHash from node:crypto. Of the
+  names it does not declare itself, it names only the language built ins on the scan's list
+  (`PURE_GLOBALS`), declares no name of a global, and takes no `.random`, by a member or by
+  destructuring. The source scan holds it to this (section 4).
 - The shape pin. Real chain data is decoded only through `decodeBlockEvents` in
-  `src/scale/block.ts`, and only when `pinShape` in `src/scale/shape.ts` pins the block. It
-  refuses, and names the reason, when:
+  `src/scale/block.ts`, and only when `pinShape` in `src/scale/shape.ts` pins the block. Outside
+  `src/scale/`, a src module may import from it only `block.ts`, which the source scan checks. Both
+  functions read each field of their input exactly once and copy every byte array, then hash,
+  measure, parse and decode that one copy. `pinShape` refuses, and names the reason, when:
   1. the spec name and version are not in `REVIEWED`,
   2. the metadata bytes differ in length or sha256 from the reviewed bytes for that spec,
   3. the shape file given is not the reviewed file, by sha256,
   4. the shape derived again from the metadata differs from that file, byte for byte, or
   5. the block's System.LastRuntimeUpgrade does not decode, or names another spec.
-  `REVIEWED` starts with `tzkv-runtime` 1014014, metadata sha256
+  Refusal 3 is not implied by 2 and 4. It holds the code that derives the shape to the review: if
+  `deriveShape` changes and the file is written again from it, 2 and 4 still pass and only 3
+  refuses. A test shows that.
+- The shape file, `flop-observatory/decoder-shape@1`, holds the spec, the System and ComputeChannel
+  entry points a reader starts from (the pallet indices, the ComputeChannel events, the Channels
+  entry, the fields and states of a channel, System.Events, System.LastRuntimeUpgrade and the
+  System.Version type), and a table of types: every type reachable from System.Events (the record,
+  the phase, the outer event enum and every pallet's events), from LastRuntimeUpgrade, from the
+  Channels key and value and from the System.Version constant's type, keyed by its name, each with
+  its kind, its path and what the kind holds. A type with a path is named by the last part of its
+  path, its parameters and its id; the table says what it is.
+- `REVIEWED` starts with `tzkv-runtime` 1014014, metadata sha256
   `f4fd2addba7fff1129483d0e66b8e6bc69141292f56443e201d3f073aab03444` of 482132 bytes, and
-  `shapes/tzkv-runtime-1014014.json`. Each line there is a review: a person read the shape file
-  and the metadata it came from. A runtime upgrade is refused until a person adds its line.
+  `shapes/tzkv-runtime-1014014.json`. Each line there is a review: a reviewer read the shape file
+  and the metadata it came from, and a test derives the file a second way, from the reference
+  decoder's own parse of the same metadata. A runtime upgrade is refused until its line is added.
 - Bounds on hostile input, each a refusal with a `ScaleError`, never another exception:
+  - metadata of more than 16 MiB is refused before it is read, and so is a value or a
+    System.Events of more than 16 MiB (`MAX_INPUT_BYTES`), so no string the decoder builds can
+    reach the engine's limit;
   - a count or length that claims more than the bytes left is refused before anything is read
-    or built for it, so no allocation is sized from an untrusted length;
+    or built for it, so no allocation is sized from an untrusted length; a list or array of
+    elements that take no bytes is held to the same bound;
   - a compact integer must be in its shortest form and fit its type;
+  - parsing metadata is linear in its bytes: each item it reads takes at least one byte, and the
+    checks after it pass once over what it read;
   - a type nests at most 32 levels (`MAX_DEPTH`), so a type that refers to itself ends;
   - one decode takes at most `1024 + 8 * bytes` steps (`valueBudget`), one for each type it
-    visits, the types a compact wraps included; each step does one pass over its type's fields
-    or variants, which the metadata bounds;
-  - a type name in a shape nests at most 16 levels and names at most 256 types.
+    visits, the types a compact wraps included. Beside constant work, a step passes over its
+    type's fields, each a step of its own, or searches its variants, of which there are at most
+    256, since an index is one byte used once. A
+    step that succeeds builds no text: a refusal's label is built only when it is thrown, and shows
+    at most 120 characters of a type's path (`MAX_LABEL_PATH`);
+  - one `deriveShape` has one budget, shared by every name and description it builds: at most
+    1,000,000 steps (`MAX_SHAPE_STEPS`; each type visited or named again, each field, variant and
+    parameter) and at most 4,000,000 characters of names and paths (`MAX_SHAPE_CHARS`). A name is
+    built once per type id and kept, so the work is linear in the size of what it derives. A name
+    is at most 2048 characters (`MAX_NAME_LENGTH`), nests at most 16 levels and visits at most 256
+    types; `typeName` alone has a budget of its own. The reviewed shape takes 9,672 steps and
+    18,167 characters;
+  - finding the events layout looks up each variant of the outer enum among the pallets, at most
+    256 times 256, since a pallet index is one byte used once.
+- The hashes take their parameters from code, not bytes: a BLAKE2b length outside 1 to 64 or an
+  xxHash64 seed outside 64 bits is a `RangeError`, a caller's mistake. A hasher name the metadata
+  could not give is a `ScaleError`.
 - The reference decoder (`@polkadot-api/substrate-bindings` and `@polkadot-api/metadata-builders`)
-  is a dev dependency for tests only, pinned exactly. Tests compare the two decoders on the
-  recorded metadata and on every recorded value. No src module imports it, which the source scan
-  checks.
+  and `@noble/hashes` are dev dependencies for tests only, pinned exactly. Tests compare the two
+  decoders on the recorded metadata, on every recorded value and on seeded values of every type.
+  No src module imports them, which the source scan checks.

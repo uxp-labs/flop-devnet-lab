@@ -1,21 +1,24 @@
-// The shape pin (RULES.md section 9): real chain data is decoded only when the chain's shape is one a
-// person reviewed. Pure: no file, network, clock or random access; the shape file is handed in.
+// The shape pin (RULES.md section 9): real chain data is decoded only when the chain's shape is a
+// reviewed one. Pure: no file, network, clock or random access; the shape file is handed in.
 //
 // Three parts:
 // - REVIEWED, the list of reviewed shapes: a spec name and version, the sha256 and length of the
 //   metadata bytes at that spec, and the sha256 of the committed shape file.
 // - The shape file, shapes/<spec name>-<spec version>.json, derived from that metadata by
-//   deriveShape and written by shapeText: what the observatory relies on, in a form a person can
+//   deriveShape and written by shapeText: what the observatory relies on, in a form a reviewer can
 //   read. The System.Version constant, the ComputeChannel pallet index, its event table, its
-//   Channels entry with the fields and states of a channel, and the System entries the events and
-//   the spec are read from.
+//   Channels entry with the fields and states of a channel, the System entries the events and the
+//   spec are read from, and a table of every type reachable from those, each with its kind, its
+//   path and what the kind holds.
 // - pinShape, the one function that says whether a block may be decoded, and why not.
 //
 // A type is named by its shape: a primitive by itself, a type with a path by the last part of its
 // path, its type parameters and #id, and lists, arrays, tuples and compacts around those. A type
 // with a path is never named by its fields, so a type that refers to itself through its fields is
-// named in one step. A name that nests past MAX_NAME_DEPTH, or names more than MAX_NAME_STEPS types,
-// is refused, so a type that refers to itself any other way is refused too.
+// named in one step. A name that nests past MAX_NAME_DEPTH, visits more than MAX_NAME_STEPS types or
+// is longer than MAX_NAME_LENGTH is refused, so a type that refers to itself any other way is refused
+// too. One deriveShape shares one budget (MAX_SHAPE_STEPS, MAX_SHAPE_CHARS) across every name and
+// description it builds, and builds each name once, so its work is linear in what it derives.
 import { createHash } from "node:crypto";
 import { type Decoded, decodeValue } from "./decode.js";
 import type { Field, Metadata, StorageEntry, TypeEntry, Variant } from "./metadata.js";
@@ -45,7 +48,10 @@ export interface ReviewedShape {
   shapeSha256: string;
 }
 
-/** Each entry here is a review: a person read the shape file and the metadata it came from. */
+/**
+ * Each entry here is a review: a reviewer read the shape file and the metadata it came from, and a
+ * test derives the file a second way, from the reference decoder's own parse of that metadata.
+ */
 export const REVIEWED: readonly ReviewedShape[] = [
   {
     specName: "tzkv-runtime",
