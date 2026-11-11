@@ -550,6 +550,48 @@ describe("pin: after the paid call, when the booking step cannot run", () => {
   });
 });
 
+describe("fails on a3d71d6: a reported cost survives a booking step that could not run", () => {
+  // Review of the booking step, the must fix. When run's booking after the paid call could not run, the cost
+  // its completion reported was on no row, and a later refresh took the cost from the row only. So it booked
+  // the settlement below the reported cost. The booking step now takes the cost from the stored response
+  // file when neither the caller nor the row has one.
+  it("the ledger lock cannot be taken after the call: a later refresh charges the reported cost and records it", async () => {
+    const h = await ready();
+    const lock = `${ledgerPath(h)}.lock`;
+    const read: Reader = (id) => {
+      writeFileSync(lock, JSON.stringify({ pid: process.pid, host: hostname(), token: "other" }));
+      return settledAt(0.05)(id);
+    };
+    const run = await cli(h, runArgs(), { provider: new P({ usage: usage(0.15), read }) });
+    rmSync(lock);
+    expect({ code: run.code, err: run.err }).toEqual({ code: 1, err: "imd-flop: ledger lock timeout" });
+    expect(ledger(h).map(booked)).toEqual([{ state: "sent", spend: null, cap_charge: 0.186 }]);
+    const rid = ledger(h)[0].request_id!;
+    const refreshed = await cli(h, refreshArgs(rid), { provider: new P({ read: settledAt(0.05) }) });
+    expect(refreshed.code, refreshed.err).toBe(0);
+    const last = ledger(h).at(-1)!;
+    expect({ ...booked(last), cost_reported: last.cost_reported, reason: last.reason }).toEqual({ state: "settled", spend: 0.05, cap_charge: 0.15, cost_reported: 0.15, reason: CHARGE_RAISED });
+    expect(await today(h)).toBe(0.15);
+  }, 30_000);
+
+  it("the ledger append fails after the call: a later refresh charges the reported cost and records it", async () => {
+    const h = await ready();
+    const read: Reader = (id) => {
+      chmodSync(ledgerPath(h), 0o400);
+      return settledAt(0.05)(id);
+    };
+    const run = await cli(h, runArgs(), { provider: new P({ usage: usage(0.15), read }) });
+    chmodSync(ledgerPath(h), 0o644);
+    expect(run.code).toBe(1);
+    const rid = ledger(h)[0].request_id!;
+    const refreshed = await cli(h, refreshArgs(rid), { provider: new P({ read: settledAt(0.05) }) });
+    expect(refreshed.code, refreshed.err).toBe(0);
+    const last = ledger(h).at(-1)!;
+    expect({ ...booked(last), cost_reported: last.cost_reported }).toEqual({ state: "settled", spend: 0.05, cap_charge: 0.15, cost_reported: 0.15 });
+    expect(await today(h)).toBe(0.15);
+  });
+});
+
 describe("fails on 9adfd17: a refresh that cannot take the ledger lock says the ledger was busy, not that receipt and ledger disagree", () => {
   // Booking step, review of the audit 8ddc5d2 fixes, decision 2. This was the pin "receipt --refresh, the
   // lock cannot be taken: the read is stored, nothing is booked, DISAGREE is printed, exit 0". Kept: the read
@@ -694,6 +736,45 @@ describe("bookRead: the one booking step", () => {
     const notANumber = held({ cost_reported: "0.15" });
     bookRead(notANumber, "r1", trusted("settled", 0.05), { flag: null });
     expect(booked(ledger(notANumber).at(-1)!)).toEqual({ state: "settled", spend: 0.05, cap_charge: 0.05 });
+  });
+
+  describe("fails on a3d71d6: the reported cost is resolved in the booking step: the caller's, else the row's, else the stored response file's", () => {
+    const writeResponse = (h: string, body: string) => {
+      mkdirSync(join(h, "responses"), { recursive: true });
+      writeFileSync(join(h, "responses", "r1.json"), body);
+    };
+    const response = (usageField: unknown) => JSON.stringify({ request_id: "r1", usage: usageField, text: "ok" });
+
+    it("the response file's cost raises the charge, and the appended row records it", () => {
+      const h = held();
+      writeResponse(h, response({ cost_flop: 0.15 }));
+      expect(bookRead(h, "r1", trusted("settled", 0.05), { flag: null }).outcome).toBe("appended");
+      const last = ledger(h).at(-1)!;
+      expect({ ...booked(last), cost_reported: last.cost_reported, reason: last.reason }).toEqual({ state: "settled", spend: 0.05, cap_charge: 0.15, cost_reported: 0.15, reason: CHARGE_RAISED });
+    });
+
+    it("the caller's cost comes first, then the row's: the response file is not asked", () => {
+      const caller = held();
+      writeResponse(caller, response({ cost_flop: 0.3 }));
+      bookRead(caller, "r1", trusted("settled", 0.05), { flag: null, cost_reported: 0.15 });
+      expect({ cap_charge: ledger(caller).at(-1)!.cap_charge, cost_reported: ledger(caller).at(-1)!.cost_reported }).toEqual({ cap_charge: 0.15, cost_reported: 0.15 });
+      const row = held({ cost_reported: 0.15 });
+      writeResponse(row, response({ cost_flop: 0.3 }));
+      bookRead(row, "r1", trusted("settled", 0.05), { flag: null });
+      expect({ cap_charge: ledger(row).at(-1)!.cap_charge, cost_reported: ledger(row).at(-1)!.cost_reported }).toEqual({ cap_charge: 0.15, cost_reported: 0.15 });
+    });
+
+    it("a response file that is missing, unreadable or has no usable cost gives no cost, never 0", () => {
+      for (const body of [null, "{not json", response(null), response({ cost_flop: "0.15" }), response({ cost_flop: Number.NaN }), JSON.stringify(7)]) {
+        const h = held({ cap_charge: 0.186 });
+        if (body !== null) writeResponse(h, body);
+        bookRead(h, "r1", trusted("estimated", null), { flag: null });
+        expect(ledger(h), String(body)).toHaveLength(1);
+        bookRead(h, "r1", trusted("settled", 0.05), { flag: null });
+        const last = ledger(h).at(-1)!;
+        expect({ ...booked(last), cost_reported: last.cost_reported }, String(body)).toEqual({ state: "settled", spend: 0.05, cap_charge: 0.05, cost_reported: null });
+      }
+    });
   });
 
   it("the receipt flag is the reason of an appended row, and a flag alone appends nothing", () => {

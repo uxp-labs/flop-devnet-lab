@@ -9,13 +9,14 @@
  * receipt file write happen before this step, outside the lock.
  */
 import { appendLedger, latestAttempts, withLedgerLock, type LedgerEntry } from "./ledger.js";
+import { storedReportedCost } from "./response-store.js";
 import { bookingReason, decideBooking, decideFailure, reportedCost, type Failure, type ReadOutcome } from "./settlement.js";
 
 /** What the caller knows beside the read. */
 export interface ReadInfo {
   /** The receipt flag of this read (key_expired), or null. It is the reason of a row this read appends. */
   flag: string | null;
-  /** Only `run` knows the cost its completion reported. A refresh leaves it out and the row keeps what it records. */
+  /** Only `run` knows the cost its completion reported. A refresh leaves it out (see bookRead for where the cost then comes from). */
   cost_reported?: number | null;
   /** Only `run` records the HTTP status of its receipt read. A refresh leaves it out and the row keeps what it records. */
   http?: number | null;
@@ -59,14 +60,17 @@ function book(h: string, requestId: string, decide: (prev: LedgerEntry) => { nex
 }
 
 /**
- * Book one receipt read (settlement.ts decideBooking). The reported cost is the caller's when it has one,
- * else the one the row records.
+ * Book one receipt read (settlement.ts decideBooking). The reported cost of the request is resolved here
+ * and nowhere else, each through reportedCost: the caller's when it has one, else the one the row records,
+ * else the one in the stored response file. So a cost is not lost when `run` could not book it. When a
+ * cost is found, the row records it in cost_reported.
  */
 export function bookRead(h: string, requestId: string, read: ReadOutcome, info: ReadInfo): BookResult {
   return book(h, requestId, (prev) => {
-    const { flag, ...own } = info;
-    const known: LedgerEntry = { ...prev, ...own };
-    const { booking, disagree } = decideBooking(known, read, reportedCost(known.cost_reported));
+    const { flag, cost_reported: own, ...seen } = info;
+    const cost = reportedCost(own) ?? reportedCost(prev.cost_reported) ?? storedReportedCost(h, requestId);
+    const known: LedgerEntry = { ...prev, ...seen, cost_reported: cost ?? prev.cost_reported };
+    const { booking, disagree } = decideBooking(known, read, cost);
     return { next: { ...known, ...booking, reason: bookingReason(booking, flag) }, disagree };
   });
 }

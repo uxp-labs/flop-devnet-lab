@@ -1,10 +1,9 @@
 import { readFileSync } from "node:fs";
-import { join } from "node:path";
 import { randomBytes, bytesToHex, utf8ToBytes } from "@noble/hashes/utils.js";
 import { sha256 } from "@noble/hashes/sha2.js";
 import { CliError, EXIT } from "./errors.js";
 import { loadConfig } from "./config.js";
-import { linkFile, responsesDir } from "./paths.js";
+import { linkFile } from "./paths.js";
 import { redactFlagged, scanForSecrets } from "./secrets.js";
 import { readJson, writeJsonSafe } from "./store.js";
 import { loadSigner, readIdentity, revokedDids } from "./keys.js";
@@ -16,6 +15,7 @@ import { classifyReceipt, type Classified } from "./receipts.js";
 import { bookFailure, bookRead, type BookResult } from "./booking.js";
 import { DISAGREE, isFreshRead, receiptIdentity, reportedCost } from "./settlement.js";
 import { receiptPath, receiptVerdicts, writeReceipt } from "./receipt-store.js";
+import { responsePath } from "./response-store.js";
 import type { Provider } from "./providers.js";
 import { assertPaidNetwork, checkImdJob, PaidGateError, PreSendError, readVerifiedSeatOwner, type Fetch } from "./gateway.js";
 import { FlopHTTPError } from "@flop-labs/client";
@@ -260,7 +260,7 @@ export async function runJob(h: string, provider: Provider, o: RunOpts, deps: Ru
     clearTimeout(timer);
   }
 
-  const responseFile = join(responsesDir(h), `${requestId}.json`);
+  const responseFile = responsePath(h, requestId);
   const responseRecord = { request_id: requestId, job, seat, provider: provider.name, model, usage: res.usage ?? null, output_sha256: bytesToHex(sha256(utf8ToBytes(res.text))), text: res.text, mock: provider.name === "mock", note: "not submitted to IMD; the holder decides what to use" };
   // `run --json` prints this return value, so it has to be the text that was stored.
   let text: string | null = res.text;
