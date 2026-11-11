@@ -23,6 +23,7 @@ const json = <T = Record<string, unknown>>(dir: string, name: string) => JSON.pa
 const FIRST = "published-2026-11-11-0808";
 const SECOND = "published-2026-11-11-0823";
 const NOON = "published-2026-11-11-1206";
+const LATE = "published-2026-11-11-1239";
 const DAY = "2026-11-11.jsonl";
 const CLOCK = () => "2026-11-11T13:00:00.000Z";
 
@@ -198,21 +199,35 @@ describe("the real readings on the data branch, and the anchor", () => {
 
   const sha256 = (t: string) => createHash("sha256").update(t).digest("hex");
 
-  it(`${NOON}: is marked real, with its provenance, and every kept file matches the SHA256SUMS the workflow wrote`, () => {
-    const meta = json<{ scenario: string; synthetic: unknown; now: string; provenance: Record<string, unknown> }>(NOON, "meta.json");
-    expect([meta.scenario, meta.synthetic]).toEqual([NOON, false]);
-    expect(readdirSync(new URL(`${NOON}/`, FIXTURES)).sort()).toEqual(["SHA256SUMS", "log", "meta.json", "run.json", "snapshot.json", "tape.jsonl"]);
-    const sums = fixture(NOON, "SHA256SUMS").split("\n");
-    for (const f of ["run.json", "snapshot.json", "tape.jsonl"]) expect(sums, f).toContain(`${sha256(fixture(NOON, f))}  ${f}`);
-    expect(meta.provenance.tape_sha256).toBe(sha256(fixture(NOON, "tape.jsonl")));
-    const snap = json<Snapshot>(NOON, "snapshot.json");
-    const runJson = json<Record<string, unknown> & { history: Record<string, unknown> }>(NOON, "run.json");
+  it.each([
+    [NOON, 1, "down", null, 5],
+    [LATE, 2, "ok", 3473481, 6],
+  ] as const)("%s: is marked real, with its provenance, and every kept file matches the SHA256SUMS the workflow wrote", (dir, seq, rpc, height, before) => {
+    const meta = json<{ scenario: string; synthetic: unknown; now: string; provenance: Record<string, unknown> }>(dir, "meta.json");
+    expect([meta.scenario, meta.synthetic]).toEqual([dir, false]);
+    expect(readdirSync(new URL(`${dir}/`, FIXTURES)).sort()).toEqual(["SHA256SUMS", "log", "meta.json", "run.json", "snapshot.json", "tape.jsonl"]);
+    const sums = fixture(dir, "SHA256SUMS").split("\n");
+    for (const f of ["run.json", "snapshot.json", "tape.jsonl"]) expect(sums, f).toContain(`${sha256(fixture(dir, f))}  ${f}`);
+    expect(meta.provenance.tape_sha256).toBe(sha256(fixture(dir, "tape.jsonl")));
+    const snap = json<Snapshot>(dir, "snapshot.json");
+    const runJson = json<Record<string, unknown> & { history: Record<string, unknown> }>(dir, "run.json");
     expect([snap.hash, checkSnapshot(snap)]).toEqual([hashSnapshot(snap), []]);
     expect([meta.provenance.snapshot_hash, runJson.snapshot_hash, meta.now]).toEqual([snap.hash, snap.hash, snap.observed_at]);
-    // Built on the five readings before it, its RPC down: no head, so no finalized height.
-    expect([snap.seq, snap.status.rpc.health, snap.status.finalized_height, runJson.exit_code, runJson.history.snapshots]).toEqual([1, "down", null, 0, 5]);
+    // Built on the readings before it by the memory step, which read no anchor back.
+    expect([snap.seq, snap.status.rpc.health, snap.status.finalized_height, runJson.exit_code, runJson.history.snapshots]).toEqual([seq, rpc, height, 0, before]);
     // The day file as the data branch held it ends with this reading's line.
-    expect(fixture(NOON, `log/${DAY}`).endsWith(logLine(snap))).toBe(true);
+    expect(fixture(dir, `log/${DAY}`).endsWith(logLine(snap))).toBe(true);
+  });
+
+  it(`${LATE}: replayed on the log it was read on, with the anchor (block 3469732) answered with the hash the log holds (synthetic), gives the recorded status but for its trust`, async () => {
+    const lines = fixture(LATE, `log/${DAY}`).split("\n");
+    const recorded = json<Snapshot>(LATE, "snapshot.json");
+    const logged = "0x01480d968331997ce13e0c949f9879fdb2193693f24f18c51efaf7e949a40794";
+    const bare = await run(tapeOf(LATE), logOf(lines.slice(0, -2).join("\n") + "\n"));
+    expect(bare.r.reason).toBe("the run broke before a snapshot was written: request 10 is rpc chain_getBlockHash [3469732], but the next one on the tape is the clock");
+    const { r, s } = await run(answeringAnchor(tapeOf(LATE), (h) => ({ result: h === 3469732 ? logged : null })), logOf(lines.slice(0, -2).join("\n") + "\n"));
+    expect(s.status).toEqual({ ...recorded.status, trust: "fixture" });
+    expect([r.code, s.seq, s.prev_hash, s.status.reset_detected]).toEqual([EXIT.ok, 2, recorded.prev_hash, false]);
   });
 
   it(`${NOON}: the run that made it read no anchor; replayed on the log it was read on, the replay asks for the anchor the tape does not hold`, async () => {
@@ -238,17 +253,23 @@ describe("the real readings on the data branch, and the anchor", () => {
     expect([r.code, s.seq, s.prev_hash, s.status.reset_detected]).toEqual([EXIT.ok, 1, recorded.prev_hash, null]);
   });
 
-  it("the log as the data branch holds it now: the next run reads back block 3469732, the latest finalized head on the pinned genesis, past the reading with the RPC down", async () => {
-    const log = logOf(fixture(NOON, `log/${DAY}`));
-    const h = readHistory(log);
+  it("the log as the data branch held it at 12:06: the next run reads back block 3469732, the latest finalized head on the pinned genesis, past the reading with the RPC down", () => {
+    const h = readHistory(logOf(fixture(NOON, `log/${DAY}`)));
     expect([h.state, h.snapshots.length]).toEqual(["read", 6]);
+    expect(earlierOf(h.snapshots, DEVNET_GENESIS).anchor).toEqual({ height: 3469732, hash: "0x01480d968331997ce13e0c949f9879fdb2193693f24f18c51efaf7e949a40794" });
+  });
+
+  it("the log as the data branch holds it now, ending with the memory step's reading at 12:39: the next run reads back that reading's finalized head, block 3473481", async () => {
+    const log = logOf(fixture(LATE, `log/${DAY}`));
+    const h = readHistory(log);
+    expect([h.state, h.snapshots.length]).toEqual(["read", 7]);
     const anchor = earlierOf(h.snapshots, DEVNET_GENESIS).anchor;
-    expect(anchor).toEqual({ height: 3469732, hash: "0x01480d968331997ce13e0c949f9879fdb2193693f24f18c51efaf7e949a40794" });
+    expect(anchor).toEqual({ height: 3473481, hash: "0x32f70298f8a58b4645f8258ded9c8bd063da07d0d241b5e662f95f623ae8ddca" });
     // The request it makes, after the head calls: the one call a tape of the next run holds that no earlier tape does.
     const calls: string[] = [];
     const t = anchoredAs(SECOND, tapeOf(SECOND));
-    const spy: Transport = { ...t, rpc: (m, p) => (calls.push(`${m} ${JSON.stringify(p)}`), m === "chain_getBlockHash" && p[0] === 3469732 ? Promise.resolve(anchor?.hash) : t.rpc(m, p)) };
+    const spy: Transport = { ...t, rpc: (m, p) => (calls.push(`${m} ${JSON.stringify(p)}`), m === "chain_getBlockHash" && p[0] === 3473481 ? Promise.resolve(anchor?.hash) : t.rpc(m, p)) };
     await run(spy, log);
-    expect(calls.at(-1)).toBe("chain_getBlockHash [3469732]");
+    expect(calls.at(-1)).toBe("chain_getBlockHash [3473481]");
   });
 });

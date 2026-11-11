@@ -179,8 +179,10 @@ each replays to its recorded snapshot, and the second is built on the first in o
 third, `published-2026-11-11-1206`, is the first reading the memory step published, built on the
 five before it, with the RPC down. Replayed on that log it asks for the anchor its tape does not
 hold; with that call answered as the socket answered every other (synthetic), it gives the recorded
-status but for the RPC detail, which says the anchor could not be read. From its log a test builds the anchor request the
-next run makes. Synthetic second readings in
+status but for the RPC detail, which says the anchor could not be read. The fourth,
+`published-2026-11-11-1239`, is the next one, with a finalized head: replayed on its log with the
+anchor answered with the hash the log holds (synthetic), it gives its recorded status but for its
+trust. From its log a test builds the anchor request the next run makes, block 3473481. Synthetic second readings in
 `fixtures/memory-*`, made from the first real tape, show each check against history and each
 refused log. Those tapes, and the real ones, were recorded before runs read an anchor back, so they
 hold no anchor call: a first run's tape replays as a first run exactly, and on a log that names an

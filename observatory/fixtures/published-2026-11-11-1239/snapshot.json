@@ -1,0 +1,65 @@
+{
+  "census": null,
+  "drift": null,
+  "escrows": [],
+  "hash": "59e064bc8fa1ce56ba946fe48fe54dacfecb2bc74b6a7cb1660618ea1aecaf78",
+  "observed_at": "2026-11-11T12:39:02.949Z",
+  "pin": {
+    "finalized_hash": "0x32f70298f8a58b4645f8258ded9c8bd063da07d0d241b5e662f95f623ae8ddca",
+    "finalized_height": 3473481,
+    "genesis": "0x99c172c095340ace980631f9123544c6bebd4839f3437e463533422d8be2d631",
+    "node": "v22.23.4",
+    "source": "live:rpc wss://rpc.devnet.flop.network",
+    "source_sha": "3df6e3375d19b50e5f9f818cacd96e9d9c9ab5fb"
+  },
+  "prev_hash": "16b903e1300b7a005615e8bcb52074db76b2724e65be94df50e3a363d4b269d6",
+  "schema": "flop-observatory/snapshot@0",
+  "seq": 2,
+  "status": {
+    "best_height": 3473482,
+    "conflicts": [],
+    "faucet": {
+      "detail": "status degraded, ready false, http 200",
+      "health": "degraded",
+      "http": 200,
+      "limits": {
+        "addressCooldownMs": 86400000,
+        "dailyCapExemptionConfigured": true,
+        "dailyCapFlop": 10000000,
+        "identityCooldownMs": 86400000,
+        "ipCooldownMs": 10000,
+        "ipGrantsPerDay": 300,
+        "ipPrefixGrantsPerDay": 10000
+      },
+      "observed_at": "2026-11-11T12:38:54.159Z",
+      "ready": false
+    },
+    "finality_lag": 1,
+    "finalized_hash": "0x32f70298f8a58b4645f8258ded9c8bd063da07d0d241b5e662f95f623ae8ddca",
+    "finalized_height": 3473481,
+    "gateway": {
+      "detail": null,
+      "health": "ok",
+      "http": 200,
+      "observed_at": "2026-11-11T12:38:56.890Z"
+    },
+    "genesis": {
+      "faucet": "0x99c172c095340ace980631f9123544c6bebd4839f3437e463533422d8be2d631",
+      "pinned": "0x99c172c095340ace980631f9123544c6bebd4839f3437e463533422d8be2d631",
+      "rpc": "0x99c172c095340ace980631f9123544c6bebd4839f3437e463533422d8be2d631"
+    },
+    "observed_at": "2026-11-11T12:39:02.949Z",
+    "reset_detected": false,
+    "rpc": {
+      "detail": null,
+      "health": "ok",
+      "http": null,
+      "observed_at": "2026-11-11T12:38:56.904Z",
+      "stale": false
+    },
+    "runtime_version": 1014014,
+    "schema": "flop-observatory/network-status@0",
+    "trust": "trusted RPC"
+  },
+  "trust": "trusted RPC"
+}
