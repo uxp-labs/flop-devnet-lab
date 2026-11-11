@@ -1,6 +1,6 @@
 {
  "file": "viewer-labels.json",
- "description": "Viewer lane labels for one ledger row and its receipt file (FIXER rules V-PRECEDENCE, V-FAILED-READ, V-UNKNOWN-SETTLED, V-LINK-GREY, plus known defects KD-1/KD-2). receipt: an object, a raw string (written as is) or null (no file). Chip text \"DISAGREE\" stands for rules.constants.DISAGREE. reservation: the value on the row's 'reservation' line, or \"absent\". greens: every c-green chip in the row. label_rules names the FIXER rules (rules.json viewer_label_rules) a vector pins; on a known_defect vector they are the rules its target follows and today's output breaks. The label-requester vectors pin the limits of a requester paid row. Swarm audit of 8ddc5d2, finding 5: the row has a job budget, worked out from the job's own running total. Finding 13: the daily cap bounds every call the seat's key pays for, so the row is checked against the seat's daily cap (spent_before, the seat's spend today), then its job budget (job_spent_before, the job's requester spend). A requester row with no job_spent_before was written before finding 13 and shows no limit. The label-settled-amount-unknown vectors and the two label-disagree controls after them pin finding 6: settled on both sides with both amounts unknown is agreement, with its own amber label. The label-negative vectors pin finding 7: a negative amount is unknown. Vectors with status known_defect assert today's output in expect; target is not asserted.",
+ "description": "Viewer lane labels for one ledger row and its receipt file (FIXER rules V-PRECEDENCE, V-FAILED-READ, V-UNKNOWN-SETTLED, V-LINK-GREY, plus known defects KD-1/KD-2). receipt: an object, a raw string (written as is) or null (no file). Chip text \"DISAGREE\" stands for rules.constants.DISAGREE. reservation: the value on the row's 'reservation' line, or \"absent\". greens: every c-green chip in the row. label_rules names the FIXER rules (rules.json viewer_label_rules) a vector pins; on a known_defect vector they are the rules its target follows and today's output breaks. The label-requester vectors pin the limits of a requester paid row. Swarm audit of 8ddc5d2, finding 5: the row has a job budget, worked out from the job's own running total. Finding 13: the daily cap bounds every call the seat's key pays for, so the row is checked against the seat's daily cap (spent_before, the seat's spend today), then its job budget (job_spent_before, the job's requester spend). A requester row with no job_spent_before was written before finding 13: its spent_before is the job's spend. Review of the audit 8ddc5d2 fixes: the daily cap applies to every row, whatever its payer. A payer that is neither holder nor requester is checked against the daily cap. A limit that applies and cannot be worked out bars the green chain final chip: one amber '<limit> not checked' chip stands in its place and the row keeps 'matches'. On the row with no job_spent_before the job budget is worked out from spent_before and the daily cap is not checked. The label-settled-amount-unknown vectors and the two label-disagree controls after them pin finding 6: settled on both sides with both amounts unknown is agreement, with its own amber label. The label-negative vectors pin finding 7: a negative amount is unknown. Vectors with status known_defect assert today's output in expect; target is not asserted.",
  "status": "current behavior at 3ae1cdf",
  "vectors": [
   {
@@ -1476,7 +1476,7 @@
    "note": "swarm audit of 8ddc5d2, finding 13: the daily cap bounds every call the seat's key pays for. Each limit is measured against its own running total: the daily cap against spent_before, the seat's spend today (1 - 0.9 - 0.05 left), and the job budget against job_spent_before, the job's requester spend (0.3 - 0.05 - 0.05 left). Inside both, so the row matches and goes green. Measured against the seat's spend the job budget would be below 0."
   },
   {
-   "id": "label-requester-row-without-job-spent-before-shows-no-limit",
+   "id": "label-requester-row-without-job-spent-before-daily-cap-not-checked",
    "rule": "viewer.label",
    "input": {
     "ledger": {
@@ -1523,15 +1523,13 @@
        "sent"
       ],
       [
-       "green",
-       "chain final"
+       "amber",
+       "daily cap not checked"
       ]
      ],
      "reservation": "absent",
      "matches_shown": true,
-     "greens": [
-      "chain final"
-     ],
+     "greens": [],
      "link": [
       "grey",
       "not checked",
@@ -1539,7 +1537,187 @@
      ]
     }
    },
-   "note": "swarm audit of 8ddc5d2, finding 13: the daily cap bounds every call the seat's key pays for. A requester row with no job_spent_before key was written before that rule, when its spent_before was the job's spend and not the seat's. Neither limit can be worked out, so the row shows neither figure and no limit chip or flag: unknown, never a guess. This is the ledger row of label-requester-row-counts-against-daily-cap as finding 5 pinned it, without the new field."
+   "note": "review of the audit 8ddc5d2 fixes: a row whose spend limit cannot be checked is never shown as fine. This vector was label-requester-row-without-job-spent-before-shows-no-limit and expected grey sent plus green chain final, with no limit shown. A requester row with no job_spent_before key was written before finding 13, when its spent_before was the job's spend and not the seat's. Its job budget left is exact (5 - 0.98 - 0.05) and is shown. Its daily cap applies and cannot be worked out, so the figure is blank and one amber chip 'daily cap not checked' stands where the green chain final chip would be. Receipt and ledger agree, so 'matches' stays. This is the ledger row of label-requester-row-counts-against-daily-cap as finding 5 pinned it, without the new field."
+  },
+  {
+   "id": "label-unknown-payer-over-daily-cap",
+   "rule": "viewer.label",
+   "input": {
+    "ledger": {
+     "ts": "2026-11-10T15:00:00Z",
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zSONAR",
+     "provider": "mock",
+     "network": "devnet",
+     "state": "settled",
+     "spend": 0.198,
+     "cap_charge": 0.198,
+     "quote_padded": 0.198,
+     "per_call_cap": 0.25,
+     "daily_cap": 0.5,
+     "spent_before": 0.45
+    },
+    "receipt": {
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zSONAR",
+     "state": "settled",
+     "settled": 0.198,
+     "chain_final": true,
+     "http": 200,
+     "error": null
+    }
+   },
+   "expect": {
+    "imd-flop": {
+     "not_applicable": "imd-flop does not render the viewer lane"
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard does not render the viewer lane"
+    },
+    "viewer": {
+     "chips": [
+      [
+       "amber",
+       "over the daily cap"
+      ]
+     ],
+     "reservation": 0.198,
+     "matches_shown": false,
+     "greens": [],
+     "link": [
+      "grey",
+      "not checked",
+      null
+     ]
+    }
+   },
+   "note": "review of the audit 8ddc5d2 fixes: the seat's key pays for every call, so the seat's daily cap applies to every row, whatever its payer. This row has no payer. Its spent_before is read as the seat's total: 0.5 - 0.45 - 0.198 is below 0, so the row is amber 'over the daily cap' and never green, as it was before finding 5. Between finding 5 and the review a row with no payer had no limit and went green. The row also carries the spend flag 'payer unknown'."
+  },
+  {
+   "id": "label-unknown-payer-string-over-daily-cap",
+   "rule": "viewer.label",
+   "input": {
+    "ledger": {
+     "ts": "2026-11-10T15:00:00Z",
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zSONAR",
+     "provider": "mock",
+     "network": "devnet",
+     "payer": "someone",
+     "state": "settled",
+     "spend": 0.198,
+     "cap_charge": 0.198,
+     "quote_padded": 0.198,
+     "per_call_cap": 0.25,
+     "daily_cap": 0.5,
+     "spent_before": 0.45
+    },
+    "receipt": {
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zSONAR",
+     "state": "settled",
+     "settled": 0.198,
+     "chain_final": true,
+     "http": 200,
+     "error": null
+    }
+   },
+   "expect": {
+    "imd-flop": {
+     "not_applicable": "imd-flop does not render the viewer lane"
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard does not render the viewer lane"
+    },
+    "viewer": {
+     "chips": [
+      [
+       "amber",
+       "over the daily cap"
+      ]
+     ],
+     "reservation": 0.198,
+     "matches_shown": false,
+     "greens": [],
+     "link": [
+      "grey",
+      "not checked",
+      null
+     ]
+    }
+   },
+   "note": "review of the audit 8ddc5d2 fixes: label-unknown-payer-over-daily-cap with a payer that is a string and neither holder nor requester. The same row."
+  },
+  {
+   "id": "label-holder-unknown-spent-before-daily-cap-not-checked",
+   "rule": "viewer.label",
+   "input": {
+    "ledger": {
+     "ts": "2026-11-10T15:00:00Z",
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zSONAR",
+     "provider": "mock",
+     "network": "devnet",
+     "payer": "holder",
+     "state": "settled",
+     "spend": 0.05,
+     "cap_charge": 0.05,
+     "quote_padded": 0.186,
+     "per_call_cap": 1,
+     "daily_cap": 5,
+     "spent_before": null
+    },
+    "receipt": {
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zSONAR",
+     "state": "settled",
+     "settled": 0.05,
+     "chain_final": true,
+     "http": 200,
+     "error": null
+    }
+   },
+   "expect": {
+    "imd-flop": {
+     "not_applicable": "imd-flop does not render the viewer lane"
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard does not render the viewer lane"
+    },
+    "viewer": {
+     "chips": [
+      [
+       "grey",
+       "sent"
+      ],
+      [
+       "amber",
+       "daily cap not checked"
+      ]
+     ],
+     "reservation": "absent",
+     "matches_shown": true,
+     "greens": [],
+     "link": [
+      "grey",
+      "not checked",
+      null
+     ]
+    }
+   },
+   "note": "review of the audit 8ddc5d2 fixes: a limit that applies to a row and cannot be worked out bars the green chain final chip. spent_before is unknown, so 'daily cap left' is blank and one amber chip 'daily cap not checked' stands where the green chip would be. Receipt and ledger agree, so 'matches' stays. With spent_before 0 this row is label-green-row-link-still-grey and goes green."
   },
   {
    "id": "label-settled-amount-unknown",

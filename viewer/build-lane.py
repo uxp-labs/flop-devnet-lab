@@ -101,35 +101,47 @@ OVER_PER_CALL = "over the per-call cap"
 OVER_DAILY = "over the daily cap"
 OVER_JOB = "over the job budget"
 OVER_RESERVATION = "over the reservation"
+PAYER_UNKNOWN = "payer unknown"
 # A spend limit: the ledger field that holds the cap, the field that holds its own running total before the
-# call, the row key and page label of what is left, and the 'over' wording.
-DAILY_CAP = dict(field="daily_cap", spent="spent_before", key="daily_left", label="daily cap left", over=OVER_DAILY)
-JOB_BUDGET = dict(field="job_budget", spent="job_spent_before", key="job_left", label="job budget left", over=OVER_JOB)
-# The spend limits a row was checked against, by payer, in the order imd-flop checks them (policy.ts).
-# The seat's daily cap bounds every call the seat's key pays for, whoever the call is for, so it is on every
-# row. A requester row is also checked against its job budget.
-SPEND_LIMITS = {"holder": [DAILY_CAP], "requester": [DAILY_CAP, JOB_BUDGET]}
+# call, the row key and page label of what is left, the 'over' wording, and the wording for a row it could
+# not be worked out for.
+DAILY_CAP = dict(field="daily_cap", spent="spent_before", key="daily_left", label="daily cap left", over=OVER_DAILY,
+                 unchecked="daily cap not checked")
+JOB_BUDGET = dict(field="job_budget", spent="job_spent_before", key="job_left", label="job budget left", over=OVER_JOB,
+                  unchecked="job budget not checked")
+# The spend limits that apply to a row, in the order imd-flop checks them (policy.ts). The seat's key pays for
+# every call, so the seat's daily cap applies to every row, whatever its payer. The job budget applies to a
+# requester row as well.
+EVERY_ROW = [DAILY_CAP]
+SPEND_LIMITS = {"holder": EVERY_ROW, "requester": EVERY_ROW + [JOB_BUDGET]}
 # Every limit once, in checked order. The page shows one line per limit a row carries.
 LIMIT_LINES = list({lim["key"]: lim for limits in SPEND_LIMITS.values() for lim in limits}.values())
 
+def known_payer(e):
+    payer = e.get("payer")
+    return isinstance(payer, str) and payer in SPEND_LIMITS
+
 def before_two_totals(e):
     """A requester row with no job_spent_before key. It was written before the daily cap bounded requester calls
-    (swarm audit of 8ddc5d2, finding 13), when its spent_before was the job's spend, not the seat's. Neither
-    limit can be worked out from it."""
+    (swarm audit of 8ddc5d2, finding 13). Its spent_before is the job's spend, not the seat's. So its job budget
+    left is exact, and its daily cap cannot be checked."""
     return e.get("payer") == "requester" and "job_spent_before" not in e
 
+def running_total(e, lim):
+    """What the row counted against this limit before the call, or None when the row does not say."""
+    if before_two_totals(e): return amount(e.get("spent_before")) if lim is JOB_BUDGET else None
+    return amount(e.get(lim["spent"]))
+
 def spend_limit(e):
-    """The spend limits this row was checked against, each with what is left of it after the row's cap_charge,
-    as a list of (limit, left) in checked order. left is None when any input is unknown (cap math uses
-    cap_charge). The list is empty when which limits applied, or what they were measured against, is unknown:
-    a payer that is neither holder nor requester, or a requester row from before it had two totals. Never a
-    guess."""
-    payer = e.get("payer")
-    limits = SPEND_LIMITS.get(payer) if isinstance(payer, str) else None
-    if limits is None or before_two_totals(e): return []
+    """The spend limits that apply to this row, each with what is left of it after the row's cap_charge, as a
+    list of (limit, left) in checked order (cap math uses cap_charge). A payer that is neither holder nor
+    requester is checked against the daily cap, its spent_before read as the seat's total. left is None when
+    the limit could not be worked out: an input is unknown, or the row does not hold that limit's running
+    total (before_two_totals). Never a guess."""
+    limits = SPEND_LIMITS[e["payer"]] if known_payer(e) else EVERY_ROW
     cap_charge, applied = amount(e.get("cap_charge")), []
     for lim in limits:
-        cap, spent = amount(e.get(lim["field"])), amount(e.get(lim["spent"]))
+        cap, spent = amount(e.get(lim["field"])), running_total(e, lim)
         if e.get(lim["field"]) is not None and cap is None: raise ValueError(f'{lim["field"]} is not an amount')
         applied.append((lim, r6(cap - spent - cap_charge) if None not in (cap, spent, cap_charge) else None))
     return applied
@@ -137,6 +149,17 @@ def spend_limit(e):
 def below_zero(applied):
     """The 'over' wording of each applied limit with less than nothing left, in checked order."""
     return [lim["over"] for lim, left in applied if left is not None and left < 0]
+
+def unchecked(applied):
+    """The 'not checked' wording of each applied limit that could not be worked out, in checked order."""
+    return [lim["unchecked"] for lim, left in applied if left is None]
+
+def limit_flags(e, applied):
+    """What the row has to say about its limits, in checked order: 'over' for a limit with less than nothing
+    left, 'not checked' for one that could not be worked out. Then 'payer unknown' for a payer that is neither
+    holder nor requester."""
+    flags = [lim["over"] if left is not None else lim["unchecked"] for lim, left in applied if left is None or left < 0]
+    return flags if known_payer(e) else flags + [PAYER_UNKNOWN]
 
 def over_limit(e, r):
     """The first limit a settled receipt breaks, or None (KD-2, FIXER's order): the per-call cap, then the row's
@@ -257,7 +280,11 @@ def row_matches(row, e, r, reservation, limit):
     chips = [["grey", "sent"]]
     if r.get("stage") == STAGE_GATEWAY:
         chips.append(["amber", STAGE_GATEWAY])
-    if chain_final and not row["bad"]: chips.append(["green", "chain final"])
+    # A limit that applies and could not be worked out bars the green chip. One amber chip stands in its place
+    # and names the first such limit. Receipt and ledger still agree, so the row keeps 'matches'.
+    not_checked = unchecked(spend_limit(e))
+    if chain_final and not_checked: chips.append(["amber", not_checked[0]]); row["bad"] = True
+    elif chain_final and not row["bad"]: chips.append(["green", "chain final"])
     row["chips"] = chips
     if not chain_final: row["flop"].append(["chain final", '<span class="unk">not checked yet</span>'])
     # A pending match still holds its reservation until it settles or is released.
@@ -277,19 +304,22 @@ def build_row(e, r):
     sub = [f"req {rid_label}", f"seat #{esc(e.get('seat'))} · node {BLANK_NODE}",
            f"{esc(e.get('provider'))} · {esc(e.get('network'))} · {esc(when(e['ts']))}"]
     # Link column: no link evidence is recorded in the ledger, so it is always grey "not checked" (link_bypassed too).
-    # A row without a payer is tagged unknown, not holder: no limit is shown for it either (spend_limit).
+    # A row without a payer is tagged unknown, not holder. It is still checked against the daily cap (spend_limit).
     row = dict(label=esc(e.get("job")), sub=sub, payer=esc(e.get("payer") or "unknown"), flags=[], spend_flags=[], flop=[],
                est=amount(e.get("quote_padded")), per_call=amount(e.get("per_call_cap")),
                outcome=["grey", "not read", "mock job, no imd lookup"], link=["grey", "not checked", None], bad=False)
-    # The row carries what is left of each limit it was checked against, under that limit's key (daily_left, job_left).
+    # The row carries what is left of each limit that applies to it, under that limit's key (daily_left, job_left).
+    # None is a limit that could not be worked out: a blank figure.
     applied = spend_limit(e)
     for lim, left in applied: row[lim["key"]] = left
     kind, limit = classify(e, r)
-    # Say it once per row: a limit the chip already names gets no spend flag repeating it.
-    row["spend_flags"] += [over for over in below_zero(applied) if over != limit]
+    row["spend_flags"] += limit_flags(e, applied)
     cap_charge = amount(e.get("cap_charge"))
     reservation = cap_charge if cap_charge is not None else amount(e.get("quote_padded"))
     ROW_KINDS[kind](row, e, r, reservation, limit)
+    # Say it once per row: a limit a chip already names gets no spend flag repeating it.
+    named = [text for _, text in row["chips"] or []]
+    row["spend_flags"] = [f for f in row["spend_flags"] if f not in named]
     return row
 BLANK_NODE = '<span class="unk">unknown</span>'
 HELD_NOTE = '<span class="note">(held)</span>'
@@ -305,7 +335,7 @@ def render(row):
         flop += f'<div><span class="k">{k}</span> {v}</div>' if k else f'<div class="k">{v}</div>'
     flop += "".join(f'<div class="flag">{f}</div>' for f in row["flags"])
     # One line per spend limit the row carries, in checked order: 'daily cap left', then 'job budget left' on a
-    # requester row. Neither for an unknown payer or a requester row from before it had two totals.
+    # requester row. A limit that could not be worked out is a blank figure.
     spend = (f'<div><span class="k">est.</span> {num(row["est"])}</div><div><span class="k">per-call cap</span> {num(row["per_call"])}</div>'
              + "".join(f'<div><span class="k">{lim["label"]}</span> {num(row[lim["key"]])}</div>' for lim in LIMIT_LINES if lim["key"] in row)
              + "".join(f'<div class="flag">{f}</div>' for f in row["spend_flags"]))

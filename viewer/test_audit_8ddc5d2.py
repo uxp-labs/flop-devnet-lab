@@ -4,9 +4,9 @@
 Finding 5 (low): the viewer subtracted a requester row's spent_before, then the job's requester spend, from
 the seat's daily cap, and never showed the job budget. Rule: a limit shown is a limit that applied, worked
 out from that limit's own running total. A requester row has a job budget: it shows 'job budget left', and
-'over the job budget' when that figure is negative. Any other payer shows neither figure. Which limits apply
-to a requester row was changed by finding 13, so the finding 5 tests below now expect the new rule. Each
-changed test says what it expected before.
+'over the job budget' when that figure is negative. Any other payer showed neither figure. Which limits apply
+to a requester row was changed by finding 13, and which apply to any other payer by the review below, so the
+finding 5 tests now expect the new rules. Each changed test says what it expected before.
 
 Finding 13 (the owner's decision): the daily cap bounds every call the seat's key pays for, whoever the call
 is for. imd-flop now counts every row of the seat against the daily cap, and a requester row records two
@@ -14,8 +14,8 @@ running totals: spent_before (the seat's spend today) and job_spent_before (the 
 a requester row is checked against two limits, in imd-flop's order: the daily cap, then the job budget. It
 shows one line for each, an 'over' chip for the first one broken, and a spend flag for any other limit below
 zero. A requester row with no job_spent_before key was written before this change, when its spent_before was
-the job's spend. Neither limit can be worked out for it, so it shows neither figure and no limit chip or
-flag. A holder row is unchanged.
+the job's spend. Finding 13 showed neither figure and no limit chip or flag on it. The review below changed
+that. A holder row is unchanged.
 
 Finding 6 (low): a settled receipt with an unknown amount beside a ledger row that is settled with an unknown
 spend was labelled 'receipt and ledger disagree'. imd-flop books exactly that row for such a receipt (contract
@@ -28,7 +28,16 @@ headroom ('daily cap left 0.8' under a 0.5 cap) and 'reservation -0.3 (held)'. i
 on such a row and spend-guard treats negatives as unknown. Rule: a negative amount is not an amount. amount()
 returns unknown (None), so every place that shows or subtracts it shows blank.
 
-Each test asserts the fixed outcome, so it fails on 8ddc5d2 and passes after the fix. Controls say so.
+Review of the audit 8ddc5d2 fixes (the tests named test_review_*, and the finding 5, 7 and 13 tests that say
+so). Item 1: a row whose spend limit cannot be checked is never shown as fine. The seat's daily cap applies to
+every row, whatever its payer. A payer that is neither holder nor requester is checked against the daily cap
+and carries the spend flag 'payer unknown'. A requester row with no job_spent_before key shows its job budget
+left, worked out from spent_before, and its daily cap cannot be checked. A limit that applies and cannot be
+worked out shows a blank figure and '<limit> not checked', as a spend flag, or as one amber chip where the
+green chain final chip would be.
+
+Each test asserts the fixed outcome, so it fails on 8ddc5d2 and passes after the fix. The review tests fail
+on 36b23fe, the commit the review read. Controls say so.
 Offline: build-lane.py is exec'd on temp dirs (lane_harness.lane).
 """
 import unittest
@@ -41,10 +50,17 @@ SETTLED_UNKNOWN = "settled, amount unknown; reservation held"
 BLANK = '<span class="unk blank" title="unknown spend">&nbsp;</span>'
 OVER_DAILY = "over the daily cap"
 OVER_JOB = "over the job budget"
+DAILY_NOT_CHECKED = "daily cap not checked"
+JOB_NOT_CHECKED = "job budget not checked"
+PAYER_UNKNOWN = "payer unknown"
 # A requester paid row, as imd-flop writes it since finding 13: two running totals. It is checked against the
 # seat's daily cap (1, less spent_before) and then its job budget (5, less job_spent_before).
 REQ = dict(LED, payer="requester", job_budget=5, daily_cap=1, job_spent_before=0)
 SETTLED = dict(REC, state="settled", chain_final=True, http=200, error=None)
+# The chips of a sent call whose receipt carries the gateway stage (REC does). A status chip may follow them.
+SENT = [["grey", "sent"], ["amber", "gateway observed"]]
+# A requester row written before finding 13: it has no job_spent_before key, and its spent_before is the job's spend.
+OLD_REQ = {k: v for k, v in REQ.items() if k != "job_spent_before"}
 
 
 def settled_row(amount, **led):
@@ -153,17 +169,20 @@ class Finding5RequesterRowsUseTheJobBudget(unittest.TestCase):
 
     def test_F5_unknown_job_budget_input_leaves_the_figure_blank(self):
         """Finding 13: the job budget's running total is job_spent_before, and the daily cap line is on the row
-        too (this test expected no 'daily cap' text). An unknown input blanks only the figures it feeds."""
-        for name, change, daily, job in (("no job_budget", dict(job_budget=None), 0.802, None),
-                                         ("unknown job_spent_before", dict(job_spent_before=None), 0.802, None),
-                                         ("unknown cap_charge", dict(cap_charge=None), None, None),
-                                         ("unknown spent_before", dict(spent_before=None), None, 4.802)):
+        too (this test expected no 'daily cap' text). An unknown input blanks only the figures it feeds.
+        Changed by the review of the audit 8ddc5d2 fixes: a limit that cannot be worked out is flagged as not
+        checked. This test expected no spend flag on any of these rows."""
+        for name, change, daily, job, flags in (
+                ("no job_budget", dict(job_budget=None), 0.802, None, [JOB_NOT_CHECKED]),
+                ("unknown job_spent_before", dict(job_spent_before=None), 0.802, None, [JOB_NOT_CHECKED]),
+                ("unknown cap_charge", dict(cap_charge=None), None, None, [DAILY_NOT_CHECKED, JOB_NOT_CHECKED]),
+                ("unknown spent_before", dict(spent_before=None), None, 4.802, [DAILY_NOT_CHECKED])):
             with self.subTest(name):
                 rows, page = lane([dict(REQ, **change)], {"req-1": dict(REC)})
                 self.assertEqual([rows[0].get("daily_left", "absent"), rows[0].get("job_left", "absent")], [daily, job])
                 self.assertIn(spend_line("daily cap left", BLANK if daily is None else mono(daily))
                               + spend_line("job budget left", BLANK if job is None else mono(job)), page)
-                self.assertEqual(rows[0]["spend_flags"], [])
+                self.assertEqual(rows[0]["spend_flags"], flags)
 
     def test_F5_job_budget_that_is_not_a_number_is_an_unreadable_row(self):
         """Same handling as a daily_cap that is not a number on a holder row (test_audit_v7 V_L9)."""
@@ -172,27 +191,33 @@ class Finding5RequesterRowsUseTheJobBudget(unittest.TestCase):
         self.assertTrue(rows[0]["bad"])
         self.assertEqual(greens(page), [])
 
-    def test_F5_any_other_payer_shows_neither_figure(self):
-        """Which limit applied is unknown, so no figure, no flag and no limit chip: never a guess."""
+    def test_F5_any_other_payer_is_checked_against_the_daily_cap_and_flagged(self):
+        """Changed by the review of the audit 8ddc5d2 fixes: the seat's key pays for every call, so the daily cap
+        applies to every row, whatever its payer. This test was test_F5_any_other_payer_shows_neither_figure and
+        expected no figure and no flag. The row now shows 'daily cap left' (0.5 - 0.4 - 0.198), the 'over' flag
+        and 'payer unknown'. The job budget is a requester row's limit, so it is still not shown."""
         for payer, tag in (("someone", "payer: someone"), ("Holder", "payer: Holder"), (None, "payer: unknown"), ("", "payer: unknown")):
             with self.subTest(payer=payer):
-                # As a holder row this is over the daily cap (0.5 - 0.4 - 0.198). As a requester row it is over the job budget.
                 rows, page = lane([dict(LED, payer=payer, job_budget=0.5, spent_before=0.4)], {"req-1": dict(REC)})
                 row, text = rows[0], visible(page)
-                self.assertNotIn("daily_left", row)
+                self.assertEqual(row.get("daily_left"), -0.098)
                 self.assertNotIn("job_left", row)
-                self.assertEqual(row["spend_flags"], [])
-                self.assertNotIn("daily cap", text)
+                self.assertEqual(row["spend_flags"], [OVER_DAILY, PAYER_UNKNOWN])
+                self.assertIn(spend_line("daily cap left", mono(-0.098)), page)
                 self.assertNotIn("job budget", text)
                 self.assertIn(tag, text)
                 self.assertNotIn("payer: holder", text)
 
-    def test_F5_any_other_payer_gets_no_limit_chip(self):
+    def test_F5_any_other_payer_over_the_daily_cap_gets_the_amber_chip(self):
+        """Changed by the review of the audit 8ddc5d2 fixes. This test was test_F5_any_other_payer_gets_no_limit_chip
+        and expected no 'over' chip. A settlement over the daily cap (0.1 - 0.3 - 0.05) is amber, whatever the payer."""
         led = dict(LED, payer="someone", job_budget=0.1, daily_cap=0.1, spent_before=0.3, state="settled", spend=0.05, cap_charge=0.05)
         rows, page = lane([led], {"req-1": dict(SETTLED, settled=0.05)})
-        self.assertNotIn(["amber", OVER_DAILY], rows[0]["chips"])
-        self.assertNotIn(["amber", OVER_JOB], rows[0]["chips"])
-        self.assertNotIn("over the", visible(page))
+        self.assertEqual(rows[0]["chips"], [["amber", OVER_DAILY]])
+        self.assertEqual(rows[0]["spend_flags"], [PAYER_UNKNOWN])
+        self.assertEqual(visible(page).count(OVER_DAILY), 1)
+        self.assertNotIn(OVER_JOB, visible(page))
+        self.assertEqual(greens(page), [])
 
     def test_F5_control_holder_row_is_unchanged(self):
         """Passes before and after: a holder row keeps the daily cap figure, flag and chip. job_budget is not its limit."""
@@ -220,7 +245,8 @@ class Finding13TheDailyCapBoundsRequesterRows(unittest.TestCase):
         left = lambda e: [(lim["field"], n) for lim, n in NS["spend_limit"](e)]
         self.assertEqual(left(dict(REQ, spent_before=0.6, job_spent_before=0.1)), [("daily_cap", 0.202), ("job_budget", 4.702)])
         self.assertEqual(left(dict(LED, spent_before=0.1)), [("daily_cap", 0.202)])
-        self.assertEqual(left(dict(LED, payer="someone")), [])
+        # Changed by the review of the audit 8ddc5d2 fixes: this line expected no limit for any other payer.
+        self.assertEqual(left(dict(LED, payer="someone")), [("daily_cap", 0.302)])
 
     def test_F13_each_limit_uses_its_own_running_total(self):
         """The seat spent 0.6 today, 0.1 of it on this job: 1 - 0.6 - 0.198 and 5 - 0.1 - 0.198."""
@@ -273,38 +299,44 @@ class Finding13TheDailyCapBoundsRequesterRows(unittest.TestCase):
         self.assertNotIn(OVER_JOB, visible(page))
         self.assertEqual(greens(page), [])
 
-    def test_F13_requester_row_without_job_spent_before_shows_neither_figure_and_no_flag(self):
-        """A row from before this change: its spent_before was the job's spend. As a seat total it would be over
-        the daily cap (0.1 - 0.3 - 0.198), as a job total over the job budget. Unknown, never a guess."""
-        old = {k: v for k, v in REQ.items() if k != "job_spent_before"}
-        rows, page = lane([dict(old, job_budget=0.1, daily_cap=0.1, spent_before=0.3)], {"req-1": dict(REC)})
+    def test_F13_requester_row_without_job_spent_before_shows_its_job_budget_and_an_unchecked_daily_cap(self):
+        """A row from before this change: its spent_before was the job's spend, not the seat's.
+        Changed by the review of the audit 8ddc5d2 fixes. This test was
+        test_F13_requester_row_without_job_spent_before_shows_neither_figure_and_no_flag. The job budget left is
+        exact (0.1 - 0.3 - 0.198) and is shown with its 'over' flag. The daily cap applies and cannot be worked
+        out: blank figure and 'daily cap not checked'. Never read as a seat total (0.1 - 0.3 - 0.198 too)."""
+        rows, page = lane([dict(OLD_REQ, job_budget=0.1, daily_cap=0.1, spent_before=0.3)], {"req-1": dict(REC)})
         row, text = rows[0], visible(page)
-        self.assertNotIn("daily_left", row)
-        self.assertNotIn("job_left", row)
-        self.assertEqual(row["spend_flags"], [])
-        self.assertNotIn("daily cap", text)
-        self.assertNotIn("job budget", text)
+        self.assertEqual([row.get("daily_left", "absent"), row.get("job_left", "absent")], [None, -0.398])
+        self.assertEqual(row["spend_flags"], [DAILY_NOT_CHECKED, OVER_JOB])
+        self.assertNotIn(OVER_DAILY, text)
         self.assertIn("payer: requester", text)
-        self.assertIn(spend_line("est.", mono(0.198)) + spend_line("per-call cap", mono(0.25)), page)
+        self.assertIn(spend_line("est.", mono(0.198)) + spend_line("per-call cap", mono(0.25))
+                      + spend_line("daily cap left") + spend_line("job budget left", mono(-0.398)), page)
 
-    def test_F13_requester_row_without_job_spent_before_gets_no_limit_chip(self):
-        old = {k: v for k, v in REQ.items() if k != "job_spent_before"}
-        led = dict(old, job_budget=0.1, daily_cap=0.1, spent_before=0.3, state="settled", spend=0.05, cap_charge=0.05)
+    def test_F13_requester_row_without_job_spent_before_over_its_job_budget_gets_the_amber_chip(self):
+        """Changed by the review of the audit 8ddc5d2 fixes. This test was
+        test_F13_requester_row_without_job_spent_before_gets_no_limit_chip and expected no 'over' chip. The job
+        budget is checked against spent_before (0.1 - 0.3 - 0.05). The daily cap is never named as broken."""
+        led = dict(OLD_REQ, job_budget=0.1, daily_cap=0.1, spent_before=0.3, state="settled", spend=0.05, cap_charge=0.05)
         rows, page = lane([led], {"req-1": dict(SETTLED, settled=0.05)})
-        self.assertNotIn(["amber", OVER_DAILY], rows[0]["chips"])
-        self.assertNotIn(["amber", OVER_JOB], rows[0]["chips"])
-        self.assertNotIn("over the", visible(page))
-        # The per-call cap and the reservation need no running total, so they are still checked.
+        self.assertEqual(rows[0]["chips"], [["amber", OVER_JOB]])
+        self.assertEqual(rows[0]["spend_flags"], [DAILY_NOT_CHECKED])
+        self.assertNotIn(OVER_DAILY, visible(page))
+        self.assertEqual(greens(page), [])
+        # The per-call cap and the reservation need no running total, so they are still checked first.
         rows, _ = lane([dict(led, spend=0.3, cap_charge=0.3)], {"req-1": dict(SETTLED, settled=0.3)})
         self.assertEqual(rows[0]["chips"], [["amber", "over the per-call cap"]])
-        self.assertEqual(rows[0]["spend_flags"], [])
+        self.assertEqual(rows[0]["spend_flags"], [DAILY_NOT_CHECKED, OVER_JOB])
 
     def test_F13_job_spent_before_null_is_a_row_since_the_change_with_an_unknown_job_figure(self):
-        """The key is there, so spent_before is the seat's spend: the daily cap is worked out, the job budget is blank."""
+        """The key is there, so spent_before is the seat's spend: the daily cap is worked out, the job budget is blank.
+        Changed by the review of the audit 8ddc5d2 fixes: the blank job budget is flagged as not checked. This
+        test expected the 'over the daily cap' flag alone."""
         rows, page = lane([dict(REQ, daily_cap=0.1, spent_before=0.3, job_spent_before=None)], {"req-1": dict(REC)})
         self.assertEqual([rows[0].get("daily_left", "absent"), rows[0].get("job_left", "absent")], [-0.398, None])
         self.assertIn(spend_line("daily cap left", mono(-0.398)) + spend_line("job budget left"), page)
-        self.assertEqual(rows[0]["spend_flags"], [OVER_DAILY])
+        self.assertEqual(rows[0]["spend_flags"], [OVER_DAILY, JOB_NOT_CHECKED])
 
     def test_F13_control_holder_row_is_the_same_with_and_without_job_spent_before(self):
         """Passes before and after: a holder row has one limit, the daily cap, whichever generation wrote it."""
@@ -430,13 +462,16 @@ class Finding7NegativeAmountsAreUnknown(unittest.TestCase):
         self.assertNotIn("1.302", visible(page))
 
     def test_F7_negative_inputs_leave_the_job_budget_figure_blank_too(self):
-        """Since finding 13 the job budget's running total is job_spent_before, so that is the negative input here."""
-        for name, change in (("cap_charge", dict(cap_charge=-0.3)), ("job_spent_before", dict(job_spent_before=-1))):
+        """Since finding 13 the job budget's running total is job_spent_before, so that is the negative input here.
+        Changed by the review of the audit 8ddc5d2 fixes: a limit that cannot be worked out is flagged as not
+        checked. This test expected no spend flag. A negative cap_charge blanks both limits."""
+        for name, change, flags in (("cap_charge", dict(cap_charge=-0.3), [DAILY_NOT_CHECKED, JOB_NOT_CHECKED]),
+                                    ("job_spent_before", dict(job_spent_before=-1), [JOB_NOT_CHECKED])):
             with self.subTest(name):
                 rows, page = lane([dict(REQ, **change)], {"req-1": dict(REC, http=200)})
                 self.assertIsNone(rows[0]["job_left"])
                 self.assertIn(spend_line("job budget left"), page)
-                self.assertEqual(rows[0]["spend_flags"], [])
+                self.assertEqual(rows[0]["spend_flags"], flags)
 
     def test_F7_negative_quote_and_per_call_cap_show_blank(self):
         rows, page = lane([dict(LED, quote_padded=-0.2, per_call_cap=-1)], {"req-1": dict(REC, http=200)})
@@ -480,6 +515,133 @@ class Finding7NegativeAmountsAreUnknown(unittest.TestCase):
                 rows, page = lane([led], {"req-1": dict(rec, chain_final=True)})
                 self.assertEqual(rows[0]["chips"], [["amber", DISAGREE]])
                 self.assertEqual(greens(page), [])
+
+
+def without_payer(led): return {k: v for k, v in led.items() if k != "payer"}
+
+
+class Review1ALimitThatCannotBeCheckedIsNeverShownAsFine(unittest.TestCase):
+    """Review of the audit 8ddc5d2 fixes, item 1. Before it a payer that is neither holder nor requester, and a
+    requester row with no job_spent_before key, had no limit at all and could go green."""
+
+    def test_review_unknown_payer_settlement_over_the_daily_cap_is_amber_and_never_green(self):
+        """The reviewer's repro: 0.5 - 0.45 - 0.198 = -0.148. Amber on main, green on 36b23fe."""
+        led = dict(LED, state="settled", spend=0.198, cap_charge=0.198, spent_before=0.45)
+        for name, row_in in (("absent", without_payer(led)), ("null", dict(led, payer=None)),
+                             ("someone", dict(led, payer="someone")), ("Holder", dict(led, payer="Holder"))):
+            with self.subTest(payer=name):
+                rows, page = lane([row_in], {"req-1": dict(SETTLED, settled=0.198)})
+                row, text = rows[0], visible(page)
+                self.assertEqual(row["chips"], [["amber", OVER_DAILY]])
+                self.assertEqual(row.get("daily_left"), -0.148)
+                self.assertIn(spend_line("daily cap left", mono(-0.148)), page)
+                self.assertNotIn("job_left", row)
+                self.assertEqual(row["spend_flags"], [PAYER_UNKNOWN])
+                self.assertTrue(row["bad"])
+                self.assertEqual(greens(page), [])
+                self.assertNotIn("matches", text)
+
+    def test_review_unknown_payer_row_says_the_payer_is_unknown(self):
+        """Pending and inside the daily cap (0.5 - 0.1 - 0.198): the figure is shown, with the one spend flag."""
+        rows, page = lane([dict(without_payer(LED), spent_before=0.1)], {"req-1": dict(REC)})
+        self.assertEqual(rows[0].get("daily_left"), 0.202)
+        self.assertEqual(rows[0]["spend_flags"], [PAYER_UNKNOWN])
+        self.assertIn(spend_line("daily cap left", mono(0.202)) + f'<div class="flag">{PAYER_UNKNOWN}</div>', page)
+        self.assertIn("payer: unknown", visible(page))
+
+    def test_review_control_known_payers_carry_no_payer_flag(self):
+        """Passes before and after."""
+        for led in (dict(LED), dict(REQ)):
+            with self.subTest(payer=led["payer"]):
+                rows, page = lane([led], {"req-1": dict(REC)})
+                self.assertEqual(rows[0]["spend_flags"], [])
+                self.assertNotIn(PAYER_UNKNOWN, visible(page))
+
+    def test_review_spend_limit_applies_the_daily_cap_to_every_row(self):
+        left = lambda e: [(lim["field"], n) for lim, n in NS["spend_limit"](e)]
+        for name, led in (("absent", without_payer(LED)), ("null", dict(LED, payer=None)), ("someone", dict(LED, payer="someone")),
+                          ("not a string", dict(LED, payer=["requester"]))):
+            with self.subTest(payer=name):
+                self.assertEqual(left(dict(led, spent_before=0.1)), [("daily_cap", 0.202)])
+        # A requester row from before it had two totals: spent_before is the job's spend (5 - 0.3 - 0.198).
+        self.assertEqual(left(dict(OLD_REQ, spent_before=0.3)), [("daily_cap", None), ("job_budget", 4.502)])
+
+    def test_review_requester_row_without_job_spent_before_never_goes_green(self):
+        """Inside its job budget (5 - 0.98 - 0.05), settled and chain final. The daily cap cannot be checked, so
+        one amber chip stands where the green one would be. The identity verdict stays."""
+        led = dict(OLD_REQ, spent_before=0.98, state="settled", spend=0.05, cap_charge=0.05)
+        rows, page = lane([led], {"req-1": dict(SETTLED, settled=0.05)})
+        row, text = rows[0], visible(page)
+        self.assertEqual(row["chips"], SENT + [["amber", DAILY_NOT_CHECKED]])
+        self.assertEqual([row.get("daily_left", "absent"), row.get("job_left", "absent")], [None, 3.97])
+        self.assertIn(spend_line("daily cap left") + spend_line("job budget left", mono(3.97)), page)
+        self.assertEqual(row["spend_flags"], [])  # said once, on the chip
+        self.assertEqual(text.count(DAILY_NOT_CHECKED), 1)
+        self.assertTrue(row["bad"])
+        self.assertEqual(greens(page), [])
+        self.assertIn(["match", "matches"], row["flop"])
+        self.assertIn(["observed spend", 0.05], row["flop"])
+
+    def test_review_holder_row_with_an_unknown_input_never_goes_green(self):
+        """Settled, chain final, receipt and ledger agree, and the daily cap cannot be worked out."""
+        base = dict(LED, state="settled", spend=0.05, cap_charge=0.05)
+        for name, led in (("no daily_cap", dict(base, daily_cap=None)), ("unknown spent_before", dict(base, spent_before=None)),
+                          ("negative spent_before", dict(base, spent_before=-1)), ("unknown cap_charge", dict(base, cap_charge=None))):
+            with self.subTest(name):
+                rows, page = lane([led], {"req-1": dict(SETTLED, settled=0.05)})
+                self.assertEqual(rows[0]["chips"], SENT + [["amber", DAILY_NOT_CHECKED]])
+                self.assertIsNone(rows[0]["daily_left"])
+                self.assertIn(spend_line("daily cap left"), page)
+                self.assertEqual(rows[0]["spend_flags"], [])
+                self.assertEqual(visible(page).count(DAILY_NOT_CHECKED), 1)
+                self.assertEqual(greens(page), [])
+                self.assertIn("matches", visible(page))
+
+    def test_review_requester_row_with_both_limits_unknown_names_the_first_on_the_chip(self):
+        """The chip names the first limit not checked, in checked order. The other keeps its spend flag."""
+        led = dict(REQ, state="settled", spend=0.05, cap_charge=None)
+        rows, page = lane([led], {"req-1": dict(SETTLED, settled=0.05)})
+        self.assertEqual(rows[0]["chips"], SENT + [["amber", DAILY_NOT_CHECKED]])
+        self.assertEqual(rows[0]["spend_flags"], [JOB_NOT_CHECKED])
+        self.assertEqual([visible(page).count(DAILY_NOT_CHECKED), visible(page).count(JOB_NOT_CHECKED)], [1, 1])
+        self.assertEqual(greens(page), [])
+
+    def test_review_pending_row_with_an_unknown_input_carries_the_not_checked_flag(self):
+        """No green chip to replace on a pending row: the flag sits under the blank figure."""
+        rows, page = lane([dict(LED, spent_before=None)], {"req-1": dict(REC, http=200)})
+        self.assertEqual(rows[0]["chips"], SENT)
+        self.assertEqual(rows[0]["spend_flags"], [DAILY_NOT_CHECKED])
+        self.assertIn(spend_line("daily cap left") + f'<div class="flag">{DAILY_NOT_CHECKED}</div>', page)
+        self.assertIn("matches", visible(page))
+
+    def test_review_settlement_over_another_limit_keeps_its_chip_and_flags_the_unchecked_limit(self):
+        """Over the per-call cap with an unknown spent_before: the chip names the broken limit."""
+        led = dict(LED, state="settled", spend=0.3, cap_charge=0.3, spent_before=None)
+        rows, page = lane([led], {"req-1": dict(SETTLED, settled=0.3)})
+        self.assertEqual(rows[0]["chips"], [["amber", "over the per-call cap"]])
+        self.assertEqual(rows[0]["spend_flags"], [DAILY_NOT_CHECKED])
+        self.assertEqual(greens(page), [])
+
+    def test_review_refused_row_keeps_its_own_rendering(self):
+        """A refused row has no chips and keeps its two flags first. A limit flag follows them, as 'over' does."""
+        led = dict(LED, request_id=None, state="refused_local", cap_charge=0, reason="estimate failed (boom)", spent_before=None)
+        rows, page = lane([led], {})
+        self.assertIsNone(rows[0]["chips"])
+        self.assertEqual(rows[0]["flop"], [["", "refused before the call, no FLOP chips"]])
+        self.assertEqual(rows[0]["spend_flags"], ["cap hit = stop", "estimate failed (boom)", DAILY_NOT_CHECKED])
+        self.assertEqual(greens(page), [])
+
+    def test_review_control_row_with_every_limit_worked_out_still_goes_green(self):
+        """Passes before and after."""
+        for led in (dict(LED, state="settled", spend=0.05, cap_charge=0.05),
+                    dict(REQ, state="settled", spend=0.05, cap_charge=0.05)):
+            with self.subTest(payer=led["payer"]):
+                rows, page = lane([led], {"req-1": dict(SETTLED, settled=0.05)})
+                self.assertEqual(rows[0]["chips"], SENT + [["green", "chain final"]])
+                self.assertEqual(rows[0]["spend_flags"], [])
+                self.assertFalse(rows[0]["bad"])
+                self.assertNotIn(DAILY_NOT_CHECKED, visible(page))
+                self.assertNotIn(JOB_NOT_CHECKED, visible(page))
 
 
 if __name__ == "__main__":

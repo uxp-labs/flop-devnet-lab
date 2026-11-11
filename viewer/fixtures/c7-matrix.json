@@ -194,7 +194,7 @@
    "fixed": [
     "KD-5"
    ],
-   "note": "[fix: KD-5] the held reservation line carries the trailing '(held)' note."
+   "note": "[fix: KD-5] the held reservation line carries the trailing '(held)' note. Review of the audit 8ddc5d2 fixes: cap_charge is unknown, so the daily cap cannot be worked out and the row carries the spend flag 'daily cap not checked'."
   },
   {
    "id": "10-F10",
