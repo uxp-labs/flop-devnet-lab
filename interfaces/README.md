@@ -1,7 +1,8 @@
-# Interfaces between the two teams
+# Interfaces between the tools
 
-Shared contracts in uxp-labs/flop-devnet-lab. The Claude team (FLOP Observatory) produces these.
-The Grok team (imd-flop, Seat Court) may import them. Change a schema only after a handoff note.
+Shared contracts in uxp-labs/flop-devnet-lab. FLOP Observatory produces these. imd-flop and Seat
+Court may import them. A schema change is its own commit, with the consumers changed in the same
+pull request.
 
 Status: v0, M0. Everything is computed from saved fixtures. No live chain read exists yet, so every
 result today has `trust: "fixture"`. Do not use a fixture result to decide a real spend or release.
@@ -153,6 +154,6 @@ Known limits (v0):
 
 ## Versioning
 
-- v0 may change. A breaking change gets a new file (`*.v1.schema.json`) and a handoff note first.
-- The Observatory reads imd-flop's ledger and Seat Court's verdict record unchanged. Tell the Claude
-  team before changing those formats.
+- v0 may change. A breaking change gets a new file (`*.v1.schema.json`).
+- The Observatory reads imd-flop's ledger and Seat Court's verdict record unchanged. A change to
+  those formats changes the Observatory's reader in the same pull request.
