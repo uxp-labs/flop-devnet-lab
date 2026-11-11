@@ -121,6 +121,23 @@ npm run build   # then: node dist/bin.js help
 `test/fixtures/job-open/` holds a real quote and its 402 challenge from api.imd.fun, never paid and
 long expired, so the tests sign against the real shapes.
 
+## Checked live
+
+One real order has been paid with this tool, at commit `652451a`, on Ethereum mainnet on 2026-11-11:
+0.5 IMD for an audit job, order `286f6813-7e06-4f14-8703-729bd237180b`. The signer ran on a machine
+with no route to IMD or to Ethereum and a browser sent the four request files.
+
+- Step 3 was signed 218 seconds after the quote was issued and answered `202`, status
+  `payment_pending`, reason `transaction_not_mined`, with the transaction hash.
+- Step 4, sent about a minute later, answered status `admitted` with the job id under
+  `admission.result.jobId`.
+- The payment is transaction
+  `0xac958dd342bb384e14f6c3875c80c6c8464647314d37b5452f3b81296caa4162`, sent and paid for by IMD's
+  recipient address through the x402 Permit2 proxy. The wallet's IMD went down by 0.5, its Permit2
+  allowance by 0.5, its ETH by nothing.
+
+That is one order on one chain. Robinhood Chain and a refused or failed payment have not been seen live.
+
 ## Not built
 
 - It does not send anything. A sender for machines with network access would be a separate small
