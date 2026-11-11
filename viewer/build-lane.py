@@ -316,6 +316,30 @@ def row_matches(row, e, r, reservation, limit):
     row["flop"].append(["observed spend", amount(r.get("settled"))])
     row["flop"] += cap_charge_line(e)
 
+EXACT_DIFFERS = "exact amount differs from the receipt"
+# The kinds where the receipt was read and its identity matches the row, so the two files are compared.
+COMPARED_KINDS = ("disagree", "settled_unknown", "over_limit", "matches")
+
+def exact_flop(digits):
+    """An exact amount in base units (canonical digits) as FLOP text: all FLOP_DECIMALS decimals significant,
+    trailing zeros trimmed, no decimal point for a whole amount. Integer arithmetic only, never a float."""
+    whole, frac = divmod(int(digits), 10 ** FLOP_DECIMALS)
+    frac = str(frac).rjust(FLOP_DECIMALS, "0").rstrip("0")
+    return f"{whole}.{frac}" if frac else str(whole)
+
+def exact_spend(row, e, r, kind):
+    """Money stage 1. A settled row whose ledger spend_raw is an exact amount shows it on its own line as FLOP,
+    and carries the base unit digits as row["spend_raw"]. When the receipt was compared (COMPARED_KINDS) and its
+    settled_raw is an exact amount that differs, the row carries the EXACT_DIFFERS flag. Nothing else on the
+    row changes: the float figures and the exact one are not compared yet, as the right tolerance needs a
+    live receipt."""
+    raw = exact(e.get("spend_raw"))
+    if e.get("state") not in SETTLES or raw is None: return
+    row["spend_raw"] = raw
+    row["flop"].append(["exact spend", f'<span class="mono" title="{raw} base units">{exact_flop(raw)}</span> FLOP'])
+    receipt_raw = exact(r.get("settled_raw")) if kind in COMPARED_KINDS else None
+    if receipt_raw is not None and receipt_raw != raw: row["flags"].append(EXACT_DIFFERS)
+
 # Each kind renders from (row, e, r, reservation, limit); limit is set only for over_limit.
 ROW_KINDS = {"refused": row_refused, "no_receipt": row_no_receipt, "unreadable": row_unreadable, "read_failed": row_read_failed,
              "mismatch": row_mismatch, "disagree": row_disagree, "over_limit": row_over_limit, "matches": row_matches,
@@ -341,6 +365,7 @@ def build_row(e, r):
     cap_charge = amount(e.get("cap_charge"))
     reservation = cap_charge if cap_charge is not None else amount(e.get("quote_padded"))
     ROW_KINDS[kind](row, e, r, reservation, limit)
+    exact_spend(row, e, r, kind)
     # Say it once per row: a limit a chip already names gets no spend flag repeating it.
     named = [text for _, text in row["chips"] or []]
     row["spend_flags"] = [f for f in row["spend_flags"] if f not in named]

@@ -1,6 +1,6 @@
 {
  "file": "viewer-labels.json",
- "description": "Viewer lane labels for one ledger row and its receipt file (FIXER rules V-PRECEDENCE, V-FAILED-READ, V-UNKNOWN-SETTLED, V-LINK-GREY, plus known defects KD-1/KD-2). receipt: an object, a raw string (written as is) or null (no file). Chip text \"DISAGREE\" stands for rules.constants.DISAGREE. reservation: the value on the row's 'reservation' line, or \"absent\". greens: every c-green chip in the row. label_rules names the FIXER rules (rules.json viewer_label_rules) a vector pins; on a known_defect vector they are the rules its target follows and today's output breaks. The label-requester vectors pin the limits of a requester paid row. Swarm audit of 8ddc5d2, finding 5: the row has a job budget, worked out from the job's own running total. Finding 13: the daily cap bounds every call the seat's key pays for, so the row is checked against the seat's daily cap (spent_before, the seat's spend today), then its job budget (job_spent_before, the job's requester spend). A requester row with no job_spent_before was written before finding 13: its spent_before is the job's spend. Review of the audit 8ddc5d2 fixes: the daily cap applies to every row, whatever its payer. A payer that is neither holder nor requester is checked against the daily cap. A limit that applies and cannot be worked out bars the green chain final chip: one amber '<limit> not checked' chip stands in its place and the row keeps 'matches'. On the row with no job_spent_before the job budget is worked out from spent_before and the daily cap is not checked. The label-settled-amount-unknown vectors and the two label-disagree controls after them pin finding 6: settled on both sides with both amounts unknown is agreement, with its own amber label. The label-negative vectors pin finding 7: a negative amount is unknown. The cap-charge vectors pin item 2 of the review of the audit 8ddc5d2 fixes: a settled row whose cap charge is a known amount that is not its settled spend shows a 'cap charge' line, with the ledger reason beside it when there is one, and nothing else on the row changes. Their rule viewer.cap_charge_line gives line: the visible text of the row's 'cap charge' line, or \"absent\". Vectors with status known_defect assert today's output in expect; target is not asserted.",
+ "description": "Viewer lane labels for one ledger row and its receipt file (FIXER rules V-PRECEDENCE, V-FAILED-READ, V-UNKNOWN-SETTLED, V-LINK-GREY, plus known defects KD-1/KD-2). receipt: an object, a raw string (written as is) or null (no file). Chip text \"DISAGREE\" stands for rules.constants.DISAGREE. reservation: the value on the row's 'reservation' line, or \"absent\". greens: every c-green chip in the row. label_rules names the FIXER rules (rules.json viewer_label_rules) a vector pins; on a known_defect vector they are the rules its target follows and today's output breaks. The label-requester vectors pin the limits of a requester paid row. Swarm audit of 8ddc5d2, finding 5: the row has a job budget, worked out from the job's own running total. Finding 13: the daily cap bounds every call the seat's key pays for, so the row is checked against the seat's daily cap (spent_before, the seat's spend today), then its job budget (job_spent_before, the job's requester spend). A requester row with no job_spent_before was written before finding 13: its spent_before is the job's spend. Review of the audit 8ddc5d2 fixes: the daily cap applies to every row, whatever its payer. A payer that is neither holder nor requester is checked against the daily cap. A limit that applies and cannot be worked out bars the green chain final chip: one amber '<limit> not checked' chip stands in its place and the row keeps 'matches'. On the row with no job_spent_before the job budget is worked out from spent_before and the daily cap is not checked. The label-settled-amount-unknown vectors and the two label-disagree controls after them pin finding 6: settled on both sides with both amounts unknown is agreement, with its own amber label. The label-negative vectors pin finding 7: a negative amount is unknown. The cap-charge vectors pin item 2 of the review of the audit 8ddc5d2 fixes: a settled row whose cap charge is a known amount that is not its settled spend shows a 'cap charge' line, with the ledger reason beside it when there is one, and nothing else on the row changes. Their rule viewer.cap_charge_line gives line: the visible text of the row's 'cap charge' line, or \"absent\". Vectors with status known_defect assert today's output in expect; target is not asserted. The exact-spend vectors (money stage 1) use rule viewer.exact_spend: line is the visible text of the row's 'exact spend' line, or \"absent\"; spend_raw is the base unit digits in the row data, or null; differs says whether the row carries the flag that the exact amount differs from the receipt.",
  "status": "current behavior at 3ae1cdf",
  "vectors": [
   {
@@ -2241,6 +2241,655 @@
    "quirks": [
     "Q-AMOUNT-JSON"
    ]
+  },
+  {
+   "id": "exact-spend-settled",
+   "rule": "viewer.exact_spend",
+   "input": {
+    "ledger": {
+     "ts": "2026-11-10T15:00:00Z",
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zSONAR",
+     "provider": "mock",
+     "network": "devnet",
+     "payer": "holder",
+     "state": "settled",
+     "spend": 0.05,
+     "spend_raw": "50000000000000000",
+     "cap_charge": 0.05,
+     "quote_padded": 0.186,
+     "per_call_cap": 1,
+     "daily_cap": 5,
+     "spent_before": 0
+    },
+    "receipt": {
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zSONAR",
+     "state": "settled",
+     "settled": 0.05,
+     "settled_raw": "50000000000000000",
+     "chain_final": false,
+     "http": 200,
+     "error": null
+    }
+   },
+   "expect": {
+    "imd-flop": {
+     "not_applicable": "imd-flop does not render the viewer lane"
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard does not render the viewer lane"
+    },
+    "viewer": {
+     "line": "exact spend 0.05 FLOP",
+     "spend_raw": "50000000000000000",
+     "differs": false
+    }
+   },
+   "note": "money stage 1: a settled row whose ledger spend_raw is an exact amount shows it as FLOP on its own line, all 18 decimals significant, trailing zeros trimmed. The base unit digits are in the row data."
+  },
+  {
+   "id": "exact-spend-one-base-unit",
+   "rule": "viewer.exact_spend",
+   "input": {
+    "ledger": {
+     "ts": "2026-11-10T15:00:00Z",
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zSONAR",
+     "provider": "mock",
+     "network": "devnet",
+     "payer": "holder",
+     "state": "settled",
+     "spend": 0.05,
+     "spend_raw": "1",
+     "cap_charge": 0.05,
+     "quote_padded": 0.186,
+     "per_call_cap": 1,
+     "daily_cap": 5,
+     "spent_before": 0
+    },
+    "receipt": {
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zSONAR",
+     "state": "settled",
+     "settled": 0.05,
+     "settled_raw": "1",
+     "chain_final": false,
+     "http": 200,
+     "error": null
+    }
+   },
+   "expect": {
+    "imd-flop": {
+     "not_applicable": "imd-flop does not render the viewer lane"
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard does not render the viewer lane"
+    },
+    "viewer": {
+     "line": "exact spend 0.000000000000000001 FLOP",
+     "spend_raw": "1",
+     "differs": false
+    }
+   },
+   "note": "money stage 1: the smallest amount keeps all 18 decimals."
+  },
+  {
+   "id": "exact-spend-whole-flop",
+   "rule": "viewer.exact_spend",
+   "input": {
+    "ledger": {
+     "ts": "2026-11-10T15:00:00Z",
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zSONAR",
+     "provider": "mock",
+     "network": "devnet",
+     "payer": "holder",
+     "state": "settled",
+     "spend": 0.05,
+     "spend_raw": "1000000000000000000",
+     "cap_charge": 0.05,
+     "quote_padded": 0.186,
+     "per_call_cap": 1,
+     "daily_cap": 5,
+     "spent_before": 0
+    },
+    "receipt": {
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zSONAR",
+     "state": "settled",
+     "settled": 0.05,
+     "settled_raw": "1000000000000000000",
+     "chain_final": false,
+     "http": 200,
+     "error": null
+    }
+   },
+   "expect": {
+    "imd-flop": {
+     "not_applicable": "imd-flop does not render the viewer lane"
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard does not render the viewer lane"
+    },
+    "viewer": {
+     "line": "exact spend 1 FLOP",
+     "spend_raw": "1000000000000000000",
+     "differs": false
+    }
+   },
+   "note": "money stage 1: no decimal point when the fraction is zero."
+  },
+  {
+   "id": "exact-spend-zero",
+   "rule": "viewer.exact_spend",
+   "input": {
+    "ledger": {
+     "ts": "2026-11-10T15:00:00Z",
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zSONAR",
+     "provider": "mock",
+     "network": "devnet",
+     "payer": "holder",
+     "state": "settled",
+     "spend": 0,
+     "spend_raw": "0",
+     "cap_charge": 0,
+     "quote_padded": 0.186,
+     "per_call_cap": 1,
+     "daily_cap": 5,
+     "spent_before": 0
+    },
+    "receipt": {
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zSONAR",
+     "state": "settled",
+     "settled": 0,
+     "settled_raw": "0",
+     "chain_final": false,
+     "http": 200,
+     "error": null
+    }
+   },
+   "expect": {
+    "imd-flop": {
+     "not_applicable": "imd-flop does not render the viewer lane"
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard does not render the viewer lane"
+    },
+    "viewer": {
+     "line": "exact spend 0 FLOP",
+     "spend_raw": "0",
+     "differs": false
+    }
+   },
+   "note": "money stage 1: an exact zero is shown as 0, as a known amount."
+  },
+  {
+   "id": "exact-spend-max-u128",
+   "rule": "viewer.exact_spend",
+   "input": {
+    "ledger": {
+     "ts": "2026-11-10T15:00:00Z",
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zSONAR",
+     "provider": "mock",
+     "network": "devnet",
+     "payer": "holder",
+     "state": "settled",
+     "spend": 0.05,
+     "spend_raw": "340282366920938463463374607431768211455",
+     "cap_charge": 0.05,
+     "quote_padded": 0.186,
+     "per_call_cap": 1,
+     "daily_cap": 5,
+     "spent_before": 0
+    },
+    "receipt": {
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zSONAR",
+     "state": "settled",
+     "settled": 0.05,
+     "settled_raw": "340282366920938463463374607431768211455",
+     "chain_final": false,
+     "http": 200,
+     "error": null
+    }
+   },
+   "expect": {
+    "imd-flop": {
+     "not_applicable": "imd-flop does not render the viewer lane"
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard does not render the viewer lane"
+    },
+    "viewer": {
+     "line": "exact spend 340282366920938463463.374607431768211455 FLOP",
+     "spend_raw": "340282366920938463463374607431768211455",
+     "differs": false
+    }
+   },
+   "note": "money stage 1: integer arithmetic only, so the largest u128 value is exact."
+  },
+  {
+   "id": "exact-spend-ledger-leading-zeros",
+   "rule": "viewer.exact_spend",
+   "input": {
+    "ledger": {
+     "ts": "2026-11-10T15:00:00Z",
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zSONAR",
+     "provider": "mock",
+     "network": "devnet",
+     "payer": "holder",
+     "state": "settled",
+     "spend": 0.05,
+     "spend_raw": "0050000000000000000",
+     "cap_charge": 0.05,
+     "quote_padded": 0.186,
+     "per_call_cap": 1,
+     "daily_cap": 5,
+     "spent_before": 0
+    },
+    "receipt": {
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zSONAR",
+     "state": "settled",
+     "settled": 0.05,
+     "settled_raw": "50000000000000000",
+     "chain_final": false,
+     "http": 200,
+     "error": null
+    }
+   },
+   "expect": {
+    "imd-flop": {
+     "not_applicable": "imd-flop does not render the viewer lane"
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard does not render the viewer lane"
+    },
+    "viewer": {
+     "line": "exact spend 0.05 FLOP",
+     "spend_raw": "50000000000000000",
+     "differs": false
+    }
+   },
+   "note": "money stage 1: a ledger value with leading zeros (a hand edit) is read through the exact amount rule, so it is the same amount as the receipt's."
+  },
+  {
+   "id": "exact-spend-receipt-differs",
+   "rule": "viewer.exact_spend",
+   "input": {
+    "ledger": {
+     "ts": "2026-11-10T15:00:00Z",
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zSONAR",
+     "provider": "mock",
+     "network": "devnet",
+     "payer": "holder",
+     "state": "settled",
+     "spend": 0.05,
+     "spend_raw": "50000000000000000",
+     "cap_charge": 0.05,
+     "quote_padded": 0.186,
+     "per_call_cap": 1,
+     "daily_cap": 5,
+     "spent_before": 0
+    },
+    "receipt": {
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zSONAR",
+     "state": "settled",
+     "settled": 0.05,
+     "settled_raw": "50000000000000001",
+     "chain_final": false,
+     "http": 200,
+     "error": null
+    }
+   },
+   "expect": {
+    "imd-flop": {
+     "not_applicable": "imd-flop does not render the viewer lane"
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard does not render the viewer lane"
+    },
+    "viewer": {
+     "line": "exact spend 0.05 FLOP",
+     "spend_raw": "50000000000000000",
+     "differs": true
+    }
+   },
+   "note": "money stage 1: the receipt file's raw value is an exact amount and differs from the ledger's spend_raw, so the row carries the flag. The float figures are not compared with the exact one: the right tolerance needs a live receipt."
+  },
+  {
+   "id": "exact-spend-receipt-raw-junk",
+   "rule": "viewer.exact_spend",
+   "input": {
+    "ledger": {
+     "ts": "2026-11-10T15:00:00Z",
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zSONAR",
+     "provider": "mock",
+     "network": "devnet",
+     "payer": "holder",
+     "state": "settled",
+     "spend": 0.05,
+     "spend_raw": "50000000000000000",
+     "cap_charge": 0.05,
+     "quote_padded": 0.186,
+     "per_call_cap": 1,
+     "daily_cap": 5,
+     "spent_before": 0
+    },
+    "receipt": {
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zSONAR",
+     "state": "settled",
+     "settled": 0.05,
+     "settled_raw": "0.05",
+     "chain_final": false,
+     "http": 200,
+     "error": null
+    }
+   },
+   "expect": {
+    "imd-flop": {
+     "not_applicable": "imd-flop does not render the viewer lane"
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard does not render the viewer lane"
+    },
+    "viewer": {
+     "line": "exact spend 0.05 FLOP",
+     "spend_raw": "50000000000000000",
+     "differs": false
+    }
+   },
+   "note": "money stage 1: a receipt raw value that is not an exact amount is unknown, so nothing is compared."
+  },
+  {
+   "id": "exact-spend-receipt-raw-null",
+   "rule": "viewer.exact_spend",
+   "input": {
+    "ledger": {
+     "ts": "2026-11-10T15:00:00Z",
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zSONAR",
+     "provider": "mock",
+     "network": "devnet",
+     "payer": "holder",
+     "state": "settled",
+     "spend": 0.05,
+     "spend_raw": "50000000000000000",
+     "cap_charge": 0.05,
+     "quote_padded": 0.186,
+     "per_call_cap": 1,
+     "daily_cap": 5,
+     "spent_before": 0
+    },
+    "receipt": {
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zSONAR",
+     "state": "settled",
+     "settled": 0.05,
+     "settled_raw": null,
+     "chain_final": false,
+     "http": 200,
+     "error": null
+    }
+   },
+   "expect": {
+    "imd-flop": {
+     "not_applicable": "imd-flop does not render the viewer lane"
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard does not render the viewer lane"
+    },
+    "viewer": {
+     "line": "exact spend 0.05 FLOP",
+     "spend_raw": "50000000000000000",
+     "differs": false
+    }
+   },
+   "note": "money stage 1: no exact amount on the receipt, nothing to compare."
+  },
+  {
+   "id": "exact-spend-ledger-junk",
+   "rule": "viewer.exact_spend",
+   "input": {
+    "ledger": {
+     "ts": "2026-11-10T15:00:00Z",
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zSONAR",
+     "provider": "mock",
+     "network": "devnet",
+     "payer": "holder",
+     "state": "settled",
+     "spend": 0.05,
+     "spend_raw": "0.05",
+     "cap_charge": 0.05,
+     "quote_padded": 0.186,
+     "per_call_cap": 1,
+     "daily_cap": 5,
+     "spent_before": 0
+    },
+    "receipt": {
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zSONAR",
+     "state": "settled",
+     "settled": 0.05,
+     "settled_raw": "50000000000000000",
+     "chain_final": false,
+     "http": 200,
+     "error": null
+    }
+   },
+   "expect": {
+    "imd-flop": {
+     "not_applicable": "imd-flop does not render the viewer lane"
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard does not render the viewer lane"
+    },
+    "viewer": {
+     "line": "absent",
+     "spend_raw": null,
+     "differs": false
+    }
+   },
+   "note": "money stage 1: a ledger spend_raw that is not an exact amount is unknown: no line, and nothing is compared."
+  },
+  {
+   "id": "exact-spend-ledger-absent",
+   "rule": "viewer.exact_spend",
+   "input": {
+    "ledger": {
+     "ts": "2026-11-10T15:00:00Z",
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zSONAR",
+     "provider": "mock",
+     "network": "devnet",
+     "payer": "holder",
+     "state": "settled",
+     "spend": 0.05,
+     "cap_charge": 0.05,
+     "quote_padded": 0.186,
+     "per_call_cap": 1,
+     "daily_cap": 5,
+     "spent_before": 0
+    },
+    "receipt": {
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zSONAR",
+     "state": "settled",
+     "settled": 0.05,
+     "settled_raw": "50000000000000000",
+     "chain_final": false,
+     "http": 200,
+     "error": null
+    }
+   },
+   "expect": {
+    "imd-flop": {
+     "not_applicable": "imd-flop does not render the viewer lane"
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard does not render the viewer lane"
+    },
+    "viewer": {
+     "line": "absent",
+     "spend_raw": null,
+     "differs": false
+    }
+   },
+   "note": "money stage 1: a row written before money stage 1 has no spend_raw: unknown, never 0. Not flagged against the receipt's raw value."
+  },
+  {
+   "id": "exact-spend-pending-row",
+   "rule": "viewer.exact_spend",
+   "input": {
+    "ledger": {
+     "ts": "2026-11-10T15:00:00Z",
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zSONAR",
+     "provider": "mock",
+     "network": "devnet",
+     "payer": "holder",
+     "state": "estimated",
+     "spend": null,
+     "spend_raw": "50000000000000000",
+     "cap_charge": 0.186,
+     "quote_padded": 0.186,
+     "per_call_cap": 1,
+     "daily_cap": 5,
+     "spent_before": 0
+    },
+    "receipt": {
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zSONAR",
+     "state": "estimated",
+     "settled": null,
+     "settled_raw": "50000000000000000",
+     "chain_final": false,
+     "http": 200,
+     "error": null
+    }
+   },
+   "expect": {
+    "imd-flop": {
+     "not_applicable": "imd-flop does not render the viewer lane"
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard does not render the viewer lane"
+    },
+    "viewer": {
+     "line": "absent",
+     "spend_raw": null,
+     "differs": false
+    }
+   },
+   "note": "money stage 1: only a settled row shows the exact spend."
+  },
+  {
+   "id": "exact-spend-identity-mismatch",
+   "rule": "viewer.exact_spend",
+   "input": {
+    "ledger": {
+     "ts": "2026-11-10T15:00:00Z",
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zSONAR",
+     "provider": "mock",
+     "network": "devnet",
+     "payer": "holder",
+     "state": "settled",
+     "spend": 0.05,
+     "spend_raw": "50000000000000000",
+     "cap_charge": 0.05,
+     "quote_padded": 0.186,
+     "per_call_cap": 1,
+     "daily_cap": 5,
+     "spent_before": 0
+    },
+    "receipt": {
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zOTHER",
+     "state": "settled",
+     "settled": 0.05,
+     "settled_raw": "7",
+     "chain_final": false,
+     "http": 200,
+     "error": null
+    }
+   },
+   "expect": {
+    "imd-flop": {
+     "not_applicable": "imd-flop does not render the viewer lane"
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard does not render the viewer lane"
+    },
+    "viewer": {
+     "line": "exact spend 0.05 FLOP",
+     "spend_raw": "50000000000000000",
+     "differs": false
+    }
+   },
+   "note": "money stage 1: the line is the ledger's own figure. A receipt whose identity does not match is not compared, so no flag."
   }
  ]
 }
