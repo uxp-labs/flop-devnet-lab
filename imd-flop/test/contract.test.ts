@@ -17,6 +17,7 @@ import { ledgerFile, receiptsDir } from "../src/paths.js";
 import type { CompleteReq, CompleteRes, Provider } from "../src/providers.js";
 import { classifyReceipt, RECEIPT_STATES, STAGE_GATEWAY, type GatewayReceipt } from "../src/receipts.js";
 import { padQuote, TEMPLATE_PAD } from "../src/run.js";
+import { floor6 } from "../src/rounding.js";
 import { DISAGREE, reconcile, SETTLES, UNRESOLVED } from "../src/settlement.js";
 import { cli, readLines, readySeat, tmpHome } from "./helpers.js";
 import { decode, forPart, rules, unreferencedLabelRules, unreferencedQuirks, vectors, type Json } from "./lib/contract-vectors.js";
@@ -88,6 +89,7 @@ const adapters: Record<string, (i: Json, want: Json) => Promise<Json> | Json> = 
     return { accepted: true, value: (await cli(h, ["cap", "show", "--json"])).json().cap.daily };
   },
   "amount.json": (i) => ({ known_settled: knownAmount(i.value), usable_cap_charge: usableCapCharge(i.value) }),
+  "rounding.floor6": (i) => ({ floor: floor6(i.value) }),
   // An input with no value key stands for a missing field: i.value is undefined.
   "amount.exact": (i) => ({ exact: exactAmount(i.value) }),
   "amount.reserved": (i) => ({ reserved: classifyReceipt({ request_id: "r", reserved_spend: i.value } as GatewayReceipt, { job: "j", provider: "mock" }).reserved }),

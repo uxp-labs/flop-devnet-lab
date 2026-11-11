@@ -4,7 +4,7 @@ Inputs:  mock-receipts/ledger.jsonl + mock-receipts/*.json  (written by imd-flop
          lane-examples.json                                  (example data for kinds the demo lacks)
 Output:  rewrites the block between <!-- lane:start --> and <!-- lane:end --> in the viewer HTML.
 No network. Unknown spend renders as an empty slot, never 0."""
-import json, glob, os, re, sys, html
+import json, glob, math, os, re, sys, html
 from datetime import datetime
 from zoneinfo import ZoneInfo
 D = os.path.dirname(os.path.abspath(__file__))
@@ -31,7 +31,16 @@ STAGE_GATEWAY = _C["STAGE_GATEWAY"]["value"]
 ET = ZoneInfo("America/New_York")
 
 def num(v): return BLANK if v is None else f'<span class="mono">{v}</span>'
-def r6(x): return float(f"{x:.6f}")
+SCALE = 1e6
+NOISE = 1e-6  # in scaled units, so 1e-12 FLOP
+def floor6(n):
+    """Room left rounds down to 6 decimals, the twin of imd-flop's rounding.ts floor6; pinned for both by
+    contract/vectors/rounding.json. A value within 1e-12 of a 1e-6 boundary counts as on it, so float noise
+    does not move a 6 decimal amount below 8192 FLOP. Rounding never adds room, so a row over its limit by
+    less than 1e-6 FLOP is still over it."""
+    scaled = n * SCALE
+    nearest = round(scaled)
+    return (nearest if abs(scaled - nearest) <= NOISE else math.floor(scaled)) / SCALE
 def esc(v): return html.escape("" if v is None else str(v), quote=True)
 def amount(v):
     """A file value used as an amount: a finite int/float that is not negative (and not a bool), else None
@@ -147,7 +156,7 @@ def running_total(e, lim):
 
 def spend_limit(e):
     """The spend limits that apply to this row, each with what is left of it after the row's cap_charge, as a
-    list of (limit, left) in checked order (cap math uses cap_charge). A payer that is neither holder nor
+    list of (limit, left) in checked order (cap math uses cap_charge). left rounds down (floor6). A payer that is neither holder nor
     requester is checked against the daily cap, its spent_before read as the seat's total. left is None when
     the limit could not be worked out: an input is unknown, or the row does not hold that limit's running
     total (before_two_totals). Never a guess."""
@@ -156,7 +165,7 @@ def spend_limit(e):
     for lim in limits:
         cap, spent = amount(e.get(lim["field"])), running_total(e, lim)
         if e.get(lim["field"]) is not None and cap is None: raise ValueError(f'{lim["field"]} is not an amount')
-        applied.append((lim, r6(cap - spent - cap_charge) if None not in (cap, spent, cap_charge) else None))
+        applied.append((lim, floor6(cap - spent - cap_charge) if None not in (cap, spent, cap_charge) else None))
     return applied
 
 def below_zero(applied):

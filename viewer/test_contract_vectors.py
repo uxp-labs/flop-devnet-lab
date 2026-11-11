@@ -30,6 +30,10 @@ def amount_exact(i):
     return {"exact": NS["exact"](i.get("value"))}
 
 
+def rounding_floor6(i):
+    return {"floor": NS["floor6"](i["value"])}
+
+
 def receipt_state(i):
     return {"settles": i["state"] in NS["SETTLES"]}
 
@@ -104,7 +108,7 @@ def reconcile(i):
     return {"verdict": verdict}
 
 
-ADAPTERS = {"amount.json": amount_json, "amount.exact": amount_exact, "receipt.state": receipt_state, "identity": identity, "read.failed": read_failed, "viewer.label": label,
+ADAPTERS = {"amount.json": amount_json, "amount.exact": amount_exact, "rounding.floor6": rounding_floor6, "receipt.state": receipt_state, "identity": identity, "read.failed": read_failed, "viewer.label": label,
             "viewer.reservation_line": reservation_line, "viewer.cap_charge_line": cap_charge_line, "viewer.exact_spend": exact_spend, "reconcile": reconcile}
 
 

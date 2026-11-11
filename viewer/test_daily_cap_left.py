@@ -21,6 +21,14 @@ class DailyCapLeft(unittest.TestCase):
                 self.assertGreaterEqual(rows[0]["daily_left"], 0)
                 self.assertNotIn(FLAG, visible(page))
 
+    def test_over_by_less_than_one_step_is_flagged(self):
+        """Money stage 1, item 5a. Room left rounds down, as imd-flop's rounding.ts floor6. Measured before the
+        fix: a daily cap of 0.2 with 0.15 spent and a charge of 0.0500004 showed -0.0 and no flag."""
+        rows, page = lane([dict(LED, daily_cap=0.2, spent_before=0.15, cap_charge=0.0500004)], {"req-1": dict(REC)})
+        self.assertEqual(rows[0]["daily_left"], -0.000001)
+        self.assertIn(FLAG, rows[0]["spend_flags"])
+        self.assertIn(FLAG, visible(page))
+
     def test_unknown_daily_cap_left_is_not_flagged(self):
         rows, page = lane([dict(LED, spent_before=None)], {"req-1": dict(REC)})
         self.assertIsNone(rows[0]["daily_left"])
