@@ -213,11 +213,16 @@ describe("values decoded wrong, or valid values refused", () => {
     expect(deriveShape(md)).toMatchObject({ spec_name: "other-runtime", spec_version: 1 });
   });
 
-  it("DEFECT 12: the plain form the differential tests compare in takes our u64 as a number as readily as a string, so it cannot see the number or string rule", () => {
+  it("review defect 12, fixed: the plain form holds our side to the number or string rule: a u64 given as a number, or a u32 as a string, fails", () => {
     const u64 = idOf((t) => t.def.kind === "primitive" && t.def.primitive === "u64");
     const u32id = idOf((t) => t.def.kind === "primitive" && t.def.primitive === "u32");
-    expect(plain(MD, "ours", u64, 5)).toBe("5");
-    expect(plain(MD, "ours", u32id, "5")).toBe("5");
+    expect(thrown(() => plain(MD, "ours", u64, 5)).message).toBe("ours: a u64 is a decimal string, not: 5");
+    expect(thrown(() => plain(MD, "ours", u32id, "5")).message).toBe('ours: a u32 is a number, not: "5"');
+    expect(thrown(() => plain(MD, "ours", u64, "05")).cls).toBe("Error");
+    expect(plain(MD, "ours", u64, "5")).toBe("5");
+    expect(plain(MD, "ours", u32id, 5)).toBe("5");
+    // The reference side keeps its own form: a bigint or a number at any width.
+    expect(plain(MD, "reference", u64, 5n)).toBe("5");
   });
 
   it("HELD: on the recorded metadata, random valid values of every type decode as the reference decodes them, but for Compact<()> and a leading BOM", () => {

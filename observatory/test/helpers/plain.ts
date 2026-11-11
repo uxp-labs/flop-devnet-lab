@@ -2,7 +2,8 @@
 // reference (polkadot-api, a dev dependency for tests only) can be compared value by value. Each
 // side keeps its own conventions; this walks the type, from the parsed metadata, beside the value
 // and writes both the same way:
-//   every integer and compact   a decimal string
+//   every integer and compact   a decimal string (ours must give u8 to u32 and i8 to i32 as a
+//                               number and every wider integer as a decimal string)
 //   bool, char, str             as they are
 //   bytes ([u8; N], Vec<u8>)    0x hex
 //   fields                      none null, named an object, one unnamed the field, several a list
@@ -16,6 +17,7 @@ import type { Field, Metadata, TypeEntry } from "../../src/scale/metadata.js";
 export type Plain = null | boolean | string | Plain[] | { [k: string]: Plain };
 export type Side = "ours" | "reference";
 
+const NARROW = new Set(["u8", "u16", "u32", "i8", "i16", "i32"]);
 const hexOf = (b: Uint8Array) => `0x${Buffer.from(b).toString("hex")}`;
 const ss58 = AccountId();
 
@@ -69,8 +71,12 @@ export function plain(md: Metadata, side: Side, id: number, v: unknown, depth = 
     case "primitive": {
       if (d.primitive === "bool") return typeof v === "boolean" ? v : fail(`${side}: not a bool`, v);
       if (d.primitive === "str" || d.primitive === "char") return typeof v === "string" ? v : fail(`${side}: not a string`, v);
+      if (side === "ours") {
+        // Our rule: u8 to u32 and i8 to i32 a number, every wider integer a decimal string.
+        if (NARROW.has(d.primitive)) return typeof v === "number" && Number.isSafeInteger(v) ? String(v) : fail(`ours: a ${d.primitive} is a number, not`, v);
+        return typeof v === "string" && /^-?(?:0|[1-9]\d*)$/.test(v) ? v : fail(`ours: a ${d.primitive} is a decimal string, not`, v);
+      }
       if (typeof v === "bigint" || (typeof v === "number" && Number.isSafeInteger(v))) return String(v);
-      if (side === "ours" && typeof v === "string" && /^-?\d+$/.test(v)) return v;
       return fail(`${side}: not an integer`, v);
     }
     case "compact": {
