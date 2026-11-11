@@ -163,7 +163,8 @@ describe("TS-L5 refresh books a settlement learned under an unchanged state", ()
     expect(rows(home, id).at(-1)).toMatchObject({ state: "settled", spend: null, cap_charge: 0.186 });
     const refreshed = await refresh(home, id, new P({ state: "settled", settled: 0.05 }));
     expect(refreshed.code, refreshed.err).toBe(0);
-    expect(rows(home, id).at(-1)).toMatchObject({ state: "settled", spend: 0.05, cap_charge: 0.05 });
+    // Moved (hold floor): charged 0.05 before, the 0.186 hold now.
+    expect(rows(home, id).at(-1)).toMatchObject({ state: "settled", spend: 0.05, cap_charge: 0.186 });
     expect(refreshed.json().ledger_spend).toBe(0.05);
   });
 });

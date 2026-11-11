@@ -203,7 +203,8 @@ describe("v3 receipt refresh writes the ledger", () => {
     const refreshed = await cli(home, ["receipt", id, "--refresh", "--json", "--seat", SEAT], { provider: refresher });
     expect(refreshed.code, refreshed.err).toBe(0);
     const rows = readLines(join(home, "ledger.jsonl")) as { request_id: string | null; state: string; spend: number | null; cap_charge: number | null }[];
-    expect(rows.filter((row) => row.request_id === id).at(-1)).toMatchObject({ state: "settled", spend: 0.05, cap_charge: 0.05 });
+    // Moved (hold floor): charged 0.05 before, the 0.186 hold now.
+    expect(rows.filter((row) => row.request_id === id).at(-1)).toMatchObject({ state: "settled", spend: 0.05, cap_charge: 0.186 });
   });
 
   it("keeps the reservation and says the ledger disagrees when the refresh write fails", async () => {

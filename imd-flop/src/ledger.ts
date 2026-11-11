@@ -45,7 +45,15 @@ export interface LedgerEntry {
   // read it, and the cap is computed from cap_charge alone. Rows written before money stage 1 lack the field:
   // a missing value is unknown, never 0.
   spend_raw?: string | null;
-  cap_charge: number; // known finite settled spend (explicit 0 included), or while spend is unknown the padded quote; either is raised to the reported cost when that is higher
+  // The hold floor: from the moment the call is sent, the padded quote it was admitted with, raised by a
+  // settled spend or a reported cost above it, never lowered by a gateway read (settlement.ts decideBooking).
+  // 0 on a refused_local row: nothing was sent. So the cap counts what each call was allowed to spend.
+  // Rows an older version booked below their hold are not migrated.
+  cap_charge: number;
+  // True when a trusted receipt read was booked and left the row in state sent (a receipt with no state):
+  // the gateway knows the request, so a "nothing was sent" report does not release the hold (settlement.ts
+  // decideFailure). Absent otherwise.
+  receipt_seen?: boolean;
   http: number | null;
   mock: boolean;
 }

@@ -107,7 +107,7 @@ describe("R2 (medium): a trusted receipt with no state does not beat \"nothing w
   // state, so the row stays sent (read first) or refused_local (report first) and the hold is released.
   const noState = (id: string) => receiptFor(id, { state: null, reserved_spend: 0.186 });
 
-  it.fails("read first: a refresh books a trusted receipt with no state, then the call fails before send: the hold stays", async () => {
+  it("read first: a refresh books a trusted receipt with no state, then the call fails before send: the hold stays", async () => {
     const h = await ready();
     const complete = async (req: CompleteReq) => {
       const r = await cli(h, refreshArgs(req.requestId), { provider: new P({ read: noState }) });
@@ -118,7 +118,7 @@ describe("R2 (medium): a trusted receipt with no state does not beat \"nothing w
     expect(await today(h)).toBe(0.186);
   });
 
-  it.fails("report first: the call fails before send, then a refresh reads a trusted receipt with no state: the hold comes back", async () => {
+  it("report first: the call fails before send, then a refresh reads a trusted receipt with no state: the hold comes back", async () => {
     const h = await ready();
     expect((await cli(h, runArgs(), { provider: new P({ complete: preSend }) })).code).toBe(11);
     const rid = ledger(h)[0].request_id!;
@@ -150,7 +150,7 @@ describe("R9 (high): a gateway settlement below the hold frees room that a later
   // refusal, no DISAGREE. Found by the stress block with a gateway stub that answered differently per read.
   const settledAt = (spend: number) => (id: string) => receiptFor(id, { state: "settled", settled_spend: spend });
 
-  it.fails("cap 0.3: A settles at 0.01, B is admitted at 0.186, a refresh of A reads settled 0.186: the day stays within 0.3", async () => {
+  it("cap 0.3: A settles at 0.01, B is admitted at 0.186, a refresh of A reads settled 0.186: the day stays within 0.3", async () => {
     const h = await ready("0.3");
     const a = await cli(h, runArgs("jA"), { provider: new P({ read: settledAt(0.01) }) });
     expect(a.code, a.err).toBe(0);
@@ -160,7 +160,7 @@ describe("R9 (high): a gateway settlement below the hold frees room that a later
     expect(await today(h)).toBeLessThanOrEqual(0.3);
   });
 
-  it.fails("cap 0.3: while A waits, a refresh books A settled 0.01 and B is admitted; A's completion reports cost 0.186: the day stays within 0.3", async () => {
+  it("cap 0.3: while A waits, a refresh books A settled 0.01 and B is admitted; A's completion reports cost 0.186: the day stays within 0.3", async () => {
     const h = await ready("0.3");
     const complete = async (req: CompleteReq): Promise<CompleteRes> => {
       expect((await cli(h, refreshArgs(req.requestId), { provider: new P({ read: settledAt(0.01) }) })).code).toBe(0);
@@ -185,12 +185,12 @@ describe("R5 (medium): the exact spend stays beside a float spend it does not de
   const settled005 = trusted("settled", 0.05, "50000000000000000");
   const after = (prev: typeof hold, read: ReturnType<typeof trusted>) => ({ ...prev, ...decideBooking(prev, read, null).booking }) as typeof hold;
 
-  it.fails("released (float unknown, exact 0.06) then settled 0.05 (exact 0.05): the row's exact spend is 0.05's own", () => {
+  it("released (float unknown, exact 0.06) then settled 0.05 (exact 0.05): the row's exact spend is 0.05's own", () => {
     const row = after(after(hold, releasedNoFloat), settled005);
     expect({ spend: row.spend, spend_raw: row.spend_raw }).toEqual({ spend: 0.05, spend_raw: "50000000000000000" });
   });
 
-  it.fails("settled 0.05 (exact 0.05) then released (float unknown, exact 0.06): the exact spend still describes 0.05", () => {
+  it("settled 0.05 (exact 0.05) then released (float unknown, exact 0.06): the exact spend still describes 0.05", () => {
     const row = after(after(hold, settled005), releasedNoFloat);
     expect({ spend: row.spend, spend_raw: row.spend_raw }).toEqual({ spend: 0.05, spend_raw: "50000000000000000" });
   });

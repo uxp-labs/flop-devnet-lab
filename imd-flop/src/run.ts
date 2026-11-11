@@ -13,7 +13,7 @@ import { checkBudget, noRoom, padQuote, requireCap, validateJob, validatePayer, 
 import { appendLedger, jobSpent, LedgerLockError, spentToday, UnusableLedgerCharge, utcDay, withLedgerLock, type LedgerEntry } from "./ledger.js";
 import { classifyReceipt, type Classified } from "./receipts.js";
 import { bookFailure, bookRead } from "./booking.js";
-import { DISAGREE, isFreshRead, receiptIdentity, reportedCost, SETTLES } from "./settlement.js";
+import { DISAGREE, isFreshRead, PAST_ADMITTED, receiptIdentity, reportedCost, SETTLES } from "./settlement.js";
 import { receiptPath, receiptVerdicts, writeReceipt } from "./receipt-store.js";
 import { responsePath } from "./response-store.js";
 import type { Provider } from "./providers.js";
@@ -89,7 +89,10 @@ function keptByLedger(row: LedgerEntry): string {
   return SETTLES.has(row.state) ? `The ledger already holds a settlement for this request (${row.state}); it was kept.` : `The ledger kept its ${row.state} row for this request.`;
 }
 
-/** What run needs from its caller. `warn` receives the DISAGREE line when run's own receipt read is not booked. */
+/**
+ * What run needs from its caller. `warn` receives the DISAGREE line when run's own receipt read is not
+ * booked, and the PAST_ADMITTED line when its booking puts the day in a state the cap did not admit.
+ */
 export interface RunDeps {
   fetch?: Fetch;
   ethRpc?: string;
@@ -313,8 +316,9 @@ export async function runJob(h: string, provider: Provider, o: RunOpts, deps: Ru
   // releases the reservation. If the step throws, the answer is in the response file written above.
   const read = { fresh: isFreshRead(rr), identityOk, redacted: receiptRedacted, state: classified.state, settled: classified.settled, settledRaw: classified.settled_raw };
   const own = { flag: classified.flag, cost_reported: reportedCost(res.usage?.cost_flop), http: rr.http };
-  const { outcome, row } = bookRead(h, requestId, read, own, sent);
+  const { outcome, row, pastAdmitted } = bookRead(h, requestId, read, own, sent);
   if (outcome === "disagree") deps.warn(DISAGREE);
+  if (pastAdmitted) deps.warn(PAST_ADMITTED);
 
   const receipt = { ...receipt0, ...(await receiptVerdicts(h, receipt0, row)) };
   return { request_id: requestId, job, provider: provider.name, payer, quote_padded: q.padded, cap_charge: row.cap_charge, receipt, response_file: responseFile, text, ...(withheld !== undefined ? { withheld } : {}), link_bypassed: linkBypassed };

@@ -19,7 +19,7 @@ import { classifyReceipt, RECEIPT_STATES, STAGE_GATEWAY, type GatewayReceipt } f
 import { MIN_CAP } from "../src/policy.js";
 import { padQuote, TEMPLATE_PAD } from "../src/run.js";
 import { floor6 } from "../src/rounding.js";
-import { DISAGREE, reconcile, SETTLES, UNRESOLVED } from "../src/settlement.js";
+import { DISAGREE, PAST_ADMITTED, reconcile, SETTLES, UNRESOLVED } from "../src/settlement.js";
 import { cli, readLines, readySeat, tmpHome } from "./helpers.js";
 import { decode, forPart, rules, unreferencedLabelRules, unreferencedQuirks, vectors, type Json } from "./lib/contract-vectors.js";
 
@@ -58,6 +58,8 @@ async function ready(cap = "1") {
   return h;
 }
 const pick = (got: Json, want: Json) => Object.fromEntries(Object.keys(want).map((k) => [k, got[k]]));
+/** A row's reason with the PAST_ADMITTED text written as its name, as the vectors write it. */
+const reasonOf = (row: Row) => (row.reason === null ? null : row.reason.split(rules.constants.PAST_ADMITTED.value).join("PAST_ADMITTED"));
 const lastOf = (rows: Row[]) => { const r = rows[rows.length - 1]; return { state: r.state, spend: r.spend, cap_charge: r.cap_charge }; };
 /** The latest row's exact spend (money stage 1), or "absent" when the row has no such field. */
 const spendRawOf = (rows: Row[]) => { const r = rows[rows.length - 1] as Row & { spend_raw?: unknown }; return "spend_raw" in r ? r.spend_raw : "absent"; };
@@ -136,7 +138,7 @@ const adapters: Record<string, (i: Json, want: Json) => Promise<Json> | Json> = 
     const h = await ready(i.cap ?? "1");
     const r = await cli(h, runArgs(["--max-tokens", "8"]), { provider: new P({ complete: i.complete, presendMessage: i.presend_message, costFlop: i.cost_flop, read: i.read }) });
     const rows = ledger(h);
-    const got: Json = { exit: r.code, states: rows.map((x) => x.state), last: lastOf(rows), reason: rows[rows.length - 1].reason, spend_raw: spendRawOf(rows) };
+    const got: Json = { exit: r.code, states: rows.map((x) => x.state), last: lastOf(rows), reason: reasonOf(rows[rows.length - 1]), spend_raw: spendRawOf(rows), stderr_past_admitted: r.err.includes(rules.constants.PAST_ADMITTED.value) };
     if ("stderr_contains" in want) got.stderr_contains = (want.stderr_contains as string[]).filter((s) => r.err.includes(s));
     return pick(got, want);
   },
@@ -163,6 +165,8 @@ const adapters: Record<string, (i: Json, want: Json) => Promise<Json> | Json> = 
       last: lastOf(rows),
       spend_raw: spendRawOf(rows),
       stderr_disagree: r.err.includes(rules.constants.DISAGREE.value),
+      stderr_past_admitted: r.err.includes(rules.constants.PAST_ADMITTED.value),
+      reason: reasonOf(rows[rows.length - 1]),
       file_absent: (want.file_absent ?? []).filter((k: string) => !(k in file)),
       file_present: (want.file_present ?? []).filter((k: string) => k in file),
     };
@@ -192,10 +196,11 @@ describe("contract files", () => {
     expect(EXACT_BOUND.toString()).toBe(c.EXACT_AMOUNT_BOUND.value);
     expect(EXACT_BOUND).toBe(2n ** 128n);
   });
-  it("settlement.ts SETTLES, UNRESOLVED and DISAGREE match rules.json", () => {
+  it("settlement.ts SETTLES, UNRESOLVED, DISAGREE and PAST_ADMITTED match rules.json", () => {
     expect([...SETTLES]).toEqual(rules.constants.SETTLES.value);
     expect([...UNRESOLVED]).toEqual(rules.constants.UNRESOLVED.value);
     expect(DISAGREE).toBe(rules.constants.DISAGREE.value);
+    expect(PAST_ADMITTED).toBe(rules.constants.PAST_ADMITTED.value);
   });
   it("reconcile vectors expect the same verdict from imd-flop and the viewer, except where a quirk says why not", () => {
     const shared = vectors.filter((v) => v.rule === "reconcile");

@@ -15,7 +15,7 @@ import { receiptsDir } from "./paths.js";
 import type { Provider } from "./providers.js";
 import { classifyReceipt, type Classified, type MatchResult } from "./receipts.js";
 import { redactFlagged } from "./secrets.js";
-import { DISAGREE, isFreshRead, receiptIdentity, reconcile, type StoredReceipt } from "./settlement.js";
+import { DISAGREE, isFreshRead, PAST_ADMITTED, receiptIdentity, reconcile, type StoredReceipt } from "./settlement.js";
 import { readJson, writeJsonSafe } from "./store.js";
 
 export type SavedReceipt = Classified & { seat: string; mock_scenario?: string };
@@ -123,8 +123,9 @@ export const LEDGER_BUSY = "ledger busy; the receipt read was stored and nothing
  * `receipt <id> --refresh`: read the receipt again, store it, and book what it proves through the booking
  * step, against the latest ledger row of the request. `warn` receives one line when the read is not
  * booked: LEDGER_BUSY when the ledger lock could not be taken (LedgerLockError), and DISAGREE when the
- * booking step refused the read or threw anything else, a failed append for one. Whether the stored receipt and the ledger disagree afterwards is not decided
- * here: receiptVerdicts reads it from the files.
+ * booking step refused the read or threw anything else, a failed append for one. It also receives
+ * PAST_ADMITTED when the booking puts the day in a state the cap did not admit. Whether the stored receipt
+ * and the ledger disagree afterwards is not decided here: receiptVerdicts reads it from the files.
  */
 export async function refreshReceipt(
   h: string,
@@ -150,6 +151,7 @@ export async function refreshReceipt(
     if (booked.outcome === "no_row") return { saved, ledgerRow: undefined };
     // Disagree: a read below a booked settlement, or an unknown charge with no proven settlement (never substitute 0).
     if (booked.outcome === "disagree") warn(DISAGREE);
+    if (booked.pastAdmitted) warn(PAST_ADMITTED);
     return { saved, ledgerRow: booked.row };
   } catch (e) {
     // The booking step could not run. The read is stored and not booked, and the latest row keeps its

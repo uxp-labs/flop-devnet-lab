@@ -19,6 +19,12 @@ import { exactAmount, knownAmount } from "./amount.js";
 export const SETTLES: ReadonlySet<string> = new Set(["settled", "released"]);
 /** Shown (stderr, receipt status) when the ledger cannot be reconciled with the receipt. Same text as the viewer. */
 export const DISAGREE = "receipt and ledger disagree; reservation held, chain-final green blocked";
+/**
+ * Printed on stderr, and recorded in the row's reason, by a booking that puts the day in a state the cap did
+ * not admit (decideBooking, pastAdmitted). There are two such bookings: a released hold that comes back, and
+ * a charge raised above the call's padded quote.
+ */
+export const PAST_ADMITTED = "booked past what the cap admitted; the day may end over its cap";
 
 /** A fresh read is an HTTP 200 answer carrying a receipt object. */
 export function isFreshRead(rr: { http: unknown; receipt: unknown }): boolean {
@@ -111,6 +117,13 @@ export interface Booking<C = number> {
    * no cap, quote, charge or settlement decision reads it. Absent on a row written before money stage 1.
    */
   spend_raw?: string | null;
+  /**
+   * True when a trusted read of this request was booked and left the row in state sent (a receipt with no
+   * state): the gateway knows the request, so decideFailure never releases its hold on "nothing was sent".
+   * Every other state a trusted read leaves (reserved, estimated, settled, released) already says so. Absent
+   * otherwise, and on a row written before the hold floor.
+   */
+  receipt_seen?: boolean;
 }
 
 /** usage.cost_flop as the completion reported it. It counts only when it is a finite number. Recorded, never a settlement. */
@@ -118,14 +131,15 @@ export function reportedCost(value: unknown): number | null {
   return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
 
-/** A reported cost may raise a charge, never lower it: a hold and a proven settlement alike. */
+/** A reported cost may raise a charge, never lower it. */
 function raisedBy(charge: number, costReported: number | null): number {
   return costReported !== null ? Math.max(charge, costReported) : charge;
 }
 
 /**
  * A booked known settlement is never lowered by a later read. True when the row is in a settling state
- * with a known spend and a trusted read settles below it.
+ * with a known spend and a trusted read settles below it. This is about the spend field, what the gateway
+ * says was spent. The cap charge has its own floor (holdFloor).
  */
 function lowersSettlement(prev: { state: string; spend: unknown }, o: ReadOutcome): boolean {
   const booked = SETTLES.has(prev.state) ? knownAmount(prev.spend) : null;
@@ -133,32 +147,40 @@ function lowersSettlement(prev: { state: string; spend: unknown }, o: ReadOutcom
   return booked !== null && settled !== null && settled < booked;
 }
 
-/** The state after a read. Only a trusted read moves it, and never from a settling state to a non settling one. */
+/**
+ * The state after a read. Only a trusted read moves it, and never from a settling state to a non settling
+ * one. A trusted read with no state moves no state forward. On a released row (refused_local) it still shows
+ * the gateway knows the request, so the row goes back to sent: the call was sent after all.
+ */
 function stateAfter(prev: string, o: ReadOutcome): string {
-  if (!trustedRead(o) || o.state === null) return prev;
+  if (!trustedRead(o)) return prev;
+  if (o.state === null) return prev === "refused_local" ? "sent" : prev;
   return SETTLES.has(prev) && !SETTLES.has(o.state) ? prev : o.state;
 }
 
 /**
  * The exact spend after a read that is booked (money stage 1): the row's spend_raw, the exact spend in base
  * units (10^18 per FLOP) as a canonical digit string, or null for unknown. It describes the booked float
- * spend, so it moves with it. `spend` is the float spend the read books.
- *  - When the read changes the float spend from one known amount to a different known amount, the exact
- *    spend is that read's own: its exact amount (amount.ts exactAmount), or unknown.
- *  - Otherwise it only rises: only a trusted read in a settling state brings an exact amount, an unknown
- *    booked one is filled, a higher one replaces a lower one, and an equal or lower one changes nothing. A
- *    booked value that is not an exact amount (a row written before money stage 1 has none) is unknown,
- *    never 0.
+ * spend, so the two are set as a pair. `settled` is the float spend this read books, or null when it books
+ * none.
+ *  - A read that books a float spend the row did not hold (the row's float was unknown, or a different
+ *    known amount) sets the pair: its own exact amount (amount.ts exactAmount), or unknown.
+ *  - A read that books no float spend never sets or changes the exact spend beside a known float spend.
+ *  - Otherwise (the same float spend again, or no float spend on either side) the exact spend only rises:
+ *    only a trusted read in a settling state brings an exact amount, an unknown booked one is filled, a
+ *    higher one replaces a lower one, and an equal or lower one changes nothing. A booked value that is not
+ *    an exact amount (a row written before money stage 1 has none) is unknown, never 0.
  * decideBooking does not ask this for a read it refuses: that read sets nothing.
  * Per FLOP's own sources, read 2026-11-11: the chain counts money in whole base units in a u128, and the
  * gateway's settled_spend_raw is the exact amount, while settled_spend comes from a legacy floating point
  * ledger. The float and exact figures are not compared yet: the right tolerance needs a live receipt.
  */
-function exactAfter(prev: { spend: unknown; spend_raw?: string | null }, o: ReadOutcome, spend: number | null): string | null | undefined {
+function exactAfter(prev: { spend: unknown; spend_raw?: string | null }, o: ReadOutcome, settled: number | null): string | null | undefined {
   const booked = prev.spend_raw;
   const incoming = trustedRead(o) && o.state !== null && SETTLES.has(o.state) ? exactAmount(o.settledRaw) : null;
   const before = knownAmount(prev.spend);
-  if (before !== null && spend !== null && spend !== before) return incoming;
+  if (settled !== null && settled !== before) return incoming;
+  if (settled === null && before !== null) return booked;
   if (incoming === null) return booked;
   const known = exactAmount(booked);
   return known === null || BigInt(incoming) > BigInt(known) ? incoming : booked;
@@ -171,59 +193,97 @@ export interface PrevBooking<C> extends Booking<C> {
 }
 
 /**
- * The charge held when no settlement is booked from a read: the booked charge, or null when that is not a
- * known amount. One exception: a trusted read that moves a refused_local row shows the gateway holds the
- * request after all, so the reservation comes back. That hold is the row's padded quote, or null when the
- * padded quote is not a known amount.
+ * The hold floor: the least the cap charge can be after a read, before a settlement or a reported cost
+ * raises it. Null when it is not a known amount, and then the read is not booked.
+ *  - On a row the call was sent for, the booked charge. From the moment a call is sent its charge is the
+ *    padded quote it was admitted with, and a read only raises it. A row an older version booked below
+ *    its hold keeps its booked charge: it is not migrated.
+ *  - On a released row (refused_local, "nothing was sent"), a trusted read shows the gateway knows the
+ *    request after all, so the hold comes back: the row's padded quote (or the booked charge if that is
+ *    higher). Null when the padded quote is not a known amount.
+ *  - A booked charge that is not a known amount (only a damaged file holds one) is never replaced by a guess.
+ *    Only a read that proves a settlement books it again, at the padded quote, and only when that is a
+ *    known amount.
  */
-function heldCharge(prev: PrevBooking<unknown>, state: string): number | null {
+function holdFloor(prev: PrevBooking<unknown>, o: ReadOutcome, proven: boolean): number | null {
   const booked = knownAmount(prev.cap_charge);
-  return booked !== null && prev.state === "refused_local" && state !== prev.state ? knownAmount(prev.quote_padded) : booked;
+  const quote = knownAmount(prev.quote_padded);
+  if (booked === null) return proven ? quote : null;
+  if (prev.state === "refused_local" && trustedRead(o)) return quote === null ? null : Math.max(booked, quote);
+  return booked;
 }
 
-/** What a read does to a booking: the next booking, and whether the read disagrees with what is booked. */
+/**
+ * The booking puts the day in a state the cap did not admit: its charge rises above what the cap admitted
+ * for the row and above what the row had booked. The cap admitted the padded quote for a call it let
+ * through, and nothing for a released row. So this is a released hold that comes back, or a charge raised
+ * above the call's padded quote (a settled amount or a reported cost above what the call was allowed to
+ * spend). False when what the cap admitted is not a known amount.
+ */
+function pastAdmitted(prev: PrevBooking<unknown>, charge: number): boolean {
+  const admitted = prev.state === "refused_local" ? 0 : knownAmount(prev.quote_padded);
+  const booked = knownAmount(prev.cap_charge);
+  return admitted !== null && charge > admitted && (booked === null || charge > booked);
+}
+
+/** What a read does to a booking: the next booking, whether the read disagrees with what is booked, and whether the booking passes what the cap admitted. */
 export interface Decision<C> {
   booking: Booking<C | number>;
-  /** The read was not booked: it would lower a booked settlement, or the charge it would hold is not a known amount. */
+  /** The read was not booked: it would lower a booked settlement, or the hold floor is not a known amount. */
   disagree: boolean;
+  /** The booking puts the day in a state the cap did not admit (pastAdmitted). The caller prints PAST_ADMITTED and records it in the row's reason. */
+  pastAdmitted: boolean;
 }
 
 /**
  * The one decision for every receipt read: `run`'s own read after its call and `receipt --refresh` alike.
  * `prev` is the latest ledger row of the request. `costReported` is the cost its completion reported, if any.
- *  - Only a trusted read changes state or spend.
- *  - A reported cost may raise a charge and never lowers it, on a hold and on a settlement alike.
- *  - A trusted read that would lower a booked known settlement disagrees. State and spend stay.
- *  - Otherwise a proven settlement replaces the booked spend, and its charge replaces the hold. The state
- *    moves only forward: never from a settling state to a non settling one.
- *  - A trusted read that moves a refused_local row ("nothing was sent", charge 0) shows the gateway holds
- *    the request after all: the reservation comes back, the row's padded quote.
- *  - A charge that is not a known amount is never replaced by a guess, and never by 0. That is a booked
- *    charge that is not a known amount, or a padded quote that is not one on a refused_local row a trusted
- *    read moves. Unless a proven settlement replaces it, the read disagrees and nothing changes.
- *  - The exact spend (money stage 1) follows exactAfter on every read that is not refused: it is replaced
- *    with the float spend it describes and otherwise only rises. A read that disagrees sets nothing, exact
- *    spend included. The exact spend never changes state, spend or charge.
- * Two reads of one request can differ, and that is normal, not an attack: per the gateway's OpenAPI
- * (CredentialReceipt), read 2026-11-11, later reconciliation can change the gateway's ledger observation.
- * So two trusted reads book the same spend and charge in either order (test/decision-properties.test.ts).
- * They book the same pair of spend and exact spend in either order too, except for one shape that test
- * counts: one read is refused only because the charge it would hold is unknown, which only a damaged row
- * or a released reservation with an unknown padded quote can meet.
- * The rule this encodes for the future: a gateway read alone never lowers a booked settlement. On FLOP a
- * refund comes from an upheld fraud verdict, which is proven on chain: per FLOP's docs, a session's payment
- * sits in escrow against the proof, and an upheld fraud verdict refunds the agent. Nothing in imd-flop
- * verifies the chain yet. When chain verification exists, a chain proven refund is the one thing that may
- * lower a booking, and that change belongs in this function.
+ *  - Only a trusted read changes state or spend. `spend` records what the gateway says was spent.
+ *  - The hold floor: the cap charge counts what the call was allowed to spend, not what it ended up
+ *    costing. A gateway read (settled or released, with any amount or none) and a reported cost can only
+ *    raise it above the floor (holdFloor). A gateway read is not final: per the gateway's OpenAPI
+ *    (CredentialReceipt), read 2026-11-11, later reconciliation can change its ledger observation. The
+ *    child key's cap, the padded quote, is the one bound the gateway enforces.
+ *  - A trusted read that would lower a booked known settlement disagrees. State and spend stay, and a
+ *    reported cost may still raise the charge.
+ *  - Otherwise a proven settlement replaces the booked spend. The state moves only forward: never from a
+ *    settling state to a non settling one.
+ *  - Any trusted read, a receipt with no state included, shows the gateway knows the request. On a
+ *    released row (refused_local) it brings the hold back. A row it leaves in state sent is marked
+ *    receipt_seen, so a later "nothing was sent" report does not release it (decideFailure).
+ *  - A hold floor that is not a known amount is never replaced by a guess, and never by 0: the read
+ *    disagrees and nothing changes.
+ *  - The exact spend (money stage 1) follows exactAfter on every read that is not refused: it is set as a
+ *    pair with the float spend it describes. A read that disagrees sets nothing, exact spend included. The
+ *    exact spend never changes state, spend or charge.
+ * Two reads of one request can differ, and that is normal, not an attack. So two trusted reads book the same
+ * spend and charge in either order (test/decision-properties.test.ts). They book the same pair of spend and
+ * exact spend in either order too, except for the shapes that test counts.
+ * The rule this encodes for the future: a gateway read alone never lowers a booked settlement, and never
+ * lowers a charge. On FLOP a refund comes from an upheld fraud verdict, which is proven on chain: per FLOP's
+ * docs, a session's payment sits in escrow against the proof, and an upheld fraud verdict refunds the agent.
+ * Nothing in imd-flop verifies the chain yet. The one place where chain proof plugs in is marked below.
  */
 export function decideBooking<C>(prev: PrevBooking<C>, o: ReadOutcome, costReported: number | null): Decision<C> {
-  const lowers = lowersSettlement(prev, o);
-  const state = lowers ? prev.state : stateAfter(prev.state, o);
+  const kept: Booking<C | number> = { state: prev.state, spend: prev.spend, cap_charge: prev.cap_charge, spend_raw: prev.spend_raw };
+  const refused: Decision<C> = { booking: kept, disagree: true, pastAdmitted: false };
+  if (lowersSettlement(prev, o)) {
+    const booked = knownAmount(prev.cap_charge);
+    if (booked === null) return refused;
+    const charge = raisedBy(booked, costReported);
+    return { booking: { ...kept, cap_charge: charge }, disagree: true, pastAdmitted: pastAdmitted(prev, charge) };
+  }
   const settled = settledSpend(o);
-  if (settled !== null && !lowers) return { booking: { state, spend: settled, cap_charge: raisedBy(settled, costReported), spend_raw: exactAfter(prev, o, settled) }, disagree: false };
-  const held = heldCharge(prev, state);
-  if (held === null) return { booking: { state: prev.state, spend: prev.spend, cap_charge: prev.cap_charge, spend_raw: prev.spend_raw }, disagree: true };
-  return { booking: { state, spend: prev.spend, cap_charge: raisedBy(held, costReported), spend_raw: lowers ? prev.spend_raw : exactAfter(prev, o, prev.spend) }, disagree: lowers };
+  const floor = holdFloor(prev, o, settled !== null);
+  if (floor === null) return refused;
+  // CHAIN PROOF PLUGS IN HERE, and nowhere else. Today the floor holds until the call's settlement is
+  // proven on chain, and no such proof exists in imd-flop yet. When it does, a settlement proven on chain
+  // for this request is the one thing that may lift the floor: the charge may then be lowered to the proven
+  // amount, and a chain proven refund may lower a booked settlement. No code for it is written yet.
+  const charge = raisedBy(settled === null ? floor : Math.max(floor, settled), costReported);
+  const state = stateAfter(prev.state, o);
+  const booking: Booking<C | number> = { state, spend: settled ?? prev.spend, cap_charge: charge, spend_raw: exactAfter(prev, o, settled), ...(trustedRead(o) && state === "sent" ? { receipt_seen: true } : {}) };
+  return { booking, disagree: false, pastAdmitted: pastAdmitted(prev, charge) };
 }
 
 /**
@@ -243,24 +303,34 @@ export type Failure = "timeout_unknown" | "error" | "refused_local";
  *    own exit code and message for what it saw.
  *  - A timeout or a gateway error moves a row that does not settle to timeout_unknown or error. The spend
  *    stays and the charge stays, so the reservation is held.
- *  - "Nothing was sent" releases the reservation: refused_local, charge 0. Only from a row still in state
- *    sent. Any other row came from a trusted gateway read or another report, and a trusted read beats a
- *    "nothing was sent" report: the row stays. A booking is never lowered on a report otherwise.
+ *  - "Nothing was sent" releases the reservation: refused_local, charge 0. It is a local fact: the paid
+ *    request never left the process. Only from a row still in state sent that no trusted read has reached
+ *    (receipt_seen). A trusted read shows the gateway knows the request, and it beats a "nothing was sent"
+ *    report: the row stays. This is the one step that lowers a charge.
  *  - A charge that is not a known amount is never replaced by a guess, as in decideBooking: the row stays.
  * A report is not a receipt read. Only a read books a settlement, and that is decideBooking.
  */
 export function decideFailure<C>(prev: Booking<C>, failure: Failure): Booking<C | number> | null {
   if (SETTLES.has(prev.state) || knownAmount(prev.cap_charge) === null) return null;
-  if (failure === "refused_local") return prev.state === "sent" ? { state: failure, spend: prev.spend, cap_charge: 0 } : null;
+  if (failure === "refused_local") return prev.state === "sent" && prev.receipt_seen !== true ? { state: failure, spend: prev.spend, cap_charge: 0 } : null;
   return { state: failure, spend: prev.spend, cap_charge: prev.cap_charge };
 }
 
 /** Ledger reason for a settled row whose cap charge is the reported cost, above its settled spend. */
 export const CHARGE_RAISED = "cap charge raised to reported cost";
 
-/** The ledger reason for a booking: the receipt flag when there is one, else a note when the charge was raised. */
-export function bookingReason(b: Booking, flag: string | null): string | null {
-  return flag ?? (b.spend !== null && b.cap_charge > b.spend ? CHARGE_RAISED : null);
+/** A booking with the cost its row records, as bookingReason reads it. */
+export type ReasonRow = Booking & { cost_reported?: number | null };
+
+/**
+ * The ledger reason for a booking. PAST_ADMITTED first when the booking passes what the cap admitted
+ * (Decision.pastAdmitted). Then the receipt flag when there is one, else a note when the charge of a settled
+ * row is the reported cost, above its settled spend. Null when there is nothing to say.
+ */
+export function bookingReason(b: ReasonRow, flag: string | null, past = false): string | null {
+  const raised = b.spend !== null && b.cap_charge > b.spend && b.cap_charge === b.cost_reported ? CHARGE_RAISED : null;
+  const parts = [past ? PAST_ADMITTED : null, flag ?? raised].filter((p): p is string => p !== null);
+  return parts.length > 0 ? parts.join("; ") : null;
 }
 
 /** How the ledger reason names a failure report that was recorded and not booked. */
@@ -270,7 +340,7 @@ const REPORTED: Record<Failure, string> = { timeout_unknown: "timeout reported",
  * The ledger reason for a row that records a failure report decideFailure did not book. It names the report
  * and says the booking was kept, and it keeps the note of a charge raised to the reported cost.
  */
-export function keptReason(failure: Failure, kept: Booking): string {
+export function keptReason(failure: Failure, kept: ReasonRow): string {
   const what = SETTLES.has(kept.state) ? "booked settlement kept" : "booked row kept";
   const raised = bookingReason(kept, null);
   return [REPORTED[failure], what, ...(raised ? [raised] : [])].join("; ");

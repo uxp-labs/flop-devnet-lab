@@ -171,7 +171,8 @@ describe("unresolved reported usage does not lower the reservation", () => {
 describe("known settlement", () => {
   it("an explicit settled spend of 0.05 wins over unresolved-looking usage of 0.01", async () => {
     const { home, result, printed } = await runWithheld("settled-positive", 0.01, 0.05);
-    await expectExposure(home, result, printed, { state: "settled", spend: 0.05, cost_reported: 0.01, cap_charge: 0.05 });
+    // Moved (hold floor): charged the settled 0.05 before. The charge keeps the 0.18 hold.
+    await expectExposure(home, result, printed, { state: "settled", spend: 0.05, cost_reported: 0.01, cap_charge: RESERVATION });
   });
 
   // Swarm audit of 8ddc5d2, finding 2: this test was "an explicit settled zero still charges zero over a

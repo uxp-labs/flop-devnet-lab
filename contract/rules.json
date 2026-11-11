@@ -81,6 +81,12 @@
       "spend-guard": null,
       "viewer": "build-lane.py DISAGREE (read from this file)"
     },
+    "PAST_ADMITTED": {
+      "value": "booked past what the cap admitted; the day may end over its cap",
+      "imd-flop": "src/settlement.ts PAST_ADMITTED (run and receipt --refresh stderr, and the reason of the row, when a booking puts the day in a state the cap did not admit: a released hold that comes back, or a charge raised above the call's padded quote)",
+      "spend-guard": null,
+      "viewer": null
+    },
     "IDENTITY": {
       "value": "receipt identity mismatch; chain-final green blocked",
       "imd-flop": "src/match.ts RECEIPT_IDENTITY_STATUS",
