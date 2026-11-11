@@ -1,0 +1,346 @@
+[
+  {
+    "id": "net-rpc-guard-skipped",
+    "file": "src/net.ts",
+    "find": "    guardRpc(method);\n    allow(this.rpcUrl);",
+    "replace": "    allow(this.rpcUrl);",
+    "test": "test/net.test.ts",
+    "why": "every RPC method passes the read only guard before anything is sent, so a write is refused and recorded"
+  },
+  {
+    "id": "net-http-guard-skipped",
+    "file": "src/net.ts",
+    "find": "    guardHttp(method, url);\n",
+    "replace": "",
+    "test": "test/net.test.ts",
+    "why": "every HTTP method passes the read only guard before anything is sent, so a POST is refused and recorded"
+  },
+  {
+    "id": "net-allow-list-off",
+    "file": "src/net.ts",
+    "find": "  if (why !== null) throw new TransportRefused(",
+    "replace": "  if (false) throw new TransportRefused(",
+    "test": "test/net.test.ts",
+    "why": "a URL off the allow list is refused and recorded, and nothing is sent"
+  },
+  {
+    "id": "net-allow-list-ignores-port",
+    "file": "src/net.ts",
+    "find": "  if (u.port !== \"\" || u.username !== \"\" || u.password !== \"\") return",
+    "replace": "  if (false) return",
+    "test": "test/net.test.ts",
+    "why": "an allowed host on another port, or with a user or password, is still off the list"
+  },
+  {
+    "id": "net-trust-fixture",
+    "file": "src/net.ts",
+    "find": "  readonly trust: Trust = \"trusted RPC\";",
+    "replace": "  readonly trust: Trust = \"fixture\";",
+    "test": "test/net.test.ts",
+    "why": "the live transport says trusted RPC: it trusts one endpoint"
+  },
+  {
+    "id": "live-run-net-trust-fixture",
+    "file": "src/net.ts",
+    "find": "  readonly trust: Trust = \"trusted RPC\";",
+    "replace": "  readonly trust: Trust = \"fixture\";",
+    "test": "test/live-run.test.ts",
+    "why": "a run over the live transport writes a snapshot whose trust is trusted RPC"
+  },
+  {
+    "id": "net-socket-per-call",
+    "file": "src/net.ts",
+    "find": "    if (this.socket === null) this.openSocket();",
+    "replace": "    this.openSocket();",
+    "test": "test/net.test.ts",
+    "why": "the run uses one socket"
+  },
+  {
+    "id": "net-reopens-dead-socket",
+    "file": "src/net.ts",
+    "find": "    if (this.dead !== null) throw new TransportError(this.dead);\n",
+    "replace": "    if (this.dead !== null) { this.dead = null; this.socket = null; this.opened = false; }\n",
+    "test": "test/net.test.ts",
+    "why": "once the one socket fails, every later call fails; no second socket is opened"
+  },
+  {
+    "id": "net-rpc-size-cap-off",
+    "file": "src/net.ts",
+    "find": "    if (bytes.length > this.maxAnswerBytes) return this.drop(",
+    "replace": "    if (false) return this.drop(",
+    "test": "test/net.test.ts",
+    "why": "an RPC answer over the size limit is refused"
+  },
+  {
+    "id": "net-rpc-size-cap-in-characters",
+    "file": "src/net.ts",
+    "find": "    if (bytes.length > this.maxAnswerBytes) return this.drop(",
+    "replace": "    if (data.length > this.maxAnswerBytes) return this.drop(",
+    "test": "test/net.test.ts",
+    "why": "the size limit counts bytes, not characters"
+  },
+  {
+    "id": "net-rpc-size-cap-off-by-one",
+    "file": "src/net.ts",
+    "find": "    if (bytes.length > this.maxAnswerBytes) return this.drop(",
+    "replace": "    if (bytes.length >= this.maxAnswerBytes) return this.drop(",
+    "test": "test/net.test.ts",
+    "why": "an answer of exactly the size limit is read"
+  },
+  {
+    "id": "net-http-size-cap-off",
+    "file": "src/net.ts",
+    "find": "      if (size > this.maxAnswerBytes) {",
+    "replace": "      if (false) {",
+    "test": "test/net.test.ts",
+    "why": "a body over the size limit is refused as it comes"
+  },
+  {
+    "id": "net-http-stated-length-ignored",
+    "file": "src/net.ts",
+    "find": "Number(stated) > this.maxAnswerBytes) {",
+    "replace": "Number(stated) > Infinity) {",
+    "test": "test/net.test.ts",
+    "why": "a body whose stated length is over the limit is refused before it is read"
+  },
+  {
+    "id": "net-rpc-timeout-never",
+    "file": "src/net.ts",
+    "find": "      }, this.timeoutMs);\n      this.waiting.set(id, { resolve, reject, timer });",
+    "replace": "      }, this.timeoutMs * 1000);\n      this.waiting.set(id, { resolve, reject, timer });",
+    "test": "test/net.test.ts",
+    "why": "every RPC call has a 15 s limit"
+  },
+  {
+    "id": "net-default-timeout-wrong",
+    "file": "src/net.ts",
+    "find": "export const REQUEST_TIMEOUT_MS = 15_000;",
+    "replace": "export const REQUEST_TIMEOUT_MS = 60_000;",
+    "test": "test/net.test.ts",
+    "why": "the per request limit is 15 s"
+  },
+  {
+    "id": "net-http-timeout-never",
+    "file": "src/net.ts",
+    "find": "    const timer = setTimeout(() => stop.abort(), this.timeoutMs);",
+    "replace": "    const timer = setTimeout(() => stop.abort(), this.timeoutMs * 1000);",
+    "test": "test/net.test.ts",
+    "why": "every GET has a time limit"
+  },
+  {
+    "id": "net-redirect-followed",
+    "file": "src/net.ts",
+    "find": "{ method, redirect: \"error\", signal",
+    "replace": "{ method, redirect: \"follow\" as \"error\", signal",
+    "test": "test/net.test.ts",
+    "why": "a redirect is refused, so a GET never lands on a host off the list"
+  },
+  {
+    "id": "net-rpc-error-read-as-result",
+    "file": "src/net.ts",
+    "find": "    if (Object.hasOwn(m, \"error\")) {",
+    "replace": "    if (false) {",
+    "test": "test/net.test.ts",
+    "why": "an RPC error answer is a failed call, never a result"
+  },
+  {
+    "id": "tape-trust-trusted",
+    "file": "src/tape.ts",
+    "find": "  readonly trust: Trust = \"fixture\";",
+    "replace": "  readonly trust: Trust = \"trusted RPC\";",
+    "test": "test/tape.test.ts",
+    "why": "a tape is saved data: its trust is fixture, whatever recorded it"
+  },
+  {
+    "id": "recorder-trust-own",
+    "file": "src/tape.ts",
+    "find": "    this.trust = inner.trust;",
+    "replace": "    this.trust = \"fixture\";",
+    "test": "test/tape.test.ts",
+    "why": "the recorder keeps the trust of the transport it wraps"
+  },
+  {
+    "id": "tape-any-request-accepted",
+    "file": "src/tape.ts",
+    "find": "    if (canonicalJson(entry.request) !== canonicalJson(request)) {",
+    "replace": "    if (false) {",
+    "test": "test/tape.test.ts",
+    "why": "a tape refuses any request that is not the next one on it"
+  },
+  {
+    "id": "tape-mismatch-skips-entry",
+    "file": "src/tape.ts",
+    "find": "      throw new TapeError(`request ${this.next} is ${describe(request)}, but the next one on the tape is ${describe(entry.request)}`);",
+    "replace": "      this.next++;\n      throw new TapeError(`request ${this.next - 1} is ${describe(request)}, but the next one on the tape is ${describe(entry.request)}`);",
+    "test": "test/tape.test.ts",
+    "why": "a refused request does not take the entry it did not match"
+  },
+  {
+    "id": "tape-error-replayed-as-refusal",
+    "file": "src/tape.ts",
+    "find": "    if (\"error\" in a) throw new TransportError(a.error);",
+    "replace": "    if (\"error\" in a) throw new TapeError(a.error);",
+    "test": "test/tape.test.ts",
+    "why": "a recorded failed read replays as a failed read"
+  },
+  {
+    "id": "recorder-refusal-recorded-as-error",
+    "file": "src/tape.ts",
+    "find": "      done(e instanceof TransportError ? { error: e.message } : { refused: messageOf(e) });",
+    "replace": "      done({ error: messageOf(e) });",
+    "test": "test/tape.test.ts",
+    "why": "a refusal is written as refused, so a replay never reads it as a failed read"
+  },
+  {
+    "id": "live-source-trust-fixed",
+    "file": "src/live-source.ts",
+    "find": "    this.trust = transport.trust;",
+    "replace": "    this.trust = \"fixture\";",
+    "test": "test/live-source.test.ts",
+    "why": "the source's trust is the transport's"
+  },
+  {
+    "id": "live-source-any-failure-is-a-read",
+    "file": "src/live-source.ts",
+    "find": "      if (e instanceof TransportError) return { error: e.message };\n      throw e;",
+    "replace": "      return { error: e instanceof Error ? e.message : String(e) };",
+    "test": "test/live-source.test.ts",
+    "why": "only a failure on the way is a failed read; a refusal or a bad tape stops the run"
+  },
+  {
+    "id": "live-source-runtime-at-best",
+    "file": "src/live-source.ts",
+    "find": "await this.call(\"state_getRuntimeVersion\", [at]);",
+    "replace": "await this.call(\"state_getRuntimeVersion\", []);",
+    "test": "test/live-source.test.ts",
+    "why": "the runtime version is read at the finalized head, by its hash"
+  },
+  {
+    "id": "live-source-reads-twice",
+    "file": "src/live-source.ts",
+    "find": "    this.reading ??= this.readAll();",
+    "replace": "    this.reading = this.readAll();",
+    "test": "test/live-source.test.ts",
+    "why": "every Source method answers from one reading"
+  },
+  {
+    "id": "rpc-head-error-dropped",
+    "file": "src/rpc-head.ts",
+    "find": "      errors.push(`${name}: ${x.error}`);",
+    "replace": "",
+    "test": "test/live-source.test.ts",
+    "why": "a call that failed on the way is a read error, so an RPC that failed every call is down"
+  },
+  {
+    "id": "rpc-head-number-any-form",
+    "file": "src/rpc-head.ts",
+    "find": "  if (typeof n !== \"string\" || !HEX_NUMBER.test(n)) return null;",
+    "replace": "  if (typeof n === \"number\") return n;\n  if (typeof n !== \"string\" || !HEX_NUMBER.test(n)) return null;",
+    "test": "test/live-source.test.ts",
+    "why": "a header number is read only as 0x and hex digits"
+  },
+  {
+    "id": "rpc-head-runtime-any-type",
+    "file": "src/rpc-head.ts",
+    "find": "  return isSafeInt(v) && v >= 0 ? v : null;",
+    "replace": "  return v as number;",
+    "test": "test/rpc-head.test.ts",
+    "why": "a runtime version that is not a number is unknown"
+  },
+  {
+    "id": "live-run-reset-ignored",
+    "file": "src/live-run.ts",
+    "find": "  if (s.status.reset_detected === true) return \"reset_detected is true\";",
+    "replace": "",
+    "test": "test/live-run.test.ts",
+    "why": "reset_detected true is a reset signal: the run exits 3"
+  },
+  {
+    "id": "live-run-conflicts-ignored",
+    "file": "src/live-run.ts",
+    "find": "  if (n > 0) return `the status holds",
+    "replace": "  if (false) return `the status holds",
+    "test": "test/live-run.test.ts",
+    "why": "a conflict the rules raise is a reset signal, even when reset_detected is not true"
+  },
+  {
+    "id": "live-run-refusal-ignored",
+    "file": "src/live-run.ts",
+    "find": "  if (refused.length > 0) {",
+    "replace": "  if (false) {",
+    "test": "test/live-run.test.ts",
+    "why": "a request the guard or the transport refused makes the run exit 4"
+  },
+  {
+    "id": "live-run-down-is-failure",
+    "file": "src/live-run.ts",
+    "find": "  } else if (signal !== null) {",
+    "replace": "  } else if (signal !== null || snapshot.status.rpc.health !== \"ok\") {",
+    "test": "test/live-run.test.ts",
+    "why": "a service down or unknown is still a truthful snapshot, exit 0"
+  },
+  {
+    "id": "live-run-notice-trust-dropped",
+    "file": "src/live-run.ts",
+    "find": "    trust: st.trust,\n    genesis_pinned",
+    "replace": "    genesis_pinned",
+    "test": "test/live-run.test.ts",
+    "why": "the notice says the trust"
+  },
+  {
+    "id": "live-run-sums-skip-tape",
+    "file": "src/live-run.ts",
+    "find": "    .filter((n) => n !== \"SHA256SUMS\")",
+    "replace": "    .filter((n) => n !== \"SHA256SUMS\" && n !== \"tape.jsonl\")",
+    "test": "test/live-run.test.ts",
+    "why": "SHA256SUMS hashes every other file in the folder"
+  },
+  {
+    "id": "live-run-writes-into-used-folder",
+    "file": "src/live-run.ts",
+    "find": "  if (existsSync(o.out) && readdirSync(o.out).length > 0) {",
+    "replace": "  if (false) {",
+    "test": "test/live-run.test.ts",
+    "why": "a run writes only into a new folder, so it never extends an earlier run's log"
+  },
+  {
+    "id": "scan-root-exemption-any-file",
+    "file": "scripts/source-scan.mjs",
+    "find": "    if (file !== COMPOSITION_ROOT || !ROOT_GLOBALS.has(n.name)) return false;",
+    "replace": "    if (!ROOT_GLOBALS.has(n.name)) return false;",
+    "test": "scripts/source-scan.mjs",
+    "why": "only src/live-bin.ts may name WebSocket and fetch"
+  },
+  {
+    "id": "scan-root-exemption-any-use",
+    "file": "scripts/source-scan.mjs",
+    "find": "    if (key !== \"value\" || parent?.type !== \"Property\" || parent.computed || parent.shorthand || parent.method || parent.kind !== \"init\") return false;",
+    "replace": "    return true;",
+    "test": "scripts/source-scan.mjs",
+    "why": "the composition root names the globals only as the plain options of new NetTransport"
+  },
+  {
+    "id": "scan-root-exemption-any-callee",
+    "file": "scripts/source-scan.mjs",
+    "find": "call.callee?.type === \"Identifier\" && call.callee.name === \"NetTransport\" && call.arguments.length === 1;",
+    "replace": "call.arguments.length === 1;",
+    "test": "scripts/source-scan.mjs",
+    "why": "the globals go only to new NetTransport"
+  },
+  {
+    "id": "scan-root-exemption-many-uses",
+    "file": "scripts/source-scan.mjs",
+    "find": "          if (rootUses.get(n.name) > 1) out.push(",
+    "replace": "          if (false) out.push(",
+    "test": "scripts/source-scan.mjs",
+    "why": "each global is named once in the composition root"
+  },
+  {
+    "id": "raw-scan-root-exemption-any-file",
+    "file": "test/guard.test.ts",
+    "find": "  const exempted = (file: string, text: string) => (file === ROOT ? text.split(ROOT_FORM).join(\"\") : text);",
+    "replace": "  const exempted = (file: string, text: string) => text.split(ROOT_FORM).join(\"\");",
+    "test": "test/guard.test.ts",
+    "why": "the raw text scan exempts the one text in src/live-bin.ts only"
+  }
+]
