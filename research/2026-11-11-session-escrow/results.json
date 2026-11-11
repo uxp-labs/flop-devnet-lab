@@ -1,0 +1,281 @@
+{
+ "what": "A devnet test: does a FlopSessionKeys session's spend meter count the escrow a ComputeChannel call moves, and do its limits hold when value moves?",
+ "answer": "Yes. Through a session whose only allowed pallet is ComputeChannel, a force_open that moved 0.01 FLOP of escrow out of the owner's account was rolled back when the device declared a spend of 0 (SpendExceedsDeclared), and went through when the device declared 0.012 FLOP. The session's lifetime and daily counters rose by the declared 0.012 FLOP. A declared spend above the limit per call failed with PerTxLimitExceeded, and one above what was left of the daily cap failed with DailyCapExceeded. After the ack window, expire_force_open through the same session returned the full 0.01 FLOP to the owner. The refund did not lower the counters.",
+ "not_shown": "open_channel and top_up_escrow were not sent (they need a miner's handshake or a live channel); they move escrow the same way, so the same meter should apply, but that is an inference. The list of pallets a session can never call. Anything about the hosted gateway. A channel that a miner answers: no miner was involved here.",
+ "no_miner_touched": "The named miner was the lab's own empty account from the first probe (5Cm4uUXzfKUWWpi9xJgrCaMupmnZ1UiAhMD1XW6WvMFLkDvB), not a registered miner. The chain accepted it. The escrow was 0.01 FLOP, below MinForceOpenEscrowForFailedAck (0.05 FLOP), the amount from which an unanswered force_open adds to a miner's FailedAcks counter. FailedAcks of the named account is absent after the test.",
+ "chain": {
+  "name": "FLOP Devnet",
+  "genesis": "0x99c172c095340ace980631f9123544c6bebd4839f3437e463533422d8be2d631",
+  "spec_version": 1014014,
+  "transaction_version": 2,
+  "metadata_sha256": "f4fd2addba7fff1129483d0e66b8e6bc69141292f56443e201d3f073aab03444",
+  "rpc": "wss://rpc.devnet.flop.network"
+ },
+ "owner": {
+  "ss58": "5HEA8QECFwBg1F9cxoXzvQzryu2d5qj5zASJS7owNW2zebBz",
+  "public_key": "0xe462d014cab1239a123233647052f4e3b572322e982441d6b7a5c1694d8419e2",
+  "role": "the agent's FLOP identity; it created the session and is the channel's agent"
+ },
+ "device": {
+  "ss58": "5GmkbyGrAAMoQCvhZsEqz9gYKkqML82qS39TaTjS84NChxvC",
+  "public_key": "0xd03f3dc1fa4ff1d0a615285a474e11c0d6f00dbaa5f4d827ad487239502bc3d2",
+  "role": "a new key made for this test; the session's delegate and the channel's agent_key"
+ },
+ "named_miner": {
+  "ss58": "5Cm4uUXzfKUWWpi9xJgrCaMupmnZ1UiAhMD1XW6WvMFLkDvB",
+  "public_key": "0x1ec8abdfa88707679f8a2fbfc0bcd80184e2f731d91bb9fa152b750210556c7f",
+  "role": "the first probe's device key: an empty account of the lab, not a miner"
+ },
+ "session": {
+  "spending_cap_raw": "50000000000000000",
+  "per_tx_limit_raw": "20000000000000000",
+  "daily_cap_raw": "25000000000000000",
+  "duration_blocks": 7200,
+  "allowed_pallets": [
+   "ComputeChannel"
+  ],
+  "created_in_block": 3497525,
+  "expires_at": 3504725
+ },
+ "force_open": {
+  "model_hash": "0x1a52c1abe781db051e70ae357f72bb70161ca0c092df0b618f22a9292ba63306",
+  "measured_root": "0x1a52c1abe781db051e70ae357f72bb70161ca0c092df0b618f22a9292ba63306",
+  "decode_policy_hash": "0xeca6a3f9c5a9fa1556892182ffef15b1273c075146a2d1a87814ae83ecea3053",
+  "precision": "BF16",
+  "sla": {
+   "max_turns": 1024,
+   "max_duration": 1200,
+   "reattest_every": 1
+  },
+  "source": "the model, root, policy, precision and sla of open_channel calls seen on chain minutes before (explorer.devnet.flop.network)",
+  "channel_nonces": {
+   "A": "7320261111000001",
+   "B": "7320261111000002",
+   "C": "7320261111000003"
+  }
+ },
+ "channel": {
+  "id": "0xe5655fd56d18ac9816623fd975d501322a7427fe5568c7aa02a19cf04dfd12dc",
+  "record_after_step_4": {
+   "state": "PendingAck",
+   "ack_deadline": 3498205,
+   "opened_at": 3497605,
+   "escrow_raw": "10000000000000000",
+   "enclave_key": "all zero",
+   "weights_pin": "0xa54fd2255ac39309a4dbcaebc883689ac0ecd6d17387ab68baebb83d01f5ddfd"
+  },
+  "record_after_step_7": {
+   "state": "Closed"
+  },
+  "note": "opened_at is 3497605 although the call was included in block 3497611, and ack_deadline is opened_at + 600."
+ },
+ "session_record": {
+  "after_step_2": {
+   "spent_raw": "0",
+   "epoch_spent_raw": "0",
+   "nonce": 0
+  },
+  "after_step_3": {
+   "spent_raw": "0",
+   "epoch_spent_raw": "0",
+   "nonce": 0
+  },
+  "after_step_4": {
+   "spent_raw": "12000000000000000",
+   "epoch_spent_raw": "12000000000000000",
+   "nonce": 1
+  },
+  "after_step_6": {
+   "spent_raw": "12000000000000000",
+   "epoch_spent_raw": "12000000000000000",
+   "nonce": 1
+  },
+  "after_step_7": {
+   "spent_raw": "12000000000000000",
+   "epoch_spent_raw": "12000000000000000",
+   "nonce": 2
+  },
+  "after_step_8": {
+   "active": false
+  }
+ },
+ "circuit_breaker_of_device": {
+  "after_step_4": {
+   "period_start": 3497611,
+   "tx_count": 1,
+   "total_spend_raw": "12000000000000000",
+   "tripped": false
+  },
+  "after_step_6": "unchanged",
+  "after_step_7": {
+   "period_start": 3498234,
+   "tx_count": 1,
+   "total_spend_raw": "0",
+   "tripped": false
+  }
+ },
+ "owner_free_balance_raw": {
+  "before": "24971396765185000000",
+  "after_step_2": "24813521733405000000",
+  "after_step_3": "24813521733405000000",
+  "after_step_4": "24803521733405000000",
+  "after_step_6": "24803521733405000000",
+  "after_step_7": "24813521733405000000",
+  "after_step_9": "24911325118780000000"
+ },
+ "steps": [
+  {
+   "step": "1-fund-device",
+   "signed_by": "owner",
+   "signer": "5HEA8QECFwBg1F9cxoXzvQzryu2d5qj5zASJS7owNW2zebBz",
+   "account_nonce": "3",
+   "what": "Balances.transfer_keep_alive: send 150000000000000000 raw (0.15 FLOP) to 0xd03f3dc1fa4ff1d0a615285a474e11c0d6f00dbaa5f4d827ad487239502bc3d2",
+   "call": "0x040300d03f3dc1fa4ff1d0a615285a474e11c0d6f00dbaa5f4d827ad487239502bc3d21300004f8c34e81402",
+   "extrinsic_hash": "0xb5a4b62d5ed5610fd7bb9d8774e9cddc2a40fb8fb6a03c87c6c5ceb4105a2f3e",
+   "finalized_in_block": 3497503,
+   "block_hash": "0x452c588f1d764187f3ad0bb9b44530b3eb768a210b94423b34b056ccd38868f6",
+   "extrinsic_index": 8,
+   "events_value_sha256": "fe635166a76f9c49d0b0d85726e4f3982cb0acec9490f8006f878b5b61743df4",
+   "result": "success",
+   "fee_raw": "2723545745000000",
+   "note": "0.15 FLOP to the new device key, for its fees."
+  },
+  {
+   "step": "2-create-session",
+   "signed_by": "owner",
+   "signer": "5HEA8QECFwBg1F9cxoXzvQzryu2d5qj5zASJS7owNW2zebBz",
+   "account_nonce": "4",
+   "what": "FlopSessionKeys.create_session: let 0xd03f3dc1fa4ff1d0a615285a474e11c0d6f00dbaa5f4d827ad487239502bc3d2 spend from the signer's account, lifetime cap 50000000000000000 raw (0.05 FLOP), per call 20000000000000000 raw (0.02 FLOP), per day 25000000000000000 raw (0.025 FLOP), for 7200 blocks, allowed pallets ComputeChannel",
+   "call": "0x5e00d03f3dc1fa4ff1d0a615285a474e11c0d6f00dbaa5f4d827ad487239502bc3d20000c52ebca2b1000000000000000000000082dfe40d47000000000000000000008062175ed158000000000000000000201c00000438436f6d707574654368616e6e656c",
+   "extrinsic_hash": "0x53d689bf855ee1d2e2b6f7fb13137cfb2268347f6790a7274baa9d0386d69920",
+   "finalized_in_block": 3497525,
+   "block_hash": "0x059113d6f9b3cc8223b06205d58aa923957c97afeb1292f03fbce0fb65bc8f19",
+   "extrinsic_index": 2,
+   "events_value_sha256": "c0cdb7a3e0d85cdb2a2aae6931127094f2ae7a9736bba3862e13f8a58ec16420",
+   "result": "success",
+   "fee_raw": "5151486035000000",
+   "note": "SessionCreated: lifetime cap 0.05 FLOP, 0.02 per call, 0.025 per day, expires at block 3504725, allowed pallets ComputeChannel."
+  },
+  {
+   "step": "3-force-open-declared-0",
+   "signed_by": "device",
+   "signer": "5GmkbyGrAAMoQCvhZsEqz9gYKkqML82qS39TaTjS84NChxvC",
+   "account_nonce": "0",
+   "what": "FlopSessionKeys.execute_via_session: as owner 0xe462d014cab1239a123233647052f4e3b572322e982441d6b7a5c1694d8419e2, declared spend 0 raw (0 FLOP), session nonce 0, run: ComputeChannel.force_open: ask miner 0x1ec8abdfa88707679f8a2fbfc0bcd80184e2f731d91bb9fa152b750210556c7f for a channel, escrow 10000000000000000 raw (0.01 FLOP), model 0x1a52c1abe781db051e70ae357f72bb70161ca0c092df0b618f22a9292ba63306, measured root 0x1a52c1abe781db051e70ae357f72bb70161ca0c092df0b618f22a9292ba63306, decode policy 0xeca6a3f9c5a9fa1556892182ffef15b1273c075146a2d1a87814ae83ecea3053, precision BF16, agent key 0xd03f3dc1fa4ff1d0a615285a474e11c0d6f00dbaa5f4d827ad487239502bc3d2, max turns 1024, max duration 1200 blocks, reattest every 1, channel nonce 7320261111000001",
+   "call": "0x5e02e462d014cab1239a123233647052f4e3b572322e982441d6b7a5c1694d8419e267091ec8abdfa88707679f8a2fbfc0bcd80184e2f731d91bb9fa152b750210556c7f1a52c1abe781db051e70ae357f72bb70161ca0c092df0b618f22a9292ba633061a52c1abe781db051e70ae357f72bb70161ca0c092df0b618f22a9292ba63306eca6a3f9c5a9fa1556892182ffef15b1273c075146a2d1a87814ae83ecea305302d03f3dc1fa4ff1d0a615285a474e11c0d6f00dbaa5f4d827ad487239502bc3d200040000b0040000010000000000c16ff28623000000000000000000c12b2f1bbd011a00000000000000000000000000000000000000000000000000",
+   "extrinsic_hash": "0xe694185428e928cf8e80dd07f79dc7105048f0405e5c87c69ba8a01de0e630ef",
+   "finalized_in_block": 3497567,
+   "block_hash": "0x7f3bf8ee33abd68baf3a3c18b596f6cf8985de1f53decd1d30de0fd70cfb9cec",
+   "extrinsic_index": 4,
+   "events_value_sha256": "d9e092db535dbb074a9072be2fe4040dc233bb1a11bf68de13a60da26fa8df88",
+   "result": "failed: FlopSessionKeys.SpendExceedsDeclared (pallet 94, error 18)",
+   "fee_raw": "9422731810000000",
+   "note": "force_open with an escrow of 0.01 FLOP and a declared spend of 0. The whole call was rolled back: the owner's balance, the session's counters and its nonce (0) were unchanged. The device paid the fee."
+  },
+  {
+   "step": "4-force-open-declared-0.012",
+   "signed_by": "device",
+   "signer": "5GmkbyGrAAMoQCvhZsEqz9gYKkqML82qS39TaTjS84NChxvC",
+   "account_nonce": "1",
+   "what": "FlopSessionKeys.execute_via_session: as owner 0xe462d014cab1239a123233647052f4e3b572322e982441d6b7a5c1694d8419e2, declared spend 12000000000000000 raw (0.012 FLOP), session nonce 0, run: ComputeChannel.force_open: ask miner 0x1ec8abdfa88707679f8a2fbfc0bcd80184e2f731d91bb9fa152b750210556c7f for a channel, escrow 10000000000000000 raw (0.01 FLOP), model 0x1a52c1abe781db051e70ae357f72bb70161ca0c092df0b618f22a9292ba63306, measured root 0x1a52c1abe781db051e70ae357f72bb70161ca0c092df0b618f22a9292ba63306, decode policy 0xeca6a3f9c5a9fa1556892182ffef15b1273c075146a2d1a87814ae83ecea3053, precision BF16, agent key 0xd03f3dc1fa4ff1d0a615285a474e11c0d6f00dbaa5f4d827ad487239502bc3d2, max turns 1024, max duration 1200 blocks, reattest every 1, channel nonce 7320261111000001",
+   "call": "0x5e02e462d014cab1239a123233647052f4e3b572322e982441d6b7a5c1694d8419e267091ec8abdfa88707679f8a2fbfc0bcd80184e2f731d91bb9fa152b750210556c7f1a52c1abe781db051e70ae357f72bb70161ca0c092df0b618f22a9292ba633061a52c1abe781db051e70ae357f72bb70161ca0c092df0b618f22a9292ba63306eca6a3f9c5a9fa1556892182ffef15b1273c075146a2d1a87814ae83ecea305302d03f3dc1fa4ff1d0a615285a474e11c0d6f00dbaa5f4d827ad487239502bc3d200040000b0040000010000000000c16ff28623000000000000000000c12b2f1bbd011a0000004eb9efa12a0000000000000000000000000000000000",
+   "extrinsic_hash": "0x1befc63c55326955bb191a9d890a530d56fd23f1804b38f3d444812a867fee2e",
+   "finalized_in_block": 3497611,
+   "block_hash": "0x22bc7a1b0b6cb5a97167829922060bffecb48e91e7f8565e0c39f2420f23826e",
+   "extrinsic_index": 3,
+   "events_value_sha256": "b0081ef14e4f44d79b55d335a93f9f3c5b1f8bc7020aea54d7530f70b0e1a1dc",
+   "result": "success",
+   "fee_raw": "9422731810000000",
+   "note": "The same force_open with a declared spend of 0.012 FLOP. Balances.Transfer moved 0.01 FLOP from the owner to the pallet account 5EYCAe5givRj4J2LCBnZV53aisbMcviXBWiWV2kCMrLbGkVw. ForceOpenRequested: channel 0xe5655fd56d18ac9816623fd975d501322a7427fe5568c7aa02a19cf04dfd12dc, agent the owner, miner the named account, escrow 0.01 FLOP, ack_deadline 3498205. SessionCallExecuted: spent 0.012 FLOP, epoch_spent 0.012 FLOP. So the counters rose by the declared amount, not by the 0.01 that moved. Session nonce 1 after it."
+  },
+  {
+   "step": "5-force-open-over-per-call",
+   "signed_by": "device",
+   "signer": "5GmkbyGrAAMoQCvhZsEqz9gYKkqML82qS39TaTjS84NChxvC",
+   "account_nonce": "2",
+   "what": "FlopSessionKeys.execute_via_session: as owner 0xe462d014cab1239a123233647052f4e3b572322e982441d6b7a5c1694d8419e2, declared spend 30000000000000000 raw (0.03 FLOP), session nonce 1, run: ComputeChannel.force_open: ask miner 0x1ec8abdfa88707679f8a2fbfc0bcd80184e2f731d91bb9fa152b750210556c7f for a channel, escrow 30000000000000000 raw (0.03 FLOP), model 0x1a52c1abe781db051e70ae357f72bb70161ca0c092df0b618f22a9292ba63306, measured root 0x1a52c1abe781db051e70ae357f72bb70161ca0c092df0b618f22a9292ba63306, decode policy 0xeca6a3f9c5a9fa1556892182ffef15b1273c075146a2d1a87814ae83ecea3053, precision BF16, agent key 0xd03f3dc1fa4ff1d0a615285a474e11c0d6f00dbaa5f4d827ad487239502bc3d2, max turns 1024, max duration 1200 blocks, reattest every 1, channel nonce 7320261111000002",
+   "call": "0x5e02e462d014cab1239a123233647052f4e3b572322e982441d6b7a5c1694d8419e267091ec8abdfa88707679f8a2fbfc0bcd80184e2f731d91bb9fa152b750210556c7f1a52c1abe781db051e70ae357f72bb70161ca0c092df0b618f22a9292ba633061a52c1abe781db051e70ae357f72bb70161ca0c092df0b618f22a9292ba63306eca6a3f9c5a9fa1556892182ffef15b1273c075146a2d1a87814ae83ecea305302d03f3dc1fa4ff1d0a615285a474e11c0d6f00dbaa5f4d827ad487239502bc3d200040000b0040000010000000000434fd7946a000000000000000000c22b2f1bbd011a000000434fd7946a0000000000000000000100000000000000",
+   "extrinsic_hash": "0x1000f911bd77d1d410e79f29251b7d09de19b13990212023a83094e24d6b6a15",
+   "finalized_in_block": 3497694,
+   "block_hash": "0xecf119ebb5d50fbafb935fa3817fefe8073baf533484e8b52e70661c80ffa4dc",
+   "extrinsic_index": 2,
+   "events_value_sha256": "d03f23300989a9c67d6390399edd75ff1025c73ca400f143d66bed032fbd7e0c",
+   "result": "failed: FlopSessionKeys.PerTxLimitExceeded (pallet 94, error 5)",
+   "fee_raw": "9422731810000000",
+   "note": "force_open with an escrow and a declared spend of 0.03 FLOP against the limit of 0.02 per call. Rolled back."
+  },
+  {
+   "step": "6-force-open-over-daily",
+   "signed_by": "device",
+   "signer": "5GmkbyGrAAMoQCvhZsEqz9gYKkqML82qS39TaTjS84NChxvC",
+   "account_nonce": "3",
+   "what": "FlopSessionKeys.execute_via_session: as owner 0xe462d014cab1239a123233647052f4e3b572322e982441d6b7a5c1694d8419e2, declared spend 19000000000000000 raw (0.019 FLOP), session nonce 1, run: ComputeChannel.force_open: ask miner 0x1ec8abdfa88707679f8a2fbfc0bcd80184e2f731d91bb9fa152b750210556c7f for a channel, escrow 19000000000000000 raw (0.019 FLOP), model 0x1a52c1abe781db051e70ae357f72bb70161ca0c092df0b618f22a9292ba63306, measured root 0x1a52c1abe781db051e70ae357f72bb70161ca0c092df0b618f22a9292ba63306, decode policy 0xeca6a3f9c5a9fa1556892182ffef15b1273c075146a2d1a87814ae83ecea3053, precision BF16, agent key 0xd03f3dc1fa4ff1d0a615285a474e11c0d6f00dbaa5f4d827ad487239502bc3d2, max turns 1024, max duration 1200 blocks, reattest every 1, channel nonce 7320261111000003",
+   "call": "0x5e02e462d014cab1239a123233647052f4e3b572322e982441d6b7a5c1694d8419e267091ec8abdfa88707679f8a2fbfc0bcd80184e2f731d91bb9fa152b750210556c7f1a52c1abe781db051e70ae357f72bb70161ca0c092df0b618f22a9292ba633061a52c1abe781db051e70ae357f72bb70161ca0c092df0b618f22a9292ba63306eca6a3f9c5a9fa1556892182ffef15b1273c075146a2d1a87814ae83ecea305302d03f3dc1fa4ff1d0a615285a474e11c0d6f00dbaa5f4d827ad487239502bc3d200040000b0040000010000000080bb3a668043000000000000000000c32b2f1bbd011a000080bb3a6680430000000000000000000100000000000000",
+   "extrinsic_hash": "0x6cc3ed73b7564a2e43b58567bbed92090cd41b9482bcdd9b6849f7f6615a3404",
+   "finalized_in_block": 3497716,
+   "block_hash": "0x628665f5659eae91882d50dec962cdf2657aa2b8e07163c59b7838687a410abc",
+   "extrinsic_index": 3,
+   "events_value_sha256": "58b78d9b778cff870ab30c2d84f46c2763fd5ef1aaf3c2660e80bf055255ec51",
+   "result": "failed: FlopSessionKeys.DailyCapExceeded (pallet 94, error 6)",
+   "fee_raw": "9422731810000000",
+   "note": "force_open with an escrow and a declared spend of 0.019 FLOP: 0.012 + 0.019 is above the 0.025 per day. Rolled back. Counters and the circuit breaker unchanged (tx_count 1)."
+  },
+  {
+   "step": "7-expire-force-open",
+   "signed_by": "device",
+   "signer": "5GmkbyGrAAMoQCvhZsEqz9gYKkqML82qS39TaTjS84NChxvC",
+   "account_nonce": "4",
+   "what": "FlopSessionKeys.execute_via_session: as owner 0xe462d014cab1239a123233647052f4e3b572322e982441d6b7a5c1694d8419e2, declared spend 0 raw (0 FLOP), session nonce 1, run: ComputeChannel.expire_force_open on channel 0xe5655fd56d18ac9816623fd975d501322a7427fe5568c7aa02a19cf04dfd12dc",
+   "call": "0x5e02e462d014cab1239a123233647052f4e3b572322e982441d6b7a5c1694d8419e2670be5655fd56d18ac9816623fd975d501322a7427fe5568c7aa02a19cf04dfd12dc000000000000000000000000000000000100000000000000",
+   "extrinsic_hash": "0x2913c55eb6d8751791bde47ad2666bd551d733cc34551601769d1f99f3674c48",
+   "finalized_in_block": 3498234,
+   "block_hash": "0xde307547f56509cde3fb4164abee3dbc6aa5136036134f5f7773f2b6f8a21d6f",
+   "extrinsic_index": 4,
+   "events_value_sha256": "3ee8ef7ad3aa39e2769a7b06bf1f51b351ed88e89d53c81b55819bf2e7f2fa6d",
+   "result": "success",
+   "fee_raw": "7829655985000000",
+   "note": "expire_force_open through the session with a declared spend of 0, sent after the ack deadline. Balances.Transfer moved 0.01 FLOP from the pallet account back to the owner. ForceOpenExpired: refunded 0.01 FLOP, failed_acks 0. SessionCallExecuted: spent 0.012 FLOP, epoch_spent 0.012 FLOP: the refund did not lower the session's counters. Session nonce 2 after it. The channel record stays with state Closed."
+  },
+  {
+   "step": "8-revoke-session",
+   "signed_by": "owner",
+   "signer": "5HEA8QECFwBg1F9cxoXzvQzryu2d5qj5zASJS7owNW2zebBz",
+   "account_nonce": "5",
+   "what": "FlopSessionKeys.revoke_session: end the session of delegate 0xd03f3dc1fa4ff1d0a615285a474e11c0d6f00dbaa5f4d827ad487239502bc3d2",
+   "call": "0x5e01d03f3dc1fa4ff1d0a615285a474e11c0d6f00dbaa5f4d827ad487239502bc3d2",
+   "extrinsic_hash": "0x765dd578050a6fbfb9e15fc5bcde10da8be22976b5ae4a404152cb85114e93ce",
+   "finalized_in_block": 3498288,
+   "block_hash": "0x6b1d673ace135876c9524e73146e7146308aaf1978e25b7921dd2ae6670e22a8",
+   "extrinsic_index": 3,
+   "events_value_sha256": "ee8fe561350331ce7c21ca65ee4b412681da1cd8c44feb66ceec8979274b82f1",
+   "result": "success",
+   "fee_raw": "3906000695000000",
+   "note": "SessionRevoked. The session record stays with active false."
+  },
+  {
+   "step": "9-return-funds",
+   "signed_by": "device",
+   "signer": "5GmkbyGrAAMoQCvhZsEqz9gYKkqML82qS39TaTjS84NChxvC",
+   "account_nonce": "5",
+   "what": "Balances.transfer_all: send everything the signer has to 0xe462d014cab1239a123233647052f4e3b572322e982441d6b7a5c1694d8419e2 (keep_alive false)",
+   "call": "0x040400e462d014cab1239a123233647052f4e3b572322e982441d6b7a5c1694d8419e200",
+   "extrinsic_hash": "0x5ac67332681298dad76e04fe275043bcb51782090be687bd47ceba8f24d27173",
+   "finalized_in_block": 3498313,
+   "block_hash": "0xc8f0ce149b3cfd96353479917ac91aed15a13e0a3af93f26e40cc0589d01aed8",
+   "extrinsic_index": 2,
+   "events_value_sha256": "31644a4b9ce87a733ed3e912b48de29bf82b06ecb2d0e397bae3820d4f31777c",
+   "result": "success",
+   "fee_raw": "2770030705000000",
+   "note": "transfer_all back to the owner: 0.10170938607 FLOP. The device account was removed from chain state (KilledAccount)."
+  }
+ ],
+ "fees_total_raw": "60071646405000000",
+ "owner_balance": {
+  "before_raw": "24971396765185000000",
+  "after_raw": "24911325118780000000",
+  "difference_raw": "60071646405000000"
+ },
+ "left_on_chain": "Channels(0xe5655f...12dc) with state Closed (the chain keeps channel records). Sessions(owner, device) with active false. CircuitBreakers(device). Nothing else: the device account is gone, FailedAcks of the named account is absent.",
+ "how": "Each call was built and signed offline by flop-sign.mjs (version 2, in this folder) on the operator's computer. Before any key was used, check.mjs compared its calls and storage keys with the polkadot-api reference encoder on the recorded metadata. Each signed extrinsic was checked by the node with TaggedTransactionQueue_validate_transaction, sent with author_submitAndWatchExtrinsic and read back from System.Events at the block that finalized it. Events and storage values were decoded with the polkadot-api reference decoder and the same metadata.",
+ "when_utc": "2026-11-11, 19:21 to 19:36"
+}
