@@ -9,12 +9,18 @@
  * with 1e999 and -1e999. Every answer is scripted text (test/lib/scripted-gateway.ts), so nothing leaves the
  * process.
  *
- * Step 1 of the brief: these tests assert what the code does TODAY, and a name that starts with "TODAY (wrong)"
- * says the behavior breaks the rule.
+ * Step 1 of the brief pinned what the code did, and a name that started with "TODAY (wrong)" said the behavior
+ * broke the rule. Step 2 applied the rule where gateway.ts reads the body (outside-json.ts readOutsideJson): such
+ * a body takes exactly the path of a body that is not JSON at that place, with the fixed reason
+ * non_finite_number. Those tests are now named "fixed". The paid call's answer and the receipt read are parsed
+ * by @flop-labs/client, not by this tool: their "TODAY" tests still pin today's behavior (known defect KD-17 in
+ * contract/rules.json).
  */
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
+import { holdsNonFiniteNumber, NonFiniteNumber, readOutsideJson } from "../src/outside-json.js";
+import { gatewayKeyFile } from "../src/paths.js";
 import { clearSecretRegistry } from "../src/secrets.js";
 import { cli, readLines, readySeat, tmpHome } from "./helpers.js";
 import { paidRun, paidSeat, PIN, receiptText, refresh, type Answer } from "./lib/scripted-gateway.js";
@@ -36,6 +42,28 @@ const USAGE = (extra = "") => `{"prompt_tokens":1,"completion_tokens":1,"total_t
 /** Every step of a paid run that reached the receipt read, in order. */
 const ALL_SENT = ["chainId", "faucet", "chainId", "ownerOf", "estimate", "chainId", "faucet", "mint", "completion", "receipt"];
 
+describe("non-finite reads: the one reader (outside-json.ts)", () => {
+  it("control: a paid run whose every answer is finite JSON reaches every step and settles", async () => {
+    const r = await paidRun();
+    expect(r.code).toBe(0);
+    expect(r.gw.seen).toEqual(ALL_SENT);
+    expect(ledger(r.h).at(-1)).toMatchObject({ state: "settled", spend: 0.01 });
+  });
+  it("finds a number past a double anywhere outside a string, and nothing inside one", () => {
+    const hits = ["1e999", "-1e999", "[1,2,1E400]", '{"a":{"b":[0,-1e+999]}}', "1" + "0".repeat(400), String.raw`{"s":"\\","n":1e999}`];
+    const misses = ['"1e999"', '{"1e999":"-1e999"}', String.raw`{"s":"\"1e999"}`, "1e-999", "-0", "1.7976931348623157e308", "[]", "true", "null"];
+    expect(hits.filter((t) => !holdsNonFiniteNumber(t))).toEqual([]);
+    expect(misses.filter((t) => holdsNonFiniteNumber(t))).toEqual([]);
+  });
+  it("reads a body nested 100000 levels with no recursion of its own, and keeps JSON.parse's error for a text that is not JSON", () => {
+    expect(() => readOutsideJson("[".repeat(100000) + "1e999" + "]".repeat(100000))).toThrow(NonFiniteNumber);
+    expect(readOutsideJson("[".repeat(100000) + "1" + "]".repeat(100000))).toBeInstanceOf(Array);
+    expect(() => readOutsideJson(NOT_JSON)).toThrow(SyntaxError);
+    expect(() => readOutsideJson("NaN")).toThrow(SyntaxError);
+    expect(new NonFiniteNumber().message).toBe("non_finite_number");
+  });
+});
+
 describe("non-finite reads: the Ethereum RPC answers (eth_chainId, eth_call ownerOf)", () => {
   it("control: an eth_chainId answer that is not JSON refuses the paid run, exit 5, nothing sent", async () => {
     const r = await paidRun({ chainId: ok(NOT_JSON) });
@@ -45,10 +73,13 @@ describe("non-finite reads: the Ethereum RPC answers (eth_chainId, eth_call owne
     expect(ledger(r.h)).toEqual([]);
   });
   for (const n of ["1e999", "-1e999"]) {
-    it(`TODAY (wrong): an eth_chainId answer with ${n} in its id is read, and the paid run goes on to the paid call`, async () => {
+    it(`fixed: an eth_chainId answer with ${n} in its id takes the not-JSON path, exit 5, nothing sent, reason non_finite_number`, async () => {
       const r = await paidRun({ chainId: ok(`{"jsonrpc":"2.0","id":${n},"result":"0x1"}`) });
-      expect(r.code).toBe(0);
-      expect(r.gw.seen).toEqual(ALL_SENT);
+      expect(r.code).toBe(5);
+      expect(r.err).toContain("eth_chainId returned malformed JSON (non_finite_number)");
+      expect(r.err).not.toContain("999");
+      expect(r.gw.seen).toEqual(["chainId"]);
+      expect(ledger(r.h)).toEqual([]);
     });
   }
   it("control: an eth_call ownerOf answer that is not JSON fails the owner check, exit 4, nothing sent", async () => {
@@ -58,11 +89,12 @@ describe("non-finite reads: the Ethereum RPC answers (eth_chainId, eth_call owne
     expect(r.gw.seen).not.toContain("estimate");
   });
   for (const n of ["1e999", "-1e999"]) {
-    it(`TODAY (wrong): an eth_call ownerOf answer with ${n} in its id is read as the owner, and the paid call is sent`, async () => {
+    it(`fixed: an eth_call ownerOf answer with ${n} in its id takes the not-JSON path, exit 4, nothing sent, reason non_finite_number`, async () => {
       const seat = await paidSeat();
       const r = await paidRun({ ownerOf: ok(`{"jsonrpc":"2.0","id":${n},"result":"0x${"0".repeat(24)}${seat.owner.slice(2).toLowerCase()}"}`) }, undefined, seat);
-      expect(r.code).toBe(0);
-      expect(r.gw.seen).toEqual(ALL_SENT);
+      expect(r.code).toBe(4);
+      expect(r.err).toContain("eth_call returned malformed JSON (non_finite_number)");
+      expect(r.gw.seen).not.toContain("estimate");
     });
   }
 });
@@ -75,10 +107,11 @@ describe("non-finite reads: the faucet /chain answer", () => {
     expect(r.gw.seen).toEqual(["chainId", "faucet"]);
   });
   for (const n of ["1e999", "-1e999"]) {
-    it(`TODAY (wrong): a faucet answer with ${n} beside the genesis is read, and the paid call is sent`, async () => {
+    it(`fixed: a faucet answer with ${n} beside the genesis takes the not-JSON path, exit 5, nothing sent, reason non_finite_number`, async () => {
       const r = await paidRun({ faucet: ok(`{"genesisHash":"${PIN}","height":${n}}`) });
-      expect(r.code).toBe(0);
-      expect(r.gw.seen).toEqual(ALL_SENT);
+      expect(r.code).toBe(5);
+      expect(r.err).toContain("(faucet returned malformed JSON (non_finite_number))");
+      expect(r.gw.seen).toEqual(["chainId", "faucet"]);
     });
   }
 });
@@ -91,10 +124,11 @@ describe("non-finite reads: the FLOP RPC WebSocket frame", () => {
     expect(r.gw.seen).toEqual(["chainId", "faucet"]);
   });
   for (const n of ["1e999", "-1e999"]) {
-    it(`TODAY (wrong): a frame with ${n} in its id is read, and the paid call is sent`, async () => {
+    it(`fixed: a frame with ${n} in its id takes the not-JSON path, exit 5, nothing sent, reason non_finite_number`, async () => {
       const r = await paidRun({}, `{"jsonrpc":"2.0","id":${n},"result":"${PIN}"}`);
-      expect(r.code).toBe(0);
-      expect(r.gw.seen).toEqual(ALL_SENT);
+      expect(r.code).toBe(5);
+      expect(r.err).toContain("(rpc unavailable: rpc returned malformed JSON (non_finite_number))");
+      expect(r.gw.seen).toEqual(["chainId", "faucet"]);
     });
   }
 });
@@ -109,18 +143,18 @@ describe("non-finite reads: the estimate", () => {
     expect(ledger(r.h)[0].reason).toMatch(/^estimate failed \(/);
   });
   for (const n of ["1e999", "-1e999"]) {
-    it(`TODAY: an estimate whose cost is ${n} fails as "no usable cost", exit 7, nothing sent (not the not-JSON path)`, async () => {
-      const r = await paidRun({ estimate: ok(`{"estimated_input_tokens":1,"estimated_output_tokens":1,"estimated_cost_flop":${n}}`) });
-      expect(r.code).toBe(7);
-      expect(r.err).toContain("refused locally, nothing sent: estimate returned no usable cost");
-      expect(r.gw.seen.at(-1)).toBe("estimate");
-      expect(ledger(r.h)).toMatchObject([{ state: "refused_local", reason: "estimate returned no usable cost", cap_charge: 0 }]);
-    });
-    it(`TODAY (wrong): an estimate with ${n} in a field it does not read is used, and the paid call is sent`, async () => {
-      const r = await paidRun({ estimate: ok(`{"estimated_input_tokens":1,"estimated_output_tokens":1,"estimated_cost_flop":0.012,"spare":${n}}`) });
-      expect(r.code).toBe(0);
-      expect(r.gw.seen).toEqual(ALL_SENT);
-    });
+    for (const [where, body] of [
+      ["whose cost is", `{"estimated_input_tokens":1,"estimated_output_tokens":1,"estimated_cost_flop":${n}}`],
+      ["with, in a field it does not read,", `{"estimated_input_tokens":1,"estimated_output_tokens":1,"estimated_cost_flop":0.012,"spare":${n}}`],
+    ]) {
+      it(`fixed: an estimate ${where} ${n} takes the not-JSON path: estimate failed (non_finite_number), exit 7, nothing sent`, async () => {
+        const r = await paidRun({ estimate: ok(body) });
+        expect(r.code).toBe(7);
+        expect(r.err).toContain("refused locally, nothing sent: estimate failed (non_finite_number)");
+        expect(r.gw.seen.at(-1)).toBe("estimate");
+        expect(ledger(r.h)).toMatchObject([{ state: "refused_local", reason: "estimate failed (non_finite_number)", cap_charge: 0 }]);
+      });
+    }
   }
 });
 
@@ -133,10 +167,12 @@ describe("non-finite reads: the child key mint", () => {
     expect(ledger(r.h).at(-1)).toMatchObject({ state: "refused_local", reason: "nothing sent: child key mint returned an unparsable body", cap_charge: 0 });
   });
   for (const n of ["1e999", "-1e999"]) {
-    it(`TODAY (wrong): a mint answer whose expires_at is ${n} is used, and the paid call is sent`, async () => {
+    it(`fixed: a mint answer whose expires_at is ${n} takes the not-JSON path, exit 11, reservation released, reason non_finite_number`, async () => {
       const r = await paidRun({ mint: ok(`{"token":"flop_ek_SYNTHETICCHILD0123456789","expires_at":${n}}`, 201) });
-      expect(r.code).toBe(0);
-      expect(r.gw.seen).toEqual(ALL_SENT);
+      expect(r.code).toBe(11);
+      expect(r.err).toContain("nothing sent: child key mint returned an unparsable body (non_finite_number)");
+      expect(r.gw.seen).not.toContain("completion");
+      expect(ledger(r.h).at(-1)).toMatchObject({ state: "refused_local", reason: "nothing sent: child key mint returned an unparsable body (non_finite_number)", cap_charge: 0 });
     });
   }
 });
@@ -151,20 +187,20 @@ describe("non-finite reads: the paid call's answer (parsed by @flop-labs/client)
     expect(r.gw.seen).not.toContain("receipt");
   });
   for (const n of ["1e999", "-1e999"]) {
-    it(`TODAY: an answer whose usage.cost_flop is ${n} takes the not-JSON path (the client's schema refuses it), with no reason of its own`, async () => {
+    it(`TODAY (KD-17): an answer whose usage.cost_flop is ${n} takes the not-JSON path (the client's schema refuses it), with no reason of its own`, async () => {
       const r = await paidRun({ completion: ok(COMPLETION(`{"prompt_tokens":1,"completion_tokens":1,"total_tokens":2,"cost_flop":${n}}`)) });
       expect(r.code).toBe(6);
       expect(ledger(r.h).at(-1)).toMatchObject({ state: "timeout_unknown", reason: "FlopValidationError: no answer; spend unknown, not retried", cap_charge: 0.132, spend: null });
       expect(responses(r.h)).toEqual([]);
     });
-    it(`TODAY (wrong): an answer with ${n} in a usage field the client does not check is stored with null in its place`, async () => {
+    it(`TODAY (wrong, KD-17): an answer with ${n} in a usage field the client does not check is stored with null in its place`, async () => {
       const r = await paidRun({ completion: ok(COMPLETION(USAGE(`,"spare":${n}`))) });
       expect(r.code).toBe(0);
       const [stored] = responses(r.h);
       expect(JSON.parse(stored).usage).toEqual({ prompt_tokens: 1, completion_tokens: 1, total_tokens: 2, cost_flop: 0.01, spare: null });
       expect(ledger(r.h).at(-1)).toMatchObject({ state: "settled", cost_reported: 0.01 });
     });
-    it(`TODAY (wrong): an answer with ${n} outside usage is used as a trusted answer and booked`, async () => {
+    it(`TODAY (wrong, KD-17): an answer with ${n} outside usage is used as a trusted answer and booked`, async () => {
       const r = await paidRun({ completion: ok(COMPLETION(USAGE(), `,"spare":${n}`)) });
       expect(r.code).toBe(0);
       expect(ledger(r.h).at(-1)).toMatchObject({ state: "settled", cost_reported: 0.01 });
@@ -175,7 +211,7 @@ describe("non-finite reads: the paid call's answer (parsed by @flop-labs/client)
     expect(r.code).toBe(1);
     expect(ledger(r.h).at(-1)).toMatchObject({ state: "error", reason: "HTTP 500", cap_charge: 0.132 });
   });
-  it("TODAY: an HTTP 500 answer with 1e999 in it is the same gateway error, exit 1", async () => {
+  it("TODAY (KD-17): an HTTP 500 answer with 1e999 in it is the same gateway error, exit 1", async () => {
     const r = await paidRun({ completion: ok(`{"error":"busy","retry":1e999}`, 500) });
     expect(r.code).toBe(1);
     expect(ledger(r.h).at(-1)).toMatchObject({ state: "error", reason: "HTTP 500", cap_charge: 0.132 });
@@ -190,7 +226,7 @@ describe("non-finite reads: the receipt read (parsed by @flop-labs/client)", () 
     expect(receipts(r.h)).toMatchObject([{ http: 0, error: "Gateway response is not valid JSON", settled: null, reserved: null }]);
   });
   for (const [field, n] of [["settled_spend", "1e999"], ["reserved_spend", "-1e999"]] as const) {
-    it(`TODAY: a receipt whose ${field} is ${n} is not a trusted read (the client's schema refuses it), but its reason is not non_finite_number`, async () => {
+    it(`TODAY (KD-17): a receipt whose ${field} is ${n} is not a trusted read (the client's schema refuses it), but its reason is not non_finite_number`, async () => {
       const r = await paidRun({ receipt: ok(receiptText({ [field]: n })) });
       expect(r.code).toBe(0);
       expect(ledger(r.h).at(-1)).toMatchObject({ state: "sent", cap_charge: 0.132, spend: null });
@@ -198,14 +234,14 @@ describe("non-finite reads: the receipt read (parsed by @flop-labs/client)", () 
     });
   }
   for (const n of ["1e999", "-1e999"]) {
-    it(`TODAY (wrong): a receipt with ${n} in a field the client does not check is a trusted read and is booked`, async () => {
+    it(`TODAY (wrong, KD-17): a receipt with ${n} in a field the client does not check is a trusted read and is booked`, async () => {
       const r = await paidRun({ receipt: ok(receiptText({ spare: n })) });
       expect(r.code).toBe(0);
       expect(ledger(r.h).at(-1)).toMatchObject({ state: "settled", spend: 0.01 });
       expect(receipts(r.h)).toMatchObject([{ http: 200, error: null, state: "settled", settled: 0.01 }]);
     });
   }
-  it("TODAY (wrong): receipt --refresh books a receipt with 1e999 in a field the client does not check", async () => {
+  it("TODAY (wrong, KD-17): receipt --refresh books a receipt with 1e999 in a field the client does not check", async () => {
     const first = await paidRun({ receipt: ok(NOT_JSON) });
     const rid = first.gw.requestId()!;
     expect(ledger(first.h).at(-1)).toMatchObject({ state: "sent" });
@@ -217,7 +253,7 @@ describe("non-finite reads: the receipt read (parsed by @flop-labs/client)", () 
     const r = await paidRun({ receipt: ok(NOT_JSON, 401) });
     expect(receipts(r.h)).toMatchObject([{ http: 401, error: null, flag: null }]);
   });
-  it("TODAY (wrong): an HTTP 401 receipt answer with 1e999 in it is read: its error sets the key_expired flag", async () => {
+  it("TODAY (wrong, KD-17): an HTTP 401 receipt answer with 1e999 in it is read: its error sets the key_expired flag", async () => {
     const r = await paidRun({ receipt: ok(`{"error":"api_key_expired","retry":1e999}`, 401) });
     expect(receipts(r.h)).toMatchObject([{ http: 401, error: "api_key_expired", flag: "key_expired" }]);
   });
@@ -247,13 +283,14 @@ describe("non-finite reads: the enroll answers", () => {
     expect(r.code).toBe(1);
     expect(r.err).toContain("the enroll challenge was not JSON");
   });
-  it("TODAY (wrong): a challenge whose expires_at is 1e999 is signed and posted", async () => {
+  it("fixed: a challenge whose expires_at is 1e999 takes the not-JSON path, exit 1, nothing signed or posted, reason non_finite_number", async () => {
     const h = await enrollSeat();
     let posted = 0;
     const f = enrollFetch(challenge("1e999"), ok(`{"error":"wallet_unfunded"}`, 403));
     const r = await cli(h, ["enroll", "--live"], { fetch: (async (u: unknown, i?: RequestInit) => { if (!String(u).includes("challenge")) posted++; return f(u as string, i); }) as typeof fetch });
-    expect(posted).toBe(1);
-    expect(r.json()).toMatchObject({ enrolled: false, http: 403, error: "wallet_unfunded" });
+    expect(r.code).toBe(1);
+    expect(r.err).toContain("the enroll challenge was not JSON (non_finite_number)");
+    expect(posted).toBe(0);
   });
   it("control: an enroll answer that is not JSON enrolls nothing and prints no error, exit 1", async () => {
     const h = await enrollSeat();
@@ -261,10 +298,11 @@ describe("non-finite reads: the enroll answers", () => {
     expect(r.code).toBe(1);
     expect(r.json()).toEqual({ enrolled: false, http: 200, error: null });
   });
-  it("TODAY (wrong): an enroll answer whose remaining_quota is 1e999 enrolls, and prints the string \"null\" for it", async () => {
+  it("fixed: an enroll answer whose remaining_quota is 1e999 takes the not-JSON path: nothing enrolled or stored, exit 1, error non_finite_number", async () => {
     const h = await enrollSeat();
     const r = await cli(h, ["enroll", "--live"], { fetch: enrollFetch(challenge("1"), ok(`{"key":"flop_sk_SYNTHETICNEWBEARER0123456789","model":"m","remaining_quota":1e999,"expires_at":1}`, 201)) });
-    expect(r.code).toBe(0);
-    expect(r.json()).toMatchObject({ enrolled: true, http: 201, remaining_quota: "null" });
+    expect(r.code).toBe(1);
+    expect(r.json()).toEqual({ enrolled: false, http: 201, error: "non_finite_number" });
+    expect(existsSync(gatewayKeyFile(h, "42"))).toBe(false);
   });
 });

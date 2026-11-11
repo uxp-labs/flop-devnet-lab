@@ -4,8 +4,11 @@
  * (genesis, Ethereum chain id, seat ownerOf, imd job check). Every request
  * carries our User-Agent: the gateway 403s default library UAs. Nothing here retries.
  * A paid run fails closed when the chain id or the pinned genesis cannot be confirmed.
+ * Every body and frame here is read by outside-json.ts readOutsideJson: one that holds a number that is not finite
+ * takes the path of one that is not JSON, with the reason non_finite_number.
  */
 import { IMD_API, SEAT_CHAIN_ID, SEAT_COLLECTION, USER_AGENT, type NetworkInfo } from "./networks.js";
+import { notJsonBecause, NonFiniteNumber, NON_FINITE_NUMBER, readOutsideJson, responseJson } from "./outside-json.js";
 import { outsideText, type Mark } from "./secrets.js";
 
 export type Fetch = typeof globalThis.fetch;
@@ -47,7 +50,8 @@ export async function postEstimate(net: NetworkInfo, body: { model: string; prom
     signal: AbortSignal.timeout(timeoutMs),
   });
   if (!res.ok) throw new Error(`estimate HTTP ${res.status}`);
-  return (await res.json()) as Estimate;
+  // A body with a number that is not finite fails like one that is not JSON: "estimate failed (non_finite_number)".
+  return (await responseJson(res)) as Estimate;
 }
 
 /** POST /keys/ephemeral: single-use child key capped at maxSpend. The token is returned to memory only. */
@@ -69,9 +73,9 @@ export async function mintChildKey(net: NetworkInfo, parentBearer: string, opts:
   if (res.status !== 201) throw new PreSendError(`child key mint HTTP ${res.status}`);
   let j: { token: string; expires_at: number };
   try {
-    j = (await res.json()) as { token: string; expires_at: number };
-  } catch {
-    throw new PreSendError("child key mint returned an unparsable body");
+    j = (await responseJson(res)) as { token: string; expires_at: number };
+  } catch (e) {
+    throw new PreSendError(notJsonBecause("child key mint returned an unparsable body", e));
   }
   if (typeof j?.token !== "string" || !/^flop_ek_/.test(j.token)) throw new PreSendError("child key mint returned an unexpected token shape");
   return j;
@@ -87,16 +91,20 @@ export async function getEnrollChallenge(net: NetworkInfo, ss58: string, f: Fetc
   // The parse error of a body that is not JSON quotes the body: never repeat it (review defect 5).
   let j: unknown;
   try {
-    j = await res.json();
-  } catch {
-    throw new Error("the enroll challenge was not JSON");
+    j = await responseJson(res);
+  } catch (e) {
+    throw new Error(notJsonBecause("the enroll challenge was not JSON", e));
   }
   const c = j as { message?: unknown; nonce?: unknown; expires_at?: unknown } | null;
   if (!c || typeof c !== "object" || typeof c.message !== "string") throw new Error("the enroll challenge has no message");
   return c as { message: string; nonce: string; expires_at: number };
 }
 
-export async function postEnroll(net: NetworkInfo, body: { address: string; message: string; signature: string }, f: Fetch): Promise<{ status: number; json: Record<string, unknown> }> {
+/**
+ * POST /enroll/wallet. A body that is not JSON reads as {}. One with a number that is not finite reads as {} too,
+ * and `reason` says why (NON_FINITE_NUMBER).
+ */
+export async function postEnroll(net: NetworkInfo, body: { address: string; message: string; signature: string }, f: Fetch): Promise<{ status: number; json: Record<string, unknown>; reason?: string }> {
   const res = await uaFetch(f)(`${net.gateway}/enroll/wallet`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Accept: "application/json" },
@@ -105,9 +113,10 @@ export async function postEnroll(net: NetworkInfo, body: { address: string; mess
   });
   let json: Record<string, unknown> = {};
   try {
-    json = (await res.json()) as Record<string, unknown>;
-  } catch {
+    json = (await responseJson(res)) as Record<string, unknown>;
+  } catch (e) {
     /* empty body */
+    if (e instanceof NonFiniteNumber) return { status: res.status, json, reason: NON_FINITE_NUMBER };
   }
   return { status: res.status, json };
 }
@@ -141,11 +150,11 @@ export async function checkGenesis(net: NetworkInfo, f: Fetch = globalThis.fetch
       errors.push(`faucet HTTP ${res.status}`);
     } else {
       try {
-        const body = (await res.json()) as { genesisHash?: unknown };
+        const body = (await responseJson(res)) as { genesisHash?: unknown };
         faucetGenesis = body && typeof body === "object" ? normalizeGenesis(body.genesisHash) : null;
         if (!faucetGenesis) errors.push("faucet genesis malformed");
-      } catch {
-        errors.push("faucet returned malformed JSON");
+      } catch (e) {
+        errors.push(notJsonBecause("faucet returned malformed JSON", e));
       }
     }
   } catch (e) {
@@ -191,7 +200,7 @@ function rpcCall(url: string, method: string, params: unknown[], timeoutMs = 150
     ws.onopen = () => ws.send(JSON.stringify({ id: 1, jsonrpc: "2.0", method, params }));
     ws.onmessage = (ev) => {
       try {
-        const msg = JSON.parse(String(ev.data)) as { result?: unknown; error?: { message?: string } };
+        const msg = readOutsideJson(String(ev.data)) as { result?: unknown; error?: { message?: string } };
         if (!msg || typeof msg !== "object" || Array.isArray(msg)) {
           finish(new Error("rpc returned malformed JSON"));
           return;
@@ -202,9 +211,9 @@ function rpcCall(url: string, method: string, params: unknown[], timeoutMs = 150
           return;
         }
         finish(null, msg.result ?? null);
-      } catch {
+      } catch (e) {
         // JSON.parse's own message quotes the frame: never repeat it.
-        finish(new Error("rpc returned malformed JSON"));
+        finish(new Error(notJsonBecause("rpc returned malformed JSON", e)));
       }
     };
     ws.onerror = () => {
@@ -324,9 +333,9 @@ export async function readEthereumChainId(rpcUrl: string, f: Fetch = globalThis.
   if (!res.ok) throw new Error(`eth_chainId HTTP ${res.status}`);
   let j: { result?: unknown; error?: { message?: string } };
   try {
-    j = (await res.json()) as { result?: unknown; error?: { message?: string } };
-  } catch {
-    throw new Error("eth_chainId returned malformed JSON");
+    j = (await responseJson(res)) as { result?: unknown; error?: { message?: string } };
+  } catch (e) {
+    throw new Error(notJsonBecause("eth_chainId returned malformed JSON", e));
   }
   if (!j || typeof j !== "object" || Array.isArray(j)) throw new Error("eth_chainId returned malformed JSON");
   if (j.error) throw new Error(`eth_chainId error: ${rpcFailure.rpcError(j.error)}`);
@@ -405,9 +414,9 @@ export async function readSeatOwner(rpcUrl: string, collection: string, tokenId:
   // The parse error of a body that is not JSON quotes the body: never repeat it.
   let j: { result?: string; error?: { message?: string } };
   try {
-    j = (await res.json()) as { result?: string; error?: { message?: string } };
-  } catch {
-    throw new Error("eth_call returned malformed JSON");
+    j = (await responseJson(res)) as { result?: string; error?: { message?: string } };
+  } catch (e) {
+    throw new Error(notJsonBecause("eth_call returned malformed JSON", e));
   }
   // The eth_call error text is never quoted: an error is a revert, read as no owner.
   if (j.error) return null;

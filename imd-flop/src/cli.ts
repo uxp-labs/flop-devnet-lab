@@ -256,7 +256,7 @@ export async function main(argv: string[], io: IO): Promise<number> {
           print({ enrolled: true, http: r.status, model: shownField(r.json.model), remaining_quota: shownField(r.json.remaining_quota), expires_at: shownField(r.json.expires_at) });
           return EXIT.OK;
         }
-        print({ enrolled: false, http: r.status, error: shownField(r.json.error) });
+        print({ enrolled: false, http: r.status, error: r.reason ?? shownField(r.json.error) });
         return EXIT.ERROR;
       }
 

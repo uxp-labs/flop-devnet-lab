@@ -611,6 +611,17 @@
       "target": "the message names the line and the field, and quotes the value only when it is a string of at most 32 characters that the secret scan passes; otherwise it says the type and the length. refuse() writes its row, run exits 3 and names the line",
       "status": "fixed: swarm audit 33f3b9f, findings 3, 6 and 10",
       "fixed_behavior": "ledger.ts placed describes each unusable value through secrets.ts outsideValue: a string of at most 32 characters that the secret scan passes is quoted, and anything else is named by its type and length (for example: day a string of 64 characters). So refuse() writes its refused_local row, run exits 3 and the message names the line and the field. Text this tool did not write goes through one function before any sink: outsideText (marks such as [ETH_RPC_URL] replaced, 0x and 64 hex replaced by [hash], withheld when the scan still finds a key, cut to a bound). The pre-send reason that goes to the ledger row is the one printed on stderr. Pinned by imd-flop/test/audit-33f3b9f.test.ts (findings 3, 6, 10) and the vector placement-seat-above-max"
+    },
+    {
+      "id": "KD-17",
+      "source": "non-finite reads brief, step 1, 2026-11-11 (imd-flop/test/non-finite-reads.test.ts)",
+      "parts": [
+        "imd-flop"
+      ],
+      "where": "src/providers.ts FlopProvider complete and readReceipt: the paid call's answer and the receipt read are parsed by @flop-labs/client (FlopClient readJSON, JSON.parse), not by src/outside-json.ts readOutsideJson",
+      "today": "a number that is not finite (1e999, -1e999) in a field the client's schema checks (usage.cost_flop, the token counts, reserved_spend, settled_spend, created_at) takes the path of a body that is not JSON with the client's reason (FlopValidationError, booked as timeout_unknown, exit 6; a receipt read with http 0 and error \"Invalid credential receipt response\"), not non_finite_number. One in a field the client does not check is read: a completion's usage is stored in the response file with null in its place, and the run and its receipt read are booked as trusted. An HTTP 401 receipt answer with one in it is read too, so its error sets the key_expired flag where a 401 body that is not JSON sets none",
+      "target": "such a body takes exactly the path of a body that is not JSON at that place, with the fixed reason non_finite_number: the paid call's answer leaves the spend unknown and the reservation held, a receipt read is not a trusted read, books nothing, and the stored receipt records the reason. Nothing is stored with null in place of a number the gateway sent",
+      "status": "current behavior: the fix needs the paid call and the receipt read to be read by readOutsideJson, which reshapes how src/providers.ts uses @flop-labs/client (decision pending)"
     }
   ]
 }
