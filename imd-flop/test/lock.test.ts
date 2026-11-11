@@ -8,7 +8,7 @@
  *    processes x STRESS_OPS entries x STRESS_ROUNDS rounds (defaults 6 x 20 x 2).
  */
 import { spawn, spawnSync } from "node:child_process";
-import { existsSync, readdirSync, readFileSync, unlinkSync, utimesSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, readdirSync, readFileSync, unlinkSync, utimesSync, writeFileSync } from "node:fs";
 import { hostname } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -47,8 +47,9 @@ describe("finding 11 item (1): the re-check under the reclaim right", () => {
     withLedgerLock(h, () => {
       const held = readFileSync(lock, "utf8");
       expect(JSON.parse(held).pid).toBe(process.pid);
-      // C, which judged T dead before B acted, now gets the right for T.
-      expect(runOnDisk(reclaim(c, lock, "T"), noWait)).toBe(true);
+      // C, which judged T dead before B acted, now gets the right for T. It removes nothing, so it does not
+      // answer "again".
+      expect(runOnDisk(reclaim(c, lock, "T"), noWait)).toBe(false);
       expect(existsSync(lock) && readFileSync(lock, "utf8")).toBe(held);
       expect(lockFiles(h)).toEqual(["ledger.jsonl.lock"]);
     });
@@ -98,6 +99,33 @@ describe("L6: the sweep under the lock", () => {
     withLedgerLock(h, () => expect(lockFiles(h)).toEqual(["ledger.jsonl.lock", ...kept].sort()));
     expect(lockFiles(h)).toEqual(kept);
   });
+});
+
+describe("defect 1: only ENOENT means the lock is absent", () => {
+  // Runs under the suite's dropped capabilities (no DAC override), so mode 000 cannot be read, even by root.
+  it("a lock that cannot be read (mode 000) is a lock with no readable owner: never removed, waited on, named in the timeout", () => {
+    const h = tmpHome();
+    writeFileSync(lockPath(h), owner(deadPid(), "dead"));
+    chmodSync(lockPath(h), 0o000);
+    try {
+      let unreadable = true;
+      try { readFileSync(lockPath(h)); unreadable = false; } catch { /* EACCES, as wanted */ }
+      expect(unreadable, "run the suite without the DAC override capabilities (setpriv)").toBe(true);
+      const t0 = Date.now();
+      expect(() => withLedgerLock(h, () => 1)).toThrow(/^ledger lock timeout: \S+ledger\.jsonl\.lock \(\d+ s old\) has no readable owner: it cannot be read \(EACCES\)\. If no imd-flop process is using this home any more, remove that file and run again\.$/);
+      expect(Date.now() - t0).toBeGreaterThanOrEqual(5_000);
+      expect(lockFiles(h)).toEqual(["ledger.jsonl.lock"]);
+    } finally {
+      chmodSync(lockPath(h), 0o644);
+    }
+  }, 20_000);
+
+  it("a directory at the lock path is waited on and named", () => {
+    const h = tmpHome();
+    mkdirSync(lockPath(h));
+    expect(() => withLedgerLock(h, () => 1)).toThrow(/has no readable owner: it is a directory\. If no imd-flop/);
+    expect(lockFiles(h)).toEqual(["ledger.jsonl.lock"]);
+  }, 20_000);
 });
 
 describe("L4: no age rule", () => {

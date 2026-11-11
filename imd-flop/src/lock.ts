@@ -31,7 +31,7 @@
  * them on the real file system. The model check runs them over an in memory file system and interleaves
  * them at every yield.
  */
-import { closeSync, linkSync, openSync, readdirSync, readFileSync, statSync, unlinkSync, writeSync } from "node:fs";
+import { closeSync, linkSync, lstatSync, openSync, readdirSync, readFileSync, unlinkSync, writeSync } from "node:fs";
 import { randomBytes } from "node:crypto";
 import { hostname } from "node:os";
 import { basename, dirname, join } from "node:path";
@@ -117,7 +117,11 @@ export function* provablyDead(self: Self, o: LockOwner): Step<boolean> {
   return !(yield* alive(o.pid));
 }
 
-/** What one attempt to take the lock ended in: taken, try again at once, or wait and then try again. */
+/**
+ * What one attempt to take the lock ended in: taken, try again at once, or wait and then try again.
+ * "again" only right after this process itself removed the lock. Every other outcome waits, so no loop of
+ * attempts is free of a wait, and the deadline is reached whatever is at the lock path.
+ */
 export type Attempt = "taken" | "again" | "wait";
 
 /**
@@ -129,9 +133,8 @@ export function* attempt(self: Self, lock: string): Step<Attempt> {
     yield* sweep(self, lock);
     return "taken";
   }
-  const text = yield* read(lock);
-  if (text === null) return "again"; // released between our create and our read
-  const o = parseOwner(text);
+  // Absent here means released between our create and our read: wait, then try again.
+  const o = parseOwner(yield* read(lock));
   if (o !== null && (yield* provablyDead(self, o)) && (yield* reclaim(self, lock, o.token))) return "again";
   return "wait";
 }
@@ -147,16 +150,18 @@ export function* acquire(self: Self, lock: string): Step<void> {
 
 /**
  * Remove the lock that carries token, whose owner was judged provably dead, if this process gets the
- * reclaim right for it. True when it held the right (and so the lock may be free now). False when it got
- * no right: another live process is reclaiming it, or a right file cannot be read.
+ * reclaim right for it. True only when this process removed the lock. False when it got no right
+ * (another live process is reclaiming it, or a right file cannot be read), or when under the right the
+ * lock no longer carried that token.
  */
 export function* reclaim(self: Self, lock: string, token: string): Step<boolean> {
   for (let n = 1; ; n++) {
     const right = rightPath(lock, token, n);
     if (yield* create(right, ownerText(self))) {
-      if (parseOwner(yield* read(lock))?.token === token) yield* unlink(lock);
+      let removed = false;
+      if (parseOwner(yield* read(lock))?.token === token) removed = yield* unlink(lock);
       yield* unlink(right);
-      return true;
+      return removed;
     }
     const r = parseOwner(yield* read(right));
     if (r === null || !(yield* provablyDead(self, r))) return false;
@@ -219,9 +224,29 @@ function createFile(path: string, content: string): boolean {
   }
 }
 
-/** The file's text, null when there is none. A file that exists and cannot be read reads as no owner. */
+/**
+ * The file's text, null when there is none. Only ENOENT means absent. A path that cannot be read, or is
+ * not a regular file (a symbolic link, a directory, anything else), reads as no owner: never removed.
+ */
 function readText(path: string): string | null {
-  try { return readFileSync(path, "utf8"); } catch (e) { return code(e) === "ENOENT" ? null : ""; }
+  try {
+    if (!lstatSync(path).isFile()) return "";
+    return readFileSync(path, "utf8");
+  } catch (e) {
+    return absentOrUnreadable(e);
+  }
+}
+const absentOrUnreadable = (e: unknown): string | null => (code(e) === "ENOENT" ? null : "");
+
+/** What is at a path that has no readable owner, for the timeout message. Null when it is a regular file that reads. */
+function whatItIs(path: string): string | null {
+  let st;
+  try { st = lstatSync(path); } catch (e) { return code(e) === "ENOENT" ? null : `it cannot be examined (${code(e)})`; }
+  if (st.isSymbolicLink()) return "it is a symbolic link";
+  if (st.isDirectory()) return "it is a directory";
+  if (!st.isFile()) return "it is not a regular file";
+  try { readFileSync(path); } catch (e) { return `it cannot be read (${code(e)})`; }
+  return null;
 }
 
 function processAlive(pid: number): boolean {
@@ -266,9 +291,11 @@ export function runOnDisk<R>(step: Step<R>, onWait: () => void): R {
  */
 export function timeoutMessage(lock: string): string {
   let age: string;
-  try { age = `${Math.floor((Date.now() - statSync(lock).mtimeMs) / 1000)} s old`; } catch { age = "gone"; }
-  const o = parseOwner(readText(lock));
-  const owner = o ? `is held by pid ${o.pid} on host ${o.host}` : "has no readable owner";
+  try { age = `${Math.floor((Date.now() - lstatSync(lock).mtimeMs) / 1000)} s old`; } catch { age = "gone"; }
+  const text = readText(lock);
+  const o = parseOwner(text);
+  const what = text === null ? null : whatItIs(lock);
+  const owner = text === null ? "is gone now" : o ? `is held by pid ${o.pid} on host ${o.host}` : `has no readable owner${what ? `: ${what}` : ""}`;
   return `ledger lock timeout: ${lock} (${age}) ${owner}. If no imd-flop process is using this home any more, remove that file and run again.`;
 }
 
@@ -288,12 +315,15 @@ function takeLock(lock: string): string {
   const token = randomBytes(16).toString("hex");
   held.add(token);
   const start = Date.now();
+  const me = self(token);
   try {
-    runOnDisk(acquire(self(token), lock), () => {
+    // The deadline is checked before every attempt, not only at a wait.
+    for (;;) {
       if (Date.now() - start > TIMEOUT_MS) throw new LedgerLockError(timeoutMessage(lock));
-      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, WAIT_MS);
-    });
-    return token;
+      const r = runOnDisk(attempt(me, lock), () => {});
+      if (r === "taken") return token;
+      if (r === "wait") Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, WAIT_MS);
+    }
   } catch (e) {
     held.delete(token);
     throw e;

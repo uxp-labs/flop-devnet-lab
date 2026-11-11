@@ -81,22 +81,28 @@ process.stdout.write(JSON.stringify({ code, calls, err: err.join("\\n") }));
   return script;
 }
 
-describe("DEFECT 1: a lock that exists for link but reads as absent", () => {
-  // createFile's link says EEXIST, readText says ENOENT (null), attempt returns "again", and acquire tries
-  // again at once. It never yields wait, so takeLock's 5 s timeout (checked only at a wait) never fires.
-  // A dangling symlink at ledger.jsonl.lock is enough. That is damage, outside the cap promise, but the
-  // tool is meant to fail closed with the L5 message after 5 s; instead it spins on the CPU forever.
-  it("DEFECT 1 (medium): a dangling symlink at the lock path makes acquire spin on again forever, so the 5 s timeout never fires", () => {
+describe("review defect 1, fixed: a lock that exists for link but reads as absent", () => {
+  // Was: createFile's link said EEXIST, readText said ENOENT (null), attempt returned "again", and acquire
+  // tried again at once, never yielding wait, so the 5 s timeout (checked only at a wait) never fired. A
+  // dangling symlink at ledger.jsonl.lock was enough.
+  // Decided: only ENOENT means absent; a path that is not a regular file is a lock with no readable owner;
+  // "again" only right after this process removed the lock itself; the deadline is checked on every attempt.
+  it("review defect 1, fixed: a dangling symlink at the lock path is waited on, and the 5 s timeout names it", () => {
     const h = tmpHome();
     symlinkSync(join(h, "no-such-target"), lockPath(h));
-    // In process: 20 000 file operations and not one wait.
+    // In process: the first attempt ends in a wait.
     const seen = { ops: 0 };
-    expect(runOnDisk(bounded(acquire(self(process.pid, "t-spin"), lockPath(h)), 20_000, seen), () => {})).toBe("spun");
-    // A real process: still in withLedgerLock after three times the 5 s timeout, and killed by the test.
+    expect(runOnDisk(bounded(acquire(self(process.pid, "t-spin"), lockPath(h)), 20_000, seen), () => {})).toBe("waited");
+    expect(seen.ops).toBeLessThan(10);
+    // A real process: the timeout fires after about 5 s, with the lock named and what it is.
     const r = spawnSync(process.execPath, [lockScript(h, h)], { timeout: 15_000, encoding: "utf8" });
-    expect({ signal: r.signal, out: r.stdout }).toEqual({ signal: "SIGTERM", out: "" });
-    // The kill can land between a temporary file's open and its unlink, so a .tmp file may be left too.
-    expect(lockFiles(h).filter((f) => !f.endsWith(".tmp"))).toEqual(["ledger.jsonl.lock"]);
+    expect(r.signal).toBeNull();
+    const m = r.stdout.match(/^LedgerLockError (\d+) (.*)$/s);
+    expect(m, r.stdout).not.toBeNull();
+    expect(Number(m![1])).toBeGreaterThanOrEqual(5_000);
+    expect(Number(m![1])).toBeLessThan(10_000);
+    expect(m![2]).toMatch(/^ledger lock timeout: \S+ledger\.jsonl\.lock \(\d+ s old\) has no readable owner: it is a symbolic link\. If no imd-flop process is using this home any more, remove that file and run again\.$/);
+    expect(lockFiles(h)).toEqual(["ledger.jsonl.lock"]);
   }, 60_000);
 });
 

@@ -20,7 +20,10 @@
  *  - in a terminal state every live process has finished, unless the lock is one the tool must not
  *    remove, and then no process got in and the lock is unchanged;
  *  - when every process finished and none died, no file is left: no lock, no right file, no temporary file.
- *    When one died, no lock of a live owner is left.
+ *    When one died, no lock of a live owner is left;
+ *  - liveness: no cycle of states without a wait. A path that comes back to a state it has already passed,
+ *    with no attempt on the way that ended in a wait, is a spin: the processes would run for ever without
+ *    one wait. Cycles through a wait are allowed and counted.
  *
  * The same checker run against wrong rules must find a violation: the old reclaim (read the owner, rename
  * aside, check, link back), an unlink under the right with no re-read, and a right file removed before the
@@ -28,7 +31,7 @@
  */
 import { createHash } from "node:crypto";
 import { describe, expect, it } from "vitest";
-import { attempt, ownerText, parseOwner, provablyDead, release, rightPath, sweep, type Attempt, type FileOp, type LockOwner, type Self, type Step } from "../src/lock.js";
+import { attempt, ownerText, parseOwner, provablyDead, reclaim, release, rightPath, sweep, type Attempt, type FileOp, type LockOwner, type Self, type Step } from "../src/lock.js";
 
 const HOST = "here";
 const MAX_STATES = 3_000_000;
@@ -93,6 +96,11 @@ class Checker {
   private original: string | undefined;
 
   readonly found = new Map<string, string>();
+  /** Cycles that pass through at least one wait. Allowed: a waiter that waits may meet the same files again. */
+  cyclesWithWait = 0;
+  private path = new Map<string, number>();
+  /** The last step ended an attempt in a wait. */
+  private waited = false;
 
   constructor(private readonly algo: Algo, start: Start, private readonly allowCrash: boolean, private readonly collect = false) {
     this.start = start;
@@ -202,6 +210,7 @@ class Checker {
 
   /** Advance process i by one scheduling point. */
   private step(s0: State, i: number, world: string): State {
+    this.waited = false;
     const s = this.clone(s0);
     const p = s.procs[i];
     if (p.phase === "inside") {
@@ -258,6 +267,7 @@ class Checker {
     }
     // wait: blocked until the world differs from the one the attempt started in, unless it changed during
     // the attempt (or by the attempt's own last operation), when trying again at once may see something new.
+    if (ended === "wait") this.waited = true;
     if (ended === "wait" && !p.dirty && worldKey(s) === startedIn) p.blockedOn = startedIn;
     this.begin(s, p);
     return s;
@@ -282,16 +292,32 @@ class Checker {
     }
   }
 
-  private visit(s: State): void {
+  /**
+   * Depth first. waits counts the attempts on the current path that ended in a wait. A state met again on
+   * the current path closes a cycle. A cycle with no wait in it is a spin: processes that run for ever
+   * without one wait, so the deadline, which follows the clock, would be the only way out. The liveness
+   * property is that there is none.
+   */
+  private visit(s: State, waits = 0): void {
     const world = worldKey(s);
     const key = stateKey(s, world);
+    const onPath = this.path.get(key);
+    if (onPath !== undefined) {
+      if (onPath === waits) this.fail(s, "spin", "a cycle with no wait: the processes run for ever without one wait");
+      else this.cyclesWithWait++;
+      return;
+    }
     if (this.seen.has(key)) return;
     if (this.seen.size > MAX_STATES) throw new Error(`more than ${MAX_STATES} states`);
     this.seen.add(key);
     this.states++;
+    this.path.set(key, waits);
     const en = this.enabled(s, world);
     if (en.length === 0) this.terminal(s);
-    for (const i of en) this.visit(this.step(s, i, world));
+    for (const i of en) {
+      const next = this.step(s, i, world);
+      this.visit(next, waits + (this.waited ? 1 : 0));
+    }
     if (this.allowCrash && !s.crashed) {
       s.procs.forEach((p, i) => {
         if (p.phase !== "acquire" && p.phase !== "inside" && p.phase !== "release") return;
@@ -300,9 +326,10 @@ class Checker {
         c.procs[i].pending = null;
         c.dead.add(p.pid);
         c.crashed = true;
-        this.visit(c);
+        this.visit(c, waits);
       });
     }
+    this.path.delete(key);
   }
 
   run(): void {
@@ -320,14 +347,14 @@ function violations(algo: Algo, start: Start, allowCrash = false): Map<string, s
   return c.found;
 }
 
-function check(algo: Algo, start: Start, allowCrash: boolean): { states: number; terminals: number; violation: string | null } {
+function check(algo: Algo, start: Start, allowCrash: boolean): { states: number; terminals: number; cyclesWithWait: number; violation: string | null } {
   const c = new Checker(algo, start, allowCrash);
   try {
     c.run();
-    return { states: c.states, terminals: c.terminals, violation: null };
+    return { states: c.states, terminals: c.terminals, cyclesWithWait: c.cyclesWithWait, violation: null };
   } catch (e) {
     if (!(e instanceof Violation)) throw e;
-    return { states: c.states, terminals: c.terminals, violation: e.message };
+    return { states: c.states, terminals: c.terminals, cyclesWithWait: c.cyclesWithWait, violation: e.message };
   }
 }
 
@@ -396,9 +423,7 @@ function withReclaim(reclaim: (self: Self, lock: string, token: string) => Step<
         yield* sweep(self, lock);
         return "taken";
       }
-      const text = yield* op<string | null>({ kind: "read", path: lock });
-      if (text === null) return "again";
-      const o = parseOwner(text);
+      const o = parseOwner(yield* op<string | null>({ kind: "read", path: lock }));
       if (o !== null && (yield* provablyDead(self, o)) && (yield* reclaim(self, lock, o.token))) return "again";
       return "wait";
     },
@@ -411,9 +436,9 @@ const NO_REREAD = withReclaim(function* (self, lock, token) {
   for (let n = 1; ; n++) {
     const right = rightPath(lock, token, n);
     if (yield* op<boolean>({ kind: "create", path: right, content: ownerText(self) })) {
-      yield* op<boolean>({ kind: "unlink", path: lock });
+      const removed = yield* op<boolean>({ kind: "unlink", path: lock });
       yield* op<boolean>({ kind: "unlink", path: right });
-      return true;
+      return removed;
     }
     const r = parseOwner(yield* op<string | null>({ kind: "read", path: right }));
     if (r === null || !(yield* provablyDead(self, r))) return false;
@@ -427,8 +452,7 @@ const RIGHT_FIRST = withReclaim(function* (self, lock, token) {
     if (yield* op<boolean>({ kind: "create", path: right, content: ownerText(self) })) {
       const same = parseOwner(yield* op<string | null>({ kind: "read", path: lock }))?.token === token;
       yield* op<boolean>({ kind: "unlink", path: right });
-      if (same) yield* op<boolean>({ kind: "unlink", path: lock });
-      return true;
+      return same && (yield* op<boolean>({ kind: "unlink", path: lock }));
     }
     const r = parseOwner(yield* op<string | null>({ kind: "read", path: right }));
     if (r === null || !(yield* provablyDead(self, r))) return false;
@@ -439,10 +463,47 @@ const RIGHT_FIRST = withReclaim(function* (self, lock, token) {
 const NO_LEVELS = withReclaim(function* (self, lock, token) {
   const right = rightPath(lock, token, 1);
   if (!(yield* op<boolean>({ kind: "create", path: right, content: ownerText(self) }))) return false;
-  if (parseOwner(yield* op<string | null>({ kind: "read", path: lock }))?.token === token) yield* op<boolean>({ kind: "unlink", path: lock });
+  let removed = false;
+  if (parseOwner(yield* op<string | null>({ kind: "read", path: lock }))?.token === token) removed = yield* op<boolean>({ kind: "unlink", path: lock });
   yield* op<boolean>({ kind: "unlink", path: right });
-  return true;
+  return removed;
 });
+
+/** Wrong (review M21): "again" after any reclaim try, whether or not this process removed the lock. */
+const AGAIN_AFTER_ANY_TRY: Algo = {
+  *attempt(self, lock) {
+    if (yield* op<boolean>({ kind: "create", path: lock, content: ownerText(self) })) {
+      yield* sweep(self, lock);
+      return "taken";
+    }
+    const o = parseOwner(yield* op<string | null>({ kind: "read", path: lock }));
+    if (o !== null && (yield* provablyDead(self, o))) {
+      yield* reclaim(self, lock, o.token);
+      return "again";
+    }
+    return "wait";
+  },
+  release,
+};
+
+/**
+ * Wrong (review M28 with the rule before the fix): a lock that cannot be read is read as absent, and an
+ * absent lock means "again". A lock that exists for create and reads as absent then spins.
+ */
+const UNREADABLE_AS_ABSENT: Algo = {
+  *attempt(self, lock) {
+    if (yield* op<boolean>({ kind: "create", path: lock, content: ownerText(self) })) {
+      yield* sweep(self, lock);
+      return "taken";
+    }
+    const text = yield* op<string | null>({ kind: "read", path: lock });
+    const o = parseOwner(text);
+    if (text === null || o === null) return "again";
+    if ((yield* provablyDead(self, o)) && (yield* reclaim(self, lock, o.token))) return "again";
+    return "wait";
+  },
+  release,
+};
 
 describe("ledger lock model check (src/lock.ts)", () => {
   for (const start of STARTS) {
@@ -454,7 +515,7 @@ describe("ledger lock model check (src/lock.ts)", () => {
       // The search is real: it reached terminal states, and the crash runs are a superset of the plain ones.
       expect(plain.terminals).toBeGreaterThan(0);
       expect(crash.states).toBeGreaterThan(plain.states);
-      console.log(`lock model: ${start.name}: ${plain.states} states without a crash, ${crash.states} with one crash (${crash.terminals} terminal)`);
+      console.log(`lock model: ${start.name}: ${plain.states} states without a crash, ${crash.states} with one crash (${crash.terminals} terminal, ${crash.cyclesWithWait} cycles through a wait, none without)`);
     }, 300_000); // alone it takes seconds; beside the other test files on two cores it can take far longer
   }
 
@@ -476,6 +537,17 @@ describe("ledger lock model check (src/lock.ts)", () => {
     const found = violations(RIGHT_FIRST, STARTS[0]);
     expect(found.get("live lock removed")).toMatch(/unlinked the lock of w\d, which is alive and holds it/);
     expect(found.get("two holders")).toBeDefined();
+  });
+
+  it("liveness: answering again after any reclaim try (review M21) spins at a dead holder's lock", () => {
+    const found = violations(AGAIN_AFTER_ANY_TRY, STARTS[0]);
+    expect(found.get("spin")).toMatch(/a cycle with no wait/);
+  });
+
+  it("liveness: a lock that cannot be read taken as absent, with again for absent (review M28), spins", () => {
+    const unreadable = STARTS.find((x) => x.name === "a lock with no readable owner")!;
+    const found = violations(UNREADABLE_AS_ABSENT, unreadable);
+    expect(found.get("spin")).toMatch(/a cycle with no wait/);
   });
 
   it("a right file that blocks whoever owns it locks the seat out once a reclaimer died holding it", () => {
