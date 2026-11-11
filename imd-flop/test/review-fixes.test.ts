@@ -239,13 +239,83 @@ describe("R6 (medium): a ledger row with an unusable day drops its charge from t
   // An unusable cap_charge refuses the next call (ledger.ts sumCharges), but spentToday filters rows by
   // e.day === day before it sums, so a row whose day is damaged (null here) is counted nowhere and its
   // charge is read as 0 for today. The same holds for a damaged seat or provider.
-  it.fails("cap 0.3, one held call of 0.186 whose latest row lost its day: a second 0.186 call is refused", async () => {
+  // Decided (review fixes 2): fail closed. A row that would count toward a total if its day, seat or
+  // provider (for the job total: job, provider or payer) were readable, and whose value there is not
+  // usable, refuses the next call with exit 3, nothing sent, and the refusal names the ledger line.
+  /** Append a copy of the latest row with these fields changed: line `n` of the ledger. */
+  const damage = (h: string, fields: Record<string, unknown>) => {
+    appendFileSync(ledgerPath(h), JSON.stringify({ ...ledger(h).at(-1)!, ts: new Date().toISOString(), ...fields }) + "\n");
+    return ledger(h).length;
+  };
+  async function refused(h: string, args: string[], line: number) {
+    const p = new P();
+    const r = await cli(h, args, { provider: p });
+    expect({ code: r.code, sent: p.calls, line: r.err.includes(`ledger line ${line}`) }, r.err).toEqual({ code: 3, sent: 0, line: true });
+  }
+  const requesterArgs = (job: string) => [...runArgs(job), "--job-budget", "1"];
+
+  it("cap 0.3, one held call of 0.186 whose latest row lost its day: a second 0.186 call is refused", async () => {
     const h = await ready("0.3");
     await pendingRun(h, "jA");
     const latest = ledger(h).at(-1)!;
     appendFileSync(ledgerPath(h), JSON.stringify({ ...latest, ts: new Date().toISOString(), day: null }) + "\n");
     const second = await cli(h, runArgs("jB"), { provider: new P() });
     expect(second.code, second.err).toBe(3);
+  });
+
+  it("cap 1: a day that is not a calendar date (2026-13-40) refuses the next call and names the line", async () => {
+    const h = await ready();
+    await pendingRun(h, "jA");
+    await refused(h, runArgs("jB"), damage(h, { day: "2026-13-40" }));
+  });
+
+  it("cap 1: a damaged seat refuses the next call and names the line", async () => {
+    const h = await ready();
+    await pendingRun(h, "jA");
+    await refused(h, runArgs("jB"), damage(h, { seat: "nine thousand one" }));
+  });
+
+  it("cap 1: a damaged provider refuses the next call and names the line", async () => {
+    const h = await ready();
+    await pendingRun(h, "jA");
+    await refused(h, runArgs("jB"), damage(h, { provider: "MOCK" }));
+  });
+
+  it("control: a row of another seat whose day is damaged would never count toward this seat: the call is admitted", async () => {
+    const h = await ready();
+    await pendingRun(h, "jA");
+    damage(h, { seat: "9002", day: null });
+    expect((await cli(h, runArgs("jB"), { provider: new P() })).code).toBe(0);
+  });
+
+  it("requester: a damaged job on a requester row refuses the next requester call; a holder call does not check the job total", async () => {
+    const h = await ready();
+    await cli(h, ["config", "set", "payer", "requester"]);
+    expect((await cli(h, requesterArgs("jA"), { provider: new P() })).code).toBe(0);
+    const line = damage(h, { job: null });
+    await refused(h, requesterArgs("jB"), line);
+    await cli(h, ["config", "set", "payer", "holder"]);
+    expect((await cli(h, runArgs("jC"), { provider: new P() })).code).toBe(0);
+  });
+
+  it("requester: a damaged payer on a row of this job refuses the next requester call for the job", async () => {
+    const h = await ready();
+    await cli(h, ["config", "set", "payer", "requester"]);
+    expect((await cli(h, requesterArgs("jA"), { provider: new P() })).code).toBe(0);
+    await refused(h, requesterArgs("jA"), damage(h, { payer: "requestor" }));
+  });
+
+  it("a damaged row that is not the latest row of its request is history: it is not placed, and the call is admitted", async () => {
+    // The latest row of a request is its booking and the only row any total counts. An older row of the
+    // same request is superseded whatever it holds, so damage there loses no charge.
+    const h = await ready();
+    await pendingRun(h, "jA");
+    const lines = readFileSync(ledgerPath(h), "utf8").split("\n").filter(Boolean).map((l) => JSON.parse(l));
+    expect(lines.length).toBeGreaterThan(1);
+    lines[0] = { ...lines[0], day: null, seat: null, provider: null };
+    writeFileSync(ledgerPath(h), lines.map((l) => JSON.stringify(l)).join("\n") + "\n");
+    expect((await cli(h, runArgs("jB"), { provider: new P() })).code).toBe(0);
+    expect(await today(h)).toBe(0.372);
   });
 });
 

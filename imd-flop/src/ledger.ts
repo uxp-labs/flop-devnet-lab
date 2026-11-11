@@ -4,13 +4,15 @@
  * States: refused_local, sent, timeout_unknown, error, reserved, estimated, settled, released.
  * A pre-mint refusal appends refused_local (cap charge 0). That latest line supersedes the pre-call sent line.
  */
-import { closeSync, linkSync, openSync, readFileSync, renameSync, statSync, unlinkSync, writeSync } from "node:fs";
+import { closeSync, existsSync, linkSync, openSync, readFileSync, renameSync, statSync, unlinkSync, writeSync } from "node:fs";
 import { randomBytes } from "node:crypto";
 import { hostname } from "node:os";
 import { knownAmount } from "./amount.js";
+import { isSeatId } from "./keys.js";
 import { ledgerFile } from "./paths.js";
+import { isJobId } from "./policy.js";
 import { ceil6 } from "./rounding.js";
-import { appendJsonlSafe, readJsonl } from "./store.js";
+import { appendJsonlSafe } from "./store.js";
 import type { Payer } from "./config.js";
 
 export interface LedgerEntry {
@@ -64,18 +66,46 @@ export function appendLedger(h: string, e: LedgerEntry): void {
   withLedgerLock(h, () => appendJsonlSafe(ledgerFile(h), e, "ledger.jsonl"));
 }
 
+/** One ledger row with its line number in ledger.jsonl, counted from 1 (blank lines count), so a refusal can name it. */
+interface Line {
+  n: number;
+  row: LedgerEntry;
+}
+
+/** Every row of ledger.jsonl with its line number. */
+function ledgerLines(h: string): Line[] {
+  const path = ledgerFile(h);
+  if (!existsSync(path)) return [];
+  const lines: Line[] = [];
+  readFileSync(path, "utf8").split("\n").forEach((text, i) => {
+    if (text.trim().length > 0) lines.push({ n: i + 1, row: JSON.parse(text) as LedgerEntry });
+  });
+  return lines;
+}
+
+/** Latest line per request_id, with its line number. Lines with no request_id are omitted. */
+function latestLines(h: string): Line[] {
+  const m = new Map<string, Line>();
+  for (const line of ledgerLines(h)) if (line.row.request_id) m.set(line.row.request_id, line);
+  return [...m.values()];
+}
+
 /**
  * Latest line per request_id. Lines with no request_id are omitted.
  * A locally proven pre-dispatch refusal may still have a request_id; that line is kept and its cap_charge is 0, so it adds nothing to spend.
  * A generic refusal label or unknown spend does not imply a zero charge, and those lines stay in this list.
  */
 export function latestAttempts(h: string): LedgerEntry[] {
-  const m = new Map<string, LedgerEntry>();
-  for (const e of readJsonl<LedgerEntry>(ledgerFile(h))) if (e.request_id) m.set(e.request_id, e);
-  return [...m.values()];
+  return latestLines(h).map((line) => line.row);
 }
 
-export class UnusableLedgerCharge extends Error {}
+/**
+ * A ledger row a total cannot use, so the next call is refused (exit 3, nothing sent). The message names the
+ * ledger line so the holder can repair it. run.ts refuses on any of these.
+ */
+export class UnusableLedgerRow extends Error {}
+/** The row's cap_charge is not a known amount. */
+export class UnusableLedgerCharge extends UnusableLedgerRow {}
 
 /** A cap charge counts only when it is a known amount (amount.ts): a finite number and not negative. Null is not 0. */
 export function usableCapCharge(value: unknown): boolean {
@@ -83,13 +113,57 @@ export function usableCapCharge(value: unknown): boolean {
 }
 
 /** The total of these rows' cap charges. Money already spent rounds up to 6 decimals, so the total never understates it. */
-function sumCharges(rows: LedgerEntry[]): number {
+function sumCharges(lines: Line[]): number {
   let sum = 0;
-  for (const row of rows) {
-    if (!usableCapCharge(row.cap_charge)) throw new UnusableLedgerCharge("ledger cap_charge unusable; next call refused");
+  for (const { n, row } of lines) {
+    if (!usableCapCharge(row.cap_charge)) throw new UnusableLedgerCharge(`ledger cap_charge unusable; next call refused (ledger line ${n}). Repair or remove that line.`);
     sum += row.cap_charge;
   }
   return ceil6(sum);
+}
+
+/** A UTC day as utcDay writes it: YYYY-MM-DD, and a real calendar date. */
+function isUtcDay(v: unknown): v is string {
+  return typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v) && !Number.isNaN(Date.parse(`${v}T00:00:00Z`)) && utcDay(new Date(`${v}T00:00:00Z`)) === v;
+}
+
+/** The provider names a ledger row can hold. contract/rules.json LEDGER_PROVIDERS. */
+export const LEDGER_PROVIDERS: ReadonlySet<string> = new Set(["mock", "flop"]);
+const PAYERS: ReadonlySet<string> = new Set(["holder", "requester"]);
+
+/** A field a total filters rows on, the value the total wants there, and what a usable value is. */
+interface Filter {
+  field: "day" | "seat" | "provider" | "job" | "payer";
+  want: string;
+  usable: (v: unknown) => boolean;
+}
+const onDay = (day: string): Filter => ({ field: "day", want: day, usable: isUtcDay });
+const onSeat = (seat: string): Filter => ({ field: "seat", want: seat, usable: isSeatId });
+const onProvider = (provider: string): Filter => ({ field: "provider", want: provider, usable: (v) => typeof v === "string" && LEDGER_PROVIDERS.has(v) });
+const onJob = (job: string): Filter => ({ field: "job", want: job, usable: isJobId });
+const onPayer = (payer: string): Filter => ({ field: "payer", want: payer, usable: (v) => typeof v === "string" && PAYERS.has(v) });
+
+/**
+ * The one owner of "this row cannot be placed", for the daily total and the job total alike. The latest row
+ * of each request is placed in a total when every filter matches. A row with a usable value that differs
+ * from what a filter wants is not this total's. A row that would count if its unusable values were readable
+ * (every usable value matches, and at least one value is not usable) cannot be placed: it throws
+ * UnusableLedgerRow naming the line, so the next call is refused rather than its charge lost. Only the latest
+ * row of a request is placed: an older row of the same request is superseded, so damage there loses nothing.
+ */
+function placed(h: string, filters: Filter[], total: string): Line[] {
+  const lines: Line[] = [];
+  for (const line of latestLines(h)) {
+    const values = filters.map((f) => ({ f, v: (line.row as unknown as Record<string, unknown>)[f.field] }));
+    if (values.some(({ f, v }) => f.usable(v) && v !== f.want)) continue;
+    const unusable = values.filter(({ f, v }) => !f.usable(v));
+    if (unusable.length > 0) {
+      const what = unusable.map(({ f, v }) => `${f.field} ${JSON.stringify(v ?? null)}`).join(", ");
+      throw new UnusableLedgerRow(`ledger line ${line.n} cannot be placed in ${total}: ${what} is not a usable value; next call refused. Repair or remove that line.`);
+    }
+    lines.push(line);
+  }
+  return lines;
 }
 
 /**
@@ -103,9 +177,9 @@ export function spentToday(h: string, seat: string, provider: string, day = utcD
   return sumCharges(seatDay(h, seat, provider, day));
 }
 
-/** The latest row of every request of the seat for that provider and UTC day. */
-function seatDay(h: string, seat: string, provider: string, day: string): LedgerEntry[] {
-  return latestAttempts(h).filter((e) => e.seat === seat && e.provider === provider && e.day === day);
+/** The latest row of every request of the seat for that provider and UTC day (placed). */
+function seatDay(h: string, seat: string, provider: string, day: string): Line[] {
+  return placed(h, [onDay(day), onSeat(seat), onProvider(provider)], `the daily total of seat ${seat} (${provider}, ${day})`);
 }
 
 /**
@@ -116,13 +190,13 @@ function seatDay(h: string, seat: string, provider: string, day: string): Ledger
  */
 export function reportedSpendToday(h: string, seat: string, provider: string, day = utcDay()): number {
   let sum = 0;
-  for (const row of seatDay(h, seat, provider, day)) sum += knownAmount(row.spend) ?? 0;
+  for (const { row } of seatDay(h, seat, provider, day)) sum += knownAmount(row.spend) ?? 0;
   return ceil6(sum);
 }
 
 /** The requester spend on one job, on any day: the job budget's running total. */
 export function jobSpent(h: string, job: string, provider: string): number {
-  return sumCharges(latestAttempts(h).filter((e) => e.job === job && e.provider === provider && e.payer === "requester"));
+  return sumCharges(placed(h, [onJob(job), onProvider(provider), onPayer("requester")], `the requester total of job ${job} (${provider})`));
 }
 
 /** The ledger lock could not be taken. Thrown before the guarded work runs, so nothing in it happened. */

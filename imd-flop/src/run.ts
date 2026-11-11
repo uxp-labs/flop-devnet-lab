@@ -10,7 +10,7 @@ import { loadSigner, readIdentity, revokedDids } from "./keys.js";
 import { verifyLink, type LinkFile } from "./link.js";
 import { DEFAULT_MODEL, network, SEAT_COLLECTION } from "./networks.js";
 import { checkBudget, noRoom, padQuote, requireCap, validateJob, validatePayer, validateRunMaxTokens, type BudgetState } from "./policy.js";
-import { appendLedger, jobSpent, LedgerLockError, spentToday, UnusableLedgerCharge, utcDay, withLedgerLock, type LedgerEntry } from "./ledger.js";
+import { appendLedger, jobSpent, LedgerLockError, spentToday, UnusableLedgerRow, utcDay, withLedgerLock, type LedgerEntry } from "./ledger.js";
 import { classifyReceipt, type Classified } from "./receipts.js";
 import { bookFailure, bookRead } from "./booking.js";
 import { DISAGREE, PAST_ADMITTED, reportedCost, SETTLES } from "./settlement.js";
@@ -175,13 +175,13 @@ export async function runJob(h: string, provider: Provider, o: RunOpts, deps: Ru
   const NO_QUOTE = { raw: null, padded: null };
   // What the limits are checked against. The seat's spend today, for every payer: the seat's key pays for
   // the call, so the daily cap bounds it. For a requester also this job's spend, for the job budget.
-  // An unusable ledger charge refuses the run.
+  // A ledger row a total cannot use (an unusable charge, or a row that cannot be placed) refuses the run.
   const spentSoFar = (day: string, quote: { raw: number | null; padded: number | null }): Spent => {
     try {
       const spentBefore = spentToday(h, seat, provider.name, day);
       return payer === "requester" ? { spentBefore, jobSpentBefore: jobSpent(h, job, provider.name) } : { spentBefore };
     } catch (e) {
-      if (e instanceof UnusableLedgerCharge) refuse(e.message, EXIT.REFUSED_CAP, quote, null);
+      if (e instanceof UnusableLedgerRow) refuse(e.message, EXIT.REFUSED_CAP, quote, null);
       throw e;
     }
   };

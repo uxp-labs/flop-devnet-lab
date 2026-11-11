@@ -30,8 +30,13 @@ export interface Signer {
   sign(msg: Uint8Array): Uint8Array;
 }
 
+/** A seat id this tool accepts: an NFT tokenId in decimal (1 to 78 digits), or the unassigned placeholder. */
+export function isSeatId(seat: unknown): seat is string {
+  return typeof seat === "string" && (seat === UNASSIGNED || /^[0-9]{1,78}$/.test(seat));
+}
+
 export function validateSeat(seat: string): string {
-  if (seat === UNASSIGNED || /^[0-9]{1,78}$/.test(seat)) return seat;
+  if (isSeatId(seat)) return seat;
   throw new CliError(`seat must be an NFT tokenId (decimal), got "${seat}"`, EXIT.USAGE);
 }
 

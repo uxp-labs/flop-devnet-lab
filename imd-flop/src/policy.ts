@@ -55,11 +55,16 @@ export function parseAmount(v: string | undefined, name: string): number | undef
   return n;
 }
 
+/** The shape of a job id: 1 to 120 printable ASCII characters, no space. */
+export function isJobId(job: unknown): job is string {
+  return typeof job === "string" && /^[\x21-\x7e]{1,120}$/.test(job);
+}
+
 /** Rule 4 (real work only): a non-empty, printable, non-key-shaped IMD job id. Returns the trimmed id. */
 export function validateJob(raw: string | undefined): string {
   const job = (raw ?? "").trim();
   if (!job) throw new CliError("--job <imd job id> is required: FLOP calls only serve real IMD jobs (rule 4)", EXIT.REFUSED_RULE);
-  if (!/^[\x21-\x7e]{1,120}$/.test(job)) throw new CliError("--job must be 1-120 printable characters", EXIT.USAGE);
+  if (!isJobId(job)) throw new CliError("--job must be 1-120 printable characters", EXIT.USAGE);
   // Every ledger row carries the job id, so a key-shaped id could never be recorded. Refuse it up front.
   if (scanForSecrets({ job }).length > 0) throw new CliError("--job looks key-shaped (for example 64+ hex characters) and cannot be written to the ledger; use a different job id", EXIT.USAGE);
   return job;
