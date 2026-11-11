@@ -175,6 +175,27 @@ export interface PinInput {
 
 const refuse = (refused: string): Pin => ({ pinned: false, refused });
 
+/** A copy of bytes the caller holds, or a refusal: what is hashed is then what is parsed. */
+export function copyBytes(v: unknown, what: string): Uint8Array {
+  if (!(v instanceof Uint8Array)) throw new ScaleError(`${what} is not bytes`);
+  // The typed array constructor copies from the source's own buffer, through no getter.
+  return new Uint8Array(v);
+}
+
+/**
+ * Each field of the input read exactly once, the byte arrays copied. A getter, or a buffer the
+ * caller changes later, can then never hand the hash one value and the parser another.
+ */
+export function copyPinInput(input: PinInput): PinInput {
+  const specName = input.specName;
+  const specVersion = input.specVersion;
+  const metadata = input.metadata;
+  const lastRuntimeUpgrade = input.lastRuntimeUpgrade;
+  const shape = input.shapeText;
+  if (typeof specName !== "string" || typeof specVersion !== "number" || typeof shape !== "string") throw new ScaleError("the spec name, spec version and shape file must be a string, a number and a string");
+  return { specName, specVersion, metadata: copyBytes(metadata, "the metadata"), lastRuntimeUpgrade: copyBytes(lastRuntimeUpgrade, "the LastRuntimeUpgrade"), shapeText: shape };
+}
+
 /** The block's System.LastRuntimeUpgrade as a record, or a refusal that names it. */
 function upgradeOf(md: Metadata, bytes: Uint8Array): { [name: string]: Decoded } {
   try {
@@ -194,18 +215,25 @@ function upgradeOf(md: Metadata, bytes: Uint8Array): { [name: string]: Decoded }
  * Otherwise it refuses, and says which of these failed.
  */
 export function pinShape(input: PinInput): Pin {
-  const reviewed = REVIEWED.find((r) => r.specName === input.specName && r.specVersion === input.specVersion);
-  if (reviewed === undefined) return refuse(`spec ${input.specName} ${input.specVersion} is not a reviewed shape`);
-  const hash = sha256(input.metadata);
-  if (input.metadata.length !== reviewed.metadataBytes || hash !== reviewed.metadataSha256) {
-    return refuse(`the metadata for spec ${reviewed.specVersion} is ${input.metadata.length} bytes with sha256 ${hash}, not the reviewed ${reviewed.metadataBytes} bytes with sha256 ${reviewed.metadataSha256}`);
-  }
-  if (sha256(input.shapeText) !== reviewed.shapeSha256) return refuse(`the shape file given is not the reviewed ${reviewed.shapeFile}`);
+  let i: PinInput;
   try {
-    const md = parseMetadata(input.metadata);
+    i = copyPinInput(input);
+  } catch (e) {
+    if (e instanceof ScaleError) return refuse(e.message);
+    throw e;
+  }
+  const reviewed = REVIEWED.find((r) => r.specName === i.specName && r.specVersion === i.specVersion);
+  if (reviewed === undefined) return refuse(`spec ${i.specName} ${i.specVersion} is not a reviewed shape`);
+  const hash = sha256(i.metadata);
+  if (i.metadata.length !== reviewed.metadataBytes || hash !== reviewed.metadataSha256) {
+    return refuse(`the metadata for spec ${reviewed.specVersion} is ${i.metadata.length} bytes with sha256 ${hash}, not the reviewed ${reviewed.metadataBytes} bytes with sha256 ${reviewed.metadataSha256}`);
+  }
+  if (sha256(i.shapeText) !== reviewed.shapeSha256) return refuse(`the shape file given is not the reviewed ${reviewed.shapeFile}`);
+  try {
+    const md = parseMetadata(i.metadata);
     const derived = shapeText(deriveShape(md));
-    if (derived !== input.shapeText) return refuse(`the shape derived from the metadata differs from ${reviewed.shapeFile}`);
-    const u = upgradeOf(md, input.lastRuntimeUpgrade);
+    if (derived !== i.shapeText) return refuse(`the shape derived from the metadata differs from ${reviewed.shapeFile}`);
+    const u = upgradeOf(md, i.lastRuntimeUpgrade);
     if (u.spec_name !== reviewed.specName || u.spec_version !== reviewed.specVersion) {
       return refuse(`the block's LastRuntimeUpgrade names spec ${String(u.spec_name)} ${String(u.spec_version)}, not ${reviewed.specName} ${reviewed.specVersion}`);
     }

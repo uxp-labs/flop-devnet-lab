@@ -361,24 +361,46 @@ describe("the shape pin", () => {
     expect(thrown(() => decodeValue(parseMetadata(h160), H256, new Uint8Array(32))).cls).toBe("ScaleError");
   });
 
-  it("DEFECT 6: pinShape reads input.metadata three times, so an input whose getter hands the reviewed bytes to the hash and others to the parser is pinned and decoded", () => {
-    let reads = 0;
-    const input = {
-      specName: "tzkv-runtime",
-      specVersion: 1014014,
-      lastRuntimeUpgrade: BLOCK?.lastRuntimeUpgrade ?? new Uint8Array(),
-      shapeText: SHAPE,
-      events: BLOCK?.events ?? new Uint8Array(),
-      get metadata() {
-        reads++;
-        return reads <= 2 ? R.metadata : SWAPPED;
-      },
-    } as PinInput & { events: Uint8Array };
-    const out = decodeBlockEvents(input);
-    expect(reads).toBe(3);
+  it("review defect 6, fixed: pinShape and decodeBlockEvents read input.metadata once, so a getter cannot hand the hash one value and the parser another", () => {
+    const tricky = (first: Uint8Array, later: Uint8Array) => {
+      const seen = { reads: 0 };
+      const input = {
+        specName: "tzkv-runtime",
+        specVersion: 1014014,
+        lastRuntimeUpgrade: BLOCK?.lastRuntimeUpgrade ?? new Uint8Array(),
+        shapeText: SHAPE,
+        events: BLOCK?.events ?? new Uint8Array(),
+        get metadata() {
+          seen.reads++;
+          return seen.reads === 1 ? first : later;
+        },
+      } as PinInput & { events: Uint8Array };
+      return { input, seen };
+    };
+    // The reviewed bytes first, other bytes after: the one read is the reviewed bytes, and what is
+    // parsed is what was hashed.
+    const a = tricky(R.metadata, SWAPPED);
+    const out = decodeBlockEvents(a.input);
+    expect(a.seen.reads).toBe(1);
     expect(out.decoded).toBe(true);
-    const pin = pinShape({ ...input, metadata: SWAPPED });
-    expect(pin.pinned).toBe(false);
+    // Other bytes first: refused, whatever comes after.
+    const b = tricky(SWAPPED, R.metadata);
+    expect(decodeBlockEvents(b.input).decoded).toBe(false);
+    expect(b.seen.reads).toBe(1);
+    const c = tricky(SWAPPED, R.metadata);
+    expect(pinShape(c.input).pinned).toBe(false);
+    expect(c.seen.reads).toBe(1);
+  });
+
+  it("review defect 6, fixed: the bytes are copied, so a caller who changes its buffer after the call changes nothing pinned", () => {
+    const meta = R.metadata.slice();
+    const p = pinShape({ specName: "tzkv-runtime", specVersion: 1014014, metadata: meta, lastRuntimeUpgrade: BLOCK?.lastRuntimeUpgrade ?? new Uint8Array(), shapeText: SHAPE });
+    expect(p.pinned).toBe(true);
+    meta.fill(0);
+    // The parsed constants are views into the bytes parsed: those must be the copy, not the caller's.
+    const v = p.pinned ? p.metadata.pallets.find((x) => x.name === "System")?.constants.find((c) => c.name === "Version") : undefined;
+    expect(v !== undefined && p.pinned ? decodeValue(p.metadata, v.type, v.value) : null).toMatchObject({ spec_name: "tzkv-runtime", spec_version: 1014014 });
+    expect(decodeBlockEvents({ specName: "tzkv-runtime", specVersion: 1014014, metadata: "0x" as never, lastRuntimeUpgrade: new Uint8Array(), shapeText: SHAPE, events: new Uint8Array() })).toEqual({ decoded: false, refused: "not decoded: the metadata is not bytes" });
   });
 
   it("HELD: the facts of the shape file, derived again from the reference's own parse with an independent namer, equal the file", () => {
