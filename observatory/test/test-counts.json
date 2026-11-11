@@ -28,8 +28,8 @@
     "names": "e7024b8929983879ef611eefd8fe938828383c55ebdccd3d2a0cfc0b4e161a1a"
   },
   "guard.test.ts": {
-    "tests": 87,
-    "names": "e65a4664f01ddb92c86fc866da8fa81e2cb0feb6e3fd06004b7b755e01fb3801"
+    "tests": 91,
+    "names": "989ff0747394e7cbdf481c206e47df631103442f9b37d77d52a05dc1c3a1eb07"
   },
   "hash.test.ts": {
     "tests": 20,
