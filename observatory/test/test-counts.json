@@ -24,8 +24,12 @@
     "names": "bd439ca49837d3e62977352e9315883dd115a9abd92613ad412e6457ee0f7bc5"
   },
   "guard.test.ts": {
-    "tests": 83,
-    "names": "3289266269d4788e38c68622daa3f19d46c5c07f457a7c12736b4eefdfc76719"
+    "tests": 85,
+    "names": "966316dbe6f6a211582d5c5d6e1a53173fa379c87d142b470faccd6f37ecddbb"
+  },
+  "hash.test.ts": {
+    "tests": 20,
+    "names": "282e68624cfa7bfd836c662c9b9fec54a424b30588d4d5d3c6cd91e9986c8ff1"
   },
   "history.test.ts": {
     "tests": 8,
