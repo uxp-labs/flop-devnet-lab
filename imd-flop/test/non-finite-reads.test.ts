@@ -23,7 +23,7 @@ import { holdsNonFiniteNumber, NonFiniteNumber, readOutsideJson } from "../src/o
 import { gatewayKeyFile } from "../src/paths.js";
 import { clearSecretRegistry } from "../src/secrets.js";
 import { cli, readLines, readySeat, tmpHome } from "./helpers.js";
-import { paidRun, paidSeat, PIN, receiptText, refresh, type Answer } from "./lib/scripted-gateway.js";
+import { failingStream, NOT_TEXT, paidRun, paidSeat, PIN, receiptText, refresh, type Answer } from "./lib/scripted-gateway.js";
 
 afterEach(() => clearSecretRegistry());
 
@@ -305,4 +305,38 @@ describe("non-finite reads: the enroll answers", () => {
     expect(r.json()).toEqual({ enrolled: false, http: 201, error: "non_finite_number" });
     expect(existsSync(gatewayKeyFile(h, "42"))).toBe(false);
   });
+});
+
+describe("non-finite reads: bodies of the paid call and the receipt read that hold no number at all (pinned before the KD-17 seam, unchanged by it)", () => {
+  const BODIES: [string, (status: number) => Answer][] = [
+    ["an empty body", (status) => ({ status, text: "" })],
+    ["a body that is not text", (status) => ({ status, body: NOT_TEXT })],
+    ["a body whose stream fails while it is read", (status) => ({ status, body: failingStream })],
+  ];
+  for (const [what, body] of BODIES) {
+    const transport = what.includes("stream");
+    it(`the paid call's 200 answer is ${what}: spend unknown, reservation held, exit 6, no response file`, async () => {
+      const r = await paidRun({ completion: body(200) });
+      expect(r.code).toBe(6);
+      expect(ledger(r.h).at(-1)).toMatchObject({ state: "timeout_unknown", reason: `${transport ? "FlopTransportError" : "FlopValidationError"}: no answer; spend unknown, not retried`, cap_charge: 0.132, spend: null });
+      expect(responses(r.h)).toEqual([]);
+    });
+    it(`the paid call's HTTP 401 answer is ${what}: a gateway error, exit 1, reservation held`, async () => {
+      const r = await paidRun({ completion: body(401) });
+      expect(r.code).toBe(1);
+      expect(r.err).toContain("gateway refused the call (HTTP 401); spend recorded as unknown");
+      expect(ledger(r.h).at(-1)).toMatchObject({ state: "error", reason: "HTTP 401", cap_charge: 0.132 });
+    });
+    it(`the receipt read's 200 answer is ${what}: not a trusted read, nothing booked, the stored receipt says why`, async () => {
+      const r = await paidRun({ receipt: body(200) });
+      expect(r.code).toBe(0);
+      expect(ledger(r.h).at(-1)).toMatchObject({ state: "sent", cap_charge: 0.132, spend: null });
+      expect(receipts(r.h)).toMatchObject([{ http: 0, error: transport ? "FLOP gateway request did not complete" : "Gateway response is not valid JSON", flag: null, settled: null }]);
+    });
+    it(`the receipt read's HTTP 401 answer is ${what}: no error, no flag, nothing booked`, async () => {
+      const r = await paidRun({ receipt: body(401) });
+      expect(ledger(r.h).at(-1)).toMatchObject({ state: "sent", cap_charge: 0.132 });
+      expect(receipts(r.h)).toMatchObject([{ http: 401, error: null, flag: null }]);
+    });
+  }
 });

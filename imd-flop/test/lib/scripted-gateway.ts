@@ -18,8 +18,11 @@ export const ETH = "https://eth.example/rpc";
 export const SEAT = "42";
 export const RUN = ["run", "--job", "job-abc", "--prompt", "Say hi", "--max-tokens", "8", "--provider", "flop", "--live", "--seat", SEAT];
 
-/** One scripted answer: the body as text and its HTTP status. */
-export interface Answer { status: number; text: string }
+/**
+ * One scripted answer: its HTTP status and its body, as text, or as anything a Response body may be (bytes, a
+ * stream) made fresh for each request. "__RID__" in a text body stands for the request id of the paid call.
+ */
+export type Answer = { status: number; text: string } | { status: number; body: () => BodyInit | null };
 
 export type Site = "chainId" | "ownerOf" | "faucet" | "estimate" | "mint" | "completion" | "receipt";
 
@@ -65,14 +68,14 @@ export interface Gateway {
   requestId: () => string | null;
 }
 
-/** "__RID__" in a receipt body stands for the request id of the paid call. */
 export function scriptedGateway(answers: Record<Site, Answer>): Gateway {
   const seen: Site[] = [];
   let rid: string | null = null;
   const reply = (site: Site) => {
     seen.push(site);
     const a = answers[site];
-    return new Response(a.text.replaceAll("__RID__", rid ?? ""), { status: a.status, headers: { "content-type": "application/json" } });
+    const body = "text" in a ? a.text.replaceAll("__RID__", rid ?? "") : a.body();
+    return new Response(body, { status: a.status, headers: { "content-type": "application/json" } });
   };
   const f = (async (input: unknown, init?: RequestInit) => {
     const url = String(input);
@@ -153,3 +156,15 @@ export async function refresh(h: string, owner: string, rid: string, receipt: An
   const r = await withFrame(frame, () => cli(h, ["receipt", rid, "--refresh", "--json", "--seat", SEAT, "--live"], { fetch: gw.fetch, env: { IMD_FLOP_HOME: h, ETH_RPC_URL: ETH } }));
   return { gw, ...r };
 }
+
+/** A body stream that sends some bytes of JSON and then fails, as a connection dropped mid body does. */
+export const failingStream = (): ReadableStream<Uint8Array> =>
+  new ReadableStream({
+    start(c) {
+      c.enqueue(new TextEncoder().encode('{"id":"x","usage":{"cost_flop":'));
+      c.error(new TypeError("terminated"));
+    },
+  });
+
+/** Bytes that are not UTF-8 text. */
+export const NOT_TEXT = () => new Uint8Array([0xff, 0xfe, 0x00, 0x9f, 0x80]);
