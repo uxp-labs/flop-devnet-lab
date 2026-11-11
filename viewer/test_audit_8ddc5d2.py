@@ -7,13 +7,21 @@ that applied was job_budget. Rule: the limit shown is the limit that applied. A 
 left'. A requester row shows 'job budget left' (job_budget - spent_before - cap_charge), no daily cap chip or
 flag, and 'over the job budget' when that figure is negative. Any other payer shows neither figure.
 
+Finding 6 (low): a settled receipt with an unknown amount beside a ledger row that is settled with an unknown
+spend was labelled 'receipt and ledger disagree'. imd-flop books exactly that row for such a receipt (contract
+vector run-settled-null-spend), so the two agree. Rule: both in a settling state and both amounts unknown is
+agreement on an unknown amount. The row shows amber 'settled, amount unknown; reservation held' as chip and
+flag, keeps the reservation line and keeps chain final green blocked. Every other disagreement stays one.
+
 Each test asserts the fixed outcome, so it fails on 8ddc5d2 and passes after the fix. Controls say so.
 Offline: build-lane.py is exec'd on temp dirs (lane_harness.lane).
 """
 import unittest
 
-from lane_harness import LED, REC, greens, lane, visible
+from lane_harness import LED, REC, greens, lane, load_lane, visible
 
+DISAGREE = load_lane()["DISAGREE"]
+SETTLED_UNKNOWN = "settled, amount unknown; reservation held"
 BLANK = '<span class="unk blank" title="unknown spend">&nbsp;</span>'
 OVER_DAILY = "over the daily cap"
 OVER_JOB = "over the job budget"
@@ -148,6 +156,76 @@ class Finding5RequesterRowsUseTheJobBudget(unittest.TestCase):
         rows, page = lane([led], {"req-1": dict(SETTLED, settled=0.05)})
         self.assertEqual(rows[0]["chips"], [["amber", OVER_DAILY]])
         self.assertEqual(rows[0]["spend_flags"], [])
+
+
+# The row imd-flop books for a settled receipt with no usable amount: settled, spend null, the hold kept.
+HELD_LED = dict(LED, state="settled", spend=None, cap_charge=0.186)
+NO_AMOUNT = dict(REC, state="settled", settled=None, http=200, error=None)
+
+
+class Finding6SettledAmountUnknown(unittest.TestCase):
+    def test_F6_settled_on_both_sides_with_unknown_amounts_is_not_a_disagreement(self):
+        """The audit's repro."""
+        rows, page = lane([HELD_LED], {"req-1": NO_AMOUNT})
+        row, text = rows[0], visible(page)
+        self.assertEqual(row["chips"], [["amber", SETTLED_UNKNOWN]])
+        self.assertEqual(row["flags"], [SETTLED_UNKNOWN])
+        self.assertIn(f'<span class="chip c-amber">{SETTLED_UNKNOWN}</span>', page)
+        self.assertIn(f'<div class="flag">{SETTLED_UNKNOWN}</div>', page)
+        self.assertNotIn("disagree", text)
+
+    def test_F6_reservation_stays_held_and_spend_stays_blank(self):
+        rows, page = lane([HELD_LED], {"req-1": NO_AMOUNT})
+        self.assertIn(["reservation", 0.186], rows[0]["flop"])
+        self.assertIn('<span class="k">reservation</span> <span class="mono">0.186</span> <span class="note">(held)</span>', page)
+        self.assertIn(["observed spend", None], rows[0]["flop"])
+        self.assertIn(f'<span class="k">observed spend</span> {BLANK}', page)
+        self.assertNotIn("disagree", visible(page))
+        # No cap_charge on the row: the reservation shown is the padded quote, as on every other held row.
+        rows, _ = lane([dict(HELD_LED, cap_charge=None)], {"req-1": NO_AMOUNT})
+        self.assertIn(["reservation", 0.198], rows[0]["flop"])
+
+    def test_F6_chain_final_green_stays_blocked(self):
+        for name, rec in (("chain_final false", NO_AMOUNT), ("chain_final true", dict(NO_AMOUNT, chain_final=True))):
+            with self.subTest(name):
+                rows, page = lane([HELD_LED], {"req-1": rec})
+                self.assertEqual(rows[0]["chips"], [["amber", SETTLED_UNKNOWN]])
+                self.assertTrue(rows[0]["bad"])
+                self.assertIn('class="row bad"', page)
+                self.assertEqual(greens(page), [])
+                self.assertNotIn("matches", visible(page))
+
+    def test_F6_any_two_settling_states_with_unknown_amounts_agree(self):
+        for led_state, rec_state in (("released", "released"), ("settled", "released"), ("released", "settled")):
+            with self.subTest(ledger=led_state, receipt=rec_state):
+                rows, page = lane([dict(HELD_LED, state=led_state)], {"req-1": dict(NO_AMOUNT, state=rec_state)})
+                self.assertEqual(rows[0]["chips"], [["amber", SETTLED_UNKNOWN]])
+                self.assertEqual(greens(page), [])
+
+    def test_F6_control_every_other_disagreement_stays_one(self):
+        """Passes before and after."""
+        cases = {
+            "ledger has an amount, receipt has none": (dict(HELD_LED, spend=0.05, cap_charge=0.05), NO_AMOUNT),
+            "receipt has an amount, ledger has none": (HELD_LED, dict(NO_AMOUNT, settled=0.05)),
+            "amounts differ": (dict(HELD_LED, spend=0.05, cap_charge=0.05), dict(NO_AMOUNT, settled=0.07)),
+            "ledger not settled, receipt settled without an amount": (dict(LED, state="estimated"), NO_AMOUNT),
+            "ledger still sent, receipt settled without an amount": (dict(LED), NO_AMOUNT),
+            "ledger settled without an amount, receipt still pending": (HELD_LED, dict(REC, http=200, error=None)),
+        }
+        for name, (led, rec) in cases.items():
+            with self.subTest(name):
+                rows, page = lane([led], {"req-1": dict(rec, chain_final=True)})
+                self.assertEqual(rows[0]["chips"], [["amber", DISAGREE]])
+                self.assertIn(DISAGREE, rows[0]["flags"])
+                self.assertNotIn(SETTLED_UNKNOWN, visible(page))
+                self.assertEqual(greens(page), [])
+
+    def test_F6_control_known_equal_amounts_still_match(self):
+        """Passes before and after."""
+        rows, page = lane([dict(HELD_LED, spend=0.05, cap_charge=0.05)], {"req-1": dict(NO_AMOUNT, settled=0.05, chain_final=True)})
+        self.assertFalse(rows[0]["bad"])
+        self.assertIn("matches", visible(page))
+        self.assertIn("chain final", greens(page))
 
 
 if __name__ == "__main__":

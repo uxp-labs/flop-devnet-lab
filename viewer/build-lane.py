@@ -131,18 +131,28 @@ def disagrees(e, r):
     """Receipt and ledger can't both be right. Only asked once the receipt was read and its identity matches."""
     st, receipt_state, settled = e.get("state"), r.get("state"), amount(r.get("settled"))
     if receipt_state in SETTLES:
-        # Green needs the ledger settled too, with a numeric settlement equal to the receipt's.
-        d = st not in SETTLES or settled is None or amount(e.get("spend")) != settled
+        # The ledger must be settled too, with the same settlement amount. One side knowing an amount the
+        # other lacks is a disagreement. Unknown on both sides is not: see settled_unknown().
+        d = st not in SETTLES or amount(e.get("spend")) != settled
     else:
         # Pending receipt: the ledger must not claim a settlement, and nothing is chain-final yet.
         d = st in SETTLES or r.get("chain_final") is True
     return d or unresolved(e)
 
+SETTLED_UNKNOWN = "settled, amount unknown; reservation held"
+
+def settled_unknown(e, r):
+    """Receipt and ledger both say the call settled and neither knows the amount. They agree: it is the row
+    imd-flop books for a settled receipt with no usable amount (settled, spend null, the hold kept)."""
+    return (e.get("state") in SETTLES and r.get("state") in SETTLES
+            and amount(e.get("spend")) is None and amount(r.get("settled")) is None)
+
 def classify(e, r):
     """The one ordered decision for a ledger row e and its receipt file r (None if there is no file), as
     (kind, limit). First match wins: refused, no receipt, unreadable file, key expired, failed read, identity
-    mismatch, disagree, over limit, matches. limit is the first limit broken (over_limit), set only for kind
-    over_limit, so over_limit() runs once per row. Rendering per kind is in ROW_KINDS."""
+    mismatch, disagree, settled with an unknown amount, over limit, matches. limit is the first limit broken
+    (over_limit), set only for kind over_limit, so over_limit() runs once per row. Rendering per kind is in
+    ROW_KINDS."""
     if e.get("state") == "refused_local": return "refused", None
     if r is None: return "no_receipt", None
     if r.get("_unreadable"): return "unreadable", None
@@ -153,6 +163,7 @@ def classify(e, r):
     if r.get("http") not in (None, 200) or present(r.get("error")): return "read_failed", None
     if not identity_ok(r, e): return "mismatch", None
     if disagrees(e, r): return "disagree", None
+    if settled_unknown(e, r): return "settled_unknown", None
     limit = over_limit(e, r)
     if limit: return "over_limit", limit
     return "matches", None
@@ -201,10 +212,11 @@ def row_mismatch(row, e, r, reservation, limit):
     if unresolved(e): row["flags"].append(unresolved_flag(e))
     row["chips"] = chips
 
-def row_disagree(row, e, r, reservation, limit):
-    row["chips"] = unknown_chips() if unresolved(e) else [["amber", DISAGREE]]
+def row_disagree(row, e, r, reservation, limit, label=DISAGREE):
+    # A settled row with an unknown amount uses the same chip, flag and held reservation with its own label.
+    row["chips"] = unknown_chips() if unresolved(e) else [["amber", label]]
     row["bad"] = True
-    row["flags"].append(DISAGREE)
+    row["flags"].append(label)
     if unresolved(e): row["flags"].append(unresolved_flag(e))
     row["flop"].append(["reservation", reservation])
     row["flop"].append(["observed spend", None])
@@ -232,7 +244,8 @@ def row_matches(row, e, r, reservation, limit):
 # Each kind renders from (row, e, r, reservation, limit); limit is set only for over_limit.
 ROW_KINDS = {"refused": row_refused, "no_receipt": row_no_receipt, "unreadable": row_unreadable, "read_failed": row_read_failed,
              "mismatch": row_mismatch, "disagree": row_disagree, "over_limit": row_over_limit, "matches": row_matches,
-             "key_expired": lambda row, e, r, reservation, limit: row_read_failed(row, e, r, reservation, limit, flag="key expired, can't re-check")}
+             "key_expired": lambda row, e, r, reservation, limit: row_read_failed(row, e, r, reservation, limit, flag="key expired, can't re-check"),
+             "settled_unknown": lambda row, e, r, reservation, limit: row_disagree(row, e, r, reservation, limit, label=SETTLED_UNKNOWN)}
 
 def build_row(e, r):
     rid = e.get("request_id")
