@@ -21,13 +21,13 @@
 // against its sum only: no rule here reads what it says. The sums show the files are the ones the
 // publish job checked, not that the reading is true: its trust is one RPC endpoint. The log itself
 // is not read here: a reader who wants the chain reads log/ with readHistory (src/history.ts).
-import { feedFiles, feedText } from "./feed.js";
+import { feedFiles, writtenValue } from "./feed.js";
 import { EXIT, RUN_SCHEMA, resetSignal } from "./live-run.js";
 import { own } from "./own.js";
 import { checkSnapshot } from "./snapshot-check.js";
 import { hashSnapshot, logLine } from "./store.js";
-import { MAX_NESTING, nestingDepth, parseZoned } from "./strict.js";
-import { sumsOf } from "./sums.js";
+import { parseZoned } from "./strict.js";
+import { sumsRefusals } from "./sums.js";
 import type { Snapshot } from "./types.js";
 
 /** Every file latest/ holds but SHA256SUMS, in the order SHA256SUMS lists them. */
@@ -44,45 +44,19 @@ export interface JudgeOptions {
 
 const refuse = (...refused: string[]): Judgement => ({ usable: false, refused });
 
-/** The value a text holds when it is JSON in the written form (feedText), or the reason it is not. */
-function written(name: string, text: string): { value: unknown } | string {
-  if (nestingDepth(text) > MAX_NESTING) return `${name} nests deeper than ${MAX_NESTING} levels`;
-  let value: unknown;
-  try {
-    value = JSON.parse(text);
-  } catch {
-    return `${name} is not JSON`;
-  }
-  // The written form has one spelling of each value: a repeated key, padding or a rounded integer
-  // prints back differently.
-  return feedText(value) === text ? { value } : `${name} is not in the written form`;
-}
-
 /** Whether the files of latest/ hold a reading the consumer may use, and the reset signal it holds. */
 export function judgeLatest(files: Readonly<Record<string, string>>, o: JudgeOptions): Judgement {
   const now = parseZoned(o.now);
   if (now === null) throw new TypeError("judgeLatest: now must be a time with a zone");
   if (!Number.isSafeInteger(o.maxAgeSeconds) || o.maxAgeSeconds < 0) throw new TypeError("judgeLatest: maxAgeSeconds must be a whole number of seconds from 0");
 
-  // 1. Exactly the published files.
-  const known: readonly string[] = [...PUBLISHED_FILES, "SHA256SUMS"];
+  // 1 and 2. Exactly the published files, each against its sum, then the sums file's own form.
+  const unsummed = sumsRefusals(files, PUBLISHED_FILES);
+  if (unsummed.length > 0) return refuse(...unsummed);
   const text = (name: string): string => own(files, name) as string;
-  const missing = known.filter((n) => typeof own(files, n) !== "string").map((n) => `missing ${n}`);
-  const unexpected = Object.keys(files)
-    .filter((n) => !known.includes(n))
-    .sort()
-    .map((n) => `unexpected ${n}`);
-  if (missing.length + unexpected.length > 0) return refuse(...missing, ...unexpected);
-
-  // 2. Each file against its sum, then the sums file's own form.
-  const sums = text("SHA256SUMS");
-  const lines = sums.split("\n");
-  const differ = PUBLISHED_FILES.filter((n) => !lines.includes(sumsOf([[n, text(n)]]).slice(0, -1))).map((n) => `${n} differs from SHA256SUMS`);
-  if (differ.length > 0) return refuse(...differ);
-  if (sumsOf(PUBLISHED_FILES.map((n) => [n, text(n)] as const)) !== sums) return refuse("SHA256SUMS is not in the written form");
 
   // 3. The snapshot.
-  const read = written("snapshot.json", text("snapshot.json"));
+  const read = writtenValue("snapshot.json", text("snapshot.json"));
   if (typeof read === "string") return refuse(read);
   const broken = checkSnapshot(read.value);
   if (broken.length > 0) return refuse(...broken.map((c) => `snapshot.json breaks ${c}`));
@@ -94,7 +68,7 @@ export function judgeLatest(files: Readonly<Record<string, string>>, o: JudgeOpt
   const given: [string, string][] = [...feedFiles(s).filter(([n]) => n !== "snapshot.json"), ["snapshots.jsonl", logLine(s)]];
   const notGiven = given.filter(([n, t]) => text(n) !== t).map(([n]) => `${n} is not the one the snapshot gives`);
   if (notGiven.length > 0) return refuse(...notGiven);
-  const run = written("run.json", text("run.json"));
+  const run = writtenValue("run.json", text("run.json"));
   if (typeof run === "string") return refuse(run);
   if (run.value === null || typeof run.value !== "object" || Array.isArray(run.value)) return refuse("run.json is not an object");
   const reset = resetSignal(s);

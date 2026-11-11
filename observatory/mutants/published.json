@@ -1,7 +1,7 @@
 [
   {
     "id": "published-extra-file-allowed",
-    "file": "src/published.ts",
+    "file": "src/sums.ts",
     "find": "    .filter((n) => !known.includes(n))\n",
     "replace": "    .filter((n) => false && !known.includes(n))\n",
     "test": "test/published.test.ts",
@@ -9,17 +9,17 @@
   },
   {
     "id": "published-sums-not-read",
-    "file": "src/published.ts",
-    "find": "  if (differ.length > 0) return refuse(...differ);",
+    "file": "src/sums.ts",
+    "find": "  if (differ.length > 0) return differ;",
     "replace": "",
     "test": "test/published.test.ts",
     "why": "a file that differs from its line in SHA256SUMS is refused before anything is read"
   },
   {
     "id": "published-sums-form-not-read",
-    "file": "src/published.ts",
-    "find": "!== sums) return refuse(\"SHA256SUMS is not in the written form\");",
-    "replace": "!== sums && false) return refuse(\"SHA256SUMS is not in the written form\");",
+    "file": "src/sums.ts",
+    "find": "!== sums) return [\"SHA256SUMS is not in the written form\"];",
+    "replace": "!== sums && false) return [\"SHA256SUMS is not in the written form\"];",
     "test": "test/published.test.ts",
     "why": "SHA256SUMS is in the one form the live run writes"
   },
