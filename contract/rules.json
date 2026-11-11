@@ -153,7 +153,7 @@
       "viewer": "build-lane.py PAST_ADMITTED (read from this file): a row whose reason carries it gets it as a spend flag, is bad and never green (review fixes 3, item 6)"
     },
     "CAP_PROMISE": {
-      "value": "The promise is that the daily cap and the job budget are never passed without PAST_ADMITTED. It holds for a ledger that only this tool writes, and for a gateway that enforces the child key's cap. A ledger that was edited, moved, removed or damaged is outside the promise: the tool fails closed where it can see the damage, names the line, and prints PAST_ADMITTED where it can see a charge rise, and that is all it claims. Crashes of this tool itself, a torn line or a dead lock holder, are inside the promise.",
+      "value": "The promise is that the daily cap and the job budget are never passed without PAST_ADMITTED. It holds for a ledger that only this tool writes, and for a gateway that enforces the child key's cap. A ledger that was edited, moved, removed or damaged is outside the promise: the tool fails closed where it can see the damage, names the line, and prints PAST_ADMITTED where it can see a charge rise, and that is all it claims. Crashes of this tool itself, a torn line or a dead lock holder, are inside the promise. The ledger lock trusts that two processes that report the same host name share one process table. A home shared by machines or containers that report the same host name and have separate process tables is outside the promise. Within one process the lock is taken on its main thread only: a take from a worker thread is refused.",
       "imd-flop": "README.md, at the top of the spend rules (review fixes 4, item 9)",
       "spend-guard": null,
       "viewer": null

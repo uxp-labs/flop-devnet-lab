@@ -288,7 +288,8 @@ describe("TS-I14 a ledger lock timeout before the call is a local refusal", () =
   it("TS-I14 lock held by a live owner: exit 10 'refused locally, nothing sent', nothing sent", async () => {
     const home = tmpHome();
     await readySeat(home, SEAT, "5");
-    writeFileSync(join(home, "ledger.jsonl.lock"), JSON.stringify({ pid: process.pid, host: hostname(), token: "other" }));
+    // Another live process: the test runner. Our own pid with a token we do not hold is a dead owner (lock reclaim, audit 33f3b9f finding 7).
+    writeFileSync(join(home, "ledger.jsonl.lock"), JSON.stringify({ pid: process.ppid, host: hostname(), token: "other" }));
     const p = new P();
     const r = await cliP(home, runArgs("o1", false), p);
     expect({ code: r.code, calls: p.calls, refused: r.err.includes("refused locally, nothing sent") }).toEqual({ code: 10, calls: 0, refused: true });
