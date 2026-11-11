@@ -23,7 +23,7 @@ const unpublished = (publishAt < 0 ? text : text.slice(0, publishAt)).split("\n"
 const checkSteps = ((check.jobs as Record<string, Record<string, unknown>>).check as { steps: Step[] }).steps;
 
 /** The live source files: a push that changes one gives a live smoke run. */
-const LIVE_FILES = ["transport", "tape", "net", "net-root", "rpc-head", "live-source", "live-run", "live-bin", "sums", "history", "store"].map((f) => `observatory/src/${f}.ts`);
+const LIVE_FILES = ["transport", "tape", "net", "net-root", "rpc-head", "live-source", "live-run", "live-bin", "run-command", "sums", "history", "store"].map((f) => `observatory/src/${f}.ts`);
 
 describe("the live workflow", () => {
   it("runs on its schedule, by hand, and on a push that changes it or a live source file", () => {

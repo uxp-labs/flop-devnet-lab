@@ -7,7 +7,7 @@
 // It reads the request list, then FLOP devnet read only, one call at a time, writes the output
 // folder src/record-run.ts describes, prints one GitHub Actions notice line with the counts and
 // what each metadata answer holds, and exits with the code record-run gives.
-import { EXIT, endCommand } from "./live-run.js";
+import { EXIT, endCommand } from "./run-command.js";
 import { realTransport } from "./net-root.js";
 import { RECORD_ANSWER_LIMITS, parseRecordArgs, runRecord } from "./record-run.js";
 

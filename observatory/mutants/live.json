@@ -289,7 +289,7 @@
   },
   {
     "id": "live-run-sums-skip-tape",
-    "file": "src/live-run.ts",
+    "file": "src/run-command.ts",
     "find": "    .filter((n) => n !== \"SHA256SUMS\")",
     "replace": "    .filter((n) => n !== \"SHA256SUMS\" && n !== \"tape.jsonl\")",
     "test": "test/live-run.test.ts",

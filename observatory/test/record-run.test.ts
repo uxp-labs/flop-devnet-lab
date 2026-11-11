@@ -7,7 +7,7 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { feedText } from "../src/feed.js";
 import { attemptLog, resetAttempts } from "../src/guard.js";
-import { EXIT, sumsText } from "../src/live-run.js";
+import { EXIT, sumsText } from "../src/run-command.js";
 import { MAX_ANSWER_BYTES, MAX_STATED_ANSWER_BYTES } from "../src/net.js";
 import { RECORD_ANSWER_LIMITS, RECORD_SCHEMA, metadataOf, parseRecordArgs, recordNotice, runRecord } from "../src/record-run.js";
 import { REQUESTS_SCHEMA, type RequestCall } from "../src/requests.js";

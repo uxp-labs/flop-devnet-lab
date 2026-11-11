@@ -22,7 +22,8 @@
 // publish job checked, not that the reading is true: its trust is one RPC endpoint. The log itself
 // is not read here: a reader who wants the chain reads log/ with readHistory (src/history.ts).
 import { feedFiles, writtenValue } from "./feed.js";
-import { EXIT, RUN_SCHEMA, resetSignal } from "./live-run.js";
+import { RUN_SCHEMA, resetSignal } from "./live-run.js";
+import { EXIT } from "./run-command.js";
 import { own } from "./own.js";
 import { checkSnapshot } from "./snapshot-check.js";
 import { hashSnapshot, logLine } from "./store.js";

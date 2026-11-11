@@ -55,6 +55,7 @@ on:
       - "observatory/src/live-source.ts"
       - "observatory/src/live-run.ts"
       - "observatory/src/live-bin.ts"
+      - "observatory/src/run-command.ts"
       - "observatory/src/sums.ts"
       - "observatory/src/history.ts"
       - "observatory/src/store.ts"

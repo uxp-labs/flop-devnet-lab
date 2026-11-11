@@ -7,7 +7,8 @@
 // It reads the published log, then FLOP devnet read only, writes the output folder src/live-run.ts
 // describes, prints one GitHub Actions notice line with what the snapshot says, and exits with the
 // code live-run gives.
-import { EXIT, endCommand, parseLiveArgs, runLive } from "./live-run.js";
+import { parseLiveArgs, runLive } from "./live-run.js";
+import { EXIT, endCommand } from "./run-command.js";
 import { realTransport } from "./net-root.js";
 
 const args = parseLiveArgs(process.argv.slice(2));

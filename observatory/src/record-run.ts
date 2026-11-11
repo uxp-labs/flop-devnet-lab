@@ -17,7 +17,7 @@
 //                failed, and how the run ended
 //   SHA256SUMS   the sha256 of the two other files, as sha256sum writes it (src/sums.ts)
 //
-// How a run ends, in the live run's codes (EXIT in src/live-run.ts):
+// How a run ends, in the live run's codes (EXIT in src/run-command.ts):
 //   0  every call in the list was made and recorded, answered or failed on the way
 //   4  the read only guard or the transport refused a request
 //   1  the request list could not be read or was refused, or the run broke
@@ -28,9 +28,9 @@ import { join } from "node:path";
 import { feedText } from "./feed.js";
 import { readRegularFile } from "./files.js";
 import { ReadOnlyViolation, attemptLog, guardRpc } from "./guard.js";
-import { EXIT, commandText, readFlags, sumsText } from "./live-run.js";
 import { MAX_STATED_ANSWER_BYTES } from "./net.js";
 import { type RequestList, readRequests } from "./requests.js";
+import { EXIT, commandText, readFlags, sumsText } from "./run-command.js";
 import { Recorder, type TapeAnswer } from "./tape.js";
 import { type Transport, TransportError } from "./transport.js";
 
