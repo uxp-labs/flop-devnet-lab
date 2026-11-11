@@ -4,7 +4,8 @@
  * request (reconcile). Pure: no file, network or ledger access. `run` (after its call) and
  * `receipt --refresh` both book through decideBooking, in booking.ts. `run`, `receipt <id>` and `status`
  * all show the reconcile verdict. Behavior is pinned by contract/vectors/settlement-run.json,
- * settlement-refresh.json and reconcile.json.
+ * settlement-refresh.json and reconcile.json, and the decision's properties by
+ * test/decision-properties.test.ts.
  */
 import { knownAmount } from "./amount.js";
 
@@ -148,7 +149,7 @@ export interface Decision<C> {
  *    proven settlement replaces it, the read disagrees and nothing changes.
  * Two reads of one request can differ, and that is normal, not an attack: per the gateway's OpenAPI
  * (CredentialReceipt), read 2026-11-11, later reconciliation can change the gateway's ledger observation.
- * So two trusted reads book the same spend and charge in either order.
+ * So two trusted reads book the same spend and charge in either order (test/decision-properties.test.ts).
  * The rule this encodes for the future: a gateway read alone never lowers a booked settlement. On FLOP a
  * refund comes from an upheld fraud verdict, which is proven on chain: per FLOP's docs, a session's payment
  * sits in escrow against the proof, and an upheld fraud verdict refunds the agent. Nothing in imd-flop
