@@ -6,10 +6,27 @@ import { spawnSync } from "node:child_process";
 import { chownSync, chmodSync, existsSync, mkdirSync, readdirSync, readFileSync, symlinkSync, unlinkSync, writeFileSync } from "node:fs";
 import { hostname } from "node:os";
 import { join } from "node:path";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { withLedgerLock } from "../src/ledger.js";
 import { acquire, runOnDisk, type FileOp, type Self, type Step } from "../src/lock.js";
-import { readySeat, tmpHome } from "./helpers.js";
+import { LEDGER_BUSY } from "../src/receipt-store.js";
+import { DISAGREE } from "../src/settlement.js";
+import { cli, readLines, readySeat, tmpHome } from "./helpers.js";
+
+// A pass through of lock.ts. Only when loseLockAt is set does assertLockHeld first remove the lock by
+// hand (the one way, inside the stated rules, to reach "ledger lock lost"), then run the real check.
+const hook = vi.hoisted(() => ({ loseLock: false }));
+vi.mock("../src/lock.js", async (importOriginal) => {
+  const real = await importOriginal<typeof import("../src/lock.js")>();
+  const fs = await import("node:fs");
+  return {
+    ...real,
+    assertLockHeld(key: string) {
+      if (hook.loseLock) { hook.loseLock = false; fs.unlinkSync(`${key}.lock`); }
+      return real.assertLockHeld(key);
+    },
+  };
+});
 
 const SEAT = "9001";
 const root = join(import.meta.dirname, "..");
@@ -159,5 +176,37 @@ describe("DEFECT 4: a right file held by a live unrelated process", () => {
     withLedgerLock(h, () => {});
     expect(existsSync(`${lockPath(h)}.reclaim.T.1`)).toBe(true);
     expect(lockFiles(h)).toEqual(["ledger.jsonl.lock.reclaim.T.1"]);
+  }, 30_000);
+});
+
+describe("DEFECT 5: receipt --refresh calls a lost lock a busy ledger", () => {
+  // receipt-store.ts refreshReceipt prints LEDGER_BUSY for every LedgerLockError. "ledger lock lost" is a
+  // LedgerLockError too, so an append that found the lock no longer ours prints "ledger busy". README
+  // (Lock-timeout rule) and the refreshReceipt comment say the busy line is for a lock that could not be
+  // taken, and that any other failure, "a failed append for one", prints DISAGREE. The lock was taken
+  // here; the append failed. The new error reached a branch whose words do not cover it.
+  it("DEFECT 5 (low): an append that finds the lock lost during a refresh prints the busy line, not DISAGREE", async () => {
+    const h = tmpHome();
+    await readySeat(h, SEAT, "1");
+    const quote = { estimated_cost_flop: 0.066, estimated_input_tokens: 3, estimated_output_tokens: 8 };
+    const receipt = (id: string, fields: Record<string, unknown>) => ({ http: 200, error: null, receipt: { request_id: id, correlation_id: "imd-job-j1", model: "m", reserved_spend: 0.186, settled_spend: null, state: "estimated", ...fields } });
+    const provider = (fields: Record<string, unknown>) => ({
+      name: "mock" as const,
+      async estimate() { return quote as never; },
+      async complete(req: { requestId: string }) { return { request_id: req.requestId, text: "ok", usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 } } as never; },
+      async readReceipt(id: string) { return receipt(id, fields) as never; },
+    }) as never;
+    const run = await cli(h, ["run", "--seat", SEAT, "--job", "j1", "--prompt", "hi", "--provider", "mock", "--max-tokens", "8", "--json"], { provider: provider({}) });
+    expect(run.code, run.err).toBe(0);
+    const rid = run.json().request_id as string;
+    const before = readLines(join(h, "ledger.jsonl")).length;
+    hook.loseLock = true;
+    const r = await cli(h, ["receipt", rid, "--refresh", "--json", "--seat", SEAT], { provider: provider({ state: "settled", settled_spend: 0.05 }) });
+    expect(hook.loseLock).toBe(false); // the append ran its check, and the lock was gone
+    expect(readLines(join(h, "ledger.jsonl"))).toHaveLength(before); // nothing appended
+    expect(r.code).toBe(0);
+    expect(r.err).toMatch(/^ledger busy; the receipt read was stored and nothing was booked \(ledger lock lost: \S+ledger\.jsonl\.lock no longer carries this process's token, so nothing was appended\)$/);
+    expect(r.err.startsWith(LEDGER_BUSY)).toBe(true);
+    expect(r.err).not.toContain(DISAGREE);
   }, 30_000);
 });
