@@ -60,7 +60,9 @@ export interface Self extends LockOwner {
  * The file operations a step may yield. Each yield is a point where another process may run.
  *  - create: exclusive create with content. True when created, false when the path exists.
  *  - read: the file's text, or null when there is no such file.
- *  - unlink: true when removed, false when it was gone. With bestEffort, a failure is ignored.
+ *  - unlink: "removed", "absent" when it was gone, or { denied: code } when this user may not remove it
+ *    (EPERM, EACCES). Any other failure is a LedgerLockError that names the file and the code. With
+ *    bestEffort every failure reads as "absent".
  *  - list: the full paths of the files whose path starts with prefix.
  *  - alive: false only when the pid is provably gone on this host.
  *  - wait: nothing to do now; try again later.
@@ -75,14 +77,17 @@ export type FileOp =
 
 export type Step<R> = Generator<FileOp, R, unknown>;
 
+/** What an unlink did. */
+export type Unlinked = "removed" | "absent" | { denied: string };
+
 function* create(path: string, content: string): Step<boolean> {
   return (yield { kind: "create", path, content }) as boolean;
 }
 function* read(path: string): Step<string | null> {
   return (yield { kind: "read", path }) as string | null;
 }
-function* unlink(path: string, bestEffort = false): Step<boolean> {
-  return (yield { kind: "unlink", path, bestEffort }) as boolean;
+function* unlink(path: string, bestEffort = false): Step<Unlinked> {
+  return (yield { kind: "unlink", path, bestEffort }) as Unlinked;
 }
 function* list(prefix: string): Step<string[]> {
   return (yield { kind: "list", prefix }) as string[];
@@ -151,15 +156,16 @@ export function* acquire(self: Self, lock: string): Step<void> {
 /**
  * Remove the lock that carries token, whose owner was judged provably dead, if this process gets the
  * reclaim right for it. True only when this process removed the lock. False when it got no right
- * (another live process is reclaiming it, or a right file cannot be read), or when under the right the
- * lock no longer carried that token.
+ * (another live process is reclaiming it, or a right file cannot be read), when under the right the lock
+ * no longer carried that token, or when this user may not remove the lock. In every case the waiter
+ * removes its own right file before it returns.
  */
 export function* reclaim(self: Self, lock: string, token: string): Step<boolean> {
   for (let n = 1; ; n++) {
     const right = rightPath(lock, token, n);
     if (yield* create(right, ownerText(self))) {
       let removed = false;
-      if (parseOwner(yield* read(lock))?.token === token) removed = yield* unlink(lock);
+      if (parseOwner(yield* read(lock))?.token === token) removed = (yield* unlink(lock)) === "removed";
       yield* unlink(right);
       return removed;
     }
@@ -168,9 +174,10 @@ export function* reclaim(self: Self, lock: string, token: string): Step<boolean>
   }
 }
 
-/** Release the lock only if it still carries our token. */
-export function* release(self: Self, lock: string): Step<void> {
-  if (parseOwner(yield* read(lock))?.token === self.token) yield* unlink(lock);
+/** Release the lock only if it still carries our token. Says what the unlink did, "absent" when it was not ours. */
+export function* release(self: Self, lock: string): Step<Unlinked> {
+  if (parseOwner(yield* read(lock))?.token !== self.token) return "absent";
+  return yield* unlink(lock);
 }
 
 const isRightName = (lock: string, path: string) => path.startsWith(`${lock}.reclaim.`) && !path.endsWith(".tmp");
@@ -260,8 +267,30 @@ function listPrefix(prefix: string): string[] {
   try { return readdirSync(dir).filter((n) => n.startsWith(start)).map((n) => join(dir, n)); } catch { return []; }
 }
 
-/** Run one step to completion on the real file system. onWait runs at each wait and may throw. */
-export function runOnDisk<R>(step: Step<R>, onWait: () => void): R {
+/** A lock error that carries the error code of the file operation that failed. */
+class LockFileError extends LedgerLockError {
+  constructor(message: string, readonly code: string) { super(message); }
+}
+
+const DENIED = new Set(["EPERM", "EACCES"]);
+
+function unlinkFile(path: string, bestEffort: boolean): Unlinked {
+  try {
+    unlinkSync(path);
+    return "removed";
+  } catch (e) {
+    const c = code(e) ?? "unknown";
+    if (c === "ENOENT" || bestEffort) return "absent";
+    if (DENIED.has(c)) return { denied: c };
+    throw new LockFileError(`ledger lock error: ${path} cannot be removed (${c})`, c);
+  }
+}
+
+/**
+ * Run one step to completion on the real file system. onWait runs at each wait and may throw. onResult,
+ * when given, sees every operation with its result.
+ */
+export function runOnDisk<R>(step: Step<R>, onWait: () => void, onResult?: (op: FileOp, result: unknown) => void): R {
   let next = step.next();
   while (!next.done) {
     const op = next.value;
@@ -269,34 +298,44 @@ export function runOnDisk<R>(step: Step<R>, onWait: () => void): R {
     switch (op.kind) {
       case "create": result = createFile(op.path, op.content); break;
       case "read": result = readText(op.path); break;
-      case "unlink":
-        try { unlinkSync(op.path); result = true; } catch (e) {
-          if (code(e) === "ENOENT") result = false;
-          else if (op.bestEffort) result = false;
-          else throw e;
-        }
-        break;
+      case "unlink": result = unlinkFile(op.path, op.bestEffort === true); break;
       case "list": result = listPrefix(op.prefix); break;
       case "alive": result = processAlive(op.pid); break;
       case "wait": onWait(); result = undefined; break;
     }
+    onResult?.(op, result);
     next = step.next(result);
   }
   return next.value;
+}
+
+const ageOf = (path: string): string => {
+  try { return `${Math.floor((Date.now() - lstatSync(path).mtimeMs) / 1000)} s old`; } catch { return "gone"; }
+};
+const uidOf = (path: string): string => {
+  try { return `uid ${lstatSync(path).uid}`; } catch { return "an unknown user"; }
+};
+
+/** What the waiter met on its last attempt that a fresh look at the files would not show. */
+export interface Blocked {
+  /** The unlink of the lock was refused with this code (EPERM, EACCES). */
+  denied?: string;
 }
 
 /**
  * The timeout message: the lock file, its age, the recorded owner and the way back, so a holder can see
  * what is in the way and how to clear it.
  */
-export function timeoutMessage(lock: string): string {
-  let age: string;
-  try { age = `${Math.floor((Date.now() - lstatSync(lock).mtimeMs) / 1000)} s old`; } catch { age = "gone"; }
+export function timeoutMessage(lock: string, blocked: Blocked = {}): string {
   const text = readText(lock);
   const o = parseOwner(text);
   const what = text === null ? null : whatItIs(lock);
-  const owner = text === null ? "is gone now" : o ? `is held by pid ${o.pid} on host ${o.host}` : `has no readable owner${what ? `: ${what}` : ""}`;
-  return `ledger lock timeout: ${lock} (${age}) ${owner}. If no imd-flop process is using this home any more, remove that file and run again.`;
+  let owner: string;
+  if (text === null) owner = "is gone now";
+  else if (o === null) owner = `has no readable owner${what ? `: ${what}` : ""}`;
+  else if (blocked.denied) owner = `was held by pid ${o.pid} on host ${o.host}, which is gone, and this user cannot remove that file (${blocked.denied}; it belongs to ${uidOf(lock)})`;
+  else owner = `is held by pid ${o.pid} on host ${o.host}`;
+  return `ledger lock timeout: ${lock} (${ageOf(lock)}) ${owner}. If no imd-flop process is using this home any more, remove that file and run again.`;
 }
 
 /** The tokens this process holds now: its lock while it waits for it or holds it. Never provably dead. */
@@ -318,9 +357,14 @@ function takeLock(lock: string): string {
   const me = self(token);
   try {
     // The deadline is checked before every attempt, not only at a wait.
+    let blocked: Blocked = {};
     for (;;) {
-      if (Date.now() - start > TIMEOUT_MS) throw new LedgerLockError(timeoutMessage(lock));
-      const r = runOnDisk(attempt(me, lock), () => {});
+      if (Date.now() - start > TIMEOUT_MS) throw new LedgerLockError(timeoutMessage(lock, blocked));
+      const seen: Blocked = {};
+      const r = runOnDisk(attempt(me, lock), () => {}, (op, result) => {
+        if (op.kind === "unlink" && op.path === lock && typeof result === "object" && result !== null) seen.denied = (result as { denied: string }).denied;
+      });
+      blocked = seen;
       if (r === "taken") return token;
       if (r === "wait") Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, WAIT_MS);
     }
@@ -330,9 +374,22 @@ function takeLock(lock: string): string {
   }
 }
 
+/**
+ * Release never throws: the protected work is done. If the lock cannot be removed, one line on stderr
+ * names the file and the code. The lock then names a pid that is gone once this process ends, so a
+ * waiter reclaims it then.
+ */
 function releaseLock(lock: string, token: string): void {
-  try { runOnDisk(release(self(token), lock), () => {}); }
-  finally { held.delete(token); }
+  let failed: string | null = null;
+  try {
+    const r = runOnDisk(release(self(token), lock), () => {});
+    if (typeof r === "object") failed = r.denied;
+  } catch (e) {
+    failed = e instanceof LockFileError ? e.code : (code(e) ?? (e as Error).message);
+  } finally {
+    held.delete(token);
+  }
+  if (failed !== null) process.stderr.write(`imd-flop: the ledger lock ${lock} could not be removed (${failed}); it will be reclaimed when this process ends.\n`);
 }
 
 /**

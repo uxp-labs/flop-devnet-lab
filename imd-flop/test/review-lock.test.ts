@@ -106,21 +106,20 @@ describe("review defect 1, fixed: a lock that exists for link but reads as absen
   }, 60_000);
 });
 
-describe("DEFECT 2: a dead holder's lock that this process may not unlink", () => {
+describe("review defect 2, fixed: a dead holder's lock that this process may not unlink", () => {
   // The home is a sticky directory (mode 1777) of another OS user, and the dead holder's lock is that
-  // user's file: a waiter may create files there but not unlink the lock. The waiter judges the owner
-  // dead, gets the reclaim right, and its unlink throws EPERM. runOnDisk rethrows it raw: not a
-  // LedgerLockError, so run exits 1 (an unexpected error) and not 10 (README: "The ledger lock could not
-  // be taken before the paid call"), with no timeout message and no way back. The right file it created
-  // is never removed, and every later attempt adds one more level: right files pile up and the sweep
-  // never runs, because nobody ever takes the lock.
-  it("DEFECT 2 (low): run exits 1 with a raw EPERM (not 10 with the lock message) and leaves one more right file each time", async () => {
+  // user's file: a waiter may create files there but not unlink the lock. Was: the EPERM at the reclaim
+  // unlink was rethrown raw (exit 1, no lock message), and each try left one more right file.
+  // Decided: the waiter removes its own right file, gets no "again", and waits. The timeout says this user
+  // cannot remove the lock, names the file and its owner, and gives the way back.
+  it("review defect 2, fixed: run exits 10 with the lock message, and no right file is left", async () => {
     const h = tmpHome();
     const home = join(h, "home");
     mkdirSync(home);
     await readySeat(home, SEAT, "1");
     const lock = lockPath(home);
-    writeFileSync(lock, owner(deadPid(), "dead"));
+    const dead = deadPid();
+    writeFileSync(lock, owner(dead, "dead"));
     // Another user's file in another user's sticky directory (a temporary directory of this test).
     chownSync(lock, 65534, 65534);
     chownSync(home, 65534, 65534);
@@ -132,13 +131,13 @@ describe("DEFECT 2: a dead holder's lock that this process may not unlink", () =
       const r = spawnSync("setpriv", [`--bounding-set=${drop}`, `--inh-caps=${drop}`, process.execPath, script], { encoding: "utf8", timeout: 60_000 });
       return JSON.parse(r.stdout) as { code: number; calls: number; err: string };
     };
-    const first = once();
-    expect({ code: first.code, calls: first.calls }).toEqual({ code: 1, calls: 0 });
-    expect(first.err).toMatch(/^imd-flop: EPERM: operation not permitted, unlink '\S+ledger\.jsonl\.lock'$/);
-    expect(lockFiles(home)).toEqual(["ledger.jsonl.lock", "ledger.jsonl.lock.reclaim.dead.1"]);
-    const second = once();
-    expect({ code: second.code, calls: second.calls }).toEqual({ code: 1, calls: 0 });
-    expect(lockFiles(home)).toEqual(["ledger.jsonl.lock", "ledger.jsonl.lock.reclaim.dead.1", "ledger.jsonl.lock.reclaim.dead.2"]);
+    const want = new RegExp(`^imd-flop: refused locally, nothing sent: ledger lock timeout: \\S+ledger\\.jsonl\\.lock \\(\\d+ s old\\) was held by pid ${dead} on host ${hostname().replace(/\./g, "\\.")}, which is gone, and this user cannot remove that file \\(EPERM; it belongs to uid 65534\\)\\. If no imd-flop process is using this home any more, remove that file and run again\\.$`);
+    for (let i = 0; i < 2; i++) {
+      const r = once();
+      expect({ code: r.code, calls: r.calls }, r.err).toEqual({ code: 10, calls: 0 });
+      expect(r.err).toMatch(want);
+      expect(lockFiles(home)).toEqual(["ledger.jsonl.lock"]);
+    }
     expect(JSON.parse(readFileSync(lock, "utf8")).token).toBe("dead");
   }, 120_000);
 });

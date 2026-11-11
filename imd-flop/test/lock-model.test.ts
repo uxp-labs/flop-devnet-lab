@@ -31,7 +31,7 @@
  */
 import { createHash } from "node:crypto";
 import { describe, expect, it } from "vitest";
-import { attempt, ownerText, parseOwner, provablyDead, reclaim, release, rightPath, sweep, type Attempt, type FileOp, type LockOwner, type Self, type Step } from "../src/lock.js";
+import { attempt, ownerText, parseOwner, provablyDead, reclaim, release, rightPath, sweep, type Attempt, type FileOp, type LockOwner, type Self, type Step, type Unlinked } from "../src/lock.js";
 
 const HOST = "here";
 const MAX_STATES = 3_000_000;
@@ -54,7 +54,7 @@ interface Proc {
   pending: FileOp | null; // the operation the step yields next
   blockedOn: string | null; // blocked until the world differs from this
   attemptWorld: string | null; // the world the current attempt started in
-  dirty: boolean; // the world changed during the current attempt
+  dirty: boolean; // another process changed the world during the current attempt
   entered: boolean;
 }
 interface State {
@@ -70,6 +70,7 @@ interface Start {
   files: Record<string, string>;
   procs: { name: string; pid: number; token: string; phase: "acquire" | "inside" }[];
   alwaysAlive?: number[]; // pids that are alive and never released: not scheduled, never die
+  denyUnlink?: string[]; // paths this user may not remove: unlink answers { denied: "EPERM" }
   expect: Expect;
 }
 
@@ -170,7 +171,8 @@ class Checker {
           const o = parseOwner(s.fs.get(op.path)!);
           if (o !== null && o.token !== p.token && o.pid !== p.pid && this.alive(s, o.pid)) this.fail(s, "live file removed", `${p.name} unlinked ${op.path}, whose owner is alive`);
         }
-        return s.fs.delete(op.path);
+        if (this.start.denyUnlink?.includes(op.path) && s.fs.has(op.path)) return { denied: "EPERM" };
+        return s.fs.delete(op.path) ? "removed" : "absent";
       }
       case "list":
         return [...s.fs.keys()].filter((k) => k.startsWith(op.prefix)).sort();
@@ -193,6 +195,11 @@ class Checker {
       return true;
     }
     throw new Error(`unknown op ${x.kind}`);
+  }
+
+  /** The world changed: every other attempt that is under way saw something new. */
+  private dirtyOthers(s: State, by: Proc | null): void {
+    for (const q of s.procs) if (q !== by && q.attemptWorld !== null) q.dirty = true;
   }
 
   private clone(s: State): State {
@@ -222,7 +229,7 @@ class Checker {
     if (p.attemptWorld === null) {
       p.attemptWorld = world;
       p.dirty = false;
-    } else if (world !== p.attemptWorld) p.dirty = true;
+    }
     p.blockedOn = null;
     let r: { op: FileOp } | { done: unknown } = { op };
     // An alive query reads no file: it commutes with every file operation of the others, and a crash
@@ -240,6 +247,8 @@ class Checker {
         return s;
       }
     } while ("op" in r && r.op.kind === "alive");
+    // Only a change by another process makes an attempt dirty. A process's own creates and removes do not.
+    if (worldKey(s) !== world) this.dirtyOthers(s, p);
     if ("op" in r) {
       p.pending = r.op;
       return s;
@@ -249,7 +258,7 @@ class Checker {
       p.pending = null;
       p.hist = [];
       p.attemptWorld = null;
-      return s;
+        return s;
     }
     // An attempt ended. The next attempt starts fresh: it carries nothing over (lock.ts attempt).
     const ended = r.done as Attempt;
@@ -289,6 +298,8 @@ class Checker {
       if (inn.length > 0) this.fail(s, "barred entered", `${inn.map((p) => p.name).join(", ")} got past a lock the tool must not remove`);
       if (s.fs.get(LOCK) !== this.original) this.fail(s, "barred changed", "the lock the tool must not remove was changed");
       if (live.some((p) => p.phase === "error")) this.fail(s, "error", "a process failed with an error");
+      const others = [...s.fs.keys()].filter((k) => k !== LOCK);
+      if (!s.crashed && others.length > 0) this.fail(s, "files left", `files are left beside the lock: ${others.join(", ")}`);
     }
   }
 
@@ -298,38 +309,59 @@ class Checker {
    * without one wait, so the deadline, which follows the clock, would be the only way out. The liveness
    * property is that there is none.
    */
-  private visit(s: State, waits = 0): void {
-    const world = worldKey(s);
-    const key = stateKey(s, world);
-    const onPath = this.path.get(key);
-    if (onPath !== undefined) {
-      if (onPath === waits) this.fail(s, "spin", "a cycle with no wait: the processes run for ever without one wait");
-      else this.cyclesWithWait++;
-      return;
-    }
-    if (this.seen.has(key)) return;
-    if (this.seen.size > MAX_STATES) throw new Error(`more than ${MAX_STATES} states`);
-    this.seen.add(key);
-    this.states++;
-    this.path.set(key, waits);
-    const en = this.enabled(s, world);
-    if (en.length === 0) this.terminal(s);
-    for (const i of en) {
-      const next = this.step(s, i, world);
-      this.visit(next, waits + (this.waited ? 1 : 0));
-    }
-    if (this.allowCrash && !s.crashed) {
-      s.procs.forEach((p, i) => {
-        if (p.phase !== "acquire" && p.phase !== "inside" && p.phase !== "release") return;
-        const c = this.clone(s);
-        c.procs[i].phase = "crashed";
-        c.procs[i].pending = null;
-        c.dead.add(p.pid);
-        c.crashed = true;
-        this.visit(c, waits);
+  private visit(s0: State): void {
+    // Iterative, so long paths through waits do not overflow the call stack.
+    interface Frame { key: string; waits: number; next: (() => { s: State; waited: boolean })[] }
+    const stack: Frame[] = [];
+    const enter = (s: State, waits: number): void => {
+      const world = worldKey(s);
+      const key = stateKey(s, world);
+      const onPath = this.path.get(key);
+      if (onPath !== undefined) {
+        if (onPath === waits) this.fail(s, "spin", "a cycle with no wait: the processes run for ever without one wait");
+        else this.cyclesWithWait++;
+        return;
+      }
+      if (this.seen.has(key)) return;
+      if (this.seen.size > MAX_STATES) throw new Error(`more than ${MAX_STATES} states`);
+      this.seen.add(key);
+      this.states++;
+      this.path.set(key, waits);
+      const en = this.enabled(s, world);
+      if (en.length === 0) this.terminal(s);
+      const next: Frame["next"] = en.map((i) => () => {
+        const t = this.step(s, i, world);
+        return { s: t, waited: this.waited };
       });
+      if (this.allowCrash && !s.crashed) {
+        s.procs.forEach((p, i) => {
+          if (p.phase !== "acquire" && p.phase !== "inside" && p.phase !== "release") return;
+          next.push(() => {
+            const c = this.clone(s);
+            c.procs[i].phase = "crashed";
+            c.procs[i].pending = null;
+            c.dead.add(p.pid);
+            c.crashed = true;
+            this.dirtyOthers(c, c.procs[i]);
+            return { s: c, waited: false };
+          });
+        });
+      }
+      next.reverse();
+      stack.push({ key, waits, next });
+    };
+    enter(s0, 0);
+    while (stack.length > 0) {
+      const top = stack[stack.length - 1];
+      const n = top.next.pop();
+      if (!n) {
+        this.path.delete(top.key);
+        stack.pop();
+        continue;
+      }
+      const { s, waited } = n();
+      enter(s, top.waits + (waited ? 1 : 0));
     }
-    this.path.delete(key);
   }
 
   run(): void {
@@ -374,6 +406,7 @@ const STARTS: Start[] = [
   },
   { name: "a lock with no readable owner", files: { [LOCK]: "not json" }, procs: waiters(3), expect: "barred" },
   { name: "a lock owned by another host", files: { [LOCK]: owner(DEAD, "tx", "elsewhere") }, procs: waiters(3), expect: "barred" },
+  { name: "a dead holder's lock this user may not remove (EPERM): no right file is left, and nobody spins", files: { [LOCK]: owner(DEAD, "td") }, denyUnlink: [LOCK], procs: waiters(3), expect: "barred" },
   { name: "a live owner that never releases", files: { [LOCK]: owner(11, "tf") }, procs: waiters(3), alwaysAlive: [11], expect: "barred" },
 ];
 
@@ -436,8 +469,8 @@ const NO_REREAD = withReclaim(function* (self, lock, token) {
   for (let n = 1; ; n++) {
     const right = rightPath(lock, token, n);
     if (yield* op<boolean>({ kind: "create", path: right, content: ownerText(self) })) {
-      const removed = yield* op<boolean>({ kind: "unlink", path: lock });
-      yield* op<boolean>({ kind: "unlink", path: right });
+      const removed = (yield* op<Unlinked>({ kind: "unlink", path: lock })) === "removed";
+      yield* op<Unlinked>({ kind: "unlink", path: right });
       return removed;
     }
     const r = parseOwner(yield* op<string | null>({ kind: "read", path: right }));
@@ -451,8 +484,8 @@ const RIGHT_FIRST = withReclaim(function* (self, lock, token) {
     const right = rightPath(lock, token, n);
     if (yield* op<boolean>({ kind: "create", path: right, content: ownerText(self) })) {
       const same = parseOwner(yield* op<string | null>({ kind: "read", path: lock }))?.token === token;
-      yield* op<boolean>({ kind: "unlink", path: right });
-      return same && (yield* op<boolean>({ kind: "unlink", path: lock }));
+      yield* op<Unlinked>({ kind: "unlink", path: right });
+      return same && (yield* op<Unlinked>({ kind: "unlink", path: lock })) === "removed";
     }
     const r = parseOwner(yield* op<string | null>({ kind: "read", path: right }));
     if (r === null || !(yield* provablyDead(self, r))) return false;
@@ -464,8 +497,8 @@ const NO_LEVELS = withReclaim(function* (self, lock, token) {
   const right = rightPath(lock, token, 1);
   if (!(yield* op<boolean>({ kind: "create", path: right, content: ownerText(self) }))) return false;
   let removed = false;
-  if (parseOwner(yield* op<string | null>({ kind: "read", path: lock }))?.token === token) removed = yield* op<boolean>({ kind: "unlink", path: lock });
-  yield* op<boolean>({ kind: "unlink", path: right });
+  if (parseOwner(yield* op<string | null>({ kind: "read", path: lock }))?.token === token) removed = (yield* op<Unlinked>({ kind: "unlink", path: lock })) === "removed";
+  yield* op<Unlinked>({ kind: "unlink", path: right });
   return removed;
 });
 

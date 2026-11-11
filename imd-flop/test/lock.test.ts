@@ -11,9 +11,9 @@ import { spawn, spawnSync } from "node:child_process";
 import { chmodSync, existsSync, mkdirSync, readdirSync, readFileSync, unlinkSync, utimesSync, writeFileSync } from "node:fs";
 import { hostname } from "node:os";
 import { join } from "node:path";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { appendLedger, LedgerLockError, withLedgerLock, type LedgerEntry } from "../src/ledger.js";
-import { provablyDead, reclaim, rightPath, runOnDisk, timeoutMessage, type Self } from "../src/lock.js";
+import { provablyDead, reclaim, rightPath, runOnDisk, timeoutMessage, type Self, type Step } from "../src/lock.js";
 import { cli, readLines, readySeat, tmpHome } from "./helpers.js";
 
 const SEAT = "9001";
@@ -126,6 +126,44 @@ describe("defect 1: only ENOENT means the lock is absent", () => {
     expect(() => withLedgerLock(h, () => 1)).toThrow(/has no readable owner: it is a directory\. If no imd-flop/);
     expect(lockFiles(h)).toEqual(["ledger.jsonl.lock"]);
   }, 20_000);
+});
+
+describe("defect 2: unlink errors are never swallowed and never raw", () => {
+  it("an unlink that fails other than ENOENT, EPERM or EACCES is a lock error naming the file and the code (review M22)", () => {
+    const h = tmpHome();
+    const dir = join(h, "a-directory");
+    mkdirSync(dir);
+    function* unlinkDir(): Step<unknown> {
+      return yield { kind: "unlink", path: dir };
+    }
+    expect(() => runOnDisk(unlinkDir(), noWait)).toThrow(LedgerLockError);
+    expect(() => runOnDisk(unlinkDir(), noWait)).toThrow(`ledger lock error: ${dir} cannot be removed (EISDIR)`);
+    function* unlinkDirBestEffort(): Step<unknown> {
+      return yield { kind: "unlink", path: dir, bestEffort: true };
+    }
+    expect(runOnDisk(unlinkDirBestEffort(), noWait)).toBe("absent");
+  });
+
+  it("release never throws after the work is done: a lock it cannot remove gets one stderr line naming the file and the code (review M30)", () => {
+    const h = tmpHome();
+    const lines: string[] = [];
+    const spy = vi.spyOn(process.stderr, "write").mockImplementation((chunk: string | Uint8Array) => { lines.push(String(chunk)); return true; });
+    let result: number;
+    try {
+      // A read only home: the lock cannot be removed (EACCES under the suite's dropped capabilities).
+      result = withLedgerLock(h, () => { chmodSync(h, 0o555); return 42; });
+    } finally {
+      spy.mockRestore();
+      chmodSync(h, 0o755);
+    }
+    expect(result).toBe(42);
+    expect(lines).toEqual([`imd-flop: the ledger lock ${lockPath(h)} could not be removed (EACCES); it will be reclaimed when this process ends.\n`]);
+    // The lock is still there. This process no longer holds its token, so by the own pid rule the next take
+    // here reclaims it at once. Another process reclaims it once this one has ended.
+    expect(lockFiles(h)).toEqual(["ledger.jsonl.lock"]);
+    expect(withLedgerLock(h, () => 7)).toBe(7);
+    expect(lockFiles(h)).toEqual([]);
+  });
 });
 
 describe("L4: no age rule", () => {
