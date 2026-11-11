@@ -101,6 +101,35 @@ describe("R1 (medium): run's own failed receipt read drops the gateway fields an
   });
 });
 
+describe("C (review fixes 2): last_known_at after failed reads in a row", () => {
+  // A failed read stores last_known_at: when the gateway fields the file keeps were last read. After two
+  // failed reads in a row it must still point at the last good read, not at the first failed one.
+  const stored = (h: string, rid: string) => JSON.parse(readFileSync(join(h, "receipts", `${rid}.json`), "utf8"));
+  const tick = () => new Promise((r) => setTimeout(r, 5));
+
+  it("a good read, then two failed refreshes: last_known_at is the good read's observed_at", async () => {
+    const h = await ready();
+    const rid = await pendingRun(h);
+    const good = stored(h, rid).observed_at as string;
+    for (let i = 0; i < 2; i++) {
+      await tick();
+      expect((await cli(h, refreshArgs(rid), { provider: new P({ read: failed }) })).code).toBe(0);
+    }
+    const file = stored(h, rid);
+    expect({ last_known_at: file.last_known_at, state: file.state }).toEqual({ last_known_at: good, state: "estimated" });
+  });
+
+  it("a failed read, then a good one: the file no longer carries last_known_at", async () => {
+    const h = await ready();
+    const rid = await pendingRun(h);
+    await tick();
+    await cli(h, refreshArgs(rid), { provider: new P({ read: failed }) });
+    await tick();
+    expect((await cli(h, refreshArgs(rid), { provider: new P({ read: pending }) })).code).toBe(0);
+    expect("last_known_at" in stored(h, rid)).toBe(false);
+  });
+});
+
 describe("R2 (medium): a trusted receipt with no state does not beat \"nothing was sent\"", () => {
   // b0835bb: a trusted read beats a "nothing was sent" report in both orders. The gateway's schema allows
   // state null (receipts.ts GatewayReceipt). A trusted 200 receipt for this request id with state null

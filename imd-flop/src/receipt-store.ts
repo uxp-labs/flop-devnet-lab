@@ -104,13 +104,28 @@ function identityFromLedger(h: string, row: LedgerEntry): Record<string, unknown
  */
 const GATEWAY_FIELDS = ["request_id", "correlation_id", "state", "reserved", "settled", "settled_raw", "terminal_event", "channel_id"] as const;
 
-/** The receipt file body after a re-read. A failed read keeps what was stored (GATEWAY_FIELDS, chain_final) and says when it was last known. */
+/**
+ * When the gateway fields a stored file holds were read: its last_known_at when the file itself holds a
+ * failed read (so a run of failed reads keeps pointing at the last good one), else its observed_at. Null
+ * when there is no stored file or no such time.
+ */
+function lastKnownAt(saved: SavedReceipt | null): unknown {
+  if (!saved) return null;
+  return "last_known_at" in saved ? (saved as { last_known_at?: unknown }).last_known_at ?? null : saved.observed_at ?? null;
+}
+
+/**
+ * The receipt file body after a re-read. A fresh read brings its own gateway fields and drops last_known_at:
+ * observed_at now says when they were read. A failed read keeps what was stored (GATEWAY_FIELDS,
+ * chain_final) and says in last_known_at when that was last read (lastKnownAt).
+ */
 function bodyAfterRead(saved: SavedReceipt | null, ident: Record<string, unknown>, c: Classified, read: { fresh: boolean; rawId: unknown; identityOk: boolean }): Record<string, unknown> {
   if (read.fresh) {
-    return { ...ident, ...saved, ...c, request_id: typeof read.rawId === "string" ? read.rawId : "", ...(read.identityOk ? {} : { settled: null, chain_final: false }) };
+    const { last_known_at: _stale, ...rest } = { ...ident, ...saved, ...c } as Record<string, unknown>;
+    return { ...rest, request_id: typeof read.rawId === "string" ? read.rawId : "", ...(read.identityOk ? {} : { settled: null, chain_final: false }) };
   }
   const kept = Object.fromEntries(GATEWAY_FIELDS.map((k) => [k, saved?.[k] ?? (k === "request_id" ? "" : null)]));
-  return { ...ident, ...saved, ...c, ...kept, chain_final: saved?.chain_final ?? false, last_known_at: saved?.observed_at ?? null };
+  return { ...ident, ...saved, ...c, ...kept, chain_final: saved?.chain_final ?? false, last_known_at: lastKnownAt(saved) };
 }
 
 /** The stored receipt file as an object, or null when there is none or it is not a JSON object. A file that cannot be read is not merged. */
