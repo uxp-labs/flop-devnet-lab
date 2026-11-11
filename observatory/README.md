@@ -85,25 +85,61 @@ starts again from the first snapshot in the new log.
 
 ```sh
 npm run build
-node dist/live-bin.js --out <a new folder> [--source-sha <revision>]
+node dist/live-bin.js --out <a new folder> --log <the published log folder> [--source-sha <revision>]
 ```
 
 What it does, once per run:
 
+- Reads the published log first: `--log` names a folder of day files, `<UTC date>.jsonl`, the
+  `log/` folder of the branch `observatory-data` ([Published readings](#published-readings)). A
+  folder that does not exist is a first run. The day files are read in name order as one hash
+  chained log, through the store's own reader and chain check (`src/store.ts`, `src/history.ts`).
 - GETs the faucet's `/health` and `/chain` and the gateway's `/v1/models`.
 - Opens one WebSocket to `wss://rpc.devnet.flop.network` and calls `system_chain`,
   `chain_getBlockHash(0)`, `chain_getFinalizedHead`, `chain_getHeader` for the finalized head (by
   its hash) and for the best head, and `state_getRuntimeVersion` at the finalized head.
 - Builds a `networkStatus` snapshot from those answers with the same code the fixtures go through,
-  pinned to the genesis in `src/status.ts`.
+  pinned to the genesis in `src/status.ts`, on top of every snapshot in the log. So the checks
+  against earlier snapshots run, unchanged, over real history: a finalized height below the
+  highest one logged on this genesis, a changed hash at a logged height, a best height below the
+  floor, and a finalized height stuck past the stale limit.
 - Writes into the folder, which must be new or empty: the snapshot (`snapshot.json`, the feeds and
-  a one line `snapshots.jsonl`), `tape.jsonl` (every request and its answer, in order), `run.json`
-  (start, end, the revision if given, how it ended) and `SHA256SUMS`.
+  `snapshots.jsonl`, its one new line of the log, with the `seq` and `prev_hash` that follow the
+  log's last line), `tape.jsonl` (every request and its answer, in order), `run.json` (start, end,
+  the revision if given, which case the log was in, how it ended) and `SHA256SUMS`.
 - Prints one line in the GitHub Actions notice format with the trust, the three geneses,
-  `reset_detected`, the heights, the runtime version, each service's health and the snapshot hash.
+  `reset_detected`, the heights, the runtime version, each service's health, the snapshot's `seq`
+  and `prev_hash`, and the snapshot hash.
 - Exits 0 when a truthful snapshot was written, even with a service down or unknown. It exits 3 for a
   reset signal (`reset_detected` true, or any conflict), 4 when the guard or the transport refused a
-  request, 1 when the run broke, and 2 for wrong flags or a folder that is not empty.
+  request, 1 when the run broke or the log was refused, and 2 for wrong flags or a folder that is
+  not empty.
+
+`run.json` names the case the log was in, as `history.state`:
+
+| State | What the run does |
+|---|---|
+| `absent` | the folder does not exist: a first run, `seq` 0 |
+| `empty` | the folder holds no line: the same as a first run |
+| `read` | every line read, the chain verifies, every snapshot passes `src/snapshot-check.ts`: the new snapshot follows the last line |
+| `unreadable` | a name that is no day file, a link, or a line that is not what the store writes: refused |
+| `broken` | a line does not follow the one before it: refused |
+| `unchecked` | a line in the chain is no snapshot this code can check: refused |
+
+A refused log is never read as no log. The run reads nothing from the network, writes no snapshot,
+exits 1 and says why. It never starts a new log over a broken one. To start a new log on purpose,
+move `log/` aside on the data branch by hand, in a commit of its own, and keep it for audit: the
+next run finds no log and starts at `seq` 0. The readings published before runs kept memory are
+each a log of one line, `seq` 0 with no `prev_hash`. The reader accepts such lines only at the
+start of the log, before any chained line, and the chain goes on from the last of them.
+
+Every run reads the whole log. The checks need the highest finalized and best heights ever logged
+on the genesis, every hash logged at the current height, and the latest run of snapshots at that
+height, which can be any length. Any bound short of the whole log would need a summary of those,
+which is a second owner of the rules in `src/status.ts`. Measured on Node 22: a year of readings,
+48 a day, is about 31 MB in 366 day files and takes about 1.4 s to read and check. Past roughly
+120,000 earlier heads on one genesis (about seven years at 48 a day) `src/status.ts` throws, as it
+spreads every earlier height into one call, so the run breaks with exit 1 and publishes nothing.
 
 A live snapshot's trust is `"trusted RPC"`. It trusts one RPC endpoint, and the faucet and gateway
 as they answer. It is not proof: no light client, and no header hash is checked.
@@ -111,19 +147,26 @@ as they answer. It is not proof: no light client, and no header hash is checked.
 What it never does: call an RPC method outside the guard's list, send anything but GET, reach a host
 other than `rpc.devnet.flop.network`, `faucet.flop.network` and `api.flop.network`, follow a
 redirect, hold a key, sign, or spend. Each request has a 15 s limit and each answer a 1 MiB limit.
-It keeps nothing between runs: it reads no earlier snapshot log, so the rollback, changed hash and
-stuck height checks do not run, and its `reset_detected` speaks for that one reading only, as the
-`status` command's does. It reads no events, so it writes no census, no escrow state and no drift.
+Its memory is the published log and nothing else: it keeps no cache. Its history is only as
+durable as that branch: lines cut from the end of the log, a one-line log removed from its start,
+or the whole log removed cannot be detected from the log itself. It reads no events, so it writes no census, no escrow state and
+no drift.
 
 `.github/workflows/observatory-live.yml` runs it at 7 and 37 past each hour, by hand, and on a push
 that changes the workflow or a live source file, and uploads the folder as an artifact. The live
-job uses no secrets. On main, a second job publishes the folder to a branch
+job checks out `observatory-data` read only and without credentials, when it exists, and passes
+its `log/`. It uses no secrets. On main, a second job publishes the folder to a branch
 ([Published readings](#published-readings)).
 
 Offline, `npm test` covers it without a network: synthetic tapes in `fixtures/live-*` replayed
 through the status code, the transport with a fake socket class and a fake HTTP call, a run whose
-tape replays to the same snapshot, and the workflow read as data. `npm run check` runs those with
-everything else, and `mutants/live.json` holds the bugs they must catch.
+tape replays to the same snapshot, and the workflow read as data. Real readings taken from the data
+branch are in `fixtures/published-*` (marked `synthetic: false`, with the data branch commit, the
+workflow run, the revision and the tape's sha256 in `meta.json`); each replays to its recorded
+snapshot, and the second is built on the first in one chain. Synthetic second readings in
+`fixtures/memory-*`, made from the first real tape, show each check against history and each
+refused log. `npm run check` runs those with everything else, and `mutants/live.json` and
+`mutants/memory.json` hold the bugs they must catch.
 
 ## Published readings
 
@@ -134,12 +177,14 @@ It holds no key and nothing personal. Every commit on it is made by that job.
 | Path on `observatory-data` | What |
 |---|---|
 | `latest/` | the output folder of the newest published run: `snapshot.json`, `status.json`, `escrows.json`, `census.json`, `drift.json`, `snapshots.jsonl`, `tape.jsonl`, `run.json` and `SHA256SUMS`. Each run replaces it whole |
-| `log/<UTC date>.jsonl` | one snapshot per line, one line for each reading published that day, as the run's `snapshots.jsonl` holds it. Each line is `seq` 0 of its own run: the lines are not a hash chain |
+| `log/<UTC date>.jsonl` | one snapshot per line, one line for each reading published that day, as the run's `snapshots.jsonl` holds it. Read in name order, the day files are one hash chained log: each line names the hash of the line before it. The readings published before runs kept memory are each `seq` 0 with no `prev_hash`, at the start of the log |
 | `README.md` | what the branch is, written when it is missing |
 
 A run is published only when it wrote a truthful snapshot: exit 0, or exit 3 for a reset signal.
 A run that broke or was refused leaves the branch as it was, so `latest/` can be old: check its
-time.
+time. A reading whose line does not follow the branch's last line (another reading was published
+after it read the branch) is not published either. The job fails and pushes nothing, and the next
+run builds on the branch as it is then.
 
 Read it with a plain GET of the raw file, no login:
 
@@ -158,13 +203,16 @@ reads no further, when:
 2. a file differs from its line in `SHA256SUMS`, or `SHA256SUMS` is not in the written form,
 3. `snapshot.json` is not JSON in the written form, breaks a check in `src/snapshot-check.ts`, fails
    its hash check, or its trust is not `"trusted RPC"`,
-4. a feed or `snapshots.jsonl` is not the one the snapshot gives, or `run.json` names another
-   snapshot or another exit (3 with a reset signal, else 0),
+4. a feed or `snapshots.jsonl` is not the one the snapshot gives, or `run.json` is not a
+   `flop-observatory/live-run@1`, names another snapshot or another exit (3 with a reset signal,
+   else 0), or does not name the log line the snapshot follows (`history.last_hash` equal to its
+   `prev_hash`, or a first run and `seq` 0),
 5. the snapshot's `observed_at` or its status's is after now, or older than the limit.
 
-It is pure: it reads no file, clock or network. The sums show the files are the ones the job
-checked. They do not show the reading is true. A raw GET can also be served from a cache for a
-few minutes, which is one more reason to check the time.
+It is pure: it reads no file, clock or network. It does not read `log/`: a reader who wants the
+chain reads that folder with `readHistory` in `src/history.ts`. The sums show the files are the
+ones the job checked. They do not show the reading is true. A raw GET can also be served from a
+cache for a few minutes, which is one more reason to check the time.
 
 ## Rules
 
@@ -181,7 +229,8 @@ The two interfaces other teams import are in [../interfaces](../interfaces).
 | `src/status.ts` | network status, reset, stale and conflict detection |
 | `src/escrow.ts` | escrow state from finalized events |
 | `src/census.ts`, `src/drift.ts` | event census and spec drift |
-| `src/store.ts`, `src/feed.ts`, `src/page.ts`, `src/mcp.ts` | snapshot log, feeds, page, MCP |
+| `src/store.ts`, `src/feed.ts`, `src/page.ts`, `src/mcp.ts` | snapshot log (one file, or split by day), feeds, page, MCP |
+| `src/history.ts` | the earlier snapshots a snapshot is built on, and the case a published log is in |
 | `src/guard.ts` | the read-only guard every transport must pass through |
 | `src/transport.ts` | the one interface a live read goes through |
 | `src/net.ts` | the live transport: the guard and the allow list before every send, time and size limits, one socket |
@@ -195,7 +244,7 @@ The two interfaces other teams import are in [../interfaces](../interfaces).
 | `src/own.ts` | the one way src reads a data record by a key only known at run time |
 | `src/files.ts` | the one way src reads a file it is handed: a regular file only, opened without waiting, so a named pipe is refused instead of blocking |
 | `tools/recount.py` | independent census recount, written from RULES.md alone |
-| `fixtures/` | saved scenarios; `meta.json` says which values are real and which are made up; `live-*` are synthetic tapes |
+| `fixtures/` | saved scenarios; `meta.json` says which values are real and which are made up; `live-*` and `memory-*` are synthetic tapes; `published-*` are real readings from the data branch, with their provenance |
 | `mutants/` | the injected bugs and the tests that must catch them |
 | `REVIEW-LOG.md` | what each outside review and independent rerun found, and the fix and proof for each, newest first |
 | `test/setup.ts` | the runtime block on every network and process path, the leftover attempt check, and the attempts journal |
