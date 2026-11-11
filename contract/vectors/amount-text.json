@@ -1,6 +1,6 @@
 {
  "file": "amount-text.json",
- "description": "Amount text from the command line. imd-flop: `cap set <text>` (the same num() parses --per-call and --job-budget): accepted with the stored daily cap, or exit 2. spend-guard: guard.cap_arg(text): accepted float, or ArgumentTypeError (argparse exit 2). nan/inf are accepted by cap_arg and refused later by json_number (decision refused_local).",
+ "description": "Amount text from the command line. imd-flop: `cap set <text>` (the same num() parses --per-call and --job-budget): accepted with the stored daily cap, or exit 2. spend-guard: guard.cap_arg(text): accepted float, or ArgumentTypeError (argparse exit 2). nan/inf are accepted by cap_arg and refused later by json_number (decision refused_local). Rule amount.min_cap (money stage 1): option cap is `cap set <text>`, --per-call is `cap set 1 --per-call <text>`, and --job-budget is a requester `run --job-budget <text>` (sent: paid calls made). A cap, per call cap or job budget below MIN_CAP (rules.json, 1e-6) is refused when it is parsed, exit 2.",
  "status": "current behavior at 3ae1cdf",
  "vectors": [
   {
@@ -375,6 +375,171 @@
    "quirks": [
     "Q-AMOUNT-TEXT"
    ]
+  },
+  {
+   "id": "min-cap-daily-below",
+   "rule": "amount.min_cap",
+   "input": {
+    "text": "1e-7",
+    "option": "cap"
+   },
+   "expect": {
+    "imd-flop": {
+     "exit": 2
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard refuses a --cap below MIN_CAP (rules.json) before the estimate, not when it parses the text; pinned by spend-guard/test_audit_v8.py. It has no per call cap and no job budget"
+    },
+    "viewer": {
+     "not_applicable": "viewer reads amounts from JSON files, not command-line text; see amount-json.json"
+    }
+   },
+   "status": "fixed",
+   "defect": "KD-11",
+   "note": "was accepted, and then every call was refused: daily cap reached (0/1e-7 FLOP today, UTC)"
+  },
+  {
+   "id": "min-cap-daily-just-below",
+   "rule": "amount.min_cap",
+   "input": {
+    "text": "0.00000099",
+    "option": "cap"
+   },
+   "expect": {
+    "imd-flop": {
+     "exit": 2
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard refuses a --cap below MIN_CAP (rules.json) before the estimate, not when it parses the text; pinned by spend-guard/test_audit_v8.py. It has no per call cap and no job budget"
+    },
+    "viewer": {
+     "not_applicable": "viewer reads amounts from JSON files, not command-line text; see amount-json.json"
+    }
+   },
+   "status": "fixed",
+   "defect": "KD-11"
+  },
+  {
+   "id": "min-cap-daily-at",
+   "rule": "amount.min_cap",
+   "input": {
+    "text": "0.000001",
+    "option": "cap"
+   },
+   "expect": {
+    "imd-flop": {
+     "exit": 0
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard refuses a --cap below MIN_CAP (rules.json) before the estimate, not when it parses the text; pinned by spend-guard/test_audit_v8.py. It has no per call cap and no job budget"
+    },
+    "viewer": {
+     "not_applicable": "viewer reads amounts from JSON files, not command-line text; see amount-json.json"
+    }
+   }
+  },
+  {
+   "id": "min-cap-daily-at-exponent",
+   "rule": "amount.min_cap",
+   "input": {
+    "text": "1e-6",
+    "option": "cap"
+   },
+   "expect": {
+    "imd-flop": {
+     "exit": 0
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard refuses a --cap below MIN_CAP (rules.json) before the estimate, not when it parses the text; pinned by spend-guard/test_audit_v8.py. It has no per call cap and no job budget"
+    },
+    "viewer": {
+     "not_applicable": "viewer reads amounts from JSON files, not command-line text; see amount-json.json"
+    }
+   }
+  },
+  {
+   "id": "min-cap-per-call-below",
+   "rule": "amount.min_cap",
+   "input": {
+    "text": "1e-7",
+    "option": "--per-call"
+   },
+   "expect": {
+    "imd-flop": {
+     "exit": 2
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard refuses a --cap below MIN_CAP (rules.json) before the estimate, not when it parses the text; pinned by spend-guard/test_audit_v8.py. It has no per call cap and no job budget"
+    },
+    "viewer": {
+     "not_applicable": "viewer reads amounts from JSON files, not command-line text; see amount-json.json"
+    }
+   },
+   "status": "fixed",
+   "defect": "KD-11"
+  },
+  {
+   "id": "min-cap-per-call-at",
+   "rule": "amount.min_cap",
+   "input": {
+    "text": "0.000001",
+    "option": "--per-call"
+   },
+   "expect": {
+    "imd-flop": {
+     "exit": 0
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard refuses a --cap below MIN_CAP (rules.json) before the estimate, not when it parses the text; pinned by spend-guard/test_audit_v8.py. It has no per call cap and no job budget"
+    },
+    "viewer": {
+     "not_applicable": "viewer reads amounts from JSON files, not command-line text; see amount-json.json"
+    }
+   }
+  },
+  {
+   "id": "min-cap-job-budget-below",
+   "rule": "amount.min_cap",
+   "input": {
+    "text": "1e-7",
+    "option": "--job-budget"
+   },
+   "expect": {
+    "imd-flop": {
+     "exit": 2,
+     "sent": 0
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard refuses a --cap below MIN_CAP (rules.json) before the estimate, not when it parses the text; pinned by spend-guard/test_audit_v8.py. It has no per call cap and no job budget"
+    },
+    "viewer": {
+     "not_applicable": "viewer reads amounts from JSON files, not command-line text; see amount-json.json"
+    }
+   },
+   "status": "fixed",
+   "defect": "KD-11",
+   "note": "refused when the text is parsed: nothing is estimated or sent"
+  },
+  {
+   "id": "min-cap-job-budget-at",
+   "rule": "amount.min_cap",
+   "input": {
+    "text": "0.000001",
+    "option": "--job-budget"
+   },
+   "expect": {
+    "imd-flop": {
+     "exit": 3,
+     "sent": 0
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard refuses a --cap below MIN_CAP (rules.json) before the estimate, not when it parses the text; pinned by spend-guard/test_audit_v8.py. It has no per call cap and no job budget"
+    },
+    "viewer": {
+     "not_applicable": "viewer reads amounts from JSON files, not command-line text; see amount-json.json"
+    }
+   },
+   "note": "accepted when parsed; the padded quote 0.186 is then over the budget, so the call is refused before it is sent"
   }
  ]
 }

@@ -16,6 +16,7 @@ import { matchReceipt, RECEIPT_IDENTITY_STATUS } from "../src/match.js";
 import { ledgerFile, receiptsDir } from "../src/paths.js";
 import type { CompleteReq, CompleteRes, Provider } from "../src/providers.js";
 import { classifyReceipt, RECEIPT_STATES, STAGE_GATEWAY, type GatewayReceipt } from "../src/receipts.js";
+import { MIN_CAP } from "../src/policy.js";
 import { padQuote, TEMPLATE_PAD } from "../src/run.js";
 import { floor6 } from "../src/rounding.js";
 import { DISAGREE, reconcile, SETTLES, UNRESOLVED } from "../src/settlement.js";
@@ -87,6 +88,15 @@ const adapters: Record<string, (i: Json, want: Json) => Promise<Json> | Json> = 
     const r = await cli(h, ["cap", "set", i.text]);
     if (r.code !== EXIT.OK) return { accepted: false, exit: r.code };
     return { accepted: true, value: (await cli(h, ["cap", "show", "--json"])).json().cap.daily };
+  },
+  // A cap, a per call cap or a job budget below MIN_CAP is refused when the text is parsed.
+  "amount.min_cap": async (i) => {
+    const h = await ready();
+    if (i.option === "cap") return { exit: (await cli(h, ["cap", "set", i.text])).code };
+    if (i.option === "--per-call") return { exit: (await cli(h, ["cap", "set", "1", "--per-call", i.text])).code };
+    await cli(h, ["config", "set", "payer", "requester"]);
+    const p = new P();
+    return { exit: (await cli(h, runArgs(["--max-tokens", "8", "--job-budget", i.text]), { provider: p })).code, sent: p.calls };
   },
   "amount.json": (i) => ({ known_settled: knownAmount(i.value), usable_cap_charge: usableCapCharge(i.value) }),
   "rounding.floor6": (i) => ({ floor: floor6(i.value) }),
@@ -174,6 +184,7 @@ describe("contract files", () => {
   it("constants match imd-flop's source", () => {
     const c = rules.constants;
     expect(TEMPLATE_PAD).toBe(c.TEMPLATE_PAD.value);
+    expect(MIN_CAP).toBe(c.MIN_CAP.value);
     expect([...RECEIPT_STATES]).toEqual(c.RECEIPT_STATES.value);
     expect(RECEIPT_IDENTITY_STATUS).toBe(c.IDENTITY.value);
     expect(STAGE_GATEWAY).toBe(c.STAGE_GATEWAY.value);

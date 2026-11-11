@@ -21,7 +21,7 @@
     },
     "MIN_CAP": {
       "value": 1e-06,
-      "imd-flop": null,
+      "imd-flop": "src/policy.ts MIN_CAP (its own literal; test/contract.test.ts checks it against this value)",
       "spend-guard": "guard.py MIN_CAP (read from this file)",
       "viewer": null
     },
@@ -426,6 +426,18 @@
       "target": "room left rounds down with the boundary tolerance imd-flop documents (1e-12 FLOP), so rounding never adds room",
       "status": "fixed: money stage 1",
       "fixed_behavior": "build-lane.py floor6, the twin of rounding.ts floor6, rounds what is left of each limit down; a value within 1e-12 of a 1e-6 boundary counts as on it. The measured row shows -0.000001 and is flagged 'over the daily cap'. Pinned for both parts by contract/vectors/rounding.json and by viewer/test_daily_cap_left.py."
+    },
+    {
+      "id": "KD-11",
+      "source": "found while money stage 1 was studied, measured 2026-11-11",
+      "parts": [
+        "imd-flop"
+      ],
+      "where": "imd-flop/src/policy.ts parseAmount: cap set, --per-call and --job-budget took any finite positive number",
+      "today": "`imd-flop cap set 1e-7` was accepted, and then every call was refused: 'daily cap reached (0/1e-7 FLOP today, UTC)'. spend-guard refuses a cap below MIN_CAP",
+      "target": "a daily cap, a per call cap and a job budget below MIN_CAP are refused when they are parsed",
+      "status": "fixed: money stage 1",
+      "fixed_behavior": "policy.ts parseAmount refuses an amount below MIN_CAP (1e-6) with exit 2, for cap set, --per-call and --job-budget. A padded quote is rounded up to 6 decimals and is above 0, so it is never below MIN_CAP. The other quirks of amount text parsing stay as they are (Q-AMOUNT-TEXT). Pinned by the amount.min_cap vectors in contract/vectors/amount-text.json."
     }
   ]
 }
