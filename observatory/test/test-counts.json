@@ -24,8 +24,8 @@
     "names": "bd439ca49837d3e62977352e9315883dd115a9abd92613ad412e6457ee0f7bc5"
   },
   "guard.test.ts": {
-    "tests": 82,
-    "names": "306a9c7fb41b670bbb82ed3db21c6d5bb64f7af43ca9945bac3bd9b86dda029f"
+    "tests": 83,
+    "names": "3289266269d4788e38c68622daa3f19d46c5c07f457a7c12736b4eefdfc76719"
   },
   "history.test.ts": {
     "tests": 8,
@@ -94,6 +94,10 @@
   "rpc-head.test.ts": {
     "tests": 19,
     "names": "91fe904982e61644eeb892bfad19b911f8c48c2e803742e26397ca7da72677fa"
+  },
+  "scale-reader.test.ts": {
+    "tests": 42,
+    "names": "4b98619494eda10d49445cfa214bb48e907573f165e7b8135f0449ab7c6e8aef"
   },
   "snapshot-check-grid.test.ts": {
     "tests": 43,
