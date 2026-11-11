@@ -9,7 +9,7 @@ import { bytesToHex, utf8ToBytes } from "@noble/hashes/utils.js";
 import { CliError, EXIT } from "./errors.js";
 import { identityFile, keyFile, linkFile, revocationsFile, seatDir, seatsDir } from "./paths.js";
 import { registerSecret } from "./secrets.js";
-import { appendJsonlSafe, ensureDir, readJson, writeJsonSafe, writeSecretFile } from "./store.js";
+import { appendJsonlSafe, ensureDir, readJson, readSecretJson, writeJsonSafe, writeSecretFile } from "./store.js";
 import { didKeyFromPub, ss58Encode } from "./ss58.js";
 import { network } from "./networks.js";
 
@@ -79,8 +79,14 @@ export function loadSigner(h: string, seat: string): Signer {
   if (!existsSync(kf) || !identity) throw new CliError(`no FLOP key for seat ${seat}; run \`imd-flop init --seat ${seat}\``, EXIT.USAGE);
   const mode = statSync(kf).mode & 0o777;
   if (mode & 0o077) throw new CliError(`key file for seat ${seat} is mode ${mode.toString(8)}; expected 600. Fix with chmod 600.`, EXIT.REFUSED_RULE);
-  const parsed = JSON.parse(readFileSync(kf, "utf8")) as { seed_b64: string };
-  const seed = base64.decode(parsed.seed_b64);
+  const parsed = readSecretJson(kf, `key file for seat ${seat}`, (v): v is { seed_b64: string } => typeof (v as { seed_b64?: unknown })?.seed_b64 === "string");
+  let seed: Uint8Array;
+  try {
+    seed = base64.decode(parsed.seed_b64);
+    if (seed.length !== 32) throw new Error("length");
+  } catch {
+    throw new CliError(`key file for seat ${seat} ${kf} is malformed (the seed is not 32 bytes of base64); restore it from a backup or rotate the key`, EXIT.ERROR);
+  }
   registerSecret(seed);
   const pub = ed25519.getPublicKey(seed);
   if (didKeyFromPub(pub) !== identity.did) throw new CliError(`seat ${seat}: key file does not match identity.json`, EXIT.REFUSED_RULE);

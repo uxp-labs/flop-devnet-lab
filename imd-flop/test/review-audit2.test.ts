@@ -177,19 +177,21 @@ describe("review defect 3 (low), fixed: a mark form shorter than 8 characters is
   });
 });
 
-describe("DEFECT 4 (low): a damaged seat key file puts part of the seed on stderr", () => {
-  it("DEFECT 4 (low): link, init --rotate and run print JSON.parse's quote of the key file, ten characters of the base64 seed", async () => {
+describe("review defect 4 (low), fixed: a damaged seat key file is named, never quoted", () => {
+  it("review defect 4, fixed: link, init --rotate and run say the key file is malformed and print no character of it", async () => {
     const h = tmpHome();
     expect((await cli(h, ["init", "--seat", "7"])).code).toBe(0);
     expect((await cli(h, ["cap", "set", "1", "--seat", "7"])).code).toBe(0);
     const kf = keyFile(h, "7");
     const text = readFileSync(kf, "utf8");
     const seed = (JSON.parse(text) as { seed_b64: string }).seed_b64;
-    writeFileSync(kf, text.replace(`"${seed}"`, seed)); // the quotes around the seed lost
-    chmodSync(kf, 0o600);
-    for (const args of [["link", "--token", "7"], ["init", "--seat", "7", "--rotate"], ["run", "--job", "j1", "--prompt", "hi", "--seat", "7", "--no-link"]]) {
-      const r = await cli(h, args);
-      expect({ args, code: r.code, leaks: r.err.includes(seed.slice(0, 10)) }).toEqual({ args, code: 1, leaks: true });
+    for (const damaged of [text.replace(`"${seed}"`, seed), text.replace(seed, "!!" + seed.slice(2))]) {
+      writeFileSync(kf, damaged);
+      chmodSync(kf, 0o600);
+      for (const args of [["link", "--token", "7"], ["init", "--seat", "7", "--rotate"], ["run", "--job", "j1", "--prompt", "hi", "--seat", "7", "--no-link"]]) {
+        const r = await cli(h, args);
+        expect({ args, code: r.code, malformed: r.err.includes(`key file for seat 7 ${kf} is malformed`), leaks: [seed.slice(2, 12), seed.slice(-10)].some((p) => r.err.includes(p)) }).toEqual({ args, code: 1, malformed: true, leaks: false });
+      }
     }
   });
 });

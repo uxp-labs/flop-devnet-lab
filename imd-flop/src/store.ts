@@ -1,5 +1,6 @@
 import { appendFileSync, chmodSync, closeSync, existsSync, fstatSync, mkdirSync, openSync, readFileSync, readSync, renameSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
+import { CliError, EXIT } from "./errors.js";
 import { assertNoSecrets } from "./secrets.js";
 
 export function ensureDir(dir: string, mode = 0o700): void {
@@ -71,4 +72,27 @@ export function writeSecretFile(path: string, contents: string, opts: { replace?
     writeFileSync(path, contents, { mode: 0o600, flag: "wx" }); // fails if it exists
     chmodSync(path, 0o600);
   }
+}
+
+/**
+ * The one reader of every secret file (the seat key, the gateway bearer). It returns the file's text. It never
+ * prints it, and an error about it never quotes a character of it (review of the audit 33f3b9f fixes, defect 4).
+ */
+export function readSecretFile(path: string): string {
+  return readFileSync(path, "utf8");
+}
+
+/**
+ * A secret file that holds JSON, parsed and checked by `valid`. A file that does not parse, or does not pass,
+ * is reported as malformed with its name only: JSON.parse's own message quotes the text, so it is never used.
+ */
+export function readSecretJson<T>(path: string, what: string, valid: (v: unknown) => v is T): T {
+  let value: unknown;
+  try {
+    value = JSON.parse(readSecretFile(path));
+  } catch {
+    throw new CliError(`${what} ${path} is malformed (not JSON); restore it from a backup or rotate the key`, EXIT.ERROR);
+  }
+  if (!valid(value)) throw new CliError(`${what} ${path} is malformed (not the expected fields); restore it from a backup or rotate the key`, EXIT.ERROR);
+  return value;
 }
