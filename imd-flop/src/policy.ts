@@ -183,6 +183,15 @@ export function noRoom(a: BudgetState): BudgetRefusal | null {
 }
 
 /**
+ * The day's total that counts against the cap (ledger.ts spentToday) is above the daily cap. `status` marks
+ * such a day. The cap check never admits a call past the cap, so a day gets there only after admission: a
+ * booking that passed what the cap admitted (settlement.ts PAST_ADMITTED), or a cap set lower during the day.
+ */
+export function overDailyCap(spent: number, cap: SeatCap | null): boolean {
+  return cap !== null && spent > cap.daily;
+}
+
+/**
  * The cap check made under the ledger lock. First the refusal that needs no quote (noRoom), then the
  * per-call cap, then the first limit of this payer that the padded quote does not fit: the daily cap, then
  * for a requester the job budget. Null means the padded quote fits.

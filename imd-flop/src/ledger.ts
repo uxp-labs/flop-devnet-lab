@@ -100,7 +100,24 @@ function sumCharges(rows: LedgerEntry[]): number {
  * account's limit will bound the call and it will not count here.
  */
 export function spentToday(h: string, seat: string, provider: string, day = utcDay()): number {
-  return sumCharges(latestAttempts(h).filter((e) => e.seat === seat && e.provider === provider && e.day === day));
+  return sumCharges(seatDay(h, seat, provider, day));
+}
+
+/** The latest row of every request of the seat for that provider and UTC day. */
+function seatDay(h: string, seat: string, provider: string, day: string): LedgerEntry[] {
+  return latestAttempts(h).filter((e) => e.seat === seat && e.provider === provider && e.day === day);
+}
+
+/**
+ * What the gateway reported as spent on one UTC day: the sum of the known settled spends (`spend`) of the
+ * same rows spentToday counts, rounded up to 6 decimals as that total is. A row whose spend is unknown adds
+ * nothing: the gateway reported no amount for it. `status` shows it beside spentToday, which is what counts
+ * against the cap. No cap or booking decision reads it.
+ */
+export function reportedSpendToday(h: string, seat: string, provider: string, day = utcDay()): number {
+  let sum = 0;
+  for (const row of seatDay(h, seat, provider, day)) sum += knownAmount(row.spend) ?? 0;
+  return ceil6(sum);
 }
 
 /** The requester spend on one job, on any day: the job budget's running total. */

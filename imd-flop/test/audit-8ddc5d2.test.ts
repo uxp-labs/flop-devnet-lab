@@ -659,8 +659,9 @@ describe("finding 13: the seat's daily cap bounds every call the seat's key pays
       { payer: "requester", state: "settled", spent_before: 0.558, job_spent_before: 0 },
     ]);
     // status reports the seat's total for the day, all payers. Moved (hold floor): this was 0.186 + 0.186 +
-    // 0.05 + 0.1 = 0.522. Every call keeps its 0.186 hold, so it is 4 x 0.186.
-    expect((await cli(h, ["status", "--seat", SEAT, "--json"])).json().today_utc.mock).toBe(0.744);
+    // 0.05 + 0.1 = 0.522. Every call keeps its 0.186 hold, so it is 4 x 0.186; the gateway reported 0.15.
+    const st = (await cli(h, ["status", "--seat", SEAT, "--json"])).json();
+    expect({ charged: st.today_utc.mock, reported: st.gateway_spent_today_utc.mock }).toEqual({ charged: 0.744, reported: 0.15 });
   });
 
   it("an unusable ledger charge on any of the seat's rows today refuses the next call, whoever either call is for (exit 3, no estimate)", async () => {

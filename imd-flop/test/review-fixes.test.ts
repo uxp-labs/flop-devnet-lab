@@ -15,7 +15,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { PreSendError } from "../src/gateway.js";
 import type { CompleteReq, CompleteRes, Provider } from "../src/providers.js";
-import { decideBooking, DISAGREE, reconcile } from "../src/settlement.js";
+import { decideBooking, DISAGREE, PAST_ADMITTED, reconcile } from "../src/settlement.js";
 import { cli, readLines, readySeat, tmpHome } from "./helpers.js";
 
 const SEAT = "9001";
@@ -131,14 +131,23 @@ describe("R3 (medium): a hold taken back after \"nothing was sent\" puts the day
   // b0835bb lets a trusted read take a released reservation back to its padded quote. Between the release
   // and that read another call may be admitted against the freed room. The day then ends above the cap,
   // with no refusal and no DISAGREE: the trusted read proves the gateway held the first call all along.
-  it.fails("cap 0.3: A fails before send (released), B is admitted at 0.186, a refresh of A reads estimated: the day stays within 0.3", async () => {
+  // Decided (hold floor): this stays possible, because the hold coming back is the safe direction, and it is
+  // never silent. The booking prints PAST_ADMITTED on stderr and records it in the row's reason, and status
+  // marks the day whose total is above its cap, in text and in --json.
+  it("cap 0.3: A fails before send (released), B is admitted at 0.186, a refresh of A reads estimated: the hold is back, the line is printed, status marks the day", async () => {
     const h = await ready("0.3");
     expect((await cli(h, runArgs("jA"), { provider: new P({ complete: preSend }) })).code).toBe(11);
     const a = ledger(h)[0].request_id!;
-    await anotherRun(h, "jB");
+    expect(await anotherRun(h, "jB")).toBe(0);
     const refreshed = await cli(h, refreshArgs(a), { provider: new P({ read: pending }) });
     expect(refreshed.code, refreshed.err).toBe(0);
-    expect(await today(h)).toBeLessThanOrEqual(0.3);
+    expect(refreshed.err).toContain(PAST_ADMITTED);
+    const rowA = ledger(h).filter((r) => r.request_id === a).at(-1)!;
+    expect({ ...booked(rowA), reason: rowA.reason }).toEqual({ state: "estimated", spend: null, cap_charge: 0.186, reason: PAST_ADMITTED });
+    const status = await cli(h, ["status", "--seat", SEAT, "--json"]);
+    expect(status.json().today_utc.mock).toBe(0.372);
+    expect(status.json().over_cap_today_utc).toEqual({ flop: false, mock: true });
+    expect((await cli(h, ["status", "--seat", SEAT])).out).toContain("mock 0.372 / 0.3 OVER CAP");
   });
 });
 
