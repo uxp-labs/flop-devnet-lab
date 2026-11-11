@@ -878,8 +878,9 @@ A recording is exactly what one RPC endpoint answered to a reviewed list of read
 order. It exists so decoders (SCALE events and storage) can be built and tested against real data.
 It is evidence for building them, never proof of chain state: no answer on it is checked against
 anything, it trusts one endpoint as the live run does (section 7), and a block a list names is in
-it because a person checked it by hand and an indexer said what it holds, which no code here
-checks. Section 4 holds for everything it reads.
+it because a person checked it by hand or a test record of the lab names it, and what it holds is
+what an indexer or that record said, which no code here checks against the chain. Section 4 holds
+for everything it reads.
 
 - The request list is `recordings/requests.json`, reviewed like code. Its form is
   `flop-observatory/requests@0` (`src/requests.ts`): JSON in the written form (`src/feed.ts`),

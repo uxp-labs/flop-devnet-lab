@@ -209,9 +209,27 @@ building and testing decoders against real data. It is evidence, never proof of 
 - The request list is `recordings/requests.json`: a `flop-observatory/requests@0` in the written
   form (sorted keys, two space indent, a newline at the end), with no other key and no key twice,
   and 1 to 64 calls, each `method`, `params` (a list) and `why` (one plain line). It is reviewed
-  like code. The first list asks the finalized head and the genesis hash, then for each of twelve
-  blocks with compute channel events its hash by height, its header, `System.Events` and
+  like code, and it is the list to be recorded next.
+- The list it holds now is the second: the storage the lab's own two devnet session tests left
+  behind (`research/2026-11-11-session-probe` and `research/2026-11-11-session-escrow`), 56 calls.
+  It asks the finalized head and the genesis hash, then for each of twelve blocks (ten of those
+  tests, and two for one gateway channel to compare with ours) its hash by height,
+  `System.LastRuntimeUpgrade` at the hash the test record gives, and the reads named there:
+  `FlopSessionKeys` `Sessions`, `SessionNonces` and `CircuitBreakers`, `ComputeChannel`
+  `Channels`, and `System.Events` where a call was sent, then the runtime version and the metadata
+  at block 3498313, the last block of the second test. Nothing in it is typed by hand:
+  `test/helpers/requests-derive.ts` derives it from `recordings/requests-inputs.json`, where each
+  account, channel id, height and block hash names the file and field it was taken from, and from
+  the recorded metadata. `test/storage-requests.test.ts` holds the file to that function byte for
+  byte, builds every storage key again with the reference decoder, and holds every input to the
+  test record or the recording it names. A storage value a node does not hold is answered as null,
+  and that is an answer too.
+- The first list asked the finalized head and the genesis hash, then for each of twelve blocks
+  with compute channel events its hash by height, its header, `System.Events` and
   `System.LastRuntimeUpgrade` at its hash, then the runtime version and the metadata at the last.
+  Its recording's fixture keeps it, byte for byte, as
+  `fixtures/recording-20261111160917-3c228907aa129a01/requests.json`, and the tests that read that
+  recording read that copy.
 - A list that is not in that form, or that holds a method the read only guard refuses, is refused
   before anything is sent: nothing is read from the network, and the run says why.
 - Each call is made once, in order, on one socket, through the same transport and guard as the
@@ -242,10 +260,11 @@ time the run started as 14 digits, a dash and the first 16 hex of the request li
 by the shell from validated values only. A recording is immutable: when that folder is already
 there, the job changes nothing and says so. It writes nothing outside it, and the live publish job
 writes nothing inside `recordings/`. On any other branch the run is a smoke run and publishes
-nothing. A recording is copied into `fixtures/` by hand, with its provenance, when a decoder needs
-it.
+nothing. A recording is copied into `fixtures/` by hand, with its provenance and the request list
+it was made from, when a decoder needs it.
 
-Offline, `npm test` covers the request list, the run over a fake socket that answers each call
+Offline, `npm test` covers the request list's form, each list against what it was made from, the
+run over a fake socket that answers each call
 (answers, RPC errors, a time limit, answers over and under their limits, a socket refused), the
 reader on doctored copies, the workflow read as data, and both publish jobs' shells run with bash
 against a local bare repository, on one branch.
@@ -389,7 +408,8 @@ The two interfaces other teams import are in [../interfaces](../interfaces).
 | `src/net-root.ts` | the one module that names the real socket class and HTTP call: the live command and the recorder take their transport from it |
 | `src/sums.ts` | the one form of `SHA256SUMS`, and the check of a folder against it, for the runs that write it and the readers that check it |
 | `src/run-command.ts` | what the live run and the recorder share: exit codes, flags, `SHA256SUMS` over the folder, how the command ends |
-| `src/requests.ts`, `recordings/requests.json` | the request list's form, and the first list |
+| `src/requests.ts`, `recordings/requests.json` | the request list's form, and the list to be recorded next |
+| `recordings/requests-inputs.json`, `test/helpers/requests-derive.ts` | the inputs of the list, each with the file and field it comes from, and the function that derives the list from them and the recorded metadata |
 | `src/record-run.ts`, `src/record-bin.ts` | one record run and its files, and the command |
 | `src/recording.ts` | the reader contract for a recording |
 | `src/scale/`, `src/hash/` | the decoder, pure: reader, hashes, metadata, decode by type, storage keys, events, the shape pin and the one entry point for a block's events ([Decoder](#decoder)) |
@@ -400,7 +420,7 @@ The two interfaces other teams import are in [../interfaces](../interfaces).
 | `src/own.ts` | the one way src reads a data record by a key only known at run time |
 | `src/files.ts` | the one way src reads a file it is handed: a regular file only, opened without waiting, so a named pipe is refused instead of blocking |
 | `tools/recount.py` | independent census recount, written from RULES.md alone |
-| `fixtures/` | saved scenarios; `meta.json` says which values are real and which are made up; `live-*` and `memory-*` are synthetic tapes; `published-*` are real readings from the data branch, with their provenance; `recording-*` are real recordings, byte for byte |
+| `fixtures/` | saved scenarios; `meta.json` says which values are real and which are made up; `live-*` and `memory-*` are synthetic tapes; `published-*` are real readings from the data branch, with their provenance; `recording-*` are real recordings, byte for byte, each with the request list it was made from |
 | `mutants/` | the injected bugs and the tests that must catch them |
 | `REVIEW-LOG.md` | what each outside review and independent rerun found, and the fix and proof for each, newest first |
 | `test/setup.ts` | the runtime block on every network and process path, its one exemption (`runShell`, for `test/publish-shell.test.ts` only, which runs both publish jobs' shells), the leftover attempt check, and the attempts journal |

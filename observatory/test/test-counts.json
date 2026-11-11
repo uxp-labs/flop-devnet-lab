@@ -97,7 +97,7 @@
   },
   "requests.test.ts": {
     "tests": 22,
-    "names": "813c6354b20649549fd2e627109a2bc4615a1499757b6c4acc8a55263e7a6346"
+    "names": "a4e5b94af87687f1dcea07ad1bf36f4a7120c6badbae2518ce9da8fcc75ef94c"
   },
   "review-decoder.test.ts": {
     "tests": 35,
@@ -158,6 +158,10 @@
   "storage-key.test.ts": {
     "tests": 9,
     "names": "ab64b240e88749709fd11d06c91eab4cc365ce23e6e12c745ec5c75a051e6dc6"
+  },
+  "storage-requests.test.ts": {
+    "tests": 12,
+    "names": "00ce20a9151fa64f93fcdad5d4550cdb1b035a7c1a25a158127743e44b906468"
   },
   "store.test.ts": {
     "tests": 23,
