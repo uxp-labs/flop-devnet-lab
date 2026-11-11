@@ -82,7 +82,7 @@ export interface ReadOutcome {
  * A read is trusted only when it is fresh, identity-matched and stored without redaction. A receipt body
  * that had to be redacted never proves a settlement and never moves the state.
  */
-export function trustedRead(o: ReadOutcome): boolean {
+function trustedRead(o: ReadOutcome): boolean {
   return o.fresh && o.identityOk && !o.redacted;
 }
 
@@ -111,26 +111,16 @@ export function reportedCost(value: unknown): number | null {
   return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
 
-/** A reported cost may raise a charge, never lower it. */
+/** A reported cost may raise a charge, never lower it: a hold and a proven settlement alike. */
 function raisedBy(charge: number, costReported: number | null): number {
   return costReported !== null ? Math.max(charge, costReported) : charge;
-}
-
-/** While no settlement is booked from a read, the charge already held stays; a reported cost may raise it, never lower it. */
-export function holdCharge(held: number, costReported: number | null): number {
-  return raisedBy(held, costReported);
-}
-
-/** A proven settlement is charged in full; a reported cost may raise that charge too, never lower it. */
-export function settledCharge(settled: number, costReported: number | null): number {
-  return raisedBy(settled, costReported);
 }
 
 /**
  * A booked known settlement is never lowered by a later read. True when the row is in a settling state
  * with a known spend and a trusted read settles below it.
  */
-export function lowersSettlement(prev: { state: string; spend: unknown }, o: ReadOutcome): boolean {
+function lowersSettlement(prev: { state: string; spend: unknown }, o: ReadOutcome): boolean {
   const booked = SETTLES.has(prev.state) ? knownAmount(prev.spend) : null;
   const settled = settledSpend(o);
   return booked !== null && settled !== null && settled < booked;
@@ -192,10 +182,10 @@ export function decideBooking<C>(prev: PrevBooking<C>, o: ReadOutcome, costRepor
   const lowers = lowersSettlement(prev, o);
   const state = lowers ? prev.state : stateAfter(prev.state, o);
   const settled = settledSpend(o);
-  if (settled !== null && !lowers) return { booking: { state, spend: settled, cap_charge: settledCharge(settled, costReported) }, disagree: false };
+  if (settled !== null && !lowers) return { booking: { state, spend: settled, cap_charge: raisedBy(settled, costReported) }, disagree: false };
   const held = heldCharge(prev, state);
   if (held === null) return { booking: { state: prev.state, spend: prev.spend, cap_charge: prev.cap_charge }, disagree: true };
-  return { booking: { state, spend: prev.spend, cap_charge: holdCharge(held, costReported) }, disagree: lowers };
+  return { booking: { state, spend: prev.spend, cap_charge: raisedBy(held, costReported) }, disagree: lowers };
 }
 
 /**
