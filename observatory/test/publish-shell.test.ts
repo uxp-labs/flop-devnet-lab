@@ -22,6 +22,7 @@ import { readHistory } from "../src/history.js";
 import { EXIT, runLive } from "../src/live-run.js";
 import { PUBLISHED_FILES } from "../src/published.js";
 import { logLine } from "../src/store.js";
+import { sumsOf } from "../src/sums.js";
 import { TapeTransport } from "../src/tape.js";
 import type { Transport } from "../src/transport.js";
 import type { Snapshot } from "../src/types.js";
@@ -350,16 +351,45 @@ describe("readings that follow the branch", () => {
     expect(b.message).toContain("exit code 3, run 4242");
   });
 
-  it("a refused push is fetched again and tried once more", async () => {
+  it("a refused push is fetched again and tried once more, on the branch as it is then", async () => {
     const r1 = await read(live("published-2026-11-11-0808"), checkout());
-    // The server refuses the first push it is given, then takes the next.
+    published(publishJob(r1));
+    const r2 = await read(live("published-2026-11-11-0823"), checkout());
+    // The server refuses the first push, and moves the branch under it by a commit that changes
+    // README.md only, so its last line stays the same. A second push of the same commit would not
+    // be a fast forward: only a fresh fetch, with the reading laid on top again, is taken.
+    const marker = join(box, "refused-once");
     const hook = join(bare(), "hooks", "pre-receive");
-    writeFileSync(hook, `#!/usr/bin/env bash\nif [ ! -e "${join(box, "refused-once")}" ]; then : >"${join(box, "refused-once")}"; echo refused >&2; exit 1; fi\n`);
+    writeFileSync(
+      hook,
+      [
+        "#!/usr/bin/env bash",
+        "set -euo pipefail",
+        `if [ -e "${marker}" ]; then exit 0; fi`,
+        `: >"${marker}"`,
+        "unset GIT_QUARANTINE_PATH GIT_OBJECT_DIRECTORY GIT_ALTERNATE_OBJECT_DIRECTORIES",
+        "tip=$(git rev-parse refs/heads/observatory-data)",
+        "blob=$(printf '# moved\\n' | git hash-object -w --stdin)",
+        "tree=$( { git ls-tree \"$tip\" | grep -v $'\\tREADME.md$'; printf '100644 blob %s\\tREADME.md\\n' \"$blob\"; } | git mktree)",
+        "c=$(GIT_AUTHOR_NAME=m GIT_AUTHOR_EMAIL=m@example.invalid GIT_COMMITTER_NAME=m GIT_COMMITTER_EMAIL=m@example.invalid git commit-tree \"$tree\" -p \"$tip\" -m moved)",
+        'git update-ref refs/heads/observatory-data "$c" "$tip"',
+        "echo refused >&2",
+        "exit 1",
+        "",
+      ].join("\n"),
+    );
     chmodSync(hook, 0o755);
-    const j = publishJob(r1);
+    const j = publishJob(r2);
     published(j);
     expect(j.publish?.stdout).toContain("the push was refused; fetching observatory-data again and trying once more");
-    expect(branch().log).toEqual({ "2026-11-11.jsonl": dayFile(r1) });
+    const b = branch();
+    const moved = git("--git-dir", bare(), "rev-parse", `${REF}~1`).trim();
+    expect(git("--git-dir", bare(), "log", "-1", "--format=%s", moved).trim()).toBe("moved");
+    expect(b.parents).toEqual([moved]);
+    expect(git("--git-dir", bare(), "show", `${REF}:README.md`)).toBe("# moved\n");
+    expect(b.log).toEqual({ "2026-11-11.jsonl": dayFile(r1, r2) });
+    expect(b.latest).toEqual(filesOf(r2));
+    expect(b.refs).toEqual([REF]);
   });
 
   it("a push refused twice fails the job, and the branch stays as it was", async () => {
@@ -476,6 +506,25 @@ describe("an artifact the check refuses: the publish step never runs and nothing
       writeFileSync(join(d, name), bytes);
     });
     refusedAtCheck(j, "a file differs from SHA256SUMS");
+    expect(branch()).toEqual(before);
+  });
+
+  it.each([
+    ["an observed_at that runs on to another line", "snapshot.json", (t: string) => JSON.stringify({ ...JSON.parse(t), observed_at: `${JSON.parse(t).observed_at}\nday=../x` }), "snapshot.json holds no observed_at in the written form"],
+    ["an observed_at that starts with a dash", "snapshot.json", (t: string) => JSON.stringify({ ...JSON.parse(t), observed_at: "-d now" }), "snapshot.json holds no observed_at in the written form"],
+    ["a prev_hash that is null on a line with seq 1", "snapshots.jsonl", (t: string) => t.replace(/"prev_hash":"[0-9a-f]{64}"/, '"prev_hash":null'), "snapshots.jsonl holds no prev_hash in the written form"],
+    ["a prev_hash that is an option", "snapshots.jsonl", (t: string) => t.replace(/"prev_hash":"[0-9a-f]{64}"/, '"prev_hash":"-rf"'), "snapshots.jsonl holds no prev_hash in the written form"],
+    ["a seq with a leading zero", "snapshots.jsonl", (t: string) => t.replace(/"seq":1,/, '"seq":"01",'), "snapshots.jsonl holds no seq in the written form"],
+    ["two lines in snapshots.jsonl", "snapshots.jsonl", (t: string) => t + t, "snapshots.jsonl is not one whole line"],
+  ] as const)("an artifact whose SHA256SUMS was written again around %s", async (_what, name, edit, why) => {
+    const { before, next } = await onBranch();
+    const j = publishJob(next, (d) => {
+      const was = readFileSync(join(d, name), "utf8");
+      expect(edit(was)).not.toBe(was);
+      writeFileSync(join(d, name), edit(was));
+      writeFileSync(join(d, "SHA256SUMS"), sumsOf(PUBLISHED_FILES.map((n) => [n, readFileSync(join(d, n))] as const)));
+    });
+    refusedAtCheck(j, why);
     expect(branch()).toEqual(before);
   });
 

@@ -56,8 +56,8 @@
     "names": "c1629a5c9e7fa1134a7e062494c93ae5e762fbe1cc26328108e74d808eb49693"
   },
   "publish-shell.test.ts": {
-    "tests": 29,
-    "names": "d99f8541cf14dfa7f6cc60980f2d1aefcb9cf484e17c2c71d7fb464f93b5fd52"
+    "tests": 35,
+    "names": "adb91e0b4c751b13cc19c3967718f13781ce5cdaa768239a46528884131842d2"
   },
   "published.test.ts": {
     "tests": 21,
