@@ -13,17 +13,20 @@
  * broke the rule. Step 2 applied the rule where gateway.ts reads the body (outside-json.ts readOutsideJson): such
  * a body takes exactly the path of a body that is not JSON at that place, with the fixed reason
  * non_finite_number. Those tests are now named "fixed". The paid call's answer and the receipt read are parsed
- * by @flop-labs/client, not by this tool: their "TODAY" tests still pin today's behavior (known defect KD-17 in
- * contract/rules.json).
+ * by @flop-labs/client: since KD-17 (contract/rules.json) the client's fetch is outside-json.ts nonFiniteSeam,
+ * and their tests, "TODAY (KD-17)" before, are named "fixed (KD-17)".
  */
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { holdsNonFiniteNumber, NonFiniteNumber, readOutsideJson } from "../src/outside-json.js";
+import { holdsNonFiniteNumber, NonFiniteNumber, nonFiniteSeam, readOutsideJson } from "../src/outside-json.js";
 import { gatewayKeyFile } from "../src/paths.js";
+import { NETWORKS } from "../src/networks.js";
+import { FlopProvider } from "../src/providers.js";
+import { writeSecretFile } from "../src/store.js";
 import { clearSecretRegistry } from "../src/secrets.js";
 import { cli, readLines, readySeat, tmpHome } from "./helpers.js";
-import { failingStream, NOT_TEXT, paidRun, paidSeat, PIN, receiptText, refresh, type Answer } from "./lib/scripted-gateway.js";
+import { ETH, failingStream, NOT_TEXT, paidRun, paidSeat, PIN, receiptText, refresh, type Answer } from "./lib/scripted-gateway.js";
 
 afterEach(() => clearSecretRegistry());
 
@@ -177,7 +180,7 @@ describe("non-finite reads: the child key mint", () => {
   }
 });
 
-describe("non-finite reads: the paid call's answer (parsed by @flop-labs/client)", () => {
+describe("non-finite reads: the paid call's answer (parsed by @flop-labs/client, through the KD-17 seam)", () => {
   it("control: an answer that is not JSON leaves the spend unknown and the reservation held, exit 6", async () => {
     const r = await paidRun({ completion: ok(NOT_JSON) });
     expect(r.code).toBe(6);
@@ -187,75 +190,115 @@ describe("non-finite reads: the paid call's answer (parsed by @flop-labs/client)
     expect(r.gw.seen).not.toContain("receipt");
   });
   for (const n of ["1e999", "-1e999"]) {
-    it(`TODAY (KD-17): an answer whose usage.cost_flop is ${n} takes the not-JSON path (the client's schema refuses it), with no reason of its own`, async () => {
-      const r = await paidRun({ completion: ok(COMPLETION(`{"prompt_tokens":1,"completion_tokens":1,"total_tokens":2,"cost_flop":${n}}`)) });
-      expect(r.code).toBe(6);
-      expect(ledger(r.h).at(-1)).toMatchObject({ state: "timeout_unknown", reason: "FlopValidationError: no answer; spend unknown, not retried", cap_charge: 0.132, spend: null });
-      expect(responses(r.h)).toEqual([]);
-    });
-    it(`TODAY (wrong, KD-17): an answer with ${n} in a usage field the client does not check is stored with null in its place`, async () => {
-      const r = await paidRun({ completion: ok(COMPLETION(USAGE(`,"spare":${n}`))) });
-      expect(r.code).toBe(0);
-      const [stored] = responses(r.h);
-      expect(JSON.parse(stored).usage).toEqual({ prompt_tokens: 1, completion_tokens: 1, total_tokens: 2, cost_flop: 0.01, spare: null });
-      expect(ledger(r.h).at(-1)).toMatchObject({ state: "settled", cost_reported: 0.01 });
-    });
-    it(`TODAY (wrong, KD-17): an answer with ${n} outside usage is used as a trusted answer and booked`, async () => {
-      const r = await paidRun({ completion: ok(COMPLETION(USAGE(), `,"spare":${n}`)) });
-      expect(r.code).toBe(0);
-      expect(ledger(r.h).at(-1)).toMatchObject({ state: "settled", cost_reported: 0.01 });
-    });
+    for (const [where, body] of [
+      ["whose usage.cost_flop is", COMPLETION(`{"prompt_tokens":1,"completion_tokens":1,"total_tokens":2,"cost_flop":${n}}`)],
+      ["with, in a usage field the client does not check,", COMPLETION(USAGE(`,"spare":${n}`))],
+      ["with, outside usage,", COMPLETION(USAGE(), `,"spare":${n}`)],
+    ]) {
+      it(`fixed (KD-17): a 200 answer ${where} ${n} takes the not-JSON path: reservation held (timeout_unknown, exit 6), never booked as trusted, no response file, reason non_finite_number`, async () => {
+        const r = await paidRun({ completion: ok(body) });
+        expect(r.code).toBe(6);
+        expect(r.err).toContain("(non_finite_number). Spend is UNKNOWN");
+        expect(r.err).not.toContain("999");
+        const rows = ledger(r.h);
+        expect(rows.at(-1)).toMatchObject({ state: "timeout_unknown", reason: "FlopValidationError: no answer; spend unknown, not retried (non_finite_number)", cap_charge: 0.132, spend: null, cost_reported: null });
+        expect(rows.some((row) => row.state === "settled" || row.state === "refused_local")).toBe(false);
+        expect(responses(r.h)).toEqual([]);
+        expect(r.gw.seen).not.toContain("receipt");
+      });
+    }
   }
   it("control: an HTTP 500 answer that is not JSON is a gateway error, exit 1, reservation held", async () => {
     const r = await paidRun({ completion: ok(NOT_JSON, 500) });
     expect(r.code).toBe(1);
     expect(ledger(r.h).at(-1)).toMatchObject({ state: "error", reason: "HTTP 500", cap_charge: 0.132 });
   });
-  it("TODAY (KD-17): an HTTP 500 answer with 1e999 in it is the same gateway error, exit 1", async () => {
+  it("fixed (KD-17): an HTTP 500 answer with 1e999 in it is the same gateway error, exit 1, reason HTTP 500 (non_finite_number)", async () => {
     const r = await paidRun({ completion: ok(`{"error":"busy","retry":1e999}`, 500) });
     expect(r.code).toBe(1);
-    expect(ledger(r.h).at(-1)).toMatchObject({ state: "error", reason: "HTTP 500", cap_charge: 0.132 });
+    expect(r.err).toContain("gateway refused the call (HTTP 500 (non_finite_number)); spend recorded as unknown");
+    expect(ledger(r.h).at(-1)).toMatchObject({ state: "error", reason: "HTTP 500 (non_finite_number)", cap_charge: 0.132 });
   });
 });
 
-describe("non-finite reads: the receipt read (parsed by @flop-labs/client)", () => {
+describe("non-finite reads: the receipt read (parsed by @flop-labs/client, through the KD-17 seam)", () => {
   it("control: a receipt that is not JSON is not a trusted read: nothing is booked and the stored receipt says why", async () => {
     const r = await paidRun({ receipt: ok(NOT_JSON) });
     expect(r.code).toBe(0);
     expect(ledger(r.h).at(-1)).toMatchObject({ state: "sent", cap_charge: 0.132, spend: null });
     expect(receipts(r.h)).toMatchObject([{ http: 0, error: "Gateway response is not valid JSON", settled: null, reserved: null }]);
   });
-  for (const [field, n] of [["settled_spend", "1e999"], ["reserved_spend", "-1e999"]] as const) {
-    it(`TODAY (KD-17): a receipt whose ${field} is ${n} is not a trusted read (the client's schema refuses it), but its reason is not non_finite_number`, async () => {
+  for (const [field, n] of [["settled_spend", "1e999"], ["reserved_spend", "-1e999"], ["spare", "1e999"], ["spare", "-1e999"]] as const) {
+    it(`fixed (KD-17): a receipt whose ${field} is ${n} is not a trusted read: nothing booked, the stored receipt records the reason, not a null spend`, async () => {
       const r = await paidRun({ receipt: ok(receiptText({ [field]: n })) });
       expect(r.code).toBe(0);
       expect(ledger(r.h).at(-1)).toMatchObject({ state: "sent", cap_charge: 0.132, spend: null });
-      expect(receipts(r.h)).toMatchObject([{ http: 0, error: "Invalid credential receipt response", settled: null, reserved: null }]);
+      expect(receipts(r.h)).toMatchObject([{ http: 0, error: "Gateway response is not valid JSON (non_finite_number)", state: null, settled: null, reserved: null }]);
     });
   }
-  for (const n of ["1e999", "-1e999"]) {
-    it(`TODAY (wrong, KD-17): a receipt with ${n} in a field the client does not check is a trusted read and is booked`, async () => {
-      const r = await paidRun({ receipt: ok(receiptText({ spare: n })) });
-      expect(r.code).toBe(0);
-      expect(ledger(r.h).at(-1)).toMatchObject({ state: "settled", spend: 0.01 });
-      expect(receipts(r.h)).toMatchObject([{ http: 200, error: null, state: "settled", settled: 0.01 }]);
-    });
-  }
-  it("TODAY (wrong, KD-17): receipt --refresh books a receipt with 1e999 in a field the client does not check", async () => {
+  it("fixed (KD-17): receipt --refresh of a receipt with 1e999 in a field the client does not check books nothing and keeps the reservation", async () => {
     const first = await paidRun({ receipt: ok(NOT_JSON) });
     const rid = first.gw.requestId()!;
     expect(ledger(first.h).at(-1)).toMatchObject({ state: "sent" });
+    const before = ledger(first.h).length;
     const r = await refresh(first.h, first.owner, rid, ok(receiptText({ spare: "1e999" })));
     expect(r.code).toBe(0);
-    expect(ledger(first.h).at(-1)).toMatchObject({ state: "settled", spend: 0.01 });
+    expect(ledger(first.h).length).toBe(before);
+    expect(ledger(first.h).at(-1)).toMatchObject({ state: "sent", cap_charge: 0.132, spend: null });
+    expect(receipts(first.h)).toMatchObject([{ http: 0, error: "Gateway response is not valid JSON (non_finite_number)", settled: null }]);
+    expect(JSON.parse(r.out).error).toBe("Gateway response is not valid JSON (non_finite_number)");
   });
   it("control: an HTTP 401 receipt answer that is not JSON keeps no error and sets no flag", async () => {
     const r = await paidRun({ receipt: ok(NOT_JSON, 401) });
     expect(receipts(r.h)).toMatchObject([{ http: 401, error: null, flag: null }]);
   });
-  it("TODAY (wrong, KD-17): an HTTP 401 receipt answer with 1e999 in it is read: its error sets the key_expired flag", async () => {
+  it("fixed (KD-17): an HTTP 401 receipt answer with 1e999 in it is not read: no key_expired flag, error non_finite_number, nothing booked", async () => {
     const r = await paidRun({ receipt: ok(`{"error":"api_key_expired","retry":1e999}`, 401) });
-    expect(receipts(r.h)).toMatchObject([{ http: 401, error: "api_key_expired", flag: "key_expired" }]);
+    expect(receipts(r.h)).toMatchObject([{ http: 401, error: "non_finite_number", flag: null }]);
+    expect(ledger(r.h).map((row) => row.reason)).not.toContain("key_expired");
+    expect(ledger(r.h).at(-1)).toMatchObject({ state: "sent", cap_charge: 0.132 });
+  });
+});
+
+describe("non-finite reads: the KD-17 seam itself (outside-json.ts nonFiniteSeam)", () => {
+  const answer = (text: string, status = 200) => (async () => new Response(text, { status, headers: { "content-type": "application/json", "x-a": "b" } })) as typeof fetch;
+  it("hands on a fine body as the same Response, and one with a number that is not finite as a new one with the same status and headers and the body non_finite_number", async () => {
+    const fine = new Response('{"a":1}', { status: 201, headers: { "x-a": "b" } });
+    const seam = nonFiniteSeam((async () => fine) as typeof fetch);
+    const got = await seam.fetch("https://g.example/v1/x");
+    expect(got).toBe(fine);
+    expect(await got.text()).toBe('{"a":1}');
+    expect(seam.met()).toBe(false);
+    const bad = nonFiniteSeam(answer('{"a":1e999}', 402));
+    const res = await bad.fetch("https://g.example/v1/x");
+    expect([res.status, res.headers.get("x-a"), res.headers.get("content-type"), await res.text()]).toEqual([402, "b", "application/json", "non_finite_number"]);
+    expect(bad.met()).toBe(true);
+  });
+  it("never throws because of what a body holds, and calls the real fetch first, once", async () => {
+    let calls = 0;
+    for (const body of ["", NOT_JSON, "<html>1e999</html>", '"1e999"']) {
+      const seam = nonFiniteSeam((async () => { calls++; return new Response(body); }) as typeof fetch);
+      await expect(seam.fetch("https://g.example/v1/x")).resolves.toBeInstanceOf(Response);
+      expect({ body, met: seam.met() }).toEqual({ body, met: false });
+    }
+    const failing = nonFiniteSeam((async () => { calls++; return new Response(failingStream()); }) as typeof fetch);
+    const res = await failing.fetch("https://g.example/v1/x");
+    await expect(res.text()).rejects.toThrow();
+    expect(failing.met()).toBe(false);
+    expect(calls).toBe(5);
+  });
+  it("two calls at once each see only their own note", async () => {
+    const h = tmpHome();
+    writeSecretFile(gatewayKeyFile(h, "9001"), "flop_sk_SYNTHETICPARENT0123456789\n");
+    const f = (async (input: unknown) => {
+      const rid = decodeURIComponent(String(input).split("/").at(-1)!);
+      await new Promise((r) => setTimeout(r, rid === "req-bad" ? 5 : 0));
+      return new Response(receiptText(rid === "req-bad" ? { spare: "1e999" } : {}, rid), { status: 200 });
+    }) as typeof fetch;
+    const p = new FlopProvider(NETWORKS.devnet, gatewayKeyFile(h, "9001"), f, ETH);
+    const [bad, good] = await Promise.all([p.readReceipt("req-bad"), p.readReceipt("req-good")]);
+    expect(bad).toMatchObject({ http: 0, receipt: null, error: "Gateway response is not valid JSON (non_finite_number)" });
+    expect(good).toMatchObject({ http: 200, error: null, receipt: { request_id: "req-good", state: "settled" } });
   });
 });
 

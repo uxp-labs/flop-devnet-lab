@@ -1,5 +1,7 @@
 /**
- * The one reading of a JSON text this tool did not write: a body or a frame a server sent (gateway.ts). Pure.
+ * The one reading of a JSON text this tool did not write: a body or a frame a server sent. gateway.ts reads its
+ * bodies with readOutsideJson. The paid call's answer and the receipt read are parsed by @flop-labs/client, so
+ * providers.ts gives the client a fetch of its own (nonFiniteSeam) that runs the same number check.
  *  - A text that is not JSON throws JSON.parse's own error, as res.json() did. Its message quotes the text, so a
  *    caller never repeats it unfiltered.
  *  - A text that holds a number that is not finite (1e999 and -1e999 parse to Infinity and -Infinity) is not JSON
@@ -60,7 +62,65 @@ export async function responseJson(res: Response): Promise<unknown> {
   return readOutsideJson(await res.text());
 }
 
+/** True when the error is NonFiniteNumber, or carries it as its cause (withNonFiniteCause). */
+export function isNonFinite(e: unknown): boolean {
+  return e instanceof NonFiniteNumber || (e instanceof Error && e.cause instanceof NonFiniteNumber);
+}
+
 /** What a place that refuses a body that is not JSON says: its own words, with the fixed reason when the body held a number that is not finite. */
 export function notJsonBecause(said: string, e: unknown): string {
-  return e instanceof NonFiniteNumber ? `${said} (${NON_FINITE_NUMBER})` : said;
+  return isNonFinite(e) ? `${said} (${NON_FINITE_NUMBER})` : said;
+}
+
+/** True when the text is JSON (JSON.parse reads it) and holds a number that is not finite. Never throws. */
+export function isNonFiniteJson(text: string): boolean {
+  try {
+    JSON.parse(text);
+  } catch {
+    return false;
+  }
+  return holdsNonFiniteNumber(text);
+}
+
+/** The statuses whose Response may not carry a body. */
+const NULL_BODY = new Set([101, 103, 204, 205, 304]);
+
+/**
+ * A fetch for @flop-labs/client (its documented `fetch` option), made for one call, and what it met. It calls
+ * the real fetch first, so it never stands before or in place of the send, and it never throws because of what
+ * a body holds:
+ *  - it reads the body text once, from a clone, and runs the number check on it (isNonFiniteJson);
+ *  - a body that holds a number that is not finite is handed to the client as a NEW Response with the same
+ *    status and headers and a body that is not JSON, the fixed text NON_FINITE_NUMBER, so the client takes its
+ *    own path for a body that is not JSON, and so does everything above it. met() is then true;
+ *  - any other body, or one whose read fails (an abort, a stream that fails), is handed on as the same
+ *    Response: the client reads the other branch of the clone, which holds the same bytes or fails the same way.
+ * The note is a closure of this one seam, so two calls never see each other's note. The body is read whole into
+ * memory, as the client's own text() does. Nothing bounds its size.
+ */
+export function nonFiniteSeam(base: typeof fetch): { fetch: typeof fetch; met: () => boolean } {
+  let met = false;
+  const seamFetch = (async (input: Parameters<typeof fetch>[0], init?: RequestInit) => {
+    const res = await base(input, init);
+    let text: string;
+    try {
+      text = await res.clone().text();
+    } catch {
+      return res;
+    }
+    if (!isNonFiniteJson(text)) return res;
+    met = true;
+    return new Response(NULL_BODY.has(res.status) ? null : NON_FINITE_NUMBER, { status: res.status, statusText: res.statusText, headers: res.headers });
+  }) as typeof fetch;
+  return { fetch: seamFetch, met: () => met };
+}
+
+/**
+ * The client's error for a body nonFiniteSeam replaced, with NonFiniteNumber as its standard cause, so the place
+ * that books the call names the reason (notJsonBecause). The error keeps its class, name and message, so it takes
+ * the same path. An error that already has a cause is left as it is.
+ */
+export function withNonFiniteCause(e: unknown): unknown {
+  if (e instanceof Error && e.cause === undefined) Object.defineProperty(e, "cause", { value: new NonFiniteNumber(), configurable: true, writable: true });
+  return e;
 }

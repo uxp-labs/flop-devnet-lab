@@ -11,6 +11,7 @@ import { bytesToHex, utf8ToBytes } from "@noble/hashes/utils.js";
 import { FlopClient, FlopHTTPError } from "@flop-labs/client";
 import { CliError, EXIT } from "./errors.js";
 import { assertPaidNetwork, mintChildKey, postEstimate, PreSendError, uaFetch, type Estimate, type Fetch } from "./gateway.js";
+import { NON_FINITE_NUMBER, NonFiniteNumber, nonFiniteSeam, notJsonBecause, withNonFiniteCause } from "./outside-json.js";
 import type { NetworkInfo } from "./networks.js";
 import type { GatewayReceipt } from "./receipts.js";
 import { registerSecret } from "./secrets.js";
@@ -151,26 +152,36 @@ export class FlopProvider implements Provider {
     const child = await mintChildKey(this.net, this.parent, { model: req.model, maxSpend: req.maxCostFlop }, this.f, req.signal);
     registerSecret(child.token);
     notAborted("after the child-key mint");
-    const client = new FlopClient({ baseURL: this.net.gateway, apiKey: child.token, fetch: uaFetch(this.f) });
-    const res = await client.createChatCompletion(
-      { model: req.model, messages: req.messages, max_tokens: req.max_tokens, max_cost_flop: req.maxCostFlop } as Parameters<FlopClient["createChatCompletion"]>[0],
-      { signal: req.signal, idempotencyKey: req.requestId, correlationId: req.correlationId },
-    );
+    // The client parses the answer: its fetch checks the body for a number that is not finite (outside-json.ts).
+    const seam = nonFiniteSeam(uaFetch(this.f));
+    const client = new FlopClient({ baseURL: this.net.gateway, apiKey: child.token, fetch: seam.fetch });
+    let res: Awaited<ReturnType<FlopClient["createChatCompletion"]>>;
+    try {
+      res = await client.createChatCompletion(
+        { model: req.model, messages: req.messages, max_tokens: req.max_tokens, max_cost_flop: req.maxCostFlop } as Parameters<FlopClient["createChatCompletion"]>[0],
+        { signal: req.signal, idempotencyKey: req.requestId, correlationId: req.correlationId },
+      );
+    } catch (e) {
+      // The same error, so the same path; run.ts names the reason when the seam replaced the body.
+      throw seam.met() ? withNonFiniteCause(e) : e;
+    }
     const u = res.usage as CompleteRes["usage"];
     return { request_id: req.requestId, text: res.choices[0]?.message?.content ?? "", usage: u };
   }
 
   async readReceipt(requestId: string): Promise<ReceiptRead> {
-    const client = new FlopClient({ baseURL: this.net.gateway, apiKey: this.parent, fetch: uaFetch(this.f) });
+    const seam = nonFiniteSeam(uaFetch(this.f));
+    const client = new FlopClient({ baseURL: this.net.gateway, apiKey: this.parent, fetch: seam.fetch });
     try {
       const r = (await client.getCredentialReceipt(requestId)) as unknown as GatewayReceipt;
       return { http: 200, receipt: r, error: null };
     } catch (e) {
+      // A body the seam replaced takes the path of a body that is not JSON, and the error says why.
       if (e instanceof FlopHTTPError) {
-        const err = (e.body as { error?: string } | undefined)?.error ?? null;
+        const err = seam.met() ? NON_FINITE_NUMBER : ((e.body as { error?: string } | undefined)?.error ?? null);
         return { http: e.status, receipt: null, error: err };
       }
-      return { http: 0, receipt: null, error: (e as Error).message };
+      return { http: 0, receipt: null, error: seam.met() ? notJsonBecause((e as Error).message, new NonFiniteNumber()) : (e as Error).message };
     }
   }
 }
