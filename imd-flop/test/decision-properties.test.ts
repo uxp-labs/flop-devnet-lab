@@ -84,8 +84,10 @@ const known = (v: unknown) => typeof v === "number" && Number.isFinite(v) && v >
 const proves = (read: ReadOutcome): number | null => (TRUSTED_READS.includes(read) && settles(read.state) && known(read.settled) ? (read.settled as number) : null);
 /** The read proves a settlement below the one the row has booked. */
 const below = (prev: Row, read: ReadOutcome) => settles(prev.state) && known(prev.spend) && proves(read) !== null && proves(read)! < prev.spend!;
-/** Any trusted read on a released reservation, a receipt with no state included: the gateway holds the request after all. */
-const reopens = (prev: Row, read: ReadOutcome) => prev.state === "refused_local" && TRUSTED_READS.includes(read);
+/** The gateway knows the request: a fresh read for this request id, stored redacted or not (review fixes 3, item B). */
+const knows = (read: ReadOutcome) => read.fresh && read.identityOk;
+/** Any read that shows the gateway knows the request, on a released reservation, a receipt with no state included: the gateway holds the request after all. */
+const reopens = (prev: Row, read: ReadOutcome) => prev.state === "refused_local" && knows(read);
 /**
  * The hold floor, the least the charge can be after the read: the booked charge; on a row the read reopens,
  * the padded quote (or the booked charge if higher); on a damaged row, the padded quote, and only for a read
@@ -128,9 +130,13 @@ describe("decideBooking properties", () => {
       .toEqual({ cases: 224, damaged: 70, older: 36, belowHold: 32, released: 20, reads: 100, trusted: 25, untrusted: 75 });
   });
 
-  it("an untrusted read never changes state or spend and never lowers the charge", () => {
-    const r = walk(UNTRUSTED_READS, (c, _read, next) => {
-      if (next.state !== c.prev.state || next.spend !== c.prev.spend) return true;
+  it("an untrusted read never changes the spend and never lowers the charge, and changes the state only to bring a released row back when the gateway knows the request", () => {
+    // Moved (review fixes 3, item B): a fresh read for this request id stored redacted is not trusted, yet it
+    // shows the gateway knows the request: on a released row the row is sent again and the hold comes back.
+    const r = walk(UNTRUSTED_READS, (c, read, next) => {
+      if (next.spend !== c.prev.spend) return true;
+      if (reopens(c.prev, read) && !notBooked(c.prev, read)) return !(next.state === "sent" && next.cap_charge! >= c.prev.quote_padded!);
+      if (next.state !== c.prev.state) return true;
       // An unknown charge stays exactly as it is. A known one may only go up, to the reported cost.
       return known(c.prev.cap_charge) ? !(known(next.cap_charge) && next.cap_charge! >= c.prev.cap_charge!) : next.cap_charge !== c.prev.cap_charge;
     });
@@ -189,7 +195,9 @@ describe("decideBooking properties", () => {
       const charge = next.cap_charge === c.prev.cap_charge || (known(c.prev.cap_charge) && next.cap_charge === max(c.prev.cap_charge!, c.cost));
       return next.state !== c.prev.state || next.spend !== c.prev.spend || !charge;
     });
-    expect({ ...r, disagreed }).toEqual({ walked: 224 * 100, failures: [], failed: 0, disagreed: 6789 });
+    // Moved (review fixes 3, item B): 6789. A redacted read for the request on a released row with no known
+    // padded quote now reopens it, finds no hold floor and disagrees (125 more).
+    expect({ ...r, disagreed }).toEqual({ walked: 224 * 100, failures: [], failed: 0, disagreed: 6914 });
   });
 
   it("a read is reported as disagreeing exactly when it is not booked: it lowers a booked settlement, or its hold floor is unknown", () => {
@@ -199,7 +207,9 @@ describe("decideBooking properties", () => {
     expect(r).toEqual({ walked: 224 * 100, failures: [], failed: 0 });
   });
 
-  it("any trusted read that reopens a released reservation holds its padded quote again, raised by a settlement or a reported cost, and says it passed what the cap admitted", () => {
+  it("any read that shows the gateway knows the request reopens a released reservation: it holds its padded quote again, raised by a settlement or a reported cost, and says it passed what the cap admitted", () => {
+    // Moved (review fixes 3, item B): a fresh read for this request id stored redacted reopens the row too.
+    // It proves no settlement and moves no state, so the row is sent again at its hold.
     // Moved (hold floor): walked the trusted reads with a state only, and booked a proven settlement at its
     // own amount. A trusted receipt with no state reopens the row too (R2): the row is sent again and marked
     // receipt_seen. A proven settlement books its spend and the hold comes back.
@@ -207,19 +217,19 @@ describe("decideBooking properties", () => {
     let walked = 0;
     const failures: string[] = [];
     for (const c of released) {
-      for (const read of TRUSTED_READS) {
+      for (const read of READS.filter(knows)) {
         walked += 1;
         const { booking, disagree, pastAdmitted } = decideBooking(c.prev, read, c.cost);
         const settled = proves(read);
         const got = { state: booking.state, spend: booking.spend, cap_charge: booking.cap_charge, receipt_seen: booking.receipt_seen ?? false, disagree, pastAdmitted };
-        const state = read.state ?? "sent";
+        const state = read.redacted ? "sent" : (read.state ?? "sent");
         const expected = known(c.prev.quote_padded)
           ? { state, spend: settled, cap_charge: max(Math.max(c.prev.quote_padded!, settled ?? 0), c.cost), receipt_seen: state === "sent", disagree: false, pastAdmitted: true }
           : { state: c.prev.state, spend: c.prev.spend, cap_charge: c.prev.cap_charge, receipt_seen: false, disagree: true, pastAdmitted: false };
         if (JSON.stringify(got) !== JSON.stringify(expected)) failures.push(show(c, read));
       }
     }
-    expect({ walked, failures: failures.slice(0, 5), failed: failures.length }).toEqual({ walked: 10 * 25, failures: [], failed: 0 });
+    expect({ walked, failures: failures.slice(0, 5), failed: failures.length }).toEqual({ walked: 10 * 50, failures: [], failed: 0 });
   });
 
   it("order independence: two trusted reads book the same spend and charge in either order", () => {
@@ -414,7 +424,7 @@ describe("the hold floor", () => {
       } else if (lower !== null && !(known(next.cap_charge) && next.cap_charge! >= lower)) {
         return `step ${i}: the charge went down`;
       }
-      if ("read" in step && TRUSTED_READS.includes(step.read) && !notBooked(row, step.read)) {
+      if ("read" in step && knows(step.read) && !notBooked(row, step.read)) {
         seen = true;
         if (row.state === "refused_local" && known(row.quote_padded) && !(next.cap_charge! >= row.quote_padded!)) return `step ${i}: the released hold did not come back`;
       }
@@ -488,7 +498,10 @@ describe("the hold floor", () => {
       if (want) passed += 1;
       return decideBooking(c.prev, read, c.cost).pastAdmitted !== want;
     });
-    expect({ ...r, passed }).toEqual({ walked: 224 * 100, failures: [], failed: 0, passed: 2839 });
+    // Item B moved 125: 50 released rows a redacted read for the request now brings back (+), and 75 released
+    // rows with no known padded quote, where a redacted read used to let the reported cost raise the released
+    // charge and now disagrees and changes nothing (-).
+    expect({ ...r, passed }).toEqual({ walked: 224 * 100, failures: [], failed: 0, passed: 2814 });
   });
 });
 

@@ -9,6 +9,7 @@
  * the two decisions by test/decision-properties.test.ts.
  */
 import { exactAmount, knownAmount } from "./amount.js";
+import { RECEIPT_STATES } from "./receipts.js";
 
 /**
  * Receipt states that settle an attempt. Per the gateway's OpenAPI (CredentialReceipt), read 2026-11-11:
@@ -86,11 +87,29 @@ export interface ReadOutcome {
 }
 
 /**
+ * The gateway knows the request: the read is fresh (HTTP 200 with a receipt object) and its request id is
+ * ours. That holds even when its stored copy had to be redacted, so such a read keeps or brings back the
+ * hold (receipt_seen, and a released row comes back), and still proves nothing else.
+ */
+function knownRead(o: ReadOutcome): boolean {
+  return o.fresh && o.identityOk;
+}
+
+/**
  * A read is trusted only when it is fresh, identity-matched and stored without redaction. A receipt body
  * that had to be redacted never proves a settlement and never moves the state.
  */
 function trustedRead(o: ReadOutcome): boolean {
-  return o.fresh && o.identityOk && !o.redacted;
+  return knownRead(o) && !o.redacted;
+}
+
+/**
+ * The state a trusted read reports, when it is one of the four gateway states (receipts.ts RECEIPT_STATES),
+ * else null: a read in any other state ("refused_local", "sent", anything) counts as a read with no state,
+ * so a gateway answer never sets a local state.
+ */
+function gatewayState(o: ReadOutcome): string | null {
+  return trustedRead(o) && o.state !== null && RECEIPT_STATES.has(o.state) ? o.state : null;
 }
 
 /**
@@ -147,14 +166,17 @@ function lowersSettlement(prev: { state: string; spend: unknown }, o: ReadOutcom
 }
 
 /**
- * The state after a read. Only a trusted read moves it, and never from a settling state to a non settling
- * one. A trusted read with no state moves no state forward. On a released row (refused_local) it still shows
- * the gateway knows the request, so the row goes back to sent: the call was sent after all.
+ * The state after a read. Only a trusted read moves it, only to one of the four gateway states
+ * (gatewayState), and never from a settling state to a non settling one. A trusted read with no state, or a
+ * state the gateway does not document, moves no state forward, and neither does a known read stored
+ * redacted. On a released row (refused_local) any known read still shows the gateway knows the request, so
+ * the row goes back to sent: the call was sent after all.
  */
 function stateAfter(prev: string, o: ReadOutcome): string {
-  if (!trustedRead(o)) return prev;
-  if (o.state === null) return prev === "refused_local" ? "sent" : prev;
-  return SETTLES.has(prev) && !SETTLES.has(o.state) ? prev : o.state;
+  if (!knownRead(o)) return prev;
+  const state = gatewayState(o);
+  if (state === null) return prev === "refused_local" ? "sent" : prev;
+  return SETTLES.has(prev) && !SETTLES.has(state) ? prev : state;
 }
 
 /**
@@ -197,7 +219,7 @@ export interface PrevBooking<C> extends Booking<C> {
  *  - On a row the call was sent for, the booked charge. From the moment a call is sent its charge is the
  *    padded quote it was admitted with, and a read only raises it (and a raise says PAST_ADMITTED). A row an older version booked below
  *    its hold keeps its booked charge: it is not migrated.
- *  - On a released row (refused_local, "nothing was sent"), a trusted read shows the gateway knows the
+ *  - On a released row (refused_local, "nothing was sent"), a known read (knownRead, redacted or not) shows the gateway knows the
  *    request after all, so the hold comes back: the row's padded quote (or the booked charge if that is
  *    higher). Null when the padded quote is not a known amount.
  *  - A booked charge that is not a known amount (only a damaged file holds one) is never replaced by a guess.
@@ -208,7 +230,7 @@ function holdFloor(prev: PrevBooking<unknown>, o: ReadOutcome, proven: boolean):
   const booked = knownAmount(prev.cap_charge);
   const quote = knownAmount(prev.quote_padded);
   if (booked === null) return proven ? quote : null;
-  if (prev.state === "refused_local" && trustedRead(o)) return quote === null ? null : Math.max(booked, quote);
+  if (prev.state === "refused_local" && knownRead(o)) return quote === null ? null : Math.max(booked, quote);
   return booked;
 }
 
@@ -247,8 +269,8 @@ export interface Decision<C> {
  *    reported cost may still raise the charge.
  *  - Otherwise a proven settlement replaces the booked spend. The state moves only forward: never from a
  *    settling state to a non settling one.
- *  - Any trusted read, a receipt with no state included, shows the gateway knows the request. On a
- *    released row (refused_local) it brings the hold back. A row it leaves in state sent is marked
+ *  - Any known read (fresh and identity matched), a receipt with no state or one stored redacted included,
+ *    shows the gateway knows the request. On a released row (refused_local) it brings the hold back. A row it leaves in state sent is marked
  *    receipt_seen, so a later "nothing was sent" report does not release it (decideFailure).
  *  - A hold floor that is not a known amount is never replaced by a guess, and never by 0: the read
  *    disagrees and nothing changes.
@@ -281,7 +303,7 @@ export function decideBooking<C>(prev: PrevBooking<C>, o: ReadOutcome, costRepor
   // amount, and a chain proven refund may lower a booked settlement. No code for it is written yet.
   const charge = raisedBy(settled === null ? floor : Math.max(floor, settled), costReported);
   const state = stateAfter(prev.state, o);
-  const booking: Booking<C | number> = { state, spend: settled ?? prev.spend, cap_charge: charge, spend_raw: exactAfter(prev, o, settled), ...(trustedRead(o) && state === "sent" ? { receipt_seen: true } : {}) };
+  const booking: Booking<C | number> = { state, spend: settled ?? prev.spend, cap_charge: charge, spend_raw: exactAfter(prev, o, settled), ...(knownRead(o) && state === "sent" ? { receipt_seen: true } : {}) };
   return { booking, disagree: false, pastAdmitted: pastAdmitted(prev, charge) };
 }
 

@@ -14,7 +14,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { PreSendError } from "../src/gateway.js";
 import type { CompleteReq, CompleteRes, Provider } from "../src/providers.js";
-import { PAST_ADMITTED } from "../src/settlement.js";
+import { decideBooking, PAST_ADMITTED } from "../src/settlement.js";
 import { cli, readLines, readySeat, tmpHome } from "./helpers.js";
 
 const SEAT = "9001";
@@ -103,6 +103,58 @@ describe("1 (high): a row an older version booked below its hold is raised back,
     expect(Math.round(jobTotal * 1e6) / 1e6).toBe(0.372);
     expect(refreshed.err).toContain(PAST_ADMITTED);
     expect(anyPastAdmitted(h)).toBe(true);
+  });
+});
+
+describe("A (review fixes 3): a read whose state is not one of the four gateway states moves no state", () => {
+  // A trusted read in a state the gateway does not document ("refused_local", "sent", anything) counts as a
+  // read with no state. A gateway answer must never set a local state.
+  const sent = { state: "sent", spend: null, cap_charge: 0.186, quote_padded: 0.186 };
+  const estimated = { state: "estimated", spend: null, cap_charge: 0.186, quote_padded: 0.186 };
+  const read = (state: string) => ({ fresh: true, identityOk: true, redacted: false, state, settled: null });
+
+  it("refused_local or sent on a sent row: the row stays sent, holds its hold and is marked receipt_seen", () => {
+    for (const state of ["refused_local", "sent", "bogus"]) {
+      const { booking } = decideBooking(sent, read(state), null);
+      expect({ state: booking.state, cap_charge: booking.cap_charge, receipt_seen: booking.receipt_seen }, state).toEqual({ state: "sent", cap_charge: 0.186, receipt_seen: true });
+    }
+  });
+
+  it("refused_local or sent on an estimated row: the state stays estimated", () => {
+    for (const state of ["refused_local", "sent"]) expect(decideBooking(estimated, read(state), null).booking.state, state).toBe("estimated");
+  });
+});
+
+describe("B (review fixes 3): a matching 200 read stored redacted keeps or brings back the hold, and never settles", () => {
+  // A 200 read whose request id matches shows the gateway knows the request, even when its stored copy had
+  // to be redacted (here settled_spend_raw of 64 digits). It never proves a settlement. Both orders.
+  const redacted = (state: string) => (id: string) => receiptFor(id, { state, settled_spend: 0.05, settled_spend_raw: "0".repeat(47) + "50000000000000000" });
+  const preSend = async (): Promise<CompleteRes> => {
+    throw new PreSendError("child key mint failed");
+  };
+
+  it("read first: a refresh stores a redacted matching read, then the call fails before send: the hold stays", async () => {
+    const h = await ready();
+    const complete = async (req: CompleteReq) => {
+      const r = await cli(h, refreshArgs(req.requestId), { provider: new P({ read: redacted("settled") }) });
+      expect(r.code, r.err).toBe(0);
+      return preSend();
+    };
+    expect((await cli(h, runArgs(), { provider: new P({ complete }) })).code).toBe(11);
+    const last = ledger(h).at(-1)!;
+    expect({ state: last.state, spend: last.spend, cap_charge: last.cap_charge, receipt_seen: last.receipt_seen }).toEqual({ state: "sent", spend: null, cap_charge: 0.186, receipt_seen: true });
+    expect((await status(h)).today_utc.mock).toBe(0.186);
+  });
+
+  it("report first: the call fails before send, then a redacted matching read brings the hold back, says so, and settles nothing", async () => {
+    const h = await ready();
+    expect((await cli(h, runArgs(), { provider: new P({ complete: preSend }) })).code).toBe(11);
+    const rid = ledger(h)[0].request_id!;
+    const r = await cli(h, refreshArgs(rid), { provider: new P({ read: redacted("settled") }) });
+    expect(r.code, r.err).toBe(0);
+    expect(r.err).toContain(PAST_ADMITTED);
+    const last = ledger(h).at(-1)!;
+    expect({ state: last.state, spend: last.spend, cap_charge: last.cap_charge }).toEqual({ state: "sent", spend: null, cap_charge: 0.186 });
   });
 });
 
