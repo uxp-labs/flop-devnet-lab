@@ -1,0 +1,66 @@
+[
+  {
+    "id": "day-log-name-order-ignored",
+    "file": "src/store.ts",
+    "find": "  const names = readdirSync(dir).sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));",
+    "replace": "  const names = readdirSync(dir).sort((a, b) => (a < b ? 1 : a > b ? -1 : 0));",
+    "test": "test/store.test.ts",
+    "why": "the day files of a log are read in name order, as one chain"
+  },
+  {
+    "id": "day-log-restart-accepted",
+    "file": "src/store.ts",
+    "find": "    const oneLine = !chained && s.seq === 0 && s.prev_hash === null;",
+    "replace": "    const oneLine = s.seq === 0 && s.prev_hash === null;",
+    "test": "test/store.test.ts",
+    "why": "once the chain has begun, a line with seq 0 breaks it: a log is never restarted part way"
+  },
+  {
+    "id": "day-log-one-line-hash-unchecked",
+    "file": "src/store.ts",
+    "find": "oneLine ? linkProblem(s, 0, null) :",
+    "replace": "oneLine ? null :",
+    "test": "test/store.test.ts",
+    "why": "a one-line log from before runs kept memory must still pass its hash check"
+  },
+  {
+    "id": "day-log-other-name-read",
+    "file": "src/store.ts",
+    "find": "    if (!isDayFile(name)) throw",
+    "replace": "    if (false) throw",
+    "test": "test/store.test.ts",
+    "why": "the log folder holds only <UTC date>.jsonl day files"
+  },
+  {
+    "id": "day-log-any-date-read",
+    "file": "src/store.ts",
+    "find": "  return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === name.slice(0, 10);",
+    "replace": "  return true;",
+    "test": "test/store.test.ts",
+    "why": "a day file names a real calendar date"
+  },
+  {
+    "id": "day-log-file-link-followed",
+    "file": "src/store.ts",
+    "find": "    if (!lstatSync(path).isFile()) throw",
+    "replace": "    if (false) throw",
+    "test": "test/store.test.ts",
+    "why": "a link or a folder at a day file's name is never read"
+  },
+  {
+    "id": "day-log-folder-link-followed",
+    "file": "src/store.ts",
+    "find": "  if (!st.isDirectory()) throw new LogRefused(",
+    "replace": "  if (!st.isDirectory() && !st.isSymbolicLink()) throw new LogRefused(",
+    "test": "test/store.test.ts",
+    "why": "a log folder that is a link is never followed"
+  },
+  {
+    "id": "day-log-unreadable-called-broken",
+    "file": "src/store.ts",
+    "find": "      if (typeof s === \"string\") throw new LogRefused(\"unreadable\",",
+    "replace": "      if (typeof s === \"string\") throw new LogRefused(\"broken\",",
+    "test": "test/store.test.ts",
+    "why": "a line that cannot be read is said to be unreadable, not a broken chain"
+  }
+]

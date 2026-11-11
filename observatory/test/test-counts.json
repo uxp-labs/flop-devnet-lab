@@ -80,8 +80,8 @@
     "names": "587c43fd19c8936f07be12ed61be7333f6c57b11abbe00369fa62c49725275a7"
   },
   "store.test.ts": {
-    "tests": 16,
-    "names": "dd32acd5b7ce293b8f83db33f4cc1a80dd430af92fd21c4846c7205337b0aae5"
+    "tests": 23,
+    "names": "19d1ec7638e6a0dd1ebdbbeb5ef2a149ba8950eefd37481768e4658a2bf34739"
   },
   "strict.test.ts": {
     "tests": 66,
