@@ -23,6 +23,10 @@
     "tests": 180,
     "names": "bd439ca49837d3e62977352e9315883dd115a9abd92613ad412e6457ee0f7bc5"
   },
+  "events.test.ts": {
+    "tests": 16,
+    "names": "e7024b8929983879ef611eefd8fe938828383c55ebdccd3d2a0cfc0b4e161a1a"
+  },
   "guard.test.ts": {
     "tests": 87,
     "names": "e65a4664f01ddb92c86fc866da8fa81e2cb0feb6e3fd06004b7b755e01fb3801"
