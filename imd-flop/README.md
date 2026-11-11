@@ -96,7 +96,7 @@ The job budget is supplied by the caller for each job id. It never replaces the 
 
 `status` and `cap show` report today's spend as the seat's total, all payers.
 
-Each ledger row records two running totals. `spent_before` is the seat's spend today before the call, for every payer. `job_spent_before` is the job's requester spend before the call, and `null` on a holder row. Rows written before this rule have no `job_spent_before`. On those requester rows `spent_before` was the job's spend, so the viewer shows no limit for them.
+Each ledger row records two running totals. `spent_before` is the seat's spend today before the call, for every payer. `job_spent_before` is the job's requester spend before the call, and `null` on a holder row. Rows written before this rule have no `job_spent_before`. On those requester rows `spent_before` was the job's spend. The viewer works out their job budget left from it and shows their daily cap as not checked, so such a row never gets the green chain final chip.
 
 Not built: when FLOP ships proxies or escrow pools and a call is funded by another account, that call will be bounded by that account's limit and will not count against the seat's cap.
 
