@@ -1128,3 +1128,25 @@ describe("money stage 1: the stored receipt keeps the channel id", () => {
     expect((await cli(none, ["receipt", plain.json().request_id])).out).not.toContain("channel_id");
   });
 });
+
+describe("money stage 1, decision 2: a failed read keeps every field the gateway supplied", () => {
+  // Coordinator's decision: a failed read keeps what was stored. Before, its nulls overwrote settled_raw,
+  // terminal_event, channel_id and correlation_id, and losing channel_id loses the key that ties the
+  // receipt to the chain.
+  const stored = { settled_spend: 0.05, settled_spend_raw: "50000000000000000", terminal_event: "0x" + "ab".repeat(32), channel_id: "cd".repeat(32), correlation_id: "imd-job-j1", state: "settled" };
+  const keys = ["settled_raw", "terminal_event", "channel_id", "correlation_id"] as const;
+  const fails: [string, Reader][] = [["HTTP 500", () => ({ http: 500, error: "HTTP 500", receipt: null })], ["401 key expired", () => ({ http: 401, error: "api_key_expired", receipt: null })]];
+  for (const [name, read] of fails) {
+    it(`${name}: settled_raw, terminal_event, channel_id and correlation_id are all still there`, async () => {
+      const h = await ready();
+      const run = await cli(h, runArgs(), { provider: new P({ read: (id) => receiptFor(id, stored) }) });
+      const rid = run.json().request_id as string;
+      const file = () => JSON.parse(readFileSync(join(h, "receipts", `${rid}.json`), "utf8"));
+      const before = Object.fromEntries(keys.map((k) => [k, file()[k]]));
+      expect(before).toEqual({ settled_raw: stored.settled_spend_raw, terminal_event: stored.terminal_event, channel_id: stored.channel_id, correlation_id: stored.correlation_id });
+      expect((await cli(h, refreshArgs(rid), { provider: new P({ read }) })).code).toBe(0);
+      expect("last_known_at" in file()).toBe(true);
+      expect(Object.fromEntries(keys.map((k) => [k, file()[k]]))).toEqual(before);
+    });
+  }
+});

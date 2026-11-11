@@ -97,12 +97,20 @@ function identityFromLedger(h: string, row: LedgerEntry): Record<string, unknown
   return { seat: row.seat, did: row.did, ss58: id && id.did === row.did ? id.ss58 : null, network: row.network };
 }
 
-/** The receipt file body after a re-read. A failed read keeps what was stored, including its request_id. */
+/**
+ * The fields of a stored receipt that come from the gateway's receipt. A failed read brings none of them, so
+ * it keeps every one as stored (null when there is none), and chain_final stays as stored too. Losing
+ * channel_id on a failed read would lose the key that later ties the receipt to the chain's events.
+ */
+const GATEWAY_FIELDS = ["request_id", "correlation_id", "state", "reserved", "settled", "settled_raw", "terminal_event", "channel_id"] as const;
+
+/** The receipt file body after a re-read. A failed read keeps what was stored (GATEWAY_FIELDS, chain_final) and says when it was last known. */
 function refreshedBody(saved: SavedReceipt | null, ident: Record<string, unknown>, c: Classified, read: { fresh: boolean; rawId: unknown; identityOk: boolean }): Record<string, unknown> {
   if (read.fresh) {
     return { ...ident, ...saved, ...c, request_id: typeof read.rawId === "string" ? read.rawId : "", ...(read.identityOk ? {} : { settled: null, chain_final: false }) };
   }
-  return { ...ident, ...saved, ...c, request_id: saved?.request_id ?? "", state: saved?.state ?? null, reserved: saved?.reserved ?? null, settled: saved?.settled ?? null, chain_final: saved?.chain_final ?? false, last_known_at: saved?.observed_at ?? null };
+  const kept = Object.fromEntries(GATEWAY_FIELDS.map((k) => [k, saved?.[k] ?? (k === "request_id" ? "" : null)]));
+  return { ...ident, ...saved, ...c, ...kept, chain_final: saved?.chain_final ?? false, last_known_at: saved?.observed_at ?? null };
 }
 
 /**
