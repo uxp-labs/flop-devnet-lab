@@ -11,7 +11,7 @@ import { FlopHTTPError } from "@flop-labs/client";
 import { EXACT_BOUND, exactAmount, knownAmount } from "../src/amount.js";
 import { EXIT } from "../src/errors.js";
 import { PreSendError } from "../src/gateway.js";
-import { usableCapCharge } from "../src/ledger.js";
+import { LEDGER_PROVIDERS, usableCapCharge, utcDay } from "../src/ledger.js";
 import { matchReceipt, RECEIPT_IDENTITY_STATUS } from "../src/match.js";
 import { ledgerFile, receiptsDir } from "../src/paths.js";
 import type { CompleteReq, CompleteRes, Provider } from "../src/providers.js";
@@ -172,6 +172,19 @@ const adapters: Record<string, (i: Json, want: Json) => Promise<Json> | Json> = 
     };
     return pick(got, want);
   },
+  // Review fixes 2 (R6): the rows are the ledger ("$today" is the current UTC day), then one run. A refusal
+  // names the ledger line of the row that cannot be placed.
+  "ledger.placement": async (i, want) => {
+    const h = await ready();
+    const day = utcDay();
+    writeFileSync(ledgerFile(h), i.rows.map((r: Json) => JSON.stringify(r.day === "$today" ? { ...r, day } : r)).join("\n") + "\n");
+    if (i.run.payer === "requester") await cli(h, ["config", "set", "payer", "requester"]);
+    const p = new P();
+    const args = ["run", "--seat", SEAT, "--job", i.run.job, "--prompt", "Say hi", "--provider", "mock", "--max-tokens", "8", "--json", ...(i.run.payer === "requester" ? ["--job-budget", "1"] : [])];
+    const r = await cli(h, args, { provider: p });
+    const line = /ledger line (\d+)/.exec(r.err);
+    return pick({ exit: r.code, sent: p.calls, names_line: line ? Number(line[1]) : null }, want);
+  },
   // A stored receipt file beside the latest ledger row of its request: the one verdict, shared with the viewer.
   reconcile: (i) => ({ verdict: reconcile(i.ledger, i.receipt) }),
 };
@@ -195,6 +208,7 @@ describe("contract files", () => {
     expect(EXIT).toEqual(c.EXIT[PART]);
     expect(EXACT_BOUND.toString()).toBe(c.EXACT_AMOUNT_BOUND.value);
     expect(EXACT_BOUND).toBe(2n ** 128n);
+    expect([...LEDGER_PROVIDERS]).toEqual(c.LEDGER_PROVIDERS.value);
   });
   it("settlement.ts SETTLES, UNRESOLVED, DISAGREE and PAST_ADMITTED match rules.json", () => {
     expect([...SETTLES]).toEqual(rules.constants.SETTLES.value);

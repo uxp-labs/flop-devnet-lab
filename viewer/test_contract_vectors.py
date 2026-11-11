@@ -103,6 +103,21 @@ def cap_charge_line(i):
     return line_text(i, CAP_CHARGE_LINE)
 
 
+PLACEMENT_FLAG = "ledger row cannot be placed in a total"
+
+
+def ledger_placement(i):
+    """Review fixes 2 (R6): the row's placement flag (the spend flag that names the fields that cannot be placed,
+    or None), whether the row is bad, and its green chips. "$today" stands for the current UTC day."""
+    from datetime import datetime, timezone
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    rows = [dict(r, day=today) if r.get("day") == "$today" else r for r in i["rows"]]
+    out, html = lane(rows, {rows[-1]["request_id"]: i["receipt"]})
+    (row,) = out
+    flags = [f for f in row["spend_flags"] if f.startswith(PLACEMENT_FLAG)]
+    return {"flag": flags[0] if flags else None, "bad": row["bad"], "greens": greens(html)}
+
+
 # classify() kinds in the four words reconcile.json uses. Every kind decided before the comparison is "not_compared".
 COMPARED = {"disagree": "disagree", "settled_unknown": "settled_unknown", "matches": "agree", "over_limit": "agree"}
 
@@ -120,7 +135,8 @@ def reconcile(i):
 
 
 ADAPTERS = {"amount.json": amount_json, "amount.exact": amount_exact, "rounding.floor6": rounding_floor6, "receipt.state": receipt_state, "identity": identity, "read.failed": read_failed, "viewer.label": label,
-            "viewer.reservation_line": reservation_line, "viewer.cap_charge_line": cap_charge_line, "viewer.exact_spend": exact_spend, "viewer.below_hold": below_hold, "reconcile": reconcile}
+            "viewer.reservation_line": reservation_line, "viewer.cap_charge_line": cap_charge_line, "viewer.exact_spend": exact_spend, "viewer.below_hold": below_hold, "reconcile": reconcile,
+            "ledger.placement": ledger_placement}
 
 
 class ContractVectors(unittest.TestCase):

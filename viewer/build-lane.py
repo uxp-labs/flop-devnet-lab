@@ -27,6 +27,7 @@ _C = load_rules()["constants"]
 DISAGREE = _C["DISAGREE"]["value"]
 IDENTITY = _C["IDENTITY"]["value"]
 SETTLES = tuple(_C["SETTLES"]["value"])
+LEDGER_PROVIDERS = tuple(_C["LEDGER_PROVIDERS"]["value"])
 STAGE_GATEWAY = _C["STAGE_GATEWAY"]["value"]
 ET = ZoneInfo("America/New_York")
 
@@ -193,6 +194,27 @@ def below_hold(e):
     flagged: never a guess."""
     cap_charge, quote = amount(e.get("cap_charge")), amount(e.get("quote_padded"))
     return e.get("state") != "refused_local" and None not in (cap_charge, quote) and cap_charge < quote
+
+UNPLACED = "ledger row cannot be placed in a total"
+SEAT_ID = re.compile(r"[0-9]{1,78}")
+JOB_ID = re.compile(r"[\x21-\x7e]{1,120}")
+def usable_day(v):
+    """A UTC day as imd-flop writes it: YYYY-MM-DD, and a real calendar date."""
+    if not isinstance(v, str) or not re.fullmatch(r"[0-9]{4}-[0-9]{2}-[0-9]{2}", v): return False
+    try: datetime.strptime(v, "%Y-%m-%d")
+    except ValueError: return False
+    return True
+def unplaced(e):
+    """The fields that keep this row out of the totals it belongs to (review fixes 2, R6), in this order: day, seat,
+    provider, and job on a requester row. imd-flop refuses the next call when such a row would count toward its
+    total (ledger.ts placed), so the lane never shows the row as fine. The twin of ledger.ts isUtcDay, isSeatId,
+    PROVIDERS and isJobId; pinned for both by contract/vectors/ledger-placement.json. A payer that is neither
+    holder nor requester already carries 'payer unknown'."""
+    checks = [("day", usable_day(e.get("day"))),
+              ("seat", isinstance(e.get("seat"), str) and (e["seat"] == "unassigned" or bool(SEAT_ID.fullmatch(e["seat"])))),
+              ("provider", e.get("provider") in LEDGER_PROVIDERS)]
+    if e.get("payer") == "requester": checks.append(("job", isinstance(e.get("job"), str) and bool(JOB_ID.fullmatch(e["job"]))))
+    return [field for field, ok in checks if not ok]
 
 def over_limit(e, r):
     """The first limit a settled receipt breaks, or None (KD-2, FIXER's order): the per-call cap, then the row's
@@ -383,8 +405,10 @@ def build_row(e, r):
     for lim, left in applied: row[lim["key"]] = left
     kind, limit = classify(e, r)
     row["spend_flags"] += limit_flags(e, applied)
-    # Set before the kind renders, so a row charged below its hold never gets the green chip.
+    # Set before the kind renders, so a row charged below its hold, or one that cannot be placed in a total, never gets the green chip.
     if below_hold(e): row["spend_flags"].append(BELOW_HOLD); row["bad"] = True
+    missing = unplaced(e)
+    if missing: row["spend_flags"].append(f"{UNPLACED} ({', '.join(missing)})"); row["bad"] = True
     cap_charge = amount(e.get("cap_charge"))
     reservation = cap_charge if cap_charge is not None else amount(e.get("quote_padded"))
     ROW_KINDS[kind](row, e, r, reservation, limit)

@@ -59,6 +59,15 @@
       "spend-guard": null,
       "viewer": "build-lane.py SETTLES (read from this file)"
     },
+    "LEDGER_PROVIDERS": {
+      "value": [
+        "mock",
+        "flop"
+      ],
+      "imd-flop": "src/ledger.ts PROVIDERS (its own literal; test/contract.test.ts checks it against this value). A ledger row whose provider is not one of these cannot be placed in a total (review fixes 2, R6)",
+      "spend-guard": null,
+      "viewer": "build-lane.py LEDGER_PROVIDERS (read from this file): a row whose provider is not one of these carries the placement flag"
+    },
     "UNRESOLVED": {
       "value": [
         "timeout_unknown",

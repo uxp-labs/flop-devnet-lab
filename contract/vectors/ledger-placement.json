@@ -1,0 +1,561 @@
+{
+ "file": "ledger-placement.json",
+ "description": "Review fixes 2, finding R6: a ledger row that cannot be placed in a total. imd-flop: the ledger rows are written to a seat 9001 home with a daily cap of 1 (\"$today\" is the current UTC day), then one mock `run` with the given payer and job (a requester run passes --job-budget 1); the answer is its exit code, how many paid calls were made, and whether stderr names the ledger line (names_line: 1 means the line of the damaged row). viewer: build_row on the latest row of the request with the receipt file; the answer is the placement flag, whether the row is bad, and its green chips. A usable day is a UTC calendar date YYYY-MM-DD, a usable seat is a decimal tokenId of 1 to 78 digits (or \"unassigned\"), a usable provider is mock or flop, and a usable job is 1 to 120 printable characters with no space.",
+ "status": "review fixes 2",
+ "vectors": [
+  {
+   "id": "placement-control",
+   "rule": "ledger.placement",
+   "input": {
+    "rows": [
+     {
+      "ts": "2026-11-11T15:00:00Z",
+      "day": "$today",
+      "request_id": "req-1",
+      "job": "j1",
+      "seat": "9001",
+      "did": "did:key:zA",
+      "provider": "mock",
+      "network": "devnet",
+      "payer": "holder",
+      "quote_padded": 0.186,
+      "per_call_cap": 1,
+      "daily_cap": 1,
+      "spent_before": 0,
+      "state": "settled",
+      "spend": 0.186,
+      "cap_charge": 0.186,
+      "mock": true
+     }
+    ],
+    "receipt": {
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zA",
+     "state": "settled",
+     "settled": 0.186,
+     "stage": "settled on chain",
+     "chain_final": true,
+     "http": 200,
+     "error": null
+    },
+    "run": {
+     "payer": "holder",
+     "job": "j2"
+    }
+   },
+   "expect": {
+    "imd-flop": {
+     "exit": 0,
+     "sent": 1
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard keeps no ledger: it checks one call against --cap"
+    },
+    "viewer": {
+     "flag": null,
+     "bad": false,
+     "greens": [
+      "chain final"
+     ]
+    }
+   },
+   "note": "every field usable: the row is placed in today's total, the call fits the cap, and the lane shows the row as fine"
+  },
+  {
+   "id": "placement-day-null",
+   "rule": "ledger.placement",
+   "input": {
+    "rows": [
+     {
+      "ts": "2026-11-11T15:00:00Z",
+      "day": null,
+      "request_id": "req-1",
+      "job": "j1",
+      "seat": "9001",
+      "did": "did:key:zA",
+      "provider": "mock",
+      "network": "devnet",
+      "payer": "holder",
+      "quote_padded": 0.186,
+      "per_call_cap": 1,
+      "daily_cap": 1,
+      "spent_before": 0,
+      "state": "settled",
+      "spend": 0.186,
+      "cap_charge": 0.186,
+      "mock": true
+     }
+    ],
+    "receipt": {
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zA",
+     "state": "settled",
+     "settled": 0.186,
+     "stage": "settled on chain",
+     "chain_final": true,
+     "http": 200,
+     "error": null
+    },
+    "run": {
+     "payer": "holder",
+     "job": "j2"
+    }
+   },
+   "expect": {
+    "imd-flop": {
+     "exit": 3,
+     "sent": 0,
+     "names_line": 1
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard keeps no ledger: it checks one call against --cap"
+    },
+    "viewer": {
+     "flag": "ledger row cannot be placed in a total (day)",
+     "bad": true,
+     "greens": []
+    }
+   },
+   "note": "R6: a row whose day is null would count toward today if it could be read. imd-flop refuses the next call and names the ledger line; the lane flags the row and never shows it green"
+  },
+  {
+   "id": "placement-day-not-a-date",
+   "rule": "ledger.placement",
+   "input": {
+    "rows": [
+     {
+      "ts": "2026-11-11T15:00:00Z",
+      "day": "2026-13-40",
+      "request_id": "req-1",
+      "job": "j1",
+      "seat": "9001",
+      "did": "did:key:zA",
+      "provider": "mock",
+      "network": "devnet",
+      "payer": "holder",
+      "quote_padded": 0.186,
+      "per_call_cap": 1,
+      "daily_cap": 1,
+      "spent_before": 0,
+      "state": "settled",
+      "spend": 0.186,
+      "cap_charge": 0.186,
+      "mock": true
+     }
+    ],
+    "receipt": {
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zA",
+     "state": "settled",
+     "settled": 0.186,
+     "stage": "settled on chain",
+     "chain_final": true,
+     "http": 200,
+     "error": null
+    },
+    "run": {
+     "payer": "holder",
+     "job": "j2"
+    }
+   },
+   "expect": {
+    "imd-flop": {
+     "exit": 3,
+     "sent": 0,
+     "names_line": 1
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard keeps no ledger: it checks one call against --cap"
+    },
+    "viewer": {
+     "flag": "ledger row cannot be placed in a total (day)",
+     "bad": true,
+     "greens": []
+    }
+   },
+   "note": "a day that has the shape YYYY-MM-DD but is not a calendar date is not usable"
+  },
+  {
+   "id": "placement-seat-damaged",
+   "rule": "ledger.placement",
+   "input": {
+    "rows": [
+     {
+      "ts": "2026-11-11T15:00:00Z",
+      "day": "$today",
+      "request_id": "req-1",
+      "job": "j1",
+      "seat": "nine",
+      "did": "did:key:zA",
+      "provider": "mock",
+      "network": "devnet",
+      "payer": "holder",
+      "quote_padded": 0.186,
+      "per_call_cap": 1,
+      "daily_cap": 1,
+      "spent_before": 0,
+      "state": "settled",
+      "spend": 0.186,
+      "cap_charge": 0.186,
+      "mock": true
+     }
+    ],
+    "receipt": {
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "nine",
+     "did": "did:key:zA",
+     "state": "settled",
+     "settled": 0.186,
+     "stage": "settled on chain",
+     "chain_final": true,
+     "http": 200,
+     "error": null
+    },
+    "run": {
+     "payer": "holder",
+     "job": "j2"
+    }
+   },
+   "expect": {
+    "imd-flop": {
+     "exit": 3,
+     "sent": 0,
+     "names_line": 1
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard keeps no ledger: it checks one call against --cap"
+    },
+    "viewer": {
+     "flag": "ledger row cannot be placed in a total (seat)",
+     "bad": true,
+     "greens": []
+    }
+   },
+   "note": "a seat that is not a decimal tokenId is not usable. The receipt carries the same seat, so identity alone does not stop the lane"
+  },
+  {
+   "id": "placement-provider-damaged",
+   "rule": "ledger.placement",
+   "input": {
+    "rows": [
+     {
+      "ts": "2026-11-11T15:00:00Z",
+      "day": "$today",
+      "request_id": "req-1",
+      "job": "j1",
+      "seat": "9001",
+      "did": "did:key:zA",
+      "provider": "MOCK",
+      "network": "devnet",
+      "payer": "holder",
+      "quote_padded": 0.186,
+      "per_call_cap": 1,
+      "daily_cap": 1,
+      "spent_before": 0,
+      "state": "settled",
+      "spend": 0.186,
+      "cap_charge": 0.186,
+      "mock": true
+     }
+    ],
+    "receipt": {
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zA",
+     "state": "settled",
+     "settled": 0.186,
+     "stage": "settled on chain",
+     "chain_final": true,
+     "http": 200,
+     "error": null
+    },
+    "run": {
+     "payer": "holder",
+     "job": "j2"
+    }
+   },
+   "expect": {
+    "imd-flop": {
+     "exit": 3,
+     "sent": 0,
+     "names_line": 1
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard keeps no ledger: it checks one call against --cap"
+    },
+    "viewer": {
+     "flag": "ledger row cannot be placed in a total (provider)",
+     "bad": true,
+     "greens": []
+    }
+   },
+   "note": "a provider other than mock or flop is not usable"
+  },
+  {
+   "id": "placement-requester-job-damaged",
+   "rule": "ledger.placement",
+   "input": {
+    "rows": [
+     {
+      "ts": "2026-11-11T15:00:00Z",
+      "day": "$today",
+      "request_id": "req-1",
+      "job": "j 1",
+      "seat": "9001",
+      "did": "did:key:zA",
+      "provider": "mock",
+      "network": "devnet",
+      "payer": "requester",
+      "quote_padded": 0.186,
+      "per_call_cap": 1,
+      "daily_cap": 1,
+      "spent_before": 0,
+      "state": "settled",
+      "spend": 0.186,
+      "cap_charge": 0.186,
+      "mock": true,
+      "job_budget": 1,
+      "job_spent_before": 0
+     }
+    ],
+    "receipt": {
+     "request_id": "req-1",
+     "job": "j 1",
+     "seat": "9001",
+     "did": "did:key:zA",
+     "state": "settled",
+     "settled": 0.186,
+     "stage": "settled on chain",
+     "chain_final": true,
+     "http": 200,
+     "error": null
+    },
+    "run": {
+     "payer": "requester",
+     "job": "j2"
+    }
+   },
+   "expect": {
+    "imd-flop": {
+     "exit": 3,
+     "sent": 0,
+     "names_line": 1
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard keeps no ledger: it checks one call against --cap"
+    },
+    "viewer": {
+     "flag": "ledger row cannot be placed in a total (job)",
+     "bad": true,
+     "greens": []
+    }
+   },
+   "note": "a requester row whose job is not a usable job id cannot be placed in any job's requester total: a requester call is refused"
+  },
+  {
+   "id": "placement-requester-job-damaged-holder-call",
+   "rule": "ledger.placement",
+   "input": {
+    "rows": [
+     {
+      "ts": "2026-11-11T15:00:00Z",
+      "day": "$today",
+      "request_id": "req-1",
+      "job": "j 1",
+      "seat": "9001",
+      "did": "did:key:zA",
+      "provider": "mock",
+      "network": "devnet",
+      "payer": "requester",
+      "quote_padded": 0.186,
+      "per_call_cap": 1,
+      "daily_cap": 1,
+      "spent_before": 0,
+      "state": "settled",
+      "spend": 0.186,
+      "cap_charge": 0.186,
+      "mock": true,
+      "job_budget": 1,
+      "job_spent_before": 0
+     }
+    ],
+    "receipt": {
+     "request_id": "req-1",
+     "job": "j 1",
+     "seat": "9001",
+     "did": "did:key:zA",
+     "state": "settled",
+     "settled": 0.186,
+     "stage": "settled on chain",
+     "chain_final": true,
+     "http": 200,
+     "error": null
+    },
+    "run": {
+     "payer": "holder",
+     "job": "j2"
+    }
+   },
+   "expect": {
+    "imd-flop": {
+     "exit": 0,
+     "sent": 1
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard keeps no ledger: it checks one call against --cap"
+    },
+    "viewer": {
+     "flag": "ledger row cannot be placed in a total (job)",
+     "bad": true,
+     "greens": []
+    }
+   },
+   "note": "the same row and a holder call: a holder call checks only the daily total, where the row is placed, so it is admitted. The lane cannot know the next call and flags the row"
+  },
+  {
+   "id": "placement-other-seat-day-null",
+   "rule": "ledger.placement",
+   "input": {
+    "rows": [
+     {
+      "ts": "2026-11-11T15:00:00Z",
+      "day": null,
+      "request_id": "req-1",
+      "job": "j1",
+      "seat": "9002",
+      "did": "did:key:zA",
+      "provider": "mock",
+      "network": "devnet",
+      "payer": "holder",
+      "quote_padded": 0.186,
+      "per_call_cap": 1,
+      "daily_cap": 1,
+      "spent_before": 0,
+      "state": "settled",
+      "spend": 0.186,
+      "cap_charge": 0.186,
+      "mock": true
+     }
+    ],
+    "receipt": {
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9002",
+     "did": "did:key:zA",
+     "state": "settled",
+     "settled": 0.186,
+     "stage": "settled on chain",
+     "chain_final": true,
+     "http": 200,
+     "error": null
+    },
+    "run": {
+     "payer": "holder",
+     "job": "j2"
+    }
+   },
+   "expect": {
+    "imd-flop": {
+     "exit": 0,
+     "sent": 1
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard keeps no ledger: it checks one call against --cap"
+    },
+    "viewer": {
+     "flag": "ledger row cannot be placed in a total (day)",
+     "bad": true,
+     "greens": []
+    }
+   },
+   "note": "a row of another seat would never count toward seat 9001, whatever its day: the call is admitted. The lane flags the row: it cannot be placed in its own seat's day"
+  },
+  {
+   "id": "placement-not-latest",
+   "rule": "ledger.placement",
+   "input": {
+    "rows": [
+     {
+      "ts": "2026-11-11T15:00:00Z",
+      "day": null,
+      "request_id": "req-1",
+      "job": "j1",
+      "seat": null,
+      "did": "did:key:zA",
+      "provider": null,
+      "network": "devnet",
+      "payer": "holder",
+      "quote_padded": 0.186,
+      "per_call_cap": 1,
+      "daily_cap": 1,
+      "spent_before": 0,
+      "state": "sent",
+      "spend": null,
+      "cap_charge": 0.186,
+      "mock": true
+     },
+     {
+      "ts": "2026-11-11T15:00:00Z",
+      "day": "$today",
+      "request_id": "req-1",
+      "job": "j1",
+      "seat": "9001",
+      "did": "did:key:zA",
+      "provider": "mock",
+      "network": "devnet",
+      "payer": "holder",
+      "quote_padded": 0.186,
+      "per_call_cap": 1,
+      "daily_cap": 1,
+      "spent_before": 0,
+      "state": "settled",
+      "spend": 0.186,
+      "cap_charge": 0.186,
+      "mock": true
+     }
+    ],
+    "receipt": {
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zA",
+     "state": "settled",
+     "settled": 0.186,
+     "stage": "settled on chain",
+     "chain_final": true,
+     "http": 200,
+     "error": null
+    },
+    "run": {
+     "payer": "holder",
+     "job": "j2"
+    }
+   },
+   "expect": {
+    "imd-flop": {
+     "exit": 0,
+     "sent": 1
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard keeps no ledger: it checks one call against --cap"
+    },
+    "viewer": {
+     "flag": null,
+     "bad": false,
+     "greens": [
+      "chain final"
+     ]
+    }
+   },
+   "note": "only the latest row of a request is placed. An older row of the same request is superseded, so damage there loses no charge: the call is admitted and the lane shows the latest row"
+  }
+ ]
+}
