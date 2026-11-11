@@ -23,7 +23,8 @@
 # exited 3, so a reset signal is published; the run stays red then. It is the only job that may
 # write, and only contents. It runs no code from the repository: it downloads this run's artifact,
 # checks every file against SHA256SUMS before anything else, publishes only a run that exited 0 or
-# 3, and then uses plain git. It replaces latest/ with the folder, appends the snapshot line to
+# 3, and then uses plain git. A fetched branch that holds anything but plain files (mode 100644: no
+# link, no executable, no submodule) fails the job before anything on it is read or written. It replaces latest/ with the folder, appends the snapshot line to
 # log/<UTC date>.jsonl, writes README.md when it is missing, and pushes to
 # refs/heads/observatory-data only, never with force. The line names the hash of the line it
 # follows: when that is not the last line of the branch as fetched (another run published in
@@ -225,6 +226,14 @@ jobs:
             if [ "$found" -eq 0 ]; then
               git fetch -q --depth=1 "$remote" refs/heads/observatory-data
               git reset -q --hard FETCH_HEAD
+              # The branch holds only what the job writes, plain files (mode 100644), read from the
+              # tree alone before anything is read or written: a link, an executable, a submodule
+              # or anything else fails the job, and nothing is pushed.
+              tree="$(git ls-tree -r --full-tree HEAD)"
+              if [ -n "$tree" ] && grep -qv '^100644 blob ' <<<"$tree"; then
+                echo "::error::observatory-data holds something the job never writes (a link, an executable, a submodule or another entry that is not a plain file); nothing is pushed"
+                exit 1
+              fi
             elif [ "$found" -ne 2 ]; then
               echo "::error::cannot read observatory-data"
               exit 1

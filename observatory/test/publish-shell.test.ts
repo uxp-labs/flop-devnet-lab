@@ -102,7 +102,7 @@ function checkout(): string {
 }
 
 /** A commit not made by the job, on top of the branch (or an orphan): files written, links made, paths removed. */
-function seed(files: Record<string, string>, links: Record<string, string> = {}, remove: string[] = []): void {
+function seed(files: Record<string, string>, links: Record<string, string> = {}, remove: string[] = [], index: (work: string) => void = () => {}): void {
   const work = next("seed");
   git("init", "-q", "-b", "observatory-data", work);
   const has = runShell(["-c", 'git ls-remote --exit-code "$1" "$2" >/dev/null', "x", remote(), REF], { HOME: box }, box).status === 0;
@@ -121,6 +121,7 @@ function seed(files: Record<string, string>, links: Record<string, string> = {},
     symlinkSync(target, join(work, p));
   }
   git("-C", work, "add", "-A");
+  index(work);
   git("-C", work, "-c", "user.name=seed", "-c", "user.email=seed@example.invalid", "commit", "-q", "-m", "seed");
   git("-C", work, "push", "-q", remote(), `${REF}:${REF}`);
 }
@@ -580,25 +581,29 @@ describe("open defects (memory review)", () => {
     expect(branch()).toEqual(before);
   });
 
-  it("DEFECT 2: a day file on the branch that is a link into latest/ makes the job push a latest/ that is not the reading and no line in log/", async () => {
+  it.each([
+    ["a day file that is a link into latest/", (r1: Reading) => seed({}, { "log/2026-11-11.jsonl": "../latest/snapshots.jsonl" }), "120000"],
+    ["a log folder that is a link", () => seed({ "elsewhere/2026-11-11.jsonl": "x\n" }, { log: "elsewhere" }), "120000"],
+    ["an executable file", () => seed({}, {}, [], (w) => git("-C", w, "update-index", "--chmod=+x", "README.md")), "100755"],
+    [
+      "a submodule",
+      () => seed({}, {}, [], (w) => git("-C", w, "update-index", "--add", "--cacheinfo", `160000,${git("--git-dir", bare(), "rev-parse", REF).trim()},vendor`)),
+      "160000",
+    ],
+  ] as const)("a fetched branch that holds %s is refused before anything is read or written, and nothing is pushed", async (_what, make, mode) => {
     const r1 = await read(live("published-2026-11-11-0808"), checkout());
     published(publishJob(r1));
-    // The live run reads the branch as the job left it.
+    // The live run reads the branch as the job left it; then a commit not made by the job lands.
     const r2 = await read(live("published-2026-11-11-0823"), checkout());
     expect([r2.code, r2.snapshot?.prev_hash]).toEqual([EXIT.ok, r1.snapshot?.hash]);
-    // Then a commit not made by the job replaces the day file with a link to latest/snapshots.jsonl,
-    // whose one line is the same last line. The live run would refuse that log; the job reads it.
-    seed({}, { "log/2026-11-11.jsonl": "../latest/snapshots.jsonl" });
-    const linked = branch();
-    const j = publishJob(r2);
-    published(j);
-    const b = branch();
-    // Pushed: a new commit whose day file is still the link, with no line added to the log ...
-    expect(b.parents).toEqual([linked.commit]);
-    expect(git("--git-dir", bare(), "ls-tree", REF, "log/2026-11-11.jsonl").split(/\s/)[0]).toBe("120000");
-    // ... and a latest/snapshots.jsonl that holds the reading's line twice, so latest/ fails its own sums.
-    expect(b.latest["snapshots.jsonl"]).toBe(logLine(r2.snapshot as Snapshot).repeat(2));
-    expect(b.latest["snapshots.jsonl"]).not.toBe(filesOf(r2)["snapshots.jsonl"]);
+    make(r1);
+    const odd = branch();
+    expect(git("--git-dir", bare(), "ls-tree", "-r", REF).split("\n").some((l) => l.startsWith(`${mode} `))).toBe(true);
+    refusedAtPublish(publishJob(r2), /observatory-data holds something the job never writes/);
+    expect(branch()).toEqual(odd);
+    // A rerun of a published reading is refused too: the tree is checked before the log is read.
+    refusedAtPublish(publishJob(r1), /observatory-data holds something the job never writes/);
+    expect(branch()).toEqual(odd);
   });
 
   it("DEFECT 3: after a line dated past the clock, the next run does not build on the branch and publish: every later run is refused until the clock passes that day", async () => {

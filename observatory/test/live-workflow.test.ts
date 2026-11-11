@@ -250,6 +250,20 @@ describe("the publish job", () => {
     expect(push.indexOf(again)).toBeLessThan(push.indexOf(refuse));
   });
 
+  it("refuses a fetched branch that holds anything but plain files, from its tree alone, before anything is read or written", () => {
+    const push = code(pubSteps.at(2)?.run);
+    const tree = 'tree="$(git ls-tree -r --full-tree HEAD)"';
+    const reset = "git reset -q --hard FETCH_HEAD";
+    const at = push.indexOf(tree);
+    expect(at).toBeGreaterThan(push.indexOf(reset));
+    const block = push.slice(at).split("\n");
+    const end = block.findIndex((l) => l.trim() === "fi");
+    expect(block[1]).toMatch(/^\s*if \[ -n "\$tree" \] && grep -qv '.*' <<<"\$tree"; then$/);
+    expect(block.slice(0, end).map((l) => l.trim())).toContain("exit 1");
+    // Before the rerun check, the last line, and anything laid down.
+    for (const later of ['grep -qxF -f "$reading/snapshots.jsonl"', "for f in log/*.jsonl", "rm -rf latest", "git commit"]) expect(at, later).toBeLessThan(push.indexOf(later));
+  });
+
   it("lays out latest/, log/<UTC date>.jsonl and README.md, and nothing else", () => {
     const push = pubSteps.at(2)?.run ?? "";
     expect(push).toContain("rm -rf latest\n");

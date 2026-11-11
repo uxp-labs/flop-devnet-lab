@@ -779,6 +779,10 @@ everything the observatory reads.
   is written when it is missing. Nothing else is written. When that day file already holds the
   line (a run attempted again), nothing is written at all, so `latest/` never goes back to an older
   reading.
+- The branch as fetched must hold only what the job writes: every entry of its tree, read with
+  `git ls-tree -r` alone and before anything on it is read or written, is a regular file with mode
+  `100644`. A link, an executable, a submodule or any other entry fails the job, and nothing is
+  pushed, a reading attempted again included.
 - The line follows the branch's last line, read from the files alone: the last line of the last day
   file in byte order. The job checks the line's `seq` and `prev_hash` against fixed patterns, then
   appends it only when its `prev_hash` is that last line's hash, or is null when the branch holds no

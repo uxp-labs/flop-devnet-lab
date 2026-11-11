@@ -174,5 +174,13 @@
     "replace": "",
     "test": "test/live-workflow.test.ts",
     "why": "the data branch is checked out only when it exists"
+  },
+  {
+    "id": "publish-odd-entries-unchecked",
+    "file": "../.github/workflows/observatory-live.yml",
+    "find": "              tree=\"$(git ls-tree -r --full-tree HEAD)\"\n",
+    "replace": "",
+    "test": "test/live-workflow.test.ts",
+    "why": "the fetched tree is checked for anything but plain files before anything is read or written"
   }
 ]

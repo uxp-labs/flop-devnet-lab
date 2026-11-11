@@ -62,5 +62,13 @@
     "replace": "\"log/$DAY.jsonl.none\"; then return 0; fi",
     "test": "test/publish-shell.test.ts",
     "why": "when the shell runs, a reading already in the log adds no commit and leaves a newer latest/ as it is (test/live-workflow.test.ts kills this one too, from the text)"
+  },
+  {
+    "id": "publish-shell-odd-entries-allowed",
+    "file": "../.github/workflows/observatory-live.yml",
+    "find": "grep -qv '^100644 blob ' <<<\"$tree\"",
+    "replace": "grep -qv '^1[0-9]* ' <<<\"$tree\"",
+    "test": "test/publish-shell.test.ts",
+    "why": "when the shell runs, a fetched branch holding a link, an executable or a submodule is refused and nothing is pushed"
   }
 ]

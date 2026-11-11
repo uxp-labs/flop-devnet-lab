@@ -36,8 +36,8 @@
     "names": "552addede8f03700f304243e1513b90c4a452d170f4633c5db01d92bd1d2f653"
   },
   "live-workflow.test.ts": {
-    "tests": 19,
-    "names": "4d628c321d8fcf3dd44153752f19a83a1a47afb97dee98b65f1bb0177aeb146a"
+    "tests": 20,
+    "names": "8827bd780d53ac05170a026e59309904b78e0d3e3db131540ea8d0720b7286cd"
   },
   "mcp.test.ts": {
     "tests": 13,
@@ -56,8 +56,8 @@
     "names": "c1629a5c9e7fa1134a7e062494c93ae5e762fbe1cc26328108e74d808eb49693"
   },
   "publish-shell.test.ts": {
-    "tests": 35,
-    "names": "845be9891c01aa17912ade32c8a78e51f2fc1233d7ade4f9f3354d62863dd81d"
+    "tests": 38,
+    "names": "e793c126bf5bbc3169bfcb4acedc37bfa613df3ef8cdd718060c19d53f2ad0a7"
   },
   "published.test.ts": {
     "tests": 21,
