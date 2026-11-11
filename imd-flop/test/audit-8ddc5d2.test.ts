@@ -9,6 +9,7 @@
  *   8  status keeps working when a receipt file is unreadable, and names the file
  *   9  "nothing was sent" has its own exit code (11), apart from "sent, spend unknown" (1)
  *  10  reserved_spend is held to the one amount rule: finite and >= 0, else unknown and shown blank
+ *  11  padQuote refuses a negative token count instead of letting it inflate the pad
  * Findings 5, 6 and 7 are the viewer's. Finding 12 is a documented residual. Finding 13 is a product
  * decision. Stub providers only; no network (test/setup.ts disables fetch).
  */
@@ -20,7 +21,7 @@ import { EXIT } from "../src/errors.js";
 import { mintChildKey, PaidGateError, PreSendError } from "../src/gateway.js";
 import { jobSpent, spentToday, utcDay } from "../src/ledger.js";
 import { network } from "../src/networks.js";
-import { checkBudget, noRoom } from "../src/policy.js";
+import { checkBudget, noRoom, padQuote } from "../src/policy.js";
 import type { CompleteReq, CompleteRes, Provider } from "../src/providers.js";
 import { classifyReceipt, knownAmount, receiptLine, type GatewayReceipt } from "../src/receipts.js";
 import { ceil6, floor6 } from "../src/rounding.js";
@@ -491,4 +492,32 @@ describe("finding 10: reserved_spend is held to the amount rule (finite and >= 0
       }
     });
   }
+});
+
+describe("finding 11: a negative token count is not a usable count", () => {
+  const est = (tin: unknown, tout: unknown) => ({ estimated_cost_flop: 0.066, estimated_input_tokens: tin, estimated_output_tokens: tout }) as never;
+
+  it("padQuote returns null for a negative input or output count", () => {
+    expect(padQuote(est(3, -2))).toBeNull(); // was padded 1.386: the divisor shrank to 1
+    expect(padQuote(est(-1, 8))).toBeNull(); // was padded 0.254572
+    expect(padQuote(est(-3, 8))).toBeNull(); // was padded 0.33, the audit report's example
+    expect(padQuote(est(-3, -8))).toBeNull();
+    expect(padQuote(est(-0.5, 8))).toBeNull();
+  });
+
+  it("control: zero, missing and positive counts pad as before", () => {
+    expect(padQuote(est(3, 8))).toEqual({ raw: 0.066, padded: 0.186 });
+    expect(padQuote(est(0, 8))).toEqual({ raw: 0.066, padded: 0.231 });
+    expect(padQuote({ estimated_cost_flop: 0.066, estimated_output_tokens: 8 })).toEqual({ raw: 0.066, padded: 0.231 });
+  });
+
+  it("run with a negative count in the estimate refuses with exit 7, nothing sent", async () => {
+    const h = await ready("5");
+    const p = new P({ estimate: { estimated_cost_flop: 0.066, estimated_input_tokens: 3, estimated_output_tokens: -2 } });
+    const r = await cli(h, runArgs(), { provider: p });
+    expect({ code: r.code, calls: p.calls }).toEqual({ code: 7, calls: 0 });
+    expect(r.err).toMatch(/estimate returned no usable cost/);
+    const last = ledger(h).at(-1)!;
+    expect({ state: last.state, quote_padded: last.quote_padded, cap_charge: last.cap_charge }).toEqual({ state: "refused_local", quote_padded: null, cap_charge: 0 });
+  });
 });

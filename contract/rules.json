@@ -120,7 +120,7 @@
         "imd-flop",
         "spend-guard"
       ],
-      "summary": "imd-flop accepts a missing token count as 0, fractional counts and counts above 10M; spend-guard requires nonnegative integer counts <= MAX_TOKEN_COUNT."
+      "summary": "imd-flop accepts a missing token count as 0, fractional counts and counts above 10M; spend-guard requires nonnegative integer counts <= MAX_TOKEN_COUNT. Both refuse a negative count: imd-flop padQuote returns null for it (swarm audit of 8ddc5d2, finding 11; before, a negative count shrank the divisor and inflated the pad)."
     },
     {
       "id": "Q-AMOUNT-TEXT",

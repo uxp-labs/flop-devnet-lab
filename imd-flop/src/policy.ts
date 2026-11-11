@@ -14,8 +14,9 @@ export const TEMPLATE_PAD = 20; // measured: Qwen chat wrap 23 tokens vs 3 raw f
 /** A finite, positive number. */
 export const posFinite = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v) && v > 0;
 
-function finiteTokenCount(value: unknown): number | null {
-  if (typeof value !== "number" || !Number.isFinite(value)) return null;
+/** A usable token count is a finite number that is not negative. A negative count would shrink the divisor and inflate the pad. */
+function usableTokenCount(value: unknown): number | null {
+  if (typeof value !== "number" || !Number.isFinite(value) || value < 0) return null;
   return value;
 }
 
@@ -24,8 +25,8 @@ export function padQuote(est: { estimated_cost_flop?: number; estimated_input_to
   if (typeof raw !== "number" || !Number.isFinite(raw) || !(raw > 0)) return null;
   const tinIn = (est as { estimated_input_tokens?: unknown }).estimated_input_tokens;
   const toutIn = (est as { estimated_output_tokens?: unknown }).estimated_output_tokens;
-  const tin = tinIn === undefined ? 0 : finiteTokenCount(tinIn);
-  const tout = toutIn === undefined ? 0 : finiteTokenCount(toutIn);
+  const tin = tinIn === undefined ? 0 : usableTokenCount(tinIn);
+  const tout = toutIn === undefined ? 0 : usableTokenCount(toutIn);
   if (tin === null || tout === null || tin + tout <= 0) return null;
   const perTok = raw / (tin + tout);
   const unrounded = raw + TEMPLATE_PAD * perTok;
