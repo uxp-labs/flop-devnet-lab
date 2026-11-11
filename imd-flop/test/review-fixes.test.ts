@@ -83,7 +83,7 @@ describe("R1 (medium): run's own failed receipt read drops the gateway fields an
   // no merge, so a failed own read overwrites the file a concurrent refresh wrote: channel_id,
   // settled_raw, state and settled become null. The ledger keeps the settlement; the receipt file loses
   // the channel id that ties it to the chain, and the viewer shows "last seen unknown".
-  it.fails("a refresh stores settled 0.05 on channel chan-1 while run waits; run's own read then fails: the file keeps chan-1", async () => {
+  it("a refresh stores settled 0.05 on channel chan-1 while run waits; run's own read then fails: the file keeps chan-1", async () => {
     const h = await ready();
     const settledOnChannel = (id: string) => receiptFor(id, { state: "settled", settled_spend: 0.05, settled_spend_raw: "50000000000000000", channel_id: "chan-1", terminal_event: "evt-1" });
     const read: Reader = async (id) => {
@@ -93,7 +93,8 @@ describe("R1 (medium): run's own failed receipt read drops the gateway fields an
     };
     const run = await cli(h, runArgs(), { provider: new P({ read }) });
     expect(run.code, run.err).toBe(0);
-    expect(booked(ledger(h).at(-1)!)).toEqual({ state: "settled", spend: 0.05, cap_charge: 0.05 });
+    // Moved (hold floor): the charge keeps the padded quote, 0.186, after a settlement below it.
+    expect(booked(ledger(h).at(-1)!)).toEqual({ state: "settled", spend: 0.05, cap_charge: 0.186 });
     const stored = JSON.parse(readFileSync(join(h, "receipts", `${run.json().request_id}.json`), "utf8"));
     expect({ channel_id: stored.channel_id, settled_raw: stored.settled_raw, terminal_event: stored.terminal_event, state: stored.state, settled: stored.settled })
       .toEqual({ channel_id: "chan-1", settled_raw: "50000000000000000", terminal_event: "evt-1", state: "settled", settled: 0.05 });

@@ -12,10 +12,10 @@ import { bookRead } from "./booking.js";
 import { latestAttempts, LedgerLockError, type LedgerEntry } from "./ledger.js";
 import { matchable, matchReceipt, type ReceiptIds } from "./match.js";
 import { receiptsDir } from "./paths.js";
-import type { Provider } from "./providers.js";
+import type { Provider, ReceiptRead } from "./providers.js";
 import { classifyReceipt, type Classified, type MatchResult } from "./receipts.js";
 import { redactFlagged } from "./secrets.js";
-import { DISAGREE, isFreshRead, PAST_ADMITTED, receiptIdentity, reconcile, type StoredReceipt } from "./settlement.js";
+import { DISAGREE, isFreshRead, PAST_ADMITTED, receiptIdentity, reconcile, type ReadOutcome, type StoredReceipt } from "./settlement.js";
 import { readJson, writeJsonSafe } from "./store.js";
 
 export type SavedReceipt = Classified & { seat: string; mock_scenario?: string };
@@ -105,12 +105,41 @@ function identityFromLedger(h: string, row: LedgerEntry): Record<string, unknown
 const GATEWAY_FIELDS = ["request_id", "correlation_id", "state", "reserved", "settled", "settled_raw", "terminal_event", "channel_id"] as const;
 
 /** The receipt file body after a re-read. A failed read keeps what was stored (GATEWAY_FIELDS, chain_final) and says when it was last known. */
-function refreshedBody(saved: SavedReceipt | null, ident: Record<string, unknown>, c: Classified, read: { fresh: boolean; rawId: unknown; identityOk: boolean }): Record<string, unknown> {
+function bodyAfterRead(saved: SavedReceipt | null, ident: Record<string, unknown>, c: Classified, read: { fresh: boolean; rawId: unknown; identityOk: boolean }): Record<string, unknown> {
   if (read.fresh) {
     return { ...ident, ...saved, ...c, request_id: typeof read.rawId === "string" ? read.rawId : "", ...(read.identityOk ? {} : { settled: null, chain_final: false }) };
   }
   const kept = Object.fromEntries(GATEWAY_FIELDS.map((k) => [k, saved?.[k] ?? (k === "request_id" ? "" : null)]));
   return { ...ident, ...saved, ...c, ...kept, chain_final: saved?.chain_final ?? false, last_known_at: saved?.observed_at ?? null };
+}
+
+/** The stored receipt file as an object, or null when there is none or it is not a JSON object. A file that cannot be read is not merged. */
+function storedBody(path: string): SavedReceipt | null {
+  try {
+    const body = readJson<unknown>(path);
+    return body !== null && typeof body === "object" && !Array.isArray(body) ? (body as SavedReceipt) : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The one owner of what a receipt file holds after a read, for `run`'s own read and `receipt --refresh`
+ * alike. It reads the stored file just before it writes, and merges the read into it (bodyAfterRead): a
+ * fresh read brings its own gateway fields, and a failed read keeps every gateway field the stored file
+ * holds. `seed` gives the identity fields (seat, did, ss58, network) to write when the caller has them to
+ * add; a value the stored file already holds wins. The file is written outside the ledger lock, so two
+ * reads at once leave the one written last. Returns the body as written (after any redaction) and what
+ * the read tells the booking step.
+ */
+export function storeRead(h: string, rid: string, rr: ReceiptRead, c: Classified, seed: (stored: SavedReceipt | null) => Record<string, unknown>): { saved: SavedReceipt; read: ReadOutcome } {
+  const path = receiptPath(h, rid);
+  const stored = storedBody(path);
+  const fresh = isFreshRead(rr);
+  const { rawId, identityOk } = fresh ? receiptIdentity(rr.receipt, rid) : { rawId: undefined, identityOk: false };
+  const written = writeReceipt(path, bodyAfterRead(stored, seed(stored), c, { fresh, rawId, identityOk }));
+  const saved = written.body as SavedReceipt;
+  return { saved, read: { fresh, identityOk, redacted: written.redacted, state: saved.state ?? null, settled: saved.settled, settledRaw: saved.settled_raw } };
 }
 
 /**
@@ -138,16 +167,15 @@ export async function refreshReceipt(
   const pname = stored?.provider ?? ledgerRow!.provider;
   const rr = await provider.readReceipt(rid);
   const c = classifyReceipt(rr.receipt, { job: stored?.job ?? ledgerRow?.job ?? null, provider: pname, http: rr.http, error: rr.error, requestId: rid, mock: pname === "mock" });
-  const fresh = isFreshRead(rr);
-  const { rawId, identityOk } = fresh ? receiptIdentity(rr.receipt, rid) : { rawId: undefined, identityOk: false };
   // No file yet, or an older file without seat/did (716819c era): seed them from the ledger row. Stored values win.
-  const lacksIdentity = !stored || (ledgerRow !== undefined && (!present(stored.seat) || !present((stored as { did?: unknown }).did)));
-  const ident = lacksIdentity ? identityFromLedger(h, ledgerRow!) : {};
-  const written = writeReceipt(receiptPath(h, rid), refreshedBody(stored, ident, c, { fresh, rawId, identityOk }));
-  const saved = written.body as SavedReceipt;
+  const seed = (file: SavedReceipt | null) => {
+    const lacksIdentity = !file || (ledgerRow !== undefined && (!present(file.seat) || !present((file as { did?: unknown }).did)));
+    return lacksIdentity && ledgerRow !== undefined ? identityFromLedger(h, ledgerRow) : {};
+  };
+  const { saved, read } = storeRead(h, rid, rr, c, seed);
 
   try {
-    const booked = bookRead(h, rid, { fresh, identityOk, redacted: written.redacted, state: saved.state ?? null, settled: saved.settled, settledRaw: saved.settled_raw }, { flag: saved.flag ?? null });
+    const booked = bookRead(h, rid, read, { flag: saved.flag ?? null });
     if (booked.outcome === "no_row") return { saved, ledgerRow: undefined };
     // Disagree: a read below a booked settlement, or an unknown charge with no proven settlement (never substitute 0).
     if (booked.outcome === "disagree") warn(DISAGREE);

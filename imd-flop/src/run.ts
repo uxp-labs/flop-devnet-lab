@@ -13,8 +13,8 @@ import { checkBudget, noRoom, padQuote, requireCap, validateJob, validatePayer, 
 import { appendLedger, jobSpent, LedgerLockError, spentToday, UnusableLedgerCharge, utcDay, withLedgerLock, type LedgerEntry } from "./ledger.js";
 import { classifyReceipt, type Classified } from "./receipts.js";
 import { bookFailure, bookRead } from "./booking.js";
-import { DISAGREE, isFreshRead, PAST_ADMITTED, receiptIdentity, reportedCost, SETTLES } from "./settlement.js";
-import { receiptPath, receiptVerdicts, writeReceipt } from "./receipt-store.js";
+import { DISAGREE, PAST_ADMITTED, reportedCost, SETTLES } from "./settlement.js";
+import { receiptVerdicts, storeRead } from "./receipt-store.js";
 import { responsePath } from "./response-store.js";
 import type { Provider } from "./providers.js";
 import { assertPaidNetwork, checkImdJob, PaidGateError, PreSendError, readVerifiedSeatOwner, type Fetch } from "./gateway.js";
@@ -295,26 +295,18 @@ export async function runJob(h: string, provider: Provider, o: RunOpts, deps: Ru
 
   const rr = await provider.readReceipt(requestId);
   const classified = classifyReceipt(rr.receipt, { job, provider: provider.name, http: rr.http, error: rr.error, requestId, mock: provider.name === "mock" });
-  const { rawId, identityOk } = receiptIdentity(rr.receipt, requestId);
-  if (!identityOk) {
-    classified.settled = null;
-    classified.chain_final = false;
-    classified.request_id = typeof rawId === "string" ? rawId : "";
-  }
-  const receipt0 = { ...classified, seat, did: signer.identity.did };
-  const stored = writeReceipt(receiptPath(h, requestId), { ...classified, seat, did: signer.identity.did, ss58: signer.identity.ss58, network: net.name, ...(provider.name === "mock" ? { mock_scenario: (provider as { scenario?: string }).scenario ?? "ok" } : {}) });
-  const receiptRedacted = stored.redacted;
-  if (receiptRedacted) {
-    // stdout shows what was stored: every redacted field, not only error and settled_raw.
-    const cleaned = stored.body as Record<string, unknown>;
-    const r0 = receipt0 as unknown as Record<string, unknown>;
-    for (const k of Object.keys(r0)) if (k in cleaned) r0[k] = cleaned[k] ?? null;
-  }
+  // The receipt file goes through the same owner as receipt --refresh (receipt-store.ts storeRead): another
+  // process may have refreshed this request and stored its read while the call ran, and a failed read here
+  // keeps every gateway field that file holds.
+  const ident = { seat, did: signer.identity.did, ss58: signer.identity.ss58, network: net.name, ...(provider.name === "mock" ? { mock_scenario: (provider as { scenario?: string }).scenario ?? "ok" } : {}) };
+  const { saved, read } = storeRead(h, requestId, rr, classified, () => ident);
+  // stdout shows what was stored: every field of the receipt as the file holds it, redacted fields included.
+  const stored = saved as unknown as Record<string, unknown>;
+  const receipt0 = { ...(Object.fromEntries(Object.keys(classified).map((k) => [k, stored[k] ?? null])) as unknown as Classified), seat, did: signer.identity.did };
 
   // The same booking step as receipt --refresh, with the rules held in settlement.ts: a failed read (not
   // HTTP 200 with a receipt object) or a receipt body that had to be redacted proves nothing and never
   // releases the reservation. If the step throws, the answer is in the response file written above.
-  const read = { fresh: isFreshRead(rr), identityOk, redacted: receiptRedacted, state: classified.state, settled: classified.settled, settledRaw: classified.settled_raw };
   const own = { flag: classified.flag, cost_reported: reportedCost(res.usage?.cost_flop), http: rr.http };
   const { outcome, row, pastAdmitted } = bookRead(h, requestId, read, own, sent);
   if (outcome === "disagree") deps.warn(DISAGREE);
