@@ -1,0 +1,163 @@
+/**
+ * Independent review of the lock reclaim (src/lock.ts at 34f922e). Each DEFECT test asserts today's
+ * wrong behavior: it passes now and fails once the defect is fixed.
+ */
+import { spawnSync } from "node:child_process";
+import { chownSync, chmodSync, existsSync, mkdirSync, readdirSync, readFileSync, symlinkSync, unlinkSync, writeFileSync } from "node:fs";
+import { hostname } from "node:os";
+import { join } from "node:path";
+import { describe, expect, it } from "vitest";
+import { withLedgerLock } from "../src/ledger.js";
+import { acquire, runOnDisk, type FileOp, type Self, type Step } from "../src/lock.js";
+import { readySeat, tmpHome } from "./helpers.js";
+
+const SEAT = "9001";
+const root = join(import.meta.dirname, "..");
+const lockPath = (h: string) => join(h, "ledger.jsonl.lock");
+const lockFiles = (h: string) => readdirSync(h).filter((f) => f.startsWith("ledger.jsonl.lock")).sort();
+const owner = (pid: number, token: string, host = hostname()) => JSON.stringify({ pid, host, token });
+const deadPid = () => spawnSync(process.execPath, ["-e", ""]).pid!;
+const self = (pid: number, token: string): Self => ({ pid, host: hostname(), token, held: new Set([token]) });
+
+/** Drive a step, but stop it after limit operations, or at its first wait. */
+function* bounded(step: Step<unknown>, limit: number, seen: { ops: number }): Step<"taken" | "waited" | "spun"> {
+  let r = step.next();
+  while (!r.done) {
+    if (r.value.kind === "wait") return "waited";
+    if (++seen.ops > limit) return "spun";
+    const x: unknown = yield r.value as FileOp;
+    r = step.next(x);
+  }
+  return "taken";
+}
+
+/** A script that takes the ledger lock of home once through dist/ledger.js and prints how it ended. */
+function lockScript(dir: string, home: string): string {
+  const script = join(dir, "take-lock.mjs");
+  writeFileSync(script, `
+const { withLedgerLock } = await import(${JSON.stringify(join(root, "dist", "ledger.js"))});
+const t0 = Date.now();
+try { withLedgerLock(${JSON.stringify(home)}, () => {}); process.stdout.write("TAKEN " + (Date.now() - t0)); }
+catch (e) { process.stdout.write((e.constructor?.name ?? "Error") + " " + (Date.now() - t0) + " " + e.message); }
+`);
+  return script;
+}
+
+/** A script that runs `run` once through dist/cli.js with a mock provider and prints its exit code, calls and stderr. */
+function runScript(dir: string, home: string): string {
+  const script = join(dir, "run-once.mjs");
+  writeFileSync(script, `
+const { main } = await import(${JSON.stringify(join(root, "dist", "cli.js"))});
+let calls = 0;
+const err = [];
+const provider = {
+  name: "mock",
+  async estimate() { return { estimated_cost_flop: 0.066, estimated_input_tokens: 3, estimated_output_tokens: 8 }; },
+  async complete(req) { calls++; return { request_id: req.requestId, text: "ok", usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 } }; },
+  async readReceipt(id) { return { http: 200, error: null, receipt: { request_id: id, correlation_id: "c", state: "estimated", settled_spend: null, reserved_spend: 0.186, model: "m" } }; },
+};
+const code = await main(["run", "--seat", ${JSON.stringify(SEAT)}, "--job", "j1", "--prompt", "hi", "--max-tokens", "8", "--provider", "mock"], {
+  out() {}, err(s) { err.push(s); }, env: { IMD_FLOP_HOME: ${JSON.stringify(home)} }, provider,
+});
+process.stdout.write(JSON.stringify({ code, calls, err: err.join("\\n") }));
+`);
+  return script;
+}
+
+describe("DEFECT 1: a lock that exists for link but reads as absent", () => {
+  // createFile's link says EEXIST, readText says ENOENT (null), attempt returns "again", and acquire tries
+  // again at once. It never yields wait, so takeLock's 5 s timeout (checked only at a wait) never fires.
+  // A dangling symlink at ledger.jsonl.lock is enough. That is damage, outside the cap promise, but the
+  // tool is meant to fail closed with the L5 message after 5 s; instead it spins on the CPU forever.
+  it("DEFECT 1 (medium): a dangling symlink at the lock path makes acquire spin on again forever, so the 5 s timeout never fires", () => {
+    const h = tmpHome();
+    symlinkSync(join(h, "no-such-target"), lockPath(h));
+    // In process: 20 000 file operations and not one wait.
+    const seen = { ops: 0 };
+    expect(runOnDisk(bounded(acquire(self(process.pid, "t-spin"), lockPath(h)), 20_000, seen), () => {})).toBe("spun");
+    // A real process: still in withLedgerLock after three times the 5 s timeout, and killed by the test.
+    const r = spawnSync(process.execPath, [lockScript(h, h)], { timeout: 15_000, encoding: "utf8" });
+    expect({ signal: r.signal, out: r.stdout }).toEqual({ signal: "SIGTERM", out: "" });
+    expect(lockFiles(h)).toEqual(["ledger.jsonl.lock"]);
+  }, 60_000);
+});
+
+describe("DEFECT 2: a dead holder's lock that this process may not unlink", () => {
+  // The home is a sticky directory (mode 1777) of another OS user, and the dead holder's lock is that
+  // user's file: a waiter may create files there but not unlink the lock. The waiter judges the owner
+  // dead, gets the reclaim right, and its unlink throws EPERM. runOnDisk rethrows it raw: not a
+  // LedgerLockError, so run exits 1 (an unexpected error) and not 10 (README: "The ledger lock could not
+  // be taken before the paid call"), with no timeout message and no way back. The right file it created
+  // is never removed, and every later attempt adds one more level: right files pile up and the sweep
+  // never runs, because nobody ever takes the lock.
+  it("DEFECT 2 (low): run exits 1 with a raw EPERM (not 10 with the lock message) and leaves one more right file each time", async () => {
+    const h = tmpHome();
+    const home = join(h, "home");
+    mkdirSync(home);
+    await readySeat(home, SEAT, "1");
+    const lock = lockPath(home);
+    writeFileSync(lock, owner(deadPid(), "dead"));
+    // Another user's file in another user's sticky directory (a temporary directory of this test).
+    chownSync(lock, 65534, 65534);
+    chownSync(home, 65534, 65534);
+    chmodSync(home, 0o1777);
+    const script = runScript(h, home);
+    // Root without CAP_FOWNER and without the DAC overrides: an ordinary user for the sticky bit.
+    const drop = "-fowner,-dac_override,-dac_read_search";
+    const once = () => {
+      const r = spawnSync("setpriv", [`--bounding-set=${drop}`, `--inh-caps=${drop}`, process.execPath, script], { encoding: "utf8", timeout: 60_000 });
+      return JSON.parse(r.stdout) as { code: number; calls: number; err: string };
+    };
+    const first = once();
+    expect({ code: first.code, calls: first.calls }).toEqual({ code: 1, calls: 0 });
+    expect(first.err).toMatch(/^imd-flop: EPERM: operation not permitted, unlink '\S+ledger\.jsonl\.lock'$/);
+    expect(lockFiles(home)).toEqual(["ledger.jsonl.lock", "ledger.jsonl.lock.reclaim.dead.1"]);
+    const second = once();
+    expect({ code: second.code, calls: second.calls }).toEqual({ code: 1, calls: 0 });
+    expect(lockFiles(home)).toEqual(["ledger.jsonl.lock", "ledger.jsonl.lock.reclaim.dead.1", "ledger.jsonl.lock.reclaim.dead.2"]);
+    expect(JSON.parse(readFileSync(lock, "utf8")).token).toBe("dead");
+  }, 120_000);
+});
+
+describe("DEFECT 3: a write error while creating the lock leaves an empty temporary file that is never swept", () => {
+  // createFile opens the temporary file and writes the owner. If the write fails (EFBIG here, the same
+  // path for ENOSPC or EDQUOT), the catch rethrows without removing the temporary file. It stays empty,
+  // so it has no readable owner, and the sweep keeps it for ever. The known gap needs a death between the
+  // open and the write; this one needs only a live process whose write fails, and it adds one file per try.
+  it("DEFECT 3 (low): a live process whose write fails leaves an empty ledger.jsonl.lock.*.tmp, and a later holder's sweep keeps it", () => {
+    const h = tmpHome();
+    const script = lockScript(h, h);
+    // A file size limit of 0: every write to a regular file fails with EFBIG (node ignores SIGXFSZ).
+    const r = spawnSync("bash", ["-c", 'ulimit -f 0 && exec "$0" "$1"', process.execPath, script], { encoding: "utf8", timeout: 60_000 });
+    expect(r.stdout).toMatch(/^Error \d+ EFBIG: file too large, write$/);
+    const left = lockFiles(h);
+    expect(left).toHaveLength(1);
+    expect(left[0]).toMatch(/^ledger\.jsonl\.lock\.\d+\.[0-9a-f]{8}\.tmp$/);
+    expect(readFileSync(join(h, left[0]), "utf8")).toBe("");
+    // A later holder takes the lock and sweeps: the empty file stays.
+    withLedgerLock(h, () => {});
+    expect(lockFiles(h)).toEqual(left);
+  }, 60_000);
+});
+
+describe("DEFECT 4: a right file held by a live unrelated process", () => {
+  // The lock's owner is dead, but the level 1 right file names a live pid (a reclaimer that died and
+  // whose pid was reused). By rule the waiter has no right and waits. The timeout then says the lock "is
+  // held by pid <the dead owner>": it blames a process that is gone and does not name the file that is
+  // really in the way. The way back (remove the lock) works, but the right file stays after it, through
+  // every sweep, for as long as the unrelated process lives.
+  it("DEFECT 4 (info): the timeout names a dead pid as the holder and not the right file in the way, and that right file is never swept", () => {
+    const h = tmpHome();
+    const dead = deadPid();
+    writeFileSync(lockPath(h), owner(dead, "T"));
+    writeFileSync(`${lockPath(h)}.reclaim.T.1`, owner(process.ppid, "reused"));
+    let msg = "";
+    try { withLedgerLock(h, () => {}); } catch (e) { msg = (e as Error).message; }
+    expect(msg).toMatch(new RegExp(`^ledger lock timeout: \\S+ \\(\\d+ s old\\) is held by pid ${dead} on host `));
+    expect(msg).not.toContain("reclaim");
+    unlinkSync(lockPath(h));
+    withLedgerLock(h, () => {});
+    expect(existsSync(`${lockPath(h)}.reclaim.T.1`)).toBe(true);
+    expect(lockFiles(h)).toEqual(["ledger.jsonl.lock.reclaim.T.1"]);
+  }, 30_000);
+});
