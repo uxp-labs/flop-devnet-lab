@@ -11,6 +11,7 @@
 // These are all the binary checks. The hash is checked apart, in src/mcp-bin.ts: it shows the file
 // is the one that was hashed, not who wrote it.
 import { own } from "./own.js";
+import { ANCHOR_LOST } from "./status.js";
 import { parseZoned } from "./strict.js";
 import type { EscrowState, Snapshot } from "./types.js";
 
@@ -190,11 +191,14 @@ const AGREEMENTS: readonly (readonly [string, (s: Snapshot) => boolean])[] = [
   // reset_detected says what the readings allow (RULES.md 1.1).
   ["status.reset-false-on-the-pinned-genesis", (s) => s.status.reset_detected !== false || (s.status.genesis.faucet === s.status.genesis.pinned && s.status.genesis.rpc === s.status.genesis.pinned)],
   ["status.reset-false-with-both-heights", (s) => s.status.reset_detected !== false || (s.status.finalized_height !== null && s.status.best_height !== null)],
+  // True only from another genesis, or from a lost anchor, a reset that kept the genesis: its
+  // conflict ends with ANCHOR_LOST (RULES.md 1.1).
   [
-    "status.reset-true-on-another-genesis",
+    "status.reset-true-on-another-genesis-or-a-lost-anchor",
     (s) => {
       const g = s.status.genesis;
-      return s.status.reset_detected !== true || (g.faucet !== null && g.faucet !== g.pinned) || (g.rpc !== null && g.rpc !== g.pinned);
+      const lost = s.status.conflicts.some((c) => c.endsWith(`: ${ANCHOR_LOST}`));
+      return s.status.reset_detected !== true || (g.faucet !== null && g.faucet !== g.pinned) || (g.rpc !== null && g.rpc !== g.pinned) || lost;
     },
   ],
   ["status.lag-adds-up", (s) => s.status.finality_lag === lagOf(s.status.finalized_height, s.status.best_height)],

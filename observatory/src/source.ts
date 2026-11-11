@@ -15,6 +15,7 @@ import { join } from "node:path";
 import { readRegularFile } from "./files.js";
 import { MAX_NESTING, duplicateKey, nestingDepth } from "./strict.js";
 import type {
+  AnchorReading,
   EventPage,
   FaucetChainBody,
   FaucetHealthBody,
@@ -33,6 +34,11 @@ export interface Source {
   faucetChain(): Promise<HttpResult<FaucetChainBody>>;
   gatewayModels(): Promise<HttpResult<unknown>>;
   rpcHead(): Promise<RpcHead>;
+  /**
+   * The anchor read back, or null when none was read: a first run, a log with no finalized head on
+   * the pinned genesis, or a source that reads no network (every fixture source).
+   */
+  anchorBlock(): Promise<AnchorReading | null>;
   runtimeConstants(): Promise<RuntimeConstants | null>;
   /** Raw event pages, verbatim. Retained so any count can be recomputed from them. */
   eventPages(): Promise<EventPage[]>;
@@ -292,6 +298,11 @@ export class FixtureSource implements Source {
 
   async rpcHead(): Promise<RpcHead> {
     return this.data.rpcHead ?? unknownHead();
+  }
+
+  /** Saved readings hold no anchor: the anchor is read back live only. */
+  async anchorBlock(): Promise<AnchorReading | null> {
+    return null;
   }
 
   async runtimeConstants(): Promise<RuntimeConstants | null> {

@@ -6,9 +6,10 @@ import { census } from "../src/census.js";
 import { escrowStates } from "../src/escrow.js";
 import { LiveSource } from "../src/live-source.js";
 import { DEVNET_GENESIS, networkStatus } from "../src/status.js";
-import { TapeError, TapeTransport } from "../src/tape.js";
+import { type TapeAnswer, TapeError, TapeTransport } from "../src/tape.js";
 import type { Transport } from "../src/transport.js";
 import type { NetworkStatus, Trust } from "../src/types.js";
+import { answeringAnchor } from "./helpers/tapes.js";
 
 const FIXTURES = new URL("../fixtures/", import.meta.url);
 const OTHER = "0x1111111111111111111111111111111111111111111111111111111111111111";
@@ -209,6 +210,47 @@ describe("LiveSource over synthetic tapes", () => {
       "chain_getHeader []",
       `state_getRuntimeVersion ["${F}"]`,
     ]);
+  });
+
+  describe("the anchor: one earlier finalized block read back by its height, after the head (RULES.md 1.1)", () => {
+    // live-healthy is a first run's tape: it holds no anchor call. Each test gives the answer, synthetic.
+    const anchored = (answer: TapeAnswer) => answeringAnchor(tapeOf("live-healthy"), () => answer);
+
+    it("with an anchor, calls chain_getBlockHash at its height after every head call, and only then", async () => {
+      const calls: string[] = [];
+      const t = tapeOf("live-healthy");
+      const spy: Transport = { ...withTrust(t, "fixture"), rpc: (m, p) => (calls.push(`${m} ${JSON.stringify(p)}`), t.rpc(m, p)) };
+      const s = new LiveSource(answeringAnchor(spy, (h) => (calls.push(`answered ${h}`), { result: F })), 3429000);
+      await s.read();
+      expect(calls).toEqual(["system_chain []", "chain_getBlockHash [0]", "chain_getFinalizedHead []", `chain_getHeader ["${F}"]`, "chain_getHeader []", `state_getRuntimeVersion ["${F}"]`, "answered 3429000"]);
+      expect(await s.anchorBlock()).toEqual({ height: 3429000, hash: F, error: null });
+      // Only the snapshot clock read is left.
+      expect(t.remaining()).toBe(1);
+    });
+
+    it("keeps the answer as given, null included, and a failure on the way as the read's error", async () => {
+      for (const [answer, reading] of [
+        [{ result: null }, { height: 3429000, hash: null, error: null }],
+        [{ result: 42 }, { height: 3429000, hash: 42, error: null }],
+        [{ error: "rpc socket error" }, { height: 3429000, hash: null, error: "rpc socket error" }],
+      ] as const) {
+        const s = new LiveSource(anchored(answer), 3429000);
+        expect(await s.anchorBlock()).toEqual(reading);
+      }
+    });
+
+    it("with none, makes no call and reads none", async () => {
+      const t = tapeOf("live-healthy");
+      const s = new LiveSource(t);
+      await s.read();
+      expect([await s.anchorBlock(), t.remaining()]).toEqual([null, 1]);
+    });
+
+    it("a tape recorded with no anchor call is never read as one that answered: the replay refuses", async () => {
+      await expect(new LiveSource(tapeOf("live-healthy"), 3429000).read()).rejects.toThrow(
+        "request 10 is rpc chain_getBlockHash [3429000], but the next one on the tape is the clock",
+      );
+    });
   });
 
   it("reads no event pages, so a census is partial over its whole range and every escrow unverified, never no events", async () => {

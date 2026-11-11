@@ -1,8 +1,11 @@
 # Live network status for FLOP devnet, read only. Each run reads the published log (log/ on the
 # branch observatory-data), then the devnet RPC, the faucet's GET /health and GET /chain and the
-# gateway's GET /v1/models once. It writes a networkStatus snapshot built on every snapshot in that
-# log, whose trust is "trusted RPC" (it trusts one RPC endpoint; it is not proof), the snapshot's one
-# new line of the log, a tape of exactly what it read, run.json and SHA256SUMS, and uploads them as
+# gateway's GET /v1/models once. When the log holds a finalized head on the pinned genesis, the run
+# then reads one block back, at the latest finalized height logged, by chain_getBlockHash, and
+# compares its hash with the logged one (the anchor, observatory/RULES.md 1.1). It writes a
+# networkStatus snapshot built on every snapshot in that log, whose trust is "trusted RPC" (it
+# trusts one RPC endpoint; it is not proof), the snapshot's one new line of the log, a tape of
+# exactly what it read, run.json and SHA256SUMS, and uploads them as
 # an artifact. The data branch is checked out read only, without credentials. When it does not
 # exist the run is a first run. A log that cannot be read or whose chain breaks is refused: the run
 # writes no snapshot and fails, and it never starts a new log over it.

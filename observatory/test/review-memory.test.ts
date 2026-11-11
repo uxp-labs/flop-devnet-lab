@@ -10,9 +10,12 @@ import { parseLiveArgs, runLive } from "../src/live-run.js";
 import { hashSnapshot, logLine } from "../src/store.js";
 import { TapeTransport } from "../src/tape.js";
 import type { Snapshot } from "../src/types.js";
+import { anchoredAs } from "./helpers/tapes.js";
 
 const FIXTURES = new URL("../fixtures/", import.meta.url);
-const tape = (dir: string) => TapeTransport.parse(readFileSync(new URL(`${dir}/tape.jsonl`, FIXTURES), "utf8"), `tape:${dir}`);
+// Each tape was recorded before runs read an anchor back: on a log, the anchor is answered as the
+// fixture's own chain would answer it, synthetic (test/helpers/tapes.ts).
+const tape = (dir: string) => anchoredAs(dir, TapeTransport.parse(readFileSync(new URL(`${dir}/tape.jsonl`, FIXTURES), "utf8"), `tape:${dir}`));
 const CLOCK = () => "2026-11-11T09:00:00.000Z";
 
 let box: string;

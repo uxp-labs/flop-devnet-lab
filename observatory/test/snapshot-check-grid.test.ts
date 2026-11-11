@@ -194,9 +194,15 @@ const GRIDS: readonly (readonly [string, Record<string, readonly Json[]>, (s: Js
   ["seq and prev_hash", { seq: [0, 1, 2], prev: [null, "ab".repeat(32)] }, (s, v) => ((s.seq = v.seq), (s.prev_hash = v.prev))],
   [
     "reset_detected and the genesis readings",
-    { reset: [true, false, null], faucet: [P, O, Q, null], rpc: [P, O, Q, null] },
+    {
+      reset: [true, false, null],
+      faucet: [P, O, Q, null],
+      rpc: [P, O, Q, null],
+      // A lost anchor's conflict, its words inside another, and another conflict.
+      conflicts: [[], ["finalized block 9 was the logged hash, and the node now has no block at that height: the finalized chain is not the one the log saw"], ["the finalized chain is not the one the log saw, they say"], ["best below finalized"]],
+    },
     (s, v) => {
-      Object.assign(s.status, { reset_detected: v.reset });
+      Object.assign(s.status, { reset_detected: v.reset, conflicts: v.conflicts });
       Object.assign(s.status.genesis, { faucet: v.faucet, rpc: v.rpc });
       s.pin.genesis = v.rpc;
       for (const e of s.escrows) e.finalized_height = null;

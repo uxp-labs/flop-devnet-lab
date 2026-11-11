@@ -22,7 +22,7 @@
     },
     "reset_detected": {
       "type": ["boolean", "null"],
-      "description": "true: some source reports a genesis other than the pinned one. false: both faucet and RPC report the pinned genesis. null: not enough evidence. Treat null like true before any spend."
+      "description": "true: some source reports a genesis other than the pinned one, or a live run found that the node no longer holds a finalized block the log saw (a conflict says so). false: both faucet and RPC report the pinned genesis. null: not enough evidence. Treat null like true before any spend."
     },
     "conflicts": { "type": "array", "items": { "type": "string" }, "description": "Disagreements between sources, in plain words." },
     "finalized_height": { "type": ["integer", "null"], "minimum": 0 },

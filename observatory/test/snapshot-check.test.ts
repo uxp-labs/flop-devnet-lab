@@ -264,8 +264,20 @@ const CASES: readonly (readonly [string, (s: Json) => void, readonly string[]])[
     },
     ["status.reset-false-with-both-heights"],
   ],
-  ["reset_detected true on the pinned genesis", (s) => (s.status.reset_detected = true), ["status.reset-true-on-another-genesis"]],
-  ["reset_detected true with no faucet genesis", (s) => ((s.status.genesis.faucet = null), (s.status.reset_detected = true)), ["status.reset-true-on-another-genesis"]],
+  ["reset_detected true on the pinned genesis", (s) => (s.status.reset_detected = true), ["status.reset-true-on-another-genesis-or-a-lost-anchor"]],
+  // A lost anchor is a reset that kept the genesis (RULES.md 1.1): its conflict carries the rule.
+  [
+    "reset_detected true on the pinned genesis, with a lost anchor's conflict",
+    (s) => ((s.status.reset_detected = true), (s.status.conflicts = [`finalized block 9 was ${OTHER} when an earlier snapshot logged it, and the node now has no block at that height: the finalized chain is not the one the log saw`])),
+    [],
+  ],
+  ["reset_detected true on the pinned genesis, with a conflict that is no lost anchor's", (s) => ((s.status.reset_detected = true), (s.status.conflicts = ["finalized height went backwards from 9 to 8 on the same genesis"])), ["status.reset-true-on-another-genesis-or-a-lost-anchor"]],
+  [
+    "reset_detected true on the pinned genesis, with a lost anchor's words inside another conflict",
+    (s) => ((s.status.reset_detected = true), (s.status.conflicts = ["it is said that the finalized chain is not the one the log saw, but not here"])),
+    ["status.reset-true-on-another-genesis-or-a-lost-anchor"],
+  ],
+  ["reset_detected true with no faucet genesis", (s) => ((s.status.genesis.faucet = null), (s.status.reset_detected = true)), ["status.reset-true-on-another-genesis-or-a-lost-anchor"]],
   [
     "reset_detected true with no rpc genesis",
     (s) => {
@@ -274,7 +286,7 @@ const CASES: readonly (readonly [string, (s: Json) => void, readonly string[]])[
       s.status.reset_detected = true;
       for (const e of s.escrows) e.finalized_height = null;
     },
-    ["status.reset-true-on-another-genesis"],
+    ["status.reset-true-on-another-genesis-or-a-lost-anchor"],
   ],
   ["a lag that does not add up", (s) => (s.status.finality_lag = 99), ["status.lag-adds-up"]],
   ["no lag though both heights are read", (s) => (s.status.finality_lag = null), ["status.lag-adds-up"]],

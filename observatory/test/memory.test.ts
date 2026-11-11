@@ -15,6 +15,7 @@ import { hashSnapshot, logLine, readDayLog } from "../src/store.js";
 import { TapeTransport } from "../src/tape.js";
 import type { Transport } from "../src/transport.js";
 import type { NetworkStatus, Snapshot } from "../src/types.js";
+import { anchoredAs } from "./helpers/tapes.js";
 
 const FIXTURES = new URL("../fixtures/", import.meta.url);
 const fixture = (dir: string, name: string) => readFileSync(new URL(`${dir}/${name}`, FIXTURES), "utf8");
@@ -38,9 +39,15 @@ function asLive(inner: Transport): Transport {
 }
 
 const tapeOf = (dir: string) => TapeTransport.parse(fixture(dir, "tape.jsonl"), `tape:${dir}`);
+/**
+ * A fixture's tape, with the anchor answered as its own chain would answer it: these tapes were
+ * recorded before runs read an anchor back, so on a log that names one the answer is synthetic
+ * (test/helpers/tapes.ts says each one and why). A first run asks for none.
+ */
+const replayOf = (dir: string) => anchoredAs(dir, tapeOf(dir));
 
 /** One run of a fixture's tape into a new folder, on the log folder given. */
-async function run(dir: string, log: string, name = dir, transport: Transport = tapeOf(dir), sourceSha: string | null = null) {
+async function run(dir: string, log: string, name = dir, transport: Transport = replayOf(dir), sourceSha: string | null = null) {
   const out = join(box, "runs", name);
   const r = await runLive(transport, { out, log, sourceSha, clock: CLOCK });
   return { out, r, runJson: JSON.parse(readFileSync(join(out, "run.json"), "utf8")) as Record<string, unknown> };
@@ -102,6 +109,9 @@ describe("real readings from the data branch", () => {
     const first = json<Snapshot>(FIRST, "snapshot.json");
     const recorded = json<Snapshot>(SECOND, "snapshot.json");
     const log = publishedLog(FIRST);
+    // The real tape holds no anchor call: the anchor, the first reading's block 3457487, is answered
+    // with the hash the first reading logged there (synthetic; test/anchor.test.ts shows the bare
+    // tape refused on this log).
     const { out, r, runJson } = await run(SECOND, log);
     const s = r.snapshot as Snapshot;
     expect([r.code, s.seq, s.prev_hash]).toEqual([EXIT.ok, 1, first.hash]);
@@ -144,6 +154,12 @@ function firstStatus(seconds: number): NetworkStatus {
 
 const F = "0x39ec5c58218ed6f195942411d94a1d7d1198a3c8421f0eaf5a3f68ff7b31a23f";
 const OTHER = "0x" + "5e".repeat(32);
+// The anchor these readings read back is the first real reading's finalized head. Their tapes hold no
+// anchor call, so each answer is synthetic, as each one's own chain would give it (test/helpers/tapes.ts).
+const was = `finalized block 3457487 was ${F} when an earlier snapshot logged it, and the node now`;
+const LOST = "the finalized chain is not the one the log saw";
+const GONE = `${was} has no block at that height: ${LOST}`;
+const NOT_ON_CHAIN = "the finalized block an earlier snapshot logged at 3457487 is not on the node's chain";
 
 /** Each synthetic second reading: its status on top of the first real reading, and its exit code. */
 const SECONDS: [string, NetworkStatus, number][] = [
@@ -151,12 +167,13 @@ const SECONDS: [string, NetworkStatus, number][] = [
     "memory-finalized-below-floor",
     {
       ...firstStatus(1800),
-      reset_detected: null,
-      conflicts: ["finalized height went backwards from 3457487 to 3457477 on the same genesis"],
+      // The chain is below the anchor too: no block there, a reset that kept the genesis.
+      reset_detected: true,
+      conflicts: [GONE, "finalized height went backwards from 3457487 to 3457477 on the same genesis"],
       finalized_height: 3457477,
       finalized_hash: "0x" + "f1".repeat(32),
       best_height: 3457481,
-      rpc: { ...firstStatus(1800).rpc, health: "degraded", detail: "finalized height went backwards", stale: false },
+      rpc: { ...firstStatus(1800).rpc, health: "degraded", detail: `finalized height went backwards; ${NOT_ON_CHAIN}`, stale: false },
     },
     EXIT.reset,
   ],
@@ -164,11 +181,12 @@ const SECONDS: [string, NetworkStatus, number][] = [
     "memory-changed-hash",
     {
       ...firstStatus(1800),
-      reset_detected: null,
-      conflicts: ["finalized block 3457487 changed hash since the previous snapshot"],
+      // The anchor is this very block, read back under its new hash.
+      reset_detected: true,
+      conflicts: [`${was} gives ${"0x" + "c4".repeat(32)} at that height: ${LOST}`, "finalized block 3457487 changed hash since the previous snapshot"],
       finalized_hash: "0x" + "c4".repeat(32),
       // The stuck check runs on a head that changed its hash too (RULES.md 1.1).
-      rpc: { ...firstStatus(1800).rpc, health: "degraded", detail: "finalized block changed; finalized height stuck at 3457487 for 1806s", stale: true },
+      rpc: { ...firstStatus(1800).rpc, health: "degraded", detail: `finalized block changed; finalized height stuck at 3457487 for 1806s; ${NOT_ON_CHAIN}`, stale: true },
     },
     EXIT.reset,
   ],
@@ -176,8 +194,10 @@ const SECONDS: [string, NetworkStatus, number][] = [
     "memory-best-below-floor",
     {
       ...firstStatus(1800),
-      reset_detected: null,
+      // A best block below the anchor: no block there.
+      reset_detected: true,
       conflicts: [
+        GONE,
         "best block 3457400 is below the finalized height 3457487 an earlier snapshot saw on this genesis",
         "best block 3457400 is more than 30 blocks below the best block 3457491 an earlier snapshot saw on this genesis",
       ],
@@ -189,7 +209,7 @@ const SECONDS: [string, NetworkStatus, number][] = [
       rpc: {
         ...firstStatus(1800).rpc,
         health: "degraded",
-        detail: "best height is below an earlier finalized height; best height fell further than the lag limit below an earlier best height; no valid finalized head",
+        detail: `best height is below an earlier finalized height; best height fell further than the lag limit below an earlier best height; ${NOT_ON_CHAIN}; no valid finalized head`,
         stale: false,
       },
     },
@@ -219,7 +239,9 @@ const SECONDS: [string, NetworkStatus, number][] = [
       rpc: {
         ...firstStatus(900).rpc,
         health: "down",
-        detail: "chain_getBlockHash(0): rpc socket error; chain_getFinalizedHead(): rpc socket error; chain_getHeader(): rpc socket error",
+        // The anchor read failed with the socket: no verdict, said after the head's own errors.
+        detail:
+          "chain_getBlockHash(0): rpc socket error; chain_getFinalizedHead(): rpc socket error; chain_getHeader(): rpc socket error; the anchor, finalized block 3457487 an earlier snapshot logged, could not be read back (chain_getBlockHash(3457487): rpc socket error), so whether the finalized chain is the one the log saw is unknown",
         stale: null,
       },
     },
@@ -231,6 +253,9 @@ const SECONDS: [string, NetworkStatus, number][] = [
       ...firstStatus(1800),
       genesis: { pinned: firstStatus(0).genesis.pinned, faucet: OTHER, rpc: OTHER },
       reset_detected: true,
+      // The new chain holds no block at the anchor's height either.
+      conflicts: [GONE],
+      rpc: { ...firstStatus(1800).rpc, health: "degraded", detail: NOT_ON_CHAIN },
       finalized_height: 120,
       finalized_hash: "0x" + "a0".repeat(32),
       best_height: 124,
@@ -272,14 +297,15 @@ describe("synthetic second readings on top of the first real one", () => {
     publish(down.out, log);
     const { r } = await run("memory-finalized-below-floor", log);
     const s = r.snapshot as Snapshot;
-    expect([r.code, s.seq, s.status.conflicts]).toEqual([EXIT.reset, 2, ["finalized height went backwards from 3457487 to 3457477 on the same genesis"]]);
+    expect([r.code, s.seq, s.status.conflicts]).toEqual([EXIT.reset, 2, [GONE, "finalized height went backwards from 3457487 to 3457477 on the same genesis"]]);
   });
 
   it("another genesis after a logged one: the logged heads set no floor on the new chain, and the log still chains", async () => {
     const log = publishedLog(FIRST);
     const { out, r } = await run("memory-other-genesis", log);
-    // Finalized 120 under a floor of 3457487 is no rollback: the floor is per genesis.
-    expect((r.snapshot as Snapshot).status.conflicts).toEqual([]);
+    // Finalized 120 under a floor of 3457487 is no rollback: the floor is per genesis. The only
+    // conflict is the anchor's: the new chain has no block at the height the log holds.
+    expect((r.snapshot as Snapshot).status.conflicts).toEqual([GONE]);
     publish(out, log);
     expect(readHistory(log).snapshots.length).toBe(2);
   });
@@ -297,7 +323,7 @@ describe("a published log the run cannot build on", () => {
   /** A run on the log given that must be refused: no network read, no snapshot, and why in run.json. */
   async function refused(log: string, state: string, detail: string) {
     let reads = 0;
-    const counting: Transport = { ...asLive(tapeOf(SECOND)), rpc: async () => (reads++, null), httpGet: async () => (reads++, { http: null, body: null, error: "x", fetched_at: null }) };
+    const counting: Transport = { ...asLive(replayOf(SECOND)), rpc: async () => (reads++, null), httpGet: async () => (reads++, { http: null, body: null, error: "x", fetched_at: null }) };
     const { out, r, runJson } = await run(SECOND, log, "refused", counting);
     expect([r.code, r.snapshot, r.notice, reads]).toEqual([EXIT.crashed, null, null, 0]);
     expect(r.reason).toBe(`the published log was refused (${state}), so nothing was read and no snapshot was written: ${detail}`);
@@ -372,7 +398,7 @@ describe("a published log the run cannot build on", () => {
 describe("the reader contract over a reading built on the log", () => {
   /** The output folder of the second real reading built on the first, as a consumer holds latest/. */
   async function latest(): Promise<Record<string, string>> {
-    const { out } = await run(SECOND, publishedLog(FIRST), "latest", asLive(tapeOf(SECOND)));
+    const { out } = await run(SECOND, publishedLog(FIRST), "latest", asLive(replayOf(SECOND)));
     return Object.fromEntries(readdirSync(out).map((n) => [n, readFileSync(join(out, n), "utf8")]));
   }
   const NOW = "2026-11-11T08:30:00.000Z";

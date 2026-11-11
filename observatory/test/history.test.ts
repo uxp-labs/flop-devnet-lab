@@ -8,6 +8,7 @@ import { logLine, sealSnapshot } from "../src/store.js";
 import type { Snapshot } from "../src/types.js";
 
 const G = "0x" + "ab".repeat(32);
+const OTHER = "0x" + "cd".repeat(32);
 const H = (n: number) => "0x" + n.toString(16).padStart(64, "0");
 
 let box: string;
@@ -19,7 +20,7 @@ afterEach(() => {
 });
 
 /** A snapshot as a run writes it, with the head values the history reads. */
-function reading(at: string, head: { genesis: string | null; finalized: number | null; best: number | null; headAt?: string | null }): Omit<Snapshot, "hash" | "seq" | "prev_hash"> {
+function reading(at: string, head: { genesis: string | null; finalized: number | null; best: number | null; headAt?: string | null; spec?: number | null }): Omit<Snapshot, "hash" | "seq" | "prev_hash"> {
   return {
     schema: "flop-observatory/snapshot@0",
     observed_at: at,
@@ -36,7 +37,7 @@ function reading(at: string, head: { genesis: string | null; finalized: number |
       finalized_hash: head.finalized === null ? null : H(head.finalized),
       best_height: head.best,
       finality_lag: head.finalized !== null && head.best !== null && head.best >= head.finalized ? head.best - head.finalized : null,
-      runtime_version: null,
+      runtime_version: head.spec ?? null,
       rpc: { health: "unknown", http: null, detail: null, observed_at: head.headAt === undefined ? at : head.headAt, stale: null },
       gateway: { health: "unknown", http: null, detail: null, observed_at: null },
       faucet: { health: "unknown", http: null, detail: null, observed_at: null, ready: null, limits: null },
@@ -68,7 +69,7 @@ describe("earlierOf", () => {
       reading("2026-01-01T01:00:00.000Z", { genesis: G, finalized: null, best: 20 }),
       reading("2026-01-01T01:30:00.000Z", { genesis: G, finalized: 30, best: 31, headAt: null }),
     );
-    expect(earlierOf(ss)).toEqual({
+    expect(earlierOf(ss, G)).toEqual({
       previous: [
         { genesis: G, finalized_height: 10, finalized_hash: H(10), observed_at: "2026-01-01T00:00:00.000Z" },
         { genesis: G, finalized_height: 30, finalized_hash: H(30), observed_at: null },
@@ -79,8 +80,43 @@ describe("earlierOf", () => {
         { genesis: G, best_height: 20 },
         { genesis: G, best_height: 31 },
       ],
+      earlierSpec: [],
+      anchor: { height: 30, hash: H(30) },
     });
-    expect(earlierOf([])).toEqual({ previous: [], earlierTimes: [], earlierBest: [] });
+    expect(earlierOf([], G)).toEqual({ previous: [], earlierTimes: [], earlierBest: [], earlierSpec: [], anchor: null });
+  });
+
+  it("passes every runtime version an earlier snapshot read on a genesis, oldest first, as the spec floor's input", () => {
+    const ss = chainOf(
+      reading("2026-01-01T00:00:00.000Z", { genesis: G, finalized: 10, best: 12, spec: 1011003 }),
+      reading("2026-01-01T00:30:00.000Z", { genesis: null, finalized: null, best: null, spec: 9 }),
+      reading("2026-01-01T01:00:00.000Z", { genesis: G, finalized: null, best: 20, spec: null }),
+      reading("2026-01-01T01:30:00.000Z", { genesis: OTHER, finalized: 3, best: 4, spec: 7 }),
+      reading("2026-01-01T02:00:00.000Z", { genesis: G, finalized: 30, best: 31, spec: 1014014 }),
+    );
+    expect(earlierOf(ss, G).earlierSpec).toEqual([
+      { genesis: G, runtime_version: 1011003 },
+      { genesis: OTHER, runtime_version: 7 },
+      { genesis: G, runtime_version: 1014014 },
+    ]);
+  });
+
+  it("the anchor is the latest finalized head an earlier snapshot logged on the pinned genesis, whatever came after it", () => {
+    const ss = chainOf(
+      reading("2026-01-01T00:00:00.000Z", { genesis: G, finalized: 10, best: 12 }),
+      reading("2026-01-01T00:30:00.000Z", { genesis: G, finalized: 40, best: 41 }),
+      // The latest, not the highest: a log that holds a lower one after a higher one is judged by the floor.
+      reading("2026-01-01T01:00:00.000Z", { genesis: G, finalized: 30, best: 31 }),
+      // A reading with the RPC down, one on another genesis and one with no finalized head: none is an anchor.
+      reading("2026-01-01T01:30:00.000Z", { genesis: null, finalized: null, best: null }),
+      reading("2026-01-01T02:00:00.000Z", { genesis: OTHER, finalized: 50, best: 51 }),
+      reading("2026-01-01T02:30:00.000Z", { genesis: G, finalized: null, best: 60 }),
+    );
+    expect(earlierOf(ss, G).anchor).toEqual({ height: 30, hash: H(30) });
+    // On another pinned genesis, that genesis's own latest head.
+    expect(earlierOf(ss, OTHER).anchor).toEqual({ height: 50, hash: H(50) });
+    // No finalized head on the pinned genesis: no anchor, so no call is made.
+    expect(earlierOf(ss.slice(3), G).anchor).toBeNull();
   });
 });
 

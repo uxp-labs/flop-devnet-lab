@@ -1,0 +1,226 @@
+[
+  {
+    "id": "history-anchor-on-any-genesis",
+    "file": "src/history.ts",
+    "find": "previous.findLast((p) => p.genesis === pinned)",
+    "replace": "previous.at(-1)",
+    "test": "test/history.test.ts",
+    "why": "the anchor is a finalized head logged on the pinned genesis, not one on another chain"
+  },
+  {
+    "id": "history-anchor-oldest-not-latest",
+    "file": "src/history.ts",
+    "find": "previous.findLast((p) => p.genesis === pinned)",
+    "replace": "previous.find((p) => p.genesis === pinned)",
+    "test": "test/history.test.ts",
+    "why": "the anchor is the latest finalized head the log holds on the pinned genesis"
+  },
+  {
+    "id": "history-spec-not-passed",
+    "file": "src/history.ts",
+    "find": "if (st.genesis.rpc !== null && st.runtime_version !== null) earlierSpec.push(",
+    "replace": "if (false) earlierSpec.push(",
+    "test": "test/history.test.ts",
+    "why": "every runtime version an earlier snapshot read on a genesis reaches the spec floor"
+  },
+  {
+    "id": "status-spec-floor-off",
+    "file": "src/status.ts",
+    "find": "if (highestSpec !== null && spec !== null && spec < highestSpec) {",
+    "replace": "if (false) {",
+    "test": "test/status.test.ts",
+    "why": "a runtime version below the highest one seen on this genesis is a conflict"
+  },
+  {
+    "id": "status-spec-floor-any-genesis",
+    "file": "src/status.ts",
+    "find": "(earlierSpec ?? []).filter((p) => p.genesis === genesis)",
+    "replace": "(earlierSpec ?? [])",
+    "test": "test/status.test.ts",
+    "why": "versions read on another genesis set no floor"
+  },
+  {
+    "id": "status-spec-floor-latest-only",
+    "file": "src/status.ts",
+    "find": "specSeen.reduce((m, v) => Math.max(m, v), -Infinity)",
+    "replace": "(specSeen.at(-1) as number)",
+    "test": "test/status.test.ts",
+    "why": "the spec floor is the highest version ever seen on this genesis, not the latest"
+  },
+  {
+    "id": "status-spec-upgrade-is-conflict",
+    "file": "src/status.ts",
+    "find": "spec !== null && spec < highestSpec",
+    "replace": "spec !== null && spec !== highestSpec",
+    "test": "test/status.test.ts",
+    "why": "a higher runtime version is an upgrade, never a conflict"
+  },
+  {
+    "id": "status-spec-below-floor-usable",
+    "file": "src/status.ts",
+    "find": "problems.push(\"runtime version went backwards\");\n    flags.contradicted = true;",
+    "replace": "problems.push(\"runtime version went backwards\");",
+    "test": "test/status.test.ts",
+    "why": "a head whose runtime version went backwards is not usable"
+  },
+  {
+    "id": "status-anchor-lost-not-reset",
+    "file": "src/status.ts",
+    "find": "anchor.kind === \"lost\" ? true : resetDetected(pinned, faucetGenesis, rpcForReset)",
+    "replace": "resetDetected(pinned, faucetGenesis, rpcForReset)",
+    "test": "test/status.test.ts",
+    "why": "a lost anchor is a reset that kept the genesis: reset_detected true"
+  },
+  {
+    "id": "status-anchor-lost-usable",
+    "file": "src/status.ts",
+    "find": "conflicts.push(anchor.conflict);\n    flags.contradicted = true;",
+    "replace": "conflicts.push(anchor.conflict);",
+    "test": "test/status.test.ts",
+    "why": "a head whose node lost the logged anchor is not usable"
+  },
+  {
+    "id": "status-anchor-lost-no-conflict",
+    "file": "src/status.ts",
+    "find": "conflicts.push(anchor.conflict);",
+    "replace": "",
+    "test": "test/status.test.ts",
+    "why": "a lost anchor is a conflict, in words that name the height, the logged hash and the answer"
+  },
+  {
+    "id": "status-anchor-unknown-counts-false",
+    "file": "src/status.ts",
+    "find": "(flags.stuck === false && anchor.kind !== \"unknown\")",
+    "replace": "flags.stuck === false",
+    "test": "test/status.test.ts",
+    "why": "an anchor read with no verdict never lets reset_detected be false"
+  },
+  {
+    "id": "status-anchor-null-no-verdict",
+    "file": "src/status.ts",
+    "find": "if (read.hash === null) return lost(\"has no block at that height\");",
+    "replace": "if (read.hash === null) return unknown(\"was read back as no block hash\");",
+    "test": "test/status.test.ts",
+    "why": "no block at the anchor's height is a lost anchor, not a read with no verdict"
+  },
+  {
+    "id": "status-anchor-odd-answer-lost",
+    "file": "src/status.ts",
+    "find": "if (hash === null) return unknown(\"was read back as no block hash\");",
+    "replace": "if (hash === null) return lost(\"has no block at that height\");",
+    "test": "test/status.test.ts",
+    "why": "an answer that is no block hash gives no verdict, never a conflict"
+  },
+  {
+    "id": "status-anchor-error-ignored",
+    "file": "src/status.ts",
+    "find": "  if (read.error !== null) return unknown(`could not be read back (chain_getBlockHash(${h}): ${read.error})`);\n",
+    "replace": "",
+    "test": "test/status.test.ts",
+    "why": "a read that failed on the way gives no verdict, and says why"
+  },
+  {
+    "id": "status-anchor-other-hash-same",
+    "file": "src/status.ts",
+    "find": "return hash === logged.hash ? { kind: \"same\" } : lost(`gives ${hash} at that height`);",
+    "replace": "return { kind: \"same\" };",
+    "test": "test/status.test.ts",
+    "why": "another hash at the anchor's height is a lost anchor"
+  },
+  {
+    "id": "status-anchor-height-unchecked",
+    "file": "src/status.ts",
+    "find": "if (logged === null || logged.height !== read.height) throw",
+    "replace": "if (logged === null) throw",
+    "test": "test/status.test.ts",
+    "why": "the anchor read back is judged only against the logged anchor at its own height"
+  },
+  {
+    "id": "status-anchor-note-dropped-when-down",
+    "file": "src/status.ts",
+    "find": "detail: anchorNote === null ? said : `${said}; ${anchorNote}`,",
+    "replace": "detail: said,",
+    "test": "test/status.test.ts",
+    "why": "with the RPC down, the detail still says the anchor could not be read"
+  },
+  {
+    "id": "status-anchor-unknown-health-ok",
+    "file": "src/status.ts",
+    "find": "if (anchor.kind === \"unknown\") cannotRun.push(anchor.note);",
+    "replace": "",
+    "test": "test/status.test.ts",
+    "why": "an anchor check that could not run leaves health unknown and says why"
+  },
+  {
+    "id": "live-source-anchor-skipped",
+    "file": "src/live-source.ts",
+    "find": "const anchor = h === null ? null : anchorFrom(h, await this.call(\"chain_getBlockHash\", [h]));",
+    "replace": "const anchor = null;",
+    "test": "test/live-source.test.ts",
+    "why": "a run given an anchor reads it back"
+  },
+  {
+    "id": "live-source-anchor-wrong-height",
+    "file": "src/live-source.ts",
+    "find": "await this.call(\"chain_getBlockHash\", [h])",
+    "replace": "await this.call(\"chain_getBlockHash\", [h + 1])",
+    "test": "test/live-source.test.ts",
+    "why": "the anchor is read back at the logged height"
+  },
+  {
+    "id": "live-source-anchor-before-head",
+    "file": "src/live-source.ts",
+    "find": "    const rpcHead = await this.readHead();\n    // After the head calls, and only when the log gave one: a first run reads no anchor.\n    const h = this.anchorHeight;\n    const anchor = h === null ? null : anchorFrom(h, await this.call(\"chain_getBlockHash\", [h]));",
+    "replace": "    const h = this.anchorHeight;\n    const anchor = h === null ? null : anchorFrom(h, await this.call(\"chain_getBlockHash\", [h]));\n    const rpcHead = await this.readHead();",
+    "test": "test/live-source.test.ts",
+    "why": "the anchor is read after every head call, in a fixed order"
+  },
+  {
+    "id": "rpc-head-anchor-error-dropped",
+    "file": "src/rpc-head.ts",
+    "find": "\"error\" in a ? { height, hash: null, error: a.error }",
+    "replace": "\"error\" in a ? { height, hash: null, error: null }",
+    "test": "test/live-source.test.ts",
+    "why": "a failed anchor read keeps its error, so it is never read as no block there"
+  },
+  {
+    "id": "live-run-anchor-not-read",
+    "file": "src/live-run.ts",
+    "find": "new LiveSource(recorder, earlier.anchor?.height ?? null)",
+    "replace": "new LiveSource(recorder, null)",
+    "test": "test/anchor.test.ts",
+    "why": "a live run on a log reads back the anchor the log names"
+  },
+  {
+    "id": "live-run-anchor-not-judged",
+    "file": "src/snapshot.ts",
+    "find": "anchor: o.anchor ?? null,",
+    "replace": "anchor: null,",
+    "test": "test/anchor.test.ts",
+    "why": "the anchor the log names reaches the status that judges it"
+  },
+  {
+    "id": "live-run-spec-floor-not-passed",
+    "file": "src/snapshot.ts",
+    "find": "earlierSpec: o.earlierSpec ?? null,",
+    "replace": "earlierSpec: null,",
+    "test": "test/anchor.test.ts",
+    "why": "a live run's spec floor comes from the log"
+  },
+  {
+    "id": "snapshot-check-lost-anchor-refused",
+    "file": "src/snapshot-check.ts",
+    "find": "(g.rpc !== null && g.rpc !== g.pinned) || lost;",
+    "replace": "(g.rpc !== null && g.rpc !== g.pinned);",
+    "test": "test/snapshot-check.test.ts",
+    "why": "a lost anchor's reset_detected true on the pinned genesis is a snapshot the reader serves"
+  },
+  {
+    "id": "snapshot-check-lost-anchor-anywhere",
+    "file": "src/snapshot-check.ts",
+    "find": "c.endsWith(`: ${ANCHOR_LOST}`)",
+    "replace": "c.includes(ANCHOR_LOST)",
+    "test": "test/snapshot-check.test.ts",
+    "why": "only a conflict that ends with the lost anchor's words carries a reset on the pinned genesis"
+  }
+]

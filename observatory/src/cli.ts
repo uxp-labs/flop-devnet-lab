@@ -233,11 +233,11 @@ async function main(): Promise<void> {
     const log = one(a, "--log");
     // RULES.md 1.1: the rollback, changed hash and stuck height checks need the earlier snapshots.
     // They come from the log, and only after the log's whole hash chain verifies (src/history.ts).
-    let earlier: Earlier = { previous: [], earlierTimes: [], earlierBest: [] };
+    let earlier: Earlier = { previous: [], earlierTimes: [], earlierBest: [], earlierSpec: [], anchor: null };
     if (log && existsSync(log)) {
       const broken = verifyChain(log);
       if (broken !== null) fail(`snapshot log ${log} is broken at line ${broken}; it is never extended or trusted`);
-      earlier = earlierOf(readSnapshots(log));
+      earlier = earlierOf(readSnapshots(log), pinned);
     }
     const fresh = await buildSnapshot(
       { status, escrows, census: censusPart, drift: driftPart },

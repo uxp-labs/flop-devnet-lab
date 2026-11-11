@@ -1,4 +1,8 @@
 {
+  "anchor.test.ts": {
+    "tests": 24,
+    "names": "45dd63f7dbdbc4823eac14726d6e91b7d993814bc22a5edcd466d6a02ea403cd"
+  },
   "attempts-check.test.ts": {
     "tests": 12,
     "names": "5271db22d00de405d8b47cd068f20f211490fce67f0f95b7279fbb39431afdb2"
@@ -24,16 +28,16 @@
     "names": "a8eab4e3eedf5630979b31841b7bb2f7f1d3ee302e107659c6433288493f326d"
   },
   "history.test.ts": {
-    "tests": 6,
-    "names": "6623cbc984d353a085253b39f92e932d957de52f3ddf9ab4038ff58d50fbb24e"
+    "tests": 8,
+    "names": "faba1380d542631276c176b31a1f332037b9259350dd83df6b686cc77fadb52a"
   },
   "live-run.test.ts": {
     "tests": 30,
     "names": "0211e19480512e9e4b97504ce65283cdc8b8fc528ac2459c0b4ed56752a60223"
   },
   "live-source.test.ts": {
-    "tests": 26,
-    "names": "552addede8f03700f304243e1513b90c4a452d170f4633c5db01d92bd1d2f653"
+    "tests": 30,
+    "names": "0cc805e96aa35da8cda3e95d798778006e9f83907aeccc7c900e139303622383"
   },
   "live-workflow.test.ts": {
     "tests": 20,
@@ -76,8 +80,8 @@
     "names": "5a272b240add649be9d418c419bfdc6a65b76e7db13154803460d63bc7cb4b41"
   },
   "snapshot-check.test.ts": {
-    "tests": 196,
-    "names": "4fd541e474efe735b93b6c10aa7d4806c73711845dae66ef634d9ead6123d844"
+    "tests": 199,
+    "names": "8ebdc51baf646a1a9b8e6cf0f64ec7dfa40fa19d1ca817bf8bf6970304784b38"
   },
   "snapshot.test.ts": {
     "tests": 22,
@@ -92,8 +96,8 @@
     "names": "de59fc974e7a9ef6ac6ebea8086881c36f93b210d7ada69de6aceadcd5650d81"
   },
   "status.test.ts": {
-    "tests": 121,
-    "names": "c94e3b8330a54c75448e9e0b4ca4014dca2c579ba4a41cf3f1cec9ca51b4f9a5"
+    "tests": 135,
+    "names": "f506539e625f34d2e5dbcc02905f37f4476f82be59bbbb87237679ba396929c0"
   },
   "store.test.ts": {
     "tests": 23,

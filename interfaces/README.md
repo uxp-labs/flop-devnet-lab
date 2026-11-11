@@ -108,7 +108,7 @@ What it answers: is this still the chain we pinned, how far is finality, and are
 |---|---|
 | `schema` | Always `flop-observatory/network-status@0`. |
 | `genesis.pinned`, `.faucet`, `.rpc` | The pinned genesis and what each source reported. `null` means unread. |
-| `reset_detected` | `true`: a usable reading reports another genesis. `false`: a usable faucet `/chain` reading and a usable RPC head both report the pinned one. `null`: not enough evidence. A reading with an error (or no error field), a stale one, one later than the snapshot, an RPC head with no valid finalized head or best height, or one that contradicts itself or an earlier snapshot counts for neither. An RPC head whose finalized height is stuck, or whose stuck check cannot run, never counts toward `false`. |
+| `reset_detected` | `true`: a usable reading reports another genesis, or a live run read back a block an earlier snapshot logged as finalized and the node gives another hash or no block at that height (a conflict says so). `false`: a usable faucet `/chain` reading and a usable RPC head both report the pinned one. `null`: not enough evidence. A reading with an error (or no error field), a stale one, one later than the snapshot, an RPC head with no valid finalized head or best height, or one that contradicts itself or an earlier snapshot counts for neither. An RPC head whose finalized height is stuck, or whose stuck check cannot run, never counts toward `false`, and neither does one whose anchor read gave no verdict. |
 | `conflicts` | Disagreements between sources, in words. |
 | `finalized_height`, `finalized_hash`, `best_height`, `finality_lag` | Chain head as read. `null` when unknown. |
 | `runtime_version` | Runtime spec version, or `null`. |
@@ -141,10 +141,12 @@ Known limits (v0):
   best height an earlier snapshot saw on the same genesis, with or without a finalized head. After
   a finality stall, a long fork that falls away reads the same way, since a restart looks the
   same: `reset_detected` stays `null` until the best height is back within the limit.
-- Those checks against earlier snapshots run in the snapshot command, which reads its log. The
-  `status` command reads no log, and neither does the live command, which keeps nothing between
-  runs: their `reset_detected` speaks for that one reading only, so a gate should read the status
-  the snapshot command writes.
+- Those checks against earlier snapshots run in the snapshot command, which reads its log, and in
+  the live command, which reads the published log. The `status` command reads no log: its
+  `reset_detected` speaks for that one reading only, so a gate should read a status built on a log.
+  A runtime version below the highest one an earlier snapshot saw on the same genesis is a conflict
+  too. Only the live command reads an earlier finalized block back (the anchor): it trusts the same
+  one RPC endpoint, so it catches a chain that changed under the log, not an endpoint that lies.
 - A field of the wrong type (a number for `observed_at`, a string for `http`, a nested object in
   `limits`) reads as `null`, and so does a field an RPC head leaves out.
 - A saved reading that cannot be read (not strict UTF-8 JSON, a key twice in one object, nested

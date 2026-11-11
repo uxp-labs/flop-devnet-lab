@@ -230,7 +230,7 @@ export const AGREEMENT_NAMES: readonly string[] = [
   "snapshot.prev_hash-follows-seq",
   "status.reset-false-on-the-pinned-genesis",
   "status.reset-false-with-both-heights",
-  "status.reset-true-on-another-genesis",
+  "status.reset-true-on-another-genesis-or-a-lost-anchor",
   "status.lag-adds-up",
   "escrows.listed-once",
   "escrow.unverified-holds-no-evidence",
@@ -278,8 +278,10 @@ export function expectedAgreements(s: Json): string[] {
     rule("status.reset-false-on-the-pinned-genesis", g.faucet === g.pinned && g.rpc === g.pinned);
     rule("status.reset-false-with-both-heights", st.finalized_height !== null && st.best_height !== null);
   }
-  // "and true only with a reading on another genesis"
-  if (st.reset_detected === true) rule("status.reset-true-on-another-genesis", [g.faucet, g.rpc].some((x) => x !== null && x !== g.pinned));
+  // "and true only with a reading on another genesis, or with a conflict that ends ": the finalized
+  // chain is not the one the log saw", which a lost anchor gives"
+  if (st.reset_detected === true)
+    rule("status.reset-true-on-another-genesis-or-a-lost-anchor", [g.faucet, g.rpc].some((x) => x !== null && x !== g.pinned) || st.conflicts.some((c: string) => c.endsWith(": the finalized chain is not the one the log saw")));
   // "the finality lag the best height less the finalized one, and none when either is missing or
   // the finalized one is higher"
   const f = st.finalized_height;

@@ -106,16 +106,16 @@
   {
     "id": "live-run-history-not-passed",
     "file": "src/live-run.ts",
-    "find": ", ...earlierOf(history.snapshots) });",
-    "replace": " });",
+    "find": "const earlier = earlierOf(history.snapshots, DEVNET_GENESIS);",
+    "replace": "const earlier = earlierOf([], DEVNET_GENESIS);",
     "test": "test/memory.test.ts",
     "why": "a live snapshot is built on every snapshot in the published log, so the checks against earlier snapshots run"
   },
   {
     "id": "live-run-history-last-day-only",
     "file": "src/live-run.ts",
-    "find": "...earlierOf(history.snapshots)",
-    "replace": "...earlierOf(history.snapshots.slice(-1))",
+    "find": "earlierOf(history.snapshots, DEVNET_GENESIS)",
+    "replace": "earlierOf(history.snapshots.slice(-1), DEVNET_GENESIS)",
     "test": "test/memory.test.ts",
     "why": "every earlier snapshot counts, not only the last"
   },

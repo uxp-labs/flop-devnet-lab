@@ -5,9 +5,10 @@
 // - Health is "ok" only when every check ran and passed (section 1.1).
 // - reset_detected is false only when the faucet and the RPC both report the pinned genesis, from
 //   usable readings, and the RPC's finalized height is known not to be stuck. Any usable source
-//   with a different genesis makes it true. Not enough evidence makes it null.
+//   with a different genesis makes it true, and so does a lost anchor: a live run read back a
+//   finalized block the log saw, and the node no longer holds it. Not enough evidence makes it null.
 // - Disagreements between sources go in `conflicts`, in plain words.
-import type { FaucetHealthBody, Health, HttpResult, NetworkStatus, RpcHead, ServiceStatus } from "./types.js";
+import type { AnchorReading, FaucetHealthBody, Health, HttpResult, NetworkStatus, RpcHead, ServiceStatus } from "./types.js";
 import type { Source } from "./source.js";
 import { isSafeInt, parseZoned, secondsBetween } from "./strict.js";
 
@@ -43,6 +44,31 @@ export interface StatusOptions {
    * than the lag limit on the same genesis).
    */
   earlierBest?: readonly EarlierBest[] | null;
+  /**
+   * The runtime version every earlier snapshot in the log read, with its RPC genesis, oldest first
+   * (RULES.md 1.1: the spec floor). The runtime is upgraded in place, so a lower one is a reset.
+   */
+  earlierSpec?: readonly EarlierSpec[] | null;
+  /**
+   * The latest finalized head an earlier snapshot logged on the pinned genesis (RULES.md 1.1). It is
+   * judged only against an anchor the source read back; a source that read none changes nothing.
+   */
+  anchor?: Anchor | null;
+}
+
+/** One earlier snapshot's runtime version and the RPC genesis it read it on (RULES.md 1.1, the spec floor). */
+export interface EarlierSpec {
+  genesis: string;
+  runtime_version: number;
+}
+
+/**
+ * The anchor (RULES.md 1.1): the latest finalized head an earlier snapshot logged on the pinned
+ * genesis. A live run reads the block hash at its height back and compares it with this hash.
+ */
+export interface Anchor {
+  height: number;
+  hash: string;
 }
 
 /** One earlier snapshot's best height and the RPC genesis it read it on. */
@@ -227,6 +253,38 @@ export function applyFreshness<T extends ServiceStatus>(
   return svc;
 }
 
+/** The words every lost anchor's conflict ends with. src/snapshot-check.ts reads them. */
+export const ANCHOR_LOST = "the finalized chain is not the one the log saw";
+
+/**
+ * What the anchor read back says (RULES.md 1.1). none: no anchor was read. same: the node gives the
+ * logged hash at that height. lost: another hash, or no block at all, so the finalized chain is not
+ * the one the log saw; conflict says so. unknown: the read failed on the way or gave no block hash,
+ * so there is no verdict. note is what the RPC detail says of a lost or unknown anchor.
+ */
+export type AnchorVerdict = { kind: "none" } | { kind: "same" } | { kind: "lost"; conflict: string; note: string } | { kind: "unknown"; note: string };
+
+export function judgeAnchor(logged: Anchor | null, read: AnchorReading | null): AnchorVerdict {
+  if (read === null) return { kind: "none" };
+  // The run reads back the anchor the log names, and no other: anything else is a fault in the run.
+  if (logged === null || logged.height !== read.height) throw new Error(`the anchor read at block ${read.height} is not the one the log names`);
+  const h = read.height;
+  const unknown = (why: string): AnchorVerdict => ({
+    kind: "unknown",
+    note: `the anchor, finalized block ${h} an earlier snapshot logged, ${why}, so whether the finalized chain is the one the log saw is unknown`,
+  });
+  const lost = (now: string): AnchorVerdict => ({
+    kind: "lost",
+    conflict: `finalized block ${h} was ${logged.hash} when an earlier snapshot logged it, and the node now ${now}: ${ANCHOR_LOST}`,
+    note: `the finalized block an earlier snapshot logged at ${h} is not on the node's chain`,
+  });
+  if (read.error !== null) return unknown(`could not be read back (chain_getBlockHash(${h}): ${read.error})`);
+  if (read.hash === null) return lost("has no block at that height");
+  const hash = normalizeHash(read.hash);
+  if (hash === null) return unknown("was read back as no block hash");
+  return hash === logged.hash ? { kind: "same" } : lost(`gives ${hash} at that height`);
+}
+
 /**
  * What classifyRpc finds about a head beyond its health. contradicted: it contradicts itself or an
  * earlier snapshot. stuck: its finalized height has not moved for longer than the stale limit
@@ -248,6 +306,9 @@ export function classifyRpc(
   flags: HeadFlags = { contradicted: false, stuck: false },
   earlierTimes: StatusOptions["earlierTimes"] = null,
   earlierBest: StatusOptions["earlierBest"] = null,
+  earlierSpec: StatusOptions["earlierSpec"] = null,
+  /** What the anchor read back says: see judgeAnchor. */
+  anchor: AnchorVerdict = { kind: "none" },
 ): NetworkStatus["rpc"] {
   // Every earlier head on this genesis counts, in log order, so a snapshot in between with no RPC
   // reading (or one on another genesis) cannot hide a rollback.
@@ -287,11 +348,18 @@ export function classifyRpc(
     }
   }
   if (backwards) flags.contradicted = true;
+  // The anchor is judged whatever this head holds: it is its own read of the finalized chain.
+  if (anchor.kind === "lost") {
+    conflicts.push(anchor.conflict);
+    flags.contradicted = true;
+  }
+  const anchorNote = anchor.kind === "lost" || anchor.kind === "unknown" ? anchor.note : null;
   if (nothing) {
+    const said = hasError(error) ? String(error) : typeof head.unreadable === "string" ? head.unreadable : "no rpc head";
     return {
       health: hasError(error) ? "down" : "unknown",
       http: null,
-      detail: hasError(error) ? String(error) : typeof head.unreadable === "string" ? head.unreadable : "no rpc head",
+      detail: anchorNote === null ? said : `${said}; ${anchorNote}`,
       observed_at: timeField(head.observed_at),
       stale: null,
     };
@@ -339,6 +407,18 @@ export function classifyRpc(
     problems.push("best height fell further than the lag limit below an earlier best height");
     flags.contradicted = true;
   }
+  // The spec floor: the runtime is upgraded in place on one genesis, never downgraded, so a version
+  // below the highest one an earlier snapshot saw on this genesis is a reset or a rollback. A higher
+  // one is an upgrade and changes nothing. An unknown one is no verdict: the head rules already
+  // judge a head that read nothing. A fold, as for the heights.
+  const spec = nonNegativeInt(head.runtime_spec_version);
+  const specSeen = genesis === null ? [] : (earlierSpec ?? []).filter((p) => p.genesis === genesis).map((p) => p.runtime_version);
+  const highestSpec = specSeen.length > 0 ? specSeen.reduce((m, v) => Math.max(m, v), -Infinity) : null;
+  if (highestSpec !== null && spec !== null && spec < highestSpec) {
+    conflicts.push(`runtime version ${spec} is below the version ${highestSpec} an earlier snapshot saw on this genesis`);
+    problems.push("runtime version went backwards");
+    flags.contradicted = true;
+  }
   if (finalized && highest !== null) {
     const changed = sameGenesis.find((p) => p.finalized_height === finalized.number && p.finalized_hash !== finalized.hash);
     // Stuck since the oldest of the latest run of snapshots at this same height. A time there that
@@ -382,6 +462,9 @@ export function classifyRpc(
       problems.push(`finality lag ${best - finalized.number} blocks`);
     }
   }
+  if (anchor.kind === "lost") problems.push(anchor.note);
+  // The anchor check could not run: like a stuck check that cannot run, it leaves health unknown.
+  if (anchor.kind === "unknown") cannotRun.push(anchor.note);
   if (finalized === null) problems.push("no valid finalized head");
   if (best === null) problems.push("no valid best height");
   const health: Health = problems.length > 0 ? "degraded" : cannotRun.length > 0 ? "unknown" : "ok";
@@ -444,11 +527,12 @@ export async function assessNetwork(source: Source, opts: StatusOptions): Promis
     staleAfterSeconds: opts.staleAfterSeconds ?? 120,
     maxFinalityLag: opts.maxFinalityLag ?? 30,
   };
-  const [health, chain, gateway, rawHead] = await Promise.all([
+  const [health, chain, gateway, rawHead, anchorRead] = await Promise.all([
     source.faucetHealth(),
     source.faucetChain(),
     source.gatewayModels(),
     source.rpcHead(),
+    source.anchorBlock(),
   ]);
   const head = headOf(rawHead);
   const conflicts: string[] = [];
@@ -501,7 +585,8 @@ export async function assessNetwork(source: Source, opts: StatusOptions): Promis
   }
 
   const flags: HeadFlags = { contradicted: false, stuck: false };
-  const rpc = classifyRpc(head, o, conflicts, opts.previous ?? null, rpcGenesis, flags, opts.earlierTimes ?? null, opts.earlierBest ?? null);
+  const anchor = judgeAnchor(opts.anchor ?? null, anchorRead);
+  const rpc = classifyRpc(head, o, conflicts, opts.previous ?? null, rpcGenesis, flags, opts.earlierTimes ?? null, opts.earlierBest ?? null, opts.earlierSpec ?? null, anchor);
   const finalizedValid =
     head.finalized && nonNegativeInt(head.finalized.number) !== null && normalizeHash(head.finalized.hash) !== null;
   const finalizedHeight = finalizedValid ? (head.finalized as { number: number }).number : null;
@@ -516,14 +601,16 @@ export async function assessNetwork(source: Source, opts: StatusOptions): Promis
   // stuck check that could not run, leaves the answer open (third IMD audit J11); another genesis
   // counts either way. The head still bounds escrow evidence: a finalized height stays final
   // however long it holds, and a lower bound only keeps more evidence waiting.
-  const rpcForReset = rpcUsable && (flags.stuck === false || rpcGenesis !== pinned) ? rpcGenesis : null;
+  // The anchor is the same: an anchor whose read gave no verdict leaves the answer open too.
+  const rpcForReset = rpcUsable && ((flags.stuck === false && anchor.kind !== "unknown") || rpcGenesis !== pinned) ? rpcGenesis : null;
 
   const status: NetworkStatus = {
     schema: "flop-observatory/network-status@0",
     observed_at: opts.now,
     trust: source.trust,
     genesis: { pinned, faucet: shownFaucetGenesis, rpc: rpcGenesis },
-    reset_detected: resetDetected(pinned, faucetGenesis, rpcForReset),
+    // A lost anchor is a reset that kept the genesis: the finalized chain is another one.
+    reset_detected: anchor.kind === "lost" ? true : resetDetected(pinned, faucetGenesis, rpcForReset),
     conflicts,
     finalized_height: finalizedHeight,
     finalized_hash: finalizedHash,

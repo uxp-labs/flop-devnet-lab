@@ -290,7 +290,7 @@
   {
     "id": "status-rpc-gate-dropped",
     "file": "src/status.ts",
-    "find": "  const rpcForReset = rpcUsable && (flags.stuck === false || rpcGenesis !== pinned) ? rpcGenesis : null;",
+    "find": "  const rpcForReset = rpcUsable && ((flags.stuck === false && anchor.kind !== \"unknown\") || rpcGenesis !== pinned) ? rpcGenesis : null;",
     "replace": "  const rpcForReset = rpcGenesis;",
     "test": "test/status.test.ts",
     "why": "reset_detected false needs a usable RPC reading of the pinned genesis"
@@ -570,16 +570,16 @@
   {
     "id": "status-reset-false-on-a-stuck-head",
     "file": "src/status.ts",
-    "find": "(flags.stuck === false || rpcGenesis !== pinned)",
-    "replace": "(true || rpcGenesis !== pinned)",
+    "find": "(flags.stuck === false && anchor.kind !== \"unknown\")",
+    "replace": "(true && anchor.kind !== \"unknown\")",
     "test": "test/status.test.ts",
     "why": "third IMD audit J11: reset_detected false needs the finalized height known not to be stuck"
   },
   {
     "id": "status-stuck-head-hides-another-genesis",
     "file": "src/status.ts",
-    "find": "(flags.stuck === false || rpcGenesis !== pinned)",
-    "replace": "(flags.stuck === false)",
+    "find": "((flags.stuck === false && anchor.kind !== \"unknown\") || rpcGenesis !== pinned)",
+    "replace": "(flags.stuck === false && anchor.kind !== \"unknown\")",
     "test": "test/status.test.ts",
     "why": "third IMD audit J11: a stuck head that names another genesis still shows the reset"
   },

@@ -13,9 +13,13 @@
 // string, so the status's own rules on its spelling apply, a conflict for a malformed one included.
 // The finalized hash must be 0x plus 64 lower case hex to be read by at all; any other answer
 // leaves the finalized head and the runtime version unread.
+//
+// After the head, a run that builds on a log reads one more answer, the anchor (RULES.md 1.1):
+//   chain_getBlockHash(h)             the block hash at h, the latest finalized height logged
+// It is kept as given, for status.ts to judge against the logged hash; a failure is its own error.
 import { isSafeInt } from "./strict.js";
 import { normalizeHash } from "./status.js";
-import type { RpcHead } from "./types.js";
+import type { AnchorReading, RpcHead } from "./types.js";
 
 /** One call's answer: its result, or why it failed on the way. */
 export type Answer = { result: unknown } | { error: string };
@@ -79,4 +83,9 @@ export function headFrom(a: HeadAnswers): RpcHead {
     observed_at: a.observedAt,
     error: errors.length > 0 ? errors.join("; ") : null,
   };
+}
+
+/** The anchor read back at height: the answer as given, or why it failed on the way. */
+export function anchorFrom(height: number, a: Answer): AnchorReading {
+  return "error" in a ? { height, hash: null, error: a.error } : { height, hash: a.result, error: null };
 }

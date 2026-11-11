@@ -1,0 +1,17 @@
+{
+  "scenario": "published-2026-11-11-1239",
+  "description": "Real data, nothing made up: the second live reading the memory step published, built on the six readings before it, the first the memory step published with a finalized head, as the workflow published it on observatory-data at commit 8de54c6. tape.jsonl, snapshot.json, run.json and SHA256SUMS are latest/ at that commit, byte for byte; log/2026-11-11.jsonl is the day file of the log at that commit, its seven lines, this reading's the last. SHA256SUMS lists all nine published files; only these four are kept here.",
+  "now": "2026-11-11T12:39:02.949Z",
+  "synthetic": false,
+  "provenance": {
+    "data_branch": "observatory-data",
+    "data_branch_commit": "8de54c6ffae5f266b8977ada6ee9bf383ea6d535",
+    "workflow_run": 43022118263,
+    "workflow_run_from": "the data branch commit message",
+    "revision": "3df6e3375d19b50e5f9f818cacd96e9d9c9ab5fb",
+    "revision_from": "run.json source_sha",
+    "tape_sha256": "6ad130b2b540f4ac9ec64e9a7c9da351f122fc673291042b6958d664f9964b15",
+    "log_day_file_git_blob": "7746d982e1988ea18a061a32fc2ca80f03b390df",
+    "snapshot_hash": "59e064bc8fa1ce56ba946fe48fe54dacfecb2bc74b6a7cb1660618ea1aecaf78"
+  }
+}
