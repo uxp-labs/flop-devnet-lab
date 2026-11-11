@@ -35,6 +35,37 @@ describe("the key file", () => {
     }
   });
 
+  it("refuses a key typed where the path belongs, and does not echo it", () => {
+    for (const typed of [TEST_KEY, TEST_KEY.slice(2), ` ${TEST_KEY} `]) {
+      for (const use of [loadAccount, createKeyFile]) {
+        const e = (() => {
+          try {
+            use(typed);
+            return null;
+          } catch (x) {
+            return x as HireError;
+          }
+        })();
+        expect(e).toBeInstanceOf(HireError);
+        expect(e!.code).toBe(EXIT.USAGE);
+        expect(e!.message).toMatch(/never a key/);
+        expect(e!.message).not.toContain(TEST_KEY.slice(2, 20));
+      }
+    }
+  });
+
+  it("no message names the path it was given", () => {
+    const path = join(dir(), "a-very-recognizable-name.key");
+    for (const run of [() => loadAccount(path), () => { createKeyFile(path); createKeyFile(path); }, () => { chmodSync(path, 0o644); loadAccount(path); }]) {
+      try {
+        run();
+        expect.unreachable();
+      } catch (x) {
+        expect((x as Error).message).not.toContain("recognizable");
+      }
+    }
+  });
+
   it("refuses a missing or malformed file with a usage error that quotes none of it", () => {
     const d = dir();
     expect(() => loadAccount(join(d, "none.key"))).toThrow(/no key file/);

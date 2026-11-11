@@ -1,4 +1,5 @@
 import { decodePaymentSignatureHeader } from "@x402/core/http";
+import { PERMIT2_ADDRESS, x402ExactPermit2ProxyAddress } from "@x402/evm";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { privateKeyToAccount } from "viem/accounts";
 import { EXIT, HireError } from "../src/errors.js";
@@ -14,6 +15,10 @@ describe("the Permit2 payment", () => {
   it("names the canonical Permit2 contract and the x402 exact proxy, pinned here so a library change shows", () => {
     expect(PERMIT2).toBe("0x000000000022D473030F116dDEE9F6B43aC78BA3");
     expect(PERMIT2_PROXY).toBe("0x402085c248EeA27D92E8b30b2C58ed07f9E20001");
+    // The pinned library signs for the same two contracts. If an upgrade moves either, this fails
+    // and every payment is refused until the addresses here are checked and changed by hand.
+    expect(PERMIT2_ADDRESS).toBe(PERMIT2);
+    expect(x402ExactPermit2ProxyAddress).toBe(PERMIT2_PROXY);
   });
 
   it("is exactly the documented shape, for exactly what the challenge asks", async () => {

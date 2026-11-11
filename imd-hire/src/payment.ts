@@ -5,7 +5,7 @@
  */
 import { x402Client } from "@x402/core/client";
 import { encodePaymentSignatureHeader } from "@x402/core/http";
-import { PERMIT2_ADDRESS, permit2WitnessTypes, x402ExactPermit2ProxyAddress } from "@x402/evm";
+import { permit2WitnessTypes } from "@x402/evm";
 import { ExactEvmScheme } from "@x402/evm/exact/client";
 import { isAddressEqual, isHex, verifyTypedData, type Address, type Hex } from "viem";
 import type { PrivateKeyAccount } from "viem/accounts";
@@ -30,9 +30,13 @@ export interface Payment {
   payload: { signature: Hex; permit2Authorization: Permit2Authorization };
 }
 
-/** The contract the token allowance is given to, and the one a payment names as its spender. */
-export const PERMIT2: Address = PERMIT2_ADDRESS;
-export const PERMIT2_PROXY: Address = x402ExactPermit2ProxyAddress;
+/**
+ * The canonical Permit2 contract, which holds the token allowance, and the x402 exact proxy, which a
+ * payment names as its spender. Written out here, not taken from the library: a payment built for any
+ * other spender is refused, and a test fails if the pinned library stops agreeing with these.
+ */
+export const PERMIT2: Address = "0x000000000022D473030F116dDEE9F6B43aC78BA3";
+export const PERMIT2_PROXY: Address = "0x402085c248EeA27D92E8b30b2C58ed07f9E20001";
 
 const keysOf = (v: object): string => Object.keys(v).sort().join();
 

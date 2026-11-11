@@ -26,6 +26,7 @@ export interface Quote {
   expiresAt: number; // unix seconds
   payment: { network: Network; asset: Address; amount: string; payTo: Address };
   quoteHash: string; // 64 hex, no 0x
+  inputHash: string; // 64 hex, no 0x: SHA-256 of the canonical JSON of the input as the server normalized it
 }
 
 export interface Resource {
@@ -98,6 +99,7 @@ export function parseChallenge(body: unknown): Challenge {
     need(isSeconds(quote.issuedAt), "quote.issuedAt is not a unix time");
     need(isSeconds(quote.expiresAt), "quote.expiresAt is not a unix time");
     need(typeof quote.quoteHash === "string" && HEX64.test(quote.quoteHash), "quote.quoteHash is not 64 hex");
+    need(typeof quote.inputHash === "string" && HEX64.test(quote.inputHash), "quote.inputHash is not 64 hex");
     const p = quote.payment;
     if (need(isObject(p), "quote.payment is missing")) {
       const pay = p as Json;
@@ -138,6 +140,7 @@ export function parseChallenge(body: unknown): Challenge {
       expiresAt: quote.expiresAt as number,
       payment: { network: pay.network as Network, asset: pay.asset as Address, amount: pay.amount as string, payTo: pay.payTo as Address },
       quoteHash: quote.quoteHash as string,
+      inputHash: quote.inputHash as string,
     },
     requesterScopeHash: b.requesterScopeHash as string,
     resourceUrl: b.resourceUrl as string,

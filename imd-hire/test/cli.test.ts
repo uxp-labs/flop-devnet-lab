@@ -1,11 +1,12 @@
 import { decodePaymentSignatureHeader } from "@x402/core/http";
-import { readdirSync, readFileSync, statSync } from "node:fs";
+import { mkdtempSync, readdirSync, readFileSync, statSync, symlinkSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { parseTransaction, recoverTypedDataAddress, type TransactionSerializedEIP1559 } from "viem";
 import { quoteApproval } from "../src/approval.js";
 import { parseChallenge } from "../src/challenge.js";
-import { cli, EXPIRES, fixture, ISSUED, read, request, save, tmpJob } from "./helpers.js";
+import { cli, EXPIRES, fixture, ISSUED, read, rehash, request, save, TEST_KEY, tmpJob, tmpKeyDir } from "./helpers.js";
 
 const NOW = ISSUED + 30;
 beforeEach(() => vi.useFakeTimers({ now: NOW * 1000, toFake: ["Date"] }));
@@ -16,7 +17,7 @@ const ORDER_ID = "06423b07-dddf-41af-8bdf-f8d03dd925d8";
 /** A job folder taken as far as a saved challenge: wallet, quote, the quote's answer, the challenge request, its answer. */
 async function quoted(edit: { quote?: (r: any) => void; challenge?: (r: any) => void } = {}) { // eslint-disable-line @typescript-eslint/no-explicit-any
   const dir = tmpJob();
-  const key = join(dir, "wallet.key");
+  const key = join(tmpKeyDir(), "wallet.key");
   const made = await cli(["wallet", "new", "--key", key]);
   const address = made.out.match(/address (0x[0-9a-fA-F]{40})/)![1];
   expect((await cli(["quote", "--dir", dir])).code).toBe(0);
@@ -89,7 +90,7 @@ describe("the whole flow, offline", () => {
     const { dir, key } = await quoted();
     const r = await pay(dir, key);
     const secret = JSON.parse(readFileSync(key, "utf8")).key_hex.slice(2);
-    const written = readdirSync(dir).filter((f) => f !== "wallet.key").map((f) => readFileSync(join(dir, f), "utf8")).join("\n");
+    const written = readdirSync(dir).map((f) => readFileSync(join(dir, f), "utf8")).join("\n");
     for (const text of [written, r.out, r.err]) expect(text.toLowerCase()).not.toContain(secret.toLowerCase());
   });
 
@@ -99,17 +100,110 @@ describe("the whole flow, offline", () => {
     const before = readFileSync(join(dir, "3-submit.request.json"), "utf8");
     const again = await pay(dir, key);
     expect(again.code).toBe(3);
-    expect(again.err).toMatch(/already signed.*safe to resend/);
+    expect(again.err).toMatch(/already signed in this folder.*safe to resend/);
     expect(readFileSync(join(dir, "3-submit.request.json"), "utf8")).toBe(before);
     // And a folder that holds a signed payment cannot be turned into a new order.
     expect((await cli(["quote", "--dir", dir, "--new"])).code).toBe(3);
+  });
+
+  it("pay signs one payment per folder, even when the saved answers are swapped for another order's", async () => {
+    const { dir, key } = await quoted();
+    expect((await pay(dir, key)).code).toBe(0);
+    const before = readFileSync(join(dir, "3-submit.request.json"), "utf8");
+    const record = readFileSync(join(dir, "signed.json"), "utf8");
+    const other = "11111111-2222-4333-8444-555555555555";
+    const quote = read(dir, "1-quote.response.json");
+    quote.body.order.id = other;
+    save(dir, "1-quote.response.json", quote);
+    const ch = read(dir, "2-challenge.response.json");
+    ch.body.quote.id = other;
+    ch.body.resourceUrl = ch.body.resource.url = `https://api.imd.fun/requests/${other}`;
+    save(dir, "2-challenge.response.json", ch);
+    const second = await pay(dir, key);
+    expect(second.code).toBe(3);
+    expect(second.err).toMatch(/already signed in this folder/);
+    expect(readFileSync(join(dir, "3-submit.request.json"), "utf8")).toBe(before);
+    expect(readFileSync(join(dir, "signed.json"), "utf8")).toBe(record);
+  });
+
+  it("pay pays IMD's pinned recipient only, unless the owner names another", async () => {
+    const elsewhere = "0x00000000000000000000000000000000000000aa";
+    const moved = { challenge: (c: any) => { c.body.accepts[0].payTo = c.body.quote.payment.payTo = elsewhere; } }; // eslint-disable-line @typescript-eslint/no-explicit-any
+    const a = await quoted(moved);
+    const refusedPay = await pay(a.dir, a.key);
+    expect(refusedPay.code).toBe(3);
+    expect(refusedPay.err).toMatch(/is not IMD's recipient 0x4e0fa57bde726079356537e2f34d671e9f41adbc/);
+    expect(readdirSync(a.dir)).not.toContain("3-submit.request.json");
+    // The owner's own word moves it: --pay-to names the recipient, and then only that one is paid.
+    const b = await quoted(moved);
+    expect((await cli(["pay", "--dir", b.dir, "--key", b.key, "--max-imd", "0.5", "--pay-to", elsewhere])).code).toBe(0);
+    const c = await quoted();
+    expect((await cli(["pay", "--dir", c.dir, "--key", c.key, "--max-imd", "0.5", "--pay-to", elsewhere])).code).toBe(3);
+    expect((await cli(["pay", "--dir", c.dir, "--key", c.key, "--max-imd", "0.5", "--pay-to", "0xnope"])).code).toBe(2);
+    // No recipient is pinned on Robinhood Chain: the owner must name one.
+    const d = await cli(["pay", "--dir", c.dir, "--key", c.key, "--max-imd", "0.5", "--chain", "4663"]);
+    expect(d.code).toBe(2);
+    expect(d.err).toMatch(/no IMD recipient is pinned for chain 4663/);
+  });
+
+  it("pay refuses a payment window or a quote longer than IMD's", async () => {
+    const long = await quoted({ challenge: (c) => { c.body.accepts[0].maxTimeoutSeconds = 315360000; c.body.quote.expiresAt = c.body.quote.issuedAt + 630720000; } });
+    const r = await pay(long.dir, long.key);
+    expect(r.code).toBe(3);
+    expect(r.err).toMatch(/longer than 300 s/);
+    const far = await quoted({ challenge: (c) => (c.body.quote.expiresAt = 9e12) });
+    const f = await pay(far.dir, far.key);
+    expect(f.code).toBe(3);
+    expect(readdirSync(far.dir)).not.toContain("3-submit.request.json");
+    expect(readdirSync(far.dir)).not.toContain("signed.json");
+  });
+
+  it("pay refuses a key that sits inside the job folder, which goes to the sender", async () => {
+    const { dir } = await quoted();
+    const inside = join(dir, "wallet.key");
+    expect((await cli(["wallet", "new", "--key", inside])).code).toBe(0);
+    const r = await pay(dir, inside);
+    expect(r.code).toBe(2);
+    expect(r.err).toMatch(/inside the job folder/);
+    expect(readdirSync(dir)).not.toContain("3-submit.request.json");
+  });
+
+  it("amounts typed in atomic units are caught, for the price limit and for the allowance", async () => {
+    const { dir, key } = await quoted();
+    const price = await pay(dir, key, "500000000000000000");
+    expect(price.code).toBe(2);
+    expect(price.err).toMatch(/in IMD, not atomic units/);
+    expect(readdirSync(dir)).not.toContain("3-submit.request.json");
+    const allowance = await cli(["approve", "--key", key, "--allowance-imd", "5000000000000000000", "--nonce", "0", "--gas", "60000", "--max-fee-gwei", "0.2", "--priority-fee-gwei", "0.01"]);
+    expect(allowance.code).toBe(3);
+    expect(allowance.err).toMatch(/typed in atomic units/);
+  });
+
+  it("a key typed where the key file belongs is refused and never echoed", async () => {
+    for (const args of [["wallet", "address", "--key", TEST_KEY], ["wallet", "new", "--key", TEST_KEY.slice(2)]]) {
+      const r = await cli(args);
+      expect(r.code).toBe(2);
+      expect((r.out + r.err).toLowerCase()).not.toContain(TEST_KEY.slice(2, 24));
+    }
+  });
+
+  it("no step writes through a link planted in the job folder", async () => {
+    const dir = tmpJob();
+    const target = join(mkdtempSync(join(tmpdir(), "imd-hire-target-")), "elsewhere.json");
+    writeFileSync(target, "untouched");
+    symlinkSync(target, join(dir, "1-quote.request.json"));
+    const r = await cli(["quote", "--dir", dir]);
+    expect(r.code).toBe(2);
+    expect(r.err).toMatch(/does not write through links/);
+    expect(readFileSync(target, "utf8")).toBe("untouched");
   });
 
   const refusals: [string, Parameters<typeof quoted>[0], string, RegExp][] = [
     ["a price above the approved maximum", {}, "0.49", /above the approved maximum/],
     ["a challenge for another order", { challenge: (c) => { c.body.quote.id = "another"; c.body.resourceUrl = c.body.resource.url = "https://api.imd.fun/requests/another"; } }, "0.5", /not the quoted order/],
     ["a quote answer for another requestKey", { quote: (q) => (q.body.order.requestKey = "00000000-0000-4000-8000-000000000000") }, "0.5", /stale answer/],
-    ["an input that is not the request in the folder", { challenge: (c) => (c.body.input.baseCommit = "f".repeat(40)) }, "0.5", /not the request that was approved/],
+    ["an input that is not the request in the folder", { challenge: (c) => { c.body.input.baseCommit = "f".repeat(40); rehash(c.body); } }, "0.5", /not the request that was approved/],
+    ["an input the quote's hash does not cover", { challenge: (c) => (c.body.input.contracts = ["Vault.sol"]) }, "0.5", /inputHash is not the hash/],
     ["another recipient in the requirement", { challenge: (c) => (c.body.accepts[0].payTo = "0x00000000000000000000000000000000000000aa") }, "0.5", /different recipients/],
     ["another asset", { challenge: (c) => { c.body.accepts[0].asset = c.body.quote.payment.asset = "0x5f7bb59365ce557c26dbcaa4ee9d39a4b95b7127"; } }, "0.5", /is not the IMD token/],
   ];
@@ -143,7 +237,7 @@ describe("the whole flow, offline", () => {
     expect((await cli(["pay", "--dir", ok.dir, "--key", ok.key])).code).toBe(2);
     expect((await cli(["pay", "--dir", ok.dir, "--max-imd", "0.5"])).code).toBe(2);
     expect((await cli(["pay", "--dir", ok.dir, "--key", ok.key, "--max-imd", "1e3"])).code).toBe(2);
-    expect((await cli(["pay", "--dir", ok.dir, "--key", ok.key, "--max-imd", "0.5", "--chain", "5"])).code).toBe(1);
+    expect((await cli(["pay", "--dir", ok.dir, "--key", ok.key, "--max-imd", "0.5", "--chain", "5"])).code).toBe(2);
   });
 
   it("order writes the status request, which never charges", async () => {

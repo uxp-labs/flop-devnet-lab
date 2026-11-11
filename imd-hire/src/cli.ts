@@ -1,11 +1,12 @@
+import { resolve, sep } from "node:path";
 import { parseArgs } from "node:util";
-import { formatUnits, parseGwei, parseUnits } from "viem";
+import { formatUnits, isAddress, parseGwei, parseUnits, type Address } from "viem";
 import { signApprove } from "./allowance.js";
 import { quoteApproval, signQuoteApproval } from "./approval.js";
 import { parseChallenge } from "./challenge.js";
 import { EXIT, HireError, refused, usage } from "./errors.js";
-import { hasRequest, hasResponse, needOrder, readJobRequest, readOrder, readRequest, readResponse, writeNewOrder, writeRequest, writeSigned } from "./jobdir.js";
-import { DEFAULT_API, IMD_DECIMALS, imdToken } from "./networks.js";
+import { hasRequest, hasResponse, needOrder, readJobRequest, readOrder, readResponse, writeNewOrder, writeRequest, writeSigned } from "./jobdir.js";
+import { DEFAULT_API, IMD_DECIMALS, imdPayTo, imdToken, LARGEST_PRICE } from "./networks.js";
 import { paymentHash, PERMIT2_PROXY, signPayment } from "./payment.js";
 import { checkChallenge, type Policy } from "./policy.js";
 import { challengeRequest, orderRequest, quoteRequest, submitRequest } from "./requests.js";
@@ -26,9 +27,10 @@ beside it as {status, body}. Then run the next step.
   quote --dir <job> [--api <origin>] [--new]
                                           write 1-quote.request.json from <job>/request.json ({action, input})
   challenge --dir <job>                   read 1-quote.response.json, write 2-challenge.request.json
-  pay --dir <job> --key <file> --max-imd <amount> [--chain <id>]
-                                          read 2-challenge.response.json, check it against the request and the
-                                          maximum, sign the payment and the quote approval, write 3-submit.request.json
+  pay --dir <job> --key <file> --max-imd <amount> [--chain <id>] [--pay-to <address>]
+                                          read 2-challenge.response.json, check it against the request, the
+                                          maximum and IMD's recipient, sign the payment and the quote approval,
+                                          write 3-submit.request.json. One payment per folder.
   order --dir <job>                       write 4-order.request.json (reads the order; never charges)
 
   approve --key <file> --allowance-imd <amount> --nonce <n> --gas <n> --max-fee-gwei <n> --priority-fee-gwei <n>
@@ -58,7 +60,11 @@ function decimal(value: string, name: string, units: (v: string) => bigint): big
 
 function chainOf(value: string | undefined): number {
   const chainId = Number(wholeNumber(value ?? "1", "chain"));
-  imdToken(chainId); // throws for a chain with no known IMD token
+  try {
+    imdToken(chainId);
+  } catch (e) {
+    throw usage(`--chain: ${(e as Error).message}`);
+  }
   return chainId;
 }
 
@@ -112,11 +118,15 @@ async function run(argv: string[], io: IO): Promise<number> {
     }
 
     case "pay": {
-      const { values } = parseArgs({ args: rest, options: { dir: str, key: str, "max-imd": str, chain: str } });
+      const { values } = parseArgs({ args: rest, options: { dir: str, key: str, "max-imd": str, chain: str, "pay-to": str } });
       const dir = need(values.dir, "dir");
       const keyPath = need(values.key, "key");
+      // The job folder goes to whoever sends the requests. The key must not travel with it.
+      if (resolve(keyPath).startsWith(resolve(dir) + sep)) throw usage("the key file is inside the job folder; keep it outside, the folder is handed to the sender");
       const maxAmount = decimal(need(values["max-imd"], "max-imd"), "max-imd", (v) => parseUnits(v, IMD_DECIMALS));
+      if (maxAmount > LARGEST_PRICE) throw usage(`--max-imd is in IMD, not atomic units, and at most ${imd(LARGEST_PRICE)}; a request costs 0.5 IMD`);
       const chainId = chainOf(values.chain);
+      const payTo = recipientOf(values["pay-to"], chainId);
       const request = readJobRequest(dir);
       const order = needOrder(dir);
       const orderId = quotedOrderId(dir, order.requestKey);
@@ -125,12 +135,10 @@ async function run(argv: string[], io: IO): Promise<number> {
       if (answer.status !== 402) throw usage(`2-challenge.response.json has status ${answer.status}; the challenge is a 402`);
       const ch = parseChallenge(answer.body);
       if (ch.quote.id !== orderId) throw refused([`the challenge is for order ${ch.quote.id}, not the quoted order ${orderId}`]);
-      if (hasRequest(dir, "3-submit")) {
-        const earlier = readRequest(dir, "3-submit");
-        if (earlier.url.includes(`/requests/${orderId}/`)) throw refused(["a payment for this order is already signed in 3-submit.request.json; send that file again, it is safe to resend"]);
-      }
+      // One folder, one payment, whatever order the saved answers now name.
+      if (hasRequest(dir, "3-submit")) throw refused(["a payment is already signed in this folder (3-submit.request.json); send that file again, it is safe to resend. For another order, use a new folder"]);
 
-      const policy: Policy = { api: order.api, chainId, token: imdToken(chainId), maxAmount, action: request.action, input: request.input };
+      const policy: Policy = { api: order.api, chainId, token: imdToken(chainId), payTo, maxAmount, action: request.action, input: request.input };
       const reasons = checkChallenge(ch, policy, Math.floor(Date.now() / 1000));
       if (reasons.length > 0) throw refused(reasons);
 
@@ -202,6 +210,17 @@ async function run(argv: string[], io: IO): Promise<number> {
     default:
       throw usage(`unknown command ${command}; run \`imd-hire help\``);
   }
+}
+
+/** The recipient the owner pays: the one named with --pay-to, else the one pinned for the chain. */
+function recipientOf(value: string | undefined, chainId: number): Address {
+  if (value !== undefined) {
+    if (!isAddress(value)) throw usage("--pay-to must be an address");
+    return value;
+  }
+  const pinned = imdPayTo(chainId);
+  if (!pinned) throw usage(`no IMD recipient is pinned for chain ${chainId}; pass --pay-to with the payTo that GET /requests/capabilities publishes`);
+  return pinned;
 }
 
 /** The order id from the saved quote answer, which must be the answer to this order's requestKey. */

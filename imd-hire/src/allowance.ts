@@ -1,12 +1,14 @@
 /**
  * The one transaction this wallet ever sends: an ERC-20 approval that lets Permit2 move a capped
  * amount of IMD. Payments themselves are signatures, and IMD's server pays their gas. The spender is
- * fixed to the canonical Permit2 contract, so this module cannot approve anyone else. It signs and
- * returns the raw transaction; it does not send it.
+ * fixed to the canonical Permit2 contract, so this module cannot approve anyone else, and the amount
+ * has a ceiling, so it cannot approve without limit. It signs and returns the raw transaction; it
+ * does not send it. The approval must be mined before a payment can settle.
  */
 import { encodeFunctionData, erc20Abi, keccak256, type Address, type Hex } from "viem";
 import type { PrivateKeyAccount } from "viem/accounts";
 import { refused } from "./errors.js";
+import { LARGEST_ALLOWANCE } from "./networks.js";
 import { PERMIT2 } from "./payment.js";
 
 export interface ApproveParams {
@@ -35,6 +37,7 @@ export interface SignedApprove {
 export async function signApprove(account: PrivateKeyAccount, p: ApproveParams): Promise<SignedApprove> {
   const reasons: string[] = [];
   if (p.amount < 0n) reasons.push("the allowance is negative");
+  if (p.amount > LARGEST_ALLOWANCE) reasons.push(`the allowance ${p.amount} is above the largest this tool signs, ${LARGEST_ALLOWANCE} atomic units; was it typed in atomic units?`);
   if (!Number.isSafeInteger(p.nonce) || p.nonce < 0) reasons.push("the nonce is not a whole number from 0");
   if (p.gas <= 0n || p.maxFeePerGas <= 0n || p.maxPriorityFeePerGas < 0n) reasons.push("gas and fees must be positive");
   if (p.maxPriorityFeePerGas > p.maxFeePerGas) reasons.push("the priority fee is above the fee cap");

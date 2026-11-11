@@ -14,7 +14,7 @@
  * Every file is owner only: the request files carry the order's bearer token.
  */
 import { randomBytes, randomUUID } from "node:crypto";
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, lstatSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { usage } from "./errors.js";
 import type { HttpRequest } from "./requests.js";
@@ -50,8 +50,11 @@ function readJson(path: string, what: string): unknown {
   }
 }
 
+/** Writes owner only, and never through a link: a link in the folder could point the write anywhere. */
 function writeJson(path: string, value: unknown): void {
+  if (lstatSync(path, { throwIfNoEntry: false })?.isSymbolicLink()) throw usage(`${path} is a link; this tool does not write through links`);
   writeFileSync(path, JSON.stringify(value, null, 2) + "\n", { mode: 0o600 });
+  chmodSync(path, 0o600);
 }
 
 export const requestFile = (dir: string, step: Step) => join(dir, `${step}.request.json`);
@@ -90,10 +93,6 @@ export function writeRequest(dir: string, step: Step, request: HttpRequest): str
   const path = requestFile(dir, step);
   writeJson(path, request);
   return path;
-}
-
-export function readRequest(dir: string, step: Step): HttpRequest {
-  return readJson(requestFile(dir, step), `${step}.request.json`) as HttpRequest;
 }
 
 export function readResponse(dir: string, step: Step): HttpResponse {

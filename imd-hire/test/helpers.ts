@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { privateKeyToAccount } from "viem/accounts";
+import { canonHash } from "../src/canon.js";
 import { parseChallenge, type Challenge } from "../src/challenge.js";
 import { main } from "../src/cli.js";
 
@@ -25,8 +26,18 @@ export const EXPIRES = 1794358518;
 
 export const IMD = "0xd34a99bc0f67ae1bbd63c660e6d0b0dd03e263b7" as const;
 export const HALF_IMD = 500000000000000000n;
+/** IMD's recipient on Ethereum mainnet, as GET /requests/capabilities publishes it. */
+export const PAY_TO = "0x4e0fa57bde726079356537e2f34d671e9f41adbc" as const;
 /** What the owner approved in these tests: IMD, at most 0.5 for one request. */
 export const LIMIT = { token: IMD, maxAmount: HALF_IMD } as const;
+
+/** Makes the quote's inputHash match the input a test has edited, as a server that changed the input would. */
+export const rehash = (body: any): void => { // eslint-disable-line @typescript-eslint/no-explicit-any
+  body.quote.inputHash = canonHash(body.input).slice(2);
+};
+
+/** A folder for a key file, apart from any job folder. */
+export const tmpKeyDir = (): string => mkdtempSync(join(tmpdir(), "imd-hire-key-"));
 
 export function tmpJob(): string {
   const dir = mkdtempSync(join(tmpdir(), "imd-hire-test-"));
