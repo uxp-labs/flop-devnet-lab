@@ -2,6 +2,30 @@
 
 What each outside review and independent rerun of FLOP Observatory M0 found, and the fix and proof for each, newest first. Rounds 1 to 10 were first written in the PR #5 description and are kept here word for word, so the log travels with the code it describes: a reviewer reads the rounds at the commit under review. RULES.md holds the rules themselves; where a round and RULES.md differ, RULES.md is binding.
 
+## Round 17: the decoder, taken over half finished, its six commits reviewed, and the work to finish it
+
+An earlier agent was stopped with the decoder half built: the recording as a fixture, the reference pinned as a dev dependency, the reader, the hashes, the metadata parser and decoding by type. Nobody had reviewed it. A new agent read each commit as a reviewer who wrote none of it, ran the whole check on it, and found it green: the faults below are ones no test held. It found 2 low and 3 info items, each fixed with a test and a mutant where one could bite. It then built the rest: storage keys, events, the shape pin, the reference comparison, the fuzz and the mutants (RULES.md section 9).
+
+| # | Finding | Fix | Proof |
+|---|---|---|---|
+| D1 low | the inner types of a compact cost no step, so the bound on work did not hold for a compact around fields: a list of compacts around 21 wrappers took 23 steps a byte, past `valueBudget` | every type a decode visits is one step, a compact's included | 1 decode test, 200 such compacts from 202 bytes refused; 1 mutant |
+| D2 low | `entry()` read `md.types.at(id)`, which takes 1.5 as 1 and -1 as the last type: type 1.5 decoded as type 1 | only a whole id from 0 is looked up, in refusals too | 1 decode test of -1 and 1.5; 1 mutant |
+| D3 info | the test of the metadata cut by one byte took any of three loose patterns | it names the one refusal: the runtime type cut short | read |
+| D4 info | `metadata.ts` named `src/shape.ts`, and three modules cited RULES.md section 9; neither existed | `src/scale/shape.ts` is the shape pin, and section 9 holds the decoder's rules | read |
+| D5 info | the source scan held the decoder to src's allow-list only: a module in `src/scale` could read a file or the clock and pass | `src/scale` and `src/hash` are pure folders: imports only from them and createHash from node:crypto, and no clock, timer, random source or process | 28 bad and 4 good samples in the two folders, 3 forms still allowed outside them, 2 samples that import the reference into src; 6 mutants, two of them a real src module that imports the reference or reads the clock |
+| research | the swarm report of 2026-11-11 (`research/2026-11-11-channel-proof/report.md`) against the recorded metadata | read, not changed. It holds for the pallet index 103, the 63 storage entries in their order with their hashers, the 60 events by index and name, the Channels key, the fields of a channel in their order, and the numbers of block 3479299. It differs in every type id it gives (key 15 and value 820 for Channels, where the metadata says 13 and 805), in the key types of 5 maps and the value types of 13 entries, in the fields of event 38 (`ToplocEscalationTimedOut` has a `turn_index: u32`), and in `weights_pin`, which is `Option<H256>` | `test/events.test.ts`, `test/shape.test.ts` and the shape file |
+
+What the round adds, all offline:
+
+- `src/scale/storage-key.ts`: keys from the hashers the metadata states. The three keys read by hand, the reference's seven hashers on random keys, and the reference's own keys agree.
+- `src/scale/events.ts`: System.Events by the type the metadata gives it. All twelve recorded blocks decode to their last byte, 190 events. At block 3479299 pallet 103 is ComputeChannel, Settled is variant 23 and AuditFeeEarmarked variant 48, with the numbers read by hand. The channel's EscrowToppedUp is in block 3479245, total 114000000000000002, and 114000000000000002 = 112860000000000002 + 0 + 1140000000000000.
+- `src/scale/shape.ts`, `src/scale/block.ts` and `shapes/tzkv-runtime-1014014.json`: a block's events are decoded only when its spec, its metadata bytes and its shape are the reviewed ones and its LastRuntimeUpgrade names that spec. The shape derived again equals the file byte for byte.
+- `test/reference.test.ts`: polkadot-api parses the same metadata, compared whole, and decodes every recorded value to the same plain form. One bit flipped shows in its event alone.
+- `test/scale-fuzz.test.ts`: 108680 seeded hostile values in its main groups, and crafted ones beside them, every failure a ScaleError, every decode inside its bound. The most steps any real or flipped value took is 421, 2.3 percent of its bound; a value built to take a million steps stops at its bound of 9024.
+- `mutants/decoder.json`: 57 bugs across the reader, the hashes, the metadata parser, the decoder, the storage keys, the events, the shape pin and the scan rule, each killed by a named test, both controls passing.
+
+What it cannot show: a recording is what one endpoint answered, so a decoded value is evidence, not proof (RULES.md section 8). The 288 byte Channels value the lead read at the finalized head is not in the recording, so the fields of a stored channel are read from the metadata only, never from a value.
+
 ## Round 16: the eleventh independent rerun, of 9479b4e, the fix for each, and where M0 stops
 
 A fresh agent reran 9479b4e from a fresh clone and reproduced it byte for byte. It found 1 low and 3 info items, nothing at medium or above. Each is fixed in this round or written into the rules. The lead changed between the rerun and this round: the fixes below were written by the lead who received the rerun, and finished, checked and logged by the next one, who did not see the rerun's own report. Where a number comes from the first lead and could not be reproduced here, the row says so.
