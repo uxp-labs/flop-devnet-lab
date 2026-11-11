@@ -142,24 +142,17 @@ describe("review defect 2, fixed: a dead holder's lock that this process may not
   }, 120_000);
 });
 
-describe("DEFECT 3: a write error while creating the lock leaves an empty temporary file that is never swept", () => {
-  // createFile opens the temporary file and writes the owner. If the write fails (EFBIG here, the same
-  // path for ENOSPC or EDQUOT), the catch rethrows without removing the temporary file. It stays empty,
-  // so it has no readable owner, and the sweep keeps it for ever. The known gap needs a death between the
-  // open and the write; this one needs only a live process whose write fails, and it adds one file per try.
-  it("DEFECT 3 (low): a live process whose write fails leaves an empty ledger.jsonl.lock.*.tmp, and a later holder's sweep keeps it", () => {
+describe("review defect 3, fixed: a write error while creating the lock leaves no temporary file", () => {
+  // Was: createFile opened the temporary file and wrote the owner; when the write failed (EFBIG here, the
+  // same path for ENOSPC or EDQUOT) the catch rethrew without removing it, so an empty .tmp stayed for ever.
+  // Decided: createFile removes its temporary file on any failure before it rethrows.
+  it("review defect 3, fixed: a live process whose write fails leaves no file of the lock behind", () => {
     const h = tmpHome();
     const script = lockScript(h, h);
     // A file size limit of 0: every write to a regular file fails with EFBIG (node ignores SIGXFSZ).
     const r = spawnSync("bash", ["-c", 'ulimit -f 0 && exec "$0" "$1"', process.execPath, script], { encoding: "utf8", timeout: 60_000 });
     expect(r.stdout).toMatch(/^Error \d+ EFBIG: file too large, write$/);
-    const left = lockFiles(h);
-    expect(left).toHaveLength(1);
-    expect(left[0]).toMatch(/^ledger\.jsonl\.lock\.\d+\.[0-9a-f]{8}\.tmp$/);
-    expect(readFileSync(join(h, left[0]), "utf8")).toBe("");
-    // A later holder takes the lock and sweeps: the empty file stays.
-    withLedgerLock(h, () => {});
-    expect(lockFiles(h)).toEqual(left);
+    expect(lockFiles(h)).toEqual([]);
   }, 60_000);
 });
 

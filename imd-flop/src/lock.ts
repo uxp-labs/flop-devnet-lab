@@ -207,12 +207,20 @@ const code = (e: unknown) => (e as NodeJS.ErrnoException).code;
  * Exclusive create with content: the content goes to a temporary file that is then linked to the path.
  * The link fails with EEXIST when the path exists. So the file is never seen empty. The temporary file
  * carries the same owner, so a creator that died before removing it leaves a file the sweep can judge.
+ * On any failure the temporary file is removed before the error goes on. Known defect: a process killed
+ * between creating its temporary file and writing it leaves an empty one, which has no readable owner and
+ * so is never swept (about one per 600 kills at that moment in the review). It is never read as a lock.
  */
 function createFile(path: string, content: string): boolean {
   const tmp = `${path}.${process.pid}.${randomBytes(4).toString("hex")}.tmp`;
   try {
     const fd = openSync(tmp, "wx");
-    try { writeSync(fd, content); } finally { closeSync(fd); }
+    try {
+      try { writeSync(fd, content); } finally { closeSync(fd); }
+    } catch (e) {
+      try { unlinkSync(tmp); } catch { /* gone */ }
+      throw e;
+    }
   } catch (e) {
     const c = code(e);
     if (c !== undefined && UNLOCKABLE.has(c)) throw new LedgerUnlockable(`the ledger could not be locked: ${path} cannot be created (${c})`);

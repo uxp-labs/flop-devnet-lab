@@ -166,6 +166,25 @@ describe("defect 2: unlink errors are never swallowed and never raw", () => {
   });
 });
 
+describe("L1: the lock is never seen without its owner", () => {
+  // The lock is written to a temporary file that is then linked into place, so the lock path holds the
+  // owner from its first instant. With open and then write it would exist empty for a moment, and a write
+  // that fails would leave it empty for good. A file size limit of 0 makes every write fail (EFBIG): then no
+  // lock may exist at all. This fails for a lock created by open and write (review M3b).
+  it("a take whose write fails leaves no lock file, and no file of the lock at all", () => {
+    const h = tmpHome();
+    const script = join(h, "take.mjs");
+    writeFileSync(script, `
+const { withLedgerLock } = await import(${JSON.stringify(join(root, "dist", "ledger.js"))});
+try { withLedgerLock(${JSON.stringify(h)}, () => {}); process.stdout.write("TAKEN"); } catch (e) { process.stdout.write(e.code ?? e.message); }
+`);
+    const r = spawnSync("bash", ["-c", 'ulimit -f 0 && exec "$0" "$1"', process.execPath, script], { encoding: "utf8", timeout: 60_000 });
+    expect(r.stdout).toBe("EFBIG");
+    expect(existsSync(lockPath(h))).toBe(false);
+    expect(lockFiles(h)).toEqual([]);
+  }, 60_000);
+});
+
 describe("L4: no age rule", () => {
   it("a provably dead owner's lock is reclaimed at once, however young", () => {
     const h = tmpHome();
