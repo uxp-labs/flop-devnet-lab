@@ -455,7 +455,7 @@ describe("ledger lock model check (src/lock.ts)", () => {
       expect(plain.terminals).toBeGreaterThan(0);
       expect(crash.states).toBeGreaterThan(plain.states);
       console.log(`lock model: ${start.name}: ${plain.states} states without a crash, ${crash.states} with one crash (${crash.terminals} terminal)`);
-    });
+    }, 300_000); // alone it takes seconds; beside the other test files on two cores it can take far longer
   }
 
   it("the old reclaim (read, rename aside, check, link back) lets two holders in at a dead holder's lock", () => {
