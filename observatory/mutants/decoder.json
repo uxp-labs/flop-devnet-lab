@@ -1,0 +1,458 @@
+[
+  {
+    "id": "reader-compact-two-byte-long-form",
+    "file": "src/scale/reader.ts",
+    "find": "if (v < 1n << 6n) throw",
+    "replace": "if (v < 0n) throw",
+    "test": "test/scale-reader.test.ts",
+    "why": "a compact in two bytes that fits one has a second spelling and is refused"
+  },
+  {
+    "id": "reader-compact-big-mode-top-zero",
+    "file": "src/scale/reader.ts",
+    "find": "if (n === 4 ? v < 1n << 30n : b.at(n - 1) === 0) throw",
+    "replace": "if (n === 4 ? v < 1n << 30n : false) throw",
+    "test": "test/scale-reader.test.ts",
+    "why": "a big compact whose top byte is zero is not its shortest form"
+  },
+  {
+    "id": "reader-length-past-bytes-left",
+    "file": "src/scale/reader.ts",
+    "find": "if (n > BigInt(this.left)) throw",
+    "replace": "if (n > BigInt(this.left) + 1n) throw",
+    "test": "test/scale-reader.test.ts",
+    "why": "a length that cannot fit in the bytes left is refused before anything is read"
+  },
+  {
+    "id": "reader-take-past-end",
+    "file": "src/scale/reader.ts",
+    "find": "if (n > this.left) throw",
+    "replace": "if (n > this.left + 1) throw",
+    "test": "test/scale-reader.test.ts",
+    "why": "a read never takes more bytes than are left"
+  },
+  {
+    "id": "reader-bool-two",
+    "file": "src/scale/reader.ts",
+    "find": "if (b > 1) throw",
+    "replace": "if (b > 2) throw",
+    "test": "test/scale-reader.test.ts",
+    "why": "a bool is 0 or 1 only"
+  },
+  {
+    "id": "reader-signed-as-unsigned",
+    "file": "src/scale/reader.ts",
+    "find": "return BigInt.asIntN(width * 8, this.unsigned(width, what));",
+    "replace": "return this.unsigned(width, what);",
+    "test": "test/scale-reader.test.ts",
+    "why": "a signed integer is read in two's complement"
+  },
+  {
+    "id": "reader-utf8-not-fatal",
+    "file": "src/scale/reader.ts",
+    "find": "new TextDecoder(\"utf-8\", { fatal: true, ignoreBOM: true })",
+    "replace": "new TextDecoder(\"utf-8\", { fatal: false, ignoreBOM: true })",
+    "test": "test/scale-reader.test.ts",
+    "why": "text that is not strict UTF-8 is refused, never replaced"
+  },
+  {
+    "id": "reader-end-allows-one-left",
+    "file": "src/scale/reader.ts",
+    "find": "if (this.left !== 0) throw",
+    "replace": "if (this.left > 1) throw",
+    "test": "test/scale-reader.test.ts",
+    "why": "a whole value ends exactly at the end of its bytes"
+  },
+  {
+    "id": "xxhash-prime-changed",
+    "file": "src/hash/xxhash64.ts",
+    "find": "const P4 = 0x85ebca77c2b2ae63n;",
+    "replace": "const P4 = 0x85ebca77c2b2ae64n;",
+    "test": "test/hash.test.ts",
+    "why": "xxHash64 gives the published values"
+  },
+  {
+    "id": "xxhash-tail-rotation",
+    "file": "src/hash/xxhash64.ts",
+    "find": "rotl(h ^ u64(BigInt(view.getUint8(at)) * P5), 11n)",
+    "replace": "rotl(h ^ u64(BigInt(view.getUint8(at)) * P5), 13n)",
+    "test": "test/hash.test.ts",
+    "why": "the last bytes of an input are mixed as the specification says"
+  },
+  {
+    "id": "xxhash-lanes-skipped",
+    "file": "src/hash/xxhash64.ts",
+    "find": "for (; at + 32 <= n; at += 32) {",
+    "replace": "for (; at + 64 <= n; at += 32) {",
+    "test": "test/hash.test.ts",
+    "why": "every 32 byte stripe of a long input is read"
+  },
+  {
+    "id": "blake2b-counter-full-blocks",
+    "file": "src/hash/blake2b.ts",
+    "find": "BigInt(last ? bytes.length : (i + 1) * BLOCK)",
+    "replace": "BigInt((i + 1) * BLOCK)",
+    "test": "test/hash.test.ts",
+    "why": "the final block counts the bytes taken, not a whole block"
+  },
+  {
+    "id": "blake2b-length-not-in-parameters",
+    "file": "src/hash/blake2b.ts",
+    "find": "0x01010000n | BigInt(outLength)",
+    "replace": "0x01010000n | 64n",
+    "test": "test/hash.test.ts",
+    "why": "a shorter BLAKE2b digest is not a cut of the 512 bit one"
+  },
+  {
+    "id": "blake2b-rotation",
+    "file": "src/hash/blake2b.ts",
+    "find": "rotr(at(v, ib) ^ at(v, ic), 63n)",
+    "replace": "rotr(at(v, ib) ^ at(v, ic), 62n)",
+    "test": "test/hash.test.ts",
+    "why": "BLAKE2b's G function rotates as RFC 7693 says"
+  },
+  {
+    "id": "metadata-other-version-read",
+    "file": "src/scale/metadata.ts",
+    "find": "if (version !== 14) throw",
+    "replace": "if (version < 14) throw",
+    "test": "test/scale-metadata.test.ts",
+    "why": "only version 14 is read"
+  },
+  {
+    "id": "metadata-ids-out-of-order",
+    "file": "src/scale/metadata.ts",
+    "find": "if (id !== i) throw",
+    "replace": "if (id < i) throw",
+    "test": "test/scale-metadata.test.ts",
+    "why": "type ids count from 0 in order"
+  },
+  {
+    "id": "metadata-bytes-left-over",
+    "file": "src/scale/metadata.ts",
+    "find": "  r.end(\"the metadata\");\n",
+    "replace": "",
+    "test": "test/scale-metadata.test.ts",
+    "why": "the metadata must end exactly at the end of its bytes"
+  },
+  {
+    "id": "metadata-dangling-id-off-by-one",
+    "file": "src/scale/metadata.ts",
+    "find": "if (id !== null && id >= n) throw",
+    "replace": "if (id !== null && id > n) throw",
+    "test": "test/scale-metadata.test.ts",
+    "why": "a type id past the last type names nothing"
+  },
+  {
+    "id": "metadata-variant-index-twice",
+    "file": "src/scale/metadata.ts",
+    "find": "if (indices.has(v.index)) throw",
+    "replace": "if (indices.has(-1)) throw",
+    "test": "test/scale-metadata.test.ts",
+    "why": "one variant index has one meaning"
+  },
+  {
+    "id": "metadata-two-hashers-any-key",
+    "file": "src/scale/metadata.ts",
+    "find": "if (e.hashers.length > 1 && (k?.kind",
+    "replace": "if (e.hashers.length > 2 && (k?.kind",
+    "test": "test/scale-metadata.test.ts",
+    "why": "a map of two hashers has a key of two types"
+  },
+  {
+    "id": "metadata-hasher-table-order",
+    "file": "src/scale/metadata.ts",
+    "find": "\"Twox128\", \"Twox256\", \"Twox64Concat\", \"Identity\"] as const;",
+    "replace": "\"Twox128\", \"Twox64Concat\", \"Twox256\", \"Identity\"] as const;",
+    "test": "test/scale-metadata.test.ts",
+    "why": "hasher 5 is Twox64Concat"
+  },
+  {
+    "id": "metadata-pallet-index-twice",
+    "file": "src/scale/metadata.ts",
+    "find": "if (indices.has(p.index)) throw",
+    "replace": "if (indices.has(-1)) throw",
+    "test": "test/scale-metadata.test.ts",
+    "why": "two pallets never share an index"
+  },
+  {
+    "id": "decode-u64-as-number",
+    "file": "src/scale/decode.ts",
+    "find": "const AS_NUMBER = new Set<Primitive>([\"u8\", \"u16\", \"u32\", \"i8\", \"i16\", \"i32\"]);",
+    "replace": "const AS_NUMBER = new Set<Primitive>([\"u8\", \"u16\", \"u32\", \"u64\", \"i8\", \"i16\", \"i32\"]);",
+    "test": "test/scale-decode.test.ts",
+    "why": "every u64 is a decimal string, never a float"
+  },
+  {
+    "id": "decode-depth-unchecked",
+    "file": "src/scale/decode.ts",
+    "find": "  const label = typeLabel(d.md, id);\n  if (depth >= MAX_DEPTH) throw",
+    "replace": "  const label = typeLabel(d.md, id);\n  if (depth >= MAX_DEPTH + 64) throw",
+    "test": "test/scale-decode.test.ts",
+    "why": "a type nests at most MAX_DEPTH levels"
+  },
+  {
+    "id": "decode-step-free",
+    "file": "src/scale/decode.ts",
+    "find": "  step(d, label);\n  const t = entry(d.md, id);\n  const def = t.def;",
+    "replace": "  const t = entry(d.md, id);\n  const def = t.def;",
+    "test": "test/scale-decode.test.ts",
+    "why": "every type a decode visits costs one step of the budget"
+  },
+  {
+    "id": "decode-compact-step-free",
+    "file": "src/scale/decode.ts",
+    "find": "levels`);\n  step(d, label);\n  const t = entry(d.md, id);\n  if (t.def.kind === \"primitive\"",
+    "replace": "levels`);\n  const t = entry(d.md, id);\n  if (t.def.kind === \"primitive\"",
+    "test": "test/scale-decode.test.ts",
+    "why": "a type a compact wraps costs a step too"
+  },
+  {
+    "id": "decode-compact-overflow",
+    "file": "src/scale/decode.ts",
+    "find": "if (v >= 1n << BigInt(8 * widthOf(p))) throw",
+    "replace": "if (v > 1n << BigInt(8 * widthOf(p))) throw",
+    "test": "test/scale-decode.test.ts",
+    "why": "a compact must fit its type"
+  },
+  {
+    "id": "decode-bytes-as-list",
+    "file": "src/scale/decode.ts",
+    "find": "if (el.kind === \"primitive\" && el.primitive === \"u8\") return toHex",
+    "replace": "if (el.kind === \"primitive\" && el.primitive === \"u16\") return toHex",
+    "test": "test/scale-decode.test.ts",
+    "why": "byte arrays and vectors are hex"
+  },
+  {
+    "id": "decode-single-field-wrapped",
+    "file": "src/scale/decode.ts",
+    "find": "  if (list.length === 1) return decodeAt(d, (list.at(0) as Field).type, depth);",
+    "replace": "",
+    "test": "test/scale-decode.test.ts",
+    "why": "one unnamed field is the field itself, so an H256 is hex"
+  },
+  {
+    "id": "decode-fractional-id",
+    "file": "src/scale/decode.ts",
+    "find": "const t = Number.isSafeInteger(id) && id >= 0 ? md.types.at(id) : undefined;",
+    "replace": "const t = md.types.at(id);",
+    "test": "test/scale-decode.test.ts",
+    "why": "an id that is not a whole number from 0 names no type"
+  },
+  {
+    "id": "decode-array-count-unchecked",
+    "file": "src/scale/decode.ts",
+    "find": "      if (def.kind === \"array\") count(d, n, label);\n",
+    "replace": "",
+    "test": "test/scale-decode.test.ts",
+    "why": "an array holds no more elements than bytes left"
+  },
+  {
+    "id": "key-twox128-one-seed",
+    "file": "src/scale/storage-key.ts",
+    "find": "export const twox128 = (bytes: Uint8Array): Uint8Array => twox(bytes, 2);",
+    "replace": "export const twox128 = (bytes: Uint8Array): Uint8Array => cat(twox(bytes, 1), twox(bytes, 1));",
+    "test": "test/storage-key.test.ts",
+    "why": "twox128 is xxHash64 with seeds 0 and 1"
+  },
+  {
+    "id": "key-concat-drops-key",
+    "file": "src/scale/storage-key.ts",
+    "find": "export const blake2_128concat = (bytes: Uint8Array): Uint8Array => cat(blake2b(bytes, 16), bytes);",
+    "replace": "export const blake2_128concat = (bytes: Uint8Array): Uint8Array => blake2b(bytes, 16);",
+    "test": "test/storage-key.test.ts",
+    "why": "Blake2_128Concat ends with the key itself"
+  },
+  {
+    "id": "key-pallet-name-for-prefix",
+    "file": "src/scale/storage-key.ts",
+    "find": "return cat(twox128(UTF8.encode(prefix)), twox128(UTF8.encode(entry)), ...parts);",
+    "replace": "return cat(twox128(UTF8.encode(pallet)), twox128(UTF8.encode(entry)), ...parts);",
+    "test": "test/storage-key.test.ts",
+    "why": "a key starts with the storage prefix the metadata states"
+  },
+  {
+    "id": "key-part-unchecked",
+    "file": "src/scale/storage-key.ts",
+    "find": "      decodeValue(md, type, k);\n",
+    "replace": "",
+    "test": "test/storage-key.test.ts",
+    "why": "a map key must be one whole value of its key type"
+  },
+  {
+    "id": "key-twox64concat-unconcatenated",
+    "file": "src/scale/storage-key.ts",
+    "find": "    case \"Twox64Concat\":\n      return twox64concat(bytes);",
+    "replace": "    case \"Twox64Concat\":\n      return twox64(bytes);",
+    "test": "test/storage-key.test.ts",
+    "why": "Twox64Concat ends with the key itself"
+  },
+  {
+    "id": "key-count-unchecked",
+    "file": "src/scale/storage-key.ts",
+    "find": "if (keys.length !== types.length) {",
+    "replace": "if (keys.length > types.length) {",
+    "test": "test/storage-key.test.ts",
+    "why": "a map is given one key for each hasher"
+  },
+  {
+    "id": "key-hashers-swapped",
+    "file": "src/scale/storage-key.ts",
+    "find": "    const hasher = e.hashers.at(i) as Hasher;",
+    "replace": "    const hasher = (e.hashers.length > 0 ? \"Blake2_128\" : e.hashers.at(i)) as Hasher;",
+    "test": "test/storage-key.test.ts",
+    "why": "each key part is hashed with the hasher the metadata states for it"
+  },
+  {
+    "id": "events-pallet-index-unchecked",
+    "file": "src/scale/events.ts",
+    "find": "if (p.index !== v.index) throw",
+    "replace": "if (p.index < 0) throw",
+    "test": "test/events.test.ts",
+    "why": "the event enum puts each pallet at its own index"
+  },
+  {
+    "id": "events-pallet-index-from-place",
+    "file": "src/scale/events.ts",
+    "find": "      palletIndex: pallet.index,",
+    "replace": "      palletIndex: index,",
+    "test": "test/events.test.ts",
+    "why": "an event's pallet index is its pallet's"
+  },
+  {
+    "id": "events-event-index-from-place",
+    "file": "src/scale/events.ts",
+    "find": "      eventIndex: event.index,",
+    "replace": "      eventIndex: index,",
+    "test": "test/events.test.ts",
+    "why": "an event's variant index is its own"
+  },
+  {
+    "id": "events-record-fields-unchecked",
+    "file": "src/scale/events.ts",
+    "find": "names.join(\",\") !== RECORD_FIELDS.join(\",\")",
+    "replace": "names.length < 2",
+    "test": "test/events.test.ts",
+    "why": "an event record has exactly phase, event and topics"
+  },
+  {
+    "id": "events-other-event-type",
+    "file": "src/scale/events.ts",
+    "find": "only.type !== p.event",
+    "replace": "only.type < 0",
+    "test": "test/events.test.ts",
+    "why": "a pallet's variant holds exactly that pallet's event type"
+  },
+  {
+    "id": "events-phase-dropped",
+    "file": "src/scale/events.ts",
+    "find": "      phase: record.phase ?? null,",
+    "replace": "      phase: null,",
+    "test": "test/events.test.ts",
+    "why": "each event keeps its phase"
+  },
+  {
+    "id": "shape-any-spec-version",
+    "file": "src/scale/shape.ts",
+    "find": "(r) => r.specName === input.specName && r.specVersion === input.specVersion",
+    "replace": "(r) => r.specName === input.specName",
+    "test": "test/shape.test.ts",
+    "why": "only a reviewed spec version is decoded"
+  },
+  {
+    "id": "shape-metadata-hash-unchecked",
+    "file": "src/scale/shape.ts",
+    "find": " || hash !== reviewed.metadataSha256) {",
+    "replace": ") {",
+    "test": "test/shape.test.ts",
+    "why": "the metadata bytes must be the reviewed bytes"
+  },
+  {
+    "id": "shape-file-hash-unchecked",
+    "file": "src/scale/shape.ts",
+    "find": "  if (sha256(input.shapeText) !== reviewed.shapeSha256) return refuse(`the shape file given is not the reviewed ${reviewed.shapeFile}`);\n",
+    "replace": "",
+    "test": "test/shape.test.ts",
+    "why": "the shape file must be the reviewed file"
+  },
+  {
+    "id": "shape-channel-fields-dropped",
+    "file": "src/scale/shape.ts",
+    "find": "      channels: { ...entryShape(md, channels), fields: fieldsOf(md, channel) },",
+    "replace": "      channels: { ...entryShape(md, channels) },",
+    "test": "test/shape.test.ts",
+    "why": "the shape holds the fields of the channel value, and the file is held to the shape derived again"
+  },
+  {
+    "id": "shape-upgrade-spec-unchecked",
+    "file": "src/scale/shape.ts",
+    "find": "u.spec_version !== reviewed.specVersion",
+    "replace": "u.spec_version === -1",
+    "test": "test/shape.test.ts",
+    "why": "the block's LastRuntimeUpgrade must name the reviewed spec"
+  },
+  {
+    "id": "shape-name-depth-off-by-one",
+    "file": "src/scale/shape.ts",
+    "find": "if (depth >= MAX_NAME_DEPTH || steps.left < 0) throw",
+    "replace": "if (depth > MAX_NAME_DEPTH || steps.left < 0) throw",
+    "test": "test/shape.test.ts",
+    "why": "a type name nests at most MAX_NAME_DEPTH levels"
+  },
+  {
+    "id": "block-pin-ignored",
+    "file": "src/scale/block.ts",
+    "find": "  const pin = pinShape(input);",
+    "replace": "  const pin = pinShape({ ...input, specVersion: 1014014 });",
+    "test": "test/shape.test.ts",
+    "why": "a block's events are decoded only once its own spec is pinned"
+  },
+  {
+    "id": "scan-pure-imports-anything",
+    "file": "scripts/source-scan.mjs",
+    "find": "  return PURE_MODULES.has(name) ? null : `imports ${JSON.stringify(name)} into the pure folder src/${file.split(\"/\").at(0)}`;",
+    "replace": "  return null;",
+    "test": "scripts/source-scan.mjs",
+    "why": "a pure folder imports only createHash from node:crypto beyond its own modules"
+  },
+  {
+    "id": "scan-pure-relative-anywhere",
+    "file": "scripts/source-scan.mjs",
+    "find": "    return isPure(inside) ? null : `imports ${JSON.stringify(name)}, which is outside the pure folders src/scale and src/hash`;",
+    "replace": "    return null;",
+    "test": "scripts/source-scan.mjs",
+    "why": "a pure folder imports no other src module, which could read a file"
+  },
+  {
+    "id": "scan-pure-names-allowed",
+    "file": "scripts/source-scan.mjs",
+    "find": "        if (isPure(file) && PURE_BANNED.has(n.name)) out.push",
+    "replace": "        if (isPure(file) && PURE_BANNED.has(n.name + \"x\")) out.push",
+    "test": "scripts/source-scan.mjs",
+    "why": "a pure folder names no clock, timer or process"
+  },
+  {
+    "id": "scan-pure-random-allowed",
+    "file": "scripts/source-scan.mjs",
+    "find": "        if (isPure(file) && member === \"random\") out.push",
+    "replace": "        if (isPure(file) && member === \"rand\") out.push",
+    "test": "scripts/source-scan.mjs",
+    "why": "a pure folder names no random source"
+  },
+  {
+    "id": "scan-reference-in-src",
+    "file": "src/scale/decode.ts",
+    "find": "import { Reader, ScaleError, type Width, toHex } from \"./reader.js\";",
+    "replace": "import { Reader, ScaleError, type Width, toHex } from \"./reader.js\";\nimport { Twox128 } from \"@polkadot-api/substrate-bindings\";\nexport const referenceTwox128 = Twox128;",
+    "test": "scripts/source-scan.mjs",
+    "why": "the reference decoder is for tests only: a src module that imports it fails the scan"
+  },
+  {
+    "id": "scan-clock-in-scale",
+    "file": "src/scale/decode.ts",
+    "find": "export const MAX_DEPTH = 32;",
+    "replace": "export const MAX_DEPTH = 32 + Math.min(0, Date.now());",
+    "test": "scripts/source-scan.mjs",
+    "why": "a decoder module that reads the clock fails the scan"
+  }
+]
