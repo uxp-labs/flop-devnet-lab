@@ -8,7 +8,9 @@ These rules are the spec. Code and tests follow them, and the independent recoun
 - A value we could not read is `null`, shown blank. It is never `ok`, never `0`, never "complete".
 - `reset_detected` is `false` only when both a usable faucet `/chain` reading and a usable RPC
   head report the pinned genesis (1.1 says what usable means). If a usable reading reports
-  another genesis it is `true`. Otherwise it is `null`, and callers treat `null` like `true`
+  another genesis it is `true`. It is `true` too when the anchor is lost (1.1): the node no longer
+  holds, at a finalized height the log saw, the block the log saw there, which is a reset that kept
+  the genesis. Otherwise it is `null`, and callers treat `null` like `true`
   before spending. An unusable reading counts for neither: it never makes the value `false`, and
   never `true` either, though its genesis still shows in `genesis` and a disagreement with the
   other source is still a conflict.
@@ -49,14 +51,16 @@ check below to run and pass.
   below found the head contradicting itself or an earlier snapshot: no rollback, no changed
   finalized hash, a best height not below the finalized height nor below the highest finalized
   height an earlier snapshot saw on this genesis nor more than the lag limit below the highest best
-  height an earlier snapshot saw on this genesis, and no earlier snapshot taken, or its head read,
-  later than this snapshot time. A head that fails any of these is not usable, however fresh: a
+  height an earlier snapshot saw on this genesis, a runtime version not below the highest one an
+  earlier snapshot saw on this genesis, no lost anchor, and no earlier snapshot taken, or its head
+  read, later than this snapshot time. A head that fails any of these is not usable, however fresh: a
   chain restarted from the same spec keeps its genesis, and its first heads report a low best height
   and no finalized head yet. `genesis.rpc` still shows what the head said. A usable head counts
   toward `reset_detected` false only once its finalized height is known not to be stuck: the stuck
   check below ran and found it held for no longer than the stale limit, or new to the log. A height
   stuck past the stale limit, or one whose stuck check cannot run, leaves `reset_detected` null
-  unless a reading names another genesis, which counts either way. The same usable head is the only
+  unless a reading names another genesis, which counts either way. So does an anchor read back with
+  no verdict: the head is still usable, but it never counts toward false. The same usable head is the only
   one whose finalized height may bound escrow evidence (section 2), stuck or not: a finalized height
   stays final however long it holds, and a bound below the chain's only keeps more evidence waiting.
 - Heights and the runtime version are safe integers (census clause 14). A finalized or best
@@ -127,16 +131,46 @@ check below to run and pass.
     of the highest one seen, and then counts again. Like the finalized floor, this one counts a
     head that came with a read error: a reading that later proves wrong keeps the head unusable
     until the operator starts a new log.
-  - Three restarts the history cannot see: one whose earlier heads read no valid genesis, which are
-    on no genesis and set no floor; one within the lag limit of where the chain was, which no
-    reorganisation rule can tell from a reorganisation; and one whose new chain is already past
-    every height the log holds by the next snapshot, which heads alone cannot tell from progress.
-    The last is seen only when the new finalized head lands on a height the log recorded, as a
-    changed hash there. On devnet, at over three million blocks, the new chain would need months
-    to get past the log, so it matters most for a young chain or a log with long gaps.
+  - the spec floor: every earlier snapshot's runtime version on the same genesis is a floor. A
+    version below the highest of them is a conflict, and this head is not usable, as for a
+    finalized height below the floor. The runtime is upgraded in place on one genesis (read by hand
+    on 2026-11-11: devnet ran spec 1011000 at block 1, 1011003 at block 1,000,000 and 1014014 at the
+    head, all on one genesis), so a
+    higher version is no conflict and changes nothing. An unknown version (`null`) is no verdict,
+    and does not keep `reset_detected` from `false` by itself: the head rules already judge a head
+    that read nothing.
+  - the anchor: a live run that builds on a log reads back one earlier finalized block, the anchor:
+    the latest finalized head an earlier snapshot logged on the pinned genesis, by its height, with
+    `chain_getBlockHash(height)`, after the head calls (section 7). It compares the answer with the
+    logged hash. The same hash changes nothing. Another hash, or no block at that height (the node
+    answers `null`), means the finalized chain is not the one the log saw: the anchor is lost. That
+    is a conflict that names the height, the logged hash and what the node answered, and ends with
+    the words "the finalized chain is not the one the log saw"; `reset_detected` is `true`; and the
+    head is not usable, as for a changed finalized hash. A read that failed on the way, or an answer
+    that is no block hash, gives no verdict: no conflict, `reset_detected` is never `false` on that
+    reading (it is `null` unless another rule finds a reset), and the RPC detail says why. Like a
+    stuck check that cannot run, it leaves RPC health `unknown` when nothing else failed. With no
+    anchor (a first run, or a log with no finalized head on the pinned genesis) no call is made and
+    nothing changes. The anchor catches a chain restored from a backup, or restarted from the same
+    chain spec and grown past the log's heights, which keeps its genesis and can pass every height
+    rule above. What it does not show: it is one block, read from the same single RPC endpoint the
+    run already trusts. It catches a chain that changed under the log, not an endpoint that lies
+    consistently. A block hash commits to every block before it, so the same hash at the anchor's
+    height means the same history below it, as far as that endpoint tells it; no header is checked.
+  - Three restarts the heads alone cannot see: one whose earlier heads read no valid genesis, which
+    are on no genesis and set no floor and no anchor; one within the lag limit of where the chain
+    was, which no reorganisation rule can tell from a reorganisation; and one whose new chain is
+    already past every height the log holds by the next snapshot, which heads alone cannot tell from
+    progress. A live run sees the last two through the anchor, once the new chain holds a block at
+    the anchor's height: a restarted chain's block there is, in practice, another block. A new chain
+    below that height is below the finalized floor already. The first stays unseen. The snapshot
+    command reads no network, so it reads no anchor back: for it the second stays unseen, and the
+    third is seen only when the new finalized head lands on a height the log recorded, as a changed
+    hash there.
   - The `status` command reads no log, so none of the checks against earlier snapshots runs there:
     its `reset_detected` speaks for that one reading only. The snapshot command's does not, and
-    neither does a live run's, which reads the published log (section 7).
+    neither does a live run's, which reads the published log (section 7). Only a live run reads the
+    anchor back; every saved reading holds none.
 - Any failed check makes RPC health `degraded`. A missing or invalid genesis hash, finalized head
   or best height is a failed check. A missing or unparsable `observed_at` means the age check
   cannot run: health is `unknown` when nothing else failed.
@@ -556,7 +590,8 @@ blank on the page and `null` in JSON and MCP.
   wrong is named once, as `<object>.fields`, and its values and parts are not read.
   Once every shape holds, the values the settlement rules tie together agree: `reset_detected` false
   only with both genesis readings on the pinned genesis and both heights read, and true only with a
-  reading on another genesis; the finality lag the best height less the finalized one, and none when
+  reading on another genesis or with a conflict that ends with "the finalized chain is not the one
+  the log saw", which only a lost anchor gives (1.1); the finality lag the best height less the finalized one, and none when
   either is missing or the finalized one is higher; an escrow unverified with no evidence, funded on
   one open and nothing else, claimed on one release and refunded on one refund, each with at most
   one open and no event of the other kind, every item on the pinned genesis; an escrow's finalized
@@ -695,7 +730,11 @@ it adds.
 - The head is read once, one call at a time, in a fixed order: `system_chain`,
   `chain_getBlockHash(0)` for the genesis, `chain_getFinalizedHead` for the finalized hash,
   `chain_getHeader` at that hash for the finalized height, `chain_getHeader` with no hash for the
-  best height, and `state_getRuntimeVersion` at the finalized hash. Its `observed_at` is taken just
+  best height, and `state_getRuntimeVersion` at the finalized hash. Then, when the published log
+  holds a finalized head on the pinned genesis, one more call: `chain_getBlockHash` at the height of
+  the latest one, the anchor (1.1). Its height comes from the log, never from a reading, and a first
+  run makes no such call. `state_getRuntimeVersion` is called only at the finalized head: at an old
+  block it takes seconds. Its `observed_at` is taken just
   before the first call, so the head is never shown as fresher than it is, and the snapshot time
   just after the last reading, so no reading is later than it.
 - A call that failed on the way (no socket, a time limit, an answer over the size limit or not
@@ -747,7 +786,8 @@ it adds.
   endpoint said before. The log does not show its lines are true, and lines cut from its end, a
   line from before memory added to or removed from its start, or the whole log removed cannot be
   detected from the log itself, as section 1.1 says of any log. Section 1.1's three restarts the
-  history cannot see stay unseen.
+  heads alone cannot see are seen as that section says. The anchor is one more read from that same endpoint: it shows the
+  endpoint still gives the block the log saw, not that the block is true.
 - Every run reads the whole log: the checks need the highest finalized and best heights ever logged
   on the genesis, every hash logged at the current height and the latest run of snapshots at that
   height, which can be any length, and any shorter read would need a second owner of those rules.
@@ -756,7 +796,9 @@ it adds.
   range and every escrow is `unverified`. Neither is ever shown as "no events".
 - The tape holds every request in the order it was made and the answer as the observatory read
   it, after parsing: a body that was not JSON is a reading with its error set, not the bytes. A
-  replay answers each request with the next entry and refuses any other request, naming both.
+  replay answers each request with the next entry and refuses any other request, naming both. A
+  tape recorded before runs read the anchor holds no anchor call: it replays as a first run exactly,
+  and a replay of it on a log that names an anchor is refused at that call, which it never answered.
 - The run exits 0 when a truthful snapshot was written, whatever it says of each service, 3 when
   that snapshot holds a reset signal (`reset_detected` true or any conflict), 4 when the guard or
   the transport refused a request, 1 when the run broke before a snapshot was written or the log

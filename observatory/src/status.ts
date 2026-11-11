@@ -5,7 +5,8 @@
 // - Health is "ok" only when every check ran and passed (section 1.1).
 // - reset_detected is false only when the faucet and the RPC both report the pinned genesis, from
 //   usable readings, and the RPC's finalized height is known not to be stuck. Any usable source
-//   with a different genesis makes it true. Not enough evidence makes it null.
+//   with a different genesis makes it true, and so does a lost anchor: a live run read back a
+//   finalized block the log saw, and the node no longer holds it. Not enough evidence makes it null.
 // - Disagreements between sources go in `conflicts`, in plain words.
 import type { AnchorReading, FaucetHealthBody, Health, HttpResult, NetworkStatus, RpcHead, ServiceStatus } from "./types.js";
 import type { Source } from "./source.js";

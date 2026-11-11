@@ -97,12 +97,18 @@ What it does, once per run:
 - GETs the faucet's `/health` and `/chain` and the gateway's `/v1/models`.
 - Opens one WebSocket to `wss://rpc.devnet.flop.network` and calls `system_chain`,
   `chain_getBlockHash(0)`, `chain_getFinalizedHead`, `chain_getHeader` for the finalized head (by
-  its hash) and for the best head, and `state_getRuntimeVersion` at the finalized head.
+  its hash) and for the best head, and `state_getRuntimeVersion` at the finalized head. When the log
+  holds a finalized head on the pinned genesis, it then calls `chain_getBlockHash` at the height of
+  the latest one, the anchor, to read that block back. A first run makes no such call.
 - Builds a `networkStatus` snapshot from those answers with the same code the fixtures go through,
   pinned to the genesis in `src/status.ts`, on top of every snapshot in the log. So the checks
   against earlier snapshots run, unchanged, over real history: a finalized height below the
   highest one logged on this genesis, a changed hash at a logged height, a best height below the
-  floor, and a finalized height stuck past the stale limit.
+  floor, a finalized height stuck past the stale limit, and a runtime version below the highest one
+  logged on this genesis (a higher one is an upgrade, and changes nothing). The anchor read back
+  under another hash, or gone (the node has no block at that height), is a conflict and
+  `reset_detected` true: the finalized chain is not the one the log saw. An anchor read that failed
+  gives no verdict: `reset_detected` is not `false` then, and the RPC detail says why.
 - Writes into the folder, which must be new or empty: the snapshot (`snapshot.json`, the feeds and
   `snapshots.jsonl`, its one new line of the log, with the `seq` and `prev_hash` that follow the
   log's last line), `tape.jsonl` (every request and its answer, in order), `run.json` (start, end,
@@ -142,7 +148,10 @@ found by a fold over the earlier heights, so no count of them breaks the checks;
 at 200,000 earlier heads, more than eleven years at 48 a day.
 
 A live snapshot's trust is `"trusted RPC"`. It trusts one RPC endpoint, and the faucet and gateway
-as they answer. It is not proof: no light client, and no header hash is checked.
+as they answer. It is not proof: no light client, and no header hash is checked. The anchor is one
+block read from that same endpoint: it catches a chain that changed under the log (a chain restored
+from a backup, or restarted from the same spec and grown past the log's heights, keeps its genesis),
+not an endpoint that lies consistently.
 
 What it never does: call an RPC method outside the guard's list, send anything but GET, reach a host
 other than `rpc.devnet.flop.network`, `faucet.flop.network` and `api.flop.network`, follow a
@@ -165,11 +174,21 @@ Offline, `npm test` covers it without a network: synthetic tapes in `fixtures/li
 through the status code, the transport with a fake socket class and a fake HTTP call, a run whose
 tape replays to the same snapshot, and the workflow read as data. Real readings taken from the data
 branch are in `fixtures/published-*` (marked `synthetic: false`, with the data branch commit, the
-workflow run, the revision and the tape's sha256 in `meta.json`); each replays to its recorded
-snapshot, and the second is built on the first in one chain. Synthetic second readings in
+workflow run, the revision and the tape's sha256 in `meta.json`). The first two are first runs:
+each replays to its recorded snapshot, and the second is built on the first in one chain. The
+third, `published-2026-11-11-1206`, is the first reading the memory step published, built on the
+five before it, with the RPC down. Replayed on that log it asks for the anchor its tape does not
+hold; with that call answered as the socket answered every other (synthetic), it gives the recorded
+status but for the RPC detail, which says the anchor could not be read. From its log a test builds the anchor request the
+next run makes. Synthetic second readings in
 `fixtures/memory-*`, made from the first real tape, show each check against history and each
-refused log. `npm run check` runs those with everything else, and `mutants/live.json` and
-`mutants/memory.json` hold the bugs they must catch.
+refused log. Those tapes, and the real ones, were recorded before runs read an anchor back, so they
+hold no anchor call: a first run's tape replays as a first run exactly, and on a log that names an
+anchor any of them is refused at the call it never answered, unless a test answers it, synthetic, as that fixture's own chain would
+(`test/helpers/tapes.ts` says each answer and why). Synthetic readings in `fixtures/anchor-*`, made
+the same way, hold the anchor call and show each case of the anchor and the spec floor.
+`npm run check` runs those with everything else, and `mutants/live.json`, `mutants/memory.json` and
+`mutants/anchor.json` hold the bugs they must catch.
 
 ## Published readings
 

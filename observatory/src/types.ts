@@ -132,7 +132,8 @@ export interface NetworkStatus {
   trust: Trust;
   genesis: { pinned: string; faucet: string | null; rpc: string | null };
   /**
-   * true: some source reports a genesis other than the pinned one.
+   * true: some source reports a genesis other than the pinned one, or the anchor is lost: the node
+   * no longer holds a finalized block the log saw (RULES.md 1.1).
    * false: both faucet and RPC report the pinned genesis.
    * null: not enough evidence to say. Callers must treat null like true before spending.
    */
