@@ -16,7 +16,7 @@ import { overDailyCap, padQuote, parseAmount } from "./policy.js";
 import { appendLedger, latestAttempts, LedgerLockError, reportedSpendToday, spentToday, UnusableLedgerRow, type LedgerEntry } from "./ledger.js";
 import { listReceipts, readSavedReceipt, receiptVerdicts, refreshReceipt, type SavedReceipt } from "./receipt-store.js";
 import { blank, classifyReceipt, receiptLine } from "./receipts.js";
-import { registerSecret } from "./secrets.js";
+import { outsideText, registerSecret } from "./secrets.js";
 
 export interface IO {
   out: (s: string) => void;
@@ -64,6 +64,13 @@ function timeoutMs(raw: string | undefined): number {
   const n = Number(raw);
   if (!Number.isInteger(n) || n < 1 || n > 2147483647) throw new CliError("--timeout-ms must be an integer from 1 to 2147483647", EXIT.USAGE);
   return n;
+}
+
+/** A field the gateway sent, for stdout: a finite number as it is, any other value through outsideText, missing as null (review defect 5). */
+function shownField(v: unknown): number | string | null {
+  if (v === undefined || v === null) return null;
+  if (typeof v === "number" && Number.isFinite(v)) return v;
+  return outsideText(typeof v === "string" ? v : JSON.stringify(v), { max: 200 });
 }
 
 function activeSeat(h: string, explicit?: string): string {
@@ -232,10 +239,10 @@ export async function main(argv: string[], io: IO): Promise<number> {
         if ((r.status === 200 || r.status === 201) && typeof bearer === "string") {
           registerSecret(bearer);
           writeSecretFile(gatewayKeyFile(h, seat), bearer + "\n");
-          print({ enrolled: true, http: r.status, model: r.json.model, remaining_quota: r.json.remaining_quota, expires_at: r.json.expires_at });
+          print({ enrolled: true, http: r.status, model: shownField(r.json.model), remaining_quota: shownField(r.json.remaining_quota), expires_at: shownField(r.json.expires_at) });
           return EXIT.OK;
         }
-        print({ enrolled: false, http: r.status, error: r.json.error ?? null });
+        print({ enrolled: false, http: r.status, error: shownField(r.json.error) });
         return EXIT.ERROR;
       }
 

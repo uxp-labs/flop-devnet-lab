@@ -84,7 +84,16 @@ export function enrollChallengeUrl(net: NetworkInfo, ss58: string): string {
 export async function getEnrollChallenge(net: NetworkInfo, ss58: string, f: Fetch): Promise<{ message: string; nonce: string; expires_at: number }> {
   const res = await uaFetch(f)(enrollChallengeUrl(net, ss58), { headers: { Accept: "application/json" }, signal: AbortSignal.timeout(15000) });
   if (!res.ok) throw new Error(`enroll challenge HTTP ${res.status}`);
-  return (await res.json()) as { message: string; nonce: string; expires_at: number };
+  // The parse error of a body that is not JSON quotes the body: never repeat it (review defect 5).
+  let j: unknown;
+  try {
+    j = await res.json();
+  } catch {
+    throw new Error("the enroll challenge was not JSON");
+  }
+  const c = j as { message?: unknown; nonce?: unknown; expires_at?: unknown } | null;
+  if (!c || typeof c !== "object" || typeof c.message !== "string") throw new Error("the enroll challenge has no message");
+  return c as { message: string; nonce: string; expires_at: number };
 }
 
 export async function postEnroll(net: NetworkInfo, body: { address: string; message: string; signature: string }, f: Fetch): Promise<{ status: number; json: Record<string, unknown> }> {

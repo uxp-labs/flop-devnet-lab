@@ -196,7 +196,7 @@ describe("review defect 4 (low), fixed: a damaged seat key file is named, never 
   });
 });
 
-describe("DEFECT 5 (low): enroll --live puts the gateway's own text on stdout and stderr without outsideText", () => {
+describe("review defect 5 (low), fixed: enroll --live shows the gateway's text only through outsideText", () => {
   const enrollFetch = (challengeBody: (ss58: string) => string, enrollBody: string): Fetch =>
     (async (input: string | URL | Request) => {
       const url = String(input instanceof Request ? input.url : input);
@@ -207,22 +207,31 @@ describe("DEFECT 5 (low): enroll --live puts the gateway's own text on stdout an
       return new Response(enrollBody, { status: 403 });
     }) as Fetch;
 
-  it("DEFECT 5 (low): a refused enroll prints the server's error field raw on stdout, a bearer token included", async () => {
+  it("review defect 5, fixed: a refused enroll prints the server's error field through outsideText: a bearer in it is withheld", async () => {
     const h = tmpHome();
     expect((await cli(h, ["init", "--seat", "7"])).code).toBe(0);
     const bearer = "Bearer sk_live_0123456789abcdefXYZ";
     const r = await cli(h, ["enroll", "--live"], { fetch: enrollFetch((ss58) => JSON.stringify({ message: `enroll ${ss58}`, nonce: "n", expires_at: 1 }), JSON.stringify({ error: `wallet_unfunded; retry with ${bearer}` })) });
     expect(r.code).toBe(1);
-    expect(scanForSecrets({ reason: bearer })).not.toEqual([]);
-    expect(r.out).toContain(bearer);
+    expect(r.out).not.toContain("sk_live");
+    expect(r.json()).toMatchObject({ enrolled: false, http: 403, error: OUTSIDE_WITHHELD });
   });
 
-  it("DEFECT 5 (low): a challenge body that is not JSON is quoted on stderr through JSON.parse's message", async () => {
+  it("review defect 5, fixed: an error field with control characters or of another type is shown as safe text", async () => {
+    const h = tmpHome();
+    expect((await cli(h, ["init", "--seat", "7"])).code).toBe(0);
+    const r = await cli(h, ["enroll", "--live"], { fetch: enrollFetch((ss58) => JSON.stringify({ message: `enroll ${ss58}`, nonce: "n", expires_at: 1 }), JSON.stringify({ error: { code: "wallet_unfunded" } })) });
+    expect(r.json()).toMatchObject({ enrolled: false, error: '{"code":"wallet_unfunded"}' });
+  });
+
+  it("review defect 5, fixed: a challenge body that is not JSON is reported with a fixed sentence", async () => {
     const h = tmpHome();
     expect((await cli(h, ["init", "--seat", "7"])).code).toBe(0);
     const r = await cli(h, ["enroll", "--live"], { fetch: enrollFetch(() => "<html>proxy SeCrEtTiCkEt-42</html>", "{}") });
     expect(r.code).toBe(1);
-    expect(r.err).toContain("<html>pro");
+    expect(r.err).toContain("the enroll challenge was not JSON");
+    expect(r.err).not.toContain("<html");
+    expect(r.err).not.toContain("SeCrEt");
   });
 });
 
