@@ -485,7 +485,6 @@ describe("JSON and object safety", () => {
         { def: def.primitive("char") }, // 3
         { def: def.primitive("str") }, // 4
         { def: def.primitive("i8") }, // 5
-        { def: def.composite([{ name: "b", type: 0 }, { name: "1", type: 0 }, { name: "0", type: 0 }]) }, // 6
       ],
       [],
     ),
@@ -508,8 +507,14 @@ describe("JSON and object safety", () => {
     expect(Object.is(decodeValue(md, 5, bytes(0)), 0)).toBe(true);
   });
 
-  it("DEFECT 11: fields named by integers come out of JSON in another order than the metadata gives them (b, 1, 0 becomes 0, 1, b)", () => {
-    expect(JSON.stringify(decodeValue(md, 6, bytes(7, 8, 9)))).toBe('{"0":9,"1":8,"b":7}');
+  it("review defect 11, fixed: a field or variant named by digits alone is refused, so JavaScript never reorders a decoded object's keys", () => {
+    const fields = metadata([{ def: def.primitive("u8") }, { def: def.composite([{ name: "b", type: 0 }, { name: "1", type: 0 }, { name: "0", type: 0 }]) }], []);
+    expect(thrown(() => parseMetadata(fields))).toEqual({ cls: "ScaleError", message: 'type 1: the field name "1" is all digits, which no Rust name is' });
+    const variants = metadata([{ def: def.variant([{ name: "7", index: 0 }]) }], []);
+    expect(thrown(() => parseMetadata(variants))).toEqual({ cls: "ScaleError", message: 'type 0: the variant name "7" is all digits, which no Rust name is' });
+    // A name with a digit in it is fine, and keeps its place.
+    const mixed = parseMetadata(metadata([{ def: def.primitive("u8") }, { def: def.composite([{ name: "b", type: 0 }, { name: "a1", type: 0 }]) }], []));
+    expect(JSON.stringify(decodeValue(mixed, 1, bytes(7, 8)))).toBe('{"b":7,"a1":8}');
   });
 });
 

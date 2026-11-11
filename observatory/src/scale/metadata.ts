@@ -7,7 +7,7 @@
 // type ids that do not count from 0 in order, a type id that names no type, a composite that mixes
 // named and unnamed fields or names a field twice, a variant index or name used twice, two pallets
 // with one name, one index or one storage prefix, a storage entry or a constant named twice in a
-// pallet, a signed extension listed twice, a map with no hasher, and a map of several hashers whose
+// pallet, a field or variant name of only digits, a signed extension listed twice, a map with no hasher, and a map of several hashers whose
 // key is not a tuple of as many types. It knows no pallet and no type by
 // name: what the observatory relies on is the shape pin's to say (src/scale/shape.ts).
 import { Reader, ScaleError, toHex } from "./reader.js";
@@ -81,6 +81,11 @@ export interface Metadata {
 }
 
 const MAGIC = "0x6d657461";
+/**
+ * A name of only digits. No Rust identifier is one, and JavaScript would put such a key before the
+ * others in a decoded object, so the order of fields would not be the metadata's.
+ */
+const DIGITS = /^[0-9]+$/;
 
 /** A compact that names a type id: a u32. */
 function typeId(r: Reader, what: string): number {
@@ -119,6 +124,7 @@ function fieldsOf(r: Reader, what: string): Field[] {
   const seen = new Set<string>();
   for (const f of fields) {
     if (f.name === null) continue;
+    if (DIGITS.test(f.name)) throw new ScaleError(`${what}: the field name ${JSON.stringify(f.name)} is all digits, which no Rust name is`);
     if (seen.has(f.name)) throw new ScaleError(`${what}: the field ${JSON.stringify(f.name)} is named twice`);
     seen.add(f.name);
   }
@@ -140,6 +146,7 @@ function typeDef(r: Reader, what: string): TypeDef {
       const names = new Set<string>();
       const indices = new Set<number>();
       for (const v of variants) {
+        if (DIGITS.test(v.name)) throw new ScaleError(`${what}: the variant name ${JSON.stringify(v.name)} is all digits, which no Rust name is`);
         if (names.has(v.name)) throw new ScaleError(`${what}: the variant ${JSON.stringify(v.name)} is named twice`);
         if (indices.has(v.index)) throw new ScaleError(`${what}: the variant index ${v.index} is used twice`);
         names.add(v.name);
