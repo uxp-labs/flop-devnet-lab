@@ -1,6 +1,6 @@
 {
  "file": "settlement-run.json",
- "description": "imd-flop run: reservation and settlement rows in the ledger. Mock provider (estimate 0.066/3/8, padded 0.186), cap 1 unless input.cap. read.receipt.request_id \"$rid\" means the run's own request_id. complete: ok (default) | presend (PreSendError) | timeout (abort) | http500 (FlopHTTPError 500). spend_raw (money stage 1) is the latest row's exact spend, or \"absent\" when the row has no such field.",
+ "description": "imd-flop run: reservation and settlement rows in the ledger. Mock provider (estimate 0.066/3/8, padded 0.186), cap 1 unless input.cap. read.receipt.request_id \"$rid\" means the run's own request_id. complete: ok (default) | presend (PreSendError) | timeout (abort) | http500 (FlopHTTPError 500). spend_raw (money stage 1) is the latest row's exact spend, or \"absent\" when the row has no such field. Hold floor (KD-12): the cap charge is max(padded quote, settled spend, reported cost). reason is the latest row's reason, with the PAST_ADMITTED text written as \"PAST_ADMITTED\"; stderr_past_admitted says whether stderr carries it.",
  "status": "current behavior at 3ae1cdf",
  "vectors": [
   {
@@ -931,7 +931,10 @@
      "not_applicable": "viewer renders ledger rows; it never writes them"
     }
    },
-   "note": "Hold floor (R3): a settled amount above the padded quote raises the charge above what the call was allowed to spend. The booking prints PAST_ADMITTED (rules.json constants) on stderr and records it in the row's reason. \"PAST_ADMITTED\" stands for that constant."
+   "note": "Hold floor (R3): a settled amount above the padded quote raises the charge above what the call was allowed to spend. The booking prints PAST_ADMITTED (rules.json constants) on stderr and records it in the row's reason. \"PAST_ADMITTED\" stands for that constant.",
+   "quirks": [
+    "R-f"
+   ]
   },
   {
    "id": "run-reported-cost-above-hold-prints-past-admitted",
@@ -973,7 +976,10 @@
      "not_applicable": "viewer renders ledger rows; it never writes them"
     }
    },
-   "note": "Hold floor (R3): a reported cost above the padded quote raises the hold above what the call was allowed to spend: the same line. \"PAST_ADMITTED\" stands for the rules.json constant."
+   "note": "Hold floor (R3): a reported cost above the padded quote raises the hold above what the call was allowed to spend: the same line. \"PAST_ADMITTED\" stands for the rules.json constant.",
+   "quirks": [
+    "R-f"
+   ]
   },
   {
    "id": "run-settled-below-hold-prints-nothing",

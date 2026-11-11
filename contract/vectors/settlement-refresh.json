@@ -1,6 +1,6 @@
 {
  "file": "settlement-refresh.json",
- "description": "imd-flop `receipt <id> --refresh` after a mock run: rows appended, the latest ledger row, the DISAGREE line on stderr, and the stored receipt file. run_read is the run's own receipt read (http 200); run_cost_flop is the usage.cost_flop its completion reported; run_complete timeout leaves no receipt file. prev_cap_charge replaces the latest row's cap_charge before the refresh. strip_receipt_fields deletes keys from the stored file before the refresh. spend_raw (money stage 1) is the latest row's exact spend, or \"absent\" when the row has no such field.",
+ "description": "imd-flop `receipt <id> --refresh` after a mock run: rows appended, the latest ledger row, the DISAGREE line on stderr, and the stored receipt file. run_read is the run's own receipt read (http 200); run_cost_flop is the usage.cost_flop its completion reported; run_complete timeout leaves no receipt file. prev_cap_charge replaces the latest row's cap_charge before the refresh. strip_receipt_fields deletes keys from the stored file before the refresh. spend_raw (money stage 1) is the latest row's exact spend, or \"absent\" when the row has no such field. Hold floor (KD-12, KD-13, KD-14): the cap charge is max(padded quote, settled spend, reported cost), and run_complete presend releases the hold before the refresh. reason is the latest row's reason, with the PAST_ADMITTED text written as \"PAST_ADMITTED\"; stderr_past_admitted says whether stderr carries it.",
  "status": "current behavior at 3ae1cdf",
  "vectors": [
   {
@@ -893,7 +893,10 @@
      "not_applicable": "viewer renders ledger rows; it never writes them"
     }
    },
-   "note": "Hold floor (R3): \"nothing was sent\" released the hold (refused_local, charge 0). A trusted read shows the gateway holds the request after all, so the hold comes back. The day may end over its cap, so the booking prints PAST_ADMITTED and records it in the row's reason. \"PAST_ADMITTED\" stands for the rules.json constant."
+   "note": "Hold floor (R3): \"nothing was sent\" released the hold (refused_local, charge 0). A trusted read shows the gateway holds the request after all, so the hold comes back. The day may end over its cap, so the booking prints PAST_ADMITTED and records it in the row's reason. \"PAST_ADMITTED\" stands for the rules.json constant.",
+   "quirks": [
+    "R-f"
+   ]
   },
   {
    "id": "refresh-presend-then-no-state-hold-comes-back",
@@ -933,7 +936,10 @@
      "not_applicable": "viewer renders ledger rows; it never writes them"
     }
    },
-   "note": "Hold floor (R2): a trusted receipt with no state shows the gateway knows the request, as any trusted read does. The hold comes back and the row is sent again; the state moves no further."
+   "note": "Hold floor (R2): a trusted receipt with no state shows the gateway knows the request, as any trusted read does. The hold comes back and the row is sent again; the state moves no further.",
+   "quirks": [
+    "R-f"
+   ]
   },
   {
    "id": "refresh-settled-low-then-hold-read",

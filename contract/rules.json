@@ -83,7 +83,7 @@
     },
     "PAST_ADMITTED": {
       "value": "booked past what the cap admitted; the day may end over its cap",
-      "imd-flop": "src/settlement.ts PAST_ADMITTED (run and receipt --refresh stderr, and the reason of the row, when a booking puts the day in a state the cap did not admit: a released hold that comes back, or a charge raised above the call's padded quote)",
+      "imd-flop": "src/settlement.ts PAST_ADMITTED (run and receipt --refresh stderr, and the reason of the row, when a booking puts the day in a state the cap did not admit: a released hold that comes back, or a charge raised above the call's padded quote; known defect KD-12, residual R-f)",
       "spend-guard": null,
       "viewer": null
     },
@@ -277,6 +277,15 @@
         "imd-flop"
       ],
       "summary": "A pre-send error message with a 0x + 64 hex hash is stored as [hash] in the ledger reason but printed raw on stderr. The swarm audit of 8ddc5d2 reported this again as its finding 12 (info). It stays as it is. The ledger reason is rewritten so that the secret scan can store the refused_local row, which is what releases the reservation (src/run.ts). The message on stderr is not rewritten. Pinned by vector run-pre-send-hash-on-stderr."
+    },
+    {
+      "id": "R-f",
+      "residual": "f",
+      "status": "current behavior",
+      "parts": [
+        "imd-flop"
+      ],
+      "summary": "The daily cap can be passed only when the gateway shows a receipt for a request this tool recorded as never sent, or reports more than the child key allowed. \"Nothing was sent\" is a local fact and releases the hold; a later trusted read that shows the gateway holds the request brings the hold back (the safe direction), and another call may have used the freed room meanwhile. A settled amount or a reported cost above the padded quote raises the charge above what the call was allowed to spend. Neither is silent: the booking prints PAST_ADMITTED on stderr and records it in the row's reason, and status marks the day (over_cap_today_utc in --json, OVER CAP in text). It stays as it is: refusing the read or keeping the hold released would understate what was spent. Pinned by vectors run-settled-above-hold-prints-past-admitted, run-reported-cost-above-hold-prints-past-admitted, refresh-presend-then-pending-hold-comes-back and refresh-presend-then-no-state-hold-comes-back."
     }
   ],
   "viewer_label_rules": {
@@ -444,6 +453,43 @@
       "target": "a daily cap, a per call cap and a job budget below MIN_CAP are refused when they are parsed",
       "status": "fixed: money stage 1",
       "fixed_behavior": "policy.ts parseAmount refuses an amount below MIN_CAP (1e-6) with exit 2, for cap set, --per-call and --job-budget. A padded quote is rounded up to 6 decimals and is above 0, so it is never below MIN_CAP. The other quirks of amount text parsing stay as they are (Q-AMOUNT-TEXT). Pinned by the amount.min_cap vectors in contract/vectors/amount-text.json."
+    },
+    {
+      "id": "KD-12",
+      "source": "independent review of the review fixes, finding R9 (high), 2026-11-11; rule decided by the owner (the hold floor)",
+      "parts": [
+        "imd-flop"
+      ],
+      "where": "src/settlement.ts decideBooking: a proven settlement replaced the hold in the cap charge",
+      "today": "a settled or released read below the padded quote freed room the next call was admitted against; a later higher read of the first request, or the cost its completion reported, was then booked, and the day ended over the cap with no refusal. Reproduced: cap 0.3, A settles at 0.01, B is admitted at 0.186, a refresh of A reads settled 0.186, the day is 0.372",
+      "target": "from the moment a call is sent, its cap charge is never below the padded quote it was admitted with; a gateway read and a reported cost can only raise it",
+      "decision": "The hold floor. The cap charge counts what each call was allowed to spend, not what it ended up costing: max(padded quote, settled spend, reported cost). The spend field still records what the gateway says was spent. Reason: a gateway read is not final by the gateway's own schema (OpenAPI CredentialReceipt, read 2026-11-11: later reconciliation can change what a receipt shows), and the child key's cap, the padded quote, is the one bound the gateway enforces. The floor lifts only when the call's settlement is proven on chain; that proof does not exist yet, and decideBooking marks the one place where it will plug in. The one release that stays is \"nothing was sent\" (KD-13). Rows an older version booked below their hold are not migrated.",
+      "status": "fixed: hold floor",
+      "fixed_behavior": "settlement.ts decideBooking books the charge from holdFloor: the booked charge; on a released row a trusted read reopens, the padded quote again (or the booked charge if higher); on a row whose charge is not a known amount, the padded quote for a read that proves a settlement, and nothing (the read disagrees) otherwise or when the padded quote is not a known amount. A settled amount and a reported cost raise it; nothing a gateway read says lowers it. Decision.pastAdmitted is set when the charge rises above what the cap admitted for the row and above what it had booked (residual R-f). status shows today_utc (charged to the cap) beside gateway_spent_today_utc (what the gateway reported as spent) and over_cap_today_utc. Pinned by imd-flop/test/review-fixes.test.ts (R9), the hold floor block of imd-flop/test/decision-properties.test.ts, and the settlement vectors that book a settlement or a release."
+    },
+    {
+      "id": "KD-13",
+      "source": "independent review of the review fixes, finding R2 (medium), 2026-11-11",
+      "parts": [
+        "imd-flop"
+      ],
+      "where": "src/settlement.ts stateAfter and heldCharge: only a trusted read with a state moved a released row or kept a sent row from release",
+      "today": "a trusted read (HTTP 200, a receipt object for this request id, identity ok, nothing redacted) whose state is null did not beat a \"nothing was sent\" report, in either order: the hold was released",
+      "target": "any trusted read shows the gateway knows the request and beats \"nothing was sent\" in both orders; a receipt with no state moves no state forward otherwise",
+      "status": "fixed: hold floor",
+      "fixed_behavior": "Read first: a trusted read that leaves a row in state sent marks it receipt_seen (a new optional ledger field), and decideFailure releases only a sent row without it. Report first: any trusted read on a refused_local row brings the hold back; a receipt with no state takes the row back to sent and no further. Pinned by imd-flop/test/review-fixes.test.ts (R2), the vector refresh-presend-then-no-state-hold-comes-back and the hold floor block of decision-properties.test.ts."
+    },
+    {
+      "id": "KD-14",
+      "source": "independent review of the review fixes, finding R5 (medium), 2026-11-11",
+      "parts": [
+        "imd-flop"
+      ],
+      "where": "src/settlement.ts exactAfter: the exact spend moved with the float spend only when the float moved from one known amount to another",
+      "today": "a released read with settled_spend null and an exact amount filled spend_raw; a later settled read booked float 0.05 and the row kept the other read's exact amount beside it, in either order",
+      "target": "the exact spend is set only by the read that books the float spend, as a pair",
+      "status": "fixed: hold floor",
+      "fixed_behavior": "A read that books a float spend the row did not hold (unknown, or a different known amount) sets the pair: its own exact amount, or unknown. A read whose float amount is unknown never sets or changes the exact spend beside a known float spend. When both floats are unknown the exact spend only rises, as before. Two trusted reads now book the same pair in either order with no counted exception (decision-properties.test.ts). Pinned by imd-flop/test/review-fixes.test.ts (R5) and the vectors refresh-released-no-float-then-settled-sets-pair and refresh-settled-then-released-no-float-keeps-pair."
     }
   ]
 }
