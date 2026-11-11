@@ -3,7 +3,7 @@
 Small Python tools for spending safely on the FLOP devnet gateway (`https://api.flop.network/v1`). Standard library only.
 
 - `guard.py` gets the free cost estimate, pads it for the chat template, and refuses locally if the result is over your cap. It fails closed if the estimate can't be reached. A negative `--max-tokens`, a `--max-tokens` above 10,000,000, or a cap that isn't a finite amount of at least 0.000001 (1e-6), is refused before the estimate is requested. Dry run only for now.
-- `receipts.py` reads your own receipts and reports their state as given. A null spend stays blank, never 0. An expired key gets its own `key_expired` flag. "Gateway observed" is never read as final on chain.
+- `receipts.py` reads your own receipts and reports their state as given. A null spend stays blank, never 0. An expired key gets its own `key_expired` flag. "Gateway observed" is never read as final on chain. What strict JSON cannot carry never stops it: a receipt holding a number that is not finite (such as `1e999`) is one error row (`non_finite_number`, state blank, no spend) and the receipts after it still print; a saved file that cannot be used is named in `last_known_error`.
 
 Rules it follows: estimate first, pay only through a single-use child key, no automatic retry after a timeout, and keys are never printed or logged.
 

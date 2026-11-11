@@ -42,6 +42,14 @@
 //   literal that is the one argument of `new NetTransport(...)`. Every other rule still holds there,
 //   and no other module (the live command and the recorder take their transport from it), nor a
 //   net-root.ts in a subfolder, gets the exemption.
+// - The decoder's folders, src/scale and src/hash, are pure (RULES.md section 9): a module there
+//   imports only modules in those two folders and createHash from node:crypto. Of the names it does
+//   not declare itself, it may name only the globals on PURE_GLOBALS (language built ins), so no
+//   clock, timer, random source, console, Intl, Atomics or process; it declares no name of a global,
+//   so no local hides one; and it takes no .random, by a member or by destructuring. The reference
+//   decoder and @noble/hashes, dev dependencies for tests only, are on no allow-list, so no src
+//   module imports them. Outside src/scale, a src module imports from it only scale/block.ts, the
+//   pinned entry point.
 // Before it scans src it proves itself: every BAD sample must fail and every GOOD sample must pass.
 // Known limit: the scan reads what src names, not what an allowed module does with the arguments
 // it is given; the runtime guard in the tests covers that.
@@ -168,6 +176,169 @@ const WRITE_RPC = /author_submit|eth_send(?:Raw)?Transaction|eth_sign|personal_s
 
 const SRC = join(pkg, "src");
 
+// The decoder's pure folders, by their path inside src, and what a module there may not name.
+const PURE_FOLDERS = ["scale/", "hash/"];
+const PURE_MODULES = new Set(["node:crypto"]);
+const isPure = (file) => PURE_FOLDERS.some((f) => file.startsWith(f));
+// The only globals a pure module may name: the language built ins the decoder uses. Any other name
+// a pure module does not declare itself (a clock, a timer, console, Intl, Atomics, an event) fails.
+const PURE_GLOBALS = new Set([
+  "undefined", "Array", "BigInt", "BigUint64Array", "DataView", "Error", "JSON", "Map", "Math", "Number",
+  "Object", "RangeError", "Set", "String", "TextDecoder", "TextEncoder", "Uint8Array",
+]);
+// Members a pure module may not reach, by a member access or by destructuring alike.
+const PURE_MEMBERS = new Set(["random"]);
+// Every global this runtime has, so a pure module declaring one (a parameter named Date, say) is
+// refused: then a name declared anywhere in a module is never a global used under it.
+const GLOBAL_NAMES = new Set([...Object.getOwnPropertyNames(globalThis), "undefined"]);
+// The pinned entry point: the one module of src/scale another src module may import.
+const SCALE_ENTRY = "scale/block.ts";
+// TypeScript nodes that hold a value in their expression; every other TS node is a type, erased.
+const TS_VALUES = new Set(["TSAsExpression", "TSSatisfiesExpression", "TSNonNullExpression", "TSTypeAssertion", "TSInstantiationExpression"]);
+// TypeScript forms the free name pass does not read, refused in a pure module.
+const TS_UNREAD = new Set(["TSEnumDeclaration", "TSModuleDeclaration", "TSImportEqualsDeclaration", "TSExportAssignment", "TSParameterProperty"]);
+const TYPE_KEYS = new Set(["typeAnnotation", "returnType", "typeParameters", "typeArguments", "superTypeArguments", "superTypeParameters", "implements"]);
+
+/**
+ * The free names of a module: every identifier it reads that no declaration in the module binds.
+ * Declarations are collected module wide, not by scope, which is sound because a pure module may
+ * not declare the name of any global (so no local can hide a global from this pass). Types are
+ * skipped: they are erased. Returns the names read and bound, the keys taken by destructuring, and
+ * the forms it does not read.
+ */
+function freeNames(ast) {
+  const refs = [];
+  const binds = new Set();
+  const keys = [];
+  const unread = [];
+  const pattern = (p) => {
+    if (!p) return;
+    switch (p.type) {
+      case "Identifier":
+        binds.add(p.name);
+        return;
+      case "ObjectPattern":
+        for (const q of p.properties) {
+          if (q.type === "RestElement") pattern(q.argument);
+          else {
+            if (q.computed) walk(q.key);
+            else keys.push(q.key?.name ?? q.key?.value);
+            pattern(q.value);
+          }
+        }
+        return;
+      case "ArrayPattern":
+        for (const e of p.elements) pattern(e);
+        return;
+      case "AssignmentPattern":
+        pattern(p.left);
+        walk(p.right);
+        return;
+      case "RestElement":
+        pattern(p.argument);
+        return;
+      default:
+        if (TS_UNREAD.has(p.type)) unread.push(p.type);
+        else walk(p);
+    }
+  };
+  const fn = (n) => {
+    if (n.id) binds.add(n.id.name);
+    for (const q of n.params ?? []) pattern(q);
+    walk(n.body);
+  };
+  const walk = (n) => {
+    if (Array.isArray(n)) {
+      for (const x of n) walk(x);
+      return;
+    }
+    if (!n || typeof n !== "object" || typeof n.type !== "string") return;
+    if (n.type.startsWith("TS")) {
+      if (TS_VALUES.has(n.type)) walk(n.expression);
+      else if (TS_UNREAD.has(n.type)) unread.push(n.type);
+      return;
+    }
+    switch (n.type) {
+      case "Identifier":
+        refs.push(n.name);
+        return;
+      case "MemberExpression":
+        walk(n.object);
+        if (n.computed) walk(n.property);
+        return;
+      case "Property":
+      case "MethodDefinition":
+      case "PropertyDefinition":
+        if (n.computed) walk(n.key);
+        walk(n.value);
+        return;
+      case "VariableDeclarator":
+        pattern(n.id);
+        walk(n.init);
+        return;
+      case "FunctionDeclaration":
+      case "FunctionExpression":
+      case "ArrowFunctionExpression":
+        fn(n);
+        return;
+      case "ClassDeclaration":
+      case "ClassExpression":
+        if (n.id) binds.add(n.id.name);
+        walk(n.superClass);
+        walk(n.body);
+        return;
+      case "CatchClause":
+        pattern(n.param);
+        walk(n.body);
+        return;
+      case "ImportDeclaration":
+        for (const x of n.specifiers) binds.add(x.local.name);
+        return;
+      case "ExportNamedDeclaration":
+        walk(n.declaration);
+        if (!n.source) for (const x of n.specifiers) walk(x.local);
+        return;
+      case "LabeledStatement":
+        walk(n.body);
+        return;
+      case "BreakStatement":
+      case "ContinueStatement":
+      case "MetaProperty":
+        return;
+    }
+    for (const k of Object.keys(n)) if (k !== "type" && !TYPE_KEYS.has(k)) walk(n[k]);
+  };
+  walk(ast);
+  return { refs, binds, keys, unread };
+}
+
+/** The pure folder rules a module's tree breaks: free names off the list, a global shadowed, a member destructured. */
+function pureProblems(ast, file) {
+  const where = `the pure folder src/${file.split("/").at(0)}`;
+  const { refs, binds, keys, unread } = freeNames(ast);
+  const out = [];
+  for (const t of new Set(unread)) out.push(`uses ${t}, which the free name rule does not read, in ${where}`);
+  for (const b of binds) if (GLOBAL_NAMES.has(b)) out.push(`declares ${b}, the name of a global, in ${where}`);
+  for (const r of new Set(refs)) if (!binds.has(r) && !PURE_GLOBALS.has(r)) out.push(`names the global ${r}, which is not on the list a pure module may name, in ${where}`);
+  for (const k of keys) if (PURE_MEMBERS.has(k)) out.push(`takes .${k} by destructuring in ${where}`);
+  return out;
+}
+
+/** In a pure folder, an import must land in a pure folder too, or be createHash from node:crypto. */
+function pureModuleProblem(name, file) {
+  if (!isPure(file)) {
+    // Outside the pure folders, a src module may import from src/scale only the pinned entry point.
+    if (!(name.startsWith("./") || name.startsWith("../"))) return null;
+    const into = relative(SRC, resolve(dirname(join(SRC, file)), name)).split(sep).join("/").replace(/\.js$/, ".ts");
+    return into.startsWith("scale/") && into !== SCALE_ENTRY ? `imports ${JSON.stringify(name)} from src/scale, where only ${SCALE_ENTRY}, the pinned entry point, may be imported` : null;
+  }
+  if (name.startsWith("./") || name.startsWith("../")) {
+    const inside = relative(SRC, resolve(dirname(join(SRC, file)), name)).split(sep).join("/");
+    return isPure(inside) ? null : `imports ${JSON.stringify(name)}, which is outside the pure folders src/scale and src/hash`;
+  }
+  return PURE_MODULES.has(name) ? null : `imports ${JSON.stringify(name)} into the pure folder src/${file.split("/").at(0)}`;
+}
+
 // The one exemption: the composition root of every network read, by its path inside src, and the
 // two globals it hands to the transport it makes.
 const COMPOSITION_ROOT = "net-root.ts";
@@ -248,6 +419,8 @@ function problems(code, file = "sample.ts", scanned = SCANNED) {
         const name = n.source.value;
         const p = moduleProblem(name, file, scanned);
         if (p) out.push(p);
+        const pure = pureModuleProblem(name, file);
+        if (pure) out.push(pure);
         // Every import names what it takes (round 9 review M1): a default or namespace import, or
         // export *, hands over a whole module object.
         if (n.type === "ExportAllDeclaration") out.push(`re-exports the whole of ${JSON.stringify(name)} (export *)`);
@@ -313,8 +486,10 @@ function problems(code, file = "sample.ts", scanned = SCANNED) {
       case "MemberExpression": {
         // A literal computed key, as in ["constructor"], is a string, which the Literal rule reads.
         if (!n.computed && n.object?.type === "Identifier" && n.object.name === "api" && n.property?.name === "tx") out.push("uses api.tx");
+
         const member = n.computed ? (n.property?.type === "Literal" ? n.property.value : undefined) : n.property?.name;
         if (READER_STREAMS.has(member)) out.push(`reads .${member}, a reader's stream`);
+        if (isPure(file) && member === "random") out.push(`names .random in the pure folder src/${file.split("/").at(0)}`);
         break;
       }
       case "ObjectPattern": {
@@ -344,6 +519,7 @@ function problems(code, file = "sample.ts", scanned = SCANNED) {
     for (const k of Object.keys(n)) if (k !== "type") visit(n[k], n, k);
   };
   visit(ast, null, null);
+  if (isPure(file)) out.push(...pureProblems(ast, file));
   // The reader createInterface hands back holds stdin, so listing it (Object.entries(rl)) or
   // handing it on hands stdin over by no name the rules above read. createInterface is named only
   // in its import from node:readline and as the whole value of a const that is not exported, and
@@ -421,6 +597,11 @@ const BAD = [
   'const u = await crypto.subtle["sign"](alg, key, data);',
   'const v = crypto["subtle"];',
   'import axios from "axios";',
+  // The reference decoder is a dev dependency for tests only: no src module imports it.
+  'import { getDynamicBuilder } from "@polkadot-api/metadata-builders";',
+  'import { Twox128 } from "@polkadot-api/substrate-bindings";',
+  // @noble/hashes is a dev dependency for tests only, like the reference decoder.
+  'import { blake2b } from "@noble/hashes/blake2.js";',
   'import got from "got";',
   'import { request as req } from "undici";',
   'export * from "node:net";',
@@ -596,6 +777,43 @@ const ROOT_BAD = [
   "const t = new NetTransport({ socketClass: WebSocket, httpCall: (u, o) => fetch(u, o) });",
 ];
 
+// The pure folders: each sample is read as src/scale/sample.ts and as src/hash/sample.ts.
+const PURE_GOOD = [
+  "export function f(a: Uint8Array, { len }: { len: number }): number { const [x = 1, ...rest] = [len]; label: for (const k of rest) { if (k) break label; } return a.length + x + Math.max(0, len); }",
+  "export class C extends Error { constructor(m: string) { super(m); this.name = new.target.name; } }",
+  'import { blake2b } from "../hash/blake2b.js"; import { Reader } from "../scale/reader.js"; import { createHash } from "node:crypto";',
+  "const len = 300; const n = Math.max(1, Math.ceil(len / 128)); const t = new TextDecoder();",
+];
+const PURE_BAD = [
+  // Review round 18, defect 9: clocks, timers and stdout the banned name list missed.
+  'export const now = (): number => new Event("x").timeStamp;',
+  'export const today = (): string => new Intl.DateTimeFormat("en", { dateStyle: "full" }).format();',
+  "export const later = (): AbortSignal => AbortSignal.timeout(10);",
+  "export const wait = (): unknown => Atomics.waitAsync(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 10);",
+  'export function t(): void { console.time("a"); console.timeEnd("a"); }',
+  "const { random: r } = Math; export const pick = (): number => r();",
+  // A global hidden under a local name, so the free name rule could not see it.
+  "function f(Date: { now(): number }): number { return Date.now(); }",
+  "const queueMicrotask = 1;",
+  // A global no other rule bans, hidden under a parameter: only the rule against declaring a global's name sees it.
+  "function g(Intl: { x: number }): number { return Intl.x; }",
+  'import { blake2b } from "@noble/hashes/blake2.js";',
+  'import { readFileSync } from "node:fs";',
+  'import { join } from "node:path";',
+  'import { feedText } from "../feed.js";',
+  'import { own } from "../own.js";',
+  'import { Twox128 } from "@polkadot-api/substrate-bindings";',
+  "const t = Date.now();",
+  "const d = new Date();",
+  "const r = Math.random();",
+  "const m = Math[\"random\"]();",
+  "const p = performance.now();",
+  "setTimeout(() => 0, 1);",
+  "queueMicrotask(() => 0);",
+  "const a = process.argv;",
+  "crypto.getRandomValues(b);",
+];
+
 const results = [];
 let bad = 0;
 const record = (check, pass, stderr) => {
@@ -617,6 +835,32 @@ for (const code of ROOT_GOOD) {
 for (const code of ROOT_BAD) {
   const p = problems(code, COMPOSITION_ROOT);
   record(`catches in src/${COMPOSITION_ROOT}: ${code}`, p.length > 0 && !p.some((x) => x.startsWith("does not parse")), p.length ? p.join("; ") : "nothing found");
+}
+for (const folder of ["scale", "hash"]) {
+  for (const code of PURE_GOOD) {
+    const p = problems(code, `${folder}/sample.ts`);
+    record(`allows in src/${folder}: ${code}`, p.length === 0, p.join("; "));
+  }
+  for (const code of PURE_BAD) {
+    const p = problems(code, `${folder}/sample.ts`);
+    record(`catches in src/${folder}, a pure folder: ${code}`, p.length > 0 && !p.some((x) => x.startsWith("does not parse")), p.length ? p.join("; ") : "nothing found");
+  }
+}
+// Outside src/scale, a src module may import only the pinned entry point from it.
+for (const [file, code, ok] of [
+  ["cli.ts", 'import { decodeBlockEvents } from "./scale/block.js";', true],
+  ["cli.ts", 'import { decodeEvents } from "./scale/events.js";', false],
+  ["cli.ts", 'import { parseMetadata } from "./scale/metadata.js";', false],
+  ["live/x.ts", 'import { pinShape } from "../scale/shape.js";', false],
+  ["live/x.ts", 'import { decodeBlockEvents } from "../scale/block.js";', true],
+]) {
+  const p = problems(code, file, new Set([...SCANNED, "scale/block.ts", "scale/events.ts", "scale/metadata.ts", "scale/shape.ts"]));
+  record(`${ok ? "allows" : "catches"} in src/${file}, outside src/scale: ${code}`, ok ? p.length === 0 : p.some((x) => x.includes("only scale/block.ts")), p.join("; ") || "nothing found");
+}
+// The same forms are not the pure rule's to refuse in a module outside the pure folders.
+for (const code of ["const t = Date.now();", "const p = performance.now();", 'import { readFileSync } from "node:fs";']) {
+  const p = problems(code, "cli.ts");
+  record(`allows outside the pure folders, in src/cli.ts: ${code}`, p.length === 0, p.join("; "));
 }
 for (const file of ["cli.ts", "net.ts", "live-bin.ts", "record-bin.ts", "live/net-root.ts", "net-root.mts.ts", "xnet-root.ts"]) {
   const p = problems(ROOT_FORM, file);

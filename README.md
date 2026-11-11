@@ -21,6 +21,7 @@ paid to the IMD swarm to audit it.
 | `cost-checker/` | Dependency free cost check before you send. | |
 | `testlib/` | The Python loader for the contract vectors. Test code only. | |
 | `tclk-rehearsal/` | Test chain rehearsal of a FLOP and ETH hash lock swap. No value at stake. | `forge test` |
+| `research/` | Research reports bought from the IMD swarm, kept as delivered with where they came from and what we confirmed ourselves, and our own devnet tests with every transaction and the tool that signed it. Reports are leads, not rules. Tests say what was measured and what was not. | |
 
 Also at the root: `flop-bug-report-draft.md` (bugs and doc gaps we hit on Nov 9, 2026, with repro
 steps) and `CREDITS.md` (dated work log and public filings).

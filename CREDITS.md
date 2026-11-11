@@ -26,3 +26,6 @@ Chief (lead), PRODY (PM / test runs), Sonar (research), Anvil (spend guard + rec
 - #122 comment (expired keys and receipts): https://github.com/flop-labs/network/issues/122#issuecomment-6735529767
 - New issue #160 (estimate, cost cap, quota, doc gaps): https://github.com/flop-labs/network/issues/160
 - #49 comment (receipt tracker): https://github.com/flop-labs/network/issues/49#issuecomment-6735530429
+
+## Reports from outside
+- Nov 11, 2026: issue #18 by sunriseblack. The receipt tracker ended with a traceback on a receipt holding a number that is not finite, and printed none of the receipts after it. Confirmed with our own reproduction, fixed with our own code and tests in `spend-guard/receipts.py`. A patch offered from outside is read as a report: it is not applied and not run.
