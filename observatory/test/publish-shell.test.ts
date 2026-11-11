@@ -912,6 +912,7 @@ describe("an artifact the record check refuses: the publish step never runs and 
     ["no list hash", runAs((r) => ({ ...r, request_list_sha256: null })), "run.json holds no request list sha256 in the written form"],
     ["a count with a leading zero", runAs((r) => ({ ...r, calls: { asked: "02", answered: 2, failed: 0 } })), "run.json holds no call counts in the written form"],
     ["a count that is a word", runAs((r) => ({ ...r, calls: { asked: 2, answered: "$(true)", failed: 0 } })), "run.json holds no call counts in the written form"],
+    ["a failed count that runs on", runAs((r) => ({ ...r, calls: { asked: 2, answered: 2, failed: "0 -m x" } })), "run.json holds no call counts in the written form"],
   ] as const)("%s", async (_what, tamper, why) => {
     const { before, next } = await onBranch();
     refusedAtCheck(recordJob(next, tamper), why);

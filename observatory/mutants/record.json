@@ -306,8 +306,8 @@
   {
     "id": "record-check-counts-unchecked",
     "file": "../.github/workflows/observatory-record.yml",
-    "find": "[[ \"$failed\" =~ $count ]]; } || fail",
-    "replace": "true; } || fail",
+    "find": "          { [[ \"$asked\" =~ $count ]] && [[ \"$answered\" =~ $count ]] && [[ \"$failed\" =~ $count ]]; } || fail",
+    "replace": "          true || fail",
     "test": "test/publish-shell.test.ts",
     "why": "the counts that reach the commit message are plain numbers"
   },
@@ -379,7 +379,7 @@
     "id": "live-publish-removes-recordings",
     "file": "../.github/workflows/observatory-live.yml",
     "find": "            rm -rf latest\n",
-    "replace": "            rm -rf latest recordings\n",
+    "replace": "            rm -rf latest recordings\n            git rm -rq --cached --ignore-unmatch -- recordings\n",
     "test": "test/publish-shell.test.ts",
     "why": "the live publish job leaves recordings/ alone"
   }
