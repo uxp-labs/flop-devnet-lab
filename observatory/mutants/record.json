@@ -1,0 +1,386 @@
+[
+  {
+    "id": "net-stated-limit-ignored",
+    "file": "src/net.ts",
+    "find": "limit: this.answerLimits.get(method) ?? this.maxAnswerBytes,",
+    "replace": "limit: this.maxAnswerBytes,",
+    "test": "test/net.test.ts",
+    "why": "a method the caller states a larger limit for gets an answer up to that limit"
+  },
+  {
+    "id": "net-ceiling-ignores-waiting-calls",
+    "file": "src/net.ts",
+    "find": "    for (const w of this.waiting.values()) if (w.limit > c) c = w.limit;\n",
+    "replace": "",
+    "test": "test/net.test.ts",
+    "why": "a message is read up to the largest limit of a waiting call, so a stated limit can be reached"
+  },
+  {
+    "id": "net-call-limit-unchecked",
+    "file": "src/net.ts",
+    "find": "    if (bytes.length > w.limit) {",
+    "replace": "    if (false) {",
+    "test": "test/net.test.ts",
+    "why": "an answer larger than its own call's limit fails that call, even while a larger limit is waiting"
+  },
+  {
+    "id": "net-stated-limit-unbounded",
+    "file": "src/net.ts",
+    "find": " || limit > MAX_STATED_ANSWER_BYTES) {",
+    "replace": ") {",
+    "test": "test/net.test.ts",
+    "why": "no caller may state a limit above 8 MiB"
+  },
+  {
+    "id": "requests-written-form-skipped",
+    "file": "src/requests.ts",
+    "find": "  if (feedText(read.value) !== new TextDecoder().decode(bytes)) return",
+    "replace": "  if (false) return",
+    "test": "test/requests.test.ts",
+    "why": "a request list is in the one written form, so a review sees every change"
+  },
+  {
+    "id": "requests-unknown-key-allowed",
+    "file": "src/requests.ts",
+    "find": "!isRecord(v) || !keysAre(v, [\"calls\", \"schema\"]) || ",
+    "replace": "!isRecord(v) || ",
+    "test": "test/requests.test.ts",
+    "why": "a request list holds exactly calls and schema"
+  },
+  {
+    "id": "requests-call-unknown-key-allowed",
+    "file": "src/requests.ts",
+    "find": "!isRecord(c) || !keysAre(c, [\"method\", \"params\", \"why\"])",
+    "replace": "!isRecord(c)",
+    "test": "test/requests.test.ts",
+    "why": "each call holds exactly method, params and why"
+  },
+  {
+    "id": "requests-why-unchecked",
+    "file": "src/requests.ts",
+    "find": "typeof c.why !== \"string\" || !PLAIN_LINE.test(c.why)",
+    "replace": "typeof c.why !== \"string\"",
+    "test": "test/requests.test.ts",
+    "why": "each call says why it is asked, in one plain line"
+  },
+  {
+    "id": "requests-no-call-limit",
+    "file": "src/requests.ts",
+    "find": " || v.calls.length > MAX_CALLS)",
+    "replace": ")",
+    "test": "test/requests.test.ts",
+    "why": "a list asks at most 64 calls"
+  },
+  {
+    "id": "requests-hash-of-parsed-value",
+    "file": "src/requests.ts",
+    "find": "createHash(\"sha256\").update(bytes).digest(\"hex\")",
+    "replace": "createHash(\"sha256\").update(JSON.stringify(read.value)).digest(\"hex\")",
+    "test": "test/requests.test.ts",
+    "why": "the list's hash is of its bytes as read"
+  },
+  {
+    "id": "record-guard-skipped",
+    "file": "src/record-run.ts",
+    "find": "          guardRpc(c.method);\n",
+    "replace": "",
+    "test": "test/record-run.test.ts",
+    "why": "every method in the list passes the guard before anything is sent, so a list with a write sends nothing"
+  },
+  {
+    "id": "record-failed-call-stops-run",
+    "file": "src/record-run.ts",
+    "find": "            if (!(e instanceof TransportError)) throw e;\n            calls.failed++;",
+    "replace": "            throw e;",
+    "test": "test/record-run.test.ts",
+    "why": "a call that failed on the way is recorded as its error and the run goes on"
+  },
+  {
+    "id": "record-refusal-mid-run-read-as-failed",
+    "file": "src/record-run.ts",
+    "find": "            if (!(e instanceof TransportError)) throw e;\n",
+    "replace": "",
+    "test": "test/record-run.test.ts",
+    "why": "a request the transport refuses, or a tape that does not match, stops the run: it is not a failed read"
+  },
+  {
+    "id": "record-metadata-not-noticed",
+    "file": "src/record-run.ts",
+    "find": "            if (c.method === \"state_getMetadata\") metadata.push(metadataOf(seq, { result }));\n",
+    "replace": "",
+    "test": "test/record-run.test.ts",
+    "why": "the notice gives the byte length and sha256 of each metadata answer"
+  },
+  {
+    "id": "record-metadata-hash-of-hex",
+    "file": "src/record-run.ts",
+    "find": "  return { seq, bytes: bytes.length, sha256: createHash(\"sha256\").update(bytes).digest(\"hex\") };",
+    "replace": "  return { seq, bytes: bytes.length, sha256: createHash(\"sha256\").update(answer.result).digest(\"hex\") };",
+    "test": "test/record-run.test.ts",
+    "why": "the metadata sha256 is of the decoded bytes, to compare with a value measured by hand"
+  },
+  {
+    "id": "record-writes-into-full-folder",
+    "file": "src/record-run.ts",
+    "find": "  if (existsSync(o.out) && readdirSync(o.out).length > 0) {",
+    "replace": "  if (false) {",
+    "test": "test/record-run.test.ts",
+    "why": "a record run writes only into a new folder"
+  },
+  {
+    "id": "record-no-stated-limit",
+    "file": "src/record-run.ts",
+    "find": "new Map([[\"state_getMetadata\", MAX_STATED_ANSWER_BYTES]])",
+    "replace": "new Map<string, number>()",
+    "test": "test/record-run.test.ts",
+    "why": "a recording states 8 MiB for state_getMetadata"
+  },
+  {
+    "id": "record-refused-exits-0",
+    "file": "src/record-run.ts",
+    "find": "    code = EXIT.refused;\n",
+    "replace": "    code = EXIT.ok;\n",
+    "test": "test/record-run.test.ts",
+    "why": "a request the guard refuses gives exit 4"
+  },
+  {
+    "id": "record-bad-list-exits-0",
+    "file": "src/record-run.ts",
+    "find": "    code = EXIT.crashed;\n    reason = `the request list was refused",
+    "replace": "    code = EXIT.ok;\n    reason = `the request list was refused",
+    "test": "test/record-run.test.ts",
+    "why": "a list that is not in its form gives exit 1, and is never published"
+  },
+  {
+    "id": "record-list-hash-dropped",
+    "file": "src/record-run.ts",
+    "find": "      request_list_sha256: listSha,",
+    "replace": "      request_list_sha256: null,",
+    "test": "test/record-run.test.ts",
+    "why": "run.json names the sha256 of the request list as it was read"
+  },
+  {
+    "id": "record-bin-no-limits",
+    "file": "src/record-bin.ts",
+    "find": "realTransport(RECORD_ANSWER_LIMITS)",
+    "replace": "realTransport()",
+    "test": "test/record-run.test.ts",
+    "why": "the recorder's transport states the recording's answer limits"
+  },
+  {
+    "id": "recording-sums-skipped",
+    "file": "src/recording.ts",
+    "find": "  if (unsummed.length > 0) return refuse(...unsummed);",
+    "replace": "",
+    "test": "test/recording.test.ts",
+    "why": "a recording's files are exactly its three, each matching SHA256SUMS, before anything is read"
+  },
+  {
+    "id": "recording-unknown-run-key-allowed",
+    "file": "src/recording.ts",
+    "find": "!isRecord(r) || !keysAre(r, RUN_KEYS) || ",
+    "replace": "!isRecord(r) || ",
+    "test": "test/recording.test.ts",
+    "why": "run.json holds exactly the keys the recorder writes"
+  },
+  {
+    "id": "recording-any-exit",
+    "file": "src/recording.ts",
+    "find": "  if (r.exit_code !== 0) return refuse(",
+    "replace": "  if (false) return refuse(",
+    "test": "test/recording.test.ts",
+    "why": "only a run that exited 0 is a recording"
+  },
+  {
+    "id": "recording-time-form-unchecked",
+    "file": "src/recording.ts",
+    "find": "typeof r.started_at === \"string\" && RECORDER_TIME.test(r.started_at) ? parseZoned(r.started_at)",
+    "replace": "typeof r.started_at === \"string\" ? parseZoned(r.started_at)",
+    "test": "test/recording.test.ts",
+    "why": "run.json's start is in the one form the publish job builds the recording's id from"
+  },
+  {
+    "id": "recording-endpoint-unchecked",
+    "file": "src/recording.ts",
+    "find": "  if (r.endpoint !== endpoint) return refuse(",
+    "replace": "  if (false) return refuse(",
+    "test": "test/recording.test.ts",
+    "why": "a recording was read from the devnet endpoint, not replayed from a tape"
+  },
+  {
+    "id": "recording-counts-unchecked",
+    "file": "src/recording.ts",
+    "find": " || c.answered + c.failed !== c.asked) {",
+    "replace": ") {",
+    "test": "test/recording.test.ts",
+    "why": "run.json's counts add up"
+  },
+  {
+    "id": "recording-tape-counts-unchecked",
+    "file": "src/recording.ts",
+    "find": "  if (canonicalJson(held) !== canonicalJson(run.calls)) {",
+    "replace": "  if (false) {",
+    "test": "test/recording.test.ts",
+    "why": "the tape holds the counts run.json gives"
+  },
+  {
+    "id": "recording-refusal-on-tape-allowed",
+    "file": "src/recording.ts",
+    "find": " || \"refused\" in e.answer) return refuse(",
+    "replace": ") return refuse(",
+    "test": "test/recording.test.ts",
+    "why": "every call on a recording's tape was answered or failed on the way"
+  },
+  {
+    "id": "recording-list-hash-unchecked",
+    "file": "src/recording.ts",
+    "find": "  if (list.sha256 !== run.request_list_sha256) return refuse(",
+    "replace": "  if (false) return refuse(",
+    "test": "test/recording.test.ts",
+    "why": "a recording is judged against the request list its run.json names"
+  },
+  {
+    "id": "recording-call-order-unchecked",
+    "file": "src/recording.ts",
+    "find": "  if (off.length > 0 || list.calls.length !== calls.length) return refuse(",
+    "replace": "  if (false) return refuse(",
+    "test": "test/recording.test.ts",
+    "why": "the tape holds exactly the list's calls, in order"
+  },
+  {
+    "id": "record-publish-immutability-off",
+    "file": "../.github/workflows/observatory-record.yml",
+    "find": "            if [ -e \"$dest\" ]; then return 0; fi\n",
+    "replace": "",
+    "test": "test/publish-shell.test.ts",
+    "why": "a recording is immutable: when recordings/<id>/ is there, the job changes nothing"
+  },
+  {
+    "id": "record-publish-id-recheck-off",
+    "file": "../.github/workflows/observatory-record.yml",
+    "find": "          [[ \"$RECORDING_ID\" =~ ^[0-9]{14}-[0-9a-f]{16}$ ]] || {",
+    "replace": "          true || {",
+    "test": "test/publish-shell.test.ts",
+    "why": "the publish step checks the id again where it names the one path it writes"
+  },
+  {
+    "id": "record-check-sums-off",
+    "file": "../.github/workflows/observatory-record.yml",
+    "find": "          sha256sum -- \"${files[@]}\" | cmp -s - SHA256SUMS || fail",
+    "replace": "          true || fail",
+    "test": "test/publish-shell.test.ts",
+    "why": "every file is checked against SHA256SUMS before anything reads it"
+  },
+  {
+    "id": "record-check-extra-file-allowed",
+    "file": "../.github/workflows/observatory-record.yml",
+    "find": "          [ \"$(find . -mindepth 1 -printf x | wc -c)\" -eq \"$((${#files[@]} + 1))\" ] || fail",
+    "replace": "          true || fail",
+    "test": "test/publish-shell.test.ts",
+    "why": "the artifact holds the recording's three files and nothing else"
+  },
+  {
+    "id": "record-check-any-exit",
+    "file": "../.github/workflows/observatory-record.yml",
+    "find": "          jq -e '.exit_code == 0' run.json >/dev/null || fail",
+    "replace": "          true || fail",
+    "test": "test/publish-shell.test.ts",
+    "why": "only a run that exited 0 is published"
+  },
+  {
+    "id": "record-check-start-unchecked",
+    "file": "../.github/workflows/observatory-record.yml",
+    "find": "$utc ]] || fail \"run.json holds no started_at in the form the recorder writes\"",
+    "replace": "$utc ]] || true",
+    "test": "test/publish-shell.test.ts",
+    "why": "the start time is read in the one form the recorder writes, digit by digit"
+  },
+  {
+    "id": "record-check-list-hash-unchecked",
+    "file": "../.github/workflows/observatory-record.yml",
+    "find": "          [[ \"$list_sha\" =~ ^[0-9a-f]{64}$ ]] || fail",
+    "replace": "          true || fail",
+    "test": "test/publish-shell.test.ts",
+    "why": "the list hash is 64 lower case hex before it is part of a path"
+  },
+  {
+    "id": "record-check-counts-unchecked",
+    "file": "../.github/workflows/observatory-record.yml",
+    "find": "          { [[ \"$asked\" =~ $count ]] && [[ \"$answered\" =~ $count ]] && [[ \"$failed\" =~ $count ]]; } || fail",
+    "replace": "          true || fail",
+    "test": "test/publish-shell.test.ts",
+    "why": "the counts that reach the commit message are plain numbers"
+  },
+  {
+    "id": "record-publish-tree-check-off",
+    "file": "../.github/workflows/observatory-record.yml",
+    "find": "              if [ -n \"$tree\" ] && grep -qv '^100644 blob ' <<<\"$tree\"; then",
+    "replace": "              if false; then",
+    "test": "test/publish-shell.test.ts",
+    "why": "a fetched branch that holds anything but plain files fails the job before anything is read or written"
+  },
+  {
+    "id": "record-publish-no-retry",
+    "file": "../.github/workflows/observatory-record.yml",
+    "find": "          prepare 2\n",
+    "replace": "          exit 1\n",
+    "test": "test/publish-shell.test.ts",
+    "why": "a refused push is fetched again and tried once more"
+  },
+  {
+    "id": "record-publish-forced",
+    "file": "../.github/workflows/observatory-record.yml",
+    "find": "\n          git push \"$remote\" refs/heads/observatory-data:refs/heads/observatory-data\n",
+    "replace": "\n          git push --force \"$remote\" refs/heads/observatory-data:refs/heads/observatory-data\n",
+    "test": "test/record-workflow.test.ts",
+    "why": "the push is never forced"
+  },
+  {
+    "id": "record-publish-any-branch",
+    "file": "../.github/workflows/observatory-record.yml",
+    "find": "    if: ${{ github.ref == 'refs/heads/main' && ",
+    "replace": "    if: ${{ ",
+    "test": "test/record-workflow.test.ts",
+    "why": "only main publishes; a run on any other branch is a smoke run"
+  },
+  {
+    "id": "record-publish-on-failure",
+    "file": "../.github/workflows/observatory-record.yml",
+    "find": " && needs.record.result == 'success' && ",
+    "replace": " && (needs.record.result == 'success' || needs.record.result == 'failure') && ",
+    "test": "test/record-workflow.test.ts",
+    "why": "only a record job that exited 0 is published"
+  },
+  {
+    "id": "record-job-may-write",
+    "file": "../.github/workflows/observatory-record.yml",
+    "find": "    timeout-minutes: 25\n",
+    "replace": "    timeout-minutes: 25\n    permissions:\n      contents: write\n",
+    "test": "test/record-workflow.test.ts",
+    "why": "the record job may read the repository and nothing else"
+  },
+  {
+    "id": "record-checkout-keeps-credentials",
+    "file": "../.github/workflows/observatory-record.yml",
+    "find": "          persist-credentials: false\n",
+    "replace": "          persist-credentials: true\n",
+    "test": "test/record-workflow.test.ts",
+    "why": "checkout keeps no credentials"
+  },
+  {
+    "id": "record-smoke-path-dropped",
+    "file": "../.github/workflows/observatory-record.yml",
+    "find": "      - \"observatory/src/net-root.ts\"\n",
+    "replace": "",
+    "test": "test/record-workflow.test.ts",
+    "why": "a change to any module the record command is built from gives a smoke run"
+  },
+  {
+    "id": "live-publish-removes-recordings",
+    "file": "../.github/workflows/observatory-live.yml",
+    "find": "            rm -rf latest\n",
+    "replace": "            rm -rf latest recordings\n            git rm -rq --cached --ignore-unmatch -- recordings\n",
+    "test": "test/publish-shell.test.ts",
+    "why": "the live publish job leaves recordings/ alone"
+  }
+]

@@ -439,13 +439,15 @@ Tests fail if any attempt is left in the log.
   `process.binding`, `process.dlopen` and `inspector.open`. The block covers the ways out named
   here and is tried against each of them; it is no proof that Node has no other.
 - One exemption: `runShell` in `test/setup.ts`, which holds the real `spawnSync` taken before the
-  block and never exports it, so `test/publish-shell.test.ts` can run the publish job's shell. It
-  serves that one test file only, runs `bash` only, in an environment built from the caller's
+  block and never exports it, so `test/publish-shell.test.ts` can run the shell of both publish
+  jobs, the live workflow's and the record workflow's (they push to one branch, so the cases that
+  show each leaves the other's files alone run both in that one file). It serves that one test
+  file only, runs `bash` only, in an environment built from the caller's
   values and `PATH` alone, with git limited to `file://` remotes (`GIT_ALLOW_PROTOCOL=file`, no
   system or global git config) and a `GITHUB_SERVER_URL` that is not `file://` refused. A call from
   any other file is recorded as a process attempt and throws, as every other process call does.
 - A source scan fails any `src` module, other than `guard.ts`, that imports one of those modules or
-  calls fetch, WebSocket, a signing API or a key API (`src/live-bin.ts` names fetch and WebSocket
+  calls fetch, WebSocket, a signing API or a key API (`src/net-root.ts` names fetch and WebSocket
   in the one form the exemption below allows, and calls neither). It also fails the indirect forms:
   `process.getBuiltinModule`, `createRequire`, an `import()` or `require()` whose argument is not
   a plain string, `process.binding`, `eval` and `Function`, called or not.
@@ -498,14 +500,15 @@ Tests fail if any attempt is left in the log.
   scans check that. It proves itself on known bad and good samples, and its file list on a throwaway
   folder, before it scans. What it cannot see is what an allowed module does with the arguments
   `src` passes it; the runtime block in the tests covers that.
-- One exemption, for the live read's composition root. `src/live-bin.ts` may name `WebSocket` and
-  `fetch`, each once, and only as the values of the plain properties of the one object literal it
-  hands to `new NetTransport(...)`. The syntax tree scan holds it to that form: no shorthand,
+- One exemption, for the composition root of every network read. `src/net-root.ts` may name
+  `WebSocket` and `fetch`, each once, and only as the values of the plain properties of the one
+  object literal it hands to `new NetTransport(...)`. The live command (`src/live-bin.ts`) and the
+  recorder (`src/record-bin.ts`) both take their one transport from it. The syntax tree scan holds it to that form: no shorthand,
   computed, method or getter property, no other callee, no second argument, no second use of either
   name, and every other rule still applies there. The text scan in `test/guard.test.ts` holds it to
-  the exact text `new NetTransport({ socketClass: WebSocket, httpCall: fetch })`, once, and reads
-  the rest of the file by every rule. No other module gets the exemption, nor a `live-bin.ts` in a
-  subfolder; both scans prove that on samples before they scan. Every other module reaches the
+  the exact text `new NetTransport({ socketClass: WebSocket, httpCall: fetch, answerLimits })`,
+  once, and reads the rest of the file by every rule. No other module gets the exemption, the two
+  commands included, nor a `net-root.ts` in a subfolder; both scans prove that on samples before they scan. Every other module reaches the
   network only through the transport it is handed, so a test hands it fakes.
 - `tools/recount.py` is read the same two ways: its own tests walk its syntax tree (exactly five
   plain imports, none under an alias and none of a submodule, no from-import, every use of a
@@ -748,7 +751,8 @@ it adds.
   HTTP method through `guardHttp`. Only these are reached: `wss://rpc.devnet.flop.network`,
   `https://faucet.flop.network` and `https://api.flop.network`, with no port, user or password. A URL
   off that list is refused and recorded as a network attempt, a redirect is refused, every request
-  has a 15 second limit, every answer a 1 MiB limit counted in bytes, and the run uses one socket.
+  has a 15 second limit, every answer a 1 MiB limit counted in bytes (the live run states no larger
+  limit for any method; section 8 says who may), and the run uses one socket.
   An RPC answer that cannot be held to one call (too large, not text, not strict JSON, not an
   object) fails the
   socket, and every call after it.
@@ -833,10 +837,11 @@ everything the observatory reads.
   `${{ }}` value appears in a shell command.
 - The layout: `latest/` is replaced whole by the output folder. The snapshot line from
   `snapshots.jsonl` is appended to `log/<UTC date of observed_at>.jsonl`. `README.md` at the root
-  is written when it is missing. Nothing else is written. When that day file already holds the
+  is written when it is missing. Nothing else is written: `recordings/`, which the record
+  workflow's publish job writes (section 8), is left as it is. When that day file already holds the
   line (a run attempted again), nothing is written at all, so `latest/` never goes back to an older
   reading.
-- The branch as fetched must hold only what the job writes: every entry of its tree, read with
+- The branch as fetched must hold only what the two publish jobs write: every entry of its tree, read with
   `git ls-tree -r` alone and before anything on it is read or written, is a regular file with mode
   `100644`. A link, an executable, a submodule or any other entry fails the job, and nothing is
   pushed, a reading attempted again included.
@@ -866,3 +871,75 @@ everything the observatory reads.
   its status neither after the reader's now nor older than the limit the reader passes. A
   `run.json` from before runs kept memory (`live-run@0`) is refused: its reading spoke for itself
   only. `judgeLatest` does not read `log/`.
+
+## 8. Recordings
+
+A recording is exactly what one RPC endpoint answered to a reviewed list of read calls, once, in
+order. It exists so decoders (SCALE events and storage) can be built and tested against real data.
+It is evidence for building them, never proof of chain state: no answer on it is checked against
+anything, it trusts one endpoint as the live run does (section 7), and a block a list names is in
+it because a person checked it by hand and an indexer said what it holds, which no code here
+checks. Section 4 holds for everything it reads.
+
+- The request list is `recordings/requests.json`, reviewed like code. Its form is
+  `flop-observatory/requests@0` (`src/requests.ts`): JSON in the written form (`src/feed.ts`),
+  strict UTF-8, no key twice, nested at most 64 levels, exactly `calls` and `schema`, 1 to 64
+  calls, each exactly `method` (an RPC method name), `params` (a list) and `why` (one plain line).
+  Its sha256 is taken of its bytes as read.
+- Nothing is sent before the whole list is judged: a list not in that form is refused, and the run
+  exits 1; a list that holds a method the read only guard refuses is refused, each refusal recorded
+  as section 4 says, and the run exits 4. Either way nothing is read from the network. A method is
+  allowed or refused by `guardRpc` alone; the list's form never decides it.
+- Each call is made once, in order, one at a time, through the one real transport
+  (`src/net-root.ts`, `src/net.ts`): the guard and the allow list before every send, the 15 s
+  limit, one socket. The tape is written by the same `Recorder` as the live run's (`src/tape.ts`).
+  A call that failed on the way (an RPC error, the time limit, an answer over its limit, a socket
+  that failed) is recorded as its error and the run goes on; anything else (a refusal, a tape that
+  does not match) stops the run, which exits 4 when the guard or the transport refused and 1
+  otherwise.
+- Answer limits: every answer has the 1 MiB limit of section 7, but where a caller states a larger
+  one for a named method, at most 8 MiB (`MAX_STATED_ANSWER_BYTES`). A recording states 8 MiB for
+  `state_getMetadata` and nothing else; the live run states none, so its limit is unchanged. A
+  message is read up to the largest limit of a call waiting at that moment, never more. An answer
+  held to its call by its id that is over that call's limit fails that call alone. A message over
+  every waiting call's limit cannot be held to one call: the socket fails, and every call after it
+  is recorded as failed.
+- The output folder holds exactly `tape.jsonl` (every request and answer in order; it holds no
+  clock read), `run.json` (`flop-observatory/record-run@0`: started and ended, the source revision,
+  the endpoint, the request list's sha256, how many calls were asked, answered and failed, the exit
+  code and reason) and `SHA256SUMS`, written by the same code as the live run's
+  (`src/run-command.ts`, `src/sums.ts`). The run exits 0 when every call was made and recorded,
+  answered or failed on the way: a run whose every call failed (the endpoint down) exits 0 too, and
+  its recording says so. It exits 2 for wrong flags or a folder that is not empty, and never writes
+  over an earlier run.
+- `judgeRecording` in `src/recording.ts` is the reader contract, pure: exactly the three files,
+  each matching `SHA256SUMS` in its written form; `run.json` a `record-run@0` in the written form
+  with exactly its keys, from `rpc wss://rpc.devnet.flop.network`, exit 0, a request list hash, its
+  start and end in the recorder's form with the end not before the start, and counts that add up;
+  a tape that parses and holds only rpc calls, each answered or failed on the way, as many as
+  `run.json` counts; and, when the request list is given, its sha256 is the one `run.json` names
+  and the tape holds exactly its calls, in order. It gives the calls with their answers, and the
+  tape replays through `TapeTransport`.
+- Publishing: only the `publish` job in `.github/workflows/observatory-record.yml` writes
+  recordings, under the same discipline as section 7.1, by the same means: only on main, only when
+  the record job exited 0 and uploaded its folder; no checkout and no repository code; file names
+  from a fixed list (`RECORDING_FILES` and `SHA256SUMS`), nothing else in the artifact, every file
+  checked against `SHA256SUMS` before anything reads it; every value from `run.json` checked
+  against a fixed pattern and passed through the environment, only inside double quotes; plain
+  git; the fetched branch held to plain files (mode `100644`) by the live job's own check, before
+  anything on it is read or written; a push to `refs/heads/observatory-data` only, never forced,
+  fetched again and tried once more when refused.
+- Where: `recordings/<id>/` on `observatory-data`, `<id>` built by the shell from validated values
+  only: the UTC time `run.json` says the run started, read digit by digit from the one form the
+  recorder writes (`YYYY-MM-DDTHH:MM:SS.sssZ`) into 14 digits, a dash, and the first 16 hex of the
+  request list's sha256. The publish step checks the id against that form again before it names a
+  path with it.
+- A recording is immutable: when anything is at `recordings/<id>/`, the job changes nothing, says
+  so, and ends well. Two runs in one second of one list share an id, and the second is not
+  published. The job writes nothing outside `recordings/<id>/`: not `latest/`, not `log/`, not
+  `README.md`.
+- The two publish jobs push to one branch and share no concurrency group: GitHub cancels a job
+  that waits in a group behind another waiting one, which would drop a reading or a recording.
+  Each job lays only its own paths on the branch as fetched and pushes a fast forward; a push
+  refused because the other job pushed in between is fetched again, checked again and laid on top.
+  The live job's checks read `log/` and the tree's modes alone, so recordings never change them.

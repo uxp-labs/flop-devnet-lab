@@ -26,19 +26,16 @@
 import { existsSync, mkdirSync, readdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { feedText, writeFeeds } from "./feed.js";
-import { readRegularFile } from "./files.js";
 import { attemptLog } from "./guard.js";
 import { type History, earlierOf, readHistory, usable } from "./history.js";
 import { LiveSource } from "./live-source.js";
 import { buildSnapshot } from "./snapshot.js";
+import { EXIT, commandText, readFlags, sumsText } from "./run-command.js";
 import { DEVNET_GENESIS } from "./status.js";
 import { logLine, sealSnapshot } from "./store.js";
-import { sumsOf } from "./sums.js";
 import { Recorder } from "./tape.js";
 import type { Transport } from "./transport.js";
 import type { Snapshot } from "./types.js";
-
-export const EXIT = { ok: 0, crashed: 1, usage: 2, reset: 3, refused: 4 } as const;
 
 export const RUN_SCHEMA = "flop-observatory/live-run@1";
 
@@ -57,19 +54,8 @@ export interface LiveArgs {
  * stray argument are each refused. Gives the reason as a string when refused.
  */
 export function parseLiveArgs(argv: readonly string[]): LiveArgs | string {
-  const known = ["--out", "--log", "--source-sha"];
-  const got = new Map<string, string>();
-  const rest = [...argv];
-  while (rest.length > 0) {
-    const a = rest.shift() as string;
-    if (!a.startsWith("--")) return `${JSON.stringify(a)} is no flag's value; every argument is --name followed by its value`;
-    if (a.includes("=")) return `${JSON.stringify(a)}: give a flag's value as the next argument, not after =`;
-    if (!known.includes(a)) return `${a} is not a flag the live command reads`;
-    if (got.has(a)) return `${a} is given twice`;
-    const v = rest.shift();
-    if (v === undefined || v === "" || v.startsWith("--")) return `${a} needs a value`;
-    got.set(a, v);
-  }
+  const got = readFlags(argv, ["--out", "--log", "--source-sha"], "live");
+  if (typeof got === "string") return got;
   const out = got.get("--out");
   if (out === undefined) return "missing --out";
   const log = got.get("--log");
@@ -88,11 +74,6 @@ export interface RunResult {
   snapshot: Snapshot | null;
   /** The one line for the run log, in the GitHub Actions notice format, when a snapshot was written. */
   notice: string | null;
-}
-
-/** A value made safe for a workflow command's message: %, CR and LF escaped as GitHub reads them. */
-export function commandText(s: string): string {
-  return s.replace(/%/g, "%25").replace(/\r/g, "%0D").replace(/\n/g, "%0A");
 }
 
 /** The notice line: what the snapshot says, in one compact JSON object. */
@@ -123,14 +104,6 @@ export function resetSignal(s: Snapshot): string | null {
   const n = s.status.conflicts.length;
   if (n > 0) return `the status holds ${n} conflict${n === 1 ? "" : "s"}: ${s.status.conflicts.join("; ")}`;
   return null;
-}
-
-/** SHA256SUMS: the sha256 of every other file in the folder, sorted by name, as sha256sum writes it. */
-export function sumsText(dir: string): string {
-  const names = readdirSync(dir)
-    .filter((n) => n !== "SHA256SUMS")
-    .sort();
-  return sumsOf(names.map((n) => [n, readRegularFile(join(dir, n))] as const));
 }
 
 /** What run.json says of the published log: its case, in words, and what was read of it. */

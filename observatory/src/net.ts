@@ -2,7 +2,7 @@
 // gateway. Its trust is "trusted RPC": it trusts the one endpoint it reads, and proves nothing.
 //
 // It never names the global socket class or the global HTTP call. Both are handed to it, so a
-// test hands it fakes and no test opens a socket. src/live-bin.ts, the composition root, is the
+// test hands it fakes and no test opens a socket. src/net-root.ts, the composition root, is the
 // one module that names the real ones.
 //
 // Before anything is sent:
@@ -12,6 +12,9 @@
 //   a URL off the list is refused and recorded as a network attempt, and nothing goes out.
 // Every request has a time limit and every answer a size limit. An answer over the limit is
 // refused, never cut short. The run uses one socket: once it closes, every later RPC call fails.
+// A caller may state a larger limit for a named RPC method (the recorder does, for
+// state_getMetadata), at most MAX_STATED_ANSWER_BYTES. Every other call keeps MAX_ANSWER_BYTES, and
+// a caller that states none, the live run, reads every message under it exactly as before.
 import { guardHttp, guardRpc, recordAttempt } from "./guard.js";
 import { type Transport, TransportError, strictJson } from "./transport.js";
 import type { HttpResult, Trust } from "./types.js";
@@ -21,6 +24,9 @@ export const REQUEST_TIMEOUT_MS = 15_000;
 
 /** The largest answer read, in bytes. */
 export const MAX_ANSWER_BYTES = 1_048_576;
+
+/** The largest limit a caller may state for one RPC method, in bytes. */
+export const MAX_STATED_ANSWER_BYTES = 8 * 1_048_576;
 
 /** The devnet RPC, the one socket the run opens. */
 export const DEVNET_RPC_URL = "wss://rpc.devnet.flop.network";
@@ -74,6 +80,8 @@ export interface NetOptions {
   rpcUrl?: string;
   timeoutMs?: number;
   maxAnswerBytes?: number;
+  /** A larger (or smaller) answer limit for each RPC method named, in bytes, from 1 to MAX_STATED_ANSWER_BYTES. */
+  answerLimits?: ReadonlyMap<string, number>;
   clock?: () => string;
 }
 
@@ -107,6 +115,9 @@ export class TransportRefused extends Error {
 }
 
 interface Waiting {
+  method: string;
+  /** The largest answer this call takes, in bytes. */
+  limit: number;
   resolve: (v: unknown) => void;
   reject: (e: unknown) => void;
   timer: ReturnType<typeof setTimeout>;
@@ -120,6 +131,7 @@ export class NetTransport implements Transport {
   private readonly rpcUrl: string;
   private readonly timeoutMs: number;
   private readonly maxAnswerBytes: number;
+  private readonly answerLimits: ReadonlyMap<string, number>;
   private readonly clock: () => string;
   private socket: SocketLike | null = null;
   private opened = false;
@@ -135,6 +147,12 @@ export class NetTransport implements Transport {
     this.rpcUrl = o.rpcUrl ?? DEVNET_RPC_URL;
     this.timeoutMs = o.timeoutMs ?? REQUEST_TIMEOUT_MS;
     this.maxAnswerBytes = o.maxAnswerBytes ?? MAX_ANSWER_BYTES;
+    this.answerLimits = new Map(o.answerLimits ?? []);
+    for (const [method, limit] of this.answerLimits) {
+      if (!Number.isSafeInteger(limit) || limit < 1 || limit > MAX_STATED_ANSWER_BYTES) {
+        throw new TypeError(`NetTransport: the answer limit for ${method} must be a whole number of bytes from 1 to ${MAX_STATED_ANSWER_BYTES}`);
+      }
+    }
     this.clock = o.clock ?? (() => new Date().toISOString());
     this.label = `rpc ${this.rpcUrl}`;
   }
@@ -154,7 +172,7 @@ export class NetTransport implements Transport {
         this.waiting.delete(id);
         reject(new TransportError(`rpc ${method} timed out after ${this.timeoutMs} ms`));
       }, this.timeoutMs);
-      this.waiting.set(id, { resolve, reject, timer });
+      this.waiting.set(id, { method, limit: this.answerLimits.get(method) ?? this.maxAnswerBytes, resolve, reject, timer });
       this.sendRpc(payload);
     });
   }
@@ -194,15 +212,24 @@ export class NetTransport implements Transport {
     }
   }
 
+  /** The largest message read: the largest limit of any waiting call, and never below the default. */
+  private ceiling(): number {
+    let c = this.maxAnswerBytes;
+    for (const w of this.waiting.values()) if (w.limit > c) c = w.limit;
+    return c;
+  }
+
   /**
-   * One message from the socket. An answer that is too large, not text, not strict JSON or not a
-   * JSON-RPC answer cannot be told apart from an answer to any call, so the socket fails, and
-   * every waiting call with it.
+   * One message from the socket. An answer that is larger than any waiting call takes, not text,
+   * not strict JSON or not a JSON-RPC answer cannot be told apart from an answer to any call, so
+   * the socket fails, and every waiting call with it. An answer held to its call by its id that is
+   * larger than that call takes fails that call alone.
    */
   private answer(data: unknown): void {
     if (typeof data !== "string") return this.drop("an rpc answer is not text");
     const bytes = new TextEncoder().encode(data);
-    if (bytes.length > this.maxAnswerBytes) return this.drop(`an rpc answer is larger than ${this.maxAnswerBytes} bytes`);
+    const ceiling = this.ceiling();
+    if (bytes.length > ceiling) return this.drop(`an rpc answer is larger than ${ceiling} bytes`);
     const read = strictJson(bytes);
     if ("problem" in read) return this.drop(`an rpc answer is ${read.problem}`);
     const m = read.value;
@@ -213,7 +240,9 @@ export class NetTransport implements Transport {
     if (w === undefined) return;
     clearTimeout(w.timer);
     this.waiting.delete(id as number);
-    if (Object.hasOwn(m, "error")) {
+    if (bytes.length > w.limit) {
+      w.reject(new TransportError(`the rpc answer to ${w.method} is larger than ${w.limit} bytes`));
+    } else if (Object.hasOwn(m, "error")) {
       const err = (m as { error: unknown }).error;
       const code = err !== null && typeof err === "object" ? (err as { code?: unknown }).code : undefined;
       const message = err !== null && typeof err === "object" ? (err as { message?: unknown }).message : undefined;

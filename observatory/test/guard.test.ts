@@ -185,11 +185,12 @@ describe("source scan", () => {
   const listModules = (d: URL | string) => (readdirSync(d, { recursive: true }) as string[]).filter((f) => f.endsWith(".ts") && f !== "guard.ts").sort();
   const files = listModules(dir);
 
-  // The one exemption (RULES.md section 4): src/live-bin.ts, the composition root of the live read,
-  // names WebSocket and fetch in exactly this text, once. With it taken out, that module must pass
-  // every rule as any other does. scripts/source-scan.mjs holds the same exemption as a syntax tree.
-  const ROOT = "live-bin.ts";
-  const ROOT_FORM = "new NetTransport({ socketClass: WebSocket, httpCall: fetch })";
+  // The one exemption (RULES.md section 4): src/net-root.ts, the composition root of every network
+  // read (the live command's and the recorder's), names WebSocket and fetch in exactly this text,
+  // once. With it taken out, that module must pass every rule as any other does.
+  // scripts/source-scan.mjs holds the same exemption as a syntax tree.
+  const ROOT = "net-root.ts";
+  const ROOT_FORM = "new NetTransport({ socketClass: WebSocket, httpCall: fetch, answerLimits })";
   const exempted = (file: string, text: string) => (file === ROOT ? text.split(ROOT_FORM).join("") : text);
 
   it.each(files)("%s has no network, process, signing, spending or key handling", (file) => {
@@ -198,19 +199,20 @@ describe("source scan", () => {
     for (const re of forbidden) expect(exempted(file, text), `${file} matches ${re}`).not.toMatch(re);
   });
 
-  it("exempts only the composition root's one text, in src/live-bin.ts alone", () => {
+  it("exempts only the composition root's one text, in src/net-root.ts alone", () => {
     expect(files).toContain(ROOT);
     const hits = (file: string, text: string) => forbidden.some((re) => re.test(exempted(file, text)));
     // The exact form passes there, and nowhere else.
     expect(hits(ROOT, `const t = ${ROOT_FORM};`)).toBe(false);
-    for (const other of ["cli.ts", "net.ts", join("live", ROOT)]) expect(hits(other, `const t = ${ROOT_FORM};`), other).toBe(true);
+    for (const other of ["cli.ts", "net.ts", "live-bin.ts", "record-bin.ts", join("live", ROOT)]) expect(hits(other, `const t = ${ROOT_FORM};`), other).toBe(true);
     // Any other use of either name in the root is still caught.
     for (const line of [
       "const f = fetch;",
       "const w = new WebSocket(url);",
       `const t = ${ROOT_FORM}; const r = await fetch(url);`,
       "const t = new NetTransport({ socketClass: WebSocket, httpCall: fetch.call });",
-      "const t = new NetTransport({ httpCall: fetch, socketClass: WebSocket });",
+      "const t = new NetTransport({ httpCall: fetch, socketClass: WebSocket, answerLimits });",
+      "const t = new NetTransport({ socketClass: WebSocket, httpCall: fetch });",
       "const t = new Other({ socketClass: WebSocket, httpCall: fetch });",
     ]) {
       expect(hits(ROOT, line), line).toBe(true);

@@ -5,7 +5,9 @@ census, and escrow states from finalized blocks. Output as a page, JSON feeds an
 
 M0 runs on saved fixtures only. No network, no keys, no spend, no signatures. The first step of
 live reads is one command that reads network status from FLOP devnet, read only, and nothing else
-([Live network status](#live-network-status)). Every other command still reads saved fixtures.
+([Live network status](#live-network-status)). A second one records what the RPC answers to a
+reviewed list of read calls, for building decoders ([Recordings](#recordings)). Every other command
+still reads saved fixtures.
 
 ## Check
 
@@ -23,7 +25,7 @@ and `SHA256SUMS`:
 | test | unit, boundary and consistency tests. Every network and child process path is blocked at runtime (fetch, WebSocket, node:http, https, http2, net, tls, dgram, dns, child_process, worker threads, module hooks, and the lower layers: net.Server's _listen2, the dgram.Socket constructor, dgram and dns resolver objects, ChildProcess spawn, native bindings, process.dlopen, inspector), and any attempt left in the log, or any refused write, signature or spend, fails its file. One exemption: `runShell` in `test/setup.ts` lets `test/publish-shell.test.ts`, and that file only, run `bash`, in a clean environment with git limited to `file://` remotes, so the publish job's shell is run against a local bare repository; a call from any other file is recorded as a process attempt. Every attempt is also written to a journal the moment it happens, and the journal is checked once every file has ended. The checks the MCP binary makes before it serves a snapshot are one module, `src/snapshot-check.ts`, each check named; its table, `test/snapshot-check.test.ts`, gives every check a case that breaks it and nothing else, refused cases on both sides of each comparison, holds snapshots the rules allow, which must be served (a short or unknown source sha, an http status of -1, a reset read on the faucet's genesis alone, evidence at its bound, each field the command may write as none, a time with an offset, heights of 0, equal heights with a lag of 0, ...), and fails if any check has no case; its grid, `test/snapshot-check-grid.test.ts`, holds the same checks to RULES.md section 5 as `test/helpers/snapshot-spec.ts` writes it down apart from the code: every field at every place given each value of its type's pool, inside and outside the type, each object given a field more, one left out or one renamed, and the settlement agreements walked over grids of small domains, where every verdict must equal the reference's. The pools and grids are finite, so they show the checks and section 5 agree on those values, not on every value |
 | test-report | the test report read again: every test file ran, each ran exactly the tests `test/test-counts.json` pins, by number and by a digest of their names in their order (so a test removed, renamed or moved shows; adding, renaming or moving one means updating its entry there), and no test was skipped, left as a todo or shut out by a `.only`, which vitest's exit code alone would not show; the test sources hold no `.fails` test and no empty `.each` or `.for` table, which a status cannot show; the same rules fail doctored copies of the report (one test skipped, one todo, one file missing, one test removed, one renamed, two that swap names). A table held in a variable and a test that returns before its assertion are still not seen |
 | attempts | the journal again, after the test run has exited: no attempt left in a file's log, nothing at all after a file's final check (a blocked call fired from a timer, say), and every test file reached that check, each file counted once (a file checked in two runs is itself a problem) |
-| source-scan | every src module read as a syntax tree, with escapes decoded and comments skipped: imports only from an allow-list (node:fs, node:path, node:readline, node:url, node:crypto for createHash only, yaml) or relative ones that land on a scanned .ts module in src, each by name (no default or namespace import, no default export taken by its name, no export *, no dynamic import, so src holds no module object), no import-equals, no banned name as an identifier, a property, a string key, a template key, a regular expression or any other string (transports, the global object, the Web Crypto global, eval, Function, Reflect, constructor, the APIs that define getters on a prototype or list its names, atob, Object.assign, the stack trace hook, WebAssembly, connect, listen and bind, the Web Crypto classes, module loading, signing, key and cipher APIs), no underscore name, as an identifier or a string, no reader's .input or .output, the reader itself only as `rl.on(event, arrow function)` in a statement of its own (rl a const that is not exported and holds the whole `createInterface(...)` call, the one place createInterface is named but its import), process only as version, argv, exit, stdout.write, stderr.write and `createInterface({ input: process.stdin })`, no computed key that is not a literal (src reads a data record by a run time key only through `own()`, which never reaches an inherited member or hands back a function), no RPC write method named, and nothing in src but regular .ts files. It first catches 129 known bad samples (the reader listed, exported, kept as the value on returns, given to a listener as this or stood in for by a function of src's own, an underscore name as a string, the default export by its name, the reader's stream read back, escaped names, legacy and third party modules, a comment before the module name, string and template keys, a getter on a prototype, an import-equals, paths out of src, keys read back from a regular expression, decoded, listed or trimmed, a stream asked to connect, a dynamic import of node:crypto, a namespace or default import, export *, the Web Crypto classes, stdin read back) and passes 18 good ones, and its file list names a .mts module, a .js file and a link in a throwaway folder. Its one exemption, `src/live-bin.ts` naming WebSocket and fetch as the options of `new NetTransport(...)`, is proved on 2 good and 18 bad samples in that file, and the same form fails in 5 other module names |
+| source-scan | every src module read as a syntax tree, with escapes decoded and comments skipped: imports only from an allow-list (node:fs, node:path, node:readline, node:url, node:crypto for createHash only, yaml) or relative ones that land on a scanned .ts module in src, each by name (no default or namespace import, no default export taken by its name, no export *, no dynamic import, so src holds no module object), no import-equals, no banned name as an identifier, a property, a string key, a template key, a regular expression or any other string (transports, the global object, the Web Crypto global, eval, Function, Reflect, constructor, the APIs that define getters on a prototype or list its names, atob, Object.assign, the stack trace hook, WebAssembly, connect, listen and bind, the Web Crypto classes, module loading, signing, key and cipher APIs), no underscore name, as an identifier or a string, no reader's .input or .output, the reader itself only as `rl.on(event, arrow function)` in a statement of its own (rl a const that is not exported and holds the whole `createInterface(...)` call, the one place createInterface is named but its import), process only as version, argv, exit, stdout.write, stderr.write and `createInterface({ input: process.stdin })`, no computed key that is not a literal (src reads a data record by a run time key only through `own()`, which never reaches an inherited member or hands back a function), no RPC write method named, and nothing in src but regular .ts files. It first catches 129 known bad samples (the reader listed, exported, kept as the value on returns, given to a listener as this or stood in for by a function of src's own, an underscore name as a string, the default export by its name, the reader's stream read back, escaped names, legacy and third party modules, a comment before the module name, string and template keys, a getter on a prototype, an import-equals, paths out of src, keys read back from a regular expression, decoded, listed or trimmed, a stream asked to connect, a dynamic import of node:crypto, a namespace or default import, export *, the Web Crypto classes, stdin read back) and passes 18 good ones, and its file list names a .mts module, a .js file and a link in a throwaway folder. Its one exemption, `src/net-root.ts` naming WebSocket and fetch as the options of `new NetTransport(...)`, is proved on 2 good and 18 bad samples in that file, and the same form fails in 7 other module names, the live command and the recorder among them |
 | canary | the harness fails a throwaway test that leaves a fetch, an https request, a net connection, a child process, module hooks, a listening handle made under listen, a dgram socket made directly, a refused RPC write, a refused signature or a refused spend, and two that make their attempt from a timer after the file's final check; a clean throwaway test passes, and so does the late timer once the journal check is taken out, so that check is what catches it |
 | mutants | in a copy of every file git tracks (nothing untracked), an unmutated control passes, then each injected bug (reset ignored, stale RPC, conflicts dropped, malformed escrow accepted, one event claiming two escrows, an unreadable page dropped, a partial census shown complete, an account named `__proto__` dropped from a feed, ...) makes at least one test fail. Bugs in the command line, the MCP binary and the syntax tree scan are caught by their end to end checks on a fresh build of the copy; each check in `src/snapshot-check.ts`, turned off, made weaker or made stricter one at a time, is caught by the table case that names it. A mutant that only breaks loading is never counted as caught, a replacement is written exactly as given, a copy that cannot be made is reported as setup-failed, and a run with no mutant fails. Four kills (a repeated key served by the MCP binary or trusted in the log, deep nesting unchecked, and a blank log line accepted) show the refusal names its reason: the written form and canonical form checks, and the log's other line rules, refuse those files too, and are mutated on their own |
 | mutants-canary | the mutation runner classifies a real bug, an equivalent change, a syntax error, a missing test, a replacement holding `$$`, and a command line bug and no-op correctly; its copy holds exactly the tracked files of a throwaway repo; a copy it cannot make is reported as setup-failed; it still works when the temp folder is reached through a link; and a mutant file with no mutant fails the run |
@@ -192,17 +194,76 @@ the same way, hold the anchor call and show each case of the anchor and the spec
 `npm run check` runs those with everything else, and `mutants/live.json`, `mutants/memory.json` and
 `mutants/anchor.json` hold the bugs they must catch.
 
+## Recordings
+
+```sh
+npm run build
+node dist/record-bin.js --requests <the request list> --out <a new folder> [--source-sha <revision>]
+```
+
+A recording is exactly what one RPC endpoint answered to a reviewed list of read calls, for
+building and testing decoders against real data. It is evidence, never proof of chain state
+(RULES.md section 8).
+
+- The request list is `recordings/requests.json`: a `flop-observatory/requests@0` in the written
+  form (sorted keys, two space indent, a newline at the end), with no other key and no key twice,
+  and 1 to 64 calls, each `method`, `params` (a list) and `why` (one plain line). It is reviewed
+  like code. The first list asks the finalized head and the genesis hash, then for each of twelve
+  blocks with compute channel events its hash by height, its header, `System.Events` and
+  `System.LastRuntimeUpgrade` at its hash, then the runtime version and the metadata at the last.
+- A list that is not in that form, or that holds a method the read only guard refuses, is refused
+  before anything is sent: nothing is read from the network, and the run says why.
+- Each call is made once, in order, on one socket, through the same transport and guard as the
+  live run (`src/net-root.ts`, `src/net.ts`), and recorded on a tape by the same code. A call that
+  failed on the way (an RPC error, the 15 s limit, an answer over its limit, a socket that failed)
+  is recorded as its error, and the run goes on.
+- Each answer has the 1 MiB limit, but `state_getMetadata`'s, which has 8 MiB (about 964 KB as hex
+  today). The live run states no larger limit, so its limit is unchanged.
+- It writes `tape.jsonl`, `run.json` (start, end, the revision if given, the endpoint, the sha256 of
+  the request list as read, how many calls were asked, answered and failed, how it ended) and
+  `SHA256SUMS` into a new folder, prints one notice line with the counts and the byte length and
+  sha256 of each metadata answer's decoded bytes, and exits 0 when every call was made and
+  recorded (answered or failed), 4 when the guard refused a request, 1 when the list could not be
+  read or was refused or the run broke, and 2 for wrong flags or a folder that is not empty.
+
+`judgeRecording` in `src/recording.ts` reads a recording: exactly its three files, each matching
+`SHA256SUMS`, `run.json` a `flop-observatory/record-run@0` in the written form that exited 0 and
+names the list's hash, and a tape that holds exactly the calls of that list, in order, each
+answered or failed. It gives the calls with their answers, and the tape replays through
+`TapeTransport`.
+
+`.github/workflows/observatory-record.yml` runs it by hand, and on a push to any branch that changes
+the request list, the workflow or any src module the command is built from, and uploads the folder
+as an artifact. The record job reads the repository and nothing else, uses no secrets and no cache,
+and checks out without credentials. On main, when the record job exited 0, its publish job puts
+the recording on the branch `observatory-data` under `recordings/<id>/`, where `<id>` is the UTC
+time the run started as 14 digits, a dash and the first 16 hex of the request list's sha256, built
+by the shell from validated values only. A recording is immutable: when that folder is already
+there, the job changes nothing and says so. It writes nothing outside it, and the live publish job
+writes nothing inside `recordings/`. On any other branch the run is a smoke run and publishes
+nothing. A recording is copied into `fixtures/` by hand, with its provenance, when a decoder needs
+it.
+
+Offline, `npm test` covers the request list, the run over a fake socket that answers each call
+(answers, RPC errors, a time limit, answers over and under their limits, a socket refused), the
+reader on doctored copies, the workflow read as data, and both publish jobs' shells run with bash
+against a local bare repository, on one branch.
+
 ## Published readings
 
 On main, the publish job in `.github/workflows/observatory-live.yml` puts each live reading on the
-branch `observatory-data` of this repository. It holds block heights, hashes and service health.
-It holds no key and nothing personal. Every commit on it is made by that job.
+branch `observatory-data` of this repository, and the publish job in
+`.github/workflows/observatory-record.yml` puts each recording there. It holds block heights,
+hashes, service health and what the RPC answered to read calls. It holds no key and nothing
+personal. Every commit on it is made by one of those two jobs, and each leaves the other's paths
+alone.
 
 | Path on `observatory-data` | What |
 |---|---|
 | `latest/` | the output folder of the newest published run: `snapshot.json`, `status.json`, `escrows.json`, `census.json`, `drift.json`, `snapshots.jsonl`, `tape.jsonl`, `run.json` and `SHA256SUMS`. Each run replaces it whole |
 | `log/<UTC date>.jsonl` | one snapshot per line, one line for each reading published that day, as the run's `snapshots.jsonl` holds it. Read in name order, the day files are one hash chained log: each line names the hash of the line before it. The readings published before runs kept memory are each `seq` 0 with no `prev_hash`, at the start of the log |
 | `README.md` | what the branch is, written when it is missing |
+| `recordings/<id>/` | one recording each: `tape.jsonl`, `run.json` and `SHA256SUMS`, written once by the record workflow's publish job and never changed ([Recordings](#recordings)) |
 
 A run is published only when it wrote a truthful snapshot: exit 0, or exit 3 for a reset signal.
 A run that broke or was refused leaves the branch as it was, so `latest/` can be old: check its
@@ -260,8 +321,13 @@ The two interfaces other teams import are in [../interfaces](../interfaces).
 | `src/net.ts` | the live transport: the guard and the allow list before every send, time and size limits, one socket |
 | `src/tape.ts` | the recording of a live run, and its replay, which refuses any request that is not next |
 | `src/rpc-head.ts`, `src/live-source.ts` | the RPC answers turned into a head, and the Source over a transport |
-| `src/live-run.ts`, `src/live-bin.ts` | one live run and its files, and the command, the one module that names the real socket class and HTTP call |
-| `src/sums.ts` | the one form of `SHA256SUMS`, for the live run that writes it and the reader that checks it |
+| `src/live-run.ts`, `src/live-bin.ts` | one live run and its files, and the command |
+| `src/net-root.ts` | the one module that names the real socket class and HTTP call: the live command and the recorder take their transport from it |
+| `src/sums.ts` | the one form of `SHA256SUMS`, and the check of a folder against it, for the runs that write it and the readers that check it |
+| `src/run-command.ts` | what the live run and the recorder share: exit codes, flags, `SHA256SUMS` over the folder, how the command ends |
+| `src/requests.ts`, `recordings/requests.json` | the request list's form, and the first list |
+| `src/record-run.ts`, `src/record-bin.ts` | one record run and its files, and the command |
+| `src/recording.ts` | the reader contract for a recording |
 | `src/published.ts` | the reader contract for `latest/` on the branch `observatory-data` |
 | `src/snapshot.ts`, `src/cli.ts` | one pass and the command line |
 | `src/snapshot-check.ts`, `src/mcp-bin.ts` | every check a snapshot must pass before the MCP binary serves it, each by name, and the binary that reads, checks and serves it |
@@ -271,7 +337,7 @@ The two interfaces other teams import are in [../interfaces](../interfaces).
 | `fixtures/` | saved scenarios; `meta.json` says which values are real and which are made up; `live-*` and `memory-*` are synthetic tapes; `published-*` are real readings from the data branch, with their provenance |
 | `mutants/` | the injected bugs and the tests that must catch them |
 | `REVIEW-LOG.md` | what each outside review and independent rerun found, and the fix and proof for each, newest first |
-| `test/setup.ts` | the runtime block on every network and process path, its one exemption (`runShell`, for `test/publish-shell.test.ts` only), the leftover attempt check, and the attempts journal |
+| `test/setup.ts` | the runtime block on every network and process path, its one exemption (`runShell`, for `test/publish-shell.test.ts` only, which runs both publish jobs' shells), the leftover attempt check, and the attempts journal |
 | `test/global-setup.ts`, `scripts/attempts-check.mjs` | the journal check once every test file has ended, and again after the run |
 | `scripts/tracked.mjs` | the copy of exactly the tracked files that the mutation runner and the canary work in |
 | `scripts/check.sh` | the check |

@@ -1,6 +1,7 @@
 // JSON feeds. The same objects feed the MCP tools, so both agree byte for byte.
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { MAX_NESTING, nestingDepth } from "./strict.js";
 import type { Snapshot } from "./types.js";
 
 function sortDeep(v: unknown): unknown {
@@ -22,6 +23,22 @@ function sortDeep(v: unknown): unknown {
 /** Deterministic text: sorted keys, two-space indent, trailing newline. */
 export function feedText(v: unknown): string {
   return JSON.stringify(sortDeep(v), null, 2) + "\n";
+}
+
+/**
+ * The value a file's text holds when it is JSON in the written form (feedText), or the reason it
+ * is not, naming the file. The written form has one spelling of each value: a repeated key,
+ * padding or a rounded integer prints back differently.
+ */
+export function writtenValue(name: string, text: string): { value: unknown } | string {
+  if (nestingDepth(text) > MAX_NESTING) return `${name} nests deeper than ${MAX_NESTING} levels`;
+  let value: unknown;
+  try {
+    value = JSON.parse(text);
+  } catch {
+    return `${name} is not JSON`;
+  }
+  return feedText(value) === text ? { value } : `${name} is not in the written form`;
 }
 
 export function statusFeed(s: Snapshot) {

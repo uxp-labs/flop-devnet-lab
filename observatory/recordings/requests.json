@@ -1,0 +1,391 @@
+{
+  "calls": [
+    {
+      "method": "chain_getFinalizedHead",
+      "params": [],
+      "why": "the finalized head when the run read it: every block below must be at or under it"
+    },
+    {
+      "method": "chain_getBlockHash",
+      "params": [
+        0
+      ],
+      "why": "the genesis hash, so the recording names the chain it was read from"
+    },
+    {
+      "method": "chain_getBlockHash",
+      "params": [
+        3479238
+      ],
+      "why": "the canonical hash at height 3479238, to compare with 0x9c0ac85d24b12803e66d3def5a03cd43a2a03e55a48f8ddda166a85fac123062, the hash checked by hand"
+    },
+    {
+      "method": "chain_getHeader",
+      "params": [
+        "0x9c0ac85d24b12803e66d3def5a03cd43a2a03e55a48f8ddda166a85fac123062"
+      ],
+      "why": "the header of block 3479238: its number, parent hash and state root"
+    },
+    {
+      "method": "state_getStorage",
+      "params": [
+        "0x26aa394eea5630e07c48ae0c9558cef780d41e5e16056765bc8461851072c9d7",
+        "0x9c0ac85d24b12803e66d3def5a03cd43a2a03e55a48f8ddda166a85fac123062"
+      ],
+      "why": "System.Events at block 3479238, where the explorer shows SessionEvidenceRegistered: the bytes an event decoder is built against"
+    },
+    {
+      "method": "state_getStorage",
+      "params": [
+        "0x26aa394eea5630e07c48ae0c9558cef7f9cce9c888469bb1a0dceaa129672ef8",
+        "0x9c0ac85d24b12803e66d3def5a03cd43a2a03e55a48f8ddda166a85fac123062"
+      ],
+      "why": "System.LastRuntimeUpgrade at block 3479238: the runtime the events were written under (spec 1014014 by hand)"
+    },
+    {
+      "method": "chain_getBlockHash",
+      "params": [
+        3479245
+      ],
+      "why": "the canonical hash at height 3479245, to compare with 0x920dc42cb5fb0f1d5d203a58a486dfe9178b2c4e7889669c6200b873cfcec7f7, the hash checked by hand"
+    },
+    {
+      "method": "chain_getHeader",
+      "params": [
+        "0x920dc42cb5fb0f1d5d203a58a486dfe9178b2c4e7889669c6200b873cfcec7f7"
+      ],
+      "why": "the header of block 3479245: its number, parent hash and state root"
+    },
+    {
+      "method": "state_getStorage",
+      "params": [
+        "0x26aa394eea5630e07c48ae0c9558cef780d41e5e16056765bc8461851072c9d7",
+        "0x920dc42cb5fb0f1d5d203a58a486dfe9178b2c4e7889669c6200b873cfcec7f7"
+      ],
+      "why": "System.Events at block 3479245, where the explorer shows EscrowToppedUp: the bytes an event decoder is built against"
+    },
+    {
+      "method": "state_getStorage",
+      "params": [
+        "0x26aa394eea5630e07c48ae0c9558cef7f9cce9c888469bb1a0dceaa129672ef8",
+        "0x920dc42cb5fb0f1d5d203a58a486dfe9178b2c4e7889669c6200b873cfcec7f7"
+      ],
+      "why": "System.LastRuntimeUpgrade at block 3479245: the runtime the events were written under (spec 1014014 by hand)"
+    },
+    {
+      "method": "chain_getBlockHash",
+      "params": [
+        3479277
+      ],
+      "why": "the canonical hash at height 3479277, to compare with 0xb85b24f4b0609839aea37d97ad1aa9f7ec7aba20348bca090ab31df471764aba, the hash checked by hand"
+    },
+    {
+      "method": "chain_getHeader",
+      "params": [
+        "0xb85b24f4b0609839aea37d97ad1aa9f7ec7aba20348bca090ab31df471764aba"
+      ],
+      "why": "the header of block 3479277: its number, parent hash and state root"
+    },
+    {
+      "method": "state_getStorage",
+      "params": [
+        "0x26aa394eea5630e07c48ae0c9558cef780d41e5e16056765bc8461851072c9d7",
+        "0xb85b24f4b0609839aea37d97ad1aa9f7ec7aba20348bca090ab31df471764aba"
+      ],
+      "why": "System.Events at block 3479277, where the explorer shows AuditFeeEarmarked, Settled: the bytes an event decoder is built against"
+    },
+    {
+      "method": "state_getStorage",
+      "params": [
+        "0x26aa394eea5630e07c48ae0c9558cef7f9cce9c888469bb1a0dceaa129672ef8",
+        "0xb85b24f4b0609839aea37d97ad1aa9f7ec7aba20348bca090ab31df471764aba"
+      ],
+      "why": "System.LastRuntimeUpgrade at block 3479277: the runtime the events were written under (spec 1014014 by hand)"
+    },
+    {
+      "method": "chain_getBlockHash",
+      "params": [
+        3479291
+      ],
+      "why": "the canonical hash at height 3479291, to compare with 0x37b23091195e6ce7c2a74ac6a3e56b2209fa2846cb4a0a46d80792338ba5fe2d, the hash checked by hand"
+    },
+    {
+      "method": "chain_getHeader",
+      "params": [
+        "0x37b23091195e6ce7c2a74ac6a3e56b2209fa2846cb4a0a46d80792338ba5fe2d"
+      ],
+      "why": "the header of block 3479291: its number, parent hash and state root"
+    },
+    {
+      "method": "state_getStorage",
+      "params": [
+        "0x26aa394eea5630e07c48ae0c9558cef780d41e5e16056765bc8461851072c9d7",
+        "0x37b23091195e6ce7c2a74ac6a3e56b2209fa2846cb4a0a46d80792338ba5fe2d"
+      ],
+      "why": "System.Events at block 3479291, where the explorer shows ToplocEvidenceSubmitted: the bytes an event decoder is built against"
+    },
+    {
+      "method": "state_getStorage",
+      "params": [
+        "0x26aa394eea5630e07c48ae0c9558cef7f9cce9c888469bb1a0dceaa129672ef8",
+        "0x37b23091195e6ce7c2a74ac6a3e56b2209fa2846cb4a0a46d80792338ba5fe2d"
+      ],
+      "why": "System.LastRuntimeUpgrade at block 3479291: the runtime the events were written under (spec 1014014 by hand)"
+    },
+    {
+      "method": "chain_getBlockHash",
+      "params": [
+        3479299
+      ],
+      "why": "the canonical hash at height 3479299, to compare with 0xeba1182c9f2bbf5a8fd012afddc201c2ebed11b64f59b10c1d3c4fcc4b2ee18e, the hash checked by hand"
+    },
+    {
+      "method": "chain_getHeader",
+      "params": [
+        "0xeba1182c9f2bbf5a8fd012afddc201c2ebed11b64f59b10c1d3c4fcc4b2ee18e"
+      ],
+      "why": "the header of block 3479299: its number, parent hash and state root"
+    },
+    {
+      "method": "state_getStorage",
+      "params": [
+        "0x26aa394eea5630e07c48ae0c9558cef780d41e5e16056765bc8461851072c9d7",
+        "0xeba1182c9f2bbf5a8fd012afddc201c2ebed11b64f59b10c1d3c4fcc4b2ee18e"
+      ],
+      "why": "System.Events at block 3479299, where the explorer shows AuditFeeEarmarked, Settled: the bytes an event decoder is built against"
+    },
+    {
+      "method": "state_getStorage",
+      "params": [
+        "0x26aa394eea5630e07c48ae0c9558cef7f9cce9c888469bb1a0dceaa129672ef8",
+        "0xeba1182c9f2bbf5a8fd012afddc201c2ebed11b64f59b10c1d3c4fcc4b2ee18e"
+      ],
+      "why": "System.LastRuntimeUpgrade at block 3479299: the runtime the events were written under (spec 1014014 by hand)"
+    },
+    {
+      "method": "chain_getBlockHash",
+      "params": [
+        3479303
+      ],
+      "why": "the canonical hash at height 3479303, to compare with 0xd7d1972cfa69f3810ee70ddfefd2f7f096b3a961e23f6c81d34ac2f4267e02e0, the hash checked by hand"
+    },
+    {
+      "method": "chain_getHeader",
+      "params": [
+        "0xd7d1972cfa69f3810ee70ddfefd2f7f096b3a961e23f6c81d34ac2f4267e02e0"
+      ],
+      "why": "the header of block 3479303: its number, parent hash and state root"
+    },
+    {
+      "method": "state_getStorage",
+      "params": [
+        "0x26aa394eea5630e07c48ae0c9558cef780d41e5e16056765bc8461851072c9d7",
+        "0xd7d1972cfa69f3810ee70ddfefd2f7f096b3a961e23f6c81d34ac2f4267e02e0"
+      ],
+      "why": "System.Events at block 3479303, where the explorer shows EscrowToppedUp: the bytes an event decoder is built against"
+    },
+    {
+      "method": "state_getStorage",
+      "params": [
+        "0x26aa394eea5630e07c48ae0c9558cef7f9cce9c888469bb1a0dceaa129672ef8",
+        "0xd7d1972cfa69f3810ee70ddfefd2f7f096b3a961e23f6c81d34ac2f4267e02e0"
+      ],
+      "why": "System.LastRuntimeUpgrade at block 3479303: the runtime the events were written under (spec 1014014 by hand)"
+    },
+    {
+      "method": "chain_getBlockHash",
+      "params": [
+        3479311
+      ],
+      "why": "the canonical hash at height 3479311, to compare with 0xa918b5dcc7bc6335914cd2a13e1442dfd7fcc1c091b47d0c86e9d868870a84cb, the hash checked by hand"
+    },
+    {
+      "method": "chain_getHeader",
+      "params": [
+        "0xa918b5dcc7bc6335914cd2a13e1442dfd7fcc1c091b47d0c86e9d868870a84cb"
+      ],
+      "why": "the header of block 3479311: its number, parent hash and state root"
+    },
+    {
+      "method": "state_getStorage",
+      "params": [
+        "0x26aa394eea5630e07c48ae0c9558cef780d41e5e16056765bc8461851072c9d7",
+        "0xa918b5dcc7bc6335914cd2a13e1442dfd7fcc1c091b47d0c86e9d868870a84cb"
+      ],
+      "why": "System.Events at block 3479311, where the explorer shows TimedOutRefunded: the bytes an event decoder is built against"
+    },
+    {
+      "method": "state_getStorage",
+      "params": [
+        "0x26aa394eea5630e07c48ae0c9558cef7f9cce9c888469bb1a0dceaa129672ef8",
+        "0xa918b5dcc7bc6335914cd2a13e1442dfd7fcc1c091b47d0c86e9d868870a84cb"
+      ],
+      "why": "System.LastRuntimeUpgrade at block 3479311: the runtime the events were written under (spec 1014014 by hand)"
+    },
+    {
+      "method": "chain_getBlockHash",
+      "params": [
+        3479313
+      ],
+      "why": "the canonical hash at height 3479313, to compare with 0x5f557ec62d3ec449e52a8e80b0cf81b02be586fc519d3b2c7052f49b25753918, the hash checked by hand"
+    },
+    {
+      "method": "chain_getHeader",
+      "params": [
+        "0x5f557ec62d3ec449e52a8e80b0cf81b02be586fc519d3b2c7052f49b25753918"
+      ],
+      "why": "the header of block 3479313: its number, parent hash and state root"
+    },
+    {
+      "method": "state_getStorage",
+      "params": [
+        "0x26aa394eea5630e07c48ae0c9558cef780d41e5e16056765bc8461851072c9d7",
+        "0x5f557ec62d3ec449e52a8e80b0cf81b02be586fc519d3b2c7052f49b25753918"
+      ],
+      "why": "System.Events at block 3479313, where the explorer shows SessionEvidenceRegistered: the bytes an event decoder is built against"
+    },
+    {
+      "method": "state_getStorage",
+      "params": [
+        "0x26aa394eea5630e07c48ae0c9558cef7f9cce9c888469bb1a0dceaa129672ef8",
+        "0x5f557ec62d3ec449e52a8e80b0cf81b02be586fc519d3b2c7052f49b25753918"
+      ],
+      "why": "System.LastRuntimeUpgrade at block 3479313: the runtime the events were written under (spec 1014014 by hand)"
+    },
+    {
+      "method": "chain_getBlockHash",
+      "params": [
+        3479317
+      ],
+      "why": "the canonical hash at height 3479317, to compare with 0x7519278459add0a60cb6a42e72e3b9d56a72d662161ef5f3b51f61aea706e85e, the hash checked by hand"
+    },
+    {
+      "method": "chain_getHeader",
+      "params": [
+        "0x7519278459add0a60cb6a42e72e3b9d56a72d662161ef5f3b51f61aea706e85e"
+      ],
+      "why": "the header of block 3479317: its number, parent hash and state root"
+    },
+    {
+      "method": "state_getStorage",
+      "params": [
+        "0x26aa394eea5630e07c48ae0c9558cef780d41e5e16056765bc8461851072c9d7",
+        "0x7519278459add0a60cb6a42e72e3b9d56a72d662161ef5f3b51f61aea706e85e"
+      ],
+      "why": "System.Events at block 3479317, where the explorer shows TimedOutRefunded: the bytes an event decoder is built against"
+    },
+    {
+      "method": "state_getStorage",
+      "params": [
+        "0x26aa394eea5630e07c48ae0c9558cef7f9cce9c888469bb1a0dceaa129672ef8",
+        "0x7519278459add0a60cb6a42e72e3b9d56a72d662161ef5f3b51f61aea706e85e"
+      ],
+      "why": "System.LastRuntimeUpgrade at block 3479317: the runtime the events were written under (spec 1014014 by hand)"
+    },
+    {
+      "method": "chain_getBlockHash",
+      "params": [
+        3479323
+      ],
+      "why": "the canonical hash at height 3479323, to compare with 0xf67f31c9721ec2966f8561a13723e3b678ee24d49cc899945c8af10f33ee42f9, the hash checked by hand"
+    },
+    {
+      "method": "chain_getHeader",
+      "params": [
+        "0xf67f31c9721ec2966f8561a13723e3b678ee24d49cc899945c8af10f33ee42f9"
+      ],
+      "why": "the header of block 3479323: its number, parent hash and state root"
+    },
+    {
+      "method": "state_getStorage",
+      "params": [
+        "0x26aa394eea5630e07c48ae0c9558cef780d41e5e16056765bc8461851072c9d7",
+        "0xf67f31c9721ec2966f8561a13723e3b678ee24d49cc899945c8af10f33ee42f9"
+      ],
+      "why": "System.Events at block 3479323, where the explorer shows AssuranceClassPinned, CalibrationSnapshotted, ChannelOpened: the bytes an event decoder is built against"
+    },
+    {
+      "method": "state_getStorage",
+      "params": [
+        "0x26aa394eea5630e07c48ae0c9558cef7f9cce9c888469bb1a0dceaa129672ef8",
+        "0xf67f31c9721ec2966f8561a13723e3b678ee24d49cc899945c8af10f33ee42f9"
+      ],
+      "why": "System.LastRuntimeUpgrade at block 3479323: the runtime the events were written under (spec 1014014 by hand)"
+    },
+    {
+      "method": "chain_getBlockHash",
+      "params": [
+        3479328
+      ],
+      "why": "the canonical hash at height 3479328, to compare with 0x63fb8c0e85f8f75f8fbc588ccbbd258255ac53e0a42f05cacf799b156f812e19, the hash checked by hand"
+    },
+    {
+      "method": "chain_getHeader",
+      "params": [
+        "0x63fb8c0e85f8f75f8fbc588ccbbd258255ac53e0a42f05cacf799b156f812e19"
+      ],
+      "why": "the header of block 3479328: its number, parent hash and state root"
+    },
+    {
+      "method": "state_getStorage",
+      "params": [
+        "0x26aa394eea5630e07c48ae0c9558cef780d41e5e16056765bc8461851072c9d7",
+        "0x63fb8c0e85f8f75f8fbc588ccbbd258255ac53e0a42f05cacf799b156f812e19"
+      ],
+      "why": "System.Events at block 3479328, where the explorer shows ToplocEvidenceSubmitted: the bytes an event decoder is built against"
+    },
+    {
+      "method": "state_getStorage",
+      "params": [
+        "0x26aa394eea5630e07c48ae0c9558cef7f9cce9c888469bb1a0dceaa129672ef8",
+        "0x63fb8c0e85f8f75f8fbc588ccbbd258255ac53e0a42f05cacf799b156f812e19"
+      ],
+      "why": "System.LastRuntimeUpgrade at block 3479328: the runtime the events were written under (spec 1014014 by hand)"
+    },
+    {
+      "method": "chain_getBlockHash",
+      "params": [
+        3479329
+      ],
+      "why": "the canonical hash at height 3479329, to compare with 0xef5960e6418bbe91c09e368b2a2a817f5a12dcf6cc75d05b6435673af18255ed, the hash checked by hand"
+    },
+    {
+      "method": "chain_getHeader",
+      "params": [
+        "0xef5960e6418bbe91c09e368b2a2a817f5a12dcf6cc75d05b6435673af18255ed"
+      ],
+      "why": "the header of block 3479329: its number, parent hash and state root"
+    },
+    {
+      "method": "state_getStorage",
+      "params": [
+        "0x26aa394eea5630e07c48ae0c9558cef780d41e5e16056765bc8461851072c9d7",
+        "0xef5960e6418bbe91c09e368b2a2a817f5a12dcf6cc75d05b6435673af18255ed"
+      ],
+      "why": "System.Events at block 3479329, where the explorer shows AssuranceClassPinned, CalibrationSnapshotted, ChannelOpened: the bytes an event decoder is built against"
+    },
+    {
+      "method": "state_getStorage",
+      "params": [
+        "0x26aa394eea5630e07c48ae0c9558cef7f9cce9c888469bb1a0dceaa129672ef8",
+        "0xef5960e6418bbe91c09e368b2a2a817f5a12dcf6cc75d05b6435673af18255ed"
+      ],
+      "why": "System.LastRuntimeUpgrade at block 3479329: the runtime the events were written under (spec 1014014 by hand)"
+    },
+    {
+      "method": "state_getRuntimeVersion",
+      "params": [
+        "0xef5960e6418bbe91c09e368b2a2a817f5a12dcf6cc75d05b6435673af18255ed"
+      ],
+      "why": "the runtime version at block 3479329, the last block, which pins the spec the metadata belongs to"
+    },
+    {
+      "method": "state_getMetadata",
+      "params": [
+        "0xef5960e6418bbe91c09e368b2a2a817f5a12dcf6cc75d05b6435673af18255ed"
+      ],
+      "why": "the metadata at block 3479329, the last block: the types every decoder reads events and storage with (version 14, 482132 bytes by hand)"
+    }
+  ],
+  "schema": "flop-observatory/requests@0"
+}

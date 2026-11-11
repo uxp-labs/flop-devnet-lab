@@ -66,7 +66,7 @@
   {
     "id": "net-rpc-size-cap-off",
     "file": "src/net.ts",
-    "find": "    if (bytes.length > this.maxAnswerBytes) return this.drop(",
+    "find": "    if (bytes.length > ceiling) return this.drop(",
     "replace": "    if (false) return this.drop(",
     "test": "test/net.test.ts",
     "why": "an RPC answer over the size limit is refused"
@@ -74,16 +74,16 @@
   {
     "id": "net-rpc-size-cap-in-characters",
     "file": "src/net.ts",
-    "find": "    if (bytes.length > this.maxAnswerBytes) return this.drop(",
-    "replace": "    if (data.length > this.maxAnswerBytes) return this.drop(",
+    "find": "    if (bytes.length > ceiling) return this.drop(",
+    "replace": "    if (data.length > ceiling) return this.drop(",
     "test": "test/net.test.ts",
     "why": "the size limit counts bytes, not characters"
   },
   {
     "id": "net-rpc-size-cap-off-by-one",
     "file": "src/net.ts",
-    "find": "    if (bytes.length > this.maxAnswerBytes) return this.drop(",
-    "replace": "    if (bytes.length >= this.maxAnswerBytes) return this.drop(",
+    "find": "    if (bytes.length > ceiling) return this.drop(",
+    "replace": "    if (bytes.length >= ceiling) return this.drop(",
     "test": "test/net.test.ts",
     "why": "an answer of exactly the size limit is read"
   },
@@ -106,8 +106,8 @@
   {
     "id": "net-rpc-timeout-never",
     "file": "src/net.ts",
-    "find": "      }, this.timeoutMs);\n      this.waiting.set(id, { resolve, reject, timer });",
-    "replace": "      }, this.timeoutMs * 1000);\n      this.waiting.set(id, { resolve, reject, timer });",
+    "find": "      }, this.timeoutMs);\n      this.waiting.set(id, { method,",
+    "replace": "      }, this.timeoutMs * 1000);\n      this.waiting.set(id, { method,",
     "test": "test/net.test.ts",
     "why": "every RPC call has a 15 s limit"
   },
@@ -138,8 +138,8 @@
   {
     "id": "net-rpc-error-read-as-result",
     "file": "src/net.ts",
-    "find": "    if (Object.hasOwn(m, \"error\")) {",
-    "replace": "    if (false) {",
+    "find": "    } else if (Object.hasOwn(m, \"error\")) {",
+    "replace": "    } else if (false) {",
     "test": "test/net.test.ts",
     "why": "an RPC error answer is a failed call, never a result"
   },
@@ -289,7 +289,7 @@
   },
   {
     "id": "live-run-sums-skip-tape",
-    "file": "src/live-run.ts",
+    "file": "src/run-command.ts",
     "find": "    .filter((n) => n !== \"SHA256SUMS\")",
     "replace": "    .filter((n) => n !== \"SHA256SUMS\" && n !== \"tape.jsonl\")",
     "test": "test/live-run.test.ts",
@@ -309,7 +309,7 @@
     "find": "    if (file !== COMPOSITION_ROOT || !ROOT_GLOBALS.has(n.name)) return false;",
     "replace": "    if (!ROOT_GLOBALS.has(n.name)) return false;",
     "test": "scripts/source-scan.mjs",
-    "why": "only src/live-bin.ts may name WebSocket and fetch"
+    "why": "only src/net-root.ts may name WebSocket and fetch"
   },
   {
     "id": "scan-root-exemption-any-use",
@@ -341,6 +341,6 @@
     "find": "  const exempted = (file: string, text: string) => (file === ROOT ? text.split(ROOT_FORM).join(\"\") : text);",
     "replace": "  const exempted = (file: string, text: string) => text.split(ROOT_FORM).join(\"\");",
     "test": "test/guard.test.ts",
-    "why": "the raw text scan exempts the one text in src/live-bin.ts only"
+    "why": "the raw text scan exempts the one text in src/net-root.ts only"
   }
 ]

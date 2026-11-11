@@ -83,6 +83,26 @@ function entryOf(v: unknown, seq: number): TapeEntry | string {
   return { seq, request, answer: { result: a.result } };
 }
 
+/** A tape's entries, in order. Throws TapeError, naming the line, when any line is not as written above. */
+export function parseTape(text: string): TapeEntry[] {
+  const lines = text.split("\n");
+  if (lines.at(-1) !== "") throw new TapeError("the tape does not end with a newline (a tape cut short)");
+  lines.pop();
+  const values = lines.map((line, i) => {
+    if (line === "") throw new TapeError(`tape line ${i} is blank`);
+    const read = strictJson(new TextEncoder().encode(line));
+    if ("problem" in read) throw new TapeError(`tape line ${i} is ${read.problem}`);
+    return read.value;
+  });
+  const head = values.at(0);
+  if (!isRecord(head) || !keysAre(head, ["schema"]) || head.schema !== TAPE_SCHEMA) throw new TapeError(`tape line 0 must be {"schema":"${TAPE_SCHEMA}"}`);
+  return values.slice(1).map((v, i) => {
+    const e = entryOf(v, i);
+    if (typeof e === "string") throw new TapeError(`tape line ${i + 1} ${e}`);
+    return e;
+  });
+}
+
 /** Replays a tape. Trust "fixture": a tape is saved data, whatever transport recorded it. */
 export class TapeTransport implements Transport {
   readonly trust: Trust = "fixture";
@@ -97,23 +117,7 @@ export class TapeTransport implements Transport {
 
   /** Reads a tape's text. Throws TapeError, naming the line, when any line is not as written above. */
   static parse(text: string, label?: string): TapeTransport {
-    const lines = text.split("\n");
-    if (lines.at(-1) !== "") throw new TapeError("the tape does not end with a newline (a tape cut short)");
-    lines.pop();
-    const values = lines.map((line, i) => {
-      if (line === "") throw new TapeError(`tape line ${i} is blank`);
-      const read = strictJson(new TextEncoder().encode(line));
-      if ("problem" in read) throw new TapeError(`tape line ${i} is ${read.problem}`);
-      return read.value;
-    });
-    const head = values.at(0);
-    if (!isRecord(head) || !keysAre(head, ["schema"]) || head.schema !== TAPE_SCHEMA) throw new TapeError(`tape line 0 must be {"schema":"${TAPE_SCHEMA}"}`);
-    const entries = values.slice(1).map((v, i) => {
-      const e = entryOf(v, i);
-      if (typeof e === "string") throw new TapeError(`tape line ${i + 1} ${e}`);
-      return e;
-    });
-    return new TapeTransport(entries, label);
+    return new TapeTransport(parseTape(text), label);
   }
 
   /** Reads the tape at path, a regular file only (src/files.ts). */
