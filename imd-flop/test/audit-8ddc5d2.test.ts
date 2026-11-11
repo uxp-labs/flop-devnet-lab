@@ -1,5 +1,5 @@
 /**
- * The swarm audit of commit 8ddc5d2 (IMD job 769d5aeb). Findings 1 to 4 and 8 to 11 are imd-flop's.
+ * The swarm audit of commit 8ddc5d2 (IMD job 769d5aeb). Findings 1 to 4, 8 to 11 and 13 are imd-flop's.
  * Each test asserts the safe outcome, so it fails on 8ddc5d2 and passes with its fix:
  *   1  receipt --refresh never settles from a receipt body that had to be redacted
  *   2  a later read never lowers a booked settlement, and a settlement is never charged below the
@@ -10,8 +10,10 @@
  *   9  "nothing was sent" has its own exit code (11), apart from "sent, spend unknown" (1)
  *  10  reserved_spend is held to the one amount rule: finite and >= 0, else unknown and shown blank
  *  11  padQuote refuses a negative token count instead of letting it inflate the pad
- * Findings 5, 6 and 7 are the viewer's. Finding 12 is a documented residual. Finding 13 is a product
- * decision. Stub providers only; no network (test/setup.ts disables fetch).
+ *  13  the seat's daily cap bounds every call the seat's key pays for, whoever the call is for. A requester
+ *      call must fit the per-call cap, the seat's daily cap and its job budget (the owner's decision)
+ * Findings 5, 6 and 7 are the viewer's. Finding 12 is a documented residual.
+ * Stub providers only; no network (test/setup.ts disables fetch).
  */
 import { appendFileSync, existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -271,7 +273,8 @@ describe("finding 3: money already spent rounds up and room left rounds down, so
     const cap = { daily: 1, perCall: 1 };
     // 1 - 0.9999992 is 0.0000008 of room: less than the smallest quote, so nothing fits.
     expect(checkBudget({ padded: 0.000001, cap, payer: "holder", spentBefore: 0.9999992 })).toMatchObject({ code: 3, reason: expect.stringMatching(/daily cap reached/) });
-    expect(checkBudget({ padded: 0.000001, cap: { daily: 5, perCall: 5 }, payer: "requester", spentBefore: 0.9999992, jobBudget: 1 })).toMatchObject({ code: 3, reason: expect.stringMatching(/requester budget/) });
+    // Since finding 13 a requester state carries two totals. The job's spend is jobSpentBefore, so it is named here.
+    expect(checkBudget({ padded: 0.000001, cap: { daily: 5, perCall: 5 }, payer: "requester", spentBefore: 0.9999992, jobSpentBefore: 0.9999992, jobBudget: 1 })).toMatchObject({ code: 3, reason: expect.stringMatching(/requester budget/) });
     // 1 - 0.4999996 is 0.5000004: the room is 0.5, not 0.500001.
     expect(checkBudget({ padded: 0.500001, cap, payer: "holder", spentBefore: 0.4999996 })).toMatchObject({ code: 3, reason: "padded quote 0.500001 FLOP is over the remaining daily cap 0.5" });
     expect(checkBudget({ padded: 0.5, cap, payer: "holder", spentBefore: 0.4999996 })).toBeNull();
@@ -346,14 +349,15 @@ describe("finding 4: a refusal that needs no quote happens before the estimate",
     const cap = { daily: 1, perCall: 0.5 };
     const holder = { cap, payer: "holder" as const, spentBefore: 1 };
     expect(noRoom(holder)).toEqual({ reason: "daily cap reached (1/1 FLOP today, UTC)", code: 3 });
-    const requester = { cap, payer: "requester" as const, spentBefore: 0.3, jobBudget: 0.3 };
+    // Since finding 13 a requester state carries two totals: the seat's spend today and the job's spend.
+    const requester = { cap, payer: "requester" as const, spentBefore: 0.3, jobSpentBefore: 0.3, jobBudget: 0.3 };
     expect(noRoom(requester)).toEqual({ reason: "requester budget reached (0.3/0.3 FLOP on this job)", code: 3 });
     for (const state of [holder, requester]) {
       for (const padded of [0.000001, 0.186, 0.9]) expect(checkBudget({ ...state, padded })).toEqual(noRoom(state));
     }
-    expect(noRoom({ cap, payer: "requester", spentBefore: 0, jobBudget: Number.POSITIVE_INFINITY })).toEqual({ reason: 'no usable requester budget for payer "requester"', code: 3 });
+    expect(noRoom({ cap, payer: "requester", spentBefore: 0, jobSpentBefore: 0, jobBudget: Number.POSITIVE_INFINITY })).toEqual({ reason: 'no usable requester budget for payer "requester"', code: 3 });
     expect(noRoom({ ...holder, spentBefore: 0.999999 })).toBeNull();
-    expect(noRoom({ ...requester, spentBefore: 0.299999 })).toBeNull();
+    expect(noRoom({ ...requester, spentBefore: 0.299999, jobSpentBefore: 0.299999 })).toBeNull();
     // 0.0000008 of room is no room: the smallest quote is 0.000001.
     expect(noRoom({ ...holder, spentBefore: 0.9999992 })).toMatchObject({ code: 3 });
   });
@@ -519,5 +523,205 @@ describe("finding 11: a negative token count is not a usable count", () => {
     expect(r.err).toMatch(/estimate returned no usable cost/);
     const last = ledger(h).at(-1)!;
     expect({ state: last.state, quote_padded: last.quote_padded, cap_charge: last.cap_charge }).toEqual({ state: "refused_local", quote_padded: null, cap_charge: 0 });
+  });
+});
+
+describe("finding 13: the seat's daily cap bounds every call the seat's key pays for, whoever the call is for", () => {
+  const budget = (flop: string) => ["--job-budget", flop];
+  type PayerRow = Row & { payer: string; job: string; job_spent_before?: number | null };
+  const rows = (h: string) => ledger(h) as PayerRow[];
+  /** What a row says about the two limits: the seat's spend today and the job's spend, both before the call. */
+  const totals = (r: PayerRow) => ({ payer: r.payer, state: r.state, spent_before: r.spent_before, job_spent_before: r.job_spent_before });
+  const settles = (spend: number) => (id: string) => receiptFor(id, { settled_spend: spend, state: "settled" });
+  async function readyRequester(cap: string) {
+    const h = await ready(cap);
+    expect((await cli(h, ["config", "set", "payer", "requester"])).code).toBe(0);
+    return h;
+  }
+
+  // The repro's own commands. The report's figures (padded quote 0.186 each, 0.93 FLOP reserved) are those of
+  // this file's stub provider. The built-in mock quotes 0.18 for the same prompt. Both were five exits of 0
+  // against a 0.2 FLOP/day cap, with spent_today_mock 0.
+  const repro: [string, (() => Provider) | null, number, number][] = [["this file's stub provider", () => new P(), 0.186, 0.014], ["the built-in mock", null, 0.18, 0.02]];
+  for (const [name, provider, quote, left] of repro) {
+    it(`the audit's repro with ${name}: cap 0.2, payer requester, five jobs with --job-budget 1: the second run is refused (exit 3) and cap show reports ${quote}`, async () => {
+      const h = tmpHome();
+      await cli(h, ["init", "--seat", "9001"]);
+      await cli(h, ["link", "--token", "9001", "--agent", "7"]);
+      await cli(h, ["cap", "set", "0.2"]);
+      await cli(h, ["config", "set", "payer", "requester"]);
+      const runs = [];
+      for (let i = 1; i <= 5; i++) runs.push(await cli(h, ["run", "--job", `job-${i}`, "--prompt", "Say hi", "--max-tokens", "8", "--job-budget", "1", "--provider", "mock"], provider ? { provider: provider() } : {}));
+      expect(runs.map((r) => r.code)).toEqual([0, 3, 3, 3, 3]);
+      expect(runs[1].err).toBe(`imd-flop: refused locally, nothing sent: padded quote ${quote} FLOP is over the remaining daily cap ${left}`);
+      const shown = (await cli(h, ["cap", "show", "--json"])).json();
+      expect({ daily: shown.cap.daily, spent_today_mock: shown.spent_today_mock }).toEqual({ daily: 0.2, spent_today_mock: quote });
+      expect((await cli(h, ["cap", "show"])).out).toBe(`seat 9001: cap 0.2 FLOP/day (UTC), 0.2 per call. Today: flop 0, mock ${quote}`);
+      expect((await cli(h, ["status", "--json"])).json().today_utc.mock).toBe(quote);
+      expect(rows(h).filter((r) => r.state === "refused_local")).toHaveLength(4);
+    });
+  }
+
+  it("a requester call inside the daily cap but over its job budget is refused (exit 3), and the row records both totals", async () => {
+    const h = await readyRequester("5");
+    // Another job runs first, so the seat's spend today (0.372) and this job's spend (0.186) differ.
+    expect((await cli(h, runArgs("other", budget("1")), { provider: new P() })).code).toBe(0);
+    expect((await cli(h, runArgs("j1", budget("0.3")), { provider: new P() })).code).toBe(0);
+    const p = new P();
+    const r = await cli(h, runArgs("j1", budget("0.3")), { provider: p });
+    expect({ code: r.code, estimates: p.estimates, calls: p.calls }).toEqual({ code: 3, estimates: 1, calls: 0 });
+    expect(r.err).toBe("imd-flop: refused locally, nothing sent: padded quote 0.186 FLOP is over this job's remaining requester budget 0.114");
+    expect(totals(rows(h).at(-1)!)).toEqual({ payer: "requester", state: "refused_local", spent_before: 0.372, job_spent_before: 0.186 });
+  });
+
+  it("a holder call after requester calls sees their charges", async () => {
+    const h = await readyRequester("0.2");
+    expect((await cli(h, runArgs("j1", budget("1")), { provider: new P() })).code).toBe(0);
+    expect((await cli(h, ["config", "set", "payer", "holder"])).code).toBe(0);
+    const p = new P();
+    const r = await cli(h, runArgs("j2"), { provider: p });
+    expect({ code: r.code, calls: p.calls }).toEqual({ code: 3, calls: 0 });
+    expect(r.err).toBe("imd-flop: refused locally, nothing sent: padded quote 0.186 FLOP is over the remaining daily cap 0.014");
+    expect(totals(rows(h).at(-1)!)).toEqual({ payer: "holder", state: "refused_local", spent_before: 0.186, job_spent_before: null });
+  });
+
+  it("the refusal before the estimate fires for a requester when the day is used up", async () => {
+    const h = await readyRequester("0.186");
+    expect((await cli(h, runArgs("a", budget("1")), { provider: new P() })).code).toBe(0);
+    const p = new P();
+    const r = await cli(h, runArgs("b", budget("1")), { provider: p });
+    expect({ code: r.code, estimates: p.estimates, calls: p.calls }).toEqual({ code: 3, estimates: 0, calls: 0 });
+    expect(r.err).toBe("imd-flop: refused locally, nothing sent: daily cap reached (0.186/0.186 FLOP today, UTC)");
+    const last = rows(h).at(-1)!;
+    expect({ ...totals(last), request_id: last.request_id, quote_padded: last.quote_padded, cap_charge: last.cap_charge })
+      .toEqual({ payer: "requester", state: "refused_local", spent_before: 0.186, job_spent_before: 0, request_id: null, quote_padded: null, cap_charge: 0 });
+  });
+
+  it("the check under the ledger lock reads the seat's spend for a requester too: room that goes during the estimate refuses the call", async () => {
+    const h = await readyRequester("0.186");
+    const p = new P();
+    // Another process books a holder paid 0.186 while this requester run waits for its quote.
+    p.estimate = async () => {
+      p.estimates += 1;
+      seedCharge(h, "other-process", 0.186);
+      return QUOTE as never;
+    };
+    const r = await cli(h, runArgs("a", budget("1")), { provider: p });
+    expect({ code: r.code, estimates: p.estimates, calls: p.calls }).toEqual({ code: 3, estimates: 1, calls: 0 });
+    const last = rows(h).at(-1)!;
+    expect({ ...totals(last), reason: last.reason, quote_padded: last.quote_padded })
+      .toEqual({ payer: "requester", state: "refused_local", spent_before: 0.186, job_spent_before: 0, reason: "daily cap reached (0.186/0.186 FLOP today, UTC)", quote_padded: 0.186 });
+  });
+
+  it("every row a run writes carries both totals: spent_before is the seat's spend today, job_spent_before the job's (null on a holder row)", async () => {
+    const h = await ready("5");
+    expect((await cli(h, runArgs("h1"), { provider: new P() })).code).toBe(0);
+    expect((await cli(h, ["config", "set", "payer", "requester"])).code).toBe(0);
+    expect((await cli(h, runArgs("j1", budget("1")), { provider: new P() })).code).toBe(0);
+    expect((await cli(h, runArgs("j1", budget("1")), { provider: new P({ read: settles(0.05) }) })).code).toBe(0);
+    const last = await cli(h, runArgs("j2", budget("1")), { provider: new P() });
+    expect(last.code, last.err).toBe(0);
+    // A refresh appends a copy of the attempt's row with the new booking: both totals stay as they were.
+    expect((await cli(h, refreshArgs(last.json().request_id as string), { provider: new P({ read: settles(0.1) }) })).code).toBe(0);
+    const all = rows(h);
+    expect(all.every((r) => "job_spent_before" in r)).toBe(true);
+    expect(all.map(totals)).toEqual([
+      { payer: "holder", state: "sent", spent_before: 0, job_spent_before: null },
+      { payer: "holder", state: "estimated", spent_before: 0, job_spent_before: null },
+      { payer: "requester", state: "sent", spent_before: 0.186, job_spent_before: 0 },
+      { payer: "requester", state: "estimated", spent_before: 0.186, job_spent_before: 0 },
+      { payer: "requester", state: "sent", spent_before: 0.372, job_spent_before: 0.186 },
+      { payer: "requester", state: "settled", spent_before: 0.372, job_spent_before: 0.186 },
+      { payer: "requester", state: "sent", spent_before: 0.422, job_spent_before: 0 },
+      { payer: "requester", state: "estimated", spent_before: 0.422, job_spent_before: 0 },
+      { payer: "requester", state: "settled", spent_before: 0.422, job_spent_before: 0 },
+    ]);
+    // status reports the seat's total for the day, all payers: 0.186 + 0.186 + 0.05 + 0.1.
+    expect((await cli(h, ["status", "--seat", SEAT, "--json"])).json().today_utc.mock).toBe(0.522);
+  });
+
+  it("an unusable ledger charge on any of the seat's rows today refuses the next call, whoever either call is for (exit 3, no estimate)", async () => {
+    const bad = (payer: string) => JSON.stringify({ day: utcDay(), request_id: "seed-bad", seat: SEAT, job: "seed", provider: "mock", payer, state: "sent", cap_charge: null }) + "\n";
+    for (const [seeded, next] of [["requester", "holder"], ["holder", "requester"]] as const) {
+      const h = await ready("5");
+      appendFileSync(join(h, "ledger.jsonl"), bad(seeded));
+      await cli(h, ["config", "set", "payer", next]);
+      const p = new P();
+      const r = await cli(h, runArgs("a", next === "requester" ? budget("1") : []), { provider: p });
+      expect({ code: r.code, estimates: p.estimates, calls: p.calls }, `${seeded} row, ${next} call`).toEqual({ code: 3, estimates: 0, calls: 0 });
+      expect(r.err).toMatch(/ledger cap_charge unusable; next call refused/);
+      expect(totals(rows(h).at(-1)!)).toEqual({ payer: next, state: "refused_local", spent_before: null, job_spent_before: null });
+    }
+  });
+
+  it("spentToday counts every row of the seat for that provider and UTC day; jobSpent stays the requester rows of one job", () => {
+    const h = tmpHome();
+    seedCharge(h, "h1", 0.1);
+    seedCharge(h, "r1", 0.2, "requester", "ja");
+    seedCharge(h, "r2", 0.05, "requester", "jb");
+    expect(spentToday(h, SEAT, "mock")).toBe(0.35);
+    expect([jobSpent(h, "ja", "mock"), jobSpent(h, "jb", "mock"), jobSpent(h, "seed", "mock")]).toEqual([0.2, 0.05, 0]);
+    // Control: another seat, another provider and another day are not this seat's spend today.
+    expect([spentToday(h, "9002", "mock"), spentToday(h, SEAT, "flop"), spentToday(h, SEAT, "mock", "2000-01-01")]).toEqual([0, 0, 0]);
+  });
+
+  describe("policy.ts: the limits that apply to a payer, in order", () => {
+    const cap = { daily: 1, perCall: 0.5 };
+    const DAY_USED = { reason: "daily cap reached (1/1 FLOP today, UTC)", code: 3 };
+    /** A requester state: the seat's spend today, this job's spend, and the job budget. */
+    const req = (spentBefore: number, jobSpentBefore: number, jobBudget = 0.3) => ({ cap, payer: "requester" as const, spentBefore, jobBudget, jobSpentBefore });
+
+    it("noRoom refuses on the first limit with nothing left: the daily cap for every payer, then the job budget for a requester", () => {
+      expect(noRoom(req(1, 0))).toEqual(DAY_USED); // the job budget has 0.3 left, the day has nothing
+      expect(noRoom(req(1, 0.3))).toEqual(DAY_USED); // both used up: the daily cap is first
+      expect(noRoom(req(0.5, 0.3))).toEqual({ reason: "requester budget reached (0.3/0.3 FLOP on this job)", code: 3 });
+      expect(noRoom(req(0.5, 0.1))).toBeNull();
+      expect(noRoom({ cap, payer: "holder", spentBefore: 1 })).toEqual(DAY_USED);
+    });
+
+    it("checkBudget: noRoom, then the per-call cap, then the first limit the padded quote does not fit", () => {
+      const overDay = { reason: "padded quote 0.186 FLOP is over the remaining daily cap 0.1", code: 3 };
+      expect(checkBudget({ ...req(0.9, 0), padded: 0.186 })).toEqual(overDay); // fits the job budget, not the day
+      expect(checkBudget({ ...req(0.9, 0.2), padded: 0.186 })).toEqual(overDay); // fits neither: the daily cap is first
+      expect(checkBudget({ ...req(0.5, 0.2), padded: 0.186 })).toEqual({ reason: "padded quote 0.186 FLOP is over this job's remaining requester budget 0.1", code: 3 });
+      expect(checkBudget({ ...req(0.9, 0.2), padded: 0.6 })).toEqual({ reason: "padded quote 0.6 FLOP is over the per-call cap 0.5", code: 3 });
+      expect(checkBudget({ ...req(1, 0.2), padded: 0.6 })).toEqual(DAY_USED); // nothing left comes before the per-call cap
+      expect(checkBudget({ ...req(0.5, 0.1), padded: 0.186 })).toBeNull();
+      expect(checkBudget({ ...req(0.5, 0.1), padded: 0.2 })).toBeNull(); // exactly what the job budget has left
+    });
+
+    it("fails closed: a requester state without a usable job budget or job spend is refused, never read as 0", () => {
+      const unusable = { reason: 'no usable requester budget for payer "requester"', code: 3 };
+      expect(noRoom({ cap, payer: "requester", spentBefore: 0, jobBudget: 0.3 })).toEqual(unusable); // no job spend
+      expect(noRoom({ cap, payer: "requester", spentBefore: 0, jobSpentBefore: 0 })).toEqual(unusable); // no job budget
+      // A null from a file or another writer is not 0 either.
+      expect(noRoom({ ...req(0, 0), jobSpentBefore: null as never })).toEqual(unusable);
+      expect(noRoom({ ...req(0, 0), jobBudget: null as never })).toEqual(unusable);
+      for (const bad of [Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY]) {
+        expect(noRoom({ ...req(0, 0), jobBudget: bad }), `budget ${bad}`).toEqual(unusable);
+        expect(noRoom({ ...req(0, 0), jobSpentBefore: bad }), `job spend ${bad}`).toEqual(unusable);
+        expect(checkBudget({ ...req(0, 0), jobBudget: bad, padded: 0.186 }), `budget ${bad}`).toEqual(unusable);
+      }
+    });
+
+    it("fails closed: a daily cap room that is not a finite number is refused, for every payer", () => {
+      const unusable = { reason: "no usable daily cap (NaN/1 FLOP today, UTC)", code: 3 };
+      expect(noRoom({ cap, payer: "holder", spentBefore: Number.NaN })).toEqual(unusable);
+      expect(noRoom(req(Number.NaN, 0))).toEqual(unusable);
+      expect(checkBudget({ cap, payer: "holder", spentBefore: Number.NaN, padded: 0.186 })).toEqual(unusable);
+    });
+
+    it("control: a payer that is neither is refused as before, and a holder is bounded by the daily cap alone", () => {
+      expect(noRoom({ cap, payer: "sponsor" as never, spentBefore: 0 })).toEqual({ reason: 'no usable requester budget for payer "sponsor"', code: 3 });
+      expect(checkBudget({ cap, payer: "sponsor" as never, spentBefore: 0, jobBudget: 1, jobSpentBefore: 0, padded: 0.186 })).toEqual({ reason: 'no usable requester budget for payer "sponsor"', code: 3 });
+      // Job figures on a holder state are not read: the job budget is the requester's limit.
+      expect(checkBudget({ cap, payer: "holder", spentBefore: 0.5, jobBudget: 0.01, jobSpentBefore: 5, padded: 0.186 })).toBeNull();
+    });
+  });
+
+  it("config set payer requester says the seat's daily cap still applies", async () => {
+    const h = await ready();
+    const r = await cli(h, ["config", "set", "payer", "requester"]);
+    expect({ code: r.code, out: r.out }).toEqual({ code: 0, out: "payer = requester (run needs --job-budget; the seat's daily cap still applies)" });
   });
 });

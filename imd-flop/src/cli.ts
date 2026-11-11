@@ -267,7 +267,7 @@ export async function main(argv: string[], io: IO): Promise<number> {
           if (key !== "payer" || (val !== "holder" && val !== "requester")) throw new CliError("usage: config set payer <holder|requester>", EXIT.USAGE);
           cfg.payer = val as Payer;
           saveConfig(h, cfg);
-          io.out(`payer = ${val}${val === "requester" ? " (run needs --job-budget; the daily cap counts holder-paid spend only)" : ""}`);
+          io.out(`payer = ${val}${val === "requester" ? " (run needs --job-budget; the seat's daily cap still applies)" : ""}`);
           return EXIT.OK;
         }
         if (rest[0] === "show" || rest[0] === undefined) {

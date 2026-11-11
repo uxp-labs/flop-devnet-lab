@@ -10,7 +10,7 @@ import { readJson, writeJsonSafe } from "./store.js";
 import { loadSigner, readIdentity, revokedDids } from "./keys.js";
 import { verifyLink, type LinkFile } from "./link.js";
 import { DEFAULT_MODEL, network, SEAT_COLLECTION } from "./networks.js";
-import { checkBudget, noRoom, padQuote, requireCap, validateJob, validatePayer, validateRunMaxTokens } from "./policy.js";
+import { checkBudget, noRoom, padQuote, requireCap, validateJob, validatePayer, validateRunMaxTokens, type BudgetState } from "./policy.js";
 import { appendLedger, jobSpent, LedgerLockError, spentToday, UnusableLedgerCharge, utcDay, withLedgerLock, type LedgerEntry } from "./ledger.js";
 import { classifyReceipt, type Classified } from "./receipts.js";
 import { bookingReason, holdCharge, isFreshRead, nextBooking, receiptIdentity, reportedCost } from "./settlement.js";
@@ -128,7 +128,7 @@ export async function runJob(h: string, provider: Provider, o: RunOpts, deps: { 
   const model = o.model ?? DEFAULT_MODEL;
   const messages = [...(o.system ? [{ role: "system" as const, content: o.system }] : []), { role: "user" as const, content: prompt }];
   const estPrompt = (o.system ? o.system + "\n" : "") + prompt;
-  const base: Omit<LedgerEntry, "state" | "reason" | "request_id" | "spend" | "cost_reported" | "cap_charge" | "http" | "quote_raw" | "quote_padded" | "spent_before"> = {
+  const base: Omit<LedgerEntry, "state" | "reason" | "request_id" | "spend" | "cost_reported" | "cap_charge" | "http" | "quote_raw" | "quote_padded" | "spent_before" | "job_spent_before"> = {
     ts: new Date().toISOString(),
     day: utcDay(),
     seat,
@@ -145,17 +145,23 @@ export async function runJob(h: string, provider: Provider, o: RunOpts, deps: { 
     job_budget: payer === "requester" ? o.jobBudget! : null,
     mock: provider.name === "mock",
   };
-  const refuse = (reason: string, code: number, q: { raw: number | null; padded: number | null }, spentBefore: number | null): never => {
-    appendLedger(h, { ...base, request_id: null, quote_raw: q.raw, quote_padded: q.padded, spent_before: spentBefore, state: "refused_local", reason, spend: null, cost_reported: null, cap_charge: 0, http: null });
+  /** What is already charged against this call's limits: the seat's spend today, and for a requester the job's spend. */
+  type Spent = Pick<BudgetState, "spentBefore" | "jobSpentBefore">;
+  // Every row records both totals. Null is unknown. job_spent_before is also null on a holder row.
+  const recorded = (spent: Spent | null): Required<Pick<LedgerEntry, "spent_before" | "job_spent_before">> => ({ spent_before: spent?.spentBefore ?? null, job_spent_before: spent?.jobSpentBefore ?? null });
+  const refuse = (reason: string, code: number, q: { raw: number | null; padded: number | null }, spent: Spent | null): never => {
+    appendLedger(h, { ...base, request_id: null, quote_raw: q.raw, quote_padded: q.padded, ...recorded(spent), state: "refused_local", reason, spend: null, cost_reported: null, cap_charge: 0, http: null });
     throw new CliError(`refused locally, nothing sent: ${reason}`, code);
   };
 
   const NO_QUOTE = { raw: null, padded: null };
-  // What the cap is checked against: today's holder-paid total, or this job's requester-paid total.
+  // What the limits are checked against. The seat's spend today, for every payer: the seat's key pays for
+  // the call, so the daily cap bounds it. For a requester also this job's spend, for the job budget.
   // An unusable ledger charge refuses the run.
-  const spentSoFar = (day: string, quote: { raw: number | null; padded: number | null }): number => {
+  const spentSoFar = (day: string, quote: { raw: number | null; padded: number | null }): Spent => {
     try {
-      return payer === "holder" ? spentToday(h, seat, provider.name, day) : jobSpent(h, job, provider.name);
+      const spentBefore = spentToday(h, seat, provider.name, day);
+      return payer === "requester" ? { spentBefore, jobSpentBefore: jobSpent(h, job, provider.name) } : { spentBefore };
     } catch (e) {
       if (e instanceof UnusableLedgerCharge) refuse(e.message, EXIT.REFUSED_CAP, quote, null);
       throw e;
@@ -165,7 +171,7 @@ export async function runJob(h: string, provider: Provider, o: RunOpts, deps: { 
   // A refusal that needs no quote comes before the estimate, so the prompt does not leave the machine
   // for nothing. The check under the ledger lock below stays the authority.
   const spentEarly = spentSoFar(base.day, NO_QUOTE);
-  const early = noRoom({ cap, payer, spentBefore: spentEarly, jobBudget: o.jobBudget });
+  const early = noRoom({ cap, payer, jobBudget: o.jobBudget, ...spentEarly });
   if (early) refuse(early.reason, early.code, NO_QUOTE, spentEarly);
 
   // Then the quote; fail closed.
@@ -181,10 +187,10 @@ export async function runJob(h: string, provider: Provider, o: RunOpts, deps: { 
   const lockedCheck = (): LedgerEntry => {
     // The UTC day is read once, inside the lock, and used for both the cap check and the rows.
     const day = utcDay();
-    const spentBefore = spentSoFar(day, q);
-    const refusal = checkBudget({ padded: q.padded, cap, payer, spentBefore, jobBudget: o.jobBudget });
-    if (refusal) refuse(refusal.reason, refusal.code, q, spentBefore);
-    const row: LedgerEntry = { ...base, day, request_id: requestId, quote_raw: q.raw, quote_padded: q.padded, spent_before: spentBefore, state: "sent", reason: null, spend: null, cost_reported: null, cap_charge: q.padded, http: null };
+    const spent = spentSoFar(day, q);
+    const refusal = checkBudget({ padded: q.padded, cap, payer, jobBudget: o.jobBudget, ...spent });
+    if (refusal) refuse(refusal.reason, refusal.code, q, spent);
+    const row: LedgerEntry = { ...base, day, request_id: requestId, quote_raw: q.raw, quote_padded: q.padded, ...recorded(spent), state: "sent", reason: null, spend: null, cost_reported: null, cap_charge: q.padded, http: null };
     appendLedger(h, row); // written before the call so a crash still leaves the attempt on the books. A later refused_local line wins if the provider refuses before mint.
     return row;
   };

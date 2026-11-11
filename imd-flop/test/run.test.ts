@@ -64,7 +64,11 @@ describe("cap is required and enforced", () => {
 });
 
 describe("payer switch", () => {
-  it("records the payer on every entry; requester needs --job-budget and does not use the holder cap", async () => {
+  // Expectations changed by the swarm audit of 8ddc5d2, finding 13: the daily cap bounds every call the
+  // seat's key pays for. This test pinned the old rule, where a requester call did not count against the
+  // daily cap ("holder daily spend untouched"). Under cap 0.2 the one requester call (0.18) now uses the
+  // day for every payer.
+  it("records the payer on every entry; requester needs --job-budget and still counts against the seat's daily cap", async () => {
     const h = tmpHome();
     await readySeat(h, "42", "0.2");
     expect((await cli(h, ["config", "set", "payer", "requester"])).code).toBe(0);
@@ -77,13 +81,17 @@ describe("payer switch", () => {
     expect(ok.json().payer).toBe("requester");
     const over = await cli(h, [...RUN, "--job-budget", "0.3"]);
     expect(over.code).toBe(3);
-    expect(over.err).toMatch(/requester budget/);
-    // holder daily spend untouched
-    expect((await cli(h, ["status", "--json"])).json().today_utc.mock).toBe(0);
+    // Was /requester budget/. The quote now fits neither limit, and the daily cap is checked first.
+    expect(over.err).toMatch(/remaining daily cap/);
+    // Was 0 ("holder daily spend untouched"). The requester call is on the seat's total for the day.
+    expect((await cli(h, ["status", "--json"])).json().today_utc.mock).toBe(0.18);
     await cli(h, ["config", "set", "payer", "holder"]);
+    // Was a holder call that ran. The requester call used the day, so the holder call is refused as well.
     const held = await cli(h, [...RUN, "--json"]);
-    expect(held.json().payer).toBe("holder");
+    expect(held.code).toBe(3);
+    expect(held.err).toMatch(/remaining daily cap/);
     const rows = readLines(join(h, "ledger.jsonl"));
+    expect(rows.at(-1).payer).toBe("holder");
     expect(rows.every((e) => e.payer === "holder" || e.payer === "requester")).toBe(true);
     expect(rows.filter((e) => e.payer === "requester").every((e) => e.job_budget === 0.3 || e.job_budget === null)).toBe(true);
     expect((await cli(h, ["status", "--json"])).json().today_utc.mock).toBeGreaterThan(0);

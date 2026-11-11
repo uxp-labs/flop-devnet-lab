@@ -66,6 +66,17 @@ const adapters: Record<string, (i: Json, want: Json) => Promise<Json> | Json> = 
     const r = await cli(h, runArgs(["--max-tokens", String(i.max_tokens)]), { provider: new P({ estimate: i.estimate }) });
     return { exit: r.code };
   },
+  // Each run sets the payer, then runs its own job. The answer is every exit code and the seat's total for the day.
+  "cap.payer": async (i) => {
+    const h = await ready(i.cap);
+    const exits: number[] = [];
+    for (const run of i.runs) {
+      await cli(h, ["config", "set", "payer", run.payer]);
+      const args = ["run", "--seat", SEAT, "--job", run.job, "--prompt", "Say hi", "--provider", "mock", "--max-tokens", String(i.max_tokens), "--json", ...(run.job_budget === undefined ? [] : ["--job-budget", run.job_budget])];
+      exits.push((await cli(h, args, { provider: new P({ estimate: i.estimate }) })).code);
+    }
+    return { exits, spent_today: (await cli(h, ["cap", "show", "--seat", SEAT, "--json"])).json().spent_today_mock };
+  },
   "amount.text": async (i) => {
     const h = tmpHome();
     await cli(h, ["init", "--seat", SEAT]);

@@ -1,6 +1,6 @@
 {
  "file": "amount-json.json",
- "description": "Amounts read from JSON (receipts, ledger rows). imd-flop: knownSettledSpend(v) and usableCapCharge(v). spend-guard: spend_amount(v) and json_number(v). viewer: amount(v). {\"$float\": \"nan\"|\"inf\"|\"-inf\"} encodes non-finite floats.",
+ "description": "Amounts read from JSON (receipts, ledger rows). imd-flop: knownAmount(v) and usableCapCharge(v). spend-guard: spend_amount(v) and json_number(v). viewer: amount(v). {\"$float\": \"nan\"|\"inf\"|\"-inf\"} encodes non-finite floats.",
  "status": "current behavior at 3ae1cdf",
  "vectors": [
   {

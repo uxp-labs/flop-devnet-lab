@@ -15,9 +15,9 @@ no network and no spend.
 | `link --token <id> [--agent <erc8004Id>]` | Builds the v1 statement `{tokenId, erc8004AgentId, flopDid, ss58, network, genesisHash, issuedAt}`, signs it with the FLOP key, and prints EIP-712 typed data for the seat holder to sign in their own wallet. |
 | `link verify <file> [--wallet-sig <sig> --wallet <addr>] [--save] [--eth-rpc <url>]` | Checks the Ed25519 signature, that the SS58 and the DID are the same key, that `genesisHash` is the FLOP network's genesis, that the EIP-712 data matches the statement, and the wallet signature if given. With `--eth-rpc` (or `ETH_RPC_URL`) it reads `eth_chainId` and, only when that is 1, `ownerOf(tokenId)` on the seat collection. It fails unless the signer still owns the seat, so a sale kills the link. A wrong, missing, or malformed chain id fails the verify. |
 | `cap set <FLOP/day> [--per-call <FLOP>]`, `cap show` | Required. No cap means `run` refuses. The day resets at 00:00 UTC. |
-| `config set payer <holder\|requester>`, `config show` | Who pays. Every ledger row records it. |
-| `run --job <id> --prompt <text> \| --prompt-file <path>` | Refuses before asking for a quote when the daily cap (or the job budget) is already used up. Otherwise gets a quote, pads it, checks the caps, makes the call, and saves the response and receipt. Nothing is sent to imd. Options: `--max-tokens`, `--system`, `--provider mock\|flop`, `--live`, `--job-budget`, `--timeout-ms`, `--check-job`, `--no-link` (mock only), `--mock-scenario`. `--provider flop` requires `ETH_RPC_URL` to report chain id 1 and the live faucet and RPC genesis to equal the pinned hash, and it refuses before any quote or paid call when they do not. The mock provider does not make those calls. |
-| `status [--json]` | Network, seat, address, link state, payer, today's spend against the cap, and recent receipts with their `match` field. A receipt file that cannot be read (not JSON, or not a JSON object) does not stop the overview: it is listed by name, in `unreadable_receipts` with `--json` and on one line in text output. |
+| `config set payer <holder\|requester>`, `config show` | Who a call is for. Every ledger row records it. The seat's key pays either way, so the daily cap applies to both. See "Payer assumption". |
+| `run --job <id> --prompt <text> \| --prompt-file <path>` | Refuses before asking for a quote when the daily cap (or, for a requester call, the job budget) is already used up. Otherwise gets a quote, pads it, checks the caps, makes the call, and saves the response and receipt. Nothing is sent to imd. Options: `--max-tokens`, `--system`, `--provider mock\|flop`, `--live`, `--job-budget`, `--timeout-ms`, `--check-job`, `--no-link` (mock only), `--mock-scenario`. `--provider flop` requires `ETH_RPC_URL` to report chain id 1 and the live faucet and RPC genesis to equal the pinned hash, and it refuses before any quote or paid call when they do not. The mock provider does not make those calls. |
+| `status [--json]` | Network, seat, address, link state, payer, today's spend against the cap (the seat's total, all payers), and recent receipts with their `match` field. A receipt file that cannot be read (not JSON, or not a JSON object) does not stop the overview: it is listed by name, in `unreadable_receipts` with `--json` and on one line in text output. |
 | `receipt <request_id> [--refresh] [--json]` | Shows one receipt and its `match` field. |
 | `quote --prompt <text> [--provider flop]` | Free cost estimate. With `--provider flop`, it calls the gateway's free `/models/estimate`. |
 | `faucet [--dry-run]` | Refuses with exit code 9, because our team doesn't use faucets. `--dry-run` prints the request it would have made. |
@@ -74,9 +74,9 @@ Known gap: if the estimate step fails, or the run is refused before the estimate
 
 Spend-guard rules, ported from `spend-guard/`:
 - The quote is padded by 20 tokens for the Qwen chat template. On a paid flop run, the chain-id and genesis checks come before that quote. If the estimate fails, or returns no usable cost (a cost that is not a finite number above 0, or a token count that is negative or not a finite number), nothing is sent.
-- A refusal that needs no quote comes before the estimate, so the prompt is not posted for nothing: the daily cap (holder) or the job budget (requester) is already used up, or a ledger `cap_charge` is unusable. The ledger row is the usual `refused_local` with a null quote. The cap check under the ledger lock still runs after the quote and stays the authority.
+- A refusal that needs no quote comes before the estimate, so the prompt is not posted for nothing: the daily cap (every payer) or the job budget (requester) is already used up, or a ledger `cap_charge` is unusable. The ledger row is the usual `refused_local` with a null quote. The cap check under the ledger lock still runs after the quote and stays the authority.
 - If the pre-mint chain-id or genesis recheck fails (exit 5), or the child-key mint fails or the run is aborted before send (exit 11), the latest ledger line is `refused_local` with cap charge 0. Status does not list that attempt as pending. The earlier `sent` line is the crash marker written before the call; the latest line is the one the cap uses. A crash between those two lines can leave `sent` as the latest line.
-- A call is refused locally if it's over the per-call cap or what's left of the daily cap. The total already charged is rounded up to 6 decimals and the room left is rounded down, so rounding never admits a call. `status` and `cap show` print that rounded-up total.
+- A call is refused locally if it's over the per-call cap or what's left of the daily cap. The daily total is every call of the seat that UTC day, whoever the call was for. A requester call must also fit what's left of its job budget. The total already charged is rounded up to 6 decimals and the room left is rounded down, so rounding never admits a call. `status` and `cap show` print that rounded-up total.
 - A timeout is never retried. Its spend is recorded as `null` with its `request_id`. For the cap, unknown spend counts as the padded quote.
 - Receipts are labeled `gateway observed` and `chain_final=false`, because nothing verifies chain settlement yet. An amount on a receipt (reserved or settled) counts only when it is a finite number that is not negative. Anything else is unknown and shows blank, never 0. A 401 `api_key_expired` gets its own `key_expired` flag.
 - A receipt read settles an attempt only when it is an HTTP 200 answer for this request id and its stored copy needed no redaction by the secret scan. `run` and `receipt --refresh` share that rule (`src/settlement.ts`). Any other read keeps the reservation.
@@ -86,11 +86,19 @@ Spend-guard rules, ported from `spend-guard/`:
 
 ## Payer assumption
 
-`holder` (the default): the seat's daily cap applies.
-`requester`: the daily cap doesn't count these calls, and each `run` needs `--job-budget <FLOP>`, which caps the
-total requester-paid spend on that job. **Assumption:** the FLOP still comes out of the seat's own gateway key,
-because the gateway has no way for a third party to pay today, so "requester" only means the call is billed
-to the job. The per-call cap still applies in both modes.
+The seat's daily cap bounds every call the seat's key pays for, whoever the call is for.
+Today the gateway has no way for a third party to pay. So the seat's key pays for every call, and every call counts against the seat's daily cap.
+
+- `holder` (the default): a call must fit the per-call cap and the seat's daily cap.
+- `requester`: the call is for an imd requester's job. This is a label on the ledger row plus a second, narrower limit. Each `run` needs `--job-budget <FLOP>`, which caps the total requester spend on that job. A requester call must fit the per-call cap, the seat's daily cap and the job budget. A limit with nothing left refuses first, before any quote: the daily cap, then the job budget. Then the padded quote is checked against the per-call cap, the daily cap and the job budget, in that order. The refusal names the first check that fails.
+
+The job budget is supplied by the caller for each job id. It never replaces the daily cap, which the holder sets.
+
+`status` and `cap show` report today's spend as the seat's total, all payers.
+
+Each ledger row records two running totals. `spent_before` is the seat's spend today before the call, for every payer. `job_spent_before` is the job's requester spend before the call, and `null` on a holder row. Rows written before this rule have no `job_spent_before`. On those requester rows `spent_before` was the job's spend, so the viewer shows no limit for them.
+
+Not built: when FLOP ships proxies or escrow pools and a call is funded by another account, that call will be bounded by that account's limit and will not count against the seat's cap.
 
 ## Run it
 
@@ -103,7 +111,7 @@ npm run check     # same command CI runs: clean install, clean build, then npm t
 
 ## Open questions
 
-- **Who pays** for FLOP calls on testnet and mainnet: imd requesters or seat holders? Until that's answered, this is a config switch.
+- **Who pays** for FLOP calls on testnet and mainnet: imd requesters or seat holders? Still open. Until that's answered, `payer` is a config switch that labels a call and adds a job budget. The switch does not remove the daily cap: the seat's key pays for every call today, so every call counts against it.
 - **Testnet** has no date, and its identity requirements (did:key, SS58 sr25519/ed25519, or both) are unpublished. Only `devnet` is accepted.
 - **Explorer URL formats** for FLOP sessions and settlements aren't documented, so receipts don't link to the explorer yet.
 - **InferenceReceipt** (in the OpenAPI) hasn't been seen on a real response yet, so no receipt is ever marked chain-final.
