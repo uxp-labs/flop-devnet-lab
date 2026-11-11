@@ -95,7 +95,8 @@ describe("DEFECT 1: a lock that exists for link but reads as absent", () => {
     // A real process: still in withLedgerLock after three times the 5 s timeout, and killed by the test.
     const r = spawnSync(process.execPath, [lockScript(h, h)], { timeout: 15_000, encoding: "utf8" });
     expect({ signal: r.signal, out: r.stdout }).toEqual({ signal: "SIGTERM", out: "" });
-    expect(lockFiles(h)).toEqual(["ledger.jsonl.lock"]);
+    // The kill can land between a temporary file's open and its unlink, so a .tmp file may be left too.
+    expect(lockFiles(h).filter((f) => !f.endsWith(".tmp"))).toEqual(["ledger.jsonl.lock"]);
   }, 60_000);
 });
 
