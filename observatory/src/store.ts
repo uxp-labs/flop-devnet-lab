@@ -179,7 +179,8 @@ function isDayFile(name: string): boolean {
 /**
  * A log split by day (the log/ folder of the data branch): its day files, read in name order, are
  * one log. The day split keeps each file small; one file would grow without bound. Returns null
- * when the folder does not exist: no earlier snapshot. Throws LogRefused otherwise when anything
+ * when the folder does not exist: no earlier snapshot. Throws LogRefused, naming the day file by
+ * its name only, so the reason reads the same on any machine, when anything
  * in it is not what the publish job writes: the folder is a link or no folder, it holds a name that
  * is no day file, a day file is a link or not a regular file, or a line fails a check readSnapshots
  * makes (all "unreadable"); or a line does not follow the one before it (verifyChain's rule, across
@@ -196,24 +197,24 @@ export function readDayLog(dir: string): DayLog | null {
     st = lstatSync(dir);
   } catch (e) {
     if ((e as NodeJS.ErrnoException).code === "ENOENT") return null;
-    throw new LogRefused("unreadable", `the log folder ${dir} cannot be read: ${(e as Error).message}`);
+    throw new LogRefused("unreadable", `the log folder cannot be read: ${(e as NodeJS.ErrnoException).code ?? (e as Error).message}`);
   }
-  if (!st.isDirectory()) throw new LogRefused("unreadable", `the log folder ${dir} is not a folder`);
+  if (!st.isDirectory()) throw new LogRefused("unreadable", "the log folder is not a folder");
   const names = readdirSync(dir).sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
   const snapshots: Snapshot[] = [];
   let chained = false;
   for (const name of names) {
     const path = join(dir, name);
     if (!isDayFile(name)) throw new LogRefused("unreadable", `the log folder holds ${JSON.stringify(name)}, which is no <UTC date>.jsonl day file`);
-    if (!lstatSync(path).isFile()) throw new LogRefused("unreadable", `${path} is not a regular file`);
+    if (!lstatSync(path).isFile()) throw new LogRefused("unreadable", `${name} is not a regular file`);
     for (const [i, line] of lines(path).entries()) {
       const s = parseLine(line);
-      if (typeof s === "string") throw new LogRefused("unreadable", `${path} line ${i} ${s}`);
+      if (typeof s === "string") throw new LogRefused("unreadable", `${name} line ${i} ${s}`);
       const last = snapshots.at(-1);
       // A whole log of one line, from before runs kept memory, only before the chain has begun.
       const oneLine = !chained && s.seq === 0 && s.prev_hash === null;
       const why = oneLine ? linkProblem(s, 0, null) : linkProblem(s, last === undefined ? 0 : last.seq + 1, last?.hash ?? null);
-      if (why !== null) throw new LogRefused("broken", `${path} line ${i} ${why}`);
+      if (why !== null) throw new LogRefused("broken", `${name} line ${i} ${why}`);
       if (!oneLine) chained = true;
       snapshots.push(s);
     }

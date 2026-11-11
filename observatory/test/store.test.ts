@@ -336,14 +336,14 @@ describe("a log split by day", () => {
 
   it("refuses a line that does not follow the one before it, across day files too", () => {
     const [a, b, c] = chain(3) as [Snapshot, Snapshot, Snapshot];
-    expect(refusal(dayLog({ "2026-01-01.jsonl": logLine(a), "2026-01-02.jsonl": logLine(c) }))).toEqual(["broken", "<log>/2026-01-02.jsonl line 0 has seq 2, not 1"]);
+    expect(refusal(dayLog({ "2026-01-01.jsonl": logLine(a), "2026-01-02.jsonl": logLine(c) }))).toEqual(["broken", "2026-01-02.jsonl line 0 has seq 2, not 1"]);
     // Day files out of order: the later file's line comes first by name.
-    expect(refusal(dayLog({ "2026-01-02.jsonl": logLine(a) + logLine(b), "2026-01-01.jsonl": logLine(c) }))).toEqual(["broken", "<log>/2026-01-01.jsonl line 0 has seq 2, not 0"]);
+    expect(refusal(dayLog({ "2026-01-02.jsonl": logLine(a) + logLine(b), "2026-01-01.jsonl": logLine(c) }))).toEqual(["broken", "2026-01-01.jsonl line 0 has seq 2, not 0"]);
     const forged = { ...b, prev_hash: "0".repeat(64) };
     const relinked = { ...forged, hash: hashSnapshot(forged) };
-    expect(refusal(dayLog({ "2026-01-01.jsonl": logLine(a) + logLine(relinked) }))).toEqual(["broken", "<log>/2026-01-01.jsonl line 1 does not name the hash of the line before it as prev_hash"]);
+    expect(refusal(dayLog({ "2026-01-01.jsonl": logLine(a) + logLine(relinked) }))).toEqual(["broken", "2026-01-01.jsonl line 1 does not name the hash of the line before it as prev_hash"]);
     const edited = { ...b, observed_at: "2030-01-01T00:00:00.000Z" };
-    expect(refusal(dayLog({ "2026-01-01.jsonl": logLine(a) + logLine(edited) }))).toEqual(["broken", "<log>/2026-01-01.jsonl line 1 fails its hash check"]);
+    expect(refusal(dayLog({ "2026-01-01.jsonl": logLine(a) + logLine(edited) }))).toEqual(["broken", "2026-01-01.jsonl line 1 fails its hash check"]);
   });
 
   it("reads the one-line logs published before runs kept memory, then the chain on from the last of them", () => {
@@ -355,35 +355,35 @@ describe("a log split by day", () => {
     expect([z.seq, z.prev_hash]).toEqual([1, y.hash]);
     // A one-line log must pass its own hash check.
     const bad = { ...x, observed_at: "2030-01-01T00:00:00.000Z" };
-    expect(refusal(dayLog({ "2026-01-01.jsonl": logLine(bad) + logLine(y) }))).toEqual(["broken", "<log>/2026-01-01.jsonl line 0 fails its hash check"]);
+    expect(refusal(dayLog({ "2026-01-01.jsonl": logLine(bad) + logLine(y) }))).toEqual(["broken", "2026-01-01.jsonl line 0 fails its hash check"]);
   });
 
   it("never restarts part way: once the chain has begun, a line with seq 0 breaks it", () => {
     const [a, b] = chain(2) as [Snapshot, Snapshot];
     const restart = sealSnapshot(fresh(), undefined);
-    expect(refusal(dayLog({ "2026-01-01.jsonl": logLine(a) + logLine(b), "2026-01-02.jsonl": logLine(restart) }))).toEqual(["broken", "<log>/2026-01-02.jsonl line 0 has seq 0, not 2"]);
+    expect(refusal(dayLog({ "2026-01-01.jsonl": logLine(a) + logLine(b), "2026-01-02.jsonl": logLine(restart) }))).toEqual(["broken", "2026-01-02.jsonl line 0 has seq 0, not 2"]);
   });
 
   it("refuses anything the publish job does not write: a line it cannot read, another name, a link, a folder", () => {
     const [a] = chain(1) as [Snapshot];
-    expect(refusal(dayLog({ "2026-01-01.jsonl": logLine(a) + "not json\n" }))).toEqual(["unreadable", "<log>/2026-01-01.jsonl line 1 is not JSON"]);
-    expect(refusal(dayLog({ "2026-01-01.jsonl": logLine(a).slice(0, -1) }))).toEqual(["unreadable", "<log>/2026-01-01.jsonl line 0 does not end with a newline (a line cut short)"]);
+    expect(refusal(dayLog({ "2026-01-01.jsonl": logLine(a) + "not json\n" }))).toEqual(["unreadable", "2026-01-01.jsonl line 1 is not JSON"]);
+    expect(refusal(dayLog({ "2026-01-01.jsonl": logLine(a).slice(0, -1) }))).toEqual(["unreadable", "2026-01-01.jsonl line 0 does not end with a newline (a line cut short)"]);
     expect(refusal(dayLog({ "2026-01-01.jsonl": logLine(a), "README.md": "x" }))).toEqual(["unreadable", 'the log folder holds "README.md", which is no <UTC date>.jsonl day file']);
     expect(refusal(dayLog({ "2026-02-30.jsonl": logLine(a) }))).toEqual(["unreadable", 'the log folder holds "2026-02-30.jsonl", which is no <UTC date>.jsonl day file']);
     const linked = dayLog({});
     const elsewhere = join(tmp(), "elsewhere.jsonl");
     writeFileSync(elsewhere, logLine(a));
     symlinkSync(elsewhere, join(linked, "2026-01-01.jsonl"));
-    expect(refusal(linked)).toEqual(["unreadable", "<log>/2026-01-01.jsonl is not a regular file"]);
+    expect(refusal(linked)).toEqual(["unreadable", "2026-01-01.jsonl is not a regular file"]);
     const nested = dayLog({});
     mkdirSync(join(nested, "2026-01-01.jsonl"));
-    expect(refusal(nested)).toEqual(["unreadable", "<log>/2026-01-01.jsonl is not a regular file"]);
+    expect(refusal(nested)).toEqual(["unreadable", "2026-01-01.jsonl is not a regular file"]);
     const file = join(tmp(), "log");
     writeFileSync(file, logLine(a));
-    expect(refusal(file)).toEqual(["unreadable", "the log folder <log> is not a folder"]);
+    expect(refusal(file)).toEqual(["unreadable", "the log folder is not a folder"]);
     const folderLink = join(tmp(), "link");
     symlinkSync(dayLog({ "2026-01-01.jsonl": logLine(a) }), folderLink);
-    expect(refusal(folderLink)).toEqual(["unreadable", "the log folder <log> is not a folder"]);
+    expect(refusal(folderLink)).toEqual(["unreadable", "the log folder is not a folder"]);
   });
 });
 

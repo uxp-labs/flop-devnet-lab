@@ -62,5 +62,29 @@
     "replace": "      if (typeof s === \"string\") throw new LogRefused(\"broken\",",
     "test": "test/store.test.ts",
     "why": "a line that cannot be read is said to be unreadable, not a broken chain"
+  },
+  {
+    "id": "history-unchecked-skipped",
+    "file": "src/history.ts",
+    "find": "    if (broken.length > 0) return refused(\"unchecked\",",
+    "replace": "    if (false) return refused(\"unchecked\",",
+    "test": "test/history.test.ts",
+    "why": "a line that is no snapshot this code can check is refused, never read as history"
+  },
+  {
+    "id": "history-refused-read-as-absent",
+    "file": "src/history.ts",
+    "find": "    if (e instanceof LogRefused) return refused(e.kind, e.message);",
+    "replace": "    if (e instanceof LogRefused) return { state: \"absent\", detail: e.message, files: [], snapshots: [] };",
+    "test": "test/history.test.ts",
+    "why": "a log that cannot be read or whose chain breaks is never read as no log"
+  },
+  {
+    "id": "history-refused-usable",
+    "file": "src/history.ts",
+    "find": "  return h.state === \"absent\" || h.state === \"empty\" || h.state === \"read\";",
+    "replace": "  return true;",
+    "test": "test/history.test.ts",
+    "why": "only an absent, empty or wholly read log gives a run something to build on"
   }
 ]

@@ -17,10 +17,11 @@ import { DriftSpecError, drift } from "./drift.js";
 import { escrowStates, isHash32 } from "./escrow.js";
 import { feedText, writeFeeds } from "./feed.js";
 import { readRegularFile } from "./files.js";
+import { type Earlier, earlierOf } from "./history.js";
 import { renderPage } from "./page.js";
 import { buildSnapshot } from "./snapshot.js";
 import { type FixtureMeta, FixtureSource } from "./source.js";
-import { DEVNET_GENESIS, type EarlierBest, networkStatus, type PreviousHead } from "./status.js";
+import { DEVNET_GENESIS, networkStatus } from "./status.js";
 import { appendSnapshot, hashSnapshot, readSnapshots, verifyChain } from "./store.js";
 import { parseZoned } from "./strict.js";
 import type { Snapshot } from "./types.js";
@@ -231,34 +232,16 @@ async function main(): Promise<void> {
     }
     const log = one(a, "--log");
     // RULES.md 1.1: the rollback, changed hash and stuck height checks need the earlier snapshots.
-    // They come from the log, and only after the log's whole hash chain verifies. Every snapshot
-    // that recorded a finalized head counts, oldest first, so one in between with no RPC reading
-    // cannot hide a rollback; the status checks use those on the same genesis.
-    const previous: PreviousHead[] = [];
-    const earlierTimes: (string | null)[] = [];
-    const earlierBest: EarlierBest[] = [];
+    // They come from the log, and only after the log's whole hash chain verifies (src/history.ts).
+    let earlier: Earlier = { previous: [], earlierTimes: [], earlierBest: [] };
     if (log && existsSync(log)) {
       const broken = verifyChain(log);
       if (broken !== null) fail(`snapshot log ${log} is broken at line ${broken}; it is never extended or trusted`);
-      for (const { status: st, observed_at: taken } of readSnapshots(log)) {
-        // Every earlier snapshot's own time, whatever it read, so a log that runs backwards shows.
-        earlierTimes.push(typeof taken === "string" ? taken : null);
-        // Every best height on a genesis counts, with or without a finalized head (round 8 review L1).
-        if (st.genesis.rpc !== null && st.best_height !== null) earlierBest.push({ genesis: st.genesis.rpc, best_height: st.best_height });
-        // A head time is needed only for the stuck check, so a snapshot without one still counts.
-        if (st.genesis.rpc !== null && st.finalized_height !== null && st.finalized_hash !== null) {
-          previous.push({
-            genesis: st.genesis.rpc,
-            finalized_height: st.finalized_height,
-            finalized_hash: st.finalized_hash,
-            observed_at: st.rpc.observed_at,
-          });
-        }
-      }
+      earlier = earlierOf(readSnapshots(log));
     }
     const fresh = await buildSnapshot(
       { status, escrows, census: censusPart, drift: driftPart },
-      { pinnedGenesis: pinned, now, sourceSha: one(a, "--source-sha") ?? null, previous, earlierTimes, earlierBest },
+      { pinnedGenesis: pinned, now, sourceSha: one(a, "--source-sha") ?? null, ...earlier },
     );
     let snap: Snapshot;
     if (log) {
