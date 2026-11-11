@@ -8,7 +8,7 @@ from pathlib import Path
 
 from lane_harness import LED, REC, lane, visible
 
-FIXTURE = Path(__file__).resolve().parent.parent / "contract" / "fixtures" / "json-constants.jsonl"
+FIXTURE = Path(__file__).resolve().parent.parent / "contract" / "fixtures" / "ledger-text" / "json-constants.jsonl"
 
 PAST_ADMITTED = "booked past what the cap admitted; the day may end over its cap"
 
@@ -36,7 +36,7 @@ class ReviewHold(unittest.TestCase):
         """Item 7 (review fixes 3): Python's json reads NaN, Infinity and -Infinity; JavaScript's JSON.parse does
         not, so imd-flop names such a line "ledger line 1 cannot be read: not valid JSON". The lane reads ledger
         and receipt lines with the same grammar (build-lane.py loads), so each line of
-        contract/fixtures/json-constants.jsonl is an unreadable red row naming line 1. imd-flop's side reads the
+        contract/fixtures/ledger-text/json-constants.jsonl is an unreadable red row naming line 1. imd-flop's side reads the
         same file (imd-flop/test/review-hold.test.ts, item 7)."""
         for line in FIXTURE.read_text().splitlines():
             with self.subTest(line=line[150:200]):

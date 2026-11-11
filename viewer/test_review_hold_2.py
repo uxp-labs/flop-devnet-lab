@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Independent review 2 of the hold floor branch (third fix pass, 26cac18..5678633): viewer side. Standard library
-only, never runs node, never needs imd-flop built. Each DEFECT test asserts today's wrong behavior, so it passes
-now and fails once the defect is fixed; the right behavior is in its docstring. imd-flop's side of the same text
-is in imd-flop/test/review-hold-2.test.ts under the same DEFECT number."""
+"""Independent review 2 of the hold floor branch (third fix pass, 26cac18..5678633): viewer side, fixed by review
+fixes 4. Standard library only, never runs node, never needs imd-flop built. Each test asserts the decided
+behavior; imd-flop's side of the same text is in imd-flop/test/review-hold-2.test.ts under the same item number,
+and the general rule is pinned for both by contract/fixtures/ledger-text/ (test_ledger_text.py)."""
 import json, sys, tempfile, unittest
 from pathlib import Path
 
@@ -34,49 +34,39 @@ def row(i, **extra):
 
 
 class ReviewHold2(unittest.TestCase):
-    def test_DEFECT_6_two_rows_joined_by_a_bare_CR_should_be_one_unreadable_line_as_in_imd_flop(self):
-        """imd-flop splits ledger.jsonl at \\n only: rowA + \\r + rowB is one line that is not valid JSON, and it
-        names "ledger line 1 cannot be read" and refuses every call (exit 3). read_ledger opens the file in text
-        mode, whose universal newlines split at the bare \\r, so the lane shows two good rows and no unreadable
-        row. Right: the viewer frames lines as imd-flop does (open with newline="" and split at \\n), so this is
-        one red unreadable row naming line 1."""
+    def test_two_rows_joined_by_a_bare_CR_are_one_unreadable_line_as_in_imd_flop(self):
+        """Item 6 (review fixes 4, the ledger text contract): lines end at \n only, so rowA + \r + rowB is one line
+        that is not valid JSON, in both parts: imd-flop names "ledger line 1 cannot be read" and refuses; the lane
+        shows one red unreadable row naming line 1."""
         text = json.dumps(row(1)) + "\r" + json.dumps(row(2)) + "\n"
         rows = lane_bytes(text.encode())
-        self.assertEqual(unreadable_labels(rows), [])
-        self.assertEqual(sorted(r["label"] for r in rows), ["j1", "j2"])
-        # Each is an ordinary row with no receipt file yet (as imd-flop's own rows would be), not an unreadable one.
-        self.assertTrue(all(r["chips"] == [["grey", "sent"], ["red", "unknown"]] for r in rows))
-
-    def test_DEFECT_6b_a_CR_between_tokens_shifts_the_viewers_line_numbers(self):
-        """A row with a bare \\r between two tokens is one good row to imd-flop, and the damaged line after it is
-        "ledger line 2". The lane splits the row at the \\r into two unreadable halves and calls the damaged line
-        line 3, so the holder is sent to the wrong line. Right: one good row, and one unreadable row naming
-        ledger line 2."""
-        text = json.dumps(row(1), separators=(",", ":")).replace(',"seat"', ',\r"seat"') + "\n" + "not json\n"
-        rows = lane_bytes(text.encode())
-        self.assertEqual(unreadable_labels(rows), ["ledger line 1", "ledger line 2", "ledger line 3"])
-
-    def test_DEFECT_6c_a_line_of_only_a_unit_separator_should_be_unreadable_as_in_imd_flop(self):
-        """imd-flop skips a line only when JavaScript's trim() leaves it empty; \\x1f is not JavaScript whitespace,
-        so a line holding only it is "ledger line 2 cannot be read" and every call is refused. Python's
-        str.strip() removes \\x1f (and \\x1c to \\x1e, \\x85), so read_ledger skips the line as blank and the lane
-        shows nothing wrong. Right: the viewer's blank test is JavaScript's (or JSON's own whitespace)."""
-        rows = lane_bytes(json.dumps(row(1)).encode() + b"\n\x1f\n")
-        self.assertEqual(unreadable_labels(rows), [])
+        self.assertEqual(unreadable_labels(rows), ["ledger line 1"])
         self.assertEqual(len(rows), 1)
 
-    def test_DEFECT_7_a_sent_line_under_a_request_id_with_a_space_should_be_flagged_unplaced(self):
-        """imd-flop (ledger.ts isRequestId) keeps every line whose request id is not 1 to 128 printable ASCII
-        characters as its own entry: the sent line "a b" (charge 0.186) cannot be placed, and the next call is
-        refused naming ledger line 1. read_ledger groups by present() (any non empty string), keeps only the latest
-        line, a refusal, and unplaced() lets a refusal through: no row says a line cannot be placed. Right: the
-        lane groups by the same request id rule, so the sent line is its own row flagged
-        "ledger row cannot be placed in a total (request_id)"."""
+    def test_a_CR_between_tokens_keeps_the_line_numbers(self):
+        """Item 6b: a \r between two tokens is JSON whitespace: one good row, and the damaged line after it is
+        ledger line 2 in both parts."""
+        text = json.dumps(row(1), separators=(",", ":")).replace(',"seat"', ',\r"seat"') + "\n" + "not json\n"
+        rows = lane_bytes(text.encode())
+        self.assertEqual(unreadable_labels(rows), ["ledger line 2"])
+        self.assertEqual(sorted(r["label"] for r in rows), ["j1", "ledger line 2"])
+
+    def test_a_line_of_only_a_unit_separator_is_unreadable_as_in_imd_flop(self):
+        """Item 6c: \x1f is not in the blank set (rules.json LEDGER_TEXT, JavaScript trim()'s characters), so a
+        line holding only it is unreadable line 2 in both parts."""
+        rows = lane_bytes(json.dumps(row(1)).encode() + b"\n\x1f\n")
+        self.assertEqual(unreadable_labels(rows), ["ledger line 2"])
+
+    def test_a_sent_line_under_a_request_id_with_a_space_is_flagged_unplaced(self):
+        """Item 7: rows group by REQUEST_ID in both parts. "a b" is not one, so each line is its own entry: the
+        sent line (charge 0.186) cannot be placed, as imd-flop says naming line 1, and the refusal charged 0 is
+        not flagged."""
         sent = row(1, request_id="a b", state="sent")
         refused = dict(sent, state="refused_local", cap_charge=0, reason="nothing sent")
         rows, _ = lane([sent, refused], {})
-        self.assertEqual(len(rows), 1)
-        self.assertFalse(any(f.startswith(UNPLACED) for r in rows for f in r["spend_flags"]))
+        self.assertEqual(len(rows), 2)
+        flagged = [any(f == UNPLACED + " (request_id)" for f in r["spend_flags"]) for r in rows]
+        self.assertEqual(flagged, [True, False])
 
     def test_a_revived_row_booked_again_stays_flagged(self):
         """Item 3 (review fixes 4): the ledger imd-flop writes now. Cap 0.3, A released by "nothing was sent", B
@@ -95,16 +85,14 @@ class ReviewHold2(unittest.TestCase):
         self.assertIn(PAST_ADMITTED, by["jA"]["spend_flags"])
         self.assertTrue(by["jA"]["bad"])
 
-    def test_DEFECT_8_an_invalid_UTF8_byte_inside_a_string_aborts_the_whole_rebuild(self):
-        """imd-flop reads ledger.jsonl with readFileSync(..., "utf8"), which replaces an invalid byte with U+FFFD:
-        a row with such a byte inside its model string parses and counts (imd-flop/test/review-hold-2.test.ts,
-        DEFECT 8). read_ledger decodes while it iterates, outside its try, so UnicodeDecodeError escapes from_files
-        and no lane is built ("one bad entry never aborts the lane" is false). Right: the line is read (as
-        imd-flop does) or shown as one unreadable row, and the rest of the lane is built."""
+    def test_an_invalid_UTF8_byte_inside_a_string_is_read_and_the_lane_is_built(self):
+        """Item 8: an invalid byte becomes U+FFFD, as Node decodes it, and never aborts the file: the row with an
+        invalid byte in its model string reads and counts in both parts, and the lane is built."""
         good = json.dumps(row(1)).encode() + b"\n"
         bad = json.dumps(row(2, model="m-X")).encode().replace(b"m-X", b"m-\xff") + b"\n"
-        with self.assertRaises(UnicodeDecodeError):
-            lane_bytes(good + bad)
+        rows = lane_bytes(good + bad)
+        self.assertEqual(sorted(r["label"] for r in rows), ["j1", "j2"])
+        self.assertEqual(unreadable_labels(rows), [])
 
 
 if __name__ == "__main__":

@@ -83,37 +83,72 @@ def unreadable(what, why):
                 est=None, per_call=None, daily_left=None, chips=[["red", "unreadable"]], outcome=["grey", "not read", None],
                 link=["grey", "not checked", None], bad=True)
 
+# The ledger text contract (contract/README.md, rules.json LEDGER_TEXT; review fixes 4, items 6 to 8): the one
+# reading of a ledger or receipt file's text, the same as imd-flop's ledger-text.ts. Pinned for both parts by the
+# byte fixtures in contract/fixtures/ledger-text/ (viewer/test_ledger_text.py).
+BLANK_CHARS = frozenset(chr(c) for c in _C["LEDGER_TEXT"]["value"]["blank"])
+REQUEST_ID_RULE = re.compile(_C["REQUEST_ID"]["value"])
 def _no_constant(name):
     raise ValueError(f"{name} is not JSON")
+def _double_int(text):
+    """A JSON integer as JavaScript reads it, a double: float(text), kept as an int only when that double is
+    integral and at most AMOUNT_MAX (so it is exact). A 4300 digit integer is inf, as in JavaScript, and never
+    meets Python's limit on digits."""
+    f = float(text)
+    return int(f) if f.is_integer() and abs(f) <= AMOUNT_MAX else f
 def loads(text):
-    """Parse a ledger line or a receipt file with the grammar of JavaScript's JSON.parse, which imd-flop uses:
-    Python's json also reads NaN, Infinity and -Infinity, and those make the text unreadable here too (review
-    fixes 3, item 7; contract/fixtures/json-constants.jsonl, read by both parts' tests)."""
-    return json.loads(text, parse_constant=_no_constant)
+    """One JSON value in JSON.parse's grammar: NaN, Infinity and -Infinity are not JSON, and every number is a
+    double. Raises ValueError for anything else (RecursionError on very deep nesting is treated the same)."""
+    try:
+        return json.loads(text, parse_constant=_no_constant, parse_int=_double_int)
+    except RecursionError as ex:
+        raise ValueError("nested too deep") from ex
+def decode(data):
+    """Bytes as text, the way Node decodes UTF-8: an invalid byte becomes U+FFFD, never an error."""
+    return data.decode("utf-8", "replace")
+def read_ledger_text(data):
+    """Every line of a ledger file's bytes as (n, kind, value), numbered from 1, blank lines included. Lines end
+    at \n only (a \r is an ordinary character), and a final empty piece after the last \n is not a line. kind
+    is "blank" (every character in BLANK_CHARS), "unreadable" (value: "not valid JSON" or "not a JSON object")
+    or "row" (value: the object)."""
+    pieces = data.split(b"\n")
+    if pieces[-1] == b"": pieces.pop()
+    out = []
+    for n, piece in enumerate(pieces, 1):
+        text = decode(piece)
+        if all(ch in BLANK_CHARS for ch in text): out.append((n, "blank", None)); continue
+        try:
+            value = loads(text)
+        except ValueError:
+            out.append((n, "unreadable", "not valid JSON")); continue
+        out.append((n, "row", value) if isinstance(value, dict) else (n, "unreadable", "not a JSON object"))
+    return out
+def group_key(e, n):
+    """The group of a row: its request id when it matches REQUEST_ID, else its own line ("line <n>")."""
+    rid = e.get("request_id")
+    return rid if isinstance(rid, str) and REQUEST_ID_RULE.fullmatch(rid) else f"line {n}"
 
 def read_ledger(led):
-    """One entry per attempt: the latest line per request_id wins (as imd-flop's ledger). Lines without a
-    request_id (local refusals) are each their own entry. Unreadable lines become unreadable rows."""
+    """One entry per group (group_key): the latest line of a request wins (as imd-flop's ledger), and a line
+    without a usable request id is its own entry. Unreadable lines become unreadable rows."""
     order, latest, bad = [], {}, []
-    with open(led) as fh:
-        for n, line in enumerate(fh, 1):
-            if not line.strip(): continue
-            try:
-                e = loads(line)
-                if not isinstance(e, dict): raise ValueError("not an object")
-            except ValueError as ex:
-                bad.append(unreadable(f"ledger line {n}", f"ledger.jsonl line {n}: {type(ex).__name__}")); continue
-            rid = e.get("request_id")
-            key = ("req", rid) if present(rid) else ("line", n)
-            if key not in latest: order.append(key)
-            latest[key] = e
+    with open(led, "rb") as fh: data = fh.read()
+    for n, kind, value in read_ledger_text(data):
+        if kind == "blank": continue
+        if kind == "unreadable":
+            bad.append(unreadable(f"ledger line {n}", f"ledger.jsonl line {n}: {value}")); continue
+        key = group_key(value, n)
+        if key not in latest: order.append(key)
+        latest[key] = value
     return [latest[k] for k in order], bad
 
 def read_receipts():
+    """Receipt files by request id. A file is one JSON value read the same way (decode, loads) and must be an
+    object; anything else is unreadable."""
     receipts = {}
     for f in glob.glob(os.path.join(RDIR, "*.json")):
         try:
-            with open(f) as fh: r = loads(fh.read())
+            with open(f, "rb") as fh: r = loads(decode(fh.read()))
         except ValueError:
             r = None
         receipts[os.path.splitext(os.path.basename(f))[0]] = r if isinstance(r, dict) else {"_unreadable": True}
