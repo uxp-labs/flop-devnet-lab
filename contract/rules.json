@@ -124,7 +124,9 @@
           65279
         ],
         "blank_note": "a line is blank when every character is one of these code points: exactly the characters JavaScript's String.prototype.trim removes, which is what imd-flop did before this contract",
-        "line": "a line that is not blank is one JSON value in JSON.parse's grammar (NaN, Infinity and -Infinity are not JSON) and must be an object; anything else is unreadable, \"not valid JSON\" or \"not a JSON object\"",
+        "line": "a line that is not blank and not nested too deep (see depth) is one JSON value in JSON.parse's grammar (NaN, Infinity and -Infinity are not JSON) and must be an object; anything else is unreadable, \"not valid JSON\" or \"not a JSON object\"",
+        "max_depth": 32,
+        "depth": "a line nested deeper than max_depth levels is unreadable, \"nested too deep\", whether or not it is otherwise valid JSON. Depth is counted on the line's text before parsing: { and [ outside a JSON string open a level, } and ] close one, and a string runs from an unescaped \" to the next unescaped \" (a backslash in a string escapes the character after it). The row object itself is level 1",
         "numbers": "every number is read as a double; in the viewer an integer is parsed as float(text) and kept as an int only when that double is integral and at most 2^53 - 1, so a 4300 digit integer is Infinity in both parts and never meets Python's digit limit",
         "booleans": "a boolean is never a number",
         "grouping": "rows are grouped by REQUEST_ID; a row without a usable request id is a group of its own, keyed by its line",

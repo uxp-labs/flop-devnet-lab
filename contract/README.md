@@ -84,9 +84,14 @@ imd-flop and the viewer read the same ledger.jsonl. They read its text by one ru
 - A line is blank when every character is in `LEDGER_TEXT.blank`: exactly the characters JavaScript's
   `String.prototype.trim` removes, which is what imd-flop already did. So `\x1c` to `\x1f` and U+0085 are not
   blank.
-- A line that is not blank is one JSON value in `JSON.parse`'s grammar, and it must be an object. Anything else
-  is an unreadable line: `not valid JSON` (NaN, Infinity and -Infinity included, and a BOM before the value) or
-  `not a JSON object`.
+- A line nested deeper than 32 levels (`LEDGER_TEXT.max_depth`) is an unreadable line: `nested too deep`. The row
+  object itself is level 1. Depth is counted on the line's text before parsing, so the answer is the same
+  whether or not the line is valid JSON: `{` and `[` outside a JSON string open a level, `}` and `]` close one,
+  and a string runs from an unescaped `"` to the next unescaped `"`. Without a limit `JSON.parse` read a far
+  deeper line and Python's `json` did not (swarm audit 33f3b9f, finding 8).
+- Any other line that is not blank is one JSON value in `JSON.parse`'s grammar, and it must be an object.
+  Anything else is an unreadable line: `not valid JSON` (NaN, Infinity and -Infinity included, and a BOM before
+  the value) or `not a JSON object`.
 - A number is a double in both parts. The viewer parses a JSON integer as `float(text)` and keeps it as an int
   only when that double is integral and at most 2^53 - 1. So a 4300 digit integer is Infinity in both parts, an
   unknown amount, and never meets Python's limit on digits.
@@ -106,5 +111,5 @@ readable row's `cap_charge` as a known amount. `imd-flop/test/ledger-text.test.t
 torn last line, a torn line with a row the writer appended after it, a last line with no newline, a bare `\r` joining two rows and between tokens, `\r\n`, `\x1c` to
 `\x1f`, U+0085 and a bare 0x85 byte, every blank character, a BOM, invalid UTF-8 inside a string and between
 tokens, NaN and Infinity, numbers past a double (4300 digits, 2^53 + 1, 1e400), booleans, values that are not
-objects, a raw control character in a string, escaped surrogates, grouping, unusable request ids and duplicate
-keys.
+objects, a raw control character in a string, escaped surrogates, grouping, unusable request ids, duplicate
+keys, nesting at 32, 33 and 10000 levels, and brackets inside strings.

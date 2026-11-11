@@ -10,7 +10,7 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { CompleteReq, CompleteRes, Provider } from "../src/providers.js";
 import { appendLedger, reportedSpendToday, spentToday, utcDay, type LedgerEntry } from "../src/ledger.js";
-import { readLedgerText } from "../src/ledger-text.js";
+import { MAX_DEPTH, readLedgerText } from "../src/ledger-text.js";
 import { ledgerFile, seatDir } from "../src/paths.js";
 import { appendJsonlSafe } from "../src/store.js";
 import { isSeatId, UNASSIGNED, validateSeat } from "../src/keys.js";
@@ -237,5 +237,34 @@ describe("finding 4 (medium): one spelling per seat", () => {
     const q = new Stub();
     const r = await cli(h, args("j3"), { provider: q });
     expect({ code: r.code, sent: q.calls, line: r.err.includes(`ledger line ${n} cannot be placed`) }, r.err).toEqual({ code: 3, sent: 0, line: true });
+  });
+});
+
+describe("finding 8 (low): a nesting limit in the ledger text contract", () => {
+  const rules = JSON.parse(readFileSync(join(CONTRACT, "rules.json"), "utf8"));
+  const deep = (levels: number) => `{"request_id":"r1","cap_charge":1,"x":${"[".repeat(levels - 1)}${"]".repeat(levels - 1)}}\n`;
+
+  it("the audit's line (9998 levels) is unreadable, nested too deep, not a row", () => {
+    expect(readLedgerText(deep(9998))).toEqual([{ n: 1, kind: "unreadable", why: "nested too deep" }]);
+  });
+
+  it("32 levels is a row and 33 is not, and the limit is rules.json LEDGER_TEXT.max_depth", () => {
+    expect(rules.constants.LEDGER_TEXT.value.max_depth).toBe(MAX_DEPTH);
+    expect(readLedgerText(deep(32))[0].kind).toBe("row");
+    expect(readLedgerText(deep(33))[0]).toEqual({ n: 1, kind: "unreadable", why: "nested too deep" });
+  });
+
+  it("depth is counted on the text: invalid JSON over the limit is nested too deep, and brackets in strings do not count", () => {
+    expect(readLedgerText("[".repeat(33) + "\n")[0]).toEqual({ n: 1, kind: "unreadable", why: "nested too deep" });
+    expect(readLedgerText("[".repeat(32) + "\n")[0]).toEqual({ n: 1, kind: "unreadable", why: "not valid JSON" });
+    expect(readLedgerText(`{"a":"${"[".repeat(100)}\\"${"{".repeat(100)}"}\n`)[0].kind).toBe("row");
+  });
+
+  it("a ledger line nested too deep refuses the next call and names the line", async () => {
+    const h = await seat7("1");
+    writeFileSync(ledgerFile(h), deep(40));
+    const p = new Stub();
+    const r = await cli(h, runArgs(), { provider: p });
+    expect({ code: r.code, sent: p.calls, named: r.err.includes("ledger line 1 cannot be read: nested too deep") }, r.err).toEqual({ code: 3, sent: 0, named: true });
   });
 });

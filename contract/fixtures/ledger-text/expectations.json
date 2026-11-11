@@ -558,6 +558,70 @@
     "1": 0.186,
     "3": 0.186
    }
+  },
+  "depth-32.jsonl": {
+   "note": "the nesting limit (swarm audit 33f3b9f, finding 8): a row nested 32 levels deep, the row object included, is at the limit and is a row",
+   "lines": 1,
+   "blank": [],
+   "unreadable": [],
+   "groups": [
+    [
+     "r1",
+     [
+      1
+     ]
+    ]
+   ],
+   "charges": {
+    "1": 0.186
+   }
+  },
+  "depth-33.jsonl": {
+   "note": "33 levels is over the limit: unreadable, nested too deep. Line 2 is not valid JSON either, and it is still nested too deep: depth is counted on the text before parsing",
+   "lines": 2,
+   "blank": [],
+   "unreadable": [
+    {
+     "line": 1,
+     "why": "nested too deep"
+    },
+    {
+     "line": 2,
+     "why": "nested too deep"
+    }
+   ],
+   "groups": [],
+   "charges": {}
+  },
+  "depth-10000.jsonl": {
+   "note": "10000 levels: nested too deep in both parts. JSON.parse reads it and Python's json raises RecursionError, so without the limit the two parts read it differently",
+   "lines": 1,
+   "blank": [],
+   "unreadable": [
+    {
+     "line": 1,
+     "why": "nested too deep"
+    }
+   ],
+   "groups": [],
+   "charges": {}
+  },
+  "depth-brackets-in-strings.jsonl": {
+   "note": "brackets inside a string do not count, an escaped quote does not end the string, and an escaped backslash before the closing quote does not escape it: depth 3",
+   "lines": 1,
+   "blank": [],
+   "unreadable": [],
+   "groups": [
+    [
+     "r1",
+     [
+      1
+     ]
+    ]
+   ],
+   "charges": {
+    "1": 0.186
+   }
   }
  }
 }

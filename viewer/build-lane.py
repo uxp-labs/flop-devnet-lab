@@ -103,20 +103,40 @@ def loads(text):
         return json.loads(text, parse_constant=_no_constant, parse_int=_double_int)
     except RecursionError as ex:
         raise ValueError("nested too deep") from ex
+MAX_DEPTH = _C["LEDGER_TEXT"]["value"]["max_depth"]
+def nested_too_deep(text):
+    """True when the text is nested deeper than MAX_DEPTH (the row object is level 1), the twin of imd-flop's
+    ledger-text.ts nestedTooDeep (swarm audit 33f3b9f, finding 8). Counted on the text before parsing, so a line
+    that is not valid JSON gets the same answer: { and [ outside a string open a level, } and ] close one, and a
+    string runs from an unescaped " to the next unescaped " (a backslash in a string escapes what follows)."""
+    depth, in_string, i = 0, False, 0
+    while i < len(text):
+        ch = text[i]
+        if in_string:
+            if ch == "\\": i += 1
+            elif ch == '"': in_string = False
+        elif ch == '"': in_string = True
+        elif ch in "{[":
+            depth += 1
+            if depth > MAX_DEPTH: return True
+        elif ch in "}]": depth -= 1
+        i += 1
+    return False
 def decode(data):
     """Bytes as text, the way Node decodes UTF-8: an invalid byte becomes U+FFFD, never an error."""
     return data.decode("utf-8", "replace")
 def read_ledger_text(data):
     """Every line of a ledger file's bytes as (n, kind, value), numbered from 1, blank lines included. Lines end
     at \n only (a \r is an ordinary character), and a final empty piece after the last \n is not a line. kind
-    is "blank" (every character in BLANK_CHARS), "unreadable" (value: "not valid JSON" or "not a JSON object")
-    or "row" (value: the object)."""
+    is "blank" (every character in BLANK_CHARS), "unreadable" (value: "nested too deep" past MAX_DEPTH, "not
+    valid JSON" or "not a JSON object") or "row" (value: the object)."""
     pieces = data.split(b"\n")
     if pieces[-1] == b"": pieces.pop()
     out = []
     for n, piece in enumerate(pieces, 1):
         text = decode(piece)
         if all(ch in BLANK_CHARS for ch in text): out.append((n, "blank", None)); continue
+        if nested_too_deep(text): out.append((n, "unreadable", "nested too deep")); continue
         try:
             value = loads(text)
         except ValueError:

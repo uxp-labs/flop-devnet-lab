@@ -47,5 +47,29 @@ class Finding4Medium(unittest.TestCase):
         self.assertEqual(NS["SEAT_PLACEHOLDER"], rule["placeholder"])
 
 
+class Finding8Low(unittest.TestCase):
+    """A nesting limit in the ledger text contract. The byte fixtures depth-*.jsonl are read by both parts
+    (test_ledger_text.py here, test/ledger-text.test.ts in imd-flop); these are the audit's own cases."""
+
+    @staticmethod
+    def deep(levels):
+        return ('{"request_id":"r1","cap_charge":1,"x":' + "[" * (levels - 1) + "]" * (levels - 1) + "}\n").encode()
+
+    def test_the_audits_line_is_nested_too_deep(self):
+        self.assertEqual(NS["read_ledger_text"](self.deep(9998)), [(1, "unreadable", "nested too deep")])
+
+    def test_the_limit_is_read_from_rules_json(self):
+        rules = json.loads((CONTRACT / "rules.json").read_text())["constants"]["LEDGER_TEXT"]["value"]
+        self.assertEqual(NS["MAX_DEPTH"], rules["max_depth"])
+        self.assertEqual(NS["read_ledger_text"](self.deep(32))[0][1], "row")
+        self.assertEqual(NS["read_ledger_text"](self.deep(33)), [(1, "unreadable", "nested too deep")])
+
+    def test_depth_is_counted_on_the_text(self):
+        read = NS["read_ledger_text"]
+        self.assertEqual(read(b"[" * 33 + b"\n"), [(1, "unreadable", "nested too deep")])
+        self.assertEqual(read(b"[" * 32 + b"\n"), [(1, "unreadable", "not valid JSON")])
+        self.assertEqual(read(('{"a":"' + "[" * 100 + '\\"' + "{" * 100 + '"}\n').encode())[0][1], "row")
+
+
 if __name__ == "__main__":
     unittest.main()
