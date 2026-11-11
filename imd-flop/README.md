@@ -75,6 +75,7 @@ Spend-guard rules, ported from `spend-guard/`:
 - A call is refused locally if it's over the per-call cap or what's left of the daily cap.
 - A timeout is never retried. Its spend is recorded as `null` with its `request_id`. For the cap, unknown spend counts as the padded quote.
 - Receipts are labeled `gateway observed` and `chain_final=false`, because nothing verifies chain settlement yet. A `null` settled spend shows blank, never 0. A 401 `api_key_expired` gets its own `key_expired` flag.
+- A receipt read settles an attempt only when it is an HTTP 200 answer for this request id and its stored copy needed no redaction by the secret scan. `run` and `receipt --refresh` share that rule (`src/settlement.ts`). Any other read keeps the reservation.
 - The `match` field says whether a receipt agrees with its records. It's `matches` only when the receipt's job, seat and DID all equal the ledger row and the seat's current link, and that link verifies. Otherwise it's `mismatch`, listing the fields that disagree, or `pending` if there's no receipt yet.
 
 ## Payer assumption

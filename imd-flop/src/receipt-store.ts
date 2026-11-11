@@ -77,11 +77,12 @@ export async function refreshReceipt(
   // No file yet, or an older file without seat/did (716819c era): seed them from the ledger row. Stored values win.
   const lacksIdentity = !stored || (ledgerRow !== undefined && (!present(stored.seat) || !present((stored as { did?: unknown }).did)));
   const ident = lacksIdentity ? identityFromLedger(h, ledgerRow!) : {};
-  let saved = writeReceipt(receiptPath(h, rid), refreshedBody(stored, ident, c, { fresh, rawId, identityOk })).body as SavedReceipt;
+  const written = writeReceipt(receiptPath(h, rid), refreshedBody(stored, ident, c, { fresh, rawId, identityOk }));
+  let saved = written.body as SavedReceipt;
 
   const prev = latestAttempts(h).find((e) => e.request_id === rid);
   if (!prev) return { saved, ledgerRow };
-  const next = refreshBooking(prev, { fresh, identityOk, state: saved?.state ?? null, settled: saved?.settled });
+  const next = refreshBooking(prev, { fresh, identityOk, redacted: written.redacted, state: saved?.state ?? null, settled: saved?.settled });
   const disagree = () => {
     warn(DISAGREE);
     saved = { ...saved, status: DISAGREE } as SavedReceipt;

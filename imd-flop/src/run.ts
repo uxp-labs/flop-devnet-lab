@@ -262,9 +262,9 @@ export async function runJob(h: string, provider: Provider, o: RunOpts, deps: { 
 
   const usage = res.usage;
   const costReported = typeof usage?.cost_flop === "number" && Number.isFinite(usage.cost_flop) ? usage.cost_flop : null;
-  // Same freshness rule as receipt --refresh: a failed read (not HTTP 200 with a receipt object) proves nothing
-  // and never releases the reservation. A receipt body that had to be redacted never proves a settlement.
-  const outcome = { fresh: isFreshRead(rr), identityOk: identityOk && !receiptRedacted, state: classified.state, settled: classified.settled };
+  // Same rules as receipt --refresh, held in settlement.ts: a failed read (not HTTP 200 with a receipt object)
+  // or a receipt body that had to be redacted proves nothing and never releases the reservation.
+  const outcome = { fresh: isFreshRead(rr), identityOk, redacted: receiptRedacted, state: classified.state, settled: classified.settled };
   const booking = nextBooking({ state: sent.state, spend: sent.spend }, outcome, holdCharge(q.padded, costReported));
   appendLedger(h, { ...sent, ts: new Date().toISOString(), ...booking, reason: classified.flag, cost_reported: costReported, http: rr.http });
 

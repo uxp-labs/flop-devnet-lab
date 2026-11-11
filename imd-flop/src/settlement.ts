@@ -25,17 +25,27 @@ export function receiptIdentity(receipt: unknown, requestId: string): { rawId: u
   return { rawId, identityOk: typeof rawId === "string" && rawId.length > 0 && rawId === requestId };
 }
 
-/** What a receipt read tells the ledger. `fresh` and `identityOk` say whether it may prove a settlement. */
+/** What a receipt read tells the ledger. `fresh`, `identityOk` and `redacted` say whether it may prove a settlement. */
 export interface ReadOutcome {
   fresh: boolean;
   identityOk: boolean;
+  /** The stored copy of this receipt had to be redacted by the secret scan. */
+  redacted: boolean;
   state: string | null;
   settled: unknown;
 }
 
-/** A known settlement: a fresh, identity-matched read in a settling state with a finite spend >= 0 (explicit 0 included). */
+/**
+ * A read is trusted only when it is fresh, identity-matched and stored without redaction. A receipt body
+ * that had to be redacted never proves a settlement and never moves the state.
+ */
+export function trustedRead(o: ReadOutcome): boolean {
+  return o.fresh && o.identityOk && !o.redacted;
+}
+
+/** A known settlement: a trusted read in a settling state with a finite spend >= 0 (explicit 0 included). */
 export function settledSpend(o: ReadOutcome): number | null {
-  return o.fresh && o.identityOk && o.state !== null && SETTLES.has(o.state) ? knownSettledSpend(o.settled) : null;
+  return trustedRead(o) && o.state !== null && SETTLES.has(o.state) ? knownSettledSpend(o.settled) : null;
 }
 
 /** The ledger fields a read can change. */
@@ -52,12 +62,12 @@ export function holdCharge(padded: number, costReported: number | null): number 
 
 /**
  * The next booking after a read. A known settlement replaces the hold and the booked spend; otherwise `hold`
- * stays charged and the booked spend stays. Only a fresh, identity-matched read moves the state, and never
- * from a settling state back to a non-settling one. A read that proves nothing changes nothing.
+ * stays charged and the booked spend stays. Only a trusted read moves the state, and never from a settling
+ * state back to a non-settling one. A read that proves nothing changes nothing.
  */
 export function nextBooking(prev: { state: string; spend: number | null }, o: ReadOutcome, hold: number): Booking {
   const settled = settledSpend(o);
-  const trusted = o.fresh && o.identityOk;
+  const trusted = trustedRead(o);
   const regresses = SETTLES.has(prev.state) && !(o.state !== null && SETTLES.has(o.state));
   const state = trusted && o.state !== null && !regresses ? o.state : prev.state;
   return { state, spend: settled ?? prev.spend, cap_charge: settled ?? hold };
