@@ -74,17 +74,31 @@ interface Line {
 
 /**
  * Every row of ledger.jsonl with its line number. A line that is not valid JSON, or is JSON but not an object,
- * is damaged: it throws UnusableLedgerRow naming the line, and nothing that reads the ledger goes on as if
- * it were not there. `run` refuses (exit 3, nothing sent), and every other command exits 1 with the same
+ * is damaged: it throws UnreadableLedgerLine naming the line, and nothing that reads the ledger goes on as
+ * if it were not there. This is the one owner of that read, for every reader: a reader outside the ledger
+ * lock that meets such a line first takes the lock and reads again, and names the line only when it is
+ * still unreadable there (review fixes 3, item 2). If the lock cannot be taken, LedgerLockError: busy. `run` refuses (exit 3, nothing sent), and every other command exits 1 with the same
  * message. A damaged ledger is not a disagreement between a receipt and the ledger.
  */
 function ledgerLines(h: string): Line[] {
+  try {
+    return parsedLines(h);
+  } catch (e) {
+    // Read outside the lock: the line may be one another process is still appending under it. Take the lock
+    // and read again before naming any line. Under the lock every append is whole, so a line still
+    // unreadable there is damaged. A lock that cannot be taken throws LedgerLockError: the ledger is busy.
+    if (!(e instanceof UnreadableLedgerLine) || (lockDepth.get(ledgerFile(h)) ?? 0) > 0) throw e;
+    return withLedgerLock(h, () => parsedLines(h));
+  }
+}
+
+function parsedLines(h: string): Line[] {
   const path = ledgerFile(h);
   if (!existsSync(path)) return [];
   const lines: Line[] = [];
   readFileSync(path, "utf8").split("\n").forEach((text, i) => {
     if (text.trim().length === 0) return;
-    const damaged = (why: string) => new UnusableLedgerRow(`ledger line ${i + 1} cannot be read: ${why}; next call refused. Repair or remove that line.`);
+    const damaged = (why: string) => new UnreadableLedgerLine(`ledger line ${i + 1} cannot be read: ${why}; next call refused. Repair or remove that line.`);
     let row: unknown;
     try {
       row = JSON.parse(text);
@@ -138,6 +152,8 @@ export function latestAttempts(h: string): LedgerEntry[] {
 export class UnusableLedgerRow extends Error {}
 /** The row's cap_charge is not a known amount. */
 export class UnusableLedgerCharge extends UnusableLedgerRow {}
+/** The line is not valid JSON, or not a JSON object, even when read under the ledger lock (ledgerLines). */
+export class UnreadableLedgerLine extends UnusableLedgerRow {}
 
 /** A cap charge counts only when it is a known amount (amount.ts): a finite number and not negative. Null is not 0. */
 export function usableCapCharge(value: unknown): boolean {

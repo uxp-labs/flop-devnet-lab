@@ -204,8 +204,15 @@ export async function refreshReceipt(
     // The booking step could not run. The read is stored and not booked, and the latest row keeps its
     // reservation. A lock that could not be taken says nothing about the read, so it gets its own line.
     // Any other exception, a failed append for one, may mean a booking was due and is not in the ledger.
-    const ledgerRow = latestAttempts(h).find((row) => row.request_id === rid);
     warn(e instanceof LedgerLockError ? `${LEDGER_BUSY} (${e.message})` : DISAGREE);
+    // The row to show beside the read: the ledger's latest, or the one the caller had when the ledger is
+    // still busy.
+    let ledgerRow = current.ledgerRow;
+    try {
+      ledgerRow = latestAttempts(h).find((row) => row.request_id === rid);
+    } catch (again) {
+      if (!(again instanceof LedgerLockError)) throw again;
+    }
     return { saved, ledgerRow };
   }
 }

@@ -14,6 +14,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { PreSendError } from "../src/gateway.js";
 import type { CompleteReq, CompleteRes, Provider } from "../src/providers.js";
+import { LEDGER_BUSY } from "../src/receipt-store.js";
 import { decideBooking, PAST_ADMITTED } from "../src/settlement.js";
 import { cli, readLines, readySeat, tmpHome } from "./helpers.js";
 
@@ -158,7 +159,7 @@ describe("B (review fixes 3): a matching 200 read stored redacted keeps or bring
   });
 });
 
-describe("DEFECT 2 (medium): a ledger line another process is still writing is named as damaged", () => {
+describe("2 (medium): a ledger line another process is still writing is not named as damaged", () => {
   // run's early check (run.ts spentEarly), status, cap show and receipt <id> read ledger.jsonl without the
   // ledger lock. A line another process is appending under the lock can be seen half written. ledgerLines
   // then throws UnusableLedgerRow: run refuses with exit 3 and appends a refused_local row, status exits 1,
@@ -167,9 +168,10 @@ describe("DEFECT 2 (medium): a ledger line another process is still writing is n
   // when that row is the request's latest booking its charge leaves the day's total.
   // Seen in the wild: the erratic stress mode of review-fixes.test.ts at 6 x 60 x 20 fails on this very
   // thing in its own worker, and the review's stress block below counts the CLI's own false reports.
-  // Right: a read outside the lock that meets a damaged last line (no newline at its end) takes the lock and
-  // reads again before it names the line; only a line still damaged under the lock is named.
-  it("DEFECT 2: a line another process is still writing under the lock is not named as damaged, and the run is not refused for it", async () => {
+  // Decided (review fixes 3): a read outside the lock that meets a line it cannot parse takes the ledger lock
+  // and reads again before it names any line. Only a line still unreadable under the lock is named. If the
+  // lock cannot be taken, the command says the ledger is busy, as a busy ledger does for it.
+  it("a line another process is still writing under the lock is not named as damaged, and the run is not refused for it", async () => {
     const h = await ready("1");
     const rid = (await cli(h, runArgs("jA"), { provider: new P() })).json().request_id as string;
     const lines = readFileSync(ledgerPath(h), "utf8");
@@ -206,10 +208,36 @@ process.stdout.write(JSON.stringify({ code, err: err.join("\\n"), sent: p.calls 
     // The ledger is whole: every line parses, and request A's latest row is the settlement that was in flight.
     const rows = ledger(h);
     expect(rows.filter((x) => x.request_id === rid).at(-1)!.state).toBe("settled");
-    // Wrong today: the child named the good line as damaged and told the holder to repair or remove it.
-    expect({ code: r.code, sent: r.sent }).toEqual({ code: 3, sent: 0 });
-    expect(r.err).toContain(`ledger line ${nLines + 1} cannot be read: not valid JSON; next call refused. Repair or remove that line.`);
+    expect({ code: r.code, sent: r.sent }, r.err).toEqual({ code: 0, sent: 1 });
+    expect(r.err).not.toContain("cannot be read");
   }, 20_000);
+});
+
+describe("2 (medium), busy: a line in flight while the lock cannot be taken is a busy ledger, never a damaged one", () => {
+  // Another process holds the lock for longer than the lock timeout (5 s) while a line is half written. Each
+  // command says the ledger is busy, with the words it uses for a busy ledger, and names no line.
+  it("status and receipt exit 1 with the lock timeout, run exits 10 with nothing sent, a refresh stores its read and prints the busy line", async () => {
+    const h = await ready("1");
+    const rid = (await cli(h, runArgs("jA"), { provider: new P() })).json().request_id as string;
+    writeFileSync(`${ledgerPath(h)}.lock`, JSON.stringify({ pid: process.pid, host: hostname(), token: "writer" }));
+    appendFileSync(ledgerPath(h), JSON.stringify({ ...ledger(h).at(-1)!, state: "settled" }).slice(0, 100));
+    const st = await cli(h, ["status", "--seat", SEAT, "--json"]);
+    const receipt = await cli(h, ["receipt", rid, "--json", "--seat", SEAT]);
+    const p = new P();
+    const run = await cli(h, runArgs("jB"), { provider: p });
+    const refresh = await cli(h, refreshArgs(rid), { provider: new P({ read: settledAt(0.05) }) });
+    const named = (r: { err: string }) => r.err.includes("cannot be read");
+    expect([st, receipt, run, refresh].map((r) => ({ code: r.code, named: named(r) }))).toEqual([
+      { code: 1, named: false },
+      { code: 1, named: false },
+      { code: 10, named: false },
+      { code: 0, named: false },
+    ]);
+    expect([st.err, receipt.err, run.err].every((e) => e.includes("ledger lock timeout"))).toBe(true);
+    expect(refresh.err).toContain(LEDGER_BUSY);
+    expect(p.calls).toBe(0);
+    expect(JSON.parse(readFileSync(join(h, "receipts", `${rid}.json`), "utf8")).state).toBe("settled");
+  }, 60_000);
 });
 
 describe("3 (medium): a latest row with no usable request_id cannot be placed", () => {
@@ -334,7 +362,7 @@ describe("DEFECT 5 (low, words): status marks only today, so a past day put over
  * by env). STRESS_REPORT, when set, is a path prefix: each mode writes its numbers to <prefix>.<mode>.json.
  * Modes:
  *  - consistent, erratic: the gateways of review-fixes.test.ts, with one change to the worker: it picks a
- *    request id from the ledger lines it can parse, so a line in flight (DEFECT 2) no longer kills it.
+ *    request id from the ledger lines it can parse, so a line in flight (item 2) does not kill it.
  *  - requester: as erratic, and each run is a requester call with a job budget of 0.6 or a holder call, by
  *    each process's own config writes; the job totals are checked beside the daily cap.
  *  - revive: as erratic, and a request that failed before send is later answered by trusted reads (pending
@@ -343,8 +371,11 @@ describe("DEFECT 5 (low, words): status marks only today, so a past day put over
  *  - midnight: as erratic, with every process's clock 5 s before the next UTC midnight until its middle
  *    operation and 5 s after it from then on, so the processes cross the day change at different moments. Each day's total is checked on its own, and every sent row against its own day.
  * Every mode counts the CLI's own reports of a damaged ledger line ("cannot be read") and checks afterwards
- * that every ledger line parses, so each such report named a line that was good (DEFECT 2). The test fails
- * only on a broken rule; it does not fail on those reports.
+ * that every ledger line parses, so each such report named a line that was good.
+ * History: written by the independent review of the hold floor branch at bf9087c, which ran all five modes
+ * at 6 x 60 x 20 and counted false damaged line reports there (item 2). Kept as a permanent test by review
+ * fixes 3 at the small default size (3 x 15 x 1), and since the fix of item 2 a false report fails it. Review
+ * fixes 3 ran it again at 6 x 60 x 20 (numbers in that report).
  */
 describe("review stress: the hold floor under real concurrent processes", () => {
   const PROCS = Number(process.env.STRESS_PROCS ?? 3);
@@ -530,6 +561,7 @@ process.stdout.write(JSON.stringify(tally));
         summary.push(c);
         expect(c.problems).toEqual([]);
       }
+      expect({ damaged: tally.damaged, byCode: tally.damagedByCode }).toEqual({ damaged: 0, byCode: {} });
       if (process.env.STRESS_REPORT) writeFileSync(`${process.env.STRESS_REPORT}.${mode}.json`, JSON.stringify({ mode, procs: PROCS, ops: OPS, rounds: ROUNDS, tally, summary: summary.map(({ problems: _p, ...s }) => s) }));
     }, 3_600_000);
   }

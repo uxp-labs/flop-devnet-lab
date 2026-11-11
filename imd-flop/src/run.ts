@@ -182,6 +182,8 @@ export async function runJob(h: string, provider: Provider, o: RunOpts, deps: Ru
       return payer === "requester" ? { spentBefore, jobSpentBefore: jobSpent(h, job, provider.name) } : { spentBefore };
     } catch (e) {
       if (e instanceof UnusableLedgerRow) refuse(e.message, EXIT.REFUSED_CAP, quote, null);
+      // A busy ledger (a line in flight that could not be read again under the lock): nothing was sent.
+      if (e instanceof LedgerLockError) throw new CliError(`refused locally, nothing sent: ${e.message}`, EXIT.REFUSED_LOCK);
       throw e;
     }
   };

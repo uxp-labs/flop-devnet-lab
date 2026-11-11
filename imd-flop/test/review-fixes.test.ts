@@ -576,19 +576,25 @@ class P {
   }
   async readReceipt(id) { await sleep(rnd() * 20); return read(id); }
 }
-const io = (p) => ({ out: () => {}, err: () => {}, env: { IMD_FLOP_HOME: home }, provider: p });
+let errs = [];
+const io = (p) => ({ out: () => {}, err: (m) => errs.push(m), env: { IMD_FLOP_HOME: home }, provider: p });
 const codes = {};
+let damaged = 0;
 for (let i = 0; i < ${OPS}; i++) {
   let code;
+  errs = [];
   if (rnd() < 0.55) code = await main(["run", "--seat", "${SEAT}", "--job", "j" + Math.floor(rnd() * 3), "--prompt", "hi", "--provider", "mock", "--max-tokens", "8", "--timeout-ms", "${mode === "erratic" ? 60 : 30}"], io(new P()));
   else {
-    const ids = existsSync(home + "/ledger.jsonl") ? readFileSync(home + "/ledger.jsonl", "utf8").split("\\n").filter(Boolean).map((l) => JSON.parse(l).request_id).filter(Boolean) : [];
+    // A line another process is appending may be seen half written: skip what does not parse.
+    const ids = [];
+    if (existsSync(home + "/ledger.jsonl")) for (const l of readFileSync(home + "/ledger.jsonl", "utf8").split("\\n")) { try { const id = JSON.parse(l).request_id; if (id) ids.push(id); } catch {} }
     if (ids.length === 0) continue;
     code = await main(["receipt", pick(ids), "--refresh", "--seat", "${SEAT}"], io(new P()));
   }
   codes[code] = (codes[code] ?? 0) + 1;
+  if (errs.some((m) => m.includes("cannot be read"))) damaged += 1;
 }
-process.stdout.write(JSON.stringify(codes));
+process.stdout.write(JSON.stringify({ codes, damaged }));
 `);
     const child = spawn(process.execPath, [script], { cwd: root, env: { ...process.env, IMD_FLOP_HOME: home } });
     let out = "";
@@ -637,19 +643,25 @@ process.stdout.write(JSON.stringify(codes));
       execFileSync("npx", ["tsc", "-p", "tsconfig.json"], { cwd: root });
       const summary: { lines: number; sent: number; total: number }[] = [];
       const codes: Record<string, number> = {};
+      let damaged = 0;
       for (let round = 0; round < ROUNDS; round++) {
         const h = await ready(String(CAP));
         const results = await Promise.all(Array.from({ length: PROCS }, (_, p) => worker(h, round * 1000 + p + 1 + (mode === "erratic" ? 500 : 0), mode)));
         for (const r of results) {
           expect(r.code, r.err).toBe(0);
-          for (const [k, n] of Object.entries(JSON.parse(r.out) as Record<string, number>)) codes[k] = (codes[k] ?? 0) + n;
+          const out = JSON.parse(r.out) as { codes: Record<string, number>; damaged: number };
+          for (const [k, n] of Object.entries(out.codes)) codes[k] = (codes[k] ?? 0) + n;
+          damaged += out.damaged;
         }
         const c = check(h);
         expect(c.problems).toEqual([]);
         expect(c.total).toBeLessThanOrEqual(CAP + 1e-9);
         summary.push({ lines: c.lines, sent: c.sent, total: c.total });
       }
-      if (process.env.STRESS_REPORT) writeFileSync(`${process.env.STRESS_REPORT}.${mode}.json`, JSON.stringify({ mode, procs: PROCS, ops: OPS, rounds: ROUNDS, codes, summary }));
+      // Review fixes 3, item 2: a line in flight is read again under the lock, so the CLI never reports a
+      // damaged line here (the ledger is checked whole above).
+      expect(damaged).toBe(0);
+      if (process.env.STRESS_REPORT) writeFileSync(`${process.env.STRESS_REPORT}.${mode}.json`, JSON.stringify({ mode, procs: PROCS, ops: OPS, rounds: ROUNDS, codes, damaged, summary }));
     }, 1_800_000);
   }
 });
