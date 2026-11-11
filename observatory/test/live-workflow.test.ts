@@ -1,5 +1,6 @@
-// The live workflow read as data: what it may do, and the things it must never do. No test can run
-// it; this holds its text to the rules RULES.md sections 4 and 7 and the README give it.
+// The live workflow read as data: what it may do, and the things it must never do. This holds its
+// text to the rules RULES.md sections 4 and 7 and the README give it. The publish job's two shell
+// steps are also run, against a local bare repository, in test/publish-shell.test.ts.
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { parse } from "yaml";

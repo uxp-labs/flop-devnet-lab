@@ -38,6 +38,37 @@ function journalLine(entry: Record<string, unknown>): void {
 // Registered before anything is blocked, so no attempt can come before it.
 onAttempt((e) => journalLine(e.type === "attempt" ? { event: "attempt", attempt: e.attempt } : { event: "reset", cleared: e.cleared }));
 
+// The one exemption from the block (memory review): test/publish-shell.test.ts runs the publish
+// job's shell, as the workflow holds it, with bash against a local bare repository, since a shell
+// that is only read as text is not tested. The real spawnSync is taken before the block is set and
+// held here, never exported. runShell hands it out to that one file only, runs bash only, with an
+// environment built from nothing but the caller's and PATH, git limited to the file:// transport and
+// no system or global git config, so no network path opens. Any other file that calls it records a
+// process attempt and throws, as every other child process call does.
+const realSpawnSync = (require("node:child_process") as typeof import("node:child_process")).spawnSync;
+export const SHELL_TEST_FILE = "test/publish-shell.test.ts";
+export interface ShellResult {
+  status: number | null;
+  stdout: string;
+  stderr: string;
+  error: string | null;
+}
+export function runShell(args: readonly string[], env: Readonly<Record<string, string>>, cwd: string): ShellResult {
+  if (testFile !== SHELL_TEST_FILE) {
+    recordAttempt("process", `runShell bash from ${testFile}`);
+    throw new Error("child processes disabled in tests");
+  }
+  const server = env.GITHUB_SERVER_URL;
+  if (server !== undefined && !server.startsWith("file://")) throw new Error(`runShell: GITHUB_SERVER_URL must be a file:// URL, not ${server}`);
+  const r = realSpawnSync("bash", [...args], {
+    cwd,
+    encoding: "utf8",
+    timeout: 60_000,
+    env: { PATH: process.env.PATH ?? "/usr/bin:/bin", ...env, GIT_ALLOW_PROTOCOL: "file", GIT_CONFIG_NOSYSTEM: "1", GIT_CONFIG_GLOBAL: "/dev/null", GIT_TERMINAL_PROMPT: "0" },
+  });
+  return { status: r.status, stdout: r.stdout ?? "", stderr: r.stderr ?? "", error: r.error ? String(r.error.message) : null };
+}
+
 function describeTarget(args: unknown[]): string {
   const a = args[0];
   if (typeof a === "string" || typeof a === "number") return String(a);
