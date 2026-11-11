@@ -5,7 +5,7 @@
  * processes (dist/cli.js, built by `npm test`) on one ledger.
  */
 import { spawn } from "node:child_process";
-import { appendFileSync, chmodSync, existsSync, openSync, closeSync, readFileSync, renameSync, unlinkSync, utimesSync, writeFileSync, writeSync } from "node:fs";
+import { appendFileSync, chmodSync, existsSync, openSync, closeSync, readdirSync, readFileSync, renameSync, unlinkSync, utimesSync, writeFileSync, writeSync } from "node:fs";
 import { hostname } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -220,7 +220,11 @@ describe("review hold 2, items 4 and 5: ledgerLines and the lock", () => {
   // the open and write window has long passed.
   // Decided (review fixes 4, item 5): a lock with no readable owner is reclaimed once it is older than the
   // reclaim window, by the same path as a lock whose owner is dead; every lock timeout names the lock and its age.
-  it("5: an old empty lock file left by a holder that crashed is reclaimed, and the run goes on", async () => {
+  // Reversed (lock reclaim, audit 33f3b9f finding 1): the lock is created with its owner already in it (review
+  // fixes 4), so this version never leaves an empty lock, even for an instant. An empty one is a leftover of an
+  // older version or damage. It is never removed, at any age. The timeout names the lock file, its age, that it
+  // has no readable owner, and the way back. Following the way back lets the run go on.
+  it("5: an old empty lock file is never removed; the timeout names it, its age, no readable owner and the way back, and removing it lets the run go on", async () => {
     const h = await ready("1");
     const lock = `${ledgerPath(h)}.lock`;
     writeFileSync(lock, "");
@@ -228,11 +232,18 @@ describe("review hold 2, items 4 and 5: ledgerLines and the lock", () => {
     utimesSync(lock, old, old);
     const p = new P();
     const r = await cli(h, runArgs("jA"), { provider: p });
-    expect({ code: r.code, sent: p.calls }, r.err).toEqual({ code: 0, sent: 1 });
+    expect({ code: r.code, sent: p.calls }, r.err).toEqual({ code: 10, sent: 0 });
+    expect(r.err).toBe(`imd-flop: refused locally, nothing sent: ledger lock timeout: ${lock} (${r.err.match(/\((\d+) s old\)/)?.[1]} s old) has no readable owner. If no imd-flop process is using this home any more, remove that file and run again.`);
+    expect(Number(r.err.match(/\((\d+) s old\)/)?.[1])).toBeGreaterThanOrEqual(600);
+    expect(readFileSync(lock, "utf8")).toBe("");
+    unlinkSync(lock);
+    const p2 = new P();
+    const again = await cli(h, runArgs("jA"), { provider: p2 });
+    expect({ code: again.code, sent: p2.calls }, again.err).toEqual({ code: 0, sent: 1 });
     expect(existsSync(lock)).toBe(false);
   }, 30_000);
 
-  it("5: a young empty lock is waited for, and the timeout names the lock file and its age", async () => {
+  it("5: a young empty lock is waited for, and the timeout names the lock file, its age, no readable owner and the way back", async () => {
     const h = await ready("1");
     const lock = `${ledgerPath(h)}.lock`;
     writeFileSync(lock, "");
@@ -242,6 +253,7 @@ describe("review hold 2, items 4 and 5: ledgerLines and the lock", () => {
     expect(r.err).toContain("ledger lock timeout");
     expect(r.err).toContain(lock);
     expect(r.err).toMatch(/\d+ s old/);
+    expect(r.err).toContain("has no readable owner. If no imd-flop process is using this home any more, remove that file and run again.");
     expect(existsSync(lock)).toBe(true);
   }, 30_000);
 });
@@ -443,10 +455,12 @@ process.stdout.write(JSON.stringify(t));
   }
 
   // A writer killed while it holds the lock, in the middle of a line: the lock file names a dead pid, and the
-  // last line is torn with no newline. While the lock is young every reader says busy and names nothing. Once
-  // it is older than 30 s the next command reclaims it and names the torn line. The holder removes that line
-  // and the seat runs again.
-  it("killed writer: busy while the dead holder's lock is young, then the torn last line is named, and removing it lets the seat run", async () => {
+  // last line is torn with no newline. The next command reclaims the lock at once and names the torn line. The
+  // holder removes that line and the seat runs again.
+  // Moved (lock reclaim, audit 33f3b9f finding 1): while the lock was younger than 30 s every reader said busy
+  // and named nothing, and only an older lock was reclaimed. A provably dead owner is now reclaimable at once,
+  // so the first command already names the line. No right file or temporary file is left.
+  it("killed writer: the dead holder's lock is reclaimed at once, the torn last line is named, and removing it lets the seat run", async () => {
     const h = await ready("1");
     const a = await cli(h, runArgs("jA"), { provider: new P() });
     expect(a.code, a.err).toBe(0);
@@ -467,12 +481,10 @@ setInterval(() => {}, 1000);
     await new Promise<void>((resolve) => child.stdout.once("data", () => resolve()));
     child.kill("SIGKILL");
     await new Promise<void>((resolve) => child.on("exit", () => resolve()));
-    const young = await cli(h, ["status", "--seat", SEAT, "--json"]);
-    expect({ code: young.code, busy: young.err.includes("ledger lock timeout"), named: young.err.includes("cannot be read") }).toEqual({ code: 1, busy: true, named: false });
-    const old = new Date(Date.now() - 60_000);
-    utimesSync(`${ledgerPath(h)}.lock`, old, old);
+    const t0 = Date.now();
     const st = await cli(h, ["status", "--seat", SEAT, "--json"]);
-    expect({ code: st.code, named: st.err.includes(`ledger line ${nLines + 1} cannot be read`) }, st.err).toEqual({ code: 1, named: true });
+    expect({ code: st.code, busy: st.err.includes("ledger lock timeout"), named: st.err.includes(`ledger line ${nLines + 1} cannot be read`), fast: Date.now() - t0 < 4_000 }, st.err).toEqual({ code: 1, busy: false, named: true, fast: true });
+    expect(readdirSync(h).filter((f) => f.startsWith("ledger.jsonl.lock"))).toEqual([]);
     const p = new P();
     const refused = await cli(h, runArgs("jB"), { provider: p });
     expect({ code: refused.code, sent: p.calls, named: refused.err.includes(`ledger line ${nLines + 1} cannot be read`) }).toEqual({ code: 3, sent: 0, named: true });

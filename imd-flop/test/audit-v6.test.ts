@@ -3,7 +3,7 @@
  * however old its mtime. Only a lock proven stale (its owner process is gone) may be reclaimed.
  */
 import { execFileSync, spawn, type ChildProcess } from "node:child_process";
-import { existsSync, readFileSync, utimesSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, unlinkSync, utimesSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { readLines, readySeat, tmpHome } from "./helpers.js";
@@ -102,8 +102,7 @@ describe("v6 ledger lock liveness", () => {
   }, 30_000);
 
   it("does not steal an old lock whose owner is on another host", async () => {
-    // Moved (review fixes 4, item 5): this also held an empty and a "not json" lock. A lock with no readable
-    // owner is now reclaimed past the reclaim window, as a dead owner's is (the next test).
+    // Moved (review fixes 4, item 5): this also held an empty and a "not json" lock. Those are in the next test.
     build();
     for (const body of [JSON.stringify({ pid: 1, host: "some-other-host", token: "x" })]) {
       const home = tmpHome();
@@ -120,7 +119,11 @@ describe("v6 ledger lock liveness", () => {
     }
   }, 60_000);
 
-  it("reclaims an old lock with no readable owner (empty or not JSON), as a dead owner's", async () => {
+  // Moved (lock reclaim, audit 33f3b9f finding 1): this was "reclaims an old lock with no readable owner
+  // (empty or not JSON), as a dead owner's". The rule is reversed. This version never creates a lock without
+  // its owner in it, so one is a leftover of an older version or damage, and it fails closed: the run
+  // refuses, names the lock, says it has no readable owner and gives the way back. The way back works.
+  it("never removes a lock with no readable owner (empty or not JSON), however old; removing it by hand lets the run go on", async () => {
     build();
     for (const body of ["", "not json"]) {
       const home = tmpHome();
@@ -128,8 +131,15 @@ describe("v6 ledger lock liveness", () => {
       writeFileSync(lockPath(home), body);
       const old = (Date.now() - 31_000) / 1000;
       utimesSync(lockPath(home), old, old);
-      const r = await runCli(home, "reclaim");
-      expect(r.code, r.err).toBe(0);
+      const r = await runCli(home, "unreadable");
+      expect({ code: r.code, sent: r.out.includes("COMPLETE_CALLED") }).toEqual({ code: 10, sent: false });
+      expect(r.err).toContain(`ledger lock timeout: ${lockPath(home)} (`);
+      expect(r.err).toContain("has no readable owner. If no imd-flop process is using this home any more, remove that file and run again.");
+      expect(sentRows(home)).toHaveLength(0);
+      expect(readFileSync(lockPath(home), "utf8")).toBe(body);
+      unlinkSync(lockPath(home));
+      const again = await runCli(home, "after");
+      expect(again.code, again.err).toBe(0);
       expect(sentRows(home)).toHaveLength(1);
       expect(existsSync(lockPath(home))).toBe(false);
     }

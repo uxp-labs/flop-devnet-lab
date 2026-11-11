@@ -4,12 +4,11 @@
  * States: refused_local, sent, timeout_unknown, error, reserved, estimated, settled, released.
  * A pre-mint refusal appends refused_local (cap charge 0). That latest line supersedes the pre-call sent line.
  */
-import { existsSync, linkSync, readFileSync, renameSync, statSync, unlinkSync, writeFileSync } from "node:fs";
-import { randomBytes } from "node:crypto";
-import { hostname } from "node:os";
+import { existsSync, readFileSync } from "node:fs";
 import { knownAmount } from "./amount.js";
 import { isSeatId } from "./keys.js";
 import { groupKey, isRequestId, readLedgerText } from "./ledger-text.js";
+import { assertLockHeld, LedgerUnlockable, lockDepth, withLock } from "./lock.js";
 import { ledgerFile } from "./paths.js";
 import { isJobId } from "./policy.js";
 import { ceil6 } from "./rounding.js";
@@ -64,7 +63,10 @@ export interface LedgerEntry {
 export const utcDay = (d = new Date()) => d.toISOString().slice(0, 10);
 
 export function appendLedger(h: string, e: LedgerEntry): void {
-  withLedgerLock(h, () => appendJsonlSafe(ledgerFile(h), e, "ledger.jsonl"));
+  withLedgerLock(h, () => {
+    assertLockHeld(ledgerFile(h)); // the lock file still carries our token (lock.ts): it was not removed by hand
+    appendJsonlSafe(ledgerFile(h), e, "ledger.jsonl");
+  });
 }
 
 /** One ledger row with its line number in ledger.jsonl, counted from 1 (blank lines count), so a refusal can name it. */
@@ -260,137 +262,14 @@ export function jobSpent(h: string, job: string, provider: string): number {
   return sumCharges(placed(h, [onJob(job), onProvider(provider), onPayer("requester")], `the requester total of job ${job} (${provider})`));
 }
 
-/** The ledger lock could not be taken. Thrown before the guarded work runs, so nothing in it happened. */
-export class LedgerLockError extends Error {}
-
-const lockDepth = new Map<string, number>();
-
-interface LockOwner { pid: number; host: string; token: string }
-
-function readOwner(path: string): LockOwner | null {
-  try {
-    const o = JSON.parse(readFileSync(path, "utf8"));
-    if (Number.isInteger(o?.pid) && o.pid > 0 && typeof o.host === "string" && typeof o.token === "string") return o;
-  } catch { /* unreadable or malformed: never provably stale */ }
-  return null;
-}
-
-/** True only when the owner is on this host and its process is gone. Anything unproven counts as alive. */
-function provablyDead(o: LockOwner | null): boolean {
-  if (!o || o.host !== hostname()) return false;
-  try { process.kill(o.pid, 0); return false; } // alive (or reachable)
-  catch (e) { return (e as NodeJS.ErrnoException).code === "ESRCH"; } // EPERM means alive
-}
-
-/**
- * Reclaim an old lock only if its recorded owner is provably dead. The lock is moved aside atomically
- * first, so two waiters can't both act on one stale file; if what was moved turns out to belong to
- * a live owner, it is linked back, and if that can't be done the caller refuses rather than reserve.
- */
-function reclaimIfDead(path: string): boolean {
-  if (!reclaimable(readOwner(path))) return false;
-  const aside = `${path}.stale.${process.pid}.${randomBytes(4).toString("hex")}`;
-  try { renameSync(path, aside); } catch { return false; } // someone else moved or released it
-  if (reclaimable(readOwner(aside))) { try { unlinkSync(aside); } catch { /* gone */ } return true; }
-  try { linkSync(aside, path); unlinkSync(aside); } catch { throw new LedgerLockError(`ledger lock contested: ${path}`); }
-  return false;
-}
-
-/**
- * An old lock (past the reclaim window) may be reclaimed when its owner is provably dead, or when it holds no
- * readable owner at all: a holder that died between creating the file and writing its owner into it
- * (review fixes 4, item 5). The window is far longer than that open and write.
- */
-function reclaimable(o: LockOwner | null): boolean {
-  return o === null || provablyDead(o);
-}
-
-/** The lock file and how old it is, for every lock message, so a holder can see what is in the way. */
-function lockAge(path: string): string {
-  try { return `${path} (${Math.floor((Date.now() - statSync(path).mtimeMs) / 1000)} s old)`; } catch { return `${path} (gone)`; }
-}
-
-/**
- * The ledger lock cannot be created at all: no permission to create the file, or a read only file system.
- * Not a busy ledger and not a crash. A reader reads without the lock (ledgerLines); a writer refuses.
- */
-export class LedgerUnlockable extends Error {}
-const UNLOCKABLE = new Set(["EACCES", "EPERM", "EROFS"]);
-
-/**
- * Create the lock with its owner already in it: the owner is written to a temporary file that is then linked
- * to the lock path, which fails with EEXIST when a lock is there. So a lock this tool creates is never seen
- * empty, and an empty or unreadable lock is only ever a leftover (an older version, or damage), which
- * reclaimable() may take once it is old. With open and then write, a holder's lock was empty for an instant,
- * and a reader whose clock ran ahead could take it for an old ownerless lock (review fixes 4, item 5).
- */
-function createLock(path: string, owner: LockOwner): void {
-  const tmp = `${path}.${process.pid}.${randomBytes(4).toString("hex")}.tmp`;
-  writeFileSync(tmp, JSON.stringify(owner), { flag: "wx" });
-  try {
-    linkSync(tmp, path);
-  } finally {
-    try { unlinkSync(tmp); } catch { /* gone */ }
-  }
-}
-
-function takeLock(path: string): { token: string } {
-  const start = Date.now();
-  const owner: LockOwner = { pid: process.pid, host: hostname(), token: randomBytes(16).toString("hex") };
-  for (;;) {
-    try {
-      createLock(path, owner);
-      return { token: owner.token };
-    } catch (e) {
-      const code = (e as NodeJS.ErrnoException).code;
-      if (code !== undefined && UNLOCKABLE.has(code)) throw new LedgerUnlockable(`the ledger could not be locked: ${path} cannot be created (${code})`);
-      if (code !== "EEXIST") throw e;
-      let old = false;
-      try { old = Date.now() - statSync(path).mtimeMs > 30_000; } catch { continue; } // the holder removed it
-      if (old && reclaimIfDead(path)) continue;
-      if (Date.now() - start > 5_000) throw new LedgerLockError(`ledger lock timeout: ${lockAge(path)} is held`);
-      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 25);
-    }
-  }
-}
-
-/** Remove the lock only if it is still ours. */
-function releaseLock(path: string, token: string): void {
-  if (readOwner(path)?.token !== token) return;
-  try { unlinkSync(path); } catch { /* already released */ }
-}
-
-/**
- * The lock is released when fn returns, so fn must be synchronous. A promise-returning body would run
- * its awaited part after the release, outside the lock; it is refused (after its lock is released).
- */
-function syncResult<T>(r: T): T {
-  if (r !== null && (typeof r === "object" || typeof r === "function") && typeof (r as { then?: unknown }).then === "function") {
-    (r as unknown as PromiseLike<unknown>).then(undefined, () => { /* the body's own failure is moot: it was refused */ });
-    throw new TypeError("withLedgerLock body must be synchronous: an async body would run its awaited part after the lock is released");
-  }
-  return r;
-}
+export { LedgerLockError, LedgerUnlockable } from "./lock.js";
 
 /**
  * Exclusive lock over a read of the ledger and the append that follows from it: the cap check with its
  * `sent` row (run.ts), and the booking step for everything written after the call (booking.ts). Re-enters
- * in this process.
+ * in this process. The lock itself is lock.ts.
  * Synchronous bodies only.
  */
 export function withLedgerLock<T>(h: string, fn: () => T): T {
-  const key = ledgerFile(h);
-  const depth = lockDepth.get(key) ?? 0;
-  if (depth > 0) {
-    lockDepth.set(key, depth + 1);
-    try { return syncResult(fn()); }
-    finally { lockDepth.set(key, depth); }
-  }
-  const { token } = takeLock(`${key}.lock`);
-  lockDepth.set(key, 1);
-  try { return syncResult(fn()); }
-  finally {
-    lockDepth.set(key, 0);
-    releaseLock(`${key}.lock`, token);
-  }
+  return withLock(ledgerFile(h), fn);
 }
