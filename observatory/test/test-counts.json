@@ -57,7 +57,7 @@
   },
   "publish-shell.test.ts": {
     "tests": 39,
-    "names": "5d7534e4aaffe32201561237451009a4cbe09d5b95a248c66ef994b357c11bdf"
+    "names": "89b69685a4e142f2f2ea02e2c404d71c92b96fc51984d709b727b140dff339c2"
   },
   "published.test.ts": {
     "tests": 21,
@@ -65,7 +65,7 @@
   },
   "review-memory.test.ts": {
     "tests": 2,
-    "names": "c0e83557946650fb327a38fcd0b3e73fd2bc9f0f06e19696792ae82d2a620b1b"
+    "names": "db7cc5f5fc51f2f7ad3eacabb6a786a7a9e066f7f5623690d16d9bf798068a14"
   },
   "rpc-head.test.ts": {
     "tests": 19,

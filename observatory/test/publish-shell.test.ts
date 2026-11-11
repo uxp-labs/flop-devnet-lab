@@ -579,11 +579,9 @@ describe("a log moved aside by hand (README: to start a new log on purpose)", ()
   });
 });
 
-// Open defects found by the memory review. Each test pins what the code does today, which is wrong,
-// so the suite stays green while the defect is open; it fails once the defect is fixed, and is then
-// turned round to assert the fix. (scripts/test-report-check.mjs refuses a test that passes on
-// failure, so these assert the defective behaviour itself.)
-describe("open defects (memory review)", () => {
+// Branch states found by the memory review: a day file with no line, entries the job never writes,
+// and a last line dated after the real clock (RULES.md sections 7 and 7.1).
+describe("a branch the live run or the job refuses, and a log dated past the clock", () => {
   it("a day file with no line is refused by the live run: it reads nothing, writes no snapshot, and nothing reaches the branch", async () => {
     const r1 = await read(live("published-2026-11-11-0808"), checkout());
     published(publishJob(r1));

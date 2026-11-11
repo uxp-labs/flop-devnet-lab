@@ -1,10 +1,6 @@
-// Findings of the memory review (branch claude/observatory-memory) that need no shell. The ones that
-// run the publish job's shell are in test/publish-shell.test.ts, under "open defects".
-//
-// Each test pins what the code does today, which is wrong, so the suite stays green while the
-// defect is open; it fails once the defect is fixed, and is then turned round to assert the fix.
-// (scripts/test-report-check.mjs refuses a test that passes on failure, so these assert the
-// defective behaviour itself.)
+// Rules from the memory review (branch claude/observatory-memory) that need no shell: the lines from
+// before memory as RULES.md section 7 states the allowance, and the live command's usage line. The
+// review's cases that run the publish job's shell are in test/publish-shell.test.ts.
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -40,7 +36,7 @@ function logOf(...ss: Snapshot[]): string {
   return dir;
 }
 
-describe("open defects (memory review)", () => {
+describe("the log from before memory, and the live command's usage", () => {
   it("the lines from before memory are each checked alone; their order and number are not protected by the chain, which protects every line from the first chained one on, and a log that runs backwards still shows as a conflict", async () => {
     const none = join(box, "none");
     // Three one-line logs, as published before runs kept memory, in time order: 08:08, 08:18, 08:23.
