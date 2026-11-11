@@ -232,3 +232,47 @@ describe("DEFECT 8 (info): a receipt nested 10000 deep is read by imd-flop and u
     expect({ read: l.receipts.length, unreadable: l.unreadable }).toEqual({ read: 1, unreadable: [] });
   });
 });
+
+describe("DEFECT 9 (low): a canonical seat of 64 to 78 digits passes the seat rule, then the secret scan blocks it and leaves a seat no command can use", () => {
+  it("DEFECT 9 (low): init exits 5, leaves flop.key without identity.json, then init says pass --rotate and --rotate says run init", async () => {
+    const h = tmpHome();
+    const seat = (2n ** 256n - 1n).toString();
+    const first = await cli(h, ["init", "--seat", seat]);
+    expect({ code: first.code, blocked: first.err.includes("secret scan blocked writing identity.json: seat") }).toEqual({ code: 5, blocked: true });
+    expect(readFileSync(keyFile(h, seat), "utf8")).toContain("seed_b64");
+    const again = await cli(h, ["init", "--seat", seat]);
+    expect({ code: again.code, says: again.err.includes("pass --rotate") }).toEqual({ code: 5, says: true });
+    const rotate = await cli(h, ["init", "--seat", seat, "--rotate"]);
+    expect({ code: rotate.code, says: rotate.err.includes(`run \`imd-flop init --seat ${seat}\``) }).toEqual({ code: 2, says: true });
+    // The shortest such seat: 64 digits.
+    expect((await cli(tmpHome(), ["init", "--seat", "1" + "0".repeat(63)])).code).toBe(5);
+  });
+});
+
+describe("DEFECT 10 (low): outsideText keeps control characters, so server text writes its own lines and terminal escapes to stderr", () => {
+  it("DEFECT 10 (low): a JSON-RPC error message with a newline and ESC reaches the message as is", async () => {
+    const msg = await chainIdError("https://eth.example.invalid/v2/tok", () => "x\n\u001b[1Aimd-flop: link verified, owner ok");
+    expect(msg).toBe("eth_chainId error: x\n\u001b[1Aimd-flop: link verified, owner ok");
+  });
+});
+
+describe("DEFECT 11 (low): the cut in outsideText splits a surrogate pair, so the ledger gets a lone surrogate the viewer cannot write", () => {
+  it("DEFECT 11 (low): a 200 character cut through an emoji stores \\ud83d alone in the refused_local reason (viewer side in test_review_audit2.py)", async () => {
+    const h = tmpHome();
+    expect((await cli(h, ["init", "--seat", "7"])).code).toBe(0);
+    expect((await cli(h, ["cap", "set", "1", "--seat", "7"])).code).toBe(0);
+    const provider = {
+      name: "mock",
+      estimate: async () => ({ estimated_cost_flop: 0.066, estimated_input_tokens: 3, estimated_output_tokens: 8 }),
+      complete: async () => {
+        await assertPaidNetwork(network("devnet"), "https://eth.example.invalid/v2/tok", echoing(() => "z".repeat(199) + "\u{1F600} after"));
+        throw new Error("unreachable");
+      },
+      readReceipt: async () => ({ http: 0, receipt: null, error: null }),
+    } as unknown as Provider;
+    await expect(runJob(h, provider, { job: "j1", prompt: "hi", maxTokens: 8, seat: "7", noLink: true, timeoutMs: 5000 }, { warn() {} })).rejects.toThrow(/nothing sent/);
+    const text = readFileSync(ledgerFile(h), "utf8");
+    expect(text).toContain("z\\ud83d[cut]");
+    expect(text).not.toContain("\\ude00");
+  });
+});

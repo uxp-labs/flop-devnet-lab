@@ -50,5 +50,33 @@ class Defect8(unittest.TestCase):
         self.assertIn(["red", "unreadable"], chips(deep))
 
 
+class Defect11(unittest.TestCase):
+    """DEFECT 11 (low): imd-flop's outsideText cuts outside text by UTF-16 code units, so a cut through an emoji
+    leaves a lone high surrogate, and JSON.stringify writes it as the escape \\ud83d (imd-flop side in
+    review-audit2.test.ts). The viewer reads that line, renders the reason, and its main() cannot write the page:
+    UnicodeEncodeError, after the page was already truncated, so the page is left empty. imd-flop reads the same ledger without complaint."""
+
+    def test_DEFECT_11_low_a_lone_surrogate_in_a_reason_stops_the_lane_build(self):
+        import shutil, tempfile
+        reason = "nothing sent: eth_chainId error: " + "z" * 199 + "\\ud83d[cut]"
+        line = json.dumps(dict(LED, state="refused_local", request_id=None, cap_charge=0, reason=None))[:-1] + ', "reason": "' + reason + '"}'
+        self.assertEqual(NS["read_ledger_text"](line.encode())[0][1], "row")
+        with tempfile.TemporaryDirectory() as tmp:
+            Path(tmp, "ledger.jsonl").write_text(line + "\n")
+            page = Path(tmp, "index.html")
+            shutil.copy(NS["VIEWER"], page)
+            old = sys.argv
+            sys.argv = ["build-lane.py", tmp]
+            try:
+                ns = load_lane()
+                ns["VIEWER"] = str(page)
+                with self.assertRaises(UnicodeEncodeError):
+                    ns["main"]()
+                # open(VIEWER, "w") truncated the page before the write failed: the page is left empty.
+                self.assertEqual(page.stat().st_size, 0)
+            finally:
+                sys.argv = old
+
+
 if __name__ == "__main__":
     unittest.main()
