@@ -357,8 +357,13 @@ export function runOnDisk<R>(step: Step<R>, onWait: () => void, onResult?: (op: 
   return next.value;
 }
 
+/**
+ * The age of a file in whole seconds, never below 0. A file's time has parts of a millisecond and
+ * Date.now() has none, so a file written in this same millisecond is "ahead" by a fraction, and a file can
+ * be dated after this clock outright (another machine's clock on a shared disk): both read as 0 s old.
+ */
 const ageOf = (path: string): string => {
-  try { return `${Math.floor((Date.now() - lstatSync(path).mtimeMs) / 1000)} s old`; } catch { return "gone"; }
+  try { return `${Math.max(0, Math.floor((Date.now() - lstatSync(path).mtimeMs) / 1000))} s old`; } catch { return "gone"; }
 };
 const uidOf = (path: string): string => {
   try { return `uid ${lstatSync(path).uid}`; } catch { return "an unknown user"; }
