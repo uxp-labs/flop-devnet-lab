@@ -80,7 +80,7 @@ interface Line {
  * is damaged: it throws UnreadableLedgerLine naming the line, and nothing that reads the ledger goes on as
  * if it were not there. This is the one owner of that read, for every reader: a reader outside the ledger
  * lock that meets such a line first takes the lock and reads again, and names the line only when it is
- * still unreadable there (review fixes 3, item 2). If the lock cannot be taken, LedgerLockError: busy. `run` refuses (exit 3, nothing sent), and every other command exits 1 with the same
+ * still unreadable there (review fixes 3, item 2). If the lock cannot be taken, LedgerLockError: busy. `run` refuses (exit 10, nothing sent), and every other command exits 1 with the same
  * message. A damaged ledger is not a disagreement between a receipt and the ledger.
  */
 function ledgerLines(h: string): Line[] {
