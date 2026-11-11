@@ -1,11 +1,11 @@
 /**
- * Independent review of the hold floor branch (b839bf3..bf9087c, HEAD bf9087c). Each DEFECT test is named
- * for what should happen, and its body asserts what the code does today, which is wrong, so it passes at
- * bf9087c and fails once the defect is fixed. The comment of each block says what goes wrong and what the
- * right behavior is. Stub providers only; test/setup.ts disables fetch.
- * DEFECT 2 uses a real child process (dist/cli.js, built by `npm test`) against one ledger.
- * The stress block at the end is the review's own multi process run: the two gateway modes of
- * review-fixes.test.ts with a worker that tolerates a line in flight, plus two modes of its own.
+ * Independent review of the hold floor branch (b839bf3..bf9087c), fixed by review fixes 3. The reviewer wrote
+ * each finding as a test that asserted the wrong behavior of bf9087c; each is now rewritten under a plain name
+ * to assert the decided behavior, and was seen failing before its fix. Items 1 to 10 are the reviewer's
+ * findings, A to D the smaller ones from the same report. Stub providers only; test/setup.ts disables fetch.
+ * Item 2 uses a real child process (dist/cli.js, built by `npm test`) against one ledger.
+ * The stress block is the review's own multi process run: the two gateway modes of review-fixes.test.ts with a
+ * worker that tolerates a line in flight, plus three modes of its own.
  */
 import { spawn } from "node:child_process";
 import { appendFileSync, existsSync, readFileSync, writeFileSync } from "node:fs";
@@ -330,6 +330,28 @@ describe("4 (low): a reported cost is a known amount or it is unknown", () => {
   });
 });
 
+describe("D (review fixes 3): status marks today over its cap, in text and --json", () => {
+  // Two direct cases: today's latest rows total 0.372 against a cap of 0.3 (over), and 0.186 (not over).
+  async function dayOf(charges: number[]) {
+    const h = await ready("0.3");
+    const day = new Date().toISOString().slice(0, 10);
+    const row = (i: number, c: number) => ({ ts: new Date().toISOString(), day, request_id: `mock-${SEAT}-${i}`, seat: SEAT, did: "did:key:z", job: `j${i}`, provider: "mock", network: "devnet", payer: "holder", model: "m", max_tokens: 8, quote_raw: 0.066, quote_padded: 0.186, per_call_cap: 0.3, daily_cap: 0.3, job_budget: null, spent_before: 0, job_spent_before: null, state: "estimated", reason: null, spend: null, cost_reported: null, cap_charge: c, http: 200, mock: true });
+    writeFileSync(ledgerPath(h), charges.map((c, i) => JSON.stringify(row(i, c))).join("\n") + "\n");
+    return { json: await status(h), text: (await cli(h, ["status", "--seat", SEAT])).out };
+  }
+  it("0.372 of 0.3 is over: over_cap_today_utc.mock is true and the text says OVER CAP", async () => {
+    const { json, text } = await dayOf([0.186, 0.186]);
+    expect({ total: json.today_utc.mock, over: json.over_cap_today_utc }).toEqual({ total: 0.372, over: { flop: false, mock: true } });
+    expect(text).toContain("mock 0.372 / 0.3 OVER CAP");
+  });
+  it("0.186 of 0.3 is not over: false, and no OVER CAP", async () => {
+    const { json, text } = await dayOf([0.186]);
+    expect({ total: json.today_utc.mock, over: json.over_cap_today_utc }).toEqual({ total: 0.186, over: { flop: false, mock: false } });
+    expect(text).toContain("mock 0.186 / 0.3");
+    expect(text).not.toContain("OVER CAP");
+  });
+});
+
 describe("7 (review fixes 3): a ledger line with NaN, Infinity or -Infinity is unreadable, in both parts", () => {
   // JSON.parse refuses those constants, so imd-flop names the line; the viewer now reads with the same grammar
   // (viewer/test_review_hold.py, item 7). Both read the same lines: contract/fixtures/json-constants.jsonl.
@@ -349,12 +371,14 @@ describe("7 (review fixes 3): a ledger line with NaN, Infinity or -Infinity is u
   });
 });
 
-describe("DEFECT 5 (low, words): status marks only today, so a past day put over its cap is never marked", () => {
+describe("5 (words): status marks today only, and the README says so", () => {
   // README: a booking past what the cap admitted prints the line, and "`status` then marks the day OVER CAP"
   // (also R-f). status computes over_cap_today_utc for today only. A released hold of an earlier UTC day that
   // a trusted read brings back puts that day over its cap; status never marks it, in text or in --json.
   // Right: the words say status marks today's total only, or status marks every day over its cap.
-  it("DEFECT 5: status marks the past UTC day a revived hold put over its cap, or the README says status marks today only", async () => {
+  // Decided (review fixes 3): the words say status marks today only, and that a hold that comes back on an
+  // earlier day is shown by its PAST_ADMITTED row and by the viewer.
+  it("a hold revived on yesterday's row is not marked by status; its row carries PAST_ADMITTED; the README says status marks today only", async () => {
     const h = await ready("0.3");
     const preSend = async (): Promise<CompleteRes> => {
       throw new PreSendError("child key mint failed");
@@ -371,6 +395,10 @@ describe("DEFECT 5 (low, words): status marks only today, so a past day put over
     expect(s.over_cap_today_utc).toEqual({ flop: false, mock: false });
     expect(JSON.stringify(s)).not.toContain(yesterday);
     expect((await cli(h, ["status", "--seat", SEAT])).out).not.toContain("OVER CAP");
+    expect(ledger(h).at(-1)!.reason).toContain(PAST_ADMITTED);
+    const readme = readFileSync(join(import.meta.dirname, "..", "README.md"), "utf8");
+    expect(readme).toContain("`status` marks today's total only");
+    expect(readme).not.toContain("`status` then marks the day `OVER CAP`");
   });
 });
 
@@ -586,13 +614,13 @@ process.stdout.write(JSON.stringify(tally));
   }
 });
 
-describe("DEFECT 8 (low, words): the exit code table says receipt and receipt --refresh exit 1 on a ledger line that cannot be placed", () => {
+describe("8 (words): the exit code table says only status and cap show stop on a row that cannot be placed", () => {
   // README exit 1: "a ledger line that cannot be read or placed when status, cap show, receipt or receipt
   // --refresh reads it (the message names the line)". receipt and receipt --refresh never place a row in a
   // total (they read latestAttempts, which only parses), so a row that cannot be placed leaves them at exit 0
   // and they name nothing. status and cap show do exit 1.
   // Right: the words say that only status and cap show stop on a row that cannot be placed.
-  it("DEFECT 8: the exit code table says that only status and cap show (not receipt or receipt --refresh) stop on a row that cannot be placed", async () => {
+  it("the exit code table says that only status and cap show (not receipt or receipt --refresh) stop on a row that cannot be placed", async () => {
     const h = await ready("1");
     const rid = (await cli(h, runArgs("jA"), { provider: new P() })).json().request_id as string;
     appendFileSync(ledgerPath(h), JSON.stringify({ ...ledger(h).at(-1)!, ts: new Date().toISOString(), day: null }) + "\n");
@@ -607,19 +635,21 @@ describe("DEFECT 8 (low, words): the exit code table says receipt and receipt --
       { code: 1, named: true },
     ]);
     const readme = readFileSync(join(import.meta.dirname, "..", "README.md"), "utf8");
-    expect(readme).toContain("a ledger line that cannot be read or placed when `status`, `cap show`, `receipt` or `receipt --refresh` reads it");
+    expect(readme).not.toContain("a ledger line that cannot be read or placed when `status`, `cap show`, `receipt` or `receipt --refresh` reads it");
+    expect(readme).toContain("a row that cannot be placed in a total when `status` or `cap show` reads it (`receipt` and `receipt --refresh` never place a row)");
   });
 });
 
-describe("DEFECT 9 (low, words): decideBooking's comment still counts exceptions to order independence of the exact pair", () => {
+describe("9 (words): decideBooking's comment says the exact pair is order independent with no exception", () => {
   // settlement.ts decideBooking: "They book the same pair of spend and exact spend in either order too,
   // except for the shapes that test counts." test/decision-properties.test.ts no longer counts any shape: it
   // asserts failed: 0 over 436 x 50 x 50 pairs, and the README and KD-14 say "no counted exception".
   // Right: the comment says the pair is the same in either order, with no exception.
-  it("DEFECT 9: decideBooking's comment says two trusted reads book the same exact pair in either order, with no exception", () => {
+  it("decideBooking's comment says two trusted reads book the same exact pair in either order, with no exception", () => {
     const src = readFileSync(join(import.meta.dirname, "..", "src", "settlement.ts"), "utf8");
     const props = readFileSync(join(import.meta.dirname, "decision-properties.test.ts"), "utf8");
-    expect(src).toContain("except for the shapes that test counts");
+    expect(src).not.toContain("except for the shapes that test counts");
+    expect(src).toContain("They book the same pair of spend and exact spend in either order too, with no exception");
     expect(props).toContain("Both\n    // are gone, and any pair that differs now fails here.");
   });
 });

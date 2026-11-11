@@ -282,8 +282,8 @@ export interface Decision<C> {
  *    pair with the float spend it describes. A read that disagrees sets nothing, exact spend included. The
  *    exact spend never changes state, spend or charge.
  * Two reads of one request can differ, and that is normal, not an attack. So two trusted reads book the same
- * spend and charge in either order (test/decision-properties.test.ts). They book the same pair of spend and
- * exact spend in either order too, except for the shapes that test counts.
+ * spend and charge in either order (test/decision-properties.test.ts).
+ * They book the same pair of spend and exact spend in either order too, with no exception (the same test).
  * The rule this encodes for the future: a gateway read alone never lowers a booked settlement, and never
  * lowers a charge. On FLOP a refund comes from an upheld fraud verdict, which is proven on chain: per FLOP's
  * docs, a session's payment sits in escrow against the proof, and an upheld fraud verdict refunds the agent.
