@@ -22,7 +22,7 @@ const unpublished = (publishAt < 0 ? text : text.slice(0, publishAt)).split("\n"
 const checkSteps = ((check.jobs as Record<string, Record<string, unknown>>).check as { steps: Step[] }).steps;
 
 /** The live source files: a push that changes one gives a live smoke run. */
-const LIVE_FILES = ["transport", "tape", "net", "rpc-head", "live-source", "live-run", "live-bin", "sums"].map((f) => `observatory/src/${f}.ts`);
+const LIVE_FILES = ["transport", "tape", "net", "rpc-head", "live-source", "live-run", "live-bin", "sums", "history", "store"].map((f) => `observatory/src/${f}.ts`);
 
 describe("the live workflow", () => {
   it("runs on its schedule, by hand, and on a push that changes it or a live source file", () => {
@@ -41,20 +41,41 @@ describe("the live workflow", () => {
   });
 
   it("checks out without credentials, on the offline check's Node version and pinned actions", () => {
-    expect(steps.map((s) => s.uses ?? s.run)).toEqual([
+    expect(steps.map((s) => s.uses ?? s.id ?? s.run)).toEqual([
+      "actions/checkout@v4",
+      "data",
       "actions/checkout@v4",
       "actions/setup-node@v4",
       "npm ci --ignore-scripts --no-audit --no-fund",
       "npm run build",
-      'node dist/live-bin.js --out "$RUNNER_TEMP/observatory-live" --source-sha "$GITHUB_SHA"',
+      'node dist/live-bin.js --out "$RUNNER_TEMP/observatory-live" --log "$GITHUB_WORKSPACE/observatory-data/log" --source-sha "$GITHUB_SHA"',
       "actions/upload-artifact@v4",
     ]);
     expect(steps.at(0)?.with).toEqual({ "persist-credentials": false });
-    expect(steps.at(1)?.with).toEqual({ "node-version": "22.23.4" });
-    expect(steps.at(1)?.with).toEqual(checkSteps.find((s) => s.uses?.startsWith("actions/setup-node"))?.with);
+    expect(steps.at(3)?.with).toEqual({ "node-version": "22.23.4" });
+    expect(steps.at(3)?.with).toEqual(checkSteps.find((s) => s.uses?.startsWith("actions/setup-node"))?.with);
     // Every action this workflow uses is pinned as the offline check pins it.
     const pinned = new Set(checkSteps.map((s) => s.uses).filter((u) => u !== undefined));
     for (const s of steps) if (s.uses !== undefined) expect(pinned, s.uses).toContain(s.uses);
+  });
+
+  it("checks out the published log read only, without credentials, and a missing branch is a first run", () => {
+    const find = steps.at(1) as Step;
+    const data = steps.at(2) as Step;
+    const read = steps.at(6) as Step;
+    expect(find.run).toMatch(/^set -euo pipefail\n/);
+    // Asked of the server by name, with no token: exit 2 means no such branch.
+    expect(find.run).toContain('git ls-remote --exit-code "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY.git" refs/heads/observatory-data >/dev/null || found=$?');
+    expect(find.run).toContain('elif [ "$found" -eq 2 ]; then\n  echo "::notice::observatory-data does not exist yet, so this is a first run"\n  echo "found=false" >>"$GITHUB_OUTPUT"');
+    // Anything else is an error, never a first run.
+    expect(find.run).toContain('else\n  echo "::error::cannot read observatory-data"\n  exit 1\nfi');
+    expect(data.if).toBe("${{ steps.data.outputs.found == 'true' }}");
+    expect(data.with).toEqual({ ref: "observatory-data", path: "observatory-data", "persist-credentials": false });
+    // The command reads the log/ folder of that checkout; a folder that is not there is a first run.
+    expect(read.run).toContain('--log "$GITHUB_WORKSPACE/observatory-data/log"');
+    expect(read["working-directory"]).toBe("observatory");
+    // Every checkout keeps no credentials.
+    for (const s of steps.filter((x) => x.uses?.startsWith("actions/checkout"))) expect(s.with?.["persist-credentials"]).toBe(false);
   });
 
   it("uploads the output folder, also when the command failed", () => {
@@ -177,9 +198,10 @@ describe("the publish job", () => {
       OBSERVED_AT: "${{ steps.check.outputs.observed_at }}",
       SNAPSHOT_HASH: "${{ steps.check.outputs.snapshot_hash }}",
       DAY: "${{ steps.check.outputs.day }}",
+      PREV_HASH: "${{ steps.check.outputs.prev_hash }}",
       EXIT_CODE: "${{ steps.check.outputs.exit_code }}",
     });
-    for (const v of ["OBSERVED_AT", "SNAPSHOT_HASH", "DAY", "EXIT_CODE", "PUSH_TOKEN"]) {
+    for (const v of ["OBSERVED_AT", "SNAPSHOT_HASH", "DAY", "PREV_HASH", "EXIT_CODE", "PUSH_TOKEN"]) {
       // Each one only inside double quotes.
       const bare = shell.split("\n").filter((l) => l.replace(/"[^"]*"/g, "").includes(`$${v}`));
       expect(bare, v).toEqual([]);
@@ -188,8 +210,43 @@ describe("the publish job", () => {
     expect(check).toContain('[[ "$observed_at" =~ $iso ]]');
     expect(check).toContain('[[ "$hash" =~ $hex ]]');
     expect(check).toContain('[[ "$day" =~ $ymd ]]');
+    expect(check).toContain('[[ "$seq" =~ ^(0|[1-9][0-9]{0,15})$ ]]');
+    expect(check).toContain('{ [[ "$prev" =~ $hex ]] || { [ "$prev" = null ] && [ "$seq" = 0 ]; }; } || fail');
     // The token is in the publish step's env and nowhere else.
     expect(text.split("github.token").length).toBe(2);
+  });
+
+  it("appends a line only when it follows the branch's last line, read from the files alone, and pushes nothing otherwise", () => {
+    const check = code(pubSteps.at(1)?.run);
+    const push = code(pubSteps.at(2)?.run);
+    // The line appended is the snapshot's, and it names the line it follows.
+    expect(check).toContain(`[ "$(jq -r '.hash' snapshots.jsonl)" = "$hash" ] || fail "snapshots.jsonl holds another snapshot"`);
+    expect(check).toContain(`prev="$(jq -r '.prev_hash' snapshots.jsonl)"`);
+    // The branch's last line: the last line of the last day file, in byte order.
+    expect(push).toContain("export LC_ALL=C\n");
+    expect(push).toContain('for f in log/*.jsonl; do if [ -f "$f" ]; then lastday="$f"; fi; done');
+    expect(push).toContain(`last="$(tail -n 1 -- "$lastday" | jq -r '.hash')"`);
+    expect(push).toContain("[[ \"$last\" =~ ^[0-9a-f]{64}$ ]] || {");
+    // No day file at all: only a line that starts a log may be appended.
+    expect(push).toMatch(/^\s*last=null$/m);
+    const refuse = 'if [ "$PREV_HASH" != "$last" ]; then';
+    const day = 'if [[ "log/$DAY.jsonl" < "$lastday" ]]; then';
+    const append = 'cat -- "$reading/snapshots.jsonl" >>"log/$DAY.jsonl"';
+    const laid = 'for f in "${files[@]}"; do cp -- "$reading/$f" "latest/$f"; done';
+    for (const t of [refuse, day]) {
+      const at = push.indexOf(t);
+      expect(at, t).toBeGreaterThan(0);
+      // Each refusal fails the job before anything is laid down, so nothing is committed or pushed.
+      const block = push.slice(at).split("\n");
+      expect(block.slice(0, block.findIndex((l) => l.trim() === "fi")).map((l) => l.trim()), t).toContain("exit 1");
+      expect(at, t).toBeLessThan(push.indexOf(laid));
+      expect(at, t).toBeLessThan(push.indexOf(append));
+    }
+    expect(push.indexOf(append)).toBeLessThan(push.indexOf("git commit"));
+    // A reading already in the day's log is not laid down again: latest/ may hold a newer one.
+    const again = 'if [ -f "log/$DAY.jsonl" ] && grep -qxF -f "$reading/snapshots.jsonl" "log/$DAY.jsonl"; then return 0; fi';
+    expect(push).toContain(again);
+    expect(push.indexOf(again)).toBeLessThan(push.indexOf(refuse));
   });
 
   it("lays out latest/, log/<UTC date>.jsonl and README.md, and nothing else", () => {

@@ -8,6 +8,14 @@
     "why": "the day files of a log are read in name order, as one chain"
   },
   {
+    "id": "day-log-latest-day-only",
+    "file": "src/store.ts",
+    "find": "  for (const name of names) {",
+    "replace": "  for (const name of names.slice(-1)) {",
+    "test": "test/store.test.ts",
+    "why": "every day file is read: the checks against earlier snapshots need the whole log, not a window of days"
+  },
+  {
     "id": "day-log-restart-accepted",
     "file": "src/store.ts",
     "find": "    const oneLine = !chained && s.seq === 0 && s.prev_hash === null;",
