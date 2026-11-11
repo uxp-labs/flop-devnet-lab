@@ -155,6 +155,19 @@ describe("decideBooking properties", () => {
     expect({ walked, failures: failures.slice(0, 5), failed: failures.length }).toEqual({ walked: 65 * 100, failures: [], failed: 0 });
   });
 
+  it("a read that disagrees changes nothing: the booking is the previous row's, except that a reported cost may raise a known charge", () => {
+    // Review of the booking step: a decision that let a lowering read still move the state (settled to
+    // released) passed every other property here.
+    let disagreed = 0;
+    const r = walk(READS, (c, _read, next, disagree) => {
+      if (!disagree) return false;
+      disagreed += 1;
+      const charge = next.cap_charge === c.prev.cap_charge || (known(c.prev.cap_charge) && next.cap_charge === max(c.prev.cap_charge!, c.cost));
+      return next.state !== c.prev.state || next.spend !== c.prev.spend || !charge;
+    });
+    expect({ ...r, disagreed }).toEqual({ walked: 174 * 100, failures: [], failed: 0, disagreed: 6152 });
+  });
+
   it("a read is reported as disagreeing exactly when it is not booked: it lowers a booked settlement, or the charge it would hold is unknown and no settlement replaces it", () => {
     const r = walk(READS, (c, read, _next, disagree) => {
       return disagree !== (below(c.prev, read) || (holds(c.prev, read) === null && proves(read) === null));
