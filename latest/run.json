@@ -1,9 +1,9 @@
 {
-  "ended_at": "2026-11-11T10:36:35.885Z",
+  "ended_at": "2026-11-11T11:36:21.832Z",
   "exit_code": 0,
   "exit_reason": "a truthful snapshot was written",
   "schema": "flop-observatory/live-run@0",
-  "snapshot_hash": "dfa1f92c5dad43a2997cfcc6629726c2f5acffe8bae3888940ff68b50539464d",
+  "snapshot_hash": "e0f67276c7dc5732dca159816a2076d50a40907e401ce0c6d9d6ee91631c09ba",
   "source_sha": "b839bf34ab07f1b429dbb0662fb3ed64923b61a3",
-  "started_at": "2026-11-11T10:36:20.959Z"
+  "started_at": "2026-11-11T11:35:59.336Z"
 }
