@@ -19,6 +19,7 @@ import { assertPaidNetwork, PreSendError, readSeatOwner, readVerifiedSeatOwner, 
 import { network } from "../src/networks.js";
 import { runJob } from "../src/run.js";
 import { scanForSecrets } from "../src/secrets.js";
+import { decideBooking, type ReadOutcome } from "../src/settlement.js";
 import { cli, readLines, tmpHome } from "./helpers.js";
 
 const CONTRACT = join(import.meta.dirname, "..", "..", "contract");
@@ -392,5 +393,93 @@ describe("finding 6 (low): a row that cannot be placed is named by line and fiel
     writeFileSync(ledgerFile(h), damaged("f".repeat(70)));
     const st = await cli(h, ["status", "--seat", "7"]);
     expect({ code: st.code, named: st.err.includes("ledger line 1 cannot be placed") && st.err.includes("day a string of 70 characters") }, st.err).toEqual({ code: 1, named: true });
+  });
+});
+
+describe("finding 11 (low): tests that kill three wrong rules", () => {
+  describe("item 2: the cap check and the sent row use the UTC day read inside the lock", () => {
+    afterEach(() => vi.useRealTimers());
+
+    it("a call admitted after the estimate crossed 00:00 UTC books its sent row on the new day", async () => {
+      const h = await seat7("1");
+      const r = await runAcrossMidnight(h, (cross) => new Stub({ onEstimate: cross }));
+      expect(r.code, r.err).toBe(0);
+      const sent = ledgerRows(h).find((x) => x.state === "sent")!;
+      expect({ day: sent.day, spent_before: sent.spent_before }).toEqual({ day: D1, spent_before: 0 });
+    });
+
+    it("the locked cap check counts the new day: a day that is full after midnight refuses, though the day before was empty", async () => {
+      const h = await seat7("1");
+      appendLedger(h, row("mock-7-seed", { day: D1, cap_charge: 0.9, state: "settled", spend: 0.9 }));
+      const p = new Stub();
+      vi.useFakeTimers({ toFake: ["Date"] });
+      vi.setSystemTime(BEFORE_MIDNIGHT);
+      const r = await cli(h, runArgs(), { provider: new Stub({ onEstimate: () => vi.setSystemTime(AFTER_MIDNIGHT), complete: async (req) => { p.calls += 1; return { request_id: req.requestId, text: "ok", usage: null } as never; } }) });
+      expect({ code: r.code, sent: p.calls }, r.err).toEqual({ code: 3, sent: 0 });
+      expect(r.err).toContain("over the remaining daily cap 0.1");
+      const last = ledgerRows(h).at(-1)!;
+      expect({ state: last.state, day: last.day, spent_before: last.spent_before }).toEqual({ state: "refused_local", day: D1, spent_before: 0.9 });
+    });
+  });
+
+  describe("item 3: a booking one 1e-6 step above what the cap admitted carries PAST_ADMITTED", () => {
+    // This file's own reading of the rule (README "The hold floor"): what the cap admitted for a request is its
+    // known booked charge, or its padded quote when that charge is not a known amount. A booking above it, by
+    // any amount, passes what the cap admitted. The amounts sit one step either side of the admitted charge.
+    const STEP = 1e-6;
+    const HOLD = 0.186;
+    const near = (a: number) => [a - STEP, a, a + STEP].map((x) => Math.round(x * 1e6) / 1e6);
+    const TRUSTED = { fresh: true, identityOk: true, redacted: false };
+    const rows = [
+      ...["sent", "estimated", "reserved"].map((state) => ({ state, spend: null, cap_charge: HOLD, quote_padded: HOLD })),
+      ...["settled", "released"].map((state) => ({ state, spend: 0.05, cap_charge: HOLD, quote_padded: HOLD })),
+      { state: "settled", spend: 0.05, cap_charge: HOLD - STEP, quote_padded: HOLD },
+      { state: "estimated", spend: null, cap_charge: null, quote_padded: HOLD },
+    ];
+    const admittedOf = (r: { cap_charge: number | null; quote_padded: number }) => r.cap_charge ?? r.quote_padded;
+
+    it("over every row, read and reported cost near the admitted charge, pastAdmitted is exactly 'the charge is above it'", () => {
+      const failures: string[] = [];
+      let walked = 0;
+      let passed = 0;
+      for (const prev of rows) {
+        const a = admittedOf(prev);
+        for (const settled of [null, ...near(a)]) {
+          for (const state of ["settled", "released", "estimated"]) {
+            for (const cost of [null, ...near(a)]) {
+              walked += 1;
+              const read: ReadOutcome = { ...TRUSTED, state, settled };
+              const d = decideBooking(prev, read, cost);
+              const charge = d.booking.cap_charge as number;
+              const want = !d.disagree && charge > a;
+              if (want) passed += 1;
+              if (d.pastAdmitted !== want) failures.push(JSON.stringify({ prev, read, cost, d }));
+            }
+          }
+        }
+      }
+      expect({ walked, failures: failures.slice(0, 3), failed: failures.length, passed }).toEqual({ walked: 7 * 4 * 3 * 4, failures: [], failed: 0, passed: 120 });
+    });
+
+    it("the audit's case: a settled spend one step above the hold is booked with PAST_ADMITTED", () => {
+      const d = decideBooking({ state: "estimated", spend: null, cap_charge: HOLD, quote_padded: HOLD }, { ...TRUSTED, state: "settled", settled: 0.186001 }, null);
+      expect({ charge: d.booking.cap_charge, past: d.pastAdmitted }).toEqual({ charge: 0.186001, past: true });
+      const c = decideBooking({ state: "estimated", spend: null, cap_charge: HOLD, quote_padded: HOLD }, { ...TRUSTED, state: "estimated", settled: null }, 0.186001);
+      expect({ charge: c.booking.cap_charge, past: c.pastAdmitted }).toEqual({ charge: 0.186001, past: true });
+    });
+  });
+
+  describe("item 4: exact amounts are compared as numbers, never as text", () => {
+    const TRUSTED = { fresh: true, identityOk: true, redacted: false };
+    const prev = (spend_raw: string) => ({ state: "settled", spend: 0.05, cap_charge: 0.186, quote_padded: 0.186, spend_raw });
+    const read = (settledRaw: string) => ({ ...TRUSTED, state: "settled", settled: 0.05, settledRaw });
+
+    it("booked 9, read 10: 10 is booked", () => {
+      expect(decideBooking(prev("9"), read("10"), null).booking.spend_raw).toBe("10");
+    });
+
+    it("booked 10, read 9: 10 stays", () => {
+      expect(decideBooking(prev("10"), read("9"), null).booking.spend_raw).toBe("10");
+    });
   });
 });

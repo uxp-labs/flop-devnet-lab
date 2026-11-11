@@ -1082,6 +1082,102 @@
     }
    },
    "note": "Hold floor (R5): a read whose float amount is unknown never sets or changes the exact spend beside a known float spend. It still moves the state."
+  },
+  {
+   "id": "refresh-exact-9-then-10",
+   "rule": "settlement.refresh",
+   "input": {
+    "run_read": {
+     "request_id": "$rid",
+     "correlation_id": "imd-job-j1",
+     "model": "m",
+     "reserved_spend": 0.186,
+     "settled_spend": 0.05,
+     "state": "settled",
+     "settled_spend_raw": "9"
+    },
+    "refresh_read": {
+     "http": 200,
+     "error": null,
+     "receipt": {
+      "request_id": "$rid",
+      "correlation_id": "imd-job-j1",
+      "model": "m",
+      "reserved_spend": 0.186,
+      "settled_spend": 0.05,
+      "state": "settled",
+      "settled_spend_raw": "10"
+     }
+    }
+   },
+   "expect": {
+    "imd-flop": {
+     "exit": 0,
+     "appended": 1,
+     "last": {
+      "state": "settled",
+      "spend": 0.05,
+      "cap_charge": 0.186
+     },
+     "spend_raw": "10",
+     "stderr_disagree": false
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard is a dry run: it writes spend 0 and keeps no reservation or settlement"
+    },
+    "viewer": {
+     "not_applicable": "viewer renders ledger rows; it never writes them"
+    }
+   },
+   "note": "swarm audit 33f3b9f, finding 11 item 4: exact amounts are compared as numbers, never as text. A booked spend_raw of 9 and a read of 10 with the same float spend: 10 is higher, so it is booked, though the text 10 sorts before 9"
+  },
+  {
+   "id": "refresh-exact-10-then-9",
+   "rule": "settlement.refresh",
+   "input": {
+    "run_read": {
+     "request_id": "$rid",
+     "correlation_id": "imd-job-j1",
+     "model": "m",
+     "reserved_spend": 0.186,
+     "settled_spend": 0.05,
+     "state": "settled",
+     "settled_spend_raw": "10"
+    },
+    "refresh_read": {
+     "http": 200,
+     "error": null,
+     "receipt": {
+      "request_id": "$rid",
+      "correlation_id": "imd-job-j1",
+      "model": "m",
+      "reserved_spend": 0.186,
+      "settled_spend": 0.05,
+      "state": "settled",
+      "settled_spend_raw": "9"
+     }
+    }
+   },
+   "expect": {
+    "imd-flop": {
+     "exit": 0,
+     "appended": 0,
+     "last": {
+      "state": "settled",
+      "spend": 0.05,
+      "cap_charge": 0.186
+     },
+     "spend_raw": "10",
+     "stderr_disagree": false
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard is a dry run: it writes spend 0 and keeps no reservation or settlement"
+    },
+    "viewer": {
+     "not_applicable": "viewer renders ledger rows; it never writes them"
+    }
+   },
+   "note": "finding 11 item 4, the reverse: a booked 10 and a read of 9 with the same float spend. 9 is lower, so nothing changes, though the text 9 sorts after 10"
   }
  ]
 }
