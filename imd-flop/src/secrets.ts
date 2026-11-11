@@ -121,3 +121,56 @@ export function assertNoSecrets(value: unknown, what: string): void {
     throw new CliError(`secret scan blocked writing ${what}: ${where}`, EXIT.REFUSED_RULE);
   }
 }
+
+/**
+ * Outside text: text this tool did not write, such as a server's error message, a transport error, or a value
+ * read from a ledger row or another file. It never reaches a sink raw. The sinks are the ledger, a receipt, a
+ * response file, stdout and stderr. It passes through outsideText (a message) or outsideValue (a field
+ * value), and the same result goes to every sink (swarm audit 33f3b9f, findings 3, 6 and 10).
+ */
+
+/** The most characters of outside text a message keeps by default. */
+export const OUTSIDE_TEXT_MAX = 1000;
+/** What a message says in place of outside text the secret scan refused. */
+export const OUTSIDE_WITHHELD = "[withheld by the secret scan]";
+/** A thing outside text may repeat, the forms it can be repeated in, and the mark that stands in for it. */
+export interface Mark { forms: string[]; mark: string }
+
+/**
+ * Outside text made safe for every sink, in this order:
+ *  1. every form of every mark is replaced by its mark, the longest form first;
+ *  2. every 0x and 64 hex run (a public hash, or a key) is replaced by [hash];
+ *  3. if the secret scan still finds anything, the whole text is withheld (OUTSIDE_WITHHELD);
+ *  4. the text is cut to `max` characters, and a cut text ends with "[cut]".
+ * The scan runs before the cut, so a cut never hides part of a key from it.
+ */
+export function outsideText(text: unknown, opts: { marks?: Mark[]; max?: number } = {}): string {
+  let s = typeof text === "string" ? text : String(text);
+  const forms = (opts.marks ?? []).flatMap((m) => m.forms.filter((f) => f.length > 0).map((form) => ({ form, mark: m.mark })));
+  for (const { form, mark } of forms.sort((a, b) => b.form.length - a.form.length)) s = s.split(form).join(mark);
+  s = s.replace(/0x[0-9a-fA-F]{64}/g, "[hash]");
+  if (scanForSecrets({ reason: s }).length > 0) return OUTSIDE_WITHHELD;
+  const max = opts.max ?? OUTSIDE_TEXT_MAX;
+  return s.length > max ? `${s.slice(0, max)}[cut]` : s;
+}
+
+/** The longest string value a message may quote. */
+const QUOTE_MAX = 32;
+
+/**
+ * A field value read from a file, for a message. It is quoted only when it is a string of at most 32
+ * characters that the secret scan passes. Anything else is described by its type and its length, so a message
+ * about a damaged row can always be written to the ledger and printed.
+ */
+export function outsideValue(v: unknown): string {
+  if (v === null || v === undefined) return "null";
+  if (typeof v === "string") return v.length <= QUOTE_MAX && scanForSecrets({ reason: v }).length === 0 ? JSON.stringify(v) : `a string of ${v.length} ${v.length === 1 ? "character" : "characters"}`;
+  if (typeof v === "number") return "a number";
+  if (typeof v === "boolean") return "a boolean";
+  if (Array.isArray(v)) return `an array of ${v.length} ${v.length === 1 ? "item" : "items"}`;
+  if (typeof v === "object") {
+    const n = Object.keys(v).length;
+    return `an object of ${n} ${n === 1 ? "key" : "keys"}`;
+  }
+  return `a ${typeof v}`;
+}

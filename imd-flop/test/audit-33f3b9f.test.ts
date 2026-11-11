@@ -15,6 +15,10 @@ import { ledgerFile, seatDir } from "../src/paths.js";
 import { appendJsonlSafe } from "../src/store.js";
 import { isSeatId, UNASSIGNED, validateSeat } from "../src/keys.js";
 import { EXIT } from "../src/errors.js";
+import { assertPaidNetwork, PreSendError, readSeatOwner, readVerifiedSeatOwner, type Fetch } from "../src/gateway.js";
+import { network } from "../src/networks.js";
+import { runJob } from "../src/run.js";
+import { scanForSecrets } from "../src/secrets.js";
 import { cli, readLines, tmpHome } from "./helpers.js";
 
 const CONTRACT = join(import.meta.dirname, "..", "..", "contract");
@@ -266,5 +270,127 @@ describe("finding 8 (low): a nesting limit in the ledger text contract", () => {
     const p = new Stub();
     const r = await cli(h, runArgs(), { provider: p });
     expect({ code: r.code, sent: p.calls, named: r.err.includes("ledger line 1 cannot be read: nested too deep") }, r.err).toEqual({ code: 3, sent: 0, named: true });
+  });
+});
+
+describe("finding 3 (low): Ethereum RPC server text never carries the RPC URL", () => {
+  const URL_GIVEN = "https://User:p4ss-W0rd-1234@ETH.Example.invalid:443/v2/k3y-AbCdEf0123456789-path-token?apikey=Q9q9Q9q9";
+  const parsed = new URL(URL_GIVEN);
+  const PIECES = [URL_GIVEN, parsed.href, parsed.origin + parsed.pathname, "User:p4ss-W0rd-1234", parsed.pathname, "k3y-AbCdEf0123456789-path-token", "p4ss-W0rd-1234"];
+  const leaks = (m: string) => PIECES.filter((p) => m.includes(p));
+  const message = async (p: Promise<unknown>) => { try { await p; return "(no error)"; } catch (e) { return (e as Error).message; } };
+  /** A JSON-RPC server that answers eth_chainId with an error message built from what it was asked. */
+  const erroring = (echo: (input: string) => string): Fetch => async (input) => new Response(JSON.stringify({ jsonrpc: "2.0", id: 1, error: { code: -32000, message: echo(String(input)) } }), { status: 200 });
+
+  it("the audit's reproduction: the eth_chainId error text has the URL replaced by the mark", async () => {
+    const url = "https://eth.example.invalid/v2/k3y-AbCdEf0123456789-path-token";
+    const m = await message(assertPaidNetwork(network("devnet"), url, erroring((input) => `unauthorized for ${input}`)));
+    expect(m).toBe("eth_chainId error: unauthorized for [ETH_RPC_URL]");
+    expect(m).not.toContain("k3y");
+    expect(m).not.toContain("eth.example.invalid");
+  });
+
+  it("every form the URL can be echoed in is replaced: as given, href, origin with path, userinfo, path alone", async () => {
+    const forms = [URL_GIVEN, parsed.href, parsed.origin + parsed.pathname, `${parsed.username}:${parsed.password}`, parsed.pathname];
+    for (const form of forms) {
+      const m = await message(readVerifiedSeatOwner(URL_GIVEN, "0x" + "1".repeat(40), "1", erroring(() => `bad key at ${form} (retry later)`)));
+      expect(m, form).toContain("[ETH_RPC_URL]");
+      expect(leaks(m), form).toEqual([]);
+      expect(scanForSecrets({ reason: m })).toEqual([]);
+    }
+  });
+
+  it("server text is cut to a bounded length", async () => {
+    const m = await message(readVerifiedSeatOwner(URL_GIVEN, "0x" + "1".repeat(40), "1", erroring(() => "x".repeat(100_000))));
+    expect(m.length).toBeLessThan(400);
+    expect(m.startsWith("eth_chainId error: xxx")).toBe(true);
+  });
+
+  it("an eth_call answer that is not JSON never quotes the body", async () => {
+    const f: Fetch = async (_input, init) => {
+      const body = JSON.parse(String(init?.body));
+      if (body.method === "eth_chainId") return new Response(JSON.stringify({ jsonrpc: "2.0", id: 1, result: "0x1" }), { status: 200 });
+      return new Response(`unauthorized for ${URL_GIVEN}`, { status: 200 });
+    };
+    const m = await message(readSeatOwner(URL_GIVEN, "0x" + "1".repeat(40), "1", f));
+    expect(m).toBe("eth_call returned malformed JSON");
+    expect(leaks(m)).toEqual([]);
+  });
+});
+
+describe("finding 10 (low): stderr shows the same pre-send reason the ledger row gets", () => {
+  it("a 0x 64 hex value in a mint failure is stripped on stderr as in the ledger row", async () => {
+    const h = await seat7("1");
+    const stub = new Stub({ complete: async () => { throw new PreSendError("child key mint failed (TypeError: 0x" + "ab".repeat(32) + ")"); } });
+    let err: (Error & { code?: number }) | null = null;
+    try { await runJob(h, stub, { job: "j1", prompt: "hi", maxTokens: 8, seat: "7", noLink: true, timeoutMs: 5000 }, { warn() {} }); } catch (e) { err = e as Error & { code?: number }; }
+    const last = ledgerRows(h).at(-1)!;
+    expect({ state: last.state, reason: last.reason }).toEqual({ state: "refused_local", reason: "nothing sent: child key mint failed (TypeError: [hash])" });
+    expect({ code: err?.code, message: err?.message }).toEqual({ code: EXIT.NOT_SENT, message: last.reason });
+    expect(err?.message).not.toContain("abab");
+  });
+
+  it("a key shaped message is withheld on stderr and in the ledger row alike", async () => {
+    const h = await seat7("1");
+    const stub = new Stub({ complete: async () => { throw new PreSendError("rpc error: Bearer SYNTHETICNOTAKEY0123456789"); } });
+    const r = await cli(h, runArgs(), { provider: stub });
+    const last = ledgerRows(h).at(-1)!;
+    expect({ code: r.code, reason: last.reason }).toEqual({ code: EXIT.NOT_SENT, reason: "nothing sent: provider error withheld by the secret scan" });
+    expect(r.err).toContain(last.reason!);
+    expect(r.err).not.toContain("SYNTHETIC");
+  });
+
+  it("an outside message is cut to a bounded length on both sinks", async () => {
+    const h = await seat7("1");
+    const stub = new Stub({ complete: async () => { throw new PreSendError("child key mint failed (" + "y".repeat(50_000) + ")"); } });
+    const r = await cli(h, runArgs(), { provider: stub });
+    const last = ledgerRows(h).at(-1)!;
+    expect(r.code).toBe(EXIT.NOT_SENT);
+    expect(last.reason!.length).toBeLessThan(1100);
+    expect(r.err).toContain(last.reason!);
+  });
+});
+
+describe("finding 6 (low): a row that cannot be placed is named by line and field, never by its raw value", () => {
+  const damaged = (day: unknown) => JSON.stringify({ request_id: "mock-7-00112233aabbccdd", seat: "7", provider: "mock", day, state: "sent", cap_charge: 0.1, payer: "holder", job: "j1", quote_padded: 0.1 }) + "\n";
+
+  it("the audit's reproduction: a key shaped day refuses with exit 3, names the line, and the refusal row is written", async () => {
+    const h = await seat7("1", "0.5");
+    writeFileSync(ledgerFile(h), damaged("a".repeat(64)));
+    const p = new Stub();
+    const r = await cli(h, runArgs(), { provider: p });
+    expect({ code: r.code, sent: p.calls }, r.err).toEqual({ code: 3, sent: 0 });
+    expect(r.err).toContain("ledger line 1 cannot be placed in the daily total");
+    expect(r.err).toContain("day a string of 64 characters is not a usable value");
+    expect(r.err).not.toContain("a".repeat(64));
+    const last = ledgerRows(h).at(-1)!;
+    expect({ state: last.state, named: last.reason?.includes("ledger line 1") }).toEqual({ state: "refused_local", named: true });
+  });
+
+  it("a short string the scan passes is quoted; anything else is described by type and length", async () => {
+    const cases: Array<[unknown, string]> = [
+      ["zz", 'day "zz"'],
+      ["z".repeat(32), `day "${"z".repeat(32)}"`],
+      ["z".repeat(33), "day a string of 33 characters"],
+      ["Bearer abcdefgh1234", "day a string of 19 characters"],
+      [5, "day a number"],
+      [true, "day a boolean"],
+      [null, "day null"],
+      [["a", "b"], "day an array of 2 items"],
+      [{ k: "v" }, "day an object of 1 key"],
+    ];
+    for (const [day, want] of cases) {
+      const h = await seat7("1");
+      writeFileSync(ledgerFile(h), damaged(day));
+      const r = await cli(h, runArgs(), { provider: new Stub() });
+      expect({ code: r.code, has: r.err.includes(`${want} is not a usable value`) }, `${JSON.stringify(day)}: ${r.err}`).toEqual({ code: 3, has: true });
+    }
+  });
+
+  it("status names the line and the field the same way", async () => {
+    const h = await seat7("1");
+    writeFileSync(ledgerFile(h), damaged("f".repeat(70)));
+    const st = await cli(h, ["status", "--seat", "7"]);
+    expect({ code: st.code, named: st.err.includes("ledger line 1 cannot be placed") && st.err.includes("day a string of 70 characters") }, st.err).toEqual({ code: 1, named: true });
   });
 });

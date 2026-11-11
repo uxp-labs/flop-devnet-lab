@@ -472,8 +472,9 @@ describe("FlopProvider.complete refuses before the child-key mint", () => {
       expect(r.code).toBe(5);
       expect(r.err).toMatch(/nothing sent/);
       expect(r.err).toMatch(/genesis mismatch/);
-      expect(r.err).toContain(PIN);
-      expect(r.err).toContain(WRONG);
+      // stderr shows the reason the ledger row gets (swarm audit 33f3b9f, finding 10): the hashes as [hash].
+      expect(r.err).toContain("[hash]");
+      expect(r.err).not.toMatch(/0x[0-9a-f]{64}/);
       expect(faucets).toBe(2);
       expect(sockets).toBe(2);
       const estimateAt = seen.findIndex((s) => s.url.endsWith("/models/estimate"));

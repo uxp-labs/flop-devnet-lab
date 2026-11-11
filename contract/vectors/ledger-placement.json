@@ -1074,9 +1074,9 @@
    },
    "expect": {
     "imd-flop": {
-     "exit": 5,
+     "exit": 3,
      "sent": 0,
-     "names_line": null
+     "names_line": 1
     },
     "spend-guard": {
      "not_applicable": "spend-guard keeps no ledger: it checks one call against --cap"
@@ -1087,16 +1087,9 @@
      "greens": []
     }
    },
-   "note": "finding 4: 2^256 is above the largest tokenId: not a usable seat. Today imd-flop exits 5 and names no line: the refusal quotes the 78 digit value, which the secret scan calls key shaped (KD-16)",
-   "status": "known_defect",
-   "defect": "KD-16",
-   "target": {
-    "imd-flop": {
-     "exit": 3,
-     "sent": 0,
-     "names_line": 1
-    }
-   }
+   "note": "finding 4: 2^256 is above the largest tokenId: not a usable seat. Before KD-16 was fixed imd-flop exited 5 and named no line: the refusal quoted the 78 digit value, which the secret scan calls key shaped",
+   "status": "fixed",
+   "defect": "KD-16"
   }
  ]
 }

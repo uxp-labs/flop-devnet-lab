@@ -13,6 +13,7 @@ import { groupKey, isRequestId, readLedgerText } from "./ledger-text.js";
 import { ledgerFile } from "./paths.js";
 import { isJobId } from "./policy.js";
 import { ceil6 } from "./rounding.js";
+import { outsideValue } from "./secrets.js";
 import { appendJsonlSafe } from "./store.js";
 import type { Payer } from "./config.js";
 
@@ -219,7 +220,8 @@ function placed(h: string, filters: Filter[], total: string): Line[] {
     if (values.some(({ f, v }) => f.usable(v) && v !== f.want)) continue;
     const unusable = [...(isRequestId(row.request_id) ? [] : [{ field: "request_id", v: row.request_id }]), ...values.filter(({ f, v }) => !f.usable(v)).map(({ f, v }) => ({ field: f.field, v }))];
     if (unusable.length > 0) {
-      const what = unusable.map(({ field, v }) => `${field} ${JSON.stringify(v ?? null)}`).join(", ");
+      // Never the raw value: a key shaped one would stop the refusal row (swarm audit 33f3b9f, finding 6).
+      const what = unusable.map(({ field, v }) => `${field} ${outsideValue(v)}`).join(", ");
       throw new UnusableLedgerRow(`ledger line ${line.n} cannot be placed in ${total}: ${what} is not a usable value; next call refused. Repair or remove that line.`);
     }
     lines.push(line);

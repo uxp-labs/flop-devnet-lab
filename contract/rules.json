@@ -356,11 +356,12 @@
     {
       "id": "R-e",
       "residual": "e",
-      "status": "current behavior",
+      "status": "fixed: swarm audit 33f3b9f, finding 10",
       "parts": [
         "imd-flop"
       ],
-      "summary": "A pre-send error message with a 0x + 64 hex hash is stored as [hash] in the ledger reason but printed raw on stderr. The swarm audit of 8ddc5d2 reported this again as its finding 12 (info). It stays as it is. The ledger reason is rewritten so that the secret scan can store the refused_local row, which is what releases the reservation (src/run.ts). The message on stderr is not rewritten. Pinned by vector run-pre-send-hash-on-stderr."
+      "summary": "A pre-send error message with a 0x + 64 hex hash is stored as [hash] in the ledger reason but printed raw on stderr. The swarm audit of 8ddc5d2 reported this again as its finding 12 (info). It stays as it is. The ledger reason is rewritten so that the secret scan can store the refused_local row, which is what releases the reservation (src/run.ts). The message on stderr is not rewritten. Pinned by vector run-pre-send-hash-on-stderr.",
+      "fixed_behavior": "stderr shows the same reason the ledger row gets. The provider's message goes through secrets.ts outsideText once (each 0x and 64 hex value replaced by [hash], withheld when the scan still flags it, cut to a bound), and run.ts prints that reason. Pinned by vector run-pre-send-hash-on-stderr (stderr now holds the [hash] form) and imd-flop/test/audit-33f3b9f.test.ts (finding 10)"
     },
     {
       "id": "R-f",
@@ -595,7 +596,8 @@
       "where": "src/ledger.ts placed: the message about a row that cannot be placed quoted the unusable value raw",
       "today": "when the value is key shaped (64 or more hex digits, a bearer, a flop_ token), refuse() cannot write its refused_local row: the secret scan blocks it, run exits 5, and the message names no line. A seat of 2^256 is 78 decimal digits, so it is key shaped too",
       "target": "the message names the line and the field, and quotes the value only when it is a string of at most 32 characters that the secret scan passes; otherwise it says the type and the length. refuse() writes its row, run exits 3 and names the line",
-      "status": "open"
+      "status": "fixed: swarm audit 33f3b9f, findings 3, 6 and 10",
+      "fixed_behavior": "ledger.ts placed describes each unusable value through secrets.ts outsideValue: a string of at most 32 characters that the secret scan passes is quoted, and anything else is named by its type and length (for example: day a string of 64 characters). So refuse() writes its refused_local row, run exits 3 and the message names the line and the field. Text this tool did not write goes through one function before any sink: outsideText (marks such as [ETH_RPC_URL] replaced, 0x and 64 hex replaced by [hash], withheld when the scan still finds a key, cut to a bound). The pre-send reason that goes to the ledger row is the one printed on stderr. Pinned by imd-flop/test/audit-33f3b9f.test.ts (findings 3, 6, 10) and the vector placement-seat-above-max"
     }
   ]
 }

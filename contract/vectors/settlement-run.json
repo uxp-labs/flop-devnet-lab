@@ -643,7 +643,7 @@
      },
      "reason": "nothing sent: bad tx [hash]",
      "stderr_contains": [
-      "0xabababababababababababababababababababababababababababababababab"
+      "nothing sent: bad tx [hash]"
      ]
     },
     "spend-guard": {
@@ -656,7 +656,7 @@
    "quirks": [
     "R-e"
    ],
-   "note": "[swarm audit of 8ddc5d2, finding 9] a provider failure before anything was sent, other than a gate refusal, exits 11 (NOT_SENT) so it is told apart from a gateway error on the paid call (1); was exit 1"
+   "note": "[swarm audit of 8ddc5d2, finding 9] a provider failure before anything was sent, other than a gate refusal, exits 11 (NOT_SENT) so it is told apart from a gateway error on the paid call (1); was exit 1. Residual R-e is fixed (swarm audit 33f3b9f, finding 10): stderr shows the same stripped reason as the ledger row, so it holds [hash], not the 64 hex value"
   },
   {
    "id": "run-released-zero-below-reported-cost",

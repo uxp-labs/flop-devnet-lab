@@ -4,7 +4,7 @@ import { sha256 } from "@noble/hashes/sha2.js";
 import { CliError, EXIT } from "./errors.js";
 import { loadConfig } from "./config.js";
 import { linkFile } from "./paths.js";
-import { redactFlagged, scanForSecrets } from "./secrets.js";
+import { OUTSIDE_WITHHELD, outsideText, redactFlagged } from "./secrets.js";
 import { readJson, writeJsonSafe } from "./store.js";
 import { loadSigner, readIdentity, revokedDids } from "./keys.js";
 import { verifyLink, type LinkFile } from "./link.js";
@@ -244,13 +244,13 @@ export async function runJob(h: string, provider: Provider, o: RunOpts, deps: Ru
     const preSend = e instanceof PreSendError;
     const timedOut = http === null && !preSend; // abort, timeout or dropped connection: the gateway may have done paid work
     // Pre-mint failure minted nothing. `error` would show in status as a pending paid attempt.
-    // `refused_local` with cap charge 0 is the line to write. Hashes are stripped so the secret scan
-    // can store that line; otherwise the pre-call `sent` charge would stay in effect.
-    let reason = timedOut ? `${err.name}: no answer; spend unknown, not retried` : preSend ? `nothing sent: ${err.message.replace(/0x[0-9a-fA-F]{64}/g, "[hash]")}` : `HTTP ${http}`;
-    // A key-shaped provider message would make the secret scan refuse the release row and strand
-    // the reservation. Withhold the message instead, so the refused_local (cap charge 0) line is written.
-    const preSendWithheld = preSend && scanForSecrets({ reason }).length > 0;
-    if (preSendWithheld) reason = "nothing sent: provider error withheld by the secret scan";
+    // `refused_local` with cap charge 0 is the line to write. The provider's message is outside text: it goes
+    // through outsideText (hashes stripped, cut to a bound), so the secret scan can store that line; otherwise
+    // the pre-call `sent` charge would stay in effect. A key-shaped message would make the scan refuse the
+    // release row and strand the reservation, so it is withheld instead. The same reason goes to the ledger
+    // row and to stderr (swarm audit 33f3b9f, finding 10).
+    const said = preSend ? outsideText(err.message) : "";
+    const reason = timedOut ? `${outsideText(err.name)}: no answer; spend unknown, not retried` : preSend ? said === OUTSIDE_WITHHELD ? "nothing sent: provider error withheld by the secret scan" : `nothing sent: ${said}` : `HTTP ${http}`;
     // What run saw is a report, not a receipt read (settlement.ts decideFailure). It never replaces a
     // settlement another process booked meanwhile, and "nothing was sent" never releases a row a trusted
     // read produced: then the report is only recorded, and the exit code below still says what this call
@@ -266,7 +266,7 @@ export async function runJob(h: string, provider: Provider, o: RunOpts, deps: Ru
     }
     // The gate refusing at its pre-mint recheck is the same rule refusal as at the first check above.
     // Any other pre-send failure exits NOT_SENT, so it is told apart from a gateway error on the paid call below.
-    if (preSend) throw new CliError(`${preSendWithheld ? reason : `nothing sent: ${err.message}`}${kept ? "." + also : ""}`, e instanceof PaidGateError ? EXIT.REFUSED_RULE : EXIT.NOT_SENT);
+    if (preSend) throw new CliError(`${reason}${kept ? "." + also : ""}`, e instanceof PaidGateError ? EXIT.REFUSED_RULE : EXIT.NOT_SENT);
     throw new CliError(`gateway refused the call (HTTP ${http})${settled ? "" : "; spend recorded as unknown"}${kept ? "." + also : ""}`, EXIT.ERROR);
   } finally {
     clearTimeout(timer);
