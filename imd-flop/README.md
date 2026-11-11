@@ -32,7 +32,7 @@ The process exit code is the `EXIT` value in `src/errors.ts`. `src/bin.ts` assig
 | Code | Name | Meaning |
 |---|---|---|
 | 0 | `OK` | The command finished successfully. |
-| 1 | `ERROR` | A general failure. Used for a failed `init --check-genesis`, a failed `enroll --live`, a failed child-key mint or a run aborted before send (`nothing sent`), a gateway HTTP error after the call was sent, and any unexpected error that is not a `CliError`. A ledger lock timeout *after* the paid call also exits 1: `appendLedger` takes the lock itself, and a `LedgerLockError` is not a `CliError`. |
+| 1 | `ERROR` | A general failure. Used for a failed `init --check-genesis`, a failed `enroll --live`, a gateway HTTP error on the paid call itself (the reservation stays held, spend unknown), and any unexpected error that is not a `CliError`. A ledger lock timeout *after* the paid call also exits 1: `appendLedger` takes the lock itself, and a `LedgerLockError` is not a `CliError`. |
 | 2 | `USAGE` | Bad arguments, a missing seat or key, or a value the command will not accept. |
 | 3 | `REFUSED_CAP` | Refused locally, nothing sent. Used when there is no usable cap, the daily cap or the job budget is already used up (refused before the quote), the padded quote is over the per-call cap or over what is left of the daily cap or the job budget, or a ledger `cap_charge` is unusable. |
 | 4 | `REFUSED_LINK` | The seat-to-DID link is missing or does not verify, or `--no-link` was used with a non-mock provider. |
@@ -42,8 +42,11 @@ The process exit code is the `EXIT` value in `src/errors.ts`. `src/bin.ts` assig
 | 8 | `VERIFY_FAILED` | `link verify` found a bad signature, a mismatch, or a failed owner check. |
 | 9 | `FAUCET_REFUSED` | `faucet` without `--dry-run` always refuses (team rule). `--dry-run` exits 0 and does not send. |
 | 10 | `REFUSED_LOCK` | The ledger lock could not be taken *before* the paid call (`LedgerLockError`: timeout or contested). Nothing was sent. This code is not shared with cap refusals (3) or a broken link (4). |
+| 11 | `NOT_SENT` | The provider failed before the paid request was sent: the child-key mint failed (transport error, HTTP error, unparsable body) or the run was aborted before send. Nothing was sent and nothing was charged. The latest ledger line is `refused_local` with cap charge 0. A refusal by the chain-id and genesis gate is not this code: it exits 5. |
 
-Lock-timeout rule: if the ledger lock cannot be taken before the paid call, the CLI exits 10 and nothing is sent. If the lock cannot be taken after the paid call, while writing the result row, the CLI exits 1. Exit 3 stays cap refusals only. Exit 4 stays a broken link. Codes 0–10 are the only values the CLI returns.
+Lock-timeout rule: if the ledger lock cannot be taken before the paid call, the CLI exits 10 and nothing is sent. If the lock cannot be taken after the paid call, while writing the result row, the CLI exits 1. Exit 3 stays cap refusals only. Exit 4 stays a broken link. Codes 0 to 11 are the only values the CLI returns.
+
+Sent or not sent: exit 11 always means nothing was sent, so the call can be made again. Exit 1 does not say that. On `run` it is used when the gateway answered the paid call with an HTTP error, and for unexpected errors. Exit 6 means the gateway did not answer in time. After an HTTP error or a timeout the spend is unknown and the reservation stays held.
 
 Known gap: if the estimate step fails, or the run is refused before the estimate, while another process holds the ledger lock, the CLI exits 1, not 10. Exit 10 covers only a lock that could not be taken before the paid call.
 
@@ -72,7 +75,7 @@ Known gap: if the estimate step fails, or the run is refused before the estimate
 Spend-guard rules, ported from `spend-guard/`:
 - The quote is padded by 20 tokens for the Qwen chat template. On a paid flop run, the chain-id and genesis checks come before that quote. If the estimate fails, nothing is sent.
 - A refusal that needs no quote comes before the estimate, so the prompt is not posted for nothing: the daily cap (holder) or the job budget (requester) is already used up, or a ledger `cap_charge` is unusable. The ledger row is the usual `refused_local` with a null quote. The cap check under the ledger lock still runs after the quote and stays the authority.
-- If the pre-mint chain-id or genesis recheck fails, the latest ledger line is `refused_local` with cap charge 0. Status does not list that attempt as pending. The earlier `sent` line is the crash marker written before the call; the latest line is the one the cap uses. A crash between those two lines can leave `sent` as the latest line.
+- If the pre-mint chain-id or genesis recheck fails (exit 5), or the child-key mint fails or the run is aborted before send (exit 11), the latest ledger line is `refused_local` with cap charge 0. Status does not list that attempt as pending. The earlier `sent` line is the crash marker written before the call; the latest line is the one the cap uses. A crash between those two lines can leave `sent` as the latest line.
 - A call is refused locally if it's over the per-call cap or what's left of the daily cap. The total already charged is rounded up to 6 decimals and the room left is rounded down, so rounding never admits a call. `status` and `cap show` print that rounded-up total.
 - A timeout is never retried. Its spend is recorded as `null` with its `request_id`. For the cap, unknown spend counts as the padded quote.
 - Receipts are labeled `gateway observed` and `chain_final=false`, because nothing verifies chain settlement yet. A `null` settled spend shows blank, never 0. A 401 `api_key_expired` gets its own `key_expired` flag.

@@ -221,7 +221,8 @@ export async function runJob(h: string, provider: Provider, o: RunOpts, deps: { 
       throw new CliError(`no answer within ${o.timeoutMs} ms. Spend is UNKNOWN (recorded as null). Not retried. Check later with \`imd-flop receipt ${requestId}\`.`, EXIT.TIMEOUT_UNKNOWN);
     }
     // The gate refusing at its pre-mint recheck is the same rule refusal as at the first check above.
-    if (preSend) throw new CliError(preSendWithheld ? reason : `nothing sent: ${err.message}`, e instanceof PaidGateError ? EXIT.REFUSED_RULE : EXIT.ERROR);
+    // Any other pre-send failure exits NOT_SENT, so it is told apart from a gateway error on the paid call below.
+    if (preSend) throw new CliError(preSendWithheld ? reason : `nothing sent: ${err.message}`, e instanceof PaidGateError ? EXIT.REFUSED_RULE : EXIT.NOT_SENT);
     throw new CliError(`gateway refused the call (HTTP ${http}); spend recorded as unknown`, EXIT.ERROR);
   } finally {
     clearTimeout(timer);

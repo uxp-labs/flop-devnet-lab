@@ -91,7 +91,8 @@
         "ESTIMATE_FAILED": 7,
         "VERIFY_FAILED": 8,
         "FAUCET_REFUSED": 9,
-        "REFUSED_LOCK": 10
+        "REFUSED_LOCK": 10,
+        "NOT_SENT": 11
       },
       "spend-guard": {
         "would_send": 0,

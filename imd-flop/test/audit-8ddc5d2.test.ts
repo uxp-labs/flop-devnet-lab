@@ -7,13 +7,18 @@
  *   3  the cap is checked against a total rounded up and room rounded down, never to nearest
  *   4  a refusal that needs no quote happens before the estimate, so the prompt is not posted for nothing
  *   8  status keeps working when a receipt file is unreadable, and names the file
+ *   9  "nothing was sent" has its own exit code (11), apart from "sent, spend unknown" (1)
  * Findings 5, 6 and 7 are the viewer's. Finding 12 is a documented residual. Finding 13 is a product
  * decision. Stub providers only; no network (test/setup.ts disables fetch).
  */
 import { appendFileSync, existsSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
+import { FlopHTTPError } from "@flop-labs/client";
+import { EXIT } from "../src/errors.js";
+import { mintChildKey, PaidGateError, PreSendError } from "../src/gateway.js";
 import { jobSpent, spentToday, utcDay } from "../src/ledger.js";
+import { network } from "../src/networks.js";
 import { checkBudget, noRoom } from "../src/policy.js";
 import type { CompleteReq, CompleteRes, Provider } from "../src/providers.js";
 import { ceil6, floor6 } from "../src/rounding.js";
@@ -389,5 +394,56 @@ describe("finding 8: status keeps working when a receipt file is unreadable", ()
     const { h } = await oneRun();
     expect((await cli(h, ["status", "--seat", SEAT, "--json"])).json().unreadable_receipts).toEqual([]);
     expect((await cli(h, ["status", "--seat", SEAT])).out).not.toContain("unreadable");
+  });
+});
+
+describe("finding 9: a provider failure before anything was sent exits 11 (NOT_SENT), not 1", () => {
+  const net = network("devnet");
+  const mint = (f: unknown) => async (req: CompleteReq): Promise<CompleteRes> => {
+    await mintChildKey(net, "parent", { model: req.model, maxSpend: req.maxCostFlop }, f as never);
+    throw new Error("unreachable: the mint must fail");
+  };
+  // Each case fails the way the flop provider does before the paid request. None of them is a PaidGateError.
+  const notSent: Record<string, (req: CompleteReq) => Promise<CompleteRes>> = {
+    "child key mint transport error": mint(async () => { throw new TypeError("fetch failed"); }),
+    "child key mint HTTP 401": mint(async () => new Response("{}", { status: 401 })),
+    "child key mint HTTP 503": mint(async () => new Response("{}", { status: 503 })),
+    "unparsable child key mint body": mint(async () => new Response("not json", { status: 201 })),
+    "abort between the gate and the mint": async () => { throw new PreSendError("aborted before send (after the network check): no answer within 50 ms"); },
+    "a key-shaped provider message (withheld)": async () => { throw new PreSendError("rpc error: Bearer SYNTHETICNOTAKEY0123456789"); },
+  };
+  for (const [name, complete] of Object.entries(notSent)) {
+    it(`${name}: exit 11, "nothing sent", the reservation is released and the next run is not capped`, async () => {
+      const h = await ready("0.186");
+      const r = await cli(h, runArgs("n1"), { provider: new P({ complete }) });
+      expect(r.code, r.err).toBe(11);
+      expect(r.err).toMatch(/nothing sent/);
+      expect(booked(ledger(h).at(-1)!)).toEqual({ state: "refused_local", spend: null, cap_charge: 0 });
+      const next = new P();
+      expect((await cli(h, runArgs("n2"), { provider: next })).code).toBe(0);
+      expect(next.calls).toBe(1);
+    });
+  }
+
+  it("control: a refusal at the pre-mint gate (PaidGateError) stays exit 5", async () => {
+    const h = await ready("0.186");
+    const r = await cli(h, runArgs("g1"), { provider: new P({ complete: async () => { throw new PaidGateError("FLOP genesis check failed: genesis mismatch"); } }) });
+    expect(r.code, r.err).toBe(5);
+    expect(booked(ledger(h).at(-1)!)).toEqual({ state: "refused_local", spend: null, cap_charge: 0 });
+  });
+
+  it("control: a gateway HTTP error on the paid call itself stays exit 1 and holds the reservation", async () => {
+    const h = await ready("0.186");
+    const r = await cli(h, runArgs("e1"), { provider: new P({ complete: async () => { throw new FlopHTTPError(500, {}, null); } }) });
+    expect(r.code, r.err).toBe(1);
+    expect(r.err).not.toMatch(/nothing sent/);
+    expect(booked(ledger(h).at(-1)!)).toEqual({ state: "error", spend: null, cap_charge: 0.186 });
+    expect((await cli(h, runArgs("e2"), { provider: new P() })).code).toBe(3);
+  });
+
+  it("EXIT.NOT_SENT is 11 and shares its value with no other code", () => {
+    const values = Object.values(EXIT) as number[];
+    expect((EXIT as Record<string, number>).NOT_SENT).toBe(11);
+    expect(new Set(values).size).toBe(values.length);
   });
 });

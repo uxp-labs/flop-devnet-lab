@@ -519,7 +519,7 @@
    },
    "expect": {
     "imd-flop": {
-     "exit": 1,
+     "exit": 11,
      "states": [
       "sent",
       "refused_local"
@@ -536,7 +536,8 @@
     "viewer": {
      "not_applicable": "viewer renders ledger rows; it never writes them"
     }
-   }
+   },
+   "note": "[swarm audit of 8ddc5d2, finding 9] a provider failure before anything was sent, other than a gate refusal, exits 11 (NOT_SENT) so it is told apart from a gateway error on the paid call (1); was exit 1"
   },
   {
    "id": "run-timeout",
@@ -627,7 +628,7 @@
    },
    "expect": {
     "imd-flop": {
-     "exit": 1,
+     "exit": 11,
      "states": [
       "sent",
       "refused_local"
@@ -651,7 +652,8 @@
    },
    "quirks": [
     "R-e"
-   ]
+   ],
+   "note": "[swarm audit of 8ddc5d2, finding 9] a provider failure before anything was sent, other than a gate refusal, exits 11 (NOT_SENT) so it is told apart from a gateway error on the paid call (1); was exit 1"
   },
   {
    "id": "run-released-zero-below-reported-cost",
