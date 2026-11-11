@@ -35,23 +35,35 @@ ET = ZoneInfo("America/New_York")
 def num(v): return BLANK if v is None else f'<span class="mono">{v}</span>'
 SCALE = 1e6
 NOISE = 1e-6  # in scaled units, so 1e-12 FLOP
-def floor6(n):
-    """Room left rounds down to 6 decimals, the twin of imd-flop's rounding.ts floor6; pinned for both by
-    contract/vectors/rounding.json. A value within 1e-12 of a 1e-6 boundary counts as on it, so float noise
-    does not move a 6 decimal amount below 8192 FLOP. Rounding adds no room beyond that tolerance, so a row over
-    its limit by more than 1e-12 FLOP and less than 1e-6 FLOP is still over it. A row over by at most 1e-12 FLOP
-    (only an amount off the 6 decimal grid makes one) reads as on its limit: residual R-g in rules.json."""
-    scaled = n * SCALE
+def _boundary(scaled):
+    """The 1e-6 step this scaled value sits on (within 1e-12 FLOP), or None when it lies between two."""
     nearest = round(scaled)
-    return (nearest if abs(scaled - nearest) <= NOISE else math.floor(scaled)) / SCALE
+    return nearest if abs(scaled - nearest) <= NOISE else None
+def floor_micro(n):
+    """n rounded down to 6 decimals, as an integer count of millionths: the twin of imd-flop's rounding.ts
+    floorMicro. A value on a 1e-6 step (within 1e-12 FLOP) stays on it."""
+    b = _boundary(n * SCALE)
+    return b if b is not None else math.floor(n * SCALE)
+def ceil_micro(n):
+    """n rounded up to 6 decimals, as an integer count of millionths: the twin of imd-flop's rounding.ts
+    ceilMicro."""
+    b = _boundary(n * SCALE)
+    return b if b is not None else math.ceil(n * SCALE)
+def floor6(n):
+    """Room left rounds down to 6 decimals, floor_micro over 1e6, the twin of imd-flop's rounding.ts floor6;
+    pinned for both by contract/vectors/rounding.json. Up to AMOUNT_MAX (1e9 FLOP) every grid amount is its own
+    double and scales to within 0.5 of its integer, so on one amount the tolerance absorbs float noise. A row over
+    its limit by at most 1e-12 FLOP (only an amount off the 6 decimal grid makes one) reads as on its limit:
+    residual R-g in rules.json."""
+    return floor_micro(n) / SCALE
 def esc(v): return html.escape("" if v is None else str(v), quote=True)
-AMOUNT_MAX = _C["AMOUNT_MAX"]["value"]  # 2^53 - 1, the largest integer a double holds exactly
+AMOUNT_MAX = _C["AMOUNT_MAX"]["value"]  # 1e9 FLOP: up to it the 6 decimal grid survives the float (swarm audit 33f3b9f, finding 5)
+DOUBLE_INT_MAX = 2 ** 53 - 1  # the largest integer a double holds exactly
 def amount(v):
     """A file value used as an amount: a finite int/float that is not negative, not above AMOUNT_MAX and not a
     bool, else None (blank, never 0). The twin of imd-flop's amount.ts knownAmount. A negative number is not an
-    amount, as in imd-flop and spend-guard: it is unknown, so nothing shows it or subtracts it. Above AMOUNT_MAX
-    Python keeps a JSON integer exact while JavaScript rounds it, so the two parts would read the same text as
-    different amounts: it is unknown in both (review fixes 2, R10)."""
+    amount, as in imd-flop and spend-guard: it is unknown, so nothing shows it or subtracts it. Above AMOUNT_MAX a
+    double cannot be trusted to hold the 6 decimal grid, so the amount is unknown in both parts."""
     if isinstance(v, bool) or not isinstance(v, (int, float)) or v != v or v in (float("inf"), float("-inf")) or v < 0 or v > AMOUNT_MAX: return None
     return v
 EXACT_BOUND = int(_C["EXACT_AMOUNT_BOUND"]["value"])  # 2^128: per FLOP's own sources (read 2026-11-11) the chain holds money in a u128
@@ -92,10 +104,10 @@ def _no_constant(name):
     raise ValueError(f"{name} is not JSON")
 def _double_int(text):
     """A JSON integer as JavaScript reads it, a double: float(text), kept as an int only when that double is
-    integral and at most AMOUNT_MAX (so it is exact). A 4300 digit integer is inf, as in JavaScript, and never
+    integral and at most DOUBLE_INT_MAX (so it is exact). A 4300 digit integer is inf, as in JavaScript, and never
     meets Python's limit on digits."""
     f = float(text)
-    return int(f) if f.is_integer() and abs(f) <= AMOUNT_MAX else f
+    return int(f) if f.is_integer() and abs(f) <= DOUBLE_INT_MAX else f
 def loads(text):
     """One JSON value in JSON.parse's grammar: NaN, Infinity and -Infinity are not JSON, and every number is a
     double. Raises ValueError for anything else (RecursionError on very deep nesting is treated the same)."""
@@ -224,10 +236,20 @@ def running_total(e, lim):
     if before_two_totals(e): return amount(e.get("spent_before")) if lim is JOB_BUDGET else None
     return amount(e.get(lim["spent"]))
 
+def left_after(cap, spent, cap_charge):
+    """What is left of a limit after a row's charge, decided with imd-flop's own expression (policy.ts roomLeft
+    and checkBudget; swarm audit 33f3b9f, finding 9): the room is floor6(cap - spent), and the row is over when
+    its cap_charge is above the room. No extra float subtraction. The figure left is the room less the charge in
+    whole millionths (floor_micro, ceil_micro), so it is exact: 0 for a row admitted exactly at its limit. A row
+    that is over shows at most -0.000001, never 0."""
+    room = floor6(cap - spent)
+    left = (floor_micro(cap - spent) - ceil_micro(cap_charge)) / SCALE
+    return min(left, -1 / SCALE) if cap_charge > room else left
+
 def spend_limit(e):
     """The spend limits that apply to this row, each with what is left of it after the row's cap_charge, as a
-    list of (limit, left) in checked order (cap math uses cap_charge). left rounds down (floor6). A payer that is neither holder nor
-    requester is checked against the daily cap, its spent_before read as the seat's total. left is None when
+    list of (limit, left) in checked order (cap math uses cap_charge; left_after). A payer that is neither holder
+    nor requester is checked against the daily cap, its spent_before read as the seat's total. left is None when
     the limit could not be worked out: an input is unknown, or the row does not hold that limit's running
     total (before_two_totals). Never a guess."""
     limits = SPEND_LIMITS[e["payer"]] if known_payer(e) else EVERY_ROW
@@ -235,7 +257,7 @@ def spend_limit(e):
     for lim in limits:
         cap, spent = amount(e.get(lim["field"])), running_total(e, lim)
         if e.get(lim["field"]) is not None and cap is None: raise ValueError(f'{lim["field"]} is not an amount')
-        applied.append((lim, floor6(cap - spent - cap_charge) if None not in (cap, spent, cap_charge) else None))
+        applied.append((lim, left_after(cap, spent, cap_charge) if None not in (cap, spent, cap_charge) else None))
     return applied
 
 def below_zero(applied):

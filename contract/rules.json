@@ -26,10 +26,11 @@
       "viewer": null
     },
     "AMOUNT_MAX": {
-      "value": 9007199254740991,
-      "imd-flop": "src/amount.ts AMOUNT_MAX (Number.MAX_SAFE_INTEGER; test/contract.test.ts checks it against this value). knownAmount refuses an amount above it: unknown, never a guess (review fixes 2, R10)",
+      "value": 1000000000,
+      "imd-flop": "src/amount.ts AMOUNT_MAX (its own literal; test/contract.test.ts checks it against this value). knownAmount refuses an amount above it: unknown, never a guess. A day or job total above it is not a known amount either: run refuses (exit 3) and the read commands exit 1 (ledger.ts exactTotal)",
       "spend-guard": null,
-      "viewer": "build-lane.py AMOUNT_MAX (read from this file): amount() refuses an amount above it"
+      "viewer": "build-lane.py AMOUNT_MAX (read from this file): amount() refuses an amount above it",
+      "note": "1e9 FLOP (swarm audit 33f3b9f, finding 5; was 2^53 - 1). Up to 1e9 FLOP every amount on the 6 decimal grid is its own double, and x * 1e6 is within 0.5 of the exact integer, so the grid survives the float: rounding.ts recovers each amount's integer numerator, and totals are exact sums of those integers. Above about 2^33 FLOP a double cannot hold the grid at all, and a float sum absorbed small charges, so calls were admitted past the cap. An amount above the bound is not a known amount. spend-guard has no such bound. Proved by the property tests in imd-flop/test/audit-33f3b9f.test.ts and viewer/test_audit_33f3b9f.py (finding 5)"
     },
     "FLOP_DECIMALS": {
       "value": 18,
@@ -380,7 +381,7 @@
         "imd-flop",
         "viewer"
       ],
-      "summary": "Rounding to 6 decimals counts a value within 1e-12 FLOP of a 1e-6 step as on it (imd-flop rounding.ts ceil6 and floor6, viewer build-lane.py floor6). For a total built from charges on the 6 decimal grid and a cap on it, that absorbs float noise and nothing else, so rounding never admits a call over the cap. imd-flop books every charge on that grid (the padded quote is rounded up to it) except a charge a gateway amount raised above the padded quote, which is booked as the gateway reported it and prints PAST_ADMITTED. A charge off the grid within 1e-12 FLOP above a step (a hand edit, a damaged row, or such a gateway amount) is rounded down onto the step, so the next call can be admitted with the day over the cap by at most 1e-12 FLOP. A cap or job budget set within 1e-12 FLOP below a step is rounded up onto it the same way, by at most 1e-12 FLOP more. It stays as it is: it closes when money moves to exact base units (money stage 2). Pinned by vectors ceil6-off-grid-within-tolerance and floor6-off-grid-within-tolerance-below, and by imd-flop/test/review-fixes.test.ts (R7, now R-g)."
+      "summary": "Rounding to 6 decimals counts a value within 1e-12 FLOP of a 1e-6 step as on it (imd-flop rounding.ts ceilMicro and floorMicro, with ceil6 and floor6 defined through them; viewer build-lane.py ceil_micro and floor_micro, with floor6). Every amount the tools compare is at most AMOUNT_MAX, 1e9 FLOP. Up to there an amount on the grid is its own double and x * 1e6 is within 0.5 of the exact integer, so on one amount the tolerance absorbs float noise and the integer numerator is exact. A day or job total is the exact sum of its charges' integer numerators (imd-flop ledger.ts exactTotal), never a float sum (swarm audit 33f3b9f, finding 5). The room left is floor6(cap - spent) in both parts (imd-flop policy.ts roomLeft; the viewer uses the same expression since finding 9). That subtraction is a float one, and above about 8192 FLOP its noise can exceed the tolerance, so the room can come out one step short: it only ever moves the safe way. So for charges and caps on the 6 decimal grid rounding never admits a call over the cap. imd-flop books every charge on that grid (the padded quote is rounded up to it) except a charge a gateway amount raised above the padded quote, which is booked as the gateway reported it and prints PAST_ADMITTED. A charge off the grid within 1e-12 FLOP above a step (a hand edit, a damaged row, or such a gateway amount) is rounded down onto the step, so the next call can be admitted with the day over the cap by at most 1e-12 FLOP for each such charge. A cap or job budget set within 1e-12 FLOP below a step is rounded up onto it the same way, by at most 1e-12 FLOP more. It stays as it is: it closes when money moves to exact base units (money stage 2). Pinned by vectors ceil6-off-grid-within-tolerance and floor6-off-grid-within-tolerance-below, the cap.daily_left vectors in cap-compare.json, imd-flop/test/review-fixes.test.ts (R7, now R-g) and the finding 5 tests of imd-flop/test/audit-33f3b9f.test.ts."
     }
   ],
   "viewer_label_rules": {

@@ -7,12 +7,12 @@
 import { existsSync, linkSync, readFileSync, renameSync, statSync, unlinkSync, writeFileSync } from "node:fs";
 import { randomBytes } from "node:crypto";
 import { hostname } from "node:os";
-import { knownAmount } from "./amount.js";
+import { AMOUNT_MAX, knownAmount } from "./amount.js";
 import { isSeatId } from "./keys.js";
 import { groupKey, isRequestId, readLedgerText } from "./ledger-text.js";
 import { ledgerFile } from "./paths.js";
 import { isJobId } from "./policy.js";
-import { ceil6 } from "./rounding.js";
+import { ceilMicro } from "./rounding.js";
 import { outsideValue } from "./secrets.js";
 import { appendJsonlSafe } from "./store.js";
 import type { Payer } from "./config.js";
@@ -170,14 +170,33 @@ export function usableCapCharge(value: unknown): boolean {
   return knownAmount(value) !== null;
 }
 
-/** The total of these rows' cap charges. Money already spent rounds up to 6 decimals, so the total never understates it. */
-function sumCharges(lines: Line[]): number {
-  let sum = 0;
+/**
+ * A total is above AMOUNT_MAX, the largest amount this tool compares: it is not a known amount, so nothing is
+ * decided on it. run.ts refuses (exit 3, nothing sent), and the read commands exit 1 with the same message.
+ */
+export class UnusableLedgerTotal extends UnusableLedgerRow {}
+
+/** AMOUNT_MAX in micro units: the largest total this tool compares. */
+const TOTAL_MAX_MICRO = BigInt(AMOUNT_MAX) * 1_000_000n;
+
+/**
+ * An exact total from the integer numerators of known amounts (rounding.ts ceilMicro: each rounded up to 6
+ * decimals, so the total never understates what was spent). They are added as BigInt, never as floats, and
+ * the total is that integer over 1e6 (swarm audit 33f3b9f, finding 5). A total above AMOUNT_MAX throws.
+ */
+function exactTotal(amounts: number[], total: string): number {
+  let micro = 0n;
+  for (const a of amounts) micro += BigInt(ceilMicro(a));
+  if (micro > TOTAL_MAX_MICRO) throw new UnusableLedgerTotal(`${total} is above ${AMOUNT_MAX} FLOP, the largest amount this tool compares, so it is not a known amount; next call refused.`);
+  return Number(micro) / 1e6;
+}
+
+/** The total of these rows' cap charges, exact (exactTotal). A charge that is not a known amount throws, naming its line. */
+function sumCharges(lines: Line[], total: string): number {
   for (const { n, row } of lines) {
     if (!usableCapCharge(row.cap_charge)) throw new UnusableLedgerCharge(`ledger cap_charge unusable; next call refused (ledger line ${n}). Repair or remove that line.`);
-    sum += row.cap_charge;
   }
-  return ceil6(sum);
+  return exactTotal(lines.map(({ row }) => row.cap_charge), total);
 }
 
 /** A UTC day as utcDay writes it: YYYY-MM-DD, and a real calendar date from year 0001 on (the viewer's Python dates start there). */
@@ -237,17 +256,19 @@ function placed(h: string, filters: Filter[], total: string): Line[] {
  * account's limit will bound the call and it will not count here.
  */
 export function spentToday(h: string, seat: string, provider: string, day = utcDay()): number {
-  return sumCharges(seatDay(h, seat, provider, day));
+  return sumCharges(seatDay(h, seat, provider, day), dailyTotal(seat, provider, day));
 }
+
+const dailyTotal = (seat: string, provider: string, day: string) => `the daily total of seat ${seat} (${provider}, ${day})`;
 
 /** The latest row of every request of the seat for that provider and UTC day (placed). */
 function seatDay(h: string, seat: string, provider: string, day: string): Line[] {
-  return placed(h, [onDay(day), onSeat(seat), onProvider(provider)], `the daily total of seat ${seat} (${provider}, ${day})`);
+  return placed(h, [onDay(day), onSeat(seat), onProvider(provider)], dailyTotal(seat, provider, day));
 }
 
 /**
  * What the gateway reported as spent on one UTC day, over the same rows spentToday counts. `spent` is the sum
- * of their known settled spends (`spend`), rounded up to 6 decimals as that total is. `unknownRows` counts the
+ * of their known settled spends (`spend`), exact as that total is (exactTotal). `unknownRows` counts the
  * rows for a call that was sent (any state but refused_local) whose spend is not a known amount: the gateway
  * reported no amount for them, so they add nothing to the sum and are never shown as 0. `spent` is null when
  * no row has a known spend and at least one is unknown (swarm audit 33f3b9f, finding 13). A refused_local row
@@ -255,22 +276,21 @@ function seatDay(h: string, seat: string, provider: string, day: string): Line[]
  * against the cap. No cap or booking decision reads them.
  */
 export function reportedSpendToday(h: string, seat: string, provider: string, day = utcDay()): { spent: number | null; unknownRows: number } {
-  let sum = 0;
-  let known = 0;
+  const spends: number[] = [];
   let unknownRows = 0;
   for (const { row } of seatDay(h, seat, provider, day)) {
     const spend = knownAmount(row.spend);
-    if (spend !== null) {
-      sum += spend;
-      known += 1;
-    } else if (row.state !== "refused_local") unknownRows += 1;
+    if (spend !== null) spends.push(spend);
+    else if (row.state !== "refused_local") unknownRows += 1;
   }
-  return { spent: known === 0 && unknownRows > 0 ? null : ceil6(sum), unknownRows };
+  if (spends.length === 0 && unknownRows > 0) return { spent: null, unknownRows };
+  return { spent: exactTotal(spends, `the reported spend of seat ${seat} (${provider}, ${day})`), unknownRows };
 }
 
 /** The requester spend on one job, on any day: the job budget's running total. */
 export function jobSpent(h: string, job: string, provider: string): number {
-  return sumCharges(placed(h, [onJob(job), onProvider(provider), onPayer("requester")], `the requester total of job ${job} (${provider})`));
+  const total = `the requester total of job ${job} (${provider})`;
+  return sumCharges(placed(h, [onJob(job), onProvider(provider), onPayer("requester")], total), total);
 }
 
 /** The ledger lock could not be taken. Thrown before the guarded work runs, so nothing in it happened. */

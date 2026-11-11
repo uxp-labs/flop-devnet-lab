@@ -439,8 +439,9 @@ class Finding7NegativeAmountsAreUnknown(unittest.TestCase):
             with self.subTest(value=v):
                 self.assertIsNone(amount(v))
         # Control: zero and positive amounts are still amounts. Moved (review fixes 2, R10): the largest one is
-        # now 2^53 - 1 (AMOUNT_MAX); 1e308 is above it and unknown.
-        for v in (0, 0.05, 7, 2 ** 53 - 1):
+        # AMOUNT_MAX; 1e308 is above it and unknown. Moved again (swarm audit 33f3b9f, finding 5): AMOUNT_MAX is
+        # 1e9 FLOP now, not 2^53 - 1.
+        for v in (0, 0.05, 7, 10 ** 9):
             with self.subTest(value=v):
                 self.assertEqual(amount(v), v)
         self.assertIsNone(amount(1e308))

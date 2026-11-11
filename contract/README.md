@@ -57,9 +57,14 @@ the float figures. The cap still runs on the float figures.
 
 ## Review fixes 2
 
-- `rules.json` constant `AMOUNT_MAX` (2^53 - 1): a float amount above it is unknown in imd-flop
+- `rules.json` constant `AMOUNT_MAX`: a float amount above it is unknown in imd-flop
   (`amount.ts knownAmount`) and the viewer (`build-lane.py amount`). The `amount.json` vectors and
-  `reconcile-amounts-above-2-53-are-unknown` pin it.
+  `reconcile-amounts-above-2-53-are-unknown` pin it. It was 2^53 - 1. Since the swarm audit of 33f3b9f
+  (finding 5) it is 1e9 FLOP: up to there every amount on the 6 decimal grid is its own double and `x * 1e6`
+  is within 0.5 of the exact integer, so day and job totals are exact sums of integer numerators. Above about
+  2^33 FLOP a double cannot hold the grid at all.
+- `vectors/cap-compare.json` rule `cap.daily_left` (finding 9) pins one daily cap decision for imd-flop and the
+  viewer: the room is `floor6(cap - spent)`, and a charge above it is over.
 - `rules.json` constant `LEDGER_PROVIDERS` and `vectors/ledger-placement.json` (rule `ledger.placement`) pin
   a ledger row that cannot be placed in a total: imd-flop refuses the next call and names the line, and the
   viewer flags the row and never shows it green.

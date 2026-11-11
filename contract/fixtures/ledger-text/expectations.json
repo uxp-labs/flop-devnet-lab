@@ -308,7 +308,7 @@
    "charges": {}
   },
   "numbers-as-doubles.jsonl": {
-   "note": "a number is a double: a 4300 digit integer and 1e400 are Infinity, 2^53 + 1 is 2^53; none of those is a known amount. 2^53 - 1 is",
+   "note": "a number is a double: a 4300 digit integer and 1e400 are Infinity, 2^53 + 1 is 2^53; none of those is a known amount. 2^53 - 1 is read exactly, and it is not a known amount either: it is above AMOUNT_MAX, 1e9 FLOP (swarm audit 33f3b9f, finding 5; it was a known amount when AMOUNT_MAX was 2^53 - 1)",
    "lines": 4,
    "blank": [],
    "unreadable": [],
@@ -342,7 +342,7 @@
     "1": null,
     "2": null,
     "3": null,
-    "4": 9007199254740991
+    "4": null
    }
   },
   "booleans.jsonl": {

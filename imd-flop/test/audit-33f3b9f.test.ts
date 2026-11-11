@@ -20,6 +20,9 @@ import { network } from "../src/networks.js";
 import { runJob } from "../src/run.js";
 import { scanForSecrets } from "../src/secrets.js";
 import { decideBooking, type ReadOutcome } from "../src/settlement.js";
+import { AMOUNT_MAX, knownAmount } from "../src/amount.js";
+import * as rounding from "../src/rounding.js";
+import { checkBudget } from "../src/policy.js";
 import { cli, readLines, tmpHome } from "./helpers.js";
 
 const CONTRACT = join(import.meta.dirname, "..", "..", "contract");
@@ -481,5 +484,105 @@ describe("finding 11 (low): tests that kill three wrong rules", () => {
     it("booked 10, read 9: 10 stays", () => {
       expect(decideBooking(prev("10"), read("9"), null).booking.spend_raw).toBe("10");
     });
+  });
+});
+
+/** A small deterministic PRNG (mulberry32), so a property test walks the same numbers on every run. */
+function prng(seed: number) {
+  return () => {
+    seed = (seed + 0x6d2b79f5) | 0;
+    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+describe("finding 5 (low): exact sums under an AMOUNT_MAX the 6 decimal grid survives", () => {
+  const rules = JSON.parse(readFileSync(join(CONTRACT, "rules.json"), "utf8"));
+  const micro = rounding as unknown as { ceilMicro?: (n: number) => number; floorMicro?: (n: number) => number };
+
+  it("AMOUNT_MAX is 1e9 FLOP, here and in rules.json; an amount above it is not a known amount", () => {
+    expect(AMOUNT_MAX).toBe(1_000_000_000);
+    expect(rules.constants.AMOUNT_MAX.value).toBe(AMOUNT_MAX);
+    expect(knownAmount(1e9)).toBe(1e9);
+    expect(knownAmount(1000000000.000001)).toBeNull();
+    expect(knownAmount(17179869184)).toBeNull();
+  });
+
+  it("property: for random integers k up to 1e15, the double nearest k / 1e6 scales back to k by rounding to nearest", () => {
+    const rand = prng(33);
+    const ks = [0, 1, 999_999, 1_000_000, 1e15 - 1, 1e15];
+    for (let i = 0; i < 200_000; i++) ks.push(Math.floor(rand() * 2 ** 21) * 2 ** 29 + Math.floor(rand() * 2 ** 29));
+    const bad = ks.filter((k) => k <= 1e15 && Math.round((k / 1e6) * 1e6) !== k);
+    expect({ walked: ks.filter((k) => k <= 1e15).length > 100_000, bad: bad.slice(0, 3) }).toEqual({ walked: true, bad: [] });
+  });
+
+  it("rounding.ts exposes the integer numerators, and ceil6 and floor6 are them over 1e6", () => {
+    expect(typeof micro.ceilMicro).toBe("function");
+    expect(micro.ceilMicro!(0.186)).toBe(186000);
+    expect(micro.floorMicro!(0.1859999)).toBe(185999);
+    expect(micro.ceilMicro!(1e9)).toBe(1e15);
+    const rand = prng(5);
+    for (let i = 0; i < 10_000; i++) {
+      const n = rand() * 1e9;
+      expect(rounding.ceil6(n)).toBe(micro.ceilMicro!(n) / 1e6);
+      expect(rounding.floor6(n)).toBe(micro.floorMicro!(n) / 1e6);
+    }
+  });
+
+  it("cap set above 1e9 is refused with exit 2; 1e9 itself is a cap", async () => {
+    const h = await seat7("1");
+    expect((await cli(h, ["cap", "set", "1000000000.000001", "--seat", "7"])).code).toBe(EXIT.USAGE);
+    expect((await cli(h, ["cap", "set", "17179869184.00001", "--seat", "7"])).code).toBe(EXIT.USAGE);
+    expect((await cli(h, ["cap", "set", "1000000000", "--seat", "7", "--per-call", "1"])).code).toBe(0);
+  });
+
+  it("a row with a charge above 1e9 is an unusable charge: run refuses and names the line", async () => {
+    const h = await seat7("1");
+    appendLedger(h, row("mock-7-big", { cap_charge: 17179869184 }));
+    const p = new Stub();
+    const r = await cli(h, runArgs(), { provider: p });
+    expect({ code: r.code, sent: p.calls, named: r.err.includes("cap_charge unusable") && r.err.includes("ledger line 1") }, r.err).toEqual({ code: 3, sent: 0, named: true });
+  });
+
+  it("the day's total is the exact sum of the charges: 4096.1 and ten charges of 0.000001 is 4096.10001", () => {
+    const h = tmpHome();
+    appendLedger(h, row("mock-7-seed", { cap_charge: 4096.1 }));
+    for (let i = 0; i < 10; i++) appendLedger(h, row(`mock-7-c${i}`, { cap_charge: 0.000001 }));
+    expect(spentToday(h, "7", "mock")).toBe(4096.10001);
+  });
+
+  it("at the largest size: a total near 1e9, a cap ten steps above it, admits exactly ten charges of 0.000001 and refuses the eleventh", () => {
+    const h = tmpHome();
+    appendLedger(h, row("mock-7-seed", { cap_charge: 999999999 }));
+    const cap = { daily: 999999999.00001, perCall: 1 };
+    let admitted = 0;
+    for (let i = 0; i < 50; i++) {
+      const spentBefore = spentToday(h, "7", "mock");
+      if (checkBudget({ padded: 0.000001, cap, payer: "holder", spentBefore }) !== null) break;
+      admitted += 1;
+      appendLedger(h, row(`mock-7-c${i}`, { cap_charge: 0.000001 }));
+    }
+    expect({ admitted, total: spentToday(h, "7", "mock") }).toEqual({ admitted: 10, total: 999999999.00001 });
+  });
+
+  it("a total above AMOUNT_MAX is not a known amount: run refuses with exit 3 and nothing sent, and status says the same", async () => {
+    const h = await seat7("1");
+    appendLedger(h, row("mock-7-a", { cap_charge: 600000000 }));
+    appendLedger(h, row("mock-7-b", { cap_charge: 600000000 }));
+    const p = new Stub();
+    const r = await cli(h, runArgs(), { provider: p });
+    expect({ code: r.code, sent: p.calls }, r.err).toEqual({ code: 3, sent: 0 });
+    expect(r.err).toContain("is above 1000000000 FLOP, the largest amount this tool compares");
+    const st = await cli(h, ["status", "--seat", "7"]);
+    expect({ code: st.code, says: st.err.includes("the largest amount this tool compares") }).toEqual({ code: 1, says: true });
+    const cs = await cli(h, ["cap", "show", "--seat", "7"]);
+    expect({ code: cs.code, says: cs.err.includes("the largest amount this tool compares") }).toEqual({ code: 1, says: true });
+  });
+});
+
+describe("finding 9 (low): the viewer decides the daily cap with imd-flop's expression", () => {
+  it("the audit's triple is admitted with room 4027.974074 (contract/vectors/cap-compare.json pins the viewer's side)", () => {
+    expect(checkBudget({ padded: 4027.974074, cap: { daily: 8197.132493, perCall: 8197.132493 }, payer: "holder", spentBefore: 4169.158419 })).toBeNull();
   });
 });

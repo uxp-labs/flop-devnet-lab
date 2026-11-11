@@ -16,7 +16,7 @@ import { matchReceipt, RECEIPT_IDENTITY_STATUS } from "../src/match.js";
 import { ledgerFile, receiptsDir } from "../src/paths.js";
 import type { CompleteReq, CompleteRes, Provider } from "../src/providers.js";
 import { classifyReceipt, RECEIPT_STATES, STAGE_GATEWAY, type GatewayReceipt } from "../src/receipts.js";
-import { MIN_CAP } from "../src/policy.js";
+import { checkBudget, MIN_CAP, roomLeft } from "../src/policy.js";
 import { padQuote, TEMPLATE_PAD } from "../src/run.js";
 import { ceil6, floor6 } from "../src/rounding.js";
 import { DISAGREE, PAST_ADMITTED, reconcile, SETTLES, UNRESOLVED } from "../src/settlement.js";
@@ -73,6 +73,11 @@ const adapters: Record<string, (i: Json, want: Json) => Promise<Json> | Json> = 
     const r = await cli(h, runArgs(["--max-tokens", String(i.max_tokens)]), { provider: new P({ estimate: i.estimate }) });
     return { exit: r.code };
   },
+  // Swarm audit 33f3b9f, finding 9: one daily cap check, with the charge as the padded quote. The viewer decides the same triple.
+  "cap.daily_left": (i) => ({
+    admitted: checkBudget({ padded: i.charge, cap: { daily: i.cap, perCall: i.cap }, payer: "holder", spentBefore: i.spent }) === null,
+    room: roomLeft({ allowed: i.cap, spent: i.spent }),
+  }),
   // Each run sets the payer, then runs its own job. The answer is every exit code and the seat's total for the day.
   "cap.payer": async (i) => {
     const h = await ready(i.cap);

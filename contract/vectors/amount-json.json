@@ -231,7 +231,49 @@
      "amount": null
     }
    },
-   "note": "Review fixes 2 (R10): above AMOUNT_MAX (2^53 - 1, the largest integer a double holds exactly) an amount is unknown in imd-flop and the viewer. Before, 1e308 was a known amount. spend-guard is outside R10 and keeps its own rule."
+   "note": "Review fixes 2 (R10): above AMOUNT_MAX (then 2^53 - 1, the largest integer a double holds exactly; 1e9 FLOP since swarm audit 33f3b9f, finding 5) an amount is unknown in imd-flop and the viewer. Before, 1e308 was a known amount. spend-guard is outside R10 and keeps its own rule."
+  },
+  {
+   "id": "amount-json-amount-max",
+   "rule": "amount.json",
+   "input": {
+    "value": 1000000000
+   },
+   "expect": {
+    "imd-flop": {
+     "known_settled": 1000000000,
+     "usable_cap_charge": true
+    },
+    "spend-guard": {
+     "spend_amount": 1000000000,
+     "json_number": 1000000000
+    },
+    "viewer": {
+     "amount": 1000000000
+    }
+   },
+   "note": "swarm audit 33f3b9f, finding 5: AMOUNT_MAX itself, 1e9 FLOP, is a known amount in both parts"
+  },
+  {
+   "id": "amount-json-above-amount-max",
+   "rule": "amount.json",
+   "input": {
+    "value": 1000000000.000001
+   },
+   "expect": {
+    "imd-flop": {
+     "known_settled": null,
+     "usable_cap_charge": false
+    },
+    "spend-guard": {
+     "spend_amount": 1000000000.000001,
+     "json_number": 1000000000.000001
+    },
+    "viewer": {
+     "amount": null
+    }
+   },
+   "note": "finding 5: one 1e-6 step above AMOUNT_MAX is not a known amount in either part"
   },
   {
    "id": "amount-json-max-safe-integer",
@@ -241,18 +283,18 @@
    },
    "expect": {
     "imd-flop": {
-     "known_settled": 9007199254740991,
-     "usable_cap_charge": true
+     "known_settled": null,
+     "usable_cap_charge": false
     },
     "spend-guard": {
      "spend_amount": 9007199254740991,
      "json_number": 9007199254740991
     },
     "viewer": {
-     "amount": 9007199254740991
+     "amount": null
     }
    },
-   "note": "Review fixes 2 (R10): AMOUNT_MAX itself, 2^53 - 1, is a known amount in both parts."
+   "note": "2^53 - 1. It was AMOUNT_MAX (review fixes 2, R10). Since swarm audit 33f3b9f, finding 5, AMOUNT_MAX is 1e9 FLOP, so it is above it and unknown in both parts. spend-guard has no such bound."
   },
   {
    "id": "amount-json-2-53",
