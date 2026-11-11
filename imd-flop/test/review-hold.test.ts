@@ -259,23 +259,28 @@ describe("DEFECT 3 (medium): a latest row with no request_id drops its charge fr
   });
 });
 
-describe("DEFECT 4 (low): a reported cost above AMOUNT_MAX is a known amount to the booking step", () => {
-  // Rule 8: an amount above 9007199254740991 is unknown. settlement.ts reportedCost takes any finite number,
-  // so a completion that reports cost_flop 1e16 raises the charge to 1e16 and the row records it. The next
-  // call then reads that charge through knownAmount, finds it unknown, and refuses: every call of the seat
-  // is refused (exit 3, "ledger cap_charge unusable") until the holder edits a line this tool wrote itself.
-  // Right: reportedCost applies the amount rule (knownAmount); a cost above AMOUNT_MAX is unknown, raises
-  // nothing, and the row stays readable.
-  it("DEFECT 4: a reported cost above AMOUNT_MAX (1e16) is unknown: it raises nothing, the row stays readable and the next call is admitted", async () => {
+describe("4 (low): a reported cost is a known amount or it is unknown", () => {
+  // settlement.ts reportedCost took any finite number, so a completion that reported cost_flop 1e16 raised
+  // the charge to 1e16, above AMOUNT_MAX, and every later call was refused on an unusable charge this tool
+  // wrote itself. Decided (review fixes 3): a reported cost follows knownAmount; an unknown cost raises nothing.
+  const reporting = (cost: number) => async (req: CompleteReq): Promise<CompleteRes> => ({ request_id: req.requestId, text: "ok", usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2, cost_flop: cost } });
+
+  it("a reported cost above AMOUNT_MAX (1e16) is unknown: it raises nothing, the row stays readable and the next call is admitted", async () => {
     const h = await ready("1");
-    const complete = async (req: CompleteReq): Promise<CompleteRes> => ({ request_id: req.requestId, text: "ok", usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2, cost_flop: 1e16 } });
-    const a = await cli(h, runArgs("jA"), { provider: new P({ complete }) });
+    const a = await cli(h, runArgs("jA"), { provider: new P({ complete: reporting(1e16) }) });
     expect(a.code, a.err).toBe(0);
-    expect(ledger(h).at(-1)!.cap_charge).toBe(1e16);
+    const last = ledger(h).at(-1)!;
+    expect({ cap_charge: last.cap_charge, cost_reported: last.cost_reported }).toEqual({ cap_charge: 0.186, cost_reported: null });
     const p = new P();
-    const b = await cli(h, runArgs("jB"), { provider: p });
-    expect({ code: b.code, sent: p.calls, unusable: b.err.includes("ledger cap_charge unusable") }).toEqual({ code: 3, sent: 0, unusable: true });
-    expect((await cli(h, ["status", "--seat", SEAT, "--json"])).code).toBe(1);
+    expect((await cli(h, runArgs("jB"), { provider: p })).code).toBe(0);
+    expect(p.calls).toBe(1);
+    expect((await cli(h, ["status", "--seat", SEAT, "--json"])).code).toBe(0);
+  });
+
+  it("a negative reported cost is unknown too and is not recorded", async () => {
+    const h = await ready("1");
+    expect((await cli(h, runArgs("jA"), { provider: new P({ complete: reporting(-0.5) }) })).code).toBe(0);
+    expect(ledger(h).at(-1)!.cost_reported).toBe(null);
   });
 });
 

@@ -144,9 +144,13 @@ export interface Booking<C = number> {
   receipt_seen?: boolean;
 }
 
-/** usage.cost_flop as the completion reported it. It counts only when it is a finite number. Recorded, never a settlement. */
+/**
+ * usage.cost_flop as the completion reported it. It counts only when it is a known amount (amount.ts
+ * knownAmount: finite, not negative, not above AMOUNT_MAX), else it is unknown and raises nothing.
+ * Recorded, never a settlement.
+ */
 export function reportedCost(value: unknown): number | null {
-  return typeof value === "number" && Number.isFinite(value) ? value : null;
+  return knownAmount(value);
 }
 
 /** A reported cost may raise a charge, never lower it. */
