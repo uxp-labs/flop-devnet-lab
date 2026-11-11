@@ -166,6 +166,32 @@ export function decideBooking<C>(prev: Booking<C>, o: ReadOutcome, costReported:
   return { booking: { state, spend: prev.spend, cap_charge: holdCharge(held, costReported) }, disagree: lowers };
 }
 
+/**
+ * What `run` reports when its paid call brought back no completion, as the ledger state it asks for.
+ *  - timeout_unknown: no answer in time, or the connection dropped. The gateway may have done paid work.
+ *  - error: the gateway answered the paid call with an HTTP error.
+ *  - refused_local: nothing was sent. The failure came before the paid request left.
+ */
+export type Failure = "timeout_unknown" | "error" | "refused_local";
+
+/**
+ * The one decision for a failure report, beside decideBooking. `prev` is the latest ledger row of the
+ * request: another process may have refreshed the request and booked its read while the call ran. Returns
+ * the next booking, or null when the report is not booked and the row stays exactly as it is.
+ *  - A failure report never replaces a booked settlement. A row in a settling state stays. `run` keeps its
+ *    own exit code and message for what it saw.
+ *  - A timeout or a gateway error moves a row that does not settle to timeout_unknown or error. The spend
+ *    stays and the charge stays, so the reservation is held.
+ *  - "Nothing was sent" releases the reservation: refused_local, charge 0. Only from a row that does not
+ *    settle. A booking is never lowered on a report.
+ *  - A charge that is not a known amount is never replaced by a guess, as in decideBooking: the row stays.
+ * A report is not a receipt read. Only a read books a settlement, and that is decideBooking.
+ */
+export function decideFailure<C>(prev: Booking<C>, failure: Failure): Booking<C | number> | null {
+  if (SETTLES.has(prev.state) || knownAmount(prev.cap_charge) === null) return null;
+  return { state: failure, spend: prev.spend, cap_charge: failure === "refused_local" ? 0 : prev.cap_charge };
+}
+
 /** Ledger reason for a settled row whose cap charge is the reported cost, above its settled spend. */
 export const CHARGE_RAISED = "cap charge raised to reported cost";
 

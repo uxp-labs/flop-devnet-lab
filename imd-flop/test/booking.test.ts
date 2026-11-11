@@ -21,7 +21,7 @@ import { describe, expect, it } from "vitest";
 import { bookRead } from "../src/booking.js";
 import { utcDay } from "../src/ledger.js";
 import type { CompleteReq, CompleteRes, Provider } from "../src/providers.js";
-import { CHARGE_RAISED, decideBooking, DISAGREE } from "../src/settlement.js";
+import { CHARGE_RAISED, decideBooking, decideFailure, DISAGREE, type Failure } from "../src/settlement.js";
 import { cli, readLines, readySeat, tmpHome } from "./helpers.js";
 
 const SEAT = "9001";
@@ -140,6 +140,42 @@ describe("decideBooking: the one decision for every receipt read", () => {
       // A read below the booked settlement stays refused, and the unknown charge stays as it is.
       const settledUnknown = { state: "settled", spend: 0.07, cap_charge: charge };
       expect(decideBooking(settledUnknown, trusted("settled", 0.05), null), String(charge)).toEqual({ booking: settledUnknown, disagree: true });
+    }
+  });
+});
+
+describe("decideFailure: the one decision for what run reports when its paid call fails", () => {
+  const REPORTS: Failure[] = ["timeout_unknown", "error", "refused_local"];
+
+  it("a failure report never replaces a booked settlement: a settling row stays, whatever is reported", () => {
+    const settling = [
+      { state: "settled", spend: 0.3, cap_charge: 0.3 },
+      { state: "released", spend: 0, cap_charge: 0 },
+      { state: "settled", spend: null, cap_charge: 0.186 },
+      { state: "settled", spend: 0.05, cap_charge: 0.15 },
+    ];
+    for (const row of settling) for (const report of REPORTS) expect(decideFailure(row, report), `${row.state} ${report}`).toBeNull();
+  });
+
+  it("a timeout or a gateway error moves a row that does not settle: the spend stays and the charge stays", () => {
+    for (const state of ["sent", "reserved", "estimated"]) {
+      for (const charge of [0.186, 0.3]) {
+        expect(decideFailure({ state, spend: null, cap_charge: charge }, "timeout_unknown")).toEqual({ state: "timeout_unknown", spend: null, cap_charge: charge });
+        expect(decideFailure({ state, spend: null, cap_charge: charge }, "error")).toEqual({ state: "error", spend: null, cap_charge: charge });
+      }
+    }
+  });
+
+  it("\"nothing was sent\" releases the reservation, only from a row that does not settle", () => {
+    for (const state of ["sent", "reserved", "estimated"]) {
+      expect(decideFailure({ state, spend: null, cap_charge: 0.186 }, "refused_local")).toEqual({ state: "refused_local", spend: null, cap_charge: 0 });
+    }
+    expect(decideFailure({ state: "settled", spend: 0.3, cap_charge: 0.3 }, "refused_local")).toBeNull();
+  });
+
+  it("a charge that is not a known amount is never replaced by a guess: the row stays, also for \"nothing was sent\"", () => {
+    for (const charge of [null, undefined, -1, Number.NaN, "0.186"]) {
+      for (const report of REPORTS) expect(decideFailure({ state: "sent", spend: null, cap_charge: charge }, report), `${String(charge)} ${report}`).toBeNull();
     }
   });
 });
