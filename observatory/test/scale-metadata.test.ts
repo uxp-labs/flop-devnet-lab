@@ -123,6 +123,7 @@ describe("refusals", () => {
     ["a type whose id is not its place", () => metadata([{ def: def.primitive("u8") }, { def: def.primitive("u8") }], []).fill(8, 6, 7), "type 0 has id 2: ids must count from 0 in order"],
     ["a type that names a type that does not exist", () => metadata([{ def: def.sequence(9) }], []), "type 0 names type 9, which does not exist"],
     ["a type that names the first id past the last type", () => metadata([{ def: def.sequence(1) }], []), "type 0 names type 1, which does not exist"],
+    ["a type that names an id past 2^32", () => metadata([{ def: def.sequence(2 ** 40) }], []), "type 0 names type 1099511627776, which does not exist"],
     ["a pallet that names a type that does not exist", () => metadata(ALL_KINDS, [{ ...(ALL_PALLETS.at(0) as PalletSpec), event: 99 }]), "pallet Things names type 99, which does not exist"],
     ["the runtime type out of range", () => metadata(ALL_KINDS, ALL_PALLETS, undefined, 50), "the runtime type names type 50, which does not exist"],
     ["a composite mixing named and unnamed fields", () => metadata([{ def: def.primitive("u8") }, { def: def.composite([{ name: "a", type: 0 }, { type: 0 }]) }], []), "type 1: fields are either all named or all unnamed"],

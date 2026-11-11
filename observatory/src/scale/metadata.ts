@@ -87,11 +87,12 @@ const MAGIC = "0x6d657461";
  */
 const DIGITS = /^[0-9]+$/;
 
-/** A compact that names a type id: a u32. */
+/**
+ * A compact that names a type id. One past the last type is refused by check(), however large, so
+ * no bound is needed here: a compact is at most 2^536, which a number holds well past any type count.
+ */
 function typeId(r: Reader, what: string): number {
-  const v = r.compact(what);
-  if (v > 0xffffffffn) throw new ScaleError(`${what}: ${v} is no type id`);
-  return Number(v);
+  return Number(r.compact(what));
 }
 
 /** A list: a compact count, then each item. Each item takes at least one byte, so the count is bounded by what is left. */

@@ -120,8 +120,8 @@
     "names": "ab793c511a13efb3d12938c5ef13bac013563137c1e84c95cd690f6c178ef5d3"
   },
   "scale-metadata.test.ts": {
-    "tests": 23,
-    "names": "b1dc91ae77ed396376f7df67efce8ac5b9722106cfa240e4b62e07b196037bed"
+    "tests": 24,
+    "names": "d17d78c3cac2b2d660454903552e221ab9f49bd0873691c4e872f7c81b3f3f21"
   },
   "scale-reader.test.ts": {
     "tests": 42,
