@@ -1,0 +1,1411 @@
+{
+  "compute_channel": {
+    "channel_states": [
+      {
+        "fields": [],
+        "index": 0,
+        "name": "Open"
+      },
+      {
+        "fields": [
+          {
+            "name": "final_root",
+            "type": "H256#13"
+          },
+          {
+            "name": "claimed_gn",
+            "type": "u128"
+          },
+          {
+            "name": "challenge_end",
+            "type": "u32"
+          }
+        ],
+        "index": 1,
+        "name": "Settling"
+      },
+      {
+        "fields": [],
+        "index": 2,
+        "name": "Closed"
+      },
+      {
+        "fields": [
+          {
+            "name": "ack_deadline",
+            "type": "u32"
+          }
+        ],
+        "index": 3,
+        "name": "PendingAck"
+      }
+    ],
+    "channels": {
+      "fields": [
+        {
+          "name": "agent",
+          "type": "AccountId32#0"
+        },
+        {
+          "name": "miner",
+          "type": "AccountId32#0"
+        },
+        {
+          "name": "model_hash",
+          "type": "H256#13"
+        },
+        {
+          "name": "measured_root",
+          "type": "H256#13"
+        },
+        {
+          "name": "precision",
+          "type": "ModelPrecision#246"
+        },
+        {
+          "name": "enclave_key",
+          "type": "[u8; 32]"
+        },
+        {
+          "name": "agent_key",
+          "type": "[u8; 32]"
+        },
+        {
+          "name": "escrow",
+          "type": "u128"
+        },
+        {
+          "name": "sla",
+          "type": "Sla<u32>#294"
+        },
+        {
+          "name": "nonce",
+          "type": "u64"
+        },
+        {
+          "name": "opened_at",
+          "type": "u32"
+        },
+        {
+          "name": "last_attested_at",
+          "type": "u32"
+        },
+        {
+          "name": "state",
+          "type": "ChannelState<u32>#806"
+        },
+        {
+          "name": "transcript_ref",
+          "type": "Option<DataRef#260>#296"
+        },
+        {
+          "name": "weights_pin",
+          "type": "Option<H256#13>#102"
+        },
+        {
+          "name": "locked_compute_consumed",
+          "type": "u128"
+        }
+      ],
+      "hashers": [
+        "Blake2_128Concat"
+      ],
+      "key": "H256#13",
+      "modifier": "Optional",
+      "value": "Channel#805"
+    },
+    "events": [
+      {
+        "fields": [
+          {
+            "name": "channel_id",
+            "type": "H256#13"
+          },
+          {
+            "name": "agent",
+            "type": "AccountId32#0"
+          },
+          {
+            "name": "miner",
+            "type": "AccountId32#0"
+          },
+          {
+            "name": "escrow",
+            "type": "u128"
+          },
+          {
+            "name": "measured_root",
+            "type": "H256#13"
+          }
+        ],
+        "index": 0,
+        "name": "ChannelOpened"
+      },
+      {
+        "fields": [
+          {
+            "name": "channel_id",
+            "type": "H256#13"
+          },
+          {
+            "name": "miner",
+            "type": "AccountId32#0"
+          },
+          {
+            "name": "offer_nonce",
+            "type": "u64"
+          },
+          {
+            "name": "expiry",
+            "type": "u32"
+          }
+        ],
+        "index": 1,
+        "name": "OfferAccepted"
+      },
+      {
+        "fields": [
+          {
+            "name": "channel_id",
+            "type": "H256#13"
+          },
+          {
+            "name": "miner",
+            "type": "AccountId32#0"
+          },
+          {
+            "name": "failed_offer_opens",
+            "type": "u32"
+          }
+        ],
+        "index": 2,
+        "name": "OfferOpenFailed"
+      },
+      {
+        "fields": [
+          {
+            "name": "miner",
+            "type": "AccountId32#0"
+          },
+          {
+            "name": "offer_nonce",
+            "type": "u64"
+          },
+          {
+            "name": "bond",
+            "type": "u128"
+          },
+          {
+            "name": "start_block",
+            "type": "u32"
+          },
+          {
+            "name": "end_block",
+            "type": "u32"
+          }
+        ],
+        "index": 3,
+        "name": "ForwardOfferFunded"
+      },
+      {
+        "fields": [
+          {
+            "name": "miner",
+            "type": "AccountId32#0"
+          },
+          {
+            "name": "offer_nonce",
+            "type": "u64"
+          },
+          {
+            "name": "bond_released",
+            "type": "u128"
+          }
+        ],
+        "index": 4,
+        "name": "ForwardOfferCancelled"
+      },
+      {
+        "fields": [
+          {
+            "name": "channel_id",
+            "type": "H256#13"
+          },
+          {
+            "name": "agent",
+            "type": "AccountId32#0"
+          },
+          {
+            "name": "miner",
+            "type": "AccountId32#0"
+          },
+          {
+            "name": "start_block",
+            "type": "u32"
+          },
+          {
+            "name": "end_block",
+            "type": "u32"
+          },
+          {
+            "name": "duration_seconds",
+            "type": "u64"
+          },
+          {
+            "name": "quota_total",
+            "type": "u128"
+          },
+          {
+            "name": "price_per_gn",
+            "type": "u128"
+          },
+          {
+            "name": "payment",
+            "type": "u128"
+          },
+          {
+            "name": "bond",
+            "type": "u128"
+          }
+        ],
+        "index": 5,
+        "name": "ForwardChannelOpened"
+      },
+      {
+        "fields": [
+          {
+            "name": "channel_id",
+            "type": "H256#13"
+          },
+          {
+            "name": "amount",
+            "type": "u128"
+          },
+          {
+            "name": "cumulative",
+            "type": "u128"
+          }
+        ],
+        "index": 6,
+        "name": "ForwardAvailabilityClaimed"
+      },
+      {
+        "fields": [
+          {
+            "name": "channel_id",
+            "type": "H256#13"
+          },
+          {
+            "name": "delivered_gn",
+            "type": "u128"
+          },
+          {
+            "name": "amount",
+            "type": "u128"
+          },
+          {
+            "name": "cumulative",
+            "type": "u128"
+          }
+        ],
+        "index": 7,
+        "name": "ForwardBondReleased"
+      },
+      {
+        "fields": [
+          {
+            "name": "channel_id",
+            "type": "H256#13"
+          },
+          {
+            "name": "previous_agent",
+            "type": "AccountId32#0"
+          },
+          {
+            "name": "new_agent",
+            "type": "AccountId32#0"
+          }
+        ],
+        "index": 8,
+        "name": "ForwardAssigned"
+      },
+      {
+        "fields": [
+          {
+            "name": "channel_id",
+            "type": "H256#13"
+          },
+          {
+            "name": "from",
+            "type": "AccountId32#0"
+          },
+          {
+            "name": "to",
+            "type": "AccountId32#0"
+          },
+          {
+            "name": "units",
+            "type": "u128"
+          },
+          {
+            "name": "from_remaining",
+            "type": "u128"
+          },
+          {
+            "name": "to_total",
+            "type": "u128"
+          }
+        ],
+        "index": 9,
+        "name": "ForwardUnitsTransferred"
+      },
+      {
+        "fields": [
+          {
+            "name": "channel_id",
+            "type": "H256#13"
+          },
+          {
+            "name": "holder",
+            "type": "AccountId32#0"
+          },
+          {
+            "name": "units",
+            "type": "u128"
+          },
+          {
+            "name": "amount",
+            "type": "u128"
+          }
+        ],
+        "index": 10,
+        "name": "ForwardDistributionClaimed"
+      },
+      {
+        "fields": [
+          {
+            "name": "channel_id",
+            "type": "H256#13"
+          },
+          {
+            "name": "draw_id",
+            "type": "H256#13"
+          },
+          {
+            "name": "holder",
+            "type": "AccountId32#0"
+          },
+          {
+            "name": "units",
+            "type": "u128"
+          },
+          {
+            "name": "aggregate_units",
+            "type": "u128"
+          }
+        ],
+        "index": 11,
+        "name": "ForwardDrawOpened"
+      },
+      {
+        "fields": [
+          {
+            "name": "channel_id",
+            "type": "H256#13"
+          },
+          {
+            "name": "draw_id",
+            "type": "H256#13"
+          },
+          {
+            "name": "units",
+            "type": "u128"
+          },
+          {
+            "name": "aggregate_units",
+            "type": "u128"
+          }
+        ],
+        "index": 12,
+        "name": "ForwardDrawClosed"
+      },
+      {
+        "fields": [
+          {
+            "name": "bid_id",
+            "type": "H256#13"
+          },
+          {
+            "name": "buyer",
+            "type": "AccountId32#0"
+          },
+          {
+            "name": "payment",
+            "type": "u128"
+          },
+          {
+            "name": "commit_deadline",
+            "type": "u32"
+          }
+        ],
+        "index": 13,
+        "name": "ForwardBidPosted"
+      },
+      {
+        "fields": [
+          {
+            "name": "bid_id",
+            "type": "H256#13"
+          },
+          {
+            "name": "miner",
+            "type": "AccountId32#0"
+          },
+          {
+            "name": "bond",
+            "type": "u128"
+          }
+        ],
+        "index": 14,
+        "name": "ForwardBidClaimCommitted"
+      },
+      {
+        "fields": [
+          {
+            "name": "bid_id",
+            "type": "H256#13"
+          },
+          {
+            "name": "claimant_count",
+            "type": "u32"
+          },
+          {
+            "name": "reveal_deadline",
+            "type": "u32"
+          }
+        ],
+        "index": 15,
+        "name": "ForwardBidClaimsSealed"
+      },
+      {
+        "fields": [
+          {
+            "name": "bid_id",
+            "type": "H256#13"
+          },
+          {
+            "name": "miner",
+            "type": "AccountId32#0"
+          }
+        ],
+        "index": 16,
+        "name": "ForwardBidClaimRevealed"
+      },
+      {
+        "fields": [
+          {
+            "name": "bid_id",
+            "type": "H256#13"
+          },
+          {
+            "name": "channel_id",
+            "type": "H256#13"
+          },
+          {
+            "name": "winner",
+            "type": "AccountId32#0"
+          }
+        ],
+        "index": 17,
+        "name": "ForwardBidCleared"
+      },
+      {
+        "fields": [
+          {
+            "name": "bid_id",
+            "type": "H256#13"
+          },
+          {
+            "name": "buyer",
+            "type": "AccountId32#0"
+          },
+          {
+            "name": "payment_released",
+            "type": "u128"
+          }
+        ],
+        "index": 18,
+        "name": "ForwardBidCancelled"
+      },
+      {
+        "fields": [
+          {
+            "name": "channel_id",
+            "type": "H256#13"
+          },
+          {
+            "name": "outcome",
+            "type": "ForwardOutcome#441"
+          },
+          {
+            "name": "delivered_gn",
+            "type": "u128"
+          },
+          {
+            "name": "miner_paid",
+            "type": "u128"
+          },
+          {
+            "name": "buyer_refunded",
+            "type": "u128"
+          },
+          {
+            "name": "buyer_damages",
+            "type": "u128"
+          },
+          {
+            "name": "backup_bounty",
+            "type": "u128"
+          },
+          {
+            "name": "bond_released",
+            "type": "u128"
+          },
+          {
+            "name": "bond_slashed",
+            "type": "u128"
+          }
+        ],
+        "index": 19,
+        "name": "ForwardSettled"
+      },
+      {
+        "fields": [
+          {
+            "name": "channel_id",
+            "type": "H256#13"
+          },
+          {
+            "name": "agent",
+            "type": "AccountId32#0"
+          },
+          {
+            "name": "miner",
+            "type": "AccountId32#0"
+          },
+          {
+            "name": "escrow",
+            "type": "u128"
+          },
+          {
+            "name": "ack_deadline",
+            "type": "u32"
+          }
+        ],
+        "index": 20,
+        "name": "ForceOpenRequested"
+      },
+      {
+        "fields": [
+          {
+            "name": "channel_id",
+            "type": "H256#13"
+          },
+          {
+            "name": "miner",
+            "type": "AccountId32#0"
+          },
+          {
+            "name": "refunded",
+            "type": "u128"
+          },
+          {
+            "name": "failed_acks",
+            "type": "u32"
+          }
+        ],
+        "index": 21,
+        "name": "ForceOpenExpired"
+      },
+      {
+        "fields": [
+          {
+            "name": "channel_id",
+            "type": "H256#13"
+          },
+          {
+            "name": "added",
+            "type": "u128"
+          },
+          {
+            "name": "total",
+            "type": "u128"
+          }
+        ],
+        "index": 22,
+        "name": "EscrowToppedUp"
+      },
+      {
+        "fields": [
+          {
+            "name": "channel_id",
+            "type": "H256#13"
+          },
+          {
+            "name": "miner_paid",
+            "type": "u128"
+          },
+          {
+            "name": "burned",
+            "type": "u128"
+          },
+          {
+            "name": "aggregate_gn",
+            "type": "u128"
+          },
+          {
+            "name": "cooperative",
+            "type": "bool"
+          }
+        ],
+        "index": 23,
+        "name": "Settled"
+      },
+      {
+        "fields": [
+          {
+            "name": "channel_id",
+            "type": "H256#13"
+          },
+          {
+            "name": "final_root",
+            "type": "H256#13"
+          },
+          {
+            "name": "aggregate_gn",
+            "type": "u128"
+          },
+          {
+            "name": "challenge_end",
+            "type": "u32"
+          }
+        ],
+        "index": 24,
+        "name": "SettlementPosted"
+      },
+      {
+        "fields": [
+          {
+            "name": "channel_id",
+            "type": "H256#13"
+          },
+          {
+            "name": "refunded",
+            "type": "u128"
+          }
+        ],
+        "index": 25,
+        "name": "TimedOutRefunded"
+      },
+      {
+        "fields": [
+          {
+            "name": "channel_id",
+            "type": "H256#13"
+          },
+          {
+            "name": "challenger",
+            "type": "AccountId32#0"
+          },
+          {
+            "name": "contested_turn",
+            "type": "u32"
+          }
+        ],
+        "index": 26,
+        "name": "DisputeOpened"
+      },
+      {
+        "fields": [
+          {
+            "name": "channel_id",
+            "type": "H256#13"
+          },
+          {
+            "name": "challenger",
+            "type": "AccountId32#0"
+          },
+          {
+            "name": "lo",
+            "type": "u32"
+          },
+          {
+            "name": "hi",
+            "type": "u32"
+          }
+        ],
+        "index": 27,
+        "name": "BisectionOpened"
+      },
+      {
+        "fields": [
+          {
+            "name": "channel_id",
+            "type": "H256#13"
+          },
+          {
+            "name": "lo",
+            "type": "u32"
+          },
+          {
+            "name": "hi",
+            "type": "u32"
+          },
+          {
+            "name": "left_root",
+            "type": "H256#13"
+          },
+          {
+            "name": "right_root",
+            "type": "H256#13"
+          }
+        ],
+        "index": 28,
+        "name": "BisectionResponded"
+      },
+      {
+        "fields": [
+          {
+            "name": "channel_id",
+            "type": "H256#13"
+          },
+          {
+            "name": "lo",
+            "type": "u32"
+          },
+          {
+            "name": "hi",
+            "type": "u32"
+          },
+          {
+            "name": "rounds",
+            "type": "u32"
+          }
+        ],
+        "index": 29,
+        "name": "BisectionChallenged"
+      },
+      {
+        "fields": [
+          {
+            "name": "channel_id",
+            "type": "H256#13"
+          }
+        ],
+        "index": 30,
+        "name": "DisputeDismissed"
+      },
+      {
+        "fields": [
+          {
+            "name": "channel_id",
+            "type": "H256#13"
+          },
+          {
+            "name": "miner",
+            "type": "AccountId32#0"
+          },
+          {
+            "name": "slashed",
+            "type": "u128"
+          }
+        ],
+        "index": 31,
+        "name": "FraudUpheld"
+      },
+      {
+        "fields": [
+          {
+            "name": "model_hash",
+            "type": "H256#13"
+          },
+          {
+            "name": "tolerance",
+            "type": "ToplocTolerance#315"
+          }
+        ],
+        "index": 32,
+        "name": "ToplocModelToleranceSet"
+      },
+      {
+        "fields": [
+          {
+            "name": "model_hash",
+            "type": "H256#13"
+          },
+          {
+            "name": "precision",
+            "type": "ModelPrecision#246"
+          },
+          {
+            "name": "constants",
+            "type": "ToplocBandConstants#316"
+          }
+        ],
+        "index": 33,
+        "name": "ToplocModelBandConstantsSet"
+      },
+      {
+        "fields": [
+          {
+            "name": "channel_id",
+            "type": "H256#13"
+          },
+          {
+            "name": "turn_index",
+            "type": "u32"
+          },
+          {
+            "name": "miner",
+            "type": "AccountId32#0"
+          },
+          {
+            "name": "slashed",
+            "type": "u128"
+          },
+          {
+            "name": "validators",
+            "type": "u32"
+          }
+        ],
+        "index": 34,
+        "name": "ToplocFraudUpheld"
+      },
+      {
+        "fields": [
+          {
+            "name": "channel_id",
+            "type": "H256#13"
+          },
+          {
+            "name": "turn_index",
+            "type": "u32"
+          },
+          {
+            "name": "miner",
+            "type": "AccountId32#0"
+          },
+          {
+            "name": "milli_exponent_error",
+            "type": "u64"
+          },
+          {
+            "name": "validators",
+            "type": "u32"
+          }
+        ],
+        "index": 35,
+        "name": "ToplocEscalationRequested"
+      },
+      {
+        "fields": [
+          {
+            "name": "channel_id",
+            "type": "H256#13"
+          },
+          {
+            "name": "turn_index",
+            "type": "u32"
+          },
+          {
+            "name": "deadline",
+            "type": "u32"
+          }
+        ],
+        "index": 36,
+        "name": "ToplocEscalationOpened"
+      },
+      {
+        "fields": [
+          {
+            "name": "channel_id",
+            "type": "H256#13"
+          },
+          {
+            "name": "turn_index",
+            "type": "u32"
+          },
+          {
+            "name": "validators",
+            "type": "u32"
+          }
+        ],
+        "index": 37,
+        "name": "ToplocEscalationCleared"
+      },
+      {
+        "fields": [
+          {
+            "name": "channel_id",
+            "type": "H256#13"
+          },
+          {
+            "name": "turn_index",
+            "type": "u32"
+          },
+          {
+            "name": "refunded",
+            "type": "u128"
+          }
+        ],
+        "index": 38,
+        "name": "ToplocEscalationTimedOut"
+      },
+      {
+        "fields": [
+          {
+            "name": "channel_id",
+            "type": "H256#13"
+          },
+          {
+            "name": "aggregate_gn",
+            "type": "u128"
+          },
+          {
+            "name": "cert_commitment",
+            "type": "H256#13"
+          }
+        ],
+        "index": 39,
+        "name": "CertificateSettled"
+      },
+      {
+        "fields": [
+          {
+            "name": "channel_id",
+            "type": "H256#13"
+          },
+          {
+            "name": "miner",
+            "type": "AccountId32#0"
+          },
+          {
+            "name": "cap_gflops_per_sec",
+            "type": "u64"
+          },
+          {
+            "name": "assurance_tier",
+            "type": "AssuranceTier#442"
+          },
+          {
+            "name": "calibration_version",
+            "type": "u32"
+          },
+          {
+            "name": "soft_tier_spot_check_rate_ppm",
+            "type": "u32"
+          }
+        ],
+        "index": 40,
+        "name": "CalibrationSnapshotted"
+      },
+      {
+        "fields": [
+          {
+            "name": "channel_id",
+            "type": "H256#13"
+          },
+          {
+            "name": "profile",
+            "type": "AttestProfileRef#410"
+          },
+          {
+            "name": "verdict",
+            "type": "AttestVerdict#203"
+          }
+        ],
+        "index": 41,
+        "name": "ToplocAttestClaimAccepted"
+      },
+      {
+        "fields": [
+          {
+            "name": "channel_id",
+            "type": "H256#13"
+          },
+          {
+            "name": "reason",
+            "type": "SettlementDegradeReason#443"
+          },
+          {
+            "name": "new_deadline",
+            "type": "u32"
+          },
+          {
+            "name": "extensions",
+            "type": "u8"
+          }
+        ],
+        "index": 42,
+        "name": "ChallengeWindowExtended"
+      },
+      {
+        "fields": [
+          {
+            "name": "channel_id",
+            "type": "H256#13"
+          },
+          {
+            "name": "reason",
+            "type": "SettlementDegradeReason#443"
+          },
+          {
+            "name": "refunded",
+            "type": "u128"
+          }
+        ],
+        "index": 43,
+        "name": "DegradedRefunded"
+      },
+      {
+        "fields": [
+          {
+            "name": "channel_id",
+            "type": "H256#13"
+          },
+          {
+            "name": "miner_paid",
+            "type": "u128"
+          },
+          {
+            "name": "agent_refunded",
+            "type": "u128"
+          },
+          {
+            "name": "aggregate_gn",
+            "type": "u128"
+          }
+        ],
+        "index": 44,
+        "name": "UnrecoverableTranscriptVoided"
+      },
+      {
+        "fields": [
+          {
+            "name": "channel_id",
+            "type": "H256#13"
+          },
+          {
+            "name": "class",
+            "type": "AssuranceClass#444"
+          }
+        ],
+        "index": 45,
+        "name": "AssuranceClassPinned"
+      },
+      {
+        "fields": [
+          {
+            "name": "channel_id",
+            "type": "H256#13"
+          },
+          {
+            "name": "miner",
+            "type": "AccountId32#0"
+          },
+          {
+            "name": "commitment_ref",
+            "type": "H256#13"
+          },
+          {
+            "name": "turns_committed",
+            "type": "u32"
+          }
+        ],
+        "index": 46,
+        "name": "ToplocEvidenceSubmitted"
+      },
+      {
+        "fields": [
+          {
+            "name": "channel_id",
+            "type": "H256#13"
+          },
+          {
+            "name": "miner",
+            "type": "AccountId32#0"
+          },
+          {
+            "name": "agent_refunded",
+            "type": "u128"
+          },
+          {
+            "name": "slashed",
+            "type": "u128"
+          },
+          {
+            "name": "window_value",
+            "type": "u128"
+          }
+        ],
+        "index": 47,
+        "name": "AuditDataForfeited"
+      },
+      {
+        "fields": [
+          {
+            "name": "channel_id",
+            "type": "H256#13"
+          },
+          {
+            "name": "amount",
+            "type": "u128"
+          }
+        ],
+        "index": 48,
+        "name": "AuditFeeEarmarked"
+      },
+      {
+        "fields": [
+          {
+            "name": "channel_id",
+            "type": "H256#13"
+          },
+          {
+            "name": "validator",
+            "type": "AccountId32#0"
+          },
+          {
+            "name": "amount",
+            "type": "u128"
+          },
+          {
+            "name": "evidence",
+            "type": "H256#13"
+          }
+        ],
+        "index": 49,
+        "name": "AuditFeeClaimed"
+      },
+      {
+        "fields": [
+          {
+            "name": "channel_id",
+            "type": "H256#13"
+          },
+          {
+            "name": "slot",
+            "type": "SessionEvidenceSlot#314"
+          },
+          {
+            "name": "commitment",
+            "type": "H256#13"
+          },
+          {
+            "name": "size_bytes",
+            "type": "u32"
+          }
+        ],
+        "index": 50,
+        "name": "SessionEvidenceRegistered"
+      },
+      {
+        "fields": [
+          {
+            "name": "params",
+            "type": "Option<FcuEmpiricalParams#306>#305"
+          }
+        ],
+        "index": 51,
+        "name": "FcuEmpiricalParamsSet"
+      },
+      {
+        "fields": [
+          {
+            "name": "paused",
+            "type": "bool"
+          }
+        ],
+        "index": 52,
+        "name": "FcuMassSlashPauseSet"
+      },
+      {
+        "fields": [
+          {
+            "name": "bid_id",
+            "type": "H256#13"
+          },
+          {
+            "name": "authored_block",
+            "type": "u32"
+          }
+        ],
+        "index": 53,
+        "name": "ForwardBidRegistrationSealed"
+      },
+      {
+        "fields": [
+          {
+            "name": "channel_id",
+            "type": "H256#13"
+          },
+          {
+            "name": "seller",
+            "type": "AccountId32#0"
+          },
+          {
+            "name": "listing_id",
+            "type": "H256#13"
+          },
+          {
+            "name": "units",
+            "type": "u128"
+          },
+          {
+            "name": "total_price",
+            "type": "u128"
+          },
+          {
+            "name": "expires_at",
+            "type": "u32"
+          },
+          {
+            "name": "delivered_gn",
+            "type": "u128"
+          }
+        ],
+        "index": 54,
+        "name": "ForwardUnitsListed"
+      },
+      {
+        "fields": [
+          {
+            "name": "channel_id",
+            "type": "H256#13"
+          },
+          {
+            "name": "seller",
+            "type": "AccountId32#0"
+          },
+          {
+            "name": "buyer",
+            "type": "AccountId32#0"
+          },
+          {
+            "name": "listing_id",
+            "type": "H256#13"
+          },
+          {
+            "name": "units",
+            "type": "u128"
+          },
+          {
+            "name": "total_price",
+            "type": "u128"
+          }
+        ],
+        "index": 55,
+        "name": "ForwardUnitsSold"
+      },
+      {
+        "fields": [
+          {
+            "name": "channel_id",
+            "type": "H256#13"
+          },
+          {
+            "name": "seller",
+            "type": "AccountId32#0"
+          },
+          {
+            "name": "listing_id",
+            "type": "H256#13"
+          }
+        ],
+        "index": 56,
+        "name": "ForwardListingCancelled"
+      },
+      {
+        "fields": [
+          {
+            "name": "paused",
+            "type": "bool"
+          }
+        ],
+        "index": 57,
+        "name": "FcuPrimaryAdmissionsPauseSet"
+      },
+      {
+        "fields": [
+          {
+            "name": "profile_hash",
+            "type": "H256#13"
+          },
+          {
+            "name": "qualification_hash",
+            "type": "H256#13"
+          }
+        ],
+        "index": 58,
+        "name": "FcuServiceProfileRegistered"
+      },
+      {
+        "fields": [
+          {
+            "name": "profile_hash",
+            "type": "H256#13"
+          },
+          {
+            "name": "status",
+            "type": "FcuProfileStatus#310"
+          }
+        ],
+        "index": 59,
+        "name": "FcuServiceProfileStatusSet"
+      }
+    ],
+    "index": 103
+  },
+  "schema": "flop-observatory/decoder-shape@0",
+  "spec_name": "tzkv-runtime",
+  "spec_version": 1014014,
+  "system": {
+    "events": {
+      "hashers": [],
+      "key": null,
+      "modifier": "Default",
+      "record": [
+        {
+          "name": "phase",
+          "type": "Phase#460"
+        },
+        {
+          "name": "event",
+          "type": "RuntimeEvent#21"
+        },
+        {
+          "name": "topics",
+          "type": "Vec<H256#13>"
+        }
+      ],
+      "value": "Vec<EventRecord<RuntimeEvent#21, H256#13>#20>"
+    },
+    "index": 0,
+    "last_runtime_upgrade": {
+      "fields": [
+        {
+          "name": "spec_version",
+          "type": "Compact<u32>"
+        },
+        {
+          "name": "spec_name",
+          "type": "Cow<str>#463"
+        }
+      ],
+      "hashers": [],
+      "key": null,
+      "modifier": "Optional",
+      "value": "LastRuntimeUpgradeInfo#462"
+    }
+  }
+}

@@ -1,0 +1,156 @@
+// The shape pin (src/scale/shape.ts) and the one entry point for real chain data
+// (src/scale/block.ts): a block is decoded only when its spec, its metadata bytes and the shape
+// derived from them are the ones a person reviewed, and its LastRuntimeUpgrade names that spec.
+import { createHash } from "node:crypto";
+import { readFileSync } from "node:fs";
+import { describe, expect, it } from "vitest";
+import { decodeBlockEvents } from "../src/scale/block.js";
+import { decodeValue } from "../src/scale/decode.js";
+import { parseMetadata } from "../src/scale/metadata.js";
+import { ScaleError } from "../src/scale/reader.js";
+import { MAX_NAME_DEPTH, type PinInput, REVIEWED, deriveShape, pinShape, shapeText, typeName } from "../src/scale/shape.js";
+import { recorded } from "./helpers/recorded.js";
+import { bytes, cat, compact, def, metadata, str } from "./helpers/scale-write.js";
+
+const R = recorded();
+const MD = parseMetadata(R.metadata);
+const FILE = "shapes/tzkv-runtime-1014014.json";
+const SHAPE = readFileSync(new URL(`../${FILE}`, import.meta.url), "utf8");
+const sha256 = (b: Uint8Array | string) => createHash("sha256").update(b).digest("hex");
+const block = R.blocks.at(4);
+const input = (over: Partial<PinInput> = {}): PinInput => ({
+  specName: String(R.runtimeVersion.specName),
+  specVersion: Number(R.runtimeVersion.specVersion),
+  metadata: R.metadata,
+  lastRuntimeUpgrade: block?.lastRuntimeUpgrade ?? new Uint8Array(),
+  shapeText: SHAPE,
+  ...over,
+});
+const refused = (over: Partial<PinInput>): string => {
+  const p = pinShape(input(over));
+  return p.pinned ? "pinned" : p.refused;
+};
+
+describe("the reviewed shapes", () => {
+  it("start with spec 1014014 of tzkv-runtime, its 482132 metadata bytes by sha256, and the committed shape file", () => {
+    expect(REVIEWED).toEqual([
+      {
+        specName: "tzkv-runtime",
+        specVersion: 1014014,
+        metadataSha256: "f4fd2addba7fff1129483d0e66b8e6bc69141292f56443e201d3f073aab03444",
+        metadataBytes: 482132,
+        shapeFile: FILE,
+        shapeSha256: sha256(SHAPE),
+      },
+    ]);
+    expect(R.metadata.length).toBe(482132);
+    expect(sha256(R.metadata)).toBe(REVIEWED.at(0)?.metadataSha256);
+  });
+
+  it("hold a shape file equal, byte for byte, to the shape derived again from the recorded metadata", () => {
+    expect(shapeText(deriveShape(MD))).toBe(SHAPE);
+  });
+
+  it("name in the shape the ComputeChannel index, events, Channels entry and channel fields, and the System entries", () => {
+    const s = JSON.parse(SHAPE);
+    expect(Object.keys(s)).toEqual(["compute_channel", "schema", "spec_name", "spec_version", "system"]);
+    expect(s).toMatchObject({ schema: "flop-observatory/decoder-shape@0", spec_name: "tzkv-runtime", spec_version: 1014014 });
+    expect(s.compute_channel.index).toBe(103);
+    expect(s.compute_channel.events.length).toBe(60);
+    expect(s.compute_channel.events.at(23)).toEqual({
+      index: 23,
+      name: "Settled",
+      fields: [
+        { name: "channel_id", type: "H256#13" },
+        { name: "miner_paid", type: "u128" },
+        { name: "burned", type: "u128" },
+        { name: "aggregate_gn", type: "u128" },
+        { name: "cooperative", type: "bool" },
+      ],
+    });
+    expect(s.compute_channel.channels).toMatchObject({ modifier: "Optional", hashers: ["Blake2_128Concat"], key: "H256#13", value: "Channel#805" });
+    expect(s.compute_channel.channels.fields.map((f: { name: string }) => f.name)).toEqual([
+      "agent", "miner", "model_hash", "measured_root", "precision", "enclave_key", "agent_key", "escrow", "sla", "nonce", "opened_at", "last_attested_at", "state", "transcript_ref", "weights_pin", "locked_compute_consumed",
+    ]);
+    expect(s.compute_channel.channel_states.map((v: { name: string }) => v.name)).toEqual(["Open", "Settling", "Closed", "PendingAck"]);
+    expect(s.system.events).toMatchObject({ modifier: "Default", hashers: [], key: null, value: "Vec<EventRecord<RuntimeEvent#21, H256#13>#20>" });
+    expect(s.system.last_runtime_upgrade).toMatchObject({ modifier: "Optional", hashers: [], key: null, value: "LastRuntimeUpgradeInfo#462" });
+  });
+});
+
+describe("the pin", () => {
+  it("decodes System.LastRuntimeUpgrade at each of the twelve blocks as spec 1014014, and pins each block", () => {
+    const lru = MD.pallets.find((p) => p.name === "System")?.storage?.entries.find((e) => e.name === "LastRuntimeUpgrade")?.value ?? -1;
+    for (const b of R.blocks) {
+      expect(decodeValue(MD, lru, b.lastRuntimeUpgrade), `block ${b.number}`).toEqual({ spec_version: 1014014, spec_name: "tzkv-runtime" });
+      const p = pinShape(input({ lastRuntimeUpgrade: b.lastRuntimeUpgrade }));
+      expect(p.pinned, `block ${b.number}`).toBe(true);
+    }
+  });
+
+  it("refuses a spec that is not reviewed, by version or by name", () => {
+    expect(refused({ specVersion: 1014015 })).toBe("spec tzkv-runtime 1014015 is not a reviewed shape");
+    expect(refused({ specName: "other-runtime" })).toBe("spec other-runtime 1014014 is not a reviewed shape");
+  });
+
+  it("refuses metadata that is not the reviewed bytes: one bit flipped, one byte more, one byte less", () => {
+    const flipped = R.metadata.slice();
+    flipped.set([(flipped.at(1000) ?? 0) ^ 1], 1000);
+    expect(refused({ metadata: flipped })).toBe(
+      `the metadata for spec 1014014 is 482132 bytes with sha256 ${sha256(flipped)}, not the reviewed 482132 bytes with sha256 f4fd2addba7fff1129483d0e66b8e6bc69141292f56443e201d3f073aab03444`,
+    );
+    expect(refused({ metadata: cat(R.metadata, bytes(0)) })).toMatch(/^the metadata for spec 1014014 is 482133 bytes with sha256 [0-9a-f]{64}, not the reviewed 482132 bytes/);
+    expect(refused({ metadata: R.metadata.subarray(1) })).toMatch(/^the metadata for spec 1014014 is 482131 bytes with sha256 [0-9a-f]{64}, not the reviewed/);
+  });
+
+  it("refuses a shape file that is not the reviewed one, even one changed only in its spacing", () => {
+    expect(refused({ shapeText: SHAPE.replace('"index": 103', '"index": 104') })).toBe(`the shape file given is not the reviewed ${FILE}`);
+    expect(refused({ shapeText: `${SHAPE}\n` })).toBe(`the shape file given is not the reviewed ${FILE}`);
+  });
+
+  it("refuses a block whose LastRuntimeUpgrade names another spec, or is not one", () => {
+    expect(refused({ lastRuntimeUpgrade: cat(compact(1014015), str("tzkv-runtime")) })).toBe("the block's LastRuntimeUpgrade names spec tzkv-runtime 1014015, not tzkv-runtime 1014014");
+    expect(refused({ lastRuntimeUpgrade: cat(compact(1014014), str("other")) })).toBe("the block's LastRuntimeUpgrade names spec other 1014014, not tzkv-runtime 1014014");
+    expect(refused({ lastRuntimeUpgrade: compact(1014014) })).toBe("the block's LastRuntimeUpgrade: type 464, a str at byte 4: needs 1 byte, 0 left");
+  });
+});
+
+describe("the one entry point for real chain data", () => {
+  it("decodes a block's events once pinned, and refuses them with the pin's reason when not", () => {
+    for (const b of R.blocks) {
+      const d = decodeBlockEvents({ ...input({ lastRuntimeUpgrade: b.lastRuntimeUpgrade }), events: b.events });
+      expect(d.decoded && d.events.length > 0, `block ${b.number}`).toBe(true);
+    }
+    const no = decodeBlockEvents({ ...input({ specVersion: 1 }), events: block?.events ?? new Uint8Array() });
+    expect(no).toEqual({ decoded: false, refused: "not decoded: spec tzkv-runtime 1 is not a reviewed shape" });
+    const cut = decodeBlockEvents({ ...input(), events: block?.events.subarray(0, 100) ?? new Uint8Array() });
+    expect(cut.decoded === false && cut.refused.startsWith("System.Events: ")).toBe(true);
+  });
+});
+
+describe("naming types, bounded", () => {
+  it("names a type that refers to itself through its fields in one step", () => {
+    const md = parseMetadata(metadata([{ path: ["Tree"], def: def.composite([{ name: "kids", type: 1 }]) }, { def: def.sequence(0) }], []));
+    expect(typeName(md, 1)).toBe("Vec<Tree#0>");
+  });
+
+  it(`refuses a list of itself, a parameter of itself, and nesting past ${MAX_NAME_DEPTH} levels`, () => {
+    const refusal = (f: () => unknown) => {
+      try {
+        f();
+      } catch (e) {
+        if (e instanceof ScaleError) return e.message;
+        throw e;
+      }
+      return "named";
+    };
+    const self = parseMetadata(metadata([{ def: def.sequence(0) }], []));
+    expect(refusal(() => typeName(self, 0))).toBe("type 0 nests too deeply to be named");
+    const param = parseMetadata(metadata([{ path: ["Box"], params: [{ name: "T", type: 0 }], def: def.composite([]) }], []));
+    expect(refusal(() => typeName(param, 0))).toBe("type 0 nests too deeply to be named");
+    // A chain of lists, each of the next: 15 deep is named, 16 is refused.
+    const chain = (n: number) => parseMetadata(metadata([...Array.from({ length: n }, (_v, i) => ({ def: def.sequence(i + 1) })), { def: def.primitive("u8") }], []));
+    expect(typeName(chain(MAX_NAME_DEPTH - 1), 0)).toBe(`${"Vec<".repeat(MAX_NAME_DEPTH - 1)}u8${">".repeat(MAX_NAME_DEPTH - 1)}`);
+    expect(refusal(() => typeName(chain(MAX_NAME_DEPTH), 0))).toBe("type 0 nests too deeply to be named");
+  });
+});
