@@ -97,22 +97,33 @@ def unresolved(e): return e.get("state") in ("timeout_unknown", "error")
 
 OVER_PER_CALL = "over the per-call cap"
 OVER_DAILY = "over the daily cap"
+OVER_JOB = "over the job budget"
 OVER_RESERVATION = "over the reservation"
+# The spend limit that applied to a row, by payer (as imd-flop checkBudget). A holder paid row counts against
+# the seat's daily cap. A requester paid row counts against the job budget, never the daily cap. Each entry is
+# the ledger field that holds the limit, the row key and page label of what is left, and the 'over' wording.
+SPEND_LIMITS = {"holder": dict(field="daily_cap", key="daily_left", label="daily cap left", over=OVER_DAILY),
+                "requester": dict(field="job_budget", key="job_left", label="job budget left", over=OVER_JOB)}
 
-def daily_left(e):
-    """Daily cap left after this row's cap_charge, or None when any input is unknown (cap math uses cap_charge)."""
-    spent_before, cap_charge, daily = amount(e.get("spent_before")), amount(e.get("cap_charge")), amount(e.get("daily_cap"))
-    if e.get("daily_cap") is not None and daily is None: raise ValueError("daily_cap is not a number")
-    return r6(daily - spent_before - cap_charge) if None not in (daily, spent_before, cap_charge) else None
+def spend_limit(e):
+    """The spend limit that applied to this row and what is left of it after the row's cap_charge, as
+    (limit, left). left is None when any input is unknown (cap math uses cap_charge). A row whose payer is
+    neither holder nor requester gives (None, None): which limit applied is unknown, never a guess."""
+    payer = e.get("payer")
+    limit = SPEND_LIMITS.get(payer) if isinstance(payer, str) else None
+    if limit is None: return None, None
+    spent_before, cap_charge, cap = amount(e.get("spent_before")), amount(e.get("cap_charge")), amount(e.get(limit["field"]))
+    if e.get(limit["field"]) is not None and cap is None: raise ValueError(f'{limit["field"]} is not a number')
+    return limit, (r6(cap - spent_before - cap_charge) if None not in (cap, spent_before, cap_charge) else None)
 
 def over_limit(e, r):
-    """The first limit a settled receipt breaks, or None (KD-2, FIXER's order): the per-call cap, then the daily
-    cap (daily cap left below 0), then the reservation (quote_padded)."""
+    """The first limit a settled receipt breaks, or None (KD-2, FIXER's order): the per-call cap, then the row's
+    spend limit (daily cap or job budget left below 0), then the reservation (quote_padded)."""
     settled = amount(r.get("settled"))
     if settled is None or r.get("state") not in SETTLES: return None
-    per_call, quote, left = amount(e.get("per_call_cap")), amount(e.get("quote_padded")), daily_left(e)
+    per_call, quote, (applied, left) = amount(e.get("per_call_cap")), amount(e.get("quote_padded")), spend_limit(e)
     if per_call is not None and settled > per_call: return OVER_PER_CALL
-    if left is not None and left < 0: return OVER_DAILY
+    if left is not None and left < 0: return applied["over"]
     if quote is not None and settled > quote: return OVER_RESERVATION
     return None
 
@@ -229,14 +240,17 @@ def build_row(e, r):
     sub = [f"req {rid_label}", f"seat #{esc(e.get('seat'))} · node {BLANK_NODE}",
            f"{esc(e.get('provider'))} · {esc(e.get('network'))} · {esc(when(e['ts']))}"]
     # Link column: no link evidence is recorded in the ledger, so it is always grey "not checked" (link_bypassed too).
-    row = dict(label=esc(e.get("job")), sub=sub, payer=esc(e.get("payer") or "holder"), flags=[], spend_flags=[], flop=[],
+    # A row without a payer is tagged unknown, not holder: no limit is shown for it either (spend_limit).
+    row = dict(label=esc(e.get("job")), sub=sub, payer=esc(e.get("payer") or "unknown"), flags=[], spend_flags=[], flop=[],
                est=amount(e.get("quote_padded")), per_call=amount(e.get("per_call_cap")),
                outcome=["grey", "not read", "mock job, no imd lookup"], link=["grey", "not checked", None], bad=False)
-    row["daily_left"] = daily_left(e)
+    # The row carries what is left of the limit that applied, under that limit's key (daily_left or job_left).
+    applied, left = spend_limit(e)
+    if applied: row[applied["key"]] = left
     kind, limit = classify(e, r)
-    # Say it once per row: a row whose limit is the daily cap says so on its chip, so no spend flag repeats it.
-    if row["daily_left"] is not None and row["daily_left"] < 0 and limit != OVER_DAILY:
-        row["spend_flags"].append(OVER_DAILY)
+    # Say it once per row: a row whose chip already names its spend limit gets no spend flag repeating it.
+    if left is not None and left < 0 and limit != applied["over"]:
+        row["spend_flags"].append(applied["over"])
     cap_charge = amount(e.get("cap_charge"))
     reservation = cap_charge if cap_charge is not None else amount(e.get("quote_padded"))
     ROW_KINDS[kind](row, e, r, reservation, limit)
@@ -254,8 +268,10 @@ def render(row):
         if k == "reservation": v += f" {HELD_NOTE}"
         flop += f'<div><span class="k">{k}</span> {v}</div>' if k else f'<div class="k">{v}</div>'
     flop += "".join(f'<div class="flag">{f}</div>' for f in row["flags"])
+    # One line per spend limit the row carries: 'daily cap left' or 'job budget left', neither for an unknown payer.
     spend = (f'<div><span class="k">est.</span> {num(row["est"])}</div><div><span class="k">per-call cap</span> {num(row["per_call"])}</div>'
-             f'<div><span class="k">daily cap left</span> {num(row["daily_left"])}</div>' + "".join(f'<div class="flag">{f}</div>' for f in row["spend_flags"]))
+             + "".join(f'<div><span class="k">{lim["label"]}</span> {num(row[lim["key"]])}</div>' for lim in SPEND_LIMITS.values() if lim["key"] in row)
+             + "".join(f'<div class="flag">{f}</div>' for f in row["spend_flags"]))
     oc, ot, on = row["outcome"]
     out = f'<span class="chip c-{oc}">{ot}</span>' + (f'<div class="k">{on}</div>' if on else "") + (f'<div class="flag">{row["outcome_flag"]}</div>' if row.get("outcome_flag") else "")
     lc, lt, lf = row["link"]
