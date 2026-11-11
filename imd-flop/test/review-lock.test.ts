@@ -11,7 +11,7 @@ import { withLedgerLock } from "../src/ledger.js";
 import { acquire, runOnDisk, type FileOp, type Self, type Step } from "../src/lock.js";
 import { LEDGER_BUSY } from "../src/receipt-store.js";
 import { DISAGREE } from "../src/settlement.js";
-import { cli, readLines, readySeat, tmpHome } from "./helpers.js";
+import { canActAsAnotherUser, cli, readLines, readySeat, tmpHome } from "./helpers.js";
 
 // A pass through of lock.ts. Only when loseLockAt is set does assertLockHeld first remove the lock by
 // hand (the one way, inside the stated rules, to reach "ledger lock lost"), then run the real check.
@@ -112,7 +112,9 @@ describe("review defect 2, fixed: a dead holder's lock that this process may not
   // unlink was rethrown raw (exit 1, no lock message), and each try left one more right file.
   // Decided: the waiter removes its own right file, gets no "again", and waits. The timeout says this user
   // cannot remove the lock, names the file and its owner, and gives the way back.
-  it("review defect 2, fixed: run exits 10 with the lock message, and no right file is left", async () => {
+  // Needs a second OS user: the lock and the home belong to another user. test/lock.test.ts holds the same
+  // rule everywhere: the reclaim step through a refused unlink, and the driver's mapping of a real one.
+  it.skipIf(!canActAsAnotherUser())("review defect 2, fixed (needs a second OS user): run exits 10 with the lock message, and no right file is left", async () => {
     const h = tmpHome();
     const home = join(h, "home");
     mkdirSync(home);

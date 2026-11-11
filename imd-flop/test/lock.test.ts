@@ -14,7 +14,7 @@ import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import { appendLedger, LedgerLockError, LedgerLockLost, withLedgerLock, type LedgerEntry } from "../src/ledger.js";
 import { provablyDead, reclaim, rightPath, runOnDisk, sweep, timeoutMessage, type Self, type Step } from "../src/lock.js";
-import { cli, readLines, readySeat, tmpHome } from "./helpers.js";
+import { canActAsAnotherUser, cli, OTHER_UID, readLines, readySeat, tmpHome } from "./helpers.js";
 
 const SEAT = "9001";
 const root = join(import.meta.dirname, "..");
@@ -157,6 +157,35 @@ describe("defect 2: unlink errors are never swallowed and never raw", () => {
     expect(runOnDisk(unlinkDirBestEffort(), noWait)).toBe("absent");
   });
 
+  it("the reclaim step through a refused unlink: no removal, no again, and the right file is still removed", () => {
+    const lock = "/h/ledger.jsonl.lock";
+    const right = rightPath(lock, "T", 1);
+    const g = reclaim(self(4_000_030, "w"), lock, "T");
+    expect(g.next().value).toEqual({ kind: "create", path: right, content: expect.any(String) });
+    expect(g.next(true).value).toEqual({ kind: "read", path: lock });
+    expect(g.next(owner(4_000_031, "T")).value).toEqual({ kind: "unlink", path: lock, bestEffort: false });
+    expect(g.next({ denied: "EPERM" }).value).toEqual({ kind: "unlink", path: right, bestEffort: false });
+    expect(g.next("removed")).toEqual({ done: true, value: false });
+  });
+
+  it("the real driver maps a refused unlink to denied with its code: a file in a read only directory (EACCES)", () => {
+    const h = tmpHome();
+    const dir = join(h, "ro");
+    mkdirSync(dir);
+    const f = join(dir, "ledger.jsonl.lock");
+    writeFileSync(f, owner(deadPid(), "T"));
+    function* unlinkIt(): Step<unknown> {
+      return yield { kind: "unlink", path: f };
+    }
+    chmodSync(dir, 0o555);
+    try {
+      expect(runOnDisk(unlinkIt(), noWait)).toEqual({ denied: "EACCES" });
+      expect(existsSync(f)).toBe(true);
+    } finally {
+      chmodSync(dir, 0o755);
+    }
+  });
+
   it("release never throws after the work is done: a lock it cannot remove gets one stderr line naming the file and the code (review M30)", () => {
     const h = tmpHome();
     const lines: string[] = [];
@@ -211,7 +240,18 @@ describe("the liveness probe: EPERM means alive (review M29)", () => {
     expect(ask(false)).toBe(true);
   });
 
-  it("the real driver: a process of another user probing this root process gets EPERM, and judges it alive", () => {
+  // The real EPERM path, in every environment: an ordinary user may not signal pid 1 (root's init on every
+  // Linux), and root may, so root uses a child of a second OS user probing this process. One of the two
+  // always runs, and the third test says so.
+  const pid1Refused = (() => { try { process.kill(1, 0); return false; } catch (e) { return (e as NodeJS.ErrnoException).code === "EPERM"; } })();
+
+  it.skipIf(!pid1Refused)("the real driver, as a user that may not signal pid 1: it gets EPERM and judges pid 1 alive", () => {
+    const me = self(process.pid, "me");
+    expect(runOnDisk(provablyDead(me, { pid: 1, host: hostname(), token: "init" }), noWait)).toBe(false);
+    expect(runOnDisk(provablyDead(me, { pid: deadPid(), host: hostname(), token: "gone" }), noWait)).toBe(true);
+  });
+
+  it.skipIf(!canActAsAnotherUser())("the real driver (needs a second OS user): a process of another user probing this process gets EPERM, and judges it alive", () => {
     const h = tmpHome();
     const script = join(h, "probe.mjs");
     writeFileSync(script, `
@@ -226,9 +266,13 @@ process.stdout.write(JSON.stringify({ uid: process.getuid(), eperm, dead, gone }
 `);
     chmodSync(h, 0o755);
     chmodSync(script, 0o644);
-    const r = spawnSync("setpriv", ["--reuid=65534", "--regid=65534", "--clear-groups", process.execPath, script, String(process.pid), String(deadPid())], { encoding: "utf8", timeout: 30_000 });
-    expect(JSON.parse(r.stdout || "null"), r.stderr).toEqual({ uid: 65534, eperm: true, dead: false, gone: true });
+    const r = spawnSync("setpriv", [`--reuid=${OTHER_UID}`, `--regid=${OTHER_UID}`, "--clear-groups", process.execPath, script, String(process.pid), String(deadPid())], { encoding: "utf8", timeout: 30_000 });
+    expect(JSON.parse(r.stdout || "null"), r.stderr).toEqual({ uid: OTHER_UID, eperm: true, dead: false, gone: true });
   }, 30_000);
+
+  it("one of the two real EPERM tests runs here", () => {
+    expect(pid1Refused || canActAsAnotherUser()).toBe(true);
+  });
 });
 
 describe("a right file with no readable owner means no right (review M2)", () => {
