@@ -53,8 +53,8 @@ describe("the reviewed shapes", () => {
 
   it("name in the shape the ComputeChannel index, events, Channels entry and channel fields, and the System entries", () => {
     const s = JSON.parse(SHAPE);
-    expect(Object.keys(s)).toEqual(["compute_channel", "schema", "spec_name", "spec_version", "system"]);
-    expect(s).toMatchObject({ schema: "flop-observatory/decoder-shape@0", spec_name: "tzkv-runtime", spec_version: 1014014 });
+    expect(Object.keys(s)).toEqual(["compute_channel", "schema", "spec_name", "spec_version", "system", "types"]);
+    expect(s).toMatchObject({ schema: "flop-observatory/decoder-shape@1", spec_name: "tzkv-runtime", spec_version: 1014014 });
     expect(s.compute_channel.index).toBe(103);
     expect(s.compute_channel.events.length).toBe(60);
     expect(s.compute_channel.events.at(23)).toEqual({
@@ -75,6 +75,55 @@ describe("the reviewed shapes", () => {
     expect(s.compute_channel.channel_states.map((v: { name: string }) => v.name)).toEqual(["Open", "Settling", "Closed", "PendingAck"]);
     expect(s.system.events).toMatchObject({ modifier: "Default", hashers: [], key: null, value: "Vec<EventRecord<RuntimeEvent#21, H256#13>#20>" });
     expect(s.system.last_runtime_upgrade).toMatchObject({ modifier: "Optional", hashers: [], key: null, value: "LastRuntimeUpgradeInfo#462" });
+  });
+});
+
+describe("the type closure in the shape", () => {
+  const s = JSON.parse(SHAPE);
+  /** Every type name a description names. */
+  const named = (d: Record<string, unknown>): string[] => {
+    const f = (fs: { type: string }[]) => fs.map((x) => x.type);
+    if (d.kind === "composite") return f(d.fields as { type: string }[]);
+    if (d.kind === "variant") return (d.variants as { fields: { type: string }[] }[]).flatMap((v) => f(v.fields));
+    if (d.kind === "sequence" || d.kind === "array") return [d.element as string];
+    if (d.kind === "tuple") return d.types as string[];
+    if (d.kind === "compact") return [d.type as string];
+    return [];
+  };
+
+  it("describes 464 types, and every type a description names is described too", () => {
+    const types = s.types as Record<string, Record<string, unknown>>;
+    expect(Object.keys(types).length).toBe(464);
+    for (const [k, d] of Object.entries(types)) for (const x of named(d)) expect(types[x], `${k} names ${x}`).toBeDefined();
+    // The entry points name described types.
+    for (const x of [s.system.events.value, s.system.last_runtime_upgrade.value, s.system.version, s.compute_channel.channels.value, s.compute_channel.channels.key]) expect(types[x], x).toBeDefined();
+  });
+
+  it("holds the outer event enum with every pallet's events, the phase, and the channel's fields and states", () => {
+    const types = s.types as Record<string, Record<string, unknown>>;
+    const outer = types["RuntimeEvent#21"] as { variants: { name: string; index: number; fields: { type: string }[] }[] };
+    expect(outer.variants.length).toBe(MD.pallets.filter((p) => p.event !== null).length);
+    expect(outer.variants.find((v) => v.name === "ComputeChannel")).toMatchObject({ index: 103 });
+    expect(types["Phase#460"]).toMatchObject({ kind: "variant" });
+    expect(types["Channel#805"]).toMatchObject({ kind: "composite", path: ["pallet_compute_channel", "pallet", "Channel"] });
+    expect(types["ChannelState<u32>#806"]).toMatchObject({ kind: "variant" });
+    expect(types["[u8; 32]"]).toEqual({ kind: "array", path: [], element: "u8", len: 32 });
+  });
+
+  it("is held to the review by its sha256: a file another deriver writes from the reviewed metadata passes the other checks and is refused by that alone", () => {
+    // Another deriver: today's without the closure, as the shape was before this round. Its file is
+    // what a changed deriveShape and a file written again from it would give. The metadata is the
+    // reviewed bytes (refusal 2 passes), and that deriver's shape equals that file (refusal 4 passes
+    // for it). Only the shape file's sha256 refuses it.
+    const other = (md: ReturnType<typeof parseMetadata>) => {
+      const x = deriveShape(md) as Record<string, unknown>;
+      const { types, ...rest } = x;
+      return { ...rest, schema: "flop-observatory/decoder-shape@0" };
+    };
+    const text = shapeText(other(MD) as never);
+    expect(sha256(R.metadata)).toBe(REVIEWED.at(0)?.metadataSha256);
+    expect(shapeText(other(parseMetadata(R.metadata)) as never)).toBe(text);
+    expect(refused({ shapeText: text })).toBe(`the shape file given is not the reviewed ${FILE}`);
   });
 });
 

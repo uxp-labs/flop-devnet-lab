@@ -20,7 +20,7 @@ import { decodeValue, typeLabel } from "../src/scale/decode.js";
 import { decodeEvents } from "../src/scale/events.js";
 import { type Metadata, parseMetadata } from "../src/scale/metadata.js";
 import { ScaleError, toHex } from "../src/scale/reader.js";
-import { type PinInput, deriveShape, pinShape, shapeText, typeName } from "../src/scale/shape.js";
+import { MAX_NAME_LENGTH, MAX_SHAPE_CHARS, MAX_SHAPE_STEPS, type PinInput, deriveShape, namer, pinShape, shapeText, typeName } from "../src/scale/shape.js";
 import { hashKeyPart, storageKey } from "../src/scale/storage-key.js";
 import { plain } from "./helpers/plain.js";
 import { seeded } from "./helpers/random.js";
@@ -108,19 +108,36 @@ function shapeMetadata(o: { eventFields?: { name: string; type: number }[]; reco
 }
 
 describe("crashes that are not a ScaleError", () => {
-  it("DEFECT 1: typeName throws a RangeError (Invalid string length) on 2.2 MB of metadata: one long path part named 250 times", () => {
+  it("review defect 1, fixed: typeName refuses with a ScaleError, not a RangeError, a name past its length on 2.2 MB of metadata: one long path part named 250 times", () => {
     const md = parseMetadata(metadata([{ path: ["a".repeat(2_200_000)], def: def.tuple([]) }, { def: def.tuple(new Array(250).fill(0)) }], []));
-    expect(thrown(() => typeName(md, 1))).toEqual({ cls: "RangeError", message: "Invalid string length" });
+    expect(thrown(() => typeName(md, 1))).toEqual({ cls: "ScaleError", message: `the name of type 0 is longer than ${MAX_NAME_LENGTH} characters` });
   });
 
-  it("DEFECT 1: and the same name, below the string limit, is about 250 times the bytes it came from", () => {
-    const md = parseMetadata(metadata([{ path: ["a".repeat(100_000)], def: def.tuple([]) }, { def: def.tuple(new Array(250).fill(0)) }], []));
-    expect(typeName(md, 1).length).toBeGreaterThan(200 * 100_000);
+  it("review defect 1, fixed: a name below the string limit is refused too once it passes the stated length, as soon as it does", () => {
+    const md = parseMetadata(metadata([{ path: ["a".repeat(100)], def: def.tuple([]) }, { def: def.tuple(new Array(250).fill(0)) }], []));
+    expect(thrown(() => typeName(md, 1))).toEqual({ cls: "ScaleError", message: `the name of type 1 is longer than ${MAX_NAME_LENGTH} characters` });
+    const ok = parseMetadata(metadata([{ path: ["a".repeat(100)], def: def.tuple([]) }, { def: def.tuple(new Array(10).fill(0)) }], []));
+    expect(typeName(ok, 1).length).toBeLessThanOrEqual(MAX_NAME_LENGTH);
   });
 
-  it("DEFECT 1: deriveShape throws the same RangeError through an event field of that type", () => {
+  it("review defect 1, fixed: deriveShape refuses the same name through an event field of that type with a ScaleError", () => {
     const b = shapeMetadata({ eventFields: [{ name: "x", type: 13 }], extra: [{ path: ["a".repeat(2_200_000)], def: def.tuple([]) }, { def: def.tuple(new Array(250).fill(12)) }] });
-    expect(thrown(() => deriveShape(parseMetadata(b)))).toEqual({ cls: "RangeError", message: "Invalid string length" });
+    expect(thrown(() => deriveShape(parseMetadata(b)))).toEqual({ cls: "ScaleError", message: `the name of type 12 is longer than ${MAX_NAME_LENGTH} characters` });
+  });
+
+  it("review defect 1, fixed: one deriveShape has one budget of steps and characters, and the real shape uses a small part of it", () => {
+    const n = namer(MD);
+    deriveShape(MD, n);
+    const steps = MAX_SHAPE_STEPS - n.steps.left;
+    const chars = MAX_SHAPE_CHARS - n.chars.left;
+    expect({ steps, chars }).toEqual({ steps: 9672, chars: 18167 });
+    // Past either budget, a ScaleError.
+    const tight = namer(MD);
+    tight.steps.left = 100;
+    expect(thrown(() => deriveShape(MD, tight)).message).toMatch(/^the shape takes more than 1000000 steps, at type -?\d+$/);
+    const few = namer(MD);
+    few.chars.left = 100;
+    expect(thrown(() => deriveShape(MD, few)).message).toBe("the shape writes more than 4000000 characters of names and paths");
   });
 
   it("review defect 10, fixed: the hashes refuse an out of range digest length or seed with a RangeError, a caller's mistake, and hashKeyPart refuses a hasher it does not know with a ScaleError", () => {
@@ -166,11 +183,26 @@ describe("work that is not bounded by a constant a step", () => {
     return () => deriveShape(md);
   };
 
-  it("DEFECT 3: deriveShape takes time in the product of an event's field count and a type's parameter count, which no name step counts", () => {
+  it("review defect 3, fixed: deriveShape is linear: 4 times an event's fields and a type's parameters takes well under 16 times the time", () => {
     const small = fastest(paramCase(500, 2_000), 5);
     const large = fastest(paramCase(2_000, 8_000), 3);
-    expect(large / small).toBeGreaterThan(7);
-    expect(large).toBeGreaterThan(40);
+    // The product would be about 16; each name built once, and each parameter one step, is about 4.
+    expect(large / small).toBeLessThan(8);
+  });
+
+  it("review defect 3, fixed: and its steps grow by the same factor as its size, each parameter and each field one step", () => {
+    const steps = (f: number, p: number) => {
+      const md = parseMetadata(
+        shapeMetadata({ eventFields: Array.from({ length: f }, (_, i) => ({ name: `f${i}`, type: 12 })), extra: [{ path: ["P"], params: Array.from({ length: p }, () => ({ name: "T", type: null })), def: def.tuple([]) }] }),
+      );
+      const n = namer(md);
+      deriveShape(md, n);
+      return MAX_SHAPE_STEPS - n.steps.left;
+    };
+    const a = steps(500, 2_000);
+    const b = steps(2_000, 8_000);
+    expect(b / a).toBeGreaterThan(3.9);
+    expect(b / a).toBeLessThan(4.1);
   });
 
   it("HELD: parseMetadata is linear: 4 times the fields takes about 4 times the time, not 16", () => {
@@ -344,24 +376,30 @@ describe("the shape pin", () => {
     [a.name, b.name] = [b.name, a.name];
   });
 
-  it("DEFECT 7: the shape file stays byte for byte equal when ModelPrecision's variants, H256's bytes or Sla's fields change", () => {
+  const H160 = edited((v) => {
+    const t = v.lookup[H256];
+    if (t) t.def = { tag: "composite", value: [{ type: BYTES20, typeName: "[u8; 20]", docs: [] }] };
+  });
+  const SLA128 = edited((v) => {
+    const f = (v.lookup[SLA]?.def.value as { type: number }[]).at(0);
+    if (f) f.type = U128;
+  });
+
+  it("review defect 7, fixed: the shape changes when ModelPrecision's variants, H256's bytes or Sla's fields change, each where that type is described", () => {
     expect(SWAPPED.length).toBe(R.metadata.length);
-    const h160 = edited((v) => {
-      const t = v.lookup[H256];
-      if (t) t.def = { tag: "composite", value: [{ type: BYTES20, typeName: "[u8; 20]", docs: [] }] };
-    });
-    const sla = edited((v) => {
-      const f = (v.lookup[SLA]?.def.value as { type: number }[]).at(0);
-      if (f) f.type = U128;
-    });
-    for (const b of [SWAPPED, h160, sla]) {
+    const real = JSON.parse(SHAPE);
+    const changed = (b: Uint8Array) => JSON.parse(shapeText(deriveShape(parseMetadata(b))));
+    for (const b of [SWAPPED, H160, SLA128]) {
       expect(toHex(b)).not.toBe(toHex(R.metadata));
-      expect(shapeText(deriveShape(parseMetadata(b)))).toBe(SHAPE);
+      expect(shapeText(deriveShape(parseMetadata(b)))).not.toBe(SHAPE);
     }
-    // And what is decoded changes under that equal shape.
-    expect(decodeValue(MD, PRECISION, bytes(0))).toEqual({ variant: "FP32", fields: null });
-    expect(decodeValue(parseMetadata(SWAPPED), PRECISION, bytes(0))).toEqual({ variant: "INT4", fields: null });
-    expect(thrown(() => decodeValue(parseMetadata(h160), H256, new Uint8Array(32))).cls).toBe("ScaleError");
+    const swapped = changed(SWAPPED).types["ModelPrecision#246"].variants.map((x: { index: number; name: string }) => `${x.index} ${x.name}`);
+    expect(swapped).toEqual(["0 INT4", "1 FP16", "2 BF16", "3 INT8", "4 FP32", "5 Mixed"]);
+    expect(changed(H160).types["H256#13"].fields).toEqual([{ name: null, type: "[u8; 20]" }]);
+    expect(real.types["H256#13"].fields).toEqual([{ name: null, type: "[u8; 32]" }]);
+    expect(changed(SLA128).types["Sla<u32>#294"].fields.at(0)).toEqual({ name: "max_turns", type: "u128" });
+    // And the pin refuses each, at the metadata's sha256 before anything is parsed.
+    for (const b of [SWAPPED, H160, SLA128]) expect(pinShape({ specName: "tzkv-runtime", specVersion: 1014014, metadata: b, lastRuntimeUpgrade: BLOCK?.lastRuntimeUpgrade ?? new Uint8Array(), shapeText: SHAPE }).pinned).toBe(false);
   });
 
   it("review defect 6, fixed: pinShape and decodeBlockEvents read input.metadata once, so a getter cannot hand the hash one value and the parser another", () => {
@@ -406,7 +444,7 @@ describe("the shape pin", () => {
     expect(decodeBlockEvents({ specName: "tzkv-runtime", specVersion: 1014014, metadata: "0x" as never, lastRuntimeUpgrade: new Uint8Array(), shapeText: SHAPE, events: new Uint8Array() })).toEqual({ decoded: false, refused: "not decoded: the metadata is not bytes" });
   });
 
-  it("HELD: the facts of the shape file, derived again from the reference's own parse with an independent namer, equal the file", () => {
+  it("HELD: the whole shape file, its type closure included, derived again from the reference's own parse with an independent namer, equals the file", () => {
     if (REF.metadata.tag !== "v14") throw new Error("not v14");
     const lk = REF.metadata.value.lookup;
     const name = (id: number): string => {
@@ -447,9 +485,40 @@ describe("the shape pin", () => {
         modifier: x.modifier === 0 ? "Optional" : "Default",
         value: name(map ? (x.type.value as { value: number }).value : (x.type.value as number)),
         valueId: map ? (x.type.value as { value: number }).value : (x.type.value as number),
+        keyId: map ? [(x.type.value as { key: number }).key] : [],
       };
     };
-    const strip = ({ valueId, ...rest }: ReturnType<typeof entry>) => rest;
+    const strip = ({ valueId, keyId, ...rest }: ReturnType<typeof entry>) => rest;
+    // The closure of types, walked over the reference's lookup on its own.
+    const describe = (id: number): { desc: Record<string, unknown>; names: number[] } => {
+      const t = lk[id];
+      if (t === undefined) throw new Error(`no type ${id}`);
+      const d = t.def;
+      const base = { kind: d.tag, path: t.path };
+      const params = t.params.flatMap((p) => (p.type === undefined ? [] : [p.type as number]));
+      if (d.tag === "primitive") return { desc: { ...base, primitive: d.value.tag }, names: params };
+      if (d.tag === "composite") return { desc: { ...base, fields: fields(d.value) }, names: [...params, ...d.value.map((f) => f.type)] };
+      if (d.tag === "variant") return { desc: { ...base, variants: d.value.map((v) => ({ fields: fields(v.fields), index: v.index, name: v.name })) }, names: [...params, ...d.value.flatMap((v) => v.fields.map((f) => f.type))] };
+      if (d.tag === "sequence") return { desc: { ...base, element: name(d.value) }, names: [...params, d.value] };
+      if (d.tag === "array") return { desc: { ...base, element: name(d.value.type), len: d.value.len }, names: [...params, d.value.type] };
+      if (d.tag === "tuple") return { desc: { ...base, types: d.value.map(name) }, names: [...params, ...d.value] };
+      if (d.tag === "compact") return { desc: { ...base, type: name(d.value) }, names: [...params, d.value] };
+      throw new Error(`a ${d.tag} in the closure`);
+    };
+    const closure = (roots: number[]) => {
+      const seen = new Set<number>();
+      const out: Record<string, unknown> = {};
+      const queue = [...roots];
+      while (queue.length > 0) {
+        const id = queue.shift() as number;
+        if (seen.has(id)) continue;
+        seen.add(id);
+        const { desc, names } = describe(id);
+        out[name(id)] = desc;
+        queue.push(...names);
+      }
+      return out;
+    };
     const cc = pallet("ComputeChannel");
     const sys = pallet("System");
     const events = entry("System", "Events");
@@ -459,7 +528,8 @@ describe("the shape pin", () => {
     const channels = entry("ComputeChannel", "Channels");
     const channel = composite(channels.valueId);
     const state = channel.find((f) => f.name === "state");
-    const version = BUILDER.buildConstant("System", "Version").dec(sys?.constants.find((c) => c.name === "Version")?.value ?? "0x") as { spec_name: string; spec_version: number };
+    const versionConstant = sys?.constants.find((c) => c.name === "Version");
+    const version = BUILDER.buildConstant("System", "Version").dec(versionConstant?.value ?? "0x") as { spec_name: string; spec_version: number };
     const mine = {
       compute_channel: {
         channel_states: variants(state?.type ?? -1),
@@ -467,15 +537,18 @@ describe("the shape pin", () => {
         events: variants(cc?.events ?? -1),
         index: cc?.index,
       },
-      schema: "flop-observatory/decoder-shape@0",
+      schema: "flop-observatory/decoder-shape@1",
       spec_name: version.spec_name,
       spec_version: version.spec_version,
       system: {
         events: { ...strip(events), record: fields(composite(seq.value)) },
         index: sys?.index,
         last_runtime_upgrade: { ...strip(upgrade), fields: fields(composite(upgrade.valueId)) },
+        version: name(versionConstant?.type ?? -1),
       },
+      types: closure([events.valueId, upgrade.valueId, channels.valueId, ...channels.keyId, versionConstant?.type ?? -1]),
     };
+    expect(Object.keys(mine.types).length).toBe(464);
     expect(mine.compute_channel.events.length).toBe(60);
     expect(mine.compute_channel.index).toBe(103);
     expect(mine).toEqual(JSON.parse(SHAPE));

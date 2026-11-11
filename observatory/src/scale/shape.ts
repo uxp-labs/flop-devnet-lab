@@ -18,14 +18,22 @@
 // is refused, so a type that refers to itself any other way is refused too.
 import { createHash } from "node:crypto";
 import { type Decoded, decodeValue } from "./decode.js";
-import type { Field, Metadata, StorageEntry, Variant } from "./metadata.js";
+import type { Field, Metadata, StorageEntry, TypeEntry, Variant } from "./metadata.js";
 import { parseMetadata } from "./metadata.js";
 import { ScaleError } from "./reader.js";
 import { storageEntryOf } from "./storage-key.js";
 
-export const SHAPE_SCHEMA = "flop-observatory/decoder-shape@0";
+export const SHAPE_SCHEMA = "flop-observatory/decoder-shape@1";
+/** How deep one name may nest. */
 export const MAX_NAME_DEPTH = 16;
+/** How many types one name may visit, a type named again included. */
 export const MAX_NAME_STEPS = 256;
+/** The longest name a type may have, in characters. */
+export const MAX_NAME_LENGTH = 2048;
+/** The most steps one deriveShape may take: each type visited, field, variant and parameter. */
+export const MAX_SHAPE_STEPS = 1_000_000;
+/** The most characters of names and paths one deriveShape may write. */
+export const MAX_SHAPE_CHARS = 4_000_000;
 
 export interface ReviewedShape {
   specName: string;
@@ -45,7 +53,7 @@ export const REVIEWED: readonly ReviewedShape[] = [
     metadataSha256: "f4fd2addba7fff1129483d0e66b8e6bc69141292f56443e201d3f073aab03444",
     metadataBytes: 482132,
     shapeFile: "shapes/tzkv-runtime-1014014.json",
-    shapeSha256: "720dec7042378853678afa2259d8b1d61854805be51434c024da12d6d6978f3f",
+    shapeSha256: "4b50e851350028f6114c9a81217599fee8f7d18df725ff97ac40b3d80b6be82a",
   },
 ];
 
@@ -53,44 +61,125 @@ export type ShapeValue = null | boolean | number | string | ShapeValue[] | { [ke
 
 const sha256 = (b: Uint8Array | string): string => createHash("sha256").update(b).digest("hex");
 
-/** A type's name, by its shape (see above). */
-export function typeName(md: Metadata, id: number): string {
-  const steps = { left: MAX_NAME_STEPS };
+/**
+ * One budget for naming and describing types, shared by a whole deriveShape: steps and characters.
+ * Each name is built once per type id and kept, so a type named from many places costs one build
+ * and one step for each place it is named from.
+ */
+export interface Namer {
+  md: Metadata;
+  memo: Map<number, string>;
+  steps: { left: number };
+  chars: { left: number };
+}
+
+export function namer(md: Metadata): Namer {
+  return { md, memo: new Map(), steps: { left: MAX_SHAPE_STEPS }, chars: { left: MAX_SHAPE_CHARS } };
+}
+
+/** One step of the shape's budget. */
+function spend(n: Namer, what: number): void {
+  n.steps.left -= 1;
+  if (n.steps.left < 0) throw new ScaleError(`the shape takes more than ${MAX_SHAPE_STEPS} steps, at type ${what}`);
+}
+
+/** Characters written into the shape, from its budget. */
+function write(n: Namer, count: number): void {
+  n.chars.left -= count;
+  if (n.chars.left < 0) throw new ScaleError(`the shape writes more than ${MAX_SHAPE_CHARS} characters of names and paths`);
+}
+
+function lookup(md: Metadata, t: number): TypeEntry {
+  const e = Number.isSafeInteger(t) && t >= 0 ? md.types.at(t) : undefined;
+  if (e === undefined) throw new ScaleError(`type ${t} does not exist`);
+  return e;
+}
+
+/** A type's name, by its shape (see above), with the namer's budget and memo. */
+export function nameOf(n: Namer, id: number): string {
+  // The types one name visits, memo hits included; its own limit, beside the shape's whole budget.
+  const visits = { left: MAX_NAME_STEPS };
+  const tooLong = (t: number): never => {
+    throw new ScaleError(`the name of type ${t} is longer than ${MAX_NAME_LENGTH} characters`);
+  };
+  /** Each part's name after the last, refused as soon as the text passes MAX_NAME_LENGTH. */
+  const joined = (t: number, open: string, ids: number[], close: string, depth: number): string => {
+    let out = open;
+    ids.forEach((x, i) => {
+      out += `${i > 0 ? ", " : ""}${name(x, depth + 1)}`;
+      if (out.length > MAX_NAME_LENGTH) tooLong(t);
+    });
+    return `${out}${close}`;
+  };
   const name = (t: number, depth: number): string => {
-    steps.left -= 1;
-    if (depth >= MAX_NAME_DEPTH || steps.left < 0) throw new ScaleError(`type ${id} nests too deeply to be named`);
-    const e = Number.isSafeInteger(t) && t >= 0 ? md.types.at(t) : undefined;
-    if (e === undefined) throw new ScaleError(`type ${t} does not exist`);
+    spend(n, t);
+    visits.left -= 1;
+    if (depth >= MAX_NAME_DEPTH || visits.left < 0) throw new ScaleError(`type ${id} nests too deeply to be named`);
+    const known = n.memo.get(t);
+    if (known !== undefined) return known;
+    const e = lookup(n.md, t);
     const d = e.def;
-    if (d.kind === "primitive") return d.primitive;
-    if (e.path.length > 0) {
-      const params = e.params.filter((p) => p.type !== null).map((p) => name(p.type as number, depth + 1));
-      return `${e.path.at(-1)}${params.length > 0 ? `<${params.join(", ")}>` : ""}#${t}`;
+    let out: string;
+    if (d.kind === "primitive") out = d.primitive;
+    else if (e.path.length > 0) {
+      const last = e.path.at(-1) as string;
+      if (last.length > MAX_NAME_LENGTH) tooLong(t);
+      const params: number[] = [];
+      for (const p of e.params) {
+        // Every parameter costs a step, one of no type too.
+        spend(n, t);
+        if (p.type !== null) params.push(p.type);
+      }
+      out = params.length > 0 ? joined(t, `${last}<`, params, `>#${t}`, depth) : `${last}#${t}`;
+    } else {
+      switch (d.kind) {
+        case "sequence":
+          out = joined(t, "Vec<", [d.type], ">", depth);
+          break;
+        case "array":
+          out = joined(t, "[", [d.type], `; ${d.len}]`, depth);
+          break;
+        case "tuple":
+          out = joined(t, "(", d.types, ")", depth);
+          break;
+        case "compact":
+          out = joined(t, "Compact<", [d.type], ">", depth);
+          break;
+        case "bitSequence":
+          out = joined(t, "BitSequence<", [d.store, d.order], ">", depth);
+          break;
+        default:
+          out = `${d.kind}#${t}`;
+      }
     }
-    switch (d.kind) {
-      case "sequence":
-        return `Vec<${name(d.type, depth + 1)}>`;
-      case "array":
-        return `[${name(d.type, depth + 1)}; ${d.len}]`;
-      case "tuple":
-        return `(${d.types.map((x) => name(x, depth + 1)).join(", ")})`;
-      case "compact":
-        return `Compact<${name(d.type, depth + 1)}>`;
-      case "bitSequence":
-        return `BitSequence<${name(d.store, depth + 1)}, ${name(d.order, depth + 1)}>`;
-      case "composite":
-      case "variant":
-        return `${d.kind}#${t}`;
-    }
+    if (out.length > MAX_NAME_LENGTH) tooLong(t);
+    write(n, out.length);
+    n.memo.set(t, out);
+    return out;
   };
   return name(id, 0);
 }
 
-const fieldsOf = (md: Metadata, fields: Field[]): ShapeValue => fields.map((f) => ({ name: f.name, type: typeName(md, f.type) }));
-const variantsOf = (md: Metadata, variants: Variant[]): ShapeValue => variants.map((v) => ({ index: v.index, name: v.name, fields: fieldsOf(md, v.fields) }));
+/** A type's name, by its shape (see above), with a budget of its own. */
+export function typeName(md: Metadata, id: number): string {
+  return nameOf(namer(md), id);
+}
 
-function entryShape(md: Metadata, e: StorageEntry): { [key: string]: ShapeValue } {
-  return { modifier: e.modifier, hashers: [...e.hashers], key: e.key === null ? null : typeName(md, e.key), value: typeName(md, e.value) };
+function fieldsOf(n: Namer, fields: Field[]): ShapeValue {
+  return fields.map((f) => {
+    spend(n, f.type);
+    return { name: f.name, type: nameOf(n, f.type) };
+  });
+}
+function variantsOf(n: Namer, variants: Variant[]): ShapeValue {
+  return variants.map((v) => {
+    spend(n, -1);
+    return { index: v.index, name: v.name, fields: fieldsOf(n, v.fields) };
+  });
+}
+
+function entryShape(n: Namer, e: StorageEntry): { [key: string]: ShapeValue } {
+  return { modifier: e.modifier, hashers: [...e.hashers], key: e.key === null ? null : nameOf(n, e.key), value: nameOf(n, e.value) };
 }
 
 /** The fields of a composite type, or a refusal naming what was looked for. */
@@ -106,8 +195,72 @@ function variants(md: Metadata, id: number | null, what: string): Variant[] {
   return d.variants;
 }
 
-/** The shape this metadata gives what the observatory relies on, or a refusal saying what is missing. */
-export function deriveShape(md: Metadata): ShapeValue {
+/** What a type's kind holds, each type it names given by its name, and the ids it names. */
+function describe(n: Namer, e: TypeEntry): { desc: { [key: string]: ShapeValue }; names: number[] } {
+  const d = e.def;
+  // The path is written into the shape, so it is paid for from the shape's characters.
+  write(n, e.path.reduce((k, p) => k + p.length, 0));
+  const base = { kind: d.kind, path: [...e.path] };
+  // A type's parameters are in its name, so their types are in the closure too.
+  const params = e.params.flatMap((p) => (p.type === null ? [] : [p.type]));
+  switch (d.kind) {
+    case "primitive":
+      return { desc: { ...base, primitive: d.primitive }, names: params };
+    case "composite":
+      return { desc: { ...base, fields: fieldsOf(n, d.fields) }, names: [...params, ...d.fields.map((f) => f.type)] };
+    case "variant":
+      return { desc: { ...base, variants: variantsOf(n, d.variants) }, names: [...params, ...d.variants.flatMap((v) => v.fields.map((f) => f.type))] };
+    case "sequence":
+      return { desc: { ...base, element: nameOf(n, d.type) }, names: [...params, d.type] };
+    case "array":
+      return { desc: { ...base, element: nameOf(n, d.type), len: d.len }, names: [...params, d.type] };
+    case "tuple":
+      return {
+        desc: {
+          ...base,
+          types: d.types.map((x) => {
+            spend(n, x);
+            return nameOf(n, x);
+          }),
+        },
+        names: [...params, ...d.types],
+      };
+    case "compact":
+      return { desc: { ...base, type: nameOf(n, d.type) }, names: [...params, d.type] };
+    case "bitSequence":
+      return { desc: { ...base, store: nameOf(n, d.store), order: nameOf(n, d.order) }, names: [...params, d.store, d.order] };
+  }
+}
+
+/**
+ * Every type reachable from the roots, each once, keyed by its name, with what its kind holds. Two
+ * types of one name must have one description, or the shape could not tell them apart.
+ */
+function closure(n: Namer, roots: number[]): { [name: string]: ShapeValue } {
+  const seen = new Set<number>();
+  const queue = [...roots];
+  const table = new Map<string, { [key: string]: ShapeValue }>();
+  for (let at = 0; at < queue.length; at++) {
+    const t = queue.at(at) as number;
+    if (seen.has(t)) continue;
+    seen.add(t);
+    spend(n, t);
+    const e = lookup(n.md, t);
+    const key = nameOf(n, t);
+    const { desc, names } = describe(n, e);
+    const known = table.get(key);
+    if (known !== undefined && JSON.stringify(known) !== JSON.stringify(desc)) throw new ScaleError(`two types are named ${key} and differ`);
+    table.set(key, desc);
+    for (const x of names) if (!seen.has(x)) queue.push(x);
+  }
+  return Object.fromEntries(table);
+}
+
+/**
+ * The shape this metadata gives what the observatory relies on, or a refusal saying what is missing.
+ * Its work is bounded by one namer's budget: MAX_SHAPE_STEPS steps and MAX_SHAPE_CHARS characters.
+ */
+export function deriveShape(md: Metadata, n: Namer = namer(md)): ShapeValue {
   const system = md.pallets.find((p) => p.name === "System");
   const cc = md.pallets.find((p) => p.name === "ComputeChannel");
   if (system === undefined || cc === undefined) throw new ScaleError("the metadata has no System or no ComputeChannel pallet");
@@ -122,21 +275,24 @@ export function deriveShape(md: Metadata): ShapeValue {
   if (recordType?.kind !== "sequence") throw new ScaleError("System.Events is not a list");
   const channel = compositeFields(md, channels.value, "the value of ComputeChannel.Channels");
   const state = channel.find((f) => f.name === "state");
+  const roots = [events.value, upgrade.value, channels.value, ...(channels.key === null ? [] : [channels.key]), version.type];
   return {
     schema: SHAPE_SCHEMA,
     spec_name: v.spec_name ?? null,
     spec_version: v.spec_version ?? null,
     system: {
       index: system.index,
-      events: { ...entryShape(md, events), record: fieldsOf(md, compositeFields(md, recordType.type, "an event record")) },
-      last_runtime_upgrade: { ...entryShape(md, upgrade), fields: fieldsOf(md, compositeFields(md, upgrade.value, "the value of System.LastRuntimeUpgrade")) },
+      events: { ...entryShape(n, events), record: fieldsOf(n, compositeFields(md, recordType.type, "an event record")) },
+      last_runtime_upgrade: { ...entryShape(n, upgrade), fields: fieldsOf(n, compositeFields(md, upgrade.value, "the value of System.LastRuntimeUpgrade")) },
+      version: nameOf(n, version.type),
     },
     compute_channel: {
       index: cc.index,
-      events: variantsOf(md, variants(md, cc.event, "the ComputeChannel event type")),
-      channels: { ...entryShape(md, channels), fields: fieldsOf(md, channel) },
-      channel_states: variantsOf(md, variants(md, state?.type ?? null, "the state of a channel")),
+      events: variantsOf(n, variants(md, cc.event, "the ComputeChannel event type")),
+      channels: { ...entryShape(n, channels), fields: fieldsOf(n, channel) },
+      channel_states: variantsOf(n, variants(md, state?.type ?? null, "the state of a channel")),
     },
+    types: closure(n, roots),
   };
 }
 

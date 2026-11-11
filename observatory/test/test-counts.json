@@ -100,8 +100,8 @@
     "names": "813c6354b20649549fd2e627109a2bc4615a1499757b6c4acc8a55263e7a6346"
   },
   "review-decoder.test.ts": {
-    "tests": 32,
-    "names": "ad345f06e840fb8e5d3a38c7babb8433c734188030b313982b808b1e8867dcaa"
+    "tests": 34,
+    "names": "3407ef909ac0ce0a33b84b0af2eae0353f71e8d2463ae9b3a1d416ef07f72ded"
   },
   "review-memory.test.ts": {
     "tests": 2,
@@ -128,8 +128,8 @@
     "names": "4b98619494eda10d49445cfa214bb48e907573f165e7b8135f0449ab7c6e8aef"
   },
   "shape.test.ts": {
-    "tests": 11,
-    "names": "21091ad673d81256f67138fd4567ff5ccf7177360cf144f2d281056cc3fc030a"
+    "tests": 14,
+    "names": "58a2143ee175b2ae3380f4e2eda99bb2ccf3a24108d3e8b3d6685e6b696c79e6"
   },
   "snapshot-check-grid.test.ts": {
     "tests": 43,
