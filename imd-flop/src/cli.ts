@@ -1,4 +1,4 @@
-import { existsSync, readdirSync } from "node:fs";
+import { existsSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { parseArgs, type ParseArgsConfig } from "node:util";
 import { bytesToHex, utf8ToBytes } from "@noble/hashes/utils.js";
@@ -14,8 +14,8 @@ import { FlopProvider, MOCK_SCENARIOS, MockProvider, type MockScenario, type Pro
 import { checkLinkForRun, runJob } from "./run.js";
 import { padQuote, parseAmount } from "./policy.js";
 import { appendLedger, latestAttempts, spentToday } from "./ledger.js";
-import { readSavedReceipt, refreshReceipt, type SavedReceipt } from "./receipt-store.js";
-import { blank, classifyReceipt, receiptLine, type Classified } from "./receipts.js";
+import { listReceipts, readSavedReceipt, refreshReceipt, type SavedReceipt } from "./receipt-store.js";
+import { blank, classifyReceipt, receiptLine } from "./receipts.js";
 import { registerSecret } from "./secrets.js";
 import { matchReceipt } from "./match.js";
 
@@ -345,8 +345,10 @@ export async function main(argv: string[], io: IO): Promise<number> {
         const lc = existsSync(linkFile(h, seat)) ? await checkLinkForRun(h, seat, false) : { ok: false, why: ["no link"] };
         const lfw = readJson<LinkFile>(linkFile(h, seat))?.wallet ?? null;
         const rows = latestAttempts(h);
+        // A receipt file that cannot be read is named, not fatal: the overview still prints.
+        const listed = listReceipts(h);
         const recent = await Promise.all(
-          listReceipts(h)
+          listed.receipts
             .slice(0, 5)
             .map(async (r) => ({ ...r, match: await matchReceipt(h, r, rows.find((e) => e.request_id === r.request_id) ?? null) })),
         );
@@ -370,6 +372,7 @@ export async function main(argv: string[], io: IO): Promise<number> {
           attempts: latestAttempts(h).filter((e) => e.seat === seat).length,
           recent_receipts: recent,
           pending_receipts: pending,
+          unreadable_receipts: listed.unreadable,
           not_shown: "balance and allowance (need a live gateway read with the bearer; not wired in v0)",
         };
         if (values.json) print(o);
@@ -384,6 +387,7 @@ export async function main(argv: string[], io: IO): Promise<number> {
           for (const r of recent) io.out(`    ${receiptLine(r)}`);
           if (recent.length === 0) io.out(`    (none)`);
           for (const p of pending) io.out(`    ${p.request_id}  job=${p.job}  ledger=${p.ledger_state}  spend=${blank(p.spend)}  match=pending`);
+          if (listed.unreadable.length > 0) io.out(`  unreadable receipt files (not shown): ${listed.unreadable.join(", ")}`);
         }
         return EXIT.OK;
       }
@@ -421,13 +425,4 @@ export async function main(argv: string[], io: IO): Promise<number> {
     io.err(`imd-flop: ${(e as Error).message}`);
     return EXIT.ERROR;
   }
-}
-
-function listReceipts(h: string): Classified[] {
-  const dir = receiptsDir(h);
-  if (!existsSync(dir)) return [];
-  return readdirSync(dir)
-    .filter((f) => f.endsWith(".json"))
-    .map((f) => readJson<Classified>(join(dir, f))!)
-    .sort((a, b) => (b.observed_at ?? "").localeCompare(a.observed_at ?? ""));
 }

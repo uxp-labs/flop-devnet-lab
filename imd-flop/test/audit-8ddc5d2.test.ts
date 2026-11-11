@@ -6,10 +6,11 @@
  *      cost the completion itself reported
  *   3  the cap is checked against a total rounded up and room rounded down, never to nearest
  *   4  a refusal that needs no quote happens before the estimate, so the prompt is not posted for nothing
+ *   8  status keeps working when a receipt file is unreadable, and names the file
  * Findings 5, 6 and 7 are the viewer's. Finding 12 is a documented residual. Finding 13 is a product
  * decision. Stub providers only; no network (test/setup.ts disables fetch).
  */
-import { appendFileSync, existsSync } from "node:fs";
+import { appendFileSync, existsSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { jobSpent, spentToday, utcDay } from "../src/ledger.js";
@@ -347,5 +348,46 @@ describe("finding 4: a refusal that needs no quote happens before the estimate",
     expect(noRoom({ ...requester, spentBefore: 0.299999 })).toBeNull();
     // 0.0000008 of room is no room: the smallest quote is 0.000001.
     expect(noRoom({ ...holder, spentBefore: 0.9999992 })).toMatchObject({ code: 3 });
+  });
+});
+
+describe("finding 8: status keeps working when a receipt file is unreadable", () => {
+  const BAD = "mock-9001-deadbeef.json";
+  async function oneRun() {
+    const h = await ready();
+    const run = await cli(h, runArgs(), { provider: new P() });
+    expect(run.code, run.err).toBe(0);
+    return { h, rid: run.json().request_id as string };
+  }
+
+  for (const [what, body] of [["not JSON", "{not json"], ["JSON that is not an object", "null"]] as const) {
+    it(`a receipt file holding ${what}: status --json exits 0, lists the readable receipt and names the unreadable file`, async () => {
+      const { h, rid } = await oneRun();
+      writeFileSync(join(h, "receipts", BAD), body);
+      const st = await cli(h, ["status", "--seat", SEAT, "--json"]);
+      expect(st.code, st.err).toBe(0);
+      const o = st.json();
+      expect(o.unreadable_receipts).toEqual([BAD]);
+      expect(o.recent_receipts.map((r: { request_id: string }) => r.request_id)).toEqual([rid]);
+      expect(o.today_utc.mock).toBe(0.186);
+    });
+  }
+
+  it("text output: the overview is printed, with one line naming the unreadable files", async () => {
+    const { h, rid } = await oneRun();
+    writeFileSync(join(h, "receipts", BAD), "{not json");
+    writeFileSync(join(h, "receipts", "mock-9001-0badf00d.json"), "[]");
+    const st = await cli(h, ["status", "--seat", SEAT]);
+    expect(st.code, st.err).toBe(0);
+    expect(st.out).toContain(`seat ${SEAT}`);
+    expect(st.out).toContain(rid);
+    const lines = st.out.split("\n").filter((l) => l.includes("unreadable"));
+    expect(lines).toEqual(["  unreadable receipt files (not shown): mock-9001-0badf00d.json, mock-9001-deadbeef.json"]);
+  });
+
+  it("control: with every receipt readable, the field is an empty list and the text has no such line", async () => {
+    const { h } = await oneRun();
+    expect((await cli(h, ["status", "--seat", SEAT, "--json"])).json().unreadable_receipts).toEqual([]);
+    expect((await cli(h, ["status", "--seat", SEAT])).out).not.toContain("unreadable");
   });
 });

@@ -1,8 +1,9 @@
 /**
- * Receipt files: where they live, how they are written (one secret-scan fallback), and the
+ * Receipt files: where they live, how they are listed and written (one secret-scan fallback), and the
  * `receipt --refresh` flow that re-reads a receipt and books the result through settlement.ts.
  * Behavior is pinned by contract/vectors/settlement-refresh.json and failed-read.json.
  */
+import { existsSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { CliError, EXIT } from "./errors.js";
 import { readIdentity } from "./keys.js";
@@ -20,6 +21,36 @@ export const receiptPath = (h: string, requestId: string): string => join(receip
 
 export function readSavedReceipt(h: string, requestId: string): SavedReceipt | null {
   return readJson<SavedReceipt>(receiptPath(h, requestId));
+}
+
+/** One receipt file as an object, or null when it cannot be read as one (not JSON, or not a JSON object). */
+function readReceiptFile(path: string): Classified | null {
+  try {
+    const body = readJson<unknown>(path);
+    return body !== null && typeof body === "object" && !Array.isArray(body) ? (body as Classified) : null;
+  } catch {
+    return null;
+  }
+}
+
+const observedAt = (c: Classified): string => (typeof c.observed_at === "string" ? c.observed_at : "");
+
+/**
+ * Every readable receipt, newest first, and the names of the receipt files that could not be read.
+ * One bad file never hides the others.
+ */
+export function listReceipts(h: string): { receipts: Classified[]; unreadable: string[] } {
+  const dir = receiptsDir(h);
+  if (!existsSync(dir)) return { receipts: [], unreadable: [] };
+  const receipts: Classified[] = [];
+  const unreadable: string[] = [];
+  for (const name of readdirSync(dir).filter((f) => f.endsWith(".json"))) {
+    const receipt = readReceiptFile(join(dir, name));
+    if (receipt) receipts.push(receipt);
+    else unreadable.push(name);
+  }
+  receipts.sort((a, b) => observedAt(b).localeCompare(observedAt(a)));
+  return { receipts, unreadable: unreadable.sort() };
 }
 
 /**
