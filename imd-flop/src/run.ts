@@ -165,7 +165,7 @@ export async function runJob(h: string, provider: Provider, o: RunOpts, deps: Ru
   // Every row records both totals. Null is unknown. job_spent_before is also null on a holder row.
   const recorded = (spent: Spent | null): Required<Pick<LedgerEntry, "spent_before" | "job_spent_before">> => ({ spent_before: spent?.spentBefore ?? null, job_spent_before: spent?.jobSpentBefore ?? null });
   const refuse = (reason: string, code: number, q: { raw: number | null; padded: number | null }, spent: Spent | null): never => {
-    appendLedger(h, { ...base, request_id: null, quote_raw: q.raw, quote_padded: q.padded, ...recorded(spent), state: "refused_local", reason, spend: null, cost_reported: null, cap_charge: 0, http: null });
+    appendLedger(h, { ...base, request_id: null, quote_raw: q.raw, quote_padded: q.padded, ...recorded(spent), state: "refused_local", reason, spend: null, spend_raw: null, cost_reported: null, cap_charge: 0, http: null });
     throw new CliError(`refused locally, nothing sent: ${reason}`, code);
   };
 
@@ -205,7 +205,7 @@ export async function runJob(h: string, provider: Provider, o: RunOpts, deps: Ru
     const spent = spentSoFar(day, q);
     const refusal = checkBudget({ padded: q.padded, cap, payer, jobBudget: o.jobBudget, ...spent });
     if (refusal) refuse(refusal.reason, refusal.code, q, spent);
-    const row: LedgerEntry = { ...base, day, request_id: requestId, quote_raw: q.raw, quote_padded: q.padded, ...recorded(spent), state: "sent", reason: null, spend: null, cost_reported: null, cap_charge: q.padded, http: null };
+    const row: LedgerEntry = { ...base, day, request_id: requestId, quote_raw: q.raw, quote_padded: q.padded, ...recorded(spent), state: "sent", reason: null, spend: null, spend_raw: null, cost_reported: null, cap_charge: q.padded, http: null };
     appendLedger(h, row); // written before the call so a crash still leaves the attempt on the books. A later refused_local line wins if the provider refuses before mint.
     return row;
   };
@@ -311,7 +311,7 @@ export async function runJob(h: string, provider: Provider, o: RunOpts, deps: Ru
   // The same booking step as receipt --refresh, with the rules held in settlement.ts: a failed read (not
   // HTTP 200 with a receipt object) or a receipt body that had to be redacted proves nothing and never
   // releases the reservation. If the step throws, the answer is in the response file written above.
-  const read = { fresh: isFreshRead(rr), identityOk, redacted: receiptRedacted, state: classified.state, settled: classified.settled };
+  const read = { fresh: isFreshRead(rr), identityOk, redacted: receiptRedacted, state: classified.state, settled: classified.settled, settledRaw: classified.settled_raw };
   const own = { flag: classified.flag, cost_reported: reportedCost(res.usage?.cost_flop), http: rr.http };
   const { outcome, row } = bookRead(h, requestId, read, own, sent);
   if (outcome === "disagree") deps.warn(DISAGREE);

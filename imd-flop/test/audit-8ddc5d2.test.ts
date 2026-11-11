@@ -146,7 +146,9 @@ describe("finding 2: a later read never lowers a booked settlement, and a report
 
     it("an equal amount may still move the state, and a higher amount is booked", () => {
       expect(decideBooking(settled005, read("released", 0.05), null)).toEqual({ booking: { state: "released", spend: 0.05, cap_charge: 0.05 }, disagree: false });
-      expect(decideBooking(settled005, read("settled", 0.07), null)).toEqual({ booking: { state: "settled", spend: 0.07, cap_charge: 0.07 }, disagree: false });
+      // Moved (money stage 1, decision 1): a read that books a different known spend brings its own exact
+      // spend, here unknown (null). The state, spend and charge are as before.
+      expect(decideBooking(settled005, read("settled", 0.07), null)).toEqual({ booking: { state: "settled", spend: 0.07, cap_charge: 0.07, spend_raw: null }, disagree: false });
     });
 
     it("control: a settling state with no known spend still learns its settlement, whatever the amount", () => {

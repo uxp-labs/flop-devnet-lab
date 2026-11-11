@@ -8,7 +8,7 @@ import { existsSync, readFileSync, writeFileSync, appendFileSync } from "node:fs
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { FlopHTTPError } from "@flop-labs/client";
-import { knownAmount } from "../src/amount.js";
+import { EXACT_BOUND, exactAmount, knownAmount } from "../src/amount.js";
 import { EXIT } from "../src/errors.js";
 import { PreSendError } from "../src/gateway.js";
 import { usableCapCharge } from "../src/ledger.js";
@@ -16,7 +16,9 @@ import { matchReceipt, RECEIPT_IDENTITY_STATUS } from "../src/match.js";
 import { ledgerFile, receiptsDir } from "../src/paths.js";
 import type { CompleteReq, CompleteRes, Provider } from "../src/providers.js";
 import { classifyReceipt, RECEIPT_STATES, STAGE_GATEWAY, type GatewayReceipt } from "../src/receipts.js";
+import { MIN_CAP } from "../src/policy.js";
 import { padQuote, TEMPLATE_PAD } from "../src/run.js";
+import { floor6 } from "../src/rounding.js";
 import { DISAGREE, reconcile, SETTLES, UNRESOLVED } from "../src/settlement.js";
 import { cli, readLines, readySeat, tmpHome } from "./helpers.js";
 import { decode, forPart, rules, unreferencedLabelRules, unreferencedQuirks, vectors, type Json } from "./lib/contract-vectors.js";
@@ -57,6 +59,8 @@ async function ready(cap = "1") {
 }
 const pick = (got: Json, want: Json) => Object.fromEntries(Object.keys(want).map((k) => [k, got[k]]));
 const lastOf = (rows: Row[]) => { const r = rows[rows.length - 1]; return { state: r.state, spend: r.spend, cap_charge: r.cap_charge }; };
+/** The latest row's exact spend (money stage 1), or "absent" when the row has no such field. */
+const spendRawOf = (rows: Row[]) => { const r = rows[rows.length - 1] as Row & { spend_raw?: unknown }; return "spend_raw" in r ? r.spend_raw : "absent"; };
 const ridOf = (h: string) => ledger(h).find((r) => r.request_id)!.request_id!;
 const receiptPath = (h: string, rid: string) => join(receiptsDir(h), `${rid}.json`);
 
@@ -85,7 +89,19 @@ const adapters: Record<string, (i: Json, want: Json) => Promise<Json> | Json> = 
     if (r.code !== EXIT.OK) return { accepted: false, exit: r.code };
     return { accepted: true, value: (await cli(h, ["cap", "show", "--json"])).json().cap.daily };
   },
+  // A cap, a per call cap or a job budget below MIN_CAP is refused when the text is parsed.
+  "amount.min_cap": async (i) => {
+    const h = await ready();
+    if (i.option === "cap") return { exit: (await cli(h, ["cap", "set", i.text])).code };
+    if (i.option === "--per-call") return { exit: (await cli(h, ["cap", "set", "1", "--per-call", i.text])).code };
+    await cli(h, ["config", "set", "payer", "requester"]);
+    const p = new P();
+    return { exit: (await cli(h, runArgs(["--max-tokens", "8", "--job-budget", i.text]), { provider: p })).code, sent: p.calls };
+  },
   "amount.json": (i) => ({ known_settled: knownAmount(i.value), usable_cap_charge: usableCapCharge(i.value) }),
+  "rounding.floor6": (i) => ({ floor: floor6(i.value) }),
+  // An input with no value key stands for a missing field: i.value is undefined.
+  "amount.exact": (i) => ({ exact: exactAmount(i.value) }),
   "amount.reserved": (i) => ({ reserved: classifyReceipt({ request_id: "r", reserved_spend: i.value } as GatewayReceipt, { job: "j", provider: "mock" }).reserved }),
   max_tokens: async (i) => {
     const h = await ready();
@@ -120,7 +136,7 @@ const adapters: Record<string, (i: Json, want: Json) => Promise<Json> | Json> = 
     const h = await ready(i.cap ?? "1");
     const r = await cli(h, runArgs(["--max-tokens", "8"]), { provider: new P({ complete: i.complete, presendMessage: i.presend_message, costFlop: i.cost_flop, read: i.read }) });
     const rows = ledger(h);
-    const got: Json = { exit: r.code, states: rows.map((x) => x.state), last: lastOf(rows), reason: rows[rows.length - 1].reason };
+    const got: Json = { exit: r.code, states: rows.map((x) => x.state), last: lastOf(rows), reason: rows[rows.length - 1].reason, spend_raw: spendRawOf(rows) };
     if ("stderr_contains" in want) got.stderr_contains = (want.stderr_contains as string[]).filter((s) => r.err.includes(s));
     return pick(got, want);
   },
@@ -145,6 +161,7 @@ const adapters: Record<string, (i: Json, want: Json) => Promise<Json> | Json> = 
       exit: r.code,
       appended: rows.length - before,
       last: lastOf(rows),
+      spend_raw: spendRawOf(rows),
       stderr_disagree: r.err.includes(rules.constants.DISAGREE.value),
       file_absent: (want.file_absent ?? []).filter((k: string) => !(k in file)),
       file_present: (want.file_present ?? []).filter((k: string) => k in file),
@@ -167,10 +184,13 @@ describe("contract files", () => {
   it("constants match imd-flop's source", () => {
     const c = rules.constants;
     expect(TEMPLATE_PAD).toBe(c.TEMPLATE_PAD.value);
+    expect(MIN_CAP).toBe(c.MIN_CAP.value);
     expect([...RECEIPT_STATES]).toEqual(c.RECEIPT_STATES.value);
     expect(RECEIPT_IDENTITY_STATUS).toBe(c.IDENTITY.value);
     expect(STAGE_GATEWAY).toBe(c.STAGE_GATEWAY.value);
     expect(EXIT).toEqual(c.EXIT[PART]);
+    expect(EXACT_BOUND.toString()).toBe(c.EXACT_AMOUNT_BOUND.value);
+    expect(EXACT_BOUND).toBe(2n ** 128n);
   });
   it("settlement.ts SETTLES, UNRESOLVED and DISAGREE match rules.json", () => {
     expect([...SETTLES]).toEqual(rules.constants.SETTLES.value);

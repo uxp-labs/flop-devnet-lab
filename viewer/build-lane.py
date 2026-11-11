@@ -4,7 +4,7 @@ Inputs:  mock-receipts/ledger.jsonl + mock-receipts/*.json  (written by imd-flop
          lane-examples.json                                  (example data for kinds the demo lacks)
 Output:  rewrites the block between <!-- lane:start --> and <!-- lane:end --> in the viewer HTML.
 No network. Unknown spend renders as an empty slot, never 0."""
-import json, glob, os, sys, html
+import json, glob, math, os, re, sys, html
 from datetime import datetime
 from zoneinfo import ZoneInfo
 D = os.path.dirname(os.path.abspath(__file__))
@@ -31,7 +31,16 @@ STAGE_GATEWAY = _C["STAGE_GATEWAY"]["value"]
 ET = ZoneInfo("America/New_York")
 
 def num(v): return BLANK if v is None else f'<span class="mono">{v}</span>'
-def r6(x): return float(f"{x:.6f}")
+SCALE = 1e6
+NOISE = 1e-6  # in scaled units, so 1e-12 FLOP
+def floor6(n):
+    """Room left rounds down to 6 decimals, the twin of imd-flop's rounding.ts floor6; pinned for both by
+    contract/vectors/rounding.json. A value within 1e-12 of a 1e-6 boundary counts as on it, so float noise
+    does not move a 6 decimal amount below 8192 FLOP. Rounding never adds room, so a row over its limit by
+    less than 1e-6 FLOP is still over it."""
+    scaled = n * SCALE
+    nearest = round(scaled)
+    return (nearest if abs(scaled - nearest) <= NOISE else math.floor(scaled)) / SCALE
 def esc(v): return html.escape("" if v is None else str(v), quote=True)
 def amount(v):
     """A file value used as an amount: a finite int/float that is not negative (and not a bool), else None
@@ -39,6 +48,19 @@ def amount(v):
     nothing shows it or subtracts it."""
     if isinstance(v, bool) or not isinstance(v, (int, float)) or v != v or v in (float("inf"), float("-inf")) or v < 0: return None
     return v
+EXACT_BOUND = int(_C["EXACT_AMOUNT_BOUND"]["value"])  # 2^128: per FLOP's own sources (read 2026-11-11) the chain holds money in a u128
+EXACT_DIGITS = len(str(EXACT_BOUND - 1))  # 39
+FLOP_DECIMALS = _C["FLOP_DECIMALS"]["value"]  # 10^18 base units per FLOP
+DIGITS = re.compile(r"[0-9]+")
+def exact(v):
+    """The exact amount rule (money stage 1), the twin of imd-flop's amount.ts exactAmount; pinned for both by
+    contract/vectors/exact-amount.json. An exact amount is a string of ASCII decimal digits only (full match,
+    so a trailing newline is refused) whose value is below 2^128, returned in canonical form: no leading
+    zeros, "0" for zero. Anything else is None (unknown, never 0). The zeros go before int(), so a long run of
+    them never meets Python's limit on digits."""
+    if not isinstance(v, str) or not DIGITS.fullmatch(v): return None
+    digits = v.lstrip("0") or "0"
+    return digits if len(digits) <= EXACT_DIGITS and int(digits) < EXACT_BOUND else None
 def short(s, n=10):
     """Head and tail of an id, so distinct random tails stay distinct. The full id goes in a title attribute."""
     return s if len(s) <= n + 2 else s[:6] + "…" + s[-(n - 6):]
@@ -134,7 +156,7 @@ def running_total(e, lim):
 
 def spend_limit(e):
     """The spend limits that apply to this row, each with what is left of it after the row's cap_charge, as a
-    list of (limit, left) in checked order (cap math uses cap_charge). A payer that is neither holder nor
+    list of (limit, left) in checked order (cap math uses cap_charge). left rounds down (floor6). A payer that is neither holder nor
     requester is checked against the daily cap, its spent_before read as the seat's total. left is None when
     the limit could not be worked out: an input is unknown, or the row does not hold that limit's running
     total (before_two_totals). Never a guess."""
@@ -143,7 +165,7 @@ def spend_limit(e):
     for lim in limits:
         cap, spent = amount(e.get(lim["field"])), running_total(e, lim)
         if e.get(lim["field"]) is not None and cap is None: raise ValueError(f'{lim["field"]} is not an amount')
-        applied.append((lim, r6(cap - spent - cap_charge) if None not in (cap, spent, cap_charge) else None))
+        applied.append((lim, floor6(cap - spent - cap_charge) if None not in (cap, spent, cap_charge) else None))
     return applied
 
 def below_zero(applied):
@@ -303,6 +325,30 @@ def row_matches(row, e, r, reservation, limit):
     row["flop"].append(["observed spend", amount(r.get("settled"))])
     row["flop"] += cap_charge_line(e)
 
+EXACT_DIFFERS = "exact amount differs from the receipt"
+# The kinds where the receipt was read and its identity matches the row, so the two files are compared.
+COMPARED_KINDS = ("disagree", "settled_unknown", "over_limit", "matches")
+
+def exact_flop(digits):
+    """An exact amount in base units (canonical digits) as FLOP text: all FLOP_DECIMALS decimals significant,
+    trailing zeros trimmed, no decimal point for a whole amount. Integer arithmetic only, never a float."""
+    whole, frac = divmod(int(digits), 10 ** FLOP_DECIMALS)
+    frac = str(frac).rjust(FLOP_DECIMALS, "0").rstrip("0")
+    return f"{whole}.{frac}" if frac else str(whole)
+
+def exact_spend(row, e, r, kind):
+    """Money stage 1. A settled row whose ledger spend_raw is an exact amount shows it on its own line as FLOP,
+    and carries the base unit digits as row["spend_raw"]. When the receipt was compared (COMPARED_KINDS) and its
+    settled_raw is an exact amount that differs, the row carries the EXACT_DIFFERS flag. Nothing else on the
+    row changes: the float figures and the exact one are not compared yet, as the right tolerance needs a
+    live receipt."""
+    raw = exact(e.get("spend_raw"))
+    if e.get("state") not in SETTLES or raw is None: return
+    row["spend_raw"] = raw
+    row["flop"].append(["exact spend", f'<span class="mono" title="{raw} base units">{exact_flop(raw)}</span> FLOP'])
+    receipt_raw = exact(r.get("settled_raw")) if kind in COMPARED_KINDS else None
+    if receipt_raw is not None and receipt_raw != raw: row["flags"].append(EXACT_DIFFERS)
+
 # Each kind renders from (row, e, r, reservation, limit); limit is set only for over_limit.
 ROW_KINDS = {"refused": row_refused, "no_receipt": row_no_receipt, "unreadable": row_unreadable, "read_failed": row_read_failed,
              "mismatch": row_mismatch, "disagree": row_disagree, "over_limit": row_over_limit, "matches": row_matches,
@@ -328,6 +374,7 @@ def build_row(e, r):
     cap_charge = amount(e.get("cap_charge"))
     reservation = cap_charge if cap_charge is not None else amount(e.get("quote_padded"))
     ROW_KINDS[kind](row, e, r, reservation, limit)
+    exact_spend(row, e, r, kind)
     # Say it once per row: a limit a chip already names gets no spend flag repeating it.
     named = [text for _, text in row["chips"] or []]
     row["spend_flags"] = [f for f in row["spend_flags"] if f not in named]

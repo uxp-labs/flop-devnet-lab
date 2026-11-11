@@ -38,3 +38,19 @@ This folder holds data and its format only; the loaders are test code outside it
 
 The viewer's 24-case row matrix lives next to the viewer (`viewer/fixtures/c7-matrix.json`,
 `viewer/snapshots/c7-matrix/`, `viewer/test_c7_matrix_snapshot.py`) because only the viewer renders rows.
+
+## Money stage 1
+
+Money stage 1 records the exact amount the gateway already gives, in base units (10^18 per FLOP), beside
+the float figures. The cap still runs on the float figures.
+
+- `rules.json` constants `EXACT_AMOUNT_BOUND` (2^128, a digit string because a JSON number cannot hold it
+  exactly) and `FLOP_DECIMALS` (18) are the two constants the exact amount rule rests on.
+- `vectors/exact-amount.json` (rule `amount.exact`) pins the exact amount rule for imd-flop and the viewer.
+  An exact amount is a JSON string. A vector whose input has no `value` key stands for a missing field.
+- `vectors/rounding.json` (rule `rounding.floor6`) pins room left rounding down, for imd-flop and the viewer
+  (known defect KD-10, fixed).
+- The `amount.min_cap` vectors in `vectors/amount-text.json` pin the refusal of a cap or budget below
+  `MIN_CAP` in imd-flop (known defect KD-11, fixed).
+- The settlement vectors carry `spend_raw`, the ledger row's exact spend, and the `viewer.exact_spend`
+  vectors in `vectors/viewer-labels.json` pin how the viewer shows it.

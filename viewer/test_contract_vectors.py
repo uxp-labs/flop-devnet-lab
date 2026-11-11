@@ -25,6 +25,15 @@ def amount_json(i):
     return {"amount": NS["amount"](i["value"])}
 
 
+def amount_exact(i):
+    # An input with no value key stands for a missing field.
+    return {"exact": NS["exact"](i.get("value"))}
+
+
+def rounding_floor6(i):
+    return {"floor": NS["floor6"](i["value"])}
+
+
 def receipt_state(i):
     return {"settles": i["state"] in NS["SETTLES"]}
 
@@ -66,6 +75,18 @@ def reservation_line(i):
     return line_text(i, RESERVATION_LINE)
 
 
+EXACT_SPEND_LINE = re.compile(r'<div><span class="k">(exact spend)</span> (.*?)</div>')
+
+
+def exact_spend(i):
+    """The visible text of the row's exact spend line ("exact spend 0.05 FLOP") or "absent", the base unit
+    digits in the row data, and whether the row says the exact amount differs from the receipt."""
+    rid = i["ledger"]["request_id"]
+    rows, _ = lane([i["ledger"]], {} if i["receipt"] is None else {rid: i["receipt"]})
+    (row,) = rows
+    return dict(line_text(i, EXACT_SPEND_LINE), spend_raw=row.get("spend_raw"), differs=NS["EXACT_DIFFERS"] in row["flags"])
+
+
 def cap_charge_line(i):
     """The visible text of the row's cap charge line ("cap charge 0.3 (<ledger reason>)"), or "absent"."""
     return line_text(i, CAP_CHARGE_LINE)
@@ -87,8 +108,8 @@ def reconcile(i):
     return {"verdict": verdict}
 
 
-ADAPTERS = {"amount.json": amount_json, "receipt.state": receipt_state, "identity": identity, "read.failed": read_failed, "viewer.label": label,
-            "viewer.reservation_line": reservation_line, "viewer.cap_charge_line": cap_charge_line, "reconcile": reconcile}
+ADAPTERS = {"amount.json": amount_json, "amount.exact": amount_exact, "rounding.floor6": rounding_floor6, "receipt.state": receipt_state, "identity": identity, "read.failed": read_failed, "viewer.label": label,
+            "viewer.reservation_line": reservation_line, "viewer.cap_charge_line": cap_charge_line, "viewer.exact_spend": exact_spend, "reconcile": reconcile}
 
 
 class ContractVectors(unittest.TestCase):
@@ -97,6 +118,9 @@ class ContractVectors(unittest.TestCase):
         self.assertEqual(NS["DISAGREE"], c["DISAGREE"]["value"])
         self.assertEqual(NS["IDENTITY"], c["IDENTITY"]["value"])
         self.assertEqual(list(NS["SETTLES"]), c["SETTLES"]["value"])
+        self.assertEqual(NS["EXACT_BOUND"], 2 ** 128)
+        self.assertEqual(str(NS["EXACT_BOUND"]), c["EXACT_AMOUNT_BOUND"]["value"])
+        self.assertEqual(NS["FLOP_DECIMALS"], c["FLOP_DECIMALS"]["value"])
         # unresolved() holds its own literal. It must name exactly the states rules.json lists.
         for state in c["UNRESOLVED"]["value"]:
             self.assertTrue(NS["unresolved"]({"state": state}), state)

@@ -36,11 +36,22 @@ export function padQuote(est: { estimated_cost_flop?: number; estimated_input_to
   return { raw, padded };
 }
 
-/** A CLI amount (`cap set`, --per-call, --job-budget): JS Number() of the text, finite and > 0. Undefined passes through. */
+/**
+ * The smallest daily cap, per call cap or job budget, in FLOP. A padded quote is rounded up to 6 decimals and
+ * is above 0, so it is never below this, and a smaller limit would refuse every call. contract/rules.json
+ * MIN_CAP holds the same value, which spend-guard reads; test/contract.test.ts checks this one against it.
+ */
+export const MIN_CAP = 1e-6;
+
+/**
+ * A CLI amount (`cap set`, --per-call, --job-budget): JS Number() of the text, finite and at least MIN_CAP.
+ * Undefined passes through. The other quirks of this parse (Q-AMOUNT-TEXT) stay until money stage 2.
+ */
 export function parseAmount(v: string | undefined, name: string): number | undefined {
   if (v === undefined) return undefined;
   const n = Number(v);
   if (!Number.isFinite(n) || n <= 0) throw new CliError(`${name} must be a positive number`, EXIT.USAGE);
+  if (n < MIN_CAP) throw new CliError(`${name} must be at least ${MIN_CAP} FLOP: a padded quote is never below that, so a smaller limit would refuse every call`, EXIT.USAGE);
   return n;
 }
 
