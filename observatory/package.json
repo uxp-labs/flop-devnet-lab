@@ -22,6 +22,8 @@
     "yaml": "^2.6.0"
   },
   "devDependencies": {
+    "@polkadot-api/metadata-builders": "0.15.2",
+    "@polkadot-api/substrate-bindings": "0.21.2",
     "@types/node": "^26.6.6",
     "typescript": "^7.0.2",
     "vitest": "^5.1.0"
