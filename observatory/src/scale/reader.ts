@@ -16,6 +16,13 @@ export class ScaleError extends Error {
   }
 }
 
+/**
+ * What a read is of, for a refusal: a string, or a function that builds one. A function is called
+ * only when a refusal is thrown, so a read that succeeds builds no text.
+ */
+export type What = string | (() => string);
+const say = (w: What): string => (typeof w === "string" ? w : w());
+
 /** The widths in bytes a fixed width integer may have: u8 to u256. */
 export type Width = 1 | 2 | 4 | 8 | 16 | 32;
 
@@ -55,20 +62,20 @@ export class Reader {
   }
 
   /** The next n bytes, as a view, or a refusal when fewer are left. */
-  take(n: number, what = "bytes"): Uint8Array {
-    if (!Number.isSafeInteger(n) || n < 0) throw new ScaleError(`${what} at byte ${this.#pos}: ${n} is no length`);
-    if (n > this.left) throw new ScaleError(`${what} at byte ${this.#pos}: needs ${n} bytes, ${this.left} left`);
+  take(n: number, what: What = "bytes"): Uint8Array {
+    if (!Number.isSafeInteger(n) || n < 0) throw new ScaleError(`${say(what)} at byte ${this.#pos}: ${n} is no length`);
+    if (n > this.left) throw new ScaleError(`${say(what)} at byte ${this.#pos}: needs ${n} bytes, ${this.left} left`);
     const out = this.bytes.subarray(this.#pos, this.#pos + n);
     this.#pos += n;
     return out;
   }
 
-  byte(what = "a byte"): number {
+  byte(what: What = "a byte"): number {
     return this.take(1, what).at(0) as number;
   }
 
   /** An unsigned little endian integer of the width given. */
-  unsigned(width: Width, what = `u${width * 8}`): bigint {
+  unsigned(width: Width, what: What = `u${width * 8}`): bigint {
     const b = this.take(width, what);
     let v = 0n;
     for (let i = width - 1; i >= 0; i--) v = (v << 8n) | BigInt(b.at(i) as number);
@@ -76,7 +83,7 @@ export class Reader {
   }
 
   /** A signed little endian integer of the width given, in two's complement. */
-  signed(width: Width, what = `i${width * 8}`): bigint {
+  signed(width: Width, what: What = `i${width * 8}`): bigint {
     return BigInt.asIntN(width * 8, this.unsigned(width, what));
   }
 
@@ -85,26 +92,26 @@ export class Reader {
    * value that fits a shorter mode, or a big integer mode with a top byte of zero, has a second
    * spelling, and the encoding has one spelling for each value.
    */
-  compact(what = "a compact integer"): bigint {
+  compact(what: What = "a compact integer"): bigint {
     const at = this.#pos;
-    if (this.left < 1) throw new ScaleError(`${what} at byte ${at}: needs 1 byte, 0 left`);
+    if (this.left < 1) throw new ScaleError(`${say(what)} at byte ${at}: needs 1 byte, 0 left`);
     const mode = (this.bytes.at(at) as number) & 3;
     if (mode === 0) return BigInt(this.byte(what) >> 2);
     if (mode === 1) {
       const v = this.unsigned(2, what) >> 2n;
-      if (v < 1n << 6n) throw new ScaleError(`${what} at byte ${at}: ${v} in two bytes is not its shortest form`);
+      if (v < 1n << 6n) throw new ScaleError(`${say(what)} at byte ${at}: ${v} in two bytes is not its shortest form`);
       return v;
     }
     if (mode === 2) {
       const v = this.unsigned(4, what) >> 2n;
-      if (v < 1n << 14n) throw new ScaleError(`${what} at byte ${at}: ${v} in four bytes is not its shortest form`);
+      if (v < 1n << 14n) throw new ScaleError(`${say(what)} at byte ${at}: ${v} in four bytes is not its shortest form`);
       return v;
     }
     const n = (this.byte(what) >> 2) + 4;
     const b = this.take(n, what);
     let v = 0n;
     for (let i = n - 1; i >= 0; i--) v = (v << 8n) | BigInt(b.at(i) as number);
-    if (n === 4 ? v < 1n << 30n : b.at(n - 1) === 0) throw new ScaleError(`${what} at byte ${at}: ${v} in ${n} bytes is not its shortest form`);
+    if (n === 4 ? v < 1n << 30n : b.at(n - 1) === 0) throw new ScaleError(`${say(what)} at byte ${at}: ${v} in ${n} bytes is not its shortest form`);
     return v;
   }
 
@@ -113,33 +120,33 @@ export class Reader {
    * the bytes left is refused before anything is read for it. A thing that takes no bytes is
    * held to the same bound by the decoder.
    */
-  length(what = "a length"): number {
+  length(what: What = "a length"): number {
     const at = this.#pos;
     const n = this.compact(what);
-    if (n > BigInt(this.left)) throw new ScaleError(`${what} at byte ${at}: ${n} cannot fit in the ${this.left} bytes left`);
+    if (n > BigInt(this.left)) throw new ScaleError(`${say(what)} at byte ${at}: ${n} cannot fit in the ${this.left} bytes left`);
     return Number(n);
   }
 
-  bool(what = "a bool"): boolean {
+  bool(what: What = "a bool"): boolean {
     const at = this.#pos;
     const b = this.byte(what);
-    if (b > 1) throw new ScaleError(`${what} at byte ${at}: ${b} is neither 0 nor 1`);
+    if (b > 1) throw new ScaleError(`${say(what)} at byte ${at}: ${b} is neither 0 nor 1`);
     return b === 1;
   }
 
   /** A string: a compact length, then that many bytes of strict UTF-8 (no byte replaced or dropped). */
-  text(what = "a string"): string {
+  text(what: What = "a string"): string {
     const at = this.#pos;
     const b = this.take(this.length(what), what);
     try {
       return UTF8.decode(b);
     } catch {
-      throw new ScaleError(`${what} at byte ${at}: not strict UTF-8`);
+      throw new ScaleError(`${say(what)} at byte ${at}: not strict UTF-8`);
     }
   }
 
   /** Refuses any byte left over: a whole value ends exactly at the end of its bytes. */
-  end(what = "the value"): void {
-    if (this.left !== 0) throw new ScaleError(`${what} ends at byte ${this.#pos}, ${this.left} bytes before the end`);
+  end(what: What = "the value"): void {
+    if (this.left !== 0) throw new ScaleError(`${say(what)} ends at byte ${this.#pos}, ${this.left} bytes before the end`);
   }
 }

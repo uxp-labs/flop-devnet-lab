@@ -51,12 +51,30 @@ const WIDTH = new Map<Primitive, Width>([
 ]);
 const AS_NUMBER = new Set<Primitive>(["u8", "u16", "u32", "i8", "i16", "i32"]);
 
-/** A type's name in a refusal: its id, and its path when it has one. */
+/** The most characters of a type's path a refusal shows. */
+export const MAX_LABEL_PATH = 120;
+
+/**
+ * A type's name in a refusal: its id, and its path when it has one, cut to MAX_LABEL_PATH
+ * characters, so a refusal costs a bounded amount of work however long the path. It is built only
+ * when a refusal is thrown, never on a step that succeeds.
+ */
 export function typeLabel(md: Metadata, id: number): string {
   // at() counts a negative id from the end, so only a whole id from 0 is looked up.
   const path = (Number.isSafeInteger(id) && id >= 0 ? md.types.at(id)?.path : undefined) ?? [];
-  return path.length > 0 ? `type ${id} (${path.join("::")})` : `type ${id}`;
+  if (path.length === 0) return `type ${id}`;
+  let shown = "";
+  for (const part of path) {
+    const next = shown === "" ? part.slice(0, MAX_LABEL_PATH + 1) : `${shown}::${part.slice(0, MAX_LABEL_PATH + 1)}`;
+    if (next.length > MAX_LABEL_PATH) return `type ${id} (${next.slice(0, MAX_LABEL_PATH)}...)`;
+    shown = next;
+  }
+  return `type ${id} (${shown})`;
 }
+
+/** A label that is built only when it is asked for: a refusal calls it, a step that succeeds does not. */
+type Label = () => string;
+const labelOf = (md: Metadata, id: number): Label => () => typeLabel(md, id);
 
 function entry(md: Metadata, id: number): TypeEntry {
   const t = Number.isSafeInteger(id) && id >= 0 ? md.types.at(id) : undefined;
@@ -74,14 +92,14 @@ function widthOf(p: Primitive): Width {
   return w;
 }
 
-function primitive(d: Decoding, p: Primitive, label: string): Decoded {
-  const what = `${label}, a ${p}`;
+function primitive(d: Decoding, p: Primitive, label: Label): Decoded {
+  const what = (): string => `${label()}, a ${p}`;
   if (p === "bool") return d.r.bool(what);
   if (p === "str") return d.r.text(what);
   if (p === "char") {
     const at = d.r.pos;
     const c = Number(d.r.unsigned(4, what));
-    if (c > 0x10ffff || (c >= 0xd800 && c <= 0xdfff)) throw new ScaleError(`${what} at byte ${at}: ${c} is no Unicode scalar value`);
+    if (c > 0x10ffff || (c >= 0xd800 && c <= 0xdfff)) throw new ScaleError(`${what()} at byte ${at}: ${c} is no Unicode scalar value`);
     return String.fromCodePoint(c);
   }
   const w = widthOf(p);
@@ -97,42 +115,42 @@ function fieldsValue(d: Decoding, list: Field[], depth: number): Decoded {
 }
 
 /** A count of elements of the given type, refused when it is more than the bytes left. */
-function count(d: Decoding, n: number, label: string): void {
-  if (n > d.r.left) throw new ScaleError(`${label} at byte ${d.r.pos}: ${n} elements cannot fit in the ${d.r.left} bytes left`);
+function count(d: Decoding, n: number, label: Label): void {
+  if (n > d.r.left) throw new ScaleError(`${label()} at byte ${d.r.pos}: ${n} elements cannot fit in the ${d.r.left} bytes left`);
 }
 
 /** One step of work: each type a decode visits costs one value of the budget, and none is free. */
-function step(d: Decoding, label: string): void {
+function step(d: Decoding, label: Label): void {
   d.budget.left -= 1;
-  if (d.budget.left < 0) throw new ScaleError(`${label} at byte ${d.r.pos}: more values than the bytes can hold (at most 1024 and 8 a byte)`);
+  if (d.budget.left < 0) throw new ScaleError(`${label()} at byte ${d.r.pos}: more values than the bytes can hold (at most 1024 and 8 a byte)`);
 }
 
 /** The compact form of type id, as that type's value: an unsigned integer, or fields around one. */
-function compactOf(d: Decoding, id: number, label: string, depth: number): Decoded {
-  if (depth >= MAX_DEPTH) throw new ScaleError(`${label} nests deeper than ${MAX_DEPTH} levels`);
+function compactOf(d: Decoding, id: number, label: Label, depth: number): Decoded {
+  if (depth >= MAX_DEPTH) throw new ScaleError(`${label()} nests deeper than ${MAX_DEPTH} levels`);
   step(d, label);
   const t = entry(d.md, id);
   if (t.def.kind === "primitive" && t.def.primitive.startsWith("u")) {
     const p = t.def.primitive;
     const at = d.r.pos;
-    const v = d.r.compact(`${label}, a Compact<${p}>`);
-    if (v >= 1n << BigInt(8 * widthOf(p))) throw new ScaleError(`${label}, a Compact<${p}> at byte ${at}: ${v} does not fit a ${p}`);
+    const v = d.r.compact(() => `${label()}, a Compact<${p}>`);
+    if (v >= 1n << BigInt(8 * widthOf(p))) throw new ScaleError(`${label()}, a Compact<${p}> at byte ${at}: ${v} does not fit a ${p}`);
     return integer(p, v);
   }
   // Compact<()> is the empty tuple in no bytes, as parity-scale-codec writes it.
   if (t.def.kind === "tuple" && t.def.types.length === 0) return null;
   if (t.def.kind === "composite" && t.def.fields.length === 1) {
     const f = t.def.fields.at(0) as Field;
-    const inner = compactOf(d, f.type, typeLabel(d.md, f.type), depth + 1);
+    const inner = compactOf(d, f.type, labelOf(d.md, f.type), depth + 1);
     return f.name === null ? inner : Object.fromEntries([[f.name, inner]]);
   }
-  throw new ScaleError(`${label}: a compact of ${typeLabel(d.md, id)} is not read, only of an unsigned integer, the empty tuple, or one field around one`);
+  throw new ScaleError(`${label()}: a compact of ${typeLabel(d.md, id)} is not read, only of an unsigned integer, the empty tuple, or one field around one`);
 }
 
 /** The value of type id at the reader's position. depth counts the types around this one. */
 export function decodeAt(d: Decoding, id: number, depth = 0): Decoded {
-  const label = typeLabel(d.md, id);
-  if (depth >= MAX_DEPTH) throw new ScaleError(`${label} nests deeper than ${MAX_DEPTH} levels`);
+  const label = labelOf(d.md, id);
+  if (depth >= MAX_DEPTH) throw new ScaleError(`${label()} nests deeper than ${MAX_DEPTH} levels`);
   step(d, label);
   const t = entry(d.md, id);
   const def = t.def;
@@ -146,15 +164,15 @@ export function decodeAt(d: Decoding, id: number, depth = 0): Decoded {
       return fieldsValue(d, def.fields, next);
     case "variant": {
       const at = d.r.pos;
-      const index = d.r.byte(`${label}, a variant index`);
+      const index = d.r.byte(() => `${label()}, a variant index`);
       const v = def.variants.find((x) => x.index === index);
-      if (v === undefined) throw new ScaleError(`${label} at byte ${at}: ${index} is not the index of one of its variants`);
+      if (v === undefined) throw new ScaleError(`${label()} at byte ${at}: ${index} is not the index of one of its variants`);
       return { variant: v.name, fields: fieldsValue(d, v.fields, next) };
     }
     case "sequence":
     case "array": {
       // A sequence's length is held to the bytes left as it is read; an array's is held here.
-      const n = def.kind === "sequence" ? d.r.length(`${label}, a length`) : def.len;
+      const n = def.kind === "sequence" ? d.r.length(() => `${label()}, a length`) : def.len;
       if (def.kind === "array") count(d, n, label);
       const el = entry(d.md, def.type).def;
       if (el.kind === "primitive" && el.primitive === "u8") return toHex(d.r.take(n, label));
@@ -165,7 +183,7 @@ export function decodeAt(d: Decoding, id: number, depth = 0): Decoded {
     case "tuple":
       return def.types.length === 0 ? null : def.types.map((x) => decodeAt(d, x, next));
     case "bitSequence":
-      throw new ScaleError(`${label}: a bit sequence, which this decoder does not read`);
+      throw new ScaleError(`${label()}: a bit sequence, which this decoder does not read`);
   }
 }
 
@@ -173,6 +191,6 @@ export function decodeAt(d: Decoding, id: number, depth = 0): Decoded {
 export function decodeValue(md: Metadata, id: number, bytes: Uint8Array): Decoded {
   const d = decoding(md, bytes);
   const v = decodeAt(d, id);
-  d.r.end(typeLabel(md, id));
+  d.r.end(labelOf(md, id));
   return v;
 }

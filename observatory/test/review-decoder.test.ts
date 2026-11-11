@@ -16,7 +16,7 @@ import { describe, expect, it } from "vitest";
 import { blake2b } from "../src/hash/blake2b.js";
 import { xxhash64 } from "../src/hash/xxhash64.js";
 import { decodeBlockEvents } from "../src/scale/block.js";
-import { decodeValue } from "../src/scale/decode.js";
+import { decodeValue, typeLabel } from "../src/scale/decode.js";
 import { decodeEvents } from "../src/scale/events.js";
 import { type Metadata, parseMetadata } from "../src/scale/metadata.js";
 import { ScaleError, toHex } from "../src/scale/reader.js";
@@ -140,16 +140,19 @@ describe("work that is not bounded by a constant a step", () => {
     return () => decodeValue(md, 4, b);
   };
 
-  it("DEFECT 2: decodeValue takes time in the product of a type's path length and the value's size: 4 times each is far more than 4 times the time", () => {
+  it("review defect 2, fixed: decodeValue's time grows with the value, not with the product of a type's path and the value: 4 times each takes well under 16 times", () => {
     const small = fastest(pathCase(5_000, 400), 5);
     const large = fastest(pathCase(20_000, 1_600), 3);
-    // Linear in what is read would be about 4; the product is about 16.
-    expect(large / small).toBeGreaterThan(7);
-    expect(large).toBeGreaterThan(40);
+    // The product would be about 16; linear in what is read is about 4.
+    expect(large / small).toBeLessThan(8);
   });
 
-  it("DEFECT 2: the value of 1600 bytes and 20000 bytes of metadata decodes, inside its step budget, yet each step joins the whole path", () => {
+  it("review defect 2, fixed: the value of 1600 bytes and 20000 bytes of metadata decodes, and a refusal shows at most 120 characters of the path", () => {
     expect(pathCase(20_000, 1_600)()).toEqual([Array(1_600).fill(null), `0x${"00".repeat(1_600)}`]);
+    const md = parseMetadata(metadata([{ path: ["a".repeat(100_000), "b"], def: def.primitive("bool") }], []));
+    const r = thrown(() => decodeValue(md, 0, bytes(2)));
+    expect(r).toEqual({ cls: "ScaleError", message: `type 0 (${"a".repeat(120)}...), a bool at byte 0: 2 is neither 0 nor 1` });
+    expect(typeLabel(parseMetadata(metadata([{ path: ["x", "y"], def: def.primitive("bool") }], [])), 0)).toBe("type 0 (x::y)");
   });
 
   // An event of F fields, each of a type with P type parameters of no type (3 bytes each).
