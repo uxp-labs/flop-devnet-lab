@@ -1,0 +1,202 @@
+[
+  {
+    "id": "rv-reader-bom-stripped",
+    "file": "src/scale/reader.ts",
+    "find": "{ fatal: true, ignoreBOM: true }",
+    "replace": "{ fatal: true, ignoreBOM: false }",
+    "test": "test/scale-reader.test.ts",
+    "why": "a leading U+FEFF is dropped from every str"
+  },
+  {
+    "id": "rv-reader-compact-one-byte-edge",
+    "file": "src/scale/reader.ts",
+    "find": "if (v < 1n << 6n) throw",
+    "replace": "if (v < (1n << 6n) - 1n) throw",
+    "test": "test/scale-reader.test.ts",
+    "why": "63 in two bytes accepted"
+  },
+  {
+    "id": "rv-reader-compact-two-byte-edge",
+    "file": "src/scale/reader.ts",
+    "find": "if (v < 1n << 14n) throw",
+    "replace": "if (v < (1n << 14n) - 1n) throw",
+    "test": "test/scale-reader.test.ts",
+    "why": "16383 in four bytes accepted"
+  },
+  {
+    "id": "rv-decode-surrogate-low-edge",
+    "file": "src/scale/decode.ts",
+    "find": "(c >= 0xd800 && c <= 0xdfff)",
+    "replace": "(c >= 0xd800 && c < 0xdfff)",
+    "test": "test/scale-decode.test.ts",
+    "why": "0xdfff accepted as a char"
+  },
+  {
+    "id": "rv-decode-char-top-edge",
+    "file": "src/scale/decode.ts",
+    "find": "if (c > 0x10ffff ||",
+    "replace": "if (c > 0x110000 ||",
+    "test": "test/scale-decode.test.ts",
+    "why": "0x110000 as a char: String.fromCodePoint throws a RangeError"
+  },
+  {
+    "id": "rv-decode-compact-named-field-dropped",
+    "file": "src/scale/decode.ts",
+    "find": "return f.name === null ? inner : Object.fromEntries([[f.name, inner]]);",
+    "replace": "return inner;",
+    "test": "test/scale-decode.test.ts",
+    "why": "a compact of a named one field struct loses its field name"
+  },
+  {
+    "id": "rv-metadata-field-named-twice",
+    "file": "src/scale/metadata.ts",
+    "find": "if (seen.has(f.name)) throw",
+    "replace": "if (seen.has(\"\\u0000\")) throw",
+    "test": "test/scale-metadata.test.ts",
+    "why": "a field named twice is accepted, and the decoder keeps the last"
+  },
+  {
+    "id": "rv-metadata-mixed-fields",
+    "file": "src/scale/metadata.ts",
+    "find": "if (named !== 0 && named !== fields.length) throw",
+    "replace": "if (named !== 0 && named < fields.length - 1) throw",
+    "test": "test/scale-metadata.test.ts",
+    "why": "one unnamed field among named ones"
+  },
+  {
+    "id": "rv-metadata-variant-name-twice",
+    "file": "src/scale/metadata.ts",
+    "find": "if (names.has(v.name)) throw",
+    "replace": "if (names.has(\"\\u0000\")) throw",
+    "test": "test/scale-metadata.test.ts",
+    "why": "a variant named twice"
+  },
+  {
+    "id": "rv-metadata-pallet-name-twice",
+    "file": "src/scale/metadata.ts",
+    "find": "if (names.has(p.name)) throw",
+    "replace": "if (names.has(\"\\u0000\")) throw",
+    "test": "test/scale-metadata.test.ts",
+    "why": "two pallets of one name"
+  },
+  {
+    "id": "rv-metadata-entry-twice",
+    "file": "src/scale/metadata.ts",
+    "find": "if (seen.has(e.name)) throw",
+    "replace": "if (seen.has(\"\\u0000\")) throw",
+    "test": "test/scale-metadata.test.ts",
+    "why": "a storage entry named twice"
+  },
+  {
+    "id": "rv-metadata-map-no-hasher",
+    "file": "src/scale/metadata.ts",
+    "find": "if (e.hashers.length === 0) throw",
+    "replace": "if (e.hashers.length < 0) throw",
+    "test": "test/scale-metadata.test.ts",
+    "why": "a map with no hasher"
+  },
+  {
+    "id": "rv-metadata-param-dangling",
+    "file": "src/scale/metadata.ts",
+    "find": "for (const p of t.params) exists(p.type, `type ${t.id}`);",
+    "replace": "",
+    "test": "test/scale-metadata.test.ts",
+    "why": "a type parameter naming no type"
+  },
+  {
+    "id": "rv-metadata-extension-dangling",
+    "file": "src/scale/metadata.ts",
+    "find": "    exists(s.additionalSigned, `the signed extension ${s.identifier}`);\n",
+    "replace": "",
+    "test": "test/scale-metadata.test.ts",
+    "why": "a signed extension additional type naming no type"
+  },
+  {
+    "id": "rv-metadata-option-tag",
+    "file": "src/scale/metadata.ts",
+    "find": "if (tag === 1) return item(r);",
+    "replace": "if (tag >= 1) return item(r);",
+    "test": "test/scale-metadata.test.ts",
+    "why": "an Option tag of 2 read as Some"
+  },
+  {
+    "id": "rv-metadata-modifier",
+    "file": "src/scale/metadata.ts",
+    "find": "if (m > 1) throw",
+    "replace": "if (m > 2) throw",
+    "test": "test/scale-metadata.test.ts",
+    "why": "a storage modifier of 2 read as Default"
+  },
+  {
+    "id": "rv-metadata-type-id-u32",
+    "file": "src/scale/metadata.ts",
+    "find": "if (v > 0xffffffffn) throw",
+    "replace": "if (v > 0xffffffffffn) throw",
+    "test": "test/scale-metadata.test.ts",
+    "why": "a type id past u32"
+  },
+  {
+    "id": "rv-shape-name-steps-off-by-one",
+    "file": "src/scale/shape.ts",
+    "find": "if (depth >= MAX_NAME_DEPTH || steps.left < 0) throw",
+    "replace": "if (depth >= MAX_NAME_DEPTH || steps.left < -1) throw",
+    "test": "test/shape.test.ts",
+    "why": "257 types in one name"
+  },
+  {
+    "id": "rv-shape-upgrade-name-unchecked",
+    "file": "src/scale/shape.ts",
+    "find": "if (u.spec_name !== reviewed.specName || u.spec_version",
+    "replace": "if (u.spec_version",
+    "test": "test/shape.test.ts",
+    "why": "a LastRuntimeUpgrade of another spec name, same version"
+  },
+  {
+    "id": "rv-shape-upgrade-fields-dropped",
+    "file": "src/scale/shape.ts",
+    "find": "last_runtime_upgrade: { ...entryShape(md, upgrade), fields: fieldsOf(md, compositeFields(md, upgrade.value, \"the value of System.LastRuntimeUpgrade\")) },",
+    "replace": "last_runtime_upgrade: { ...entryShape(md, upgrade) },",
+    "test": "test/shape.test.ts",
+    "why": "the shape loses the LastRuntimeUpgrade fields"
+  },
+  {
+    "id": "rv-events-topics-dropped",
+    "file": "src/scale/events.ts",
+    "find": "topics: record.topics ?? null,",
+    "replace": "topics: null,",
+    "test": "test/events.test.ts",
+    "why": "an event's topics are dropped"
+  },
+  {
+    "id": "rv-events-unnamed-wrapper",
+    "file": "src/scale/events.ts",
+    "find": "if (only === undefined || only.name !== null || p.event === null",
+    "replace": "if (only === undefined || p.event === null",
+    "test": "test/events.test.ts",
+    "why": "a named field around a pallet's events"
+  },
+  {
+    "id": "rv-xxhash-four-byte-tail",
+    "file": "src/hash/xxhash64.ts",
+    "find": "if (at + 4 <= n) {",
+    "replace": "if (at + 4 < n) {",
+    "test": "test/hash.test.ts",
+    "why": "a tail of exactly 4 bytes read byte by byte"
+  },
+  {
+    "id": "rv-xxhash-seed-edge",
+    "file": "src/hash/xxhash64.ts",
+    "find": "seed >= 1n << 64n",
+    "replace": "seed > 1n << 64n",
+    "test": "test/hash.test.ts",
+    "why": "seed 2^64 accepted"
+  },
+  {
+    "id": "rv-blake2b-out-edge",
+    "file": "src/hash/blake2b.ts",
+    "find": "outLength > 64)",
+    "replace": "outLength > 65)",
+    "test": "test/hash.test.ts",
+    "why": "a 65 byte digest asked for"
+  }
+]

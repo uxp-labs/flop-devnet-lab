@@ -1,0 +1,20 @@
+{
+  "description": "Real data, nothing made up: the first recording the record workflow published, recordings/20261111160917-3c228907aa129a01/ on observatory-data at commit 9d165dd. tape.jsonl, run.json and SHA256SUMS are those three files, byte for byte. It holds what one RPC endpoint answered to the 52 calls of recordings/requests.json at that list's sha256: evidence for building the decoder, never proof of chain state (RULES.md section 8).",
+  "provenance": {
+    "data_branch": "observatory-data",
+    "data_branch_commit": "9d165dd175557f257cf27954571f5c786494bc06",
+    "ended_at": "2026-11-11T16:10:00.195Z",
+    "metadata_sha256": "f4fd2addba7fff1129483d0e66b8e6bc69141292f56443e201d3f073aab03444",
+    "recording_id": "20261111160917-3c228907aa129a01",
+    "request_list": "recordings/requests.json",
+    "request_list_sha256": "3c228907aa129a0190e3df130b7c6bb3efc99783a32be1b16137a86e827d6c20",
+    "revision": "c79dd6d4c02343fdae8025fb6381fb378eb6d6e9",
+    "revision_from": "run.json source_sha",
+    "started_at": "2026-11-11T16:09:17.879Z",
+    "tape_sha256": "b95463d7bea46a7c9edbfaa72448400f4d3ff3d7d5315bcee59602a380339e3f",
+    "workflow_run": 43055431463,
+    "workflow_run_from": "the data branch commit message"
+  },
+  "scenario": "recording-20261111160917-3c228907aa129a01",
+  "synthetic": false
+}
