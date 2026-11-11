@@ -42,11 +42,11 @@ const LOCK = "/h/ledger.jsonl.lock";
 /** One algorithm under test: one attempt to take the lock, and the release. */
 interface Algo {
   attempt(self: Self, lock: string): Step<Attempt>;
-  release(self: Self, lock: string): Step<void>;
+  release(self: Self, lock: string): Step<unknown>;
 }
 const RIGHT: Algo = { attempt, release };
 
-type Phase = "acquire" | "inside" | "release" | "done" | "crashed" | "error";
+type Phase = "acquire" | "inside" | "release" | "done" | "crashed" | "error" | "unborn";
 interface Proc {
   name: string;
   pid: number;
@@ -58,19 +58,21 @@ interface Proc {
   attemptWorld: string | null; // the world the current attempt started in
   dirty: boolean; // another process changed the world during the current attempt
   entered: boolean;
+  bornAfter?: string; // an unborn process starts once this one has crashed, and takes its pid if it is given the same
 }
 interface State {
   fs: Map<string, string>;
-  dead: Set<number>;
   procs: Proc[];
-  crashed: boolean;
+  crashed: number;
 }
 /** How a start state must end. finish: every live process finishes. barred: nobody gets in, the lock stays. */
 type Expect = "finish" | "barred";
 interface Start {
   name: string;
   files: Record<string, string>;
-  procs: { name: string; pid: number; token: string; phase: "acquire" | "inside" }[];
+  procs: { name: string; pid: number; token: string; phase: "acquire" | "inside" | "unborn"; bornAfter?: string }[];
+  maxCrashes?: number; // how many processes may die in one run (default 1)
+  doneIsDead?: boolean; // a process that has finished has exited: its pid is gone
   alwaysAlive?: number[]; // pids that are alive and never released: not scheduled, never die
   denyUnlink?: string[]; // paths this user may not remove: unlink answers { denied: "EPERM" }
   expect: Expect;
@@ -79,9 +81,8 @@ interface Start {
 const owner = (pid: number, token: string, host = HOST): string => ownerText({ pid, host, token });
 const waiters = (n: number) => Array.from({ length: n }, (_, i) => ({ name: `w${i + 1}`, pid: i + 1, token: `w${i + 1}`, phase: "acquire" as const }));
 
-function worldKey(s: State): string {
-  return JSON.stringify([[...s.fs.entries()].sort(), [...s.dead].sort()]);
-}
+/** The phases of a process whose pid is alive. "done" too, unless the start says finished processes exit. */
+const LIVE: ReadonlySet<Phase> = new Set(["acquire", "inside", "release", "error"]);
 function stateKey(s: State, world: string): string {
   const text = JSON.stringify([world, s.crashed, s.procs.map((p) => [p.phase, p.hist, p.blockedOn, p.attemptWorld, p.dirty, p.entered])]);
   return createHash("sha256").update(text).digest("base64");
@@ -94,7 +95,6 @@ class Checker {
   states = 0;
   terminals = 0;
   private seen = new Set<string>();
-  private livePids: Set<number>;
   private start: Start;
   private original: string | undefined;
 
@@ -105,9 +105,8 @@ class Checker {
   /** The last step ended an attempt in a wait. */
   private waited = false;
 
-  constructor(private readonly algo: Algo, start: Start, private readonly allowCrash: boolean, private readonly collect = false) {
+  constructor(private readonly algo: Algo, start: Start, private readonly allowCrash: boolean, private readonly collect = false, private readonly maxStates = MAX_STATES) {
     this.start = start;
-    this.livePids = new Set([...start.procs.map((p) => p.pid), ...(start.alwaysAlive ?? [])]);
     this.original = start.files[LOCK];
   }
 
@@ -137,8 +136,29 @@ class Checker {
     else throw new Error("a step that does no file operation");
   }
 
+  private procAlive(p: Proc): boolean {
+    return LIVE.has(p.phase) || (p.phase === "done" && !this.start.doneIsDead);
+  }
+
+  /** The pids that are alive: the processes that run, and the start's always alive owners. */
+  private livePids(s: State): number[] {
+    return [...new Set([...s.procs.filter((p) => this.procAlive(p)).map((p) => p.pid), ...(this.start.alwaysAlive ?? [])])].sort();
+  }
+
   private alive(s: State, pid: number): boolean {
-    return this.livePids.has(pid) && !s.dead.has(pid);
+    return this.livePids(s).includes(pid);
+  }
+
+  /** The owner of a token is alive: its process runs, or it is an always alive start owner. With pid reuse a live pid need not be the owner. */
+  private ownerAlive(s: State, o: LockOwner): boolean {
+    const p = s.procs.find((q) => q.token === o.token);
+    if (p) return this.procAlive(p);
+    return (this.start.alwaysAlive ?? []).includes(o.pid);
+  }
+
+  /** The world: the files, and which pids are alive. */
+  private world(s: State): string {
+    return JSON.stringify([[...s.fs.entries()].sort(), this.livePids(s)]);
   }
 
   /** Report a violation of one kind. The first stops the search, unless the checker collects every kind. */
@@ -163,7 +183,7 @@ class Checker {
           if (o === null) this.fail(s, "barred removed", `${p.name} unlinked a lock with no readable owner`);
           else if (o.host !== HOST) this.fail(s, "barred removed", `${p.name} unlinked a lock of another host`);
           // A live owner's lock is its own: it holds it, or is about to look at it. Our own pid is us.
-          else if (o.token !== p.token && o.pid !== p.pid && this.alive(s, o.pid)) {
+          else if (o.token !== p.token && this.ownerAlive(s, o)) {
             const holder = s.procs.find((q) => q.token === o.token);
             this.fail(s, "live lock removed", `${p.name} unlinked the lock of ${holder?.name ?? `pid ${o.pid}`}, which is alive and holds it`);
           }
@@ -176,7 +196,7 @@ class Checker {
         } else if (op.path !== LOCK && s.fs.has(op.path)) {
           // A temporary file: only its owner removes it while that owner is alive.
           const o = parseOwner(s.fs.get(op.path)!);
-          if (o !== null && o.token !== p.token && o.pid !== p.pid && this.alive(s, o.pid)) this.fail(s, "live file removed", `${p.name} unlinked ${op.path}, whose owner is alive`);
+          if (o !== null && o.token !== p.token && this.ownerAlive(s, o)) this.fail(s, "live file removed", `${p.name} unlinked ${op.path}, whose owner is alive`);
         }
         if (this.start.denyUnlink?.includes(op.path) && s.fs.has(op.path)) return { denied: "EPERM" };
         return s.fs.delete(op.path) ? "removed" : "absent";
@@ -210,12 +230,16 @@ class Checker {
   }
 
   private clone(s: State): State {
-    return { fs: new Map(s.fs), dead: new Set(s.dead), procs: s.procs.map((p) => ({ ...p })), crashed: s.crashed };
+    return { fs: new Map(s.fs), procs: s.procs.map((p) => ({ ...p })), crashed: s.crashed };
   }
 
   private enabled(s: State, world: string): number[] {
     const out: number[] = [];
     s.procs.forEach((p, i) => {
+      if (p.phase === "unborn") {
+        if (s.procs.find((q) => q.name === p.bornAfter)?.phase === "crashed") out.push(i);
+        return;
+      }
       if (p.phase === "inside") out.push(i);
       else if ((p.phase === "acquire" || p.phase === "release") && (p.blockedOn === null || p.blockedOn !== world)) out.push(i);
     });
@@ -227,6 +251,12 @@ class Checker {
     this.waited = false;
     const s = this.clone(s0);
     const p = s.procs[i];
+    if (p.phase === "unborn") {
+      p.phase = "acquire";
+      this.begin(s, p);
+      this.dirtyOthers(s, p); // its pid is alive now
+      return s;
+    }
     if (p.phase === "inside") {
       p.phase = "release";
       this.begin(s, p);
@@ -255,7 +285,7 @@ class Checker {
       }
     } while ("op" in r && r.op.kind === "alive");
     // Only a change by another process makes an attempt dirty. A process's own creates and removes do not.
-    if (worldKey(s) !== world) this.dirtyOthers(s, p);
+    if (this.world(s) !== world) this.dirtyOthers(s, p);
     if ("op" in r) {
       p.pending = r.op;
       return s;
@@ -284,21 +314,21 @@ class Checker {
     // wait: blocked until the world differs from the one the attempt started in, unless it changed during
     // the attempt (or by the attempt's own last operation), when trying again at once may see something new.
     if (ended === "wait") this.waited = true;
-    if (ended === "wait" && !p.dirty && worldKey(s) === startedIn) p.blockedOn = startedIn;
+    if (ended === "wait" && !p.dirty && this.world(s) === startedIn) p.blockedOn = startedIn;
     this.begin(s, p);
     return s;
   }
 
   private terminal(s: State): void {
     this.terminals++;
-    const live = s.procs.filter((p) => p.phase !== "crashed");
+    const live = s.procs.filter((p) => p.phase !== "crashed" && p.phase !== "unborn");
     if (this.start.expect === "finish") {
       const stuck = live.filter((p) => p.phase !== "done");
       if (stuck.length > 0) this.fail(s, "not finished", `terminal state with ${stuck.map((p) => `${p.name} (${p.phase})`).join(", ")} not finished`);
       if (!s.crashed && s.fs.size > 0) this.fail(s, "files left", `every process finished and files are left: ${[...s.fs.keys()].join(", ")}`);
       if (s.crashed && s.fs.has(LOCK)) {
         const o = parseOwner(s.fs.get(LOCK)!);
-        if (o === null || this.alive(s, o.pid)) this.fail(s, "live lock left", "a lock of a live owner is left");
+        if (o === null || this.ownerAlive(s, o)) this.fail(s, "live lock left", "a lock of a live owner is left");
       }
     } else {
       const inn = s.procs.filter((p) => p.entered);
@@ -321,7 +351,7 @@ class Checker {
     interface Frame { key: string; waits: number; next: (() => { s: State; waited: boolean })[] }
     const stack: Frame[] = [];
     const enter = (s: State, waits: number): void => {
-      const world = worldKey(s);
+      const world = this.world(s);
       const key = stateKey(s, world);
       const onPath = this.path.get(key);
       if (onPath !== undefined) {
@@ -330,7 +360,7 @@ class Checker {
         return;
       }
       if (this.seen.has(key)) return;
-      if (this.seen.size > MAX_STATES) throw new Error(`more than ${MAX_STATES} states`);
+      if (this.seen.size > this.maxStates) throw new Error(`more than ${this.maxStates} states`);
       this.seen.add(key);
       this.states++;
       this.path.set(key, waits);
@@ -340,15 +370,14 @@ class Checker {
         const t = this.step(s, i, world);
         return { s: t, waited: this.waited };
       });
-      if (this.allowCrash && !s.crashed) {
+      if (this.allowCrash && s.crashed < (this.start.maxCrashes ?? 1)) {
         s.procs.forEach((p, i) => {
           if (p.phase !== "acquire" && p.phase !== "inside" && p.phase !== "release") return;
           next.push(() => {
             const c = this.clone(s);
             c.procs[i].phase = "crashed";
             c.procs[i].pending = null;
-            c.dead.add(p.pid);
-            c.crashed = true;
+            c.crashed += 1;
             this.dirtyOthers(c, c.procs[i]);
             return { s: c, waited: false };
           });
@@ -373,7 +402,7 @@ class Checker {
 
   run(): void {
     const procs: Proc[] = this.start.procs.map((d) => ({ ...d, hist: [], pending: null, blockedOn: null, attemptWorld: null, dirty: false, entered: d.phase === "inside" }));
-    const s: State = { fs: new Map(Object.entries(this.start.files)), dead: new Set(), procs, crashed: false };
+    const s: State = { fs: new Map(Object.entries(this.start.files)), procs, crashed: 0 };
     for (const p of procs) if (p.phase === "acquire") this.begin(s, p);
     this.visit(s);
   }
@@ -386,8 +415,8 @@ function violations(algo: Algo, start: Start, allowCrash = false): Map<string, s
   return c.found;
 }
 
-function check(algo: Algo, start: Start, allowCrash: boolean): { states: number; terminals: number; cyclesWithWait: number; violation: string | null } {
-  const c = new Checker(algo, start, allowCrash);
+function check(algo: Algo, start: Start, allowCrash: boolean, maxStates = MAX_STATES): { states: number; terminals: number; cyclesWithWait: number; violation: string | null } {
+  const c = new Checker(algo, start, allowCrash, false, maxStates);
   try {
     c.run();
     return { states: c.states, terminals: c.terminals, cyclesWithWait: c.cyclesWithWait, violation: null };
@@ -556,6 +585,57 @@ const UNREADABLE_AS_ABSENT: Algo = {
   },
   release,
 };
+
+/**
+ * The review's extensions: pid reuse (a process born after another crashed, with its pid), finished
+ * processes counted as exited, two crashes, four waiters. The light ones run in every suite run. The heavy
+ * ones run when any STRESS_ size is set, the same switch as the long stress blocks.
+ */
+const FULL = ["STRESS_PROCS", "STRESS_OPS", "STRESS_ROUNDS"].some((k) => process.env[k] !== undefined);
+const W = waiters;
+const reuse = (pid: number, after: string, name: string) => ({ name, pid, token: name, phase: "unborn" as const, bornAfter: after });
+const EXT: (Start & { heavy?: boolean; maxStates?: number })[] = [
+  { name: "pid reuse: w3 takes w1's pid after w1 crashed, at a dead holder's lock", files: { [LOCK]: owner(DEAD, "td") }, procs: [...W(2), reuse(1, "w1", "w3")], expect: "finish" },
+  { name: "pid reuse with finished processes exited: w3 takes w1's pid after w1 crashed, at a dead holder's lock", files: { [LOCK]: owner(DEAD, "td") }, procs: [...W(2), reuse(1, "w1", "w3")], expect: "finish", doneIsDead: true },
+  { name: "pid reuse: w4 takes w1's pid after w1 crashed, at a dead holder's lock, 3 waiters", files: { [LOCK]: owner(DEAD, "td") }, procs: [...W(3), reuse(1, "w1", "w4")], expect: "finish", heavy: true },
+  { name: "pid reuse with finished processes exited: w4 takes w1's pid, at a dead holder's lock, 3 waiters", files: { [LOCK]: owner(DEAD, "td") }, procs: [...W(3), reuse(1, "w1", "w4")], expect: "finish", doneIsDead: true, heavy: true },
+  { name: "pid reuse: w3 takes w1's pid after w1 crashed, no lock, two crashes, finished processes exited", files: {}, procs: [...W(2), reuse(1, "w1", "w3")], expect: "finish", maxCrashes: 2, doneIsDead: true },
+  { name: "no lock, 3 waiters, two crashes", files: {}, procs: W(3), expect: "finish", maxCrashes: 2 },
+  { name: "a dead holder's lock, 3 waiters, two crashes", files: { [LOCK]: owner(DEAD, "td") }, procs: W(3), expect: "finish", maxCrashes: 2, heavy: true },
+  { name: "a dead holder's lock, 3 waiters, two crashes, finished processes exited", files: { [LOCK]: owner(DEAD, "td") }, procs: W(3), expect: "finish", maxCrashes: 2, doneIsDead: true, heavy: true },
+  { name: "a dead holder's lock with a dead reclaimer's right, 3 waiters, two crashes", files: { [LOCK]: owner(DEAD, "td"), [rightPath(LOCK, "td", 1)]: owner(DEAD_RECLAIMER, "tr") }, procs: W(3), expect: "finish", maxCrashes: 2, heavy: true },
+  { name: "our own pid with a token we do not hold, 3 waiters, two crashes", files: { [LOCK]: owner(1, "old") }, procs: W(3), expect: "finish", maxCrashes: 2, heavy: true },
+  { name: "a live holder that releases, 3 waiters, two crashes", files: { [LOCK]: owner(10, "th") }, procs: [{ name: "holder", pid: 10, token: "th", phase: "inside" }, ...W(3)], expect: "finish", maxCrashes: 2, heavy: true },
+  { name: "a dead holder's lock, 4 waiters, no crash", files: { [LOCK]: owner(DEAD, "td") }, procs: W(4), expect: "finish", maxCrashes: 0, heavy: true },
+  { name: "no lock, 4 waiters, one crash", files: {}, procs: W(4), expect: "finish", heavy: true },
+  { name: "a dead holder's lock, 4 waiters, one crash", files: { [LOCK]: owner(DEAD, "td") }, procs: W(4), expect: "finish", heavy: true, maxStates: 12_000_000 },
+];
+
+/** Wrong: our own pid is never dead, whatever the token. A process that took a crashed one's pid then waits for its own pid for ever. */
+const OWN_PID_NEVER_DEAD: Algo = {
+  attempt: (self, lock) => attempt({ ...self, held: { has: () => true } as unknown as ReadonlySet<string> }, lock),
+  release,
+};
+
+describe("ledger lock model check, the review's extensions", () => {
+  for (const start of EXT) {
+    it.runIf(FULL || !start.heavy)(`${start.name}`, () => {
+      const t0 = Date.now();
+      const r = check(RIGHT, start, true, start.maxStates);
+      console.log(`lock model ext: ${start.name}: ${r.states} states (${r.terminals} terminal, ${r.cyclesWithWait} cycles through a wait, none without), ${Date.now() - t0} ms`);
+      expect(r.violation).toBeNull();
+      expect(r.terminals).toBeGreaterThan(0);
+    }, 3_600_000);
+  }
+
+  it("control: the pid reuse start catches the unlink with no re-read under the right", () => {
+    expect(check(NO_REREAD, EXT[0], true).violation).not.toBeNull();
+  });
+
+  it("control: the pid reuse start catches an own pid rule that never judges our own pid dead", () => {
+    expect(check(OWN_PID_NEVER_DEAD, EXT[1], true).violation).toMatch(/terminal state with .*w3 \(acquire\).* not finished/);
+  });
+});
 
 describe("ledger lock model check (src/lock.ts)", () => {
   for (const start of STARTS) {
