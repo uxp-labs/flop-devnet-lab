@@ -202,6 +202,7 @@ def below_hold(e):
 UNPLACED = "ledger row cannot be placed in a total"
 SEAT_ID = re.compile(r"[0-9]{1,78}")
 JOB_ID = re.compile(r"[\x21-\x7e]{1,120}")
+REQUEST_ID = re.compile(r"[\x21-\x7e]{1,128}")
 def usable_day(v):
     """A UTC day as imd-flop writes it: YYYY-MM-DD, and a real calendar date."""
     if not isinstance(v, str) or not re.fullmatch(r"[0-9]{4}-[0-9]{2}-[0-9]{2}", v): return False
@@ -209,12 +210,16 @@ def usable_day(v):
     except ValueError: return False
     return True
 def unplaced(e):
-    """The fields that keep this row out of the totals it belongs to (review fixes 2, R6), in this order: day, seat,
-    provider, and job on a requester row. imd-flop refuses the next call when such a row would count toward its
+    """The fields that keep this row out of the totals it belongs to (review fixes 2, R6), in this order: request_id
+    (review fixes 3: a row with no usable request id, unless it is a refusal written before one exists,
+    refused_local charged 0), day, seat, provider, and job on a requester row. imd-flop refuses the next call when such a row would count toward its
     total (ledger.ts placed), so the lane never shows the row as fine. The twin of ledger.ts isUtcDay, isSeatId,
     PROVIDERS and isJobId; pinned for both by contract/vectors/ledger-placement.json. A payer that is neither
     holder nor requester already carries 'payer unknown'."""
-    checks = [("day", usable_day(e.get("day"))),
+    rid = e.get("request_id")
+    refusal = e.get("state") == "refused_local" and e.get("cap_charge") == 0 and not isinstance(e.get("cap_charge"), bool)
+    checks = [("request_id", (isinstance(rid, str) and bool(REQUEST_ID.fullmatch(rid))) or refusal),
+              ("day", usable_day(e.get("day"))),
               ("seat", isinstance(e.get("seat"), str) and (e["seat"] == "unassigned" or bool(SEAT_ID.fullmatch(e["seat"])))),
               ("provider", e.get("provider") in LEDGER_PROVIDERS)]
     if e.get("payer") == "requester": checks.append(("job", isinstance(e.get("job"), str) and bool(JOB_ID.fullmatch(e["job"]))))

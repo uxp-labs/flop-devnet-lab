@@ -45,15 +45,17 @@ class ReviewHold(unittest.TestCase):
         self.assertFalse(rows[0]["bad"])
         self.assertEqual(rows[0]["spend_flags"], ["daily cap not checked"])
 
-    def test_DEFECT_3_a_held_row_with_no_request_id_is_a_row_that_cannot_be_placed_in_both_parts(self):
-        """DEFECT 3: a held row with no request_id is a row that cannot be placed, in both parts. Viewer side (the two parts disagree): a held row whose request_id was lost. imd-flop counts
-        it in no total and admits the next call (imd-flop/test/review-hold.test.ts DEFECT 3). The lane shows it
-        as its own entry, red 'unknown'. Right: both parts treat it as a row that cannot be placed (imd-flop
-        refuses the next call and names the line; the lane says 'ledger row cannot be placed in a total')."""
+    def test_a_held_row_with_no_request_id_cannot_be_placed(self):
+        """Item 3 (review fixes 3): a held row whose request_id was lost is a row that cannot be placed, in both
+        parts: imd-flop refuses the next call and names the line (imd-flop/test/review-hold.test.ts, item 3),
+        and the lane flags it 'ledger row cannot be placed in a total (request_id)', red, never green. A
+        refusal written before a request id exists (refused_local, charge 0) is not such a row. Shared vectors:
+        contract/vectors/ledger-placement.json placement-request-id-*."""
         rows, _ = lane([dict(LED, request_id=None, state="estimated")], {})
         self.assertEqual(len(rows), 1)
         self.assertTrue(rows[0]["bad"])
-        self.assertEqual(rows[0]["chips"], [["grey", "sent"], ["red", "unknown"]])
+        self.assertIn("ledger row cannot be placed in a total (request_id)", rows[0]["spend_flags"])
+        rows, _ = lane([dict(LED, request_id=None, state="refused_local", cap_charge=0)], {})
         self.assertFalse(any("cannot be placed" in f for f in rows[0]["spend_flags"]))
 
     def test_DEFECT_10_a_row_imd_flop_admitted_under_its_cap_is_not_an_unreadable_row(self):

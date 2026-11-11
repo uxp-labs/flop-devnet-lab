@@ -212,50 +212,68 @@ process.stdout.write(JSON.stringify({ code, err: err.join("\\n"), sent: p.calls 
   }, 20_000);
 });
 
-describe("DEFECT 3 (medium): a latest row with no request_id drops its charge from every total", () => {
-  // ledger.ts latestLines omits every line whose request_id is falsy, before placed() looks at day, seat or
-  // provider, so a line that is valid JSON and carries this seat's day, seat, provider and a charge but no
-  // usable request_id is counted nowhere and refuses nothing. imd-flop itself writes request_id null only on
-  // refused_local rows with charge 0. The README says "Only the latest row of a request is placed: an older
-  // row of the same request is superseded, so damage there loses no charge": when the damage is to the
-  // latest row's request_id, the older row (here the released hold, charge 0) becomes the latest, and the
-  // revived hold is lost.
-  // Right: a line with no usable request_id that is not a refused_local row charged 0 cannot be placed: it
-  // refuses the next call (exit 3) and names the line.
-  it("DEFECT 3: a latest row that lost its request_id (A revived to 0.186, cap 0.3) cannot be placed: B is refused and the line is named", async () => {
+describe("3 (medium): a latest row with no usable request_id cannot be placed", () => {
+  // ledger.ts latestLines omitted every line whose request_id was falsy before placed() looked at it, so a
+  // line with this seat's day, seat, provider and a charge but no usable request_id counted nowhere and
+  // refused nothing; when it was a request's latest row, the older row (a released hold, charge 0) stood in.
+  // Decided (review fixes 3): a line with no usable request_id cannot be placed, unless it is a
+  // refused_local row charged 0 (a refusal written before a request id exists). It refuses the next call and
+  // names the line, like any other row that cannot be placed.
+  const preSend = async (): Promise<CompleteRes> => {
+    throw new PreSendError("child key mint failed");
+  };
+  async function refusedNaming(h: string, line: number) {
+    const p = new P();
+    const b = await cli(h, runArgs("jB"), { provider: p });
+    expect({ code: b.code, sent: p.calls, named: b.err.includes(`ledger line ${line} cannot be placed`) && b.err.includes("request_id") }, b.err).toEqual({ code: 3, sent: 0, named: true });
+  }
+
+  it("a latest row that lost its request_id (A revived to 0.186, cap 0.3) cannot be placed: B is refused and the line is named", async () => {
     const h = await ready("0.3");
-    const preSend = async (): Promise<CompleteRes> => {
-      throw new PreSendError("child key mint failed");
-    };
     expect((await cli(h, runArgs("jA"), { provider: new P({ complete: preSend }) })).code).toBe(11);
     const a = ledger(h)[0].request_id!;
     const revived = await cli(h, refreshArgs(a), { provider: new P() });
     expect(revived.code, revived.err).toBe(0);
     expect((await status(h)).today_utc.mock).toBe(0.186);
-    // Damage: the latest row of A, valid JSON, loses its request_id.
     const lines = readFileSync(ledgerPath(h), "utf8").split("\n").filter(Boolean);
     const last = JSON.parse(lines.at(-1)!);
     expect(last.cap_charge).toBe(0.186);
     lines[lines.length - 1] = JSON.stringify({ ...last, request_id: null });
     writeFileSync(ledgerPath(h), lines.join("\n") + "\n");
-    // Wrong today: the charge is gone from the total, no line is named, and B is admitted.
-    expect((await status(h)).today_utc.mock).toBe(0);
-    const b = await cli(h, runArgs("jB"), { provider: new P() });
-    expect(b.code, b.err).toBe(0);
-    const rows = ledger(h);
-    const heldCharges = rows.filter((r) => r.state !== "refused_local").map((r) => r.cap_charge);
-    expect(heldCharges).toContain(0.186);
-    expect((await status(h)).today_utc.mock).toBe(0.186);
+    await refusedNaming(h, lines.length);
   });
 
-  it("DEFECT 3 (no history): a held call whose lines all lost their request_id refuses the next call", async () => {
+  it("no history: a held call whose lines all lost their request_id refuses the next call", async () => {
     const h = await ready("0.3");
     await cli(h, runArgs("jA"), { provider: new P() });
     const lines = readLines(ledgerPath(h)).map((r: Record<string, unknown>) => ({ ...r, request_id: "" }));
     writeFileSync(ledgerPath(h), lines.map((l) => JSON.stringify(l)).join("\n") + "\n");
-    const b = await cli(h, runArgs("jB"), { provider: new P() });
-    expect(b.code, b.err).toBe(0);
-    expect((await status(h)).today_utc.mock).toBe(0.186);
+    await refusedNaming(h, 1);
+  });
+
+  it("control: a refusal written before a request id exists (refused_local, request_id null, charge 0) is not a damaged row", async () => {
+    const h = await ready("0.3");
+    const refusal = await cli(h, runArgs("jA"), { provider: new P({ complete: preSend }) });
+    expect(refusal.code).toBe(11);
+    // The refusal before the estimate writes such a row: a run refused at the cap.
+    await cli(h, ["cap", "set", "0.1", "--seat", SEAT]);
+    expect((await cli(h, runArgs("jZ"), { provider: new P() })).code).toBe(3);
+    expect(ledger(h).at(-1)!).toMatchObject({ request_id: null, state: "refused_local", cap_charge: 0 });
+    await cli(h, ["cap", "set", "0.3", "--seat", SEAT]);
+    expect((await cli(h, runArgs("jB"), { provider: new P() })).code).toBe(0);
+  });
+});
+
+describe("C (review fixes 3): the day 0000-01-01 is not a usable day", () => {
+  // imd-flop read 0000-01-01 as a calendar date and the viewer did not (Python dates start at year 1).
+  // Decided: both refuse it.
+  it("a held row whose day is 0000-01-01 refuses the next call and names the line", async () => {
+    const h = await ready();
+    await cli(h, runArgs("jA"), { provider: new P() });
+    appendFileSync(ledgerPath(h), JSON.stringify({ ...ledger(h).at(-1)!, ts: new Date().toISOString(), day: "0000-01-01" }) + "\n");
+    const p = new P();
+    const b = await cli(h, runArgs("jB"), { provider: p });
+    expect({ code: b.code, sent: p.calls, named: b.err.includes(`ledger line ${ledger(h).length - 1} cannot be placed`) }, b.err).toEqual({ code: 3, sent: 0, named: true });
   });
 });
 

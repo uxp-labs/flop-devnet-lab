@@ -97,11 +97,28 @@ function ledgerLines(h: string): Line[] {
   return lines;
 }
 
-/** Latest line per request_id, with its line number. Lines with no request_id are omitted. */
+/** A usable request id: 1 to 128 printable ASCII characters, no space (the ids `run` writes, and what `receipt <id>` accepts). */
+export function isRequestId(v: unknown): v is string {
+  return typeof v === "string" && /^[\x21-\x7e]{1,128}$/.test(v);
+}
+
+/** Latest line per usable request_id, with its line number. Lines with no usable request_id are left out. */
 function latestLines(h: string): Line[] {
+  return latestOf(ledgerLines(h));
+}
+
+function latestOf(lines: Line[]): Line[] {
   const m = new Map<string, Line>();
-  for (const line of ledgerLines(h)) if (line.row.request_id) m.set(line.row.request_id, line);
+  for (const line of lines) if (isRequestId(line.row.request_id)) m.set(line.row.request_id, line);
   return [...m.values()];
+}
+
+/**
+ * A line with no usable request_id that is not a refusal written before a request id exists (refused_local,
+ * charge 0). No later line can supersede it, so it is its own entry for the totals, and it cannot be placed.
+ */
+function withoutRequestId(row: LedgerEntry): boolean {
+  return !isRequestId(row.request_id) && !(row.state === "refused_local" && row.cap_charge === 0);
 }
 
 /**
@@ -137,9 +154,9 @@ function sumCharges(lines: Line[]): number {
   return ceil6(sum);
 }
 
-/** A UTC day as utcDay writes it: YYYY-MM-DD, and a real calendar date. */
+/** A UTC day as utcDay writes it: YYYY-MM-DD, and a real calendar date from year 0001 on (the viewer's Python dates start there). */
 function isUtcDay(v: unknown): v is string {
-  return typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v) && !Number.isNaN(Date.parse(`${v}T00:00:00Z`)) && utcDay(new Date(`${v}T00:00:00Z`)) === v;
+  return typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v) && !v.startsWith("0000") && !Number.isNaN(Date.parse(`${v}T00:00:00Z`)) && utcDay(new Date(`${v}T00:00:00Z`)) === v;
 }
 
 /** The provider names a ledger row can hold. contract/rules.json LEDGER_PROVIDERS. */
@@ -165,15 +182,19 @@ const onPayer = (payer: string): Filter => ({ field: "payer", want: payer, usabl
  * (every usable value matches, and at least one value is not usable) cannot be placed: it throws
  * UnusableLedgerRow naming the line, so the next call is refused rather than its charge lost. Only the latest
  * row of a request is placed: an older row of the same request is superseded, so damage there loses nothing.
+ * A line with no usable request_id cannot be superseded, so it is its own entry, and its request_id counts
+ * as an unusable value (withoutRequestId): it cannot be placed, unless it is a refusal charged 0.
  */
 function placed(h: string, filters: Filter[], total: string): Line[] {
+  const all = ledgerLines(h);
   const lines: Line[] = [];
-  for (const line of latestLines(h)) {
-    const values = filters.map((f) => ({ f, v: (line.row as unknown as Record<string, unknown>)[f.field] }));
+  for (const line of [...latestOf(all), ...all.filter((l) => withoutRequestId(l.row))]) {
+    const row = line.row as unknown as Record<string, unknown>;
+    const values = filters.map((f) => ({ f, v: row[f.field] }));
     if (values.some(({ f, v }) => f.usable(v) && v !== f.want)) continue;
-    const unusable = values.filter(({ f, v }) => !f.usable(v));
+    const unusable = [...(isRequestId(row.request_id) ? [] : [{ field: "request_id", v: row.request_id }]), ...values.filter(({ f, v }) => !f.usable(v)).map(({ f, v }) => ({ field: f.field, v }))];
     if (unusable.length > 0) {
-      const what = unusable.map(({ f, v }) => `${f.field} ${JSON.stringify(v ?? null)}`).join(", ");
+      const what = unusable.map(({ field, v }) => `${field} ${JSON.stringify(v ?? null)}`).join(", ");
       throw new UnusableLedgerRow(`ledger line ${line.n} cannot be placed in ${total}: ${what} is not a usable value; next call refused. Repair or remove that line.`);
     }
     lines.push(line);
