@@ -63,6 +63,9 @@ export function hashKeyPart(hasher: Hasher, bytes: Uint8Array): Uint8Array {
       return twox64concat(bytes);
     case "Identity":
       return bytes.slice();
+    default:
+      // A hasher name the type does not allow can only come from a caller that cast it.
+      throw new ScaleError(`${JSON.stringify(String(hasher))} is no storage hasher`);
   }
 }
 

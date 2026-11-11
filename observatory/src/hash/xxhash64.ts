@@ -1,6 +1,9 @@
 // xxHash64, written from its specification (github.com/Cyan4973/xxHash, doc/xxhash_spec.md) with
 // no dependency. Substrate builds its twox storage hashers from it (src/scale/storage-key.ts).
 // Pure: bytes and a seed in, a 64 bit unsigned bigint out. It is not a cryptographic hash.
+//
+// A seed outside 0 to 2^64 - 1 is a RangeError, not a ScaleError: it is a caller's mistake in code,
+// never something read from bytes. src passes only the seeds 0 to 3.
 
 const P1 = 0x9e3779b185ebca87n;
 const P2 = 0xc2b2ae3d27d4eb4fn;

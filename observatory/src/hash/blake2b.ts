@@ -2,6 +2,9 @@
 // (src/scale/storage-key.ts). Node's own hash offers only the 512 bit digest, and a shorter BLAKE2b
 // digest is not a cut of the longer one: the length is part of the parameter block. Pure: bytes and
 // an output length in, the digest out.
+//
+// An output length outside 1 to 64 is a RangeError, not a ScaleError: it is a caller's mistake in
+// code, never something read from bytes. No caller in src passes one.
 
 const IV = [
   0x6a09e667f3bcc908n, 0xbb67ae8584caa73bn, 0x3c6ef372fe94f82bn, 0xa54ff53a5f1d36f1n,

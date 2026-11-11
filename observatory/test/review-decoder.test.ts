@@ -123,12 +123,12 @@ describe("crashes that are not a ScaleError", () => {
     expect(thrown(() => deriveShape(parseMetadata(b)))).toEqual({ cls: "RangeError", message: "Invalid string length" });
   });
 
-  it("DEFECT 10: the hashes refuse an out of range digest length or seed with a RangeError, and hashKeyPart returns undefined for a hasher it does not know", () => {
+  it("review defect 10, fixed: the hashes refuse an out of range digest length or seed with a RangeError, a caller's mistake, and hashKeyPart refuses a hasher it does not know with a ScaleError", () => {
     expect(thrown(() => blake2b(new Uint8Array(), 0)).cls).toBe("RangeError");
     expect(thrown(() => blake2b(new Uint8Array(), 65)).cls).toBe("RangeError");
     expect(thrown(() => xxhash64(new Uint8Array(), 1n << 64n)).cls).toBe("RangeError");
     expect(thrown(() => xxhash64(new Uint8Array(), -1n)).cls).toBe("RangeError");
-    expect(hashKeyPart("Blake2_512" as never, new Uint8Array([1]))).toBeUndefined();
+    expect(thrown(() => hashKeyPart("Blake2_512" as never, new Uint8Array([1])))).toEqual({ cls: "ScaleError", message: '"Blake2_512" is no storage hasher' });
   });
 });
 
