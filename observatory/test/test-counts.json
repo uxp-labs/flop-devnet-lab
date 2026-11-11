@@ -100,8 +100,8 @@
     "names": "813c6354b20649549fd2e627109a2bc4615a1499757b6c4acc8a55263e7a6346"
   },
   "review-decoder.test.ts": {
-    "tests": 30,
-    "names": "f36243d578a67819ca425020b87c7ac3af55a4f2ab0f98f13bdce043e05ca387"
+    "tests": 31,
+    "names": "955eb9a9b3f7adaddccf657cc8999476f53599a39895be7a7b85ba8e915b4ac0"
   },
   "review-memory.test.ts": {
     "tests": 2,

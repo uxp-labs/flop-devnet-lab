@@ -201,16 +201,22 @@ describe("values decoded wrong, or valid values refused", () => {
     expect(thrown(() => decodeEvents(md, b))).toEqual({ cls: "ScaleError", message: "an event record of System.Events does not have exactly the fields phase, event and topics" });
   });
 
-  it("DEFECT 8: two constants of one name in a pallet are accepted, and deriveShape reads the spec from the first", () => {
+  it("review defect 8, fixed: two constants of one name in a pallet are refused, so deriveShape never reads the spec from one of two", () => {
     const b = shapeMetadata({
       constants: [
         { name: "Version", type: 3, value: cat(str("other-runtime"), u32(1)) },
         { name: "Version", type: 3, value: cat(str("tzkv-runtime"), u32(1014014)) },
       ],
     });
-    const md = parseMetadata(b);
-    expect(md.pallets.at(0)?.constants.map((c) => c.name)).toEqual(["Version", "Version"]);
-    expect(deriveShape(md)).toMatchObject({ spec_name: "other-runtime", spec_version: 1 });
+    expect(thrown(() => parseMetadata(b))).toEqual({ cls: "ScaleError", message: 'pallet System: the constant "Version" is named twice' });
+  });
+
+  it("review defect 8, fixed: a signed extension listed twice, and two pallets of one storage prefix, are refused; the recorded metadata still parses", () => {
+    const ext = cat(bytes(0x6d, 0x65, 0x74, 0x61, 14), vec([typeEntry(0, { def: def.primitive("u8") })]), vec([]), compact(0), u8(4), vec([cat(str("CheckNonce"), compact(0), compact(0)), cat(str("CheckNonce"), compact(0), compact(0))]), compact(0));
+    expect(thrown(() => parseMetadata(ext))).toEqual({ cls: "ScaleError", message: "the signed extension CheckNonce is listed twice" });
+    const shared = metadata([{ def: def.primitive("u8") }], [{ name: "A", index: 0, prefix: "S", entries: [{ name: "X", plain: 0 }] }, { name: "B", index: 1, prefix: "S", entries: [{ name: "Y", plain: 0 }] }]);
+    expect(thrown(() => parseMetadata(shared))).toEqual({ cls: "ScaleError", message: 'pallets A and B share the storage prefix "S", so their keys would be one' });
+    expect(thrown(() => parseMetadata(R.metadata)).cls).toBe("returned");
   });
 
   it("review defect 12, fixed: the plain form holds our side to the number or string rule: a u64 given as a number, or a u32 as a string, fails", () => {

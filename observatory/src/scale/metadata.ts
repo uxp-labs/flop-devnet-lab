@@ -6,8 +6,9 @@
 // Beyond the encoding, it refuses what would give one name two meanings or point at nothing:
 // type ids that do not count from 0 in order, a type id that names no type, a composite that mixes
 // named and unnamed fields or names a field twice, a variant index or name used twice, two pallets
-// with one name or index, a storage entry named twice in a pallet, a map with no hasher, and a map
-// of several hashers whose key is not a tuple of as many types. It knows no pallet and no type by
+// with one name, one index or one storage prefix, a storage entry or a constant named twice in a
+// pallet, a signed extension listed twice, a map with no hasher, and a map of several hashers whose
+// key is not a tuple of as many types. It knows no pallet and no type by
 // name: what the observatory relies on is the shape pin's to say (src/scale/shape.ts).
 import { Reader, ScaleError, toHex } from "./reader.js";
 
@@ -217,6 +218,11 @@ function palletOf(r: Reader): Pallet {
     value: x.take(x.length(`${what} constant value`), `${what} constant value`),
     docs: strings(x, `${what} constant docs`),
   }));
+  const named = new Set<string>();
+  for (const c of constants) {
+    if (named.has(c.name)) throw new ScaleError(`pallet ${name}: the constant ${JSON.stringify(c.name)} is named twice`);
+    named.add(c.name);
+  }
   const error = option(r, `${what} error`, (x) => typeId(x, `${what} error`));
   return { name, index: r.byte(`${what} index`), storage, calls, event, error, constants };
 }
@@ -253,8 +259,13 @@ function check(m: Metadata): void {
   }
   const names = new Set<string>();
   const indices = new Map<number, string>();
+  const prefixes = new Map<string, string>();
   for (const p of m.pallets) {
     if (names.has(p.name)) throw new ScaleError(`the pallet name ${p.name} is used twice`);
+    const prefix = p.storage?.prefix;
+    const other = prefix === undefined ? undefined : prefixes.get(prefix);
+    if (other !== undefined) throw new ScaleError(`pallets ${other} and ${p.name} share the storage prefix ${JSON.stringify(prefix)}, so their keys would be one`);
+    if (prefix !== undefined) prefixes.set(prefix, p.name);
     if (indices.has(p.index)) throw new ScaleError(`pallet ${p.name} has the index ${p.index} of another pallet`);
     names.add(p.name);
     indices.set(p.index, p.name);
@@ -272,7 +283,10 @@ function check(m: Metadata): void {
     }
   }
   exists(m.extrinsic.type, "the extrinsic");
+  const identifiers = new Set<string>();
   for (const s of m.extrinsic.signedExtensions) {
+    if (identifiers.has(s.identifier)) throw new ScaleError(`the signed extension ${s.identifier} is listed twice`);
+    identifiers.add(s.identifier);
     exists(s.type, `the signed extension ${s.identifier}`);
     exists(s.additionalSigned, `the signed extension ${s.identifier}`);
   }
