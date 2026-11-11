@@ -784,6 +784,19 @@ describe("bookRead: the one booking step", () => {
     expect(ledger(h)).toHaveLength(1);
   });
 
+  it("fails on a3d71d6: a seed row is written under the same lock when the ledger holds no row for the request, then the read is booked against it", () => {
+    const h = held();
+    const seed = { ...readLines(ledgerPath(h))[0], request_id: "r2", state: "sent", http: null, ts: "2026-11-11T00:00:01.000Z" };
+    const r = bookRead(h, "r2", trusted("settled", 0.05), { flag: null }, seed);
+    expect(r.outcome).toBe("appended");
+    const rows = readLines(ledgerPath(h)).filter((e: Row) => e.request_id === "r2");
+    expect(rows[0]).toEqual(seed);
+    expect(rows.map(booked)).toEqual([{ state: "sent", spend: null, cap_charge: 0.186 }, { state: "settled", spend: 0.05, cap_charge: 0.05 }]);
+    // With a row for the request the seed is not written.
+    bookRead(h, "r1", trusted("settled", 0.05), { flag: null }, { ...seed, request_id: "r1" });
+    expect(ledger(h).filter((e) => e.request_id === "r1").map((e) => e.state)).toEqual(["estimated", "settled"]);
+  });
+
   it("what only run knows is recorded on the row: its reported cost and the HTTP status of its read", () => {
     const h = held({ state: "sent", http: null });
     const r = bookRead(h, "r1", { ...trusted("settled", 0.05), fresh: false }, { flag: null, cost_reported: 0.3, http: 503 });
@@ -913,6 +926,15 @@ describe("bookFailure: a failed call goes through the same booking step", () => 
     const h = ledgerWith();
     expect(bookFailure(h, "other", "timeout_unknown", timeout)).toEqual({ outcome: "no_row" });
     expect(ledger(h)).toHaveLength(1);
+  });
+
+  it("fails on a3d71d6: a seed row is written under the same lock when the ledger holds no row for the request, then the report is booked against it", () => {
+    const h = tmpHome();
+    const seed = { ...JSON.parse(JSON.stringify(readLines(ledgerPath(ledgerWith()))[0])) };
+    const r = bookFailure(h, "r1", "timeout_unknown", timeout, seed);
+    expect(r.outcome).toBe("appended");
+    expect(readLines(ledgerPath(h))[0]).toEqual(seed);
+    expect(ledger(h).map(booked)).toEqual([{ state: "sent", spend: null, cap_charge: 0.186 }, { state: "timeout_unknown", spend: null, cap_charge: 0.186 }]);
   });
 
   it("a later trusted read books over a booked failure report as over any hold", () => {

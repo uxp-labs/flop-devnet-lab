@@ -12,7 +12,7 @@ import { DEFAULT_MODEL, network, SEAT_COLLECTION } from "./networks.js";
 import { checkBudget, noRoom, padQuote, requireCap, validateJob, validatePayer, validateRunMaxTokens, type BudgetState } from "./policy.js";
 import { appendLedger, jobSpent, LedgerLockError, spentToday, UnusableLedgerCharge, utcDay, withLedgerLock, type LedgerEntry } from "./ledger.js";
 import { classifyReceipt, type Classified } from "./receipts.js";
-import { bookFailure, bookRead, type BookResult } from "./booking.js";
+import { bookFailure, bookRead } from "./booking.js";
 import { DISAGREE, isFreshRead, receiptIdentity, reportedCost } from "./settlement.js";
 import { receiptPath, receiptVerdicts, writeReceipt } from "./receipt-store.js";
 import { responsePath } from "./response-store.js";
@@ -212,19 +212,10 @@ export async function runJob(h: string, provider: Provider, o: RunOpts, deps: Ru
 
   // Every row written for this request from here on goes through the booking step (booking.ts), against
   // the request's latest ledger row and not against `sent`: another process may have refreshed this
-  // request and booked its own read while the call ran. If the lock cannot be taken or the append fails,
-  // the step throws (exit 1), and the latest row stays and keeps its reservation.
-  const booked = (step: () => BookResult) => {
-    let result = step();
-    if (result.outcome === "no_row") {
-      // The ledger no longer holds the row written before the call (the file was moved or removed while the
-      // call ran). Write it again and book against it, so the call stays on the books.
-      appendLedger(h, sent);
-      result = step();
-    }
-    if (result.outcome === "no_row") throw new Error(`ledger has no row for ${requestId}; nothing was booked`);
-    return result;
-  };
+  // request and booked its own read while the call ran. `sent` goes with it as the seed row, which the
+  // step writes again only when the ledger no longer holds the request's row, so the call stays on the
+  // books. If the lock cannot be taken or the append fails, the step throws (exit 1), and the latest row
+  // stays and keeps its reservation.
 
   // A ref'd timer (AbortSignal.timeout is unref'd and would let the process exit mid-call).
   const ac = new AbortController();
@@ -248,7 +239,7 @@ export async function runJob(h: string, provider: Provider, o: RunOpts, deps: Ru
     // What run saw is a report, not a receipt read (settlement.ts decideFailure). It never replaces a
     // settlement another process booked meanwhile: then nothing is appended, and the exit code and message
     // below still say what this call saw.
-    booked(() => bookFailure(h, requestId, timedOut ? "timeout_unknown" : preSend ? "refused_local" : "error", { reason, http }));
+    bookFailure(h, requestId, timedOut ? "timeout_unknown" : preSend ? "refused_local" : "error", { reason, http }, sent);
     if (timedOut) {
       throw new CliError(`no answer within ${o.timeoutMs} ms. Spend is UNKNOWN (recorded as null). Not retried. Check later with \`imd-flop receipt ${requestId}\`.`, EXIT.TIMEOUT_UNKNOWN);
     }
@@ -310,7 +301,7 @@ export async function runJob(h: string, provider: Provider, o: RunOpts, deps: Ru
   // releases the reservation. If the step throws, the answer is in the response file written above.
   const read = { fresh: isFreshRead(rr), identityOk, redacted: receiptRedacted, state: classified.state, settled: classified.settled };
   const own = { flag: classified.flag, cost_reported: reportedCost(res.usage?.cost_flop), http: rr.http };
-  const { outcome, row } = booked(() => bookRead(h, requestId, read, own));
+  const { outcome, row } = bookRead(h, requestId, read, own, sent);
   if (outcome === "disagree") deps.warn(DISAGREE);
 
   const receipt = { ...receipt0, ...(await receiptVerdicts(h, receipt0, row)) };
