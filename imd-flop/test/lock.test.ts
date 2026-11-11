@@ -467,6 +467,19 @@ describe("L5: the timeout message names the owner and the way back", () => {
     }
   });
 
+  // A lock written in this same millisecond read as "-1 s old": the file's time carries parts of a
+  // millisecond and Date.now() does not. A file dated after this clock is 0 s old, never a negative age.
+  it("an age is never negative: a lock dated after this clock is 0 s old", () => {
+    const h = tmpHome();
+    const lock = lockPath(h);
+    writeFileSync(lock, owner(1, "x", "some-other-host"));
+    for (const ahead of [0.4, 900, 3_600_000]) {
+      const t = new Date(Date.now() + ahead);
+      utimesSync(lock, t, t);
+      expect(timeoutMessage(lock), String(ahead)).toBe(`ledger lock timeout: ${lock} (0 s old) is held by pid 1 on host some-other-host. ${WAY_BACK}`);
+    }
+  });
+
   it("run against a lock of another host: exit 10, nothing sent, the message names the owner and the way back, and the way back works", async () => {
     const h = tmpHome();
     await readySeat(h, SEAT, "1");
