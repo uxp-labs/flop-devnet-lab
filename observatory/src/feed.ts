@@ -45,9 +45,8 @@ export function snapshotMeta(s: Snapshot) {
   return { schema: "flop-observatory/feed-snapshot-meta@0", snapshot_hash: s.hash, seq: s.seq, prev_hash: s.prev_hash, observed_at: s.observed_at, trust: s.trust, pin: s.pin };
 }
 
-/** Writes status.json, escrows.json, census.json, drift.json and snapshot.json. Returns the file names. */
-export function writeFeeds(dir: string, s: Snapshot): string[] {
-  mkdirSync(dir, { recursive: true });
+/** status.json, escrows.json, census.json, drift.json and snapshot.json, each a name and its text. */
+export function feedFiles(s: Snapshot): [string, string][] {
   const files: [string, unknown][] = [
     ["status.json", statusFeed(s)],
     ["escrows.json", escrowsFeed(s)],
@@ -55,6 +54,13 @@ export function writeFeeds(dir: string, s: Snapshot): string[] {
     ["drift.json", driftFeed(s)],
     ["snapshot.json", s],
   ];
-  for (const [name, obj] of files) writeFileSync(join(dir, name), feedText(obj));
+  return files.map(([name, obj]) => [name, feedText(obj)]);
+}
+
+/** Writes the feed files (feedFiles). Returns the file names. */
+export function writeFeeds(dir: string, s: Snapshot): string[] {
+  mkdirSync(dir, { recursive: true });
+  const files = feedFiles(s);
+  for (const [name, text] of files) writeFileSync(join(dir, name), text);
   return files.map(([n]) => n);
 }
