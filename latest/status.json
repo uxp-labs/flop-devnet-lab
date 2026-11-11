@@ -1,39 +1,47 @@
 {
-  "observed_at": "2026-11-11T08:23:05.518Z",
+  "observed_at": "2026-11-11T09:31:16.783Z",
   "schema": "flop-observatory/feed-status@0",
-  "snapshot_hash": "201cd6e452b6459b38acf05f11a66d014d0302294447ed0ded09e016e2ba8506",
+  "snapshot_hash": "58b5cd06e1dd1c7ae37b0b45119fdf735c8db96c88e27713f9d03608cc08ca95",
   "status": {
-    "best_height": 3458333,
+    "best_height": 3462421,
     "conflicts": [],
     "faucet": {
-      "detail": "GET timed out after 15000 ms",
-      "health": "unknown",
-      "http": null,
-      "limits": null,
-      "observed_at": null,
-      "ready": null
+      "detail": "status degraded, ready false, http 200",
+      "health": "degraded",
+      "http": 200,
+      "limits": {
+        "addressCooldownMs": 86400000,
+        "dailyCapExemptionConfigured": true,
+        "dailyCapFlop": 10000000,
+        "identityCooldownMs": 86400000,
+        "ipCooldownMs": 10000,
+        "ipGrantsPerDay": 300,
+        "ipPrefixGrantsPerDay": 10000
+      },
+      "observed_at": "2026-11-11T09:31:11.699Z",
+      "ready": false
     },
-    "finality_lag": 4,
-    "finalized_hash": "0xbd9029954f5d4d3c82e8fc059aeb0c5c06e96ba8a8d42d2c4efc916cd8aa66fa",
-    "finalized_height": 3458329,
+    "finality_lag": 6,
+    "finalized_hash": "0x1a865100a54686211481fd0521b35d27af1676a88bb38c95f839fa4b42330226",
+    "finalized_height": 3462415,
     "gateway": {
       "detail": null,
       "health": "ok",
       "http": 200,
-      "observed_at": "2026-11-11T08:23:01.209Z"
+      "observed_at": "2026-11-11T09:31:12.895Z"
     },
     "genesis": {
       "faucet": "0x99c172c095340ace980631f9123544c6bebd4839f3437e463533422d8be2d631",
       "pinned": "0x99c172c095340ace980631f9123544c6bebd4839f3437e463533422d8be2d631",
       "rpc": "0x99c172c095340ace980631f9123544c6bebd4839f3437e463533422d8be2d631"
     },
-    "observed_at": "2026-11-11T08:23:05.518Z",
+    "observed_at": "2026-11-11T09:31:16.783Z",
     "reset_detected": false,
     "rpc": {
       "detail": null,
       "health": "ok",
       "http": null,
-      "observed_at": "2026-11-11T08:23:01.229Z",
+      "observed_at": "2026-11-11T09:31:12.912Z",
       "stale": false
     },
     "runtime_version": 1014014,
