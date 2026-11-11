@@ -70,6 +70,10 @@ const runArgs = (extra: string[] = []) => ["run", "--seat", SEAT, "--job", "j1",
 const refreshArgs = (rid: string) => ["receipt", rid, "--refresh", "--json", "--seat", SEAT];
 type Row = { request_id: string | null; state: string; spend: number | null; cap_charge: number | null; cost_reported: number | null; reason: string | null; http: number | null };
 const ledgerPath = (home: string) => join(home, "ledger.jsonl");
+// A lock held by another live process stands for one with process.ppid (the test runner, alive). Our own pid
+// with a token we do not hold is a dead owner (lock reclaim, audit 33f3b9f finding 7). The timeout names the
+// owner and the way back.
+const HELD_BY = `is held by pid ${process.ppid} on host ${hostname()}. If no imd-flop process is using this home any more, remove that file and run again.`.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 const ledger = (home: string) => (existsSync(ledgerPath(home)) ? (readLines(ledgerPath(home)) as Row[]) : []);
 const booked = (r: Row) => ({ state: r.state, spend: r.spend, cap_charge: r.cap_charge });
 const today = async (home: string) => (await cli(home, ["status", "--seat", SEAT, "--json"])).json().today_utc.mock as number;
@@ -634,14 +638,15 @@ describe("pin: after the paid call, when the booking step cannot run", () => {
     const lock = `${ledgerPath(h)}.lock`;
     // Another live process takes the lock while run waits for its receipt, and keeps it.
     const read: Reader = (id) => {
-      writeFileSync(lock, JSON.stringify({ pid: process.pid, host: hostname(), token: "other" }));
+      writeFileSync(lock, JSON.stringify({ pid: process.ppid, host: hostname(), token: "other" }));
       return settledAt(0.05)(id);
     };
     const p = new P({ read });
     const run = await cli(h, runArgs(), { provider: p });
     rmSync(lock);
     // Moved (review fixes 4, item 5): the timeout names the lock file and its age.
-    expect({ code: run.code, out: run.out, err: run.err, calls: p.calls }).toEqual({ code: 1, out: "", err: expect.stringMatching(/^imd-flop: ledger lock timeout: \S+ledger\.jsonl\.lock \(\d+ s old\) is held$/), calls: 1 });
+    // Moved (lock reclaim, audit 33f3b9f finding 7): and the recorded owner and the way back.
+    expect({ code: run.code, out: run.out, err: run.err, calls: p.calls }).toEqual({ code: 1, out: "", err: expect.stringMatching(new RegExp(`^imd-flop: ledger lock timeout: \\S+ledger\\.jsonl\\.lock \\(\\d+ s old\\) ${HELD_BY}$`)), calls: 1 });
     const rows = ledger(h);
     expect(rows.map(booked)).toEqual([{ state: "sent", spend: null, cap_charge: 0.186 }]);
     const rid = rows[0].request_id!;
@@ -679,14 +684,14 @@ describe("fails on a3d71d6: a reported cost survives a booking step that could n
     const h = await ready();
     const lock = `${ledgerPath(h)}.lock`;
     const read: Reader = (id) => {
-      writeFileSync(lock, JSON.stringify({ pid: process.pid, host: hostname(), token: "other" }));
+      writeFileSync(lock, JSON.stringify({ pid: process.ppid, host: hostname(), token: "other" }));
       return settledAt(0.05)(id);
     };
     // Moved (hold floor): the cost was 0.15. A cost below the 0.186 hold no longer raises the charge, so the
     // cost here is above it, and the booking that raises the charge past the hold says so in its reason.
     const run = await cli(h, runArgs(), { provider: new P({ usage: usage(0.3), read }) });
     rmSync(lock);
-    expect({ code: run.code, err: run.err }).toEqual({ code: 1, err: expect.stringMatching(/^imd-flop: ledger lock timeout: \S+\.lock \(\d+ s old\) is held$/) });
+    expect({ code: run.code, err: run.err }).toEqual({ code: 1, err: expect.stringMatching(new RegExp(`^imd-flop: ledger lock timeout: \\S+\\.lock \\(\\d+ s old\\) ${HELD_BY}$`)) });
     expect(ledger(h).map(booked)).toEqual([{ state: "sent", spend: null, cap_charge: 0.186 }]);
     const rid = ledger(h)[0].request_id!;
     const refreshed = await cli(h, refreshArgs(rid), { provider: new P({ read: settledAt(0.05) }) });
@@ -724,14 +729,15 @@ describe("fails on 9adfd17: a refresh that cannot take the ledger lock says the 
   // had nothing to book. DISAGREE on stderr stays for a read that was refused, and for an append that failed
   // (test/audit-v3.test.ts).
   // Moved (review fixes 4, item 5): the timeout now names the lock file and its age.
-  const BUSY = expect.stringMatching(new RegExp(`^${LEDGER_BUSY.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")} \\(ledger lock timeout: \\S+\\.lock \\(\\d+ s old\\) is held\\)$`));
+  // Moved (lock reclaim, audit 33f3b9f finding 7): the lock error names the recorded owner and the way back.
+  const BUSY = expect.stringMatching(new RegExp(`^${LEDGER_BUSY.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")} \\(ledger lock timeout: \\S+\\.lock \\(\\d+ s old\\) ${HELD_BY}\\)$`));
 
   it("a read with nothing to book: the busy line, no status, exit 0; then a read that settles: the busy line, and the files do disagree", async () => {
     const h = await ready();
     const rid = await pendingRun(h);
     const before = readFileSync(ledgerPath(h), "utf8");
     const lock = `${ledgerPath(h)}.lock`;
-    writeFileSync(lock, JSON.stringify({ pid: process.pid, host: hostname(), token: "other" }));
+    writeFileSync(lock, JSON.stringify({ pid: process.ppid, host: hostname(), token: "other" }));
     const same = await cli(h, refreshArgs(rid), { provider: new P({ read: pending }) });
     expect({ code: same.code, err: same.err, status: same.json().status, ledger_state: same.json().ledger_state }).toEqual({ code: 0, err: BUSY, status: undefined, ledger_state: "estimated" });
     const settles = await cli(h, refreshArgs(rid), { provider: new P({ read: settledAt(0.05) }) });

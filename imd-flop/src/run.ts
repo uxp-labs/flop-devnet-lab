@@ -10,7 +10,7 @@ import { loadSigner, readIdentity, revokedDids } from "./keys.js";
 import { verifyLink, type LinkFile } from "./link.js";
 import { DEFAULT_MODEL, network, SEAT_COLLECTION } from "./networks.js";
 import { checkBudget, noRoom, padQuote, requireCap, validateJob, validatePayer, validateRunMaxTokens, type BudgetState } from "./policy.js";
-import { appendLedger, jobSpent, LedgerLockError, spentToday, UnusableLedgerRow, utcDay, withLedgerLock, type LedgerEntry } from "./ledger.js";
+import { appendLedger, jobSpent, LedgerLockError, LedgerLockLost, spentToday, UnusableLedgerRow, utcDay, withLedgerLock, type LedgerEntry } from "./ledger.js";
 import { classifyReceipt, type Classified } from "./receipts.js";
 import { bookFailure, bookRead } from "./booking.js";
 import { DISAGREE, PAST_ADMITTED, reportedCost, SETTLES } from "./settlement.js";
@@ -172,7 +172,13 @@ export async function runJob(h: string, provider: Provider, o: RunOpts, deps: Ru
   // inside the lock, as the `sent` row is (swarm audit 33f3b9f, finding 12). Its ts is the time the row is
   // written, not a time from before the estimate.
   const refuse = (reason: string, code: number, q: { raw: number | null; padded: number | null }, spent: Spent | null, day = base.day): never => {
-    appendLedger(h, { ...base, ts: new Date().toISOString(), day, request_id: null, quote_raw: q.raw, quote_padded: q.padded, ...recorded(spent), state: "refused_local", reason, spend: null, spend_raw: null, cost_reported: null, cap_charge: 0, http: null });
+    try {
+      appendLedger(h, { ...base, ts: new Date().toISOString(), day, request_id: null, quote_raw: q.raw, quote_padded: q.padded, ...recorded(spent), state: "refused_local", reason, spend: null, spend_raw: null, cost_reported: null, cap_charge: 0, http: null });
+    } catch (e) {
+      // The run still refuses and nothing is sent. The refusal row could not be written for a lock error.
+      if (e instanceof LedgerLockError || e instanceof LedgerLockLost) throw new CliError(`refused locally, nothing sent: ${reason}. The refusal row could not be written: ${e.message}`, EXIT.REFUSED_LOCK);
+      throw e;
+    }
     throw new CliError(`refused locally, nothing sent: ${reason}`, code);
   };
 

@@ -180,7 +180,8 @@ export const LEDGER_BUSY = "ledger busy; the receipt read was stored and nothing
  * `receipt <id> --refresh`: read the receipt again, store it, and book what it proves through the booking
  * step, against the latest ledger row of the request. `warn` receives one line when the read is not
  * booked: LEDGER_BUSY when the ledger lock could not be taken (LedgerLockError), and DISAGREE when the
- * booking step refused the read or threw anything else, a failed append for one, except a damaged ledger
+ * booking step refused the read or threw anything else, a failed append for one (a lost lock, LedgerLockLost,
+ * is a failed append), except a damaged ledger
  * line (UnusableLedgerRow), which it throws after the read is stored. It also receives
  * PAST_ADMITTED when the booking puts the day in a state the cap did not admit. Whether the stored receipt
  * and the ledger disagree afterwards is not decided here: receiptVerdicts reads it from the files.
