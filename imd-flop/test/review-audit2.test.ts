@@ -348,10 +348,29 @@ describe("review defect 9 (low), fixed: a seat has at most 63 digits, and init n
   });
 });
 
-describe("DEFECT 10 (low): outsideText keeps control characters, so server text writes its own lines and terminal escapes to stderr", () => {
-  it("DEFECT 10 (low): a message with a newline and ESC reaches the message as is", () => {
-    // Moved with defects 2 and 3: RPC server text is no longer quoted, so this goes through outsideText directly.
-    expect(outsideText("x\n\u001b[1Aimd-flop: link verified, owner ok")).toBe("x\n\u001b[1Aimd-flop: link verified, owner ok");
+describe("review defect 10 (low), fixed: outside text cannot write its own lines or terminal escapes", () => {
+  it("review defect 10, fixed: a newline and ESC each become one space", () => {
+    expect(outsideText("x\n\u001b[1Aimd-flop: link verified, owner ok")).toBe("x  [1Aimd-flop: link verified, owner ok");
+  });
+
+  it("review defect 10, fixed: every Cc, Cf, Zl and Zp code point and a lone surrogate become one space, before the cut", () => {
+    expect(outsideText("a\r\tb\u0085c\u200bd\u202ee\u2028f\u2029g\ud800h\udfffi")).toBe("a  b c d e f g h i");
+    expect(outsideText("\u{1F600} keeps its pair")).toBe("\u{1F600} keeps its pair");
+    expect(outsideText("\u0007".repeat(10) + "tail", { max: 12 })).toBe("          ta[cut]");
+  });
+
+  it("review defect 10, fixed: a pre-send failure with a newline reaches stderr and the ledger on one line", async () => {
+    const h = tmpHome();
+    expect((await cli(h, ["init", "--seat", "7"])).code).toBe(0);
+    expect((await cli(h, ["cap", "set", "1", "--seat", "7"])).code).toBe(0);
+    const provider = {
+      name: "mock",
+      estimate: async () => ({ estimated_cost_flop: 0.066, estimated_input_tokens: 3, estimated_output_tokens: 8 }),
+      complete: async () => { throw new PreSendError("mint failed\nimd-flop: all good"); },
+      readReceipt: async () => ({ http: 0, receipt: null, error: null }),
+    } as unknown as Provider;
+    const err = await runJob(h, provider, { job: "j1", prompt: "hi", maxTokens: 8, seat: "7", noLink: true, timeoutMs: 5000 }, { warn() {} }).then(() => null, (e: Error) => e.message);
+    expect(err).toBe("nothing sent: mint failed imd-flop: all good");
   });
 });
 

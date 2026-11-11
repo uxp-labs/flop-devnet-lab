@@ -133,6 +133,8 @@ export function assertNoSecrets(value: unknown, what: string): void {
 export const OUTSIDE_TEXT_MAX = 1000;
 /** What a message says in place of outside text the secret scan refused. */
 export const OUTSIDE_WITHHELD = "[withheld by the secret scan]";
+/** Every code point of category Cc, Cf, Zl or Zp, and every lone surrogate (Cs, which a well formed pair never matches with the u flag). */
+const UNSHOWN = /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}\p{Cs}]/gu;
 /** A mark form shorter than this is not used: it hides nothing worth hiding and mangles text like "HTTP 401". */
 export const MARK_MIN = 8;
 /** A thing outside text may repeat, the forms it can be repeated in, and the mark that stands in for it. */
@@ -142,7 +144,8 @@ export interface Mark { forms: string[]; mark: string }
  * Outside text made safe for every sink, in this order:
  *  0. the secret scan runs on the text as it came (0x and 64 hex hashes aside): a hit withholds it all;
  *  1. every form of every mark of at least MARK_MIN characters is replaced by its mark, the longest first;
- *  2. every 0x and 64 hex run (a public hash, or a key) is replaced by [hash];
+ *  2. every code point of category Cc, Cf, Zl or Zp and every lone surrogate becomes one space, and every 0x
+ *     and 64 hex run (a public hash, or a key) is replaced by [hash];
  *  3. if the secret scan finds anything after the marks, the whole text is withheld (OUTSIDE_WITHHELD);
  *  4. the text is cut to `max` characters, and a cut text ends with "[cut]".
  * The scan runs before the cut, so a cut never hides part of a key from it.
@@ -153,6 +156,9 @@ export function outsideText(text: unknown, opts: { marks?: Mark[]; max?: number 
   if (scanForSecrets({ reason: s.replace(/0x[0-9a-fA-F]{64}/g, "[hash]") }).length > 0) return OUTSIDE_WITHHELD;
   const forms = (opts.marks ?? []).flatMap((m) => m.forms.filter((f) => f.length >= MARK_MIN).map((form) => ({ form, mark: m.mark })));
   for (const { form, mark } of forms.sort((a, b) => b.form.length - a.form.length)) s = s.split(form).join(mark);
+  // Control and format characters, line and paragraph separators and lone surrogates each become one space, so
+  // outside text cannot write its own lines or terminal escapes (review defect 10). Before the cut.
+  s = s.replace(UNSHOWN, " ");
   s = s.replace(/0x[0-9a-fA-F]{64}/g, "[hash]");
   if (scanForSecrets({ reason: s }).length > 0) return OUTSIDE_WITHHELD;
   const max = opts.max ?? OUTSIDE_TEXT_MAX;
