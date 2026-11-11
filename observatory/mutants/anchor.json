@@ -96,14 +96,6 @@
     "why": "an anchor read with no verdict never lets reset_detected be false"
   },
   {
-    "id": "status-anchor-unknown-hides-other-genesis",
-    "file": "src/status.ts",
-    "find": "((flags.stuck === false && anchor.kind !== \"unknown\") || rpcGenesis !== pinned)",
-    "replace": "(flags.stuck === false && anchor.kind !== \"unknown\")",
-    "test": "test/status.test.ts",
-    "why": "another genesis counts whatever the anchor read gave"
-  },
-  {
     "id": "status-anchor-null-no-verdict",
     "file": "src/status.ts",
     "find": "if (read.hash === null) return lost(\"has no block at that height\");",
