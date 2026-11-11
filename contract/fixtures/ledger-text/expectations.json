@@ -646,6 +646,40 @@
     "1": 0.186,
     "2": 0.186
    }
+  },
+  "depth-siblings.jsonl": {
+   "note": "forty sibling arrays and two sibling objects at the same level: each ] and } closes its level, so the depth stays 3 and the line is a row",
+   "lines": 1,
+   "blank": [],
+   "unreadable": [],
+   "groups": [
+    [
+     "r1",
+     [
+      1
+     ]
+    ]
+   ],
+   "charges": {
+    "1": 0.186
+   }
+  },
+  "depth-unbalanced-closers.jsonl": {
+   "note": "closers before any opener count too: depth goes to -4, then 33 openers reach 29, under the limit, so these lines are not valid JSON rather than nested too deep. The count is never floored at 0",
+   "lines": 2,
+   "blank": [],
+   "unreadable": [
+    {
+     "line": 1,
+     "why": "not valid JSON"
+    },
+    {
+     "line": 2,
+     "why": "not valid JSON"
+    }
+   ],
+   "groups": [],
+   "charges": {}
   }
  }
 }

@@ -202,8 +202,9 @@ function rpcCall(url: string, method: string, params: unknown[], timeoutMs = 150
           return;
         }
         finish(null, msg.result ?? null);
-      } catch (e) {
-        finish(e as Error);
+      } catch {
+        // JSON.parse's own message quotes the frame: never repeat it.
+        finish(new Error("rpc returned malformed JSON"));
       }
     };
     ws.onerror = () => {

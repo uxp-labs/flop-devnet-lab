@@ -134,6 +134,19 @@ describe("finding 12 (info): a refusal row carries the day the locked check used
     expect({ state: last.state, day: last.day }).toEqual({ state: "refused_local", day: D1 });
   });
 
+  it("a refusal for a row that cannot be placed, met only by the locked check on the new day, is dated the new day", async () => {
+    // Kills the mutant that drops `day` from refuse() in spentSoFar (review of the audit 33f3b9f fixes).
+    const h = await seat7("1");
+    appendLedger(h, row("mock-7-damaged", { day: D1, seat: "07" }));
+    const p = new Stub({ onEstimate: () => vi.setSystemTime(AFTER_MIDNIGHT) });
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(BEFORE_MIDNIGHT);
+    const r = await cli(h, runArgs(), { provider: p });
+    expect({ code: r.code, sent: p.calls, named: r.err.includes("ledger line 1 cannot be placed") }, r.err).toEqual({ code: 3, sent: 0, named: true });
+    const last = ledgerRows(h).at(-1)!;
+    expect({ state: last.state, day: last.day }).toEqual({ state: "refused_local", day: D1 });
+  });
+
   it("control: a refusal before the estimate keeps the day the early check used", async () => {
     const h = await seat7("0.1");
     appendLedger(h, row("mock-7-seed", { day: D, cap_charge: 0.1 }));

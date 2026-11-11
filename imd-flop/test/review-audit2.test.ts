@@ -417,15 +417,27 @@ describe("surviving mutants of the review: gateway.ts", () => {
       onopen?: () => void;
       onmessage?: (ev: { data: string }) => void;
       constructor() { setTimeout(() => this.onopen?.(), 0); }
-      send() { setTimeout(() => this.onmessage?.({ data: JSON.stringify({ error: { message: `denied ${BEARER}` } }) }), 0); }
+      static data = "";
+      send() { setTimeout(() => this.onmessage?.({ data: WS.data }), 0); }
       close() {}
     }
     (globalThis as { WebSocket: unknown }).WebSocket = WS;
     try {
       const { checkGenesis } = await import("../src/gateway.js");
-      const g = await checkGenesis(network("devnet"), (async () => new Response("{}", { status: 500 })) as Fetch);
+      const faucet500 = (async () => new Response("{}", { status: 500 })) as Fetch;
+      WS.data = JSON.stringify({ error: { message: `denied ${BEARER}` } });
+      const g = await checkGenesis(network("devnet"), faucet500);
       expect(g.error).toContain("rpc unavailable: rpc error: [withheld by the secret scan]");
       expect(g.error).not.toContain("sk_live");
+      // A frame that is not JSON: JSON.parse's own message would quote it. Only a fixed sentence is given.
+      WS.data = `<html>${BEARER}</html>`;
+      const raw = await checkGenesis(network("devnet"), faucet500);
+      expect(raw.error).toContain("rpc unavailable: rpc returned malformed JSON");
+      expect(raw.error).not.toContain("<html");
+      // Any other error on the way (here the socket itself fails) is outside text too: through outsideText.
+      (globalThis as { WebSocket: unknown }).WebSocket = class { constructor() { throw new Error(`socket said\n${BEARER}`); } };
+      const thrown = await checkGenesis(network("devnet"), faucet500);
+      expect(thrown.error).toContain("rpc unavailable: [withheld by the secret scan]");
     } finally {
       globalThis.WebSocket = real;
     }
@@ -436,5 +448,55 @@ describe("surviving mutants of the review: gateway.ts", () => {
     const f = (async () => { throw new Error(`proxy said ${BEARER}`); }) as Fetch;
     const m = await mintChildKey(network("devnet"), "flop_ek_PARENTPARENTPARENT00", { model: "m", maxSpend: 0.1 }, f).then(() => "ok", (e: Error) => e.message);
     expect(m).toBe("child key mint failed (Error: [withheld by the secret scan])");
+  });
+});
+
+describe("surviving mutants of the review: store.ts, keys.ts, ledger-text.ts, secrets.ts, run.ts", () => {
+  it("store.ts: a file of one byte that is not a newline still gets a newline first; a final \\r is not a fresh line", async () => {
+    const { appendJsonlSafe } = await import("../src/store.js");
+    const h = tmpHome();
+    for (const [start, want] of [["{", '{\n{"a":1}\n'], ["\n", '\n{"a":1}\n'], ['{"b":2}\r', '{"b":2}\r\n{"a":1}\n']]) {
+      const p = join(h, `f${start.charCodeAt(0)}.jsonl`);
+      writeFileSync(p, start);
+      appendJsonlSafe(p, { a: 1 });
+      expect(readFileSync(p, "utf8"), JSON.stringify(start)).toBe(want);
+    }
+  });
+
+  it("keys.ts: a seat id is the whole string, so a newline before or after the digits is not a seat", async () => {
+    const { isSeatId } = await import("../src/keys.js");
+    for (const v of ["42\n", "x\n42", "\n42", "42\nx"]) expect(isSeatId(v), JSON.stringify(v)).toBe(false);
+  });
+
+  it("ledger-text.ts: each ] and } closes a level, and the count is never floored at 0 (the fixtures depth-siblings and depth-unbalanced-closers pin both readers)", async () => {
+    const { nestedTooDeep } = await import("../src/ledger-text.js");
+    expect(nestedTooDeep(`{"x":[${Array(40).fill("[1]").join(",")}]}`)).toBe(false);
+    expect(nestedTooDeep(`{"x":[${Array(40).fill('{"a":1}').join(",")}]}`)).toBe(false);
+    expect(nestedTooDeep("]]]]" + "[".repeat(33))).toBe(false);
+    expect(nestedTooDeep("[".repeat(33))).toBe(true);
+  });
+
+  it("secrets.ts: the longest form of a mark is replaced first, whatever order the forms come in", () => {
+    expect(outsideText("at abcdefghijkl now", { marks: [{ forms: ["abcdefgh", "abcdefghijkl"], mark: "[M]" }] })).toBe("at [M] now");
+  });
+
+  it("secrets.ts: the scan runs before the cut, so a key past the cut still withholds the text", () => {
+    expect(outsideText("y".repeat(995) + " Bearer abcdefgh12345678")).toBe(OUTSIDE_WITHHELD);
+    expect(outsideText("y".repeat(995) + " " + "ab".repeat(32))).toBe(OUTSIDE_WITHHELD);
+  });
+
+  it("run.ts: a timeout's error name goes through outsideText too", async () => {
+    const h = tmpHome();
+    expect((await cli(h, ["init", "--seat", "7"])).code).toBe(0);
+    expect((await cli(h, ["cap", "set", "1", "--seat", "7"])).code).toBe(0);
+    const provider = {
+      name: "mock",
+      estimate: async () => ({ estimated_cost_flop: 0.066, estimated_input_tokens: 3, estimated_output_tokens: 8 }),
+      complete: async () => { const e = new Error("gone"); e.name = "Time\nout Bearer abcdefgh12345678"; throw e; },
+      readReceipt: async () => ({ http: 0, receipt: null, error: null }),
+    } as unknown as Provider;
+    const code = await runJob(h, provider, { job: "j1", prompt: "hi", maxTokens: 8, seat: "7", noLink: true, timeoutMs: 5000 }, { warn() {} }).then(() => 0, (e: { code: number }) => e.code);
+    const last = JSON.parse(readFileSync(ledgerFile(h), "utf8").trim().split("\n").at(-1)!);
+    expect({ code, state: last.state, reason: last.reason }).toEqual({ code: 6, state: "timeout_unknown", reason: `${OUTSIDE_WITHHELD}: no answer; spend unknown, not retried` });
   });
 });
