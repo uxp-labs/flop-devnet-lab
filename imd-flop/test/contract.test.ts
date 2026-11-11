@@ -113,7 +113,7 @@ const adapters: Record<string, (i: Json, want: Json) => Promise<Json> | Json> = 
   },
   "settlement.refresh": async (i, want) => {
     const h = await ready();
-    await cli(h, runArgs(["--max-tokens", "8"]), { provider: new P(i.run_complete ? { complete: i.run_complete } : { read: { http: 200, error: null, receipt: i.run_read } }) });
+    await cli(h, runArgs(["--max-tokens", "8"]), { provider: new P(i.run_complete ? { complete: i.run_complete } : { costFlop: i.run_cost_flop, read: { http: 200, error: null, receipt: i.run_read } }) });
     const rid = ridOf(h);
     if ("prev_cap_charge" in i) {
       const rows = ledger(h);

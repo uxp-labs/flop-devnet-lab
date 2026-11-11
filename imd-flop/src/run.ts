@@ -13,7 +13,7 @@ import { DEFAULT_MODEL, network, SEAT_COLLECTION } from "./networks.js";
 import { checkBudget, padQuote, requireCap, validateJob, validatePayer, validateRunMaxTokens } from "./policy.js";
 import { appendLedger, jobSpent, LedgerLockError, spentToday, UnusableLedgerCharge, utcDay, withLedgerLock, type LedgerEntry } from "./ledger.js";
 import { classifyReceipt, type Classified } from "./receipts.js";
-import { holdCharge, isFreshRead, nextBooking, receiptIdentity } from "./settlement.js";
+import { bookingReason, holdCharge, isFreshRead, nextBooking, receiptIdentity, reportedCost } from "./settlement.js";
 import { receiptPath, writeReceipt } from "./receipt-store.js";
 import type { Provider } from "./providers.js";
 import { assertPaidNetwork, checkImdJob, PaidGateError, PreSendError, readVerifiedSeatOwner, type Fetch } from "./gateway.js";
@@ -260,13 +260,12 @@ export async function runJob(h: string, provider: Provider, o: RunOpts, deps: { 
     for (const k of Object.keys(r0)) if (k in cleaned) r0[k] = cleaned[k] ?? null;
   }
 
-  const usage = res.usage;
-  const costReported = typeof usage?.cost_flop === "number" && Number.isFinite(usage.cost_flop) ? usage.cost_flop : null;
+  const costReported = reportedCost(res.usage?.cost_flop);
   // Same rules as receipt --refresh, held in settlement.ts: a failed read (not HTTP 200 with a receipt object)
   // or a receipt body that had to be redacted proves nothing and never releases the reservation.
   const outcome = { fresh: isFreshRead(rr), identityOk, redacted: receiptRedacted, state: classified.state, settled: classified.settled };
-  const booking = nextBooking({ state: sent.state, spend: sent.spend }, outcome, holdCharge(q.padded, costReported));
-  appendLedger(h, { ...sent, ts: new Date().toISOString(), ...booking, reason: classified.flag, cost_reported: costReported, http: rr.http });
+  const booking = nextBooking({ state: sent.state, spend: sent.spend }, outcome, holdCharge(q.padded, costReported), costReported);
+  appendLedger(h, { ...sent, ts: new Date().toISOString(), ...booking, reason: bookingReason(booking, classified.flag), cost_reported: costReported, http: rr.http });
 
   const match = await matchReceipt(h, receipt0, latestAttempts(h).find((e) => e.request_id === requestId) ?? null);
   const receipt = { ...receipt0, match };

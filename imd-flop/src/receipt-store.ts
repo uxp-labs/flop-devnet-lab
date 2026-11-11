@@ -11,7 +11,7 @@ import { receiptsDir } from "./paths.js";
 import type { Provider } from "./providers.js";
 import { classifyReceipt, type Classified } from "./receipts.js";
 import { redactFlagged } from "./secrets.js";
-import { DISAGREE, isFreshRead, receiptIdentity, refreshBooking } from "./settlement.js";
+import { bookingReason, DISAGREE, isFreshRead, receiptIdentity, refreshBooking } from "./settlement.js";
 import { readJson, writeJsonSafe } from "./store.js";
 
 export type SavedReceipt = Classified & { seat: string; mock_scenario?: string };
@@ -87,10 +87,11 @@ export async function refreshReceipt(
     warn(DISAGREE);
     saved = { ...saved, status: DISAGREE } as SavedReceipt;
   };
-  if (next.kind === "disagree") disagree(); // unknown charge and no exact-identity settlement: never substitute 0
+  // Disagree: an unknown charge with no exact-identity settlement (never substitute 0), or a read below a booked settlement.
+  if (next.kind === "disagree") disagree();
   else if (next.kind === "append") {
     try {
-      appendLedger(h, { ...prev, ts: new Date().toISOString(), state: next.booking.state, reason: saved?.flag ?? null, spend: next.booking.spend, cap_charge: next.booking.cap_charge });
+      appendLedger(h, { ...prev, ts: new Date().toISOString(), state: next.booking.state, reason: bookingReason(next.booking, saved?.flag ?? null), spend: next.booking.spend, cap_charge: next.booking.cap_charge });
     } catch {
       disagree();
     }

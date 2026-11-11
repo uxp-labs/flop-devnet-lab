@@ -34,7 +34,7 @@ export interface LedgerEntry {
   reason: string | null;
   spend: number | null; // finite settled spend >= 0; null = unknown (negative, non-finite, and missing are unknown, never coerced to 0)
   cost_reported: number | null; // usage.cost_flop from the completion, if any. Recorded as reported; not a settlement.
-  cap_charge: number; // known finite settled spend, including explicit 0; while spend is unknown, the padded quote, raised if reported cost is higher
+  cap_charge: number; // known finite settled spend (explicit 0 included), or while spend is unknown the padded quote; either is raised to the reported cost when that is higher
   http: number | null;
   mock: boolean;
 }
