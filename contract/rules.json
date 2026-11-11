@@ -301,6 +301,16 @@
         "imd-flop"
       ],
       "summary": "The daily cap can be passed only when the gateway shows a receipt for a request this tool recorded as never sent, or reports more than the child key allowed. \"Nothing was sent\" is a local fact and releases the hold; a later trusted read that shows the gateway holds the request brings the hold back (the safe direction), and another call may have used the freed room meanwhile. A settled amount or a reported cost above the padded quote raises the charge above what the call was allowed to spend. Neither is silent: the booking prints PAST_ADMITTED on stderr and records it in the row's reason, and status marks the day (over_cap_today_utc in --json, OVER CAP in text). It stays as it is: refusing the read or keeping the hold released would understate what was spent. Pinned by vectors run-settled-above-hold-prints-past-admitted, run-reported-cost-above-hold-prints-past-admitted, refresh-presend-then-pending-hold-comes-back and refresh-presend-then-no-state-hold-comes-back."
+    },
+    {
+      "id": "R-g",
+      "residual": "g",
+      "status": "current behavior",
+      "parts": [
+        "imd-flop",
+        "viewer"
+      ],
+      "summary": "Rounding to 6 decimals counts a value within 1e-12 FLOP of a 1e-6 step as on it (imd-flop rounding.ts ceil6 and floor6, viewer build-lane.py floor6). For a total built from charges on the 6 decimal grid and a cap on it, that absorbs float noise and nothing else, so rounding never admits a call over the cap. imd-flop books every charge on that grid (the padded quote is rounded up to it) except a charge a gateway amount raised above the padded quote, which is booked as the gateway reported it and prints PAST_ADMITTED. A charge off the grid within 1e-12 FLOP above a step (a hand edit, a damaged row, or such a gateway amount) is rounded down onto the step, so the next call can be admitted with the day over the cap by at most 1e-12 FLOP. A cap or job budget set within 1e-12 FLOP below a step is rounded up onto it the same way, by at most 1e-12 FLOP more. It stays as it is: it closes when money moves to exact base units (money stage 2). Pinned by vectors ceil6-off-grid-within-tolerance and floor6-off-grid-within-tolerance-below, and by imd-flop/test/review-fixes.test.ts (R7, now R-g)."
     }
   ],
   "viewer_label_rules": {

@@ -37,8 +37,9 @@ NOISE = 1e-6  # in scaled units, so 1e-12 FLOP
 def floor6(n):
     """Room left rounds down to 6 decimals, the twin of imd-flop's rounding.ts floor6; pinned for both by
     contract/vectors/rounding.json. A value within 1e-12 of a 1e-6 boundary counts as on it, so float noise
-    does not move a 6 decimal amount below 8192 FLOP. Rounding never adds room, so a row over its limit by
-    less than 1e-6 FLOP is still over it."""
+    does not move a 6 decimal amount below 8192 FLOP. Rounding adds no room beyond that tolerance, so a row over
+    its limit by more than 1e-12 FLOP and less than 1e-6 FLOP is still over it. A row over by at most 1e-12 FLOP
+    (only an amount off the 6 decimal grid makes one) reads as on its limit: residual R-g in rules.json."""
     scaled = n * SCALE
     nearest = round(scaled)
     return (nearest if abs(scaled - nearest) <= NOISE else math.floor(scaled)) / SCALE

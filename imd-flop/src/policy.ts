@@ -160,7 +160,8 @@ function limitsFor(a: BudgetState): SpendLimit[] | null {
 
 /**
  * Room left under a limit: what it allows, less what is already charged. Rounded down to 6 decimals, so
- * rounding never adds room. A figure that is missing is unknown, never 0: the room is then not a number.
+ * rounding adds no room beyond the 1e-12 FLOP tolerance of rounding.ts, which only amounts off the 6 decimal
+ * grid can use (residual R-g). A figure that is missing is unknown, never 0: the room is then not a number.
  */
 export function roomLeft(limit: { allowed: number | undefined; spent: number | undefined }): number {
   if (typeof limit.allowed !== "number" || typeof limit.spent !== "number") return Number.NaN;

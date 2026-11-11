@@ -15,6 +15,8 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { PreSendError } from "../src/gateway.js";
 import type { CompleteReq, CompleteRes, Provider } from "../src/providers.js";
+import { checkBudget } from "../src/policy.js";
+import { ceil6 } from "../src/rounding.js";
 import { decideBooking, DISAGREE, PAST_ADMITTED, reconcile } from "../src/settlement.js";
 import { cli, readLines, readySeat, tmpHome } from "./helpers.js";
 
@@ -319,18 +321,55 @@ describe("R6 (medium): a ledger row with an unusable day drops its charge from t
   });
 });
 
-describe("R7 (low): the rounding tolerance admits a call over the cap", () => {
+describe("R7 (low), now residual R-g: the rounding tolerance", () => {
   // README: "the total already charged is rounded up ... so rounding never admits a call". ceil6 snaps a
   // total within 1e-12 FLOP above a 1e-6 boundary down onto it. A known spend of 0.8140000000005 (any
   // finite amount is a known settled spend) is charged as 0.814, the room is 0.186, and a 0.186 call fits:
   // the day ends at 1.0000000000005 against a cap of 1 (500000 base units over).
-  it.fails("cap 1, a settled row charged 0.8140000000005: a 0.186 call is refused", async () => {
+  // Decided (review fixes 2): words, not code. contract/rules.json R-g says what is true: a charge on the 6
+  // decimal grid is never understated by rounding; a charge off it within 1e-12 FLOP above a step can be
+  // admitted over the cap by at most 1e-12 FLOP. It closes when money moves to exact base units (stage 2).
+  it("R-g: cap 1, a settled row charged 0.8140000000005 (off the grid): a 0.186 call is admitted, and the day is over the cap by at most 1e-12 FLOP", async () => {
     const h = await ready("1");
     await pendingRun(h, "jA");
     const latest = ledger(h).at(-1)!;
     appendFileSync(ledgerPath(h), JSON.stringify({ ...latest, ts: new Date().toISOString(), state: "settled", spend: 0.8140000000005, cap_charge: 0.8140000000005 }) + "\n");
     const second = await cli(h, runArgs("jB"), { provider: new P() });
-    expect(second.code, second.err).toBe(3);
+    expect(second.code, second.err).toBe(0);
+    const charges = ledger(h).filter((r, i, all) => all.findLastIndex((x) => x.request_id === r.request_id) === i).map((r) => r.cap_charge as number);
+    const over = charges.reduce((a, b) => a + b, 0) - 1;
+    expect(over).toBeGreaterThan(0);
+    expect(over).toBeLessThanOrEqual(1e-12);
+    expect(await today(h)).toBe(1); // the rounded total status shows
+  });
+
+  it("charges on the 6 decimal grid: rounding never admits a call over the cap (20000 random sums)", () => {
+    // Each case: up to 40 charges on the grid (whole base units of 1e-6 FLOP), summed as floats in order as
+    // ledger.ts sumCharges does and rounded up with ceil6, a cap and a padded quote on the grid, and
+    // policy.ts checkBudget. Whenever the call is admitted, the exact total in 1e-6 units plus the quote is
+    // within the cap. And the rounded total is never below the exact one.
+    let seed = 7;
+    const rnd = () => ((seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648);
+    const micro = (max: number) => Math.floor(rnd() * max);
+    let admitted = 0;
+    for (let c = 0; c < 20000; c++) {
+      const scale = [10, 1e3, 1e6, 1e8, 1e10][c % 5]; // charges from 1e-5 FLOP to 1e4 FLOP
+      const charges = Array.from({ length: 1 + micro(40) }, () => micro(scale));
+      const exact = charges.reduce((a, b) => a + b, 0);
+      let float = 0;
+      for (const k of charges) float += k / 1e6;
+      const spent = ceil6(float);
+      expect(Math.round(spent * 1e6), `charges ${charges}`).toBeGreaterThanOrEqual(exact);
+      const capMicro = exact + micro(scale * 2) - micro(scale);
+      if (capMicro < 1) continue;
+      const padMicro = 1 + micro(scale);
+      const cap = { daily: capMicro / 1e6, perCall: capMicro / 1e6 };
+      if (checkBudget({ padded: padMicro / 1e6, cap, payer: "holder", spentBefore: spent }) === null) {
+        admitted += 1;
+        expect(exact + padMicro, `charges ${charges}, cap ${capMicro}, quote ${padMicro}`).toBeLessThanOrEqual(capMicro);
+      }
+    }
+    expect(admitted).toBeGreaterThan(1000);
   });
 });
 
