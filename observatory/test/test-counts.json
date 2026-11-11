@@ -20,8 +20,8 @@
     "names": "bd439ca49837d3e62977352e9315883dd115a9abd92613ad412e6457ee0f7bc5"
   },
   "guard.test.ts": {
-    "tests": 72,
-    "names": "f8d6de057ce89bfc00855b55f688aeb1f006775521ecb210cf8a93d437258b1a"
+    "tests": 74,
+    "names": "27b65064d3414e410fd84b528b8a2f9942d48d7bf8b8e5e35d399b27d6112f60"
   },
   "live-run.test.ts": {
     "tests": 28,
@@ -32,8 +32,8 @@
     "names": "552addede8f03700f304243e1513b90c4a452d170f4633c5db01d92bd1d2f653"
   },
   "live-workflow.test.ts": {
-    "tests": 5,
-    "names": "9a60efb81c3084c4b3655598dafc6c30a52182d32d25709db3741a7707049fe2"
+    "tests": 17,
+    "names": "112f802b2897826e0eb454abafbb49c8b868838f466726faf4f99e58e299c3f3"
   },
   "mcp.test.ts": {
     "tests": 13,
@@ -46,6 +46,10 @@
   "page.test.ts": {
     "tests": 40,
     "names": "c1629a5c9e7fa1134a7e062494c93ae5e762fbe1cc26328108e74d808eb49693"
+  },
+  "published.test.ts": {
+    "tests": 21,
+    "names": "903d704885ae6f13255754cd80c7df684a1f721cb9c697dc7dd4a3825d546ce8"
   },
   "rpc-head.test.ts": {
     "tests": 19,

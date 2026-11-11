@@ -16,7 +16,6 @@
 //   4  the read only guard or the transport refused a request
 //   1  the run broke before a snapshot was written
 //   2  the command was given wrong flags, or an output folder that is not empty
-import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { feedText, writeFeeds } from "./feed.js";
@@ -26,6 +25,7 @@ import { LiveSource } from "./live-source.js";
 import { buildSnapshot } from "./snapshot.js";
 import { DEVNET_GENESIS } from "./status.js";
 import { appendSnapshot } from "./store.js";
+import { sumsOf } from "./sums.js";
 import { Recorder } from "./tape.js";
 import type { Transport } from "./transport.js";
 import type { Snapshot } from "./types.js";
@@ -112,11 +112,10 @@ export function resetSignal(s: Snapshot): string | null {
 
 /** SHA256SUMS: the sha256 of every other file in the folder, sorted by name, as sha256sum writes it. */
 export function sumsText(dir: string): string {
-  return readdirSync(dir)
+  const names = readdirSync(dir)
     .filter((n) => n !== "SHA256SUMS")
-    .sort()
-    .map((n) => `${createHash("sha256").update(readRegularFile(join(dir, n))).digest("hex")}  ${n}\n`)
-    .join("");
+    .sort();
+  return sumsOf(names.map((n) => [n, readRegularFile(join(dir, n))] as const));
 }
 
 export async function runLive(transport: Transport, o: RunOptions): Promise<RunResult> {

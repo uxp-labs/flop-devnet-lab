@@ -1,0 +1,98 @@
+[
+  {
+    "id": "publish-any-branch",
+    "file": "../.github/workflows/observatory-live.yml",
+    "find": "github.ref == 'refs/heads/main' && ",
+    "replace": "",
+    "test": "test/live-workflow.test.ts",
+    "why": "the publish job runs for main only"
+  },
+  {
+    "id": "publish-not-on-failure",
+    "file": "../.github/workflows/observatory-live.yml",
+    "find": "(needs.live.result == 'success' || needs.live.result == 'failure')",
+    "replace": "needs.live.result == 'success'",
+    "test": "test/live-workflow.test.ts",
+    "why": "a live run that exited 3 fails the live job, and its reading is still published"
+  },
+  {
+    "id": "publish-without-artifact",
+    "file": "../.github/workflows/observatory-live.yml",
+    "find": " && needs.live.outputs.artifact-id != ''",
+    "replace": "",
+    "test": "test/live-workflow.test.ts",
+    "why": "the publish job runs only when the live job uploaded its folder"
+  },
+  {
+    "id": "live-may-write",
+    "file": "../.github/workflows/observatory-live.yml",
+    "find": "permissions:\n  contents: read\n",
+    "replace": "permissions:\n  contents: write\n",
+    "test": "test/live-workflow.test.ts",
+    "why": "the live job may read the repository and nothing else"
+  },
+  {
+    "id": "publish-forces",
+    "file": "../.github/workflows/observatory-live.yml",
+    "find": "          git push \"$remote\" refs/heads/observatory-data:refs/heads/observatory-data\n",
+    "replace": "          git push --force \"$remote\" refs/heads/observatory-data:refs/heads/observatory-data\n",
+    "test": "test/live-workflow.test.ts",
+    "why": "no push is ever forced"
+  },
+  {
+    "id": "publish-pushes-main",
+    "file": "../.github/workflows/observatory-live.yml",
+    "find": "          git push \"$remote\" refs/heads/observatory-data:refs/heads/observatory-data\n",
+    "replace": "          git push \"$remote\" refs/heads/observatory-data:refs/heads/main\n",
+    "test": "test/live-workflow.test.ts",
+    "why": "the push names the data branch and nothing else"
+  },
+  {
+    "id": "publish-sums-unchecked",
+    "file": "../.github/workflows/observatory-live.yml",
+    "find": "          sha256sum -- \"${present[@]}\" | cmp -s - SHA256SUMS || fail \"a file differs from SHA256SUMS\"\n",
+    "replace": "",
+    "test": "test/live-workflow.test.ts",
+    "why": "every file is checked against SHA256SUMS before anything reads it"
+  },
+  {
+    "id": "publish-interpolates-reading",
+    "file": "../.github/workflows/observatory-live.yml",
+    "find": "git commit -q -m \"observatory-data: reading at $OBSERVED_AT\"",
+    "replace": "git commit -q -m \"observatory-data: reading at ${{ steps.check.outputs.observed_at }}\"",
+    "test": "test/live-workflow.test.ts",
+    "why": "no value from the reading is written into a shell command"
+  },
+  {
+    "id": "publish-no-retry",
+    "file": "../.github/workflows/observatory-live.yml",
+    "find": "          prepare 2\n",
+    "replace": "",
+    "test": "test/live-workflow.test.ts",
+    "why": "a refused push is fetched again and retried once"
+  },
+  {
+    "id": "publish-runs-repo-code",
+    "file": "../.github/workflows/observatory-live.yml",
+    "find": "      - name: Download what was read\n        uses: actions/download-artifact@v4\n",
+    "replace": "      - name: Checkout\n        uses: actions/checkout@v4\n\n      - name: Download what was read\n        uses: actions/download-artifact@v4\n",
+    "test": "test/live-workflow.test.ts",
+    "why": "the publish job runs no code from the repository"
+  },
+  {
+    "id": "live-continues-on-error",
+    "file": "../.github/workflows/observatory-live.yml",
+    "find": "        run: node dist/live-bin.js",
+    "replace": "        continue-on-error: true\n        run: node dist/live-bin.js",
+    "test": "test/live-workflow.test.ts",
+    "why": "the run stays red when the live job failed"
+  },
+  {
+    "id": "publish-unquoted-day",
+    "file": "../.github/workflows/observatory-live.yml",
+    "find": ">>\"log/$DAY.jsonl\"",
+    "replace": ">>log/$DAY.jsonl",
+    "test": "test/live-workflow.test.ts",
+    "why": "a value from the reading is used only inside double quotes"
+  }
+]

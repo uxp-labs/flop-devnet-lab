@@ -1,0 +1,82 @@
+[
+  {
+    "id": "published-extra-file-allowed",
+    "file": "src/published.ts",
+    "find": "    .filter((n) => !known.includes(n))\n",
+    "replace": "    .filter((n) => false && !known.includes(n))\n",
+    "test": "test/published.test.ts",
+    "why": "latest/ holds exactly the published files: a file it does not know is refused"
+  },
+  {
+    "id": "published-sums-not-read",
+    "file": "src/published.ts",
+    "find": "  if (differ.length > 0) return refuse(...differ);",
+    "replace": "",
+    "test": "test/published.test.ts",
+    "why": "a file that differs from its line in SHA256SUMS is refused before anything is read"
+  },
+  {
+    "id": "published-sums-form-not-read",
+    "file": "src/published.ts",
+    "find": "!== sums) return refuse(\"SHA256SUMS is not in the written form\");",
+    "replace": "!== sums && false) return refuse(\"SHA256SUMS is not in the written form\");",
+    "test": "test/published.test.ts",
+    "why": "SHA256SUMS is in the one form the live run writes"
+  },
+  {
+    "id": "published-snapshot-checks-skipped",
+    "file": "src/published.ts",
+    "find": "  const broken = checkSnapshot(read.value);",
+    "replace": "  const broken: string[] = [];",
+    "test": "test/published.test.ts",
+    "why": "the snapshot passes every check the MCP binary holds a snapshot to"
+  },
+  {
+    "id": "published-hash-not-checked",
+    "file": "src/published.ts",
+    "find": "  if (s.hash !== hashSnapshot(s)) return",
+    "replace": "  if (false) return",
+    "test": "test/published.test.ts",
+    "why": "the snapshot passes its hash check"
+  },
+  {
+    "id": "published-fixture-trusted",
+    "file": "src/published.ts",
+    "find": "  if (s.trust !== \"trusted RPC\") return",
+    "replace": "  if (false) return",
+    "test": "test/published.test.ts",
+    "why": "a published reading has trust trusted RPC; a fixture is never one"
+  },
+  {
+    "id": "published-feeds-not-compared",
+    "file": "src/published.ts",
+    "find": "  if (notGiven.length > 0) return refuse(...notGiven);",
+    "replace": "",
+    "test": "test/published.test.ts",
+    "why": "every feed and the log line are the ones the snapshot gives"
+  },
+  {
+    "id": "published-run-exit-not-compared",
+    "file": "src/published.ts",
+    "find": "  if (said !== exit) return",
+    "replace": "  if (false) return",
+    "test": "test/published.test.ts",
+    "why": "run.json gives the exit the snapshot gives: 3 with a reset signal, else 0"
+  },
+  {
+    "id": "published-future-allowed",
+    "file": "src/published.ts",
+    "find": "    if (at > now) stale.push(",
+    "replace": "    if (false) stale.push(",
+    "test": "test/published.test.ts",
+    "why": "a reading from after now is refused"
+  },
+  {
+    "id": "published-age-off-by-one",
+    "file": "src/published.ts",
+    "find": "    else if (now - at > o.maxAgeSeconds * 1000)",
+    "replace": "    else if (now - at > o.maxAgeSeconds * 1000 + 1)",
+    "test": "test/published.test.ts",
+    "why": "a reading older than the limit by one millisecond is refused"
+  }
+]

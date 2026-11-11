@@ -3,15 +3,25 @@
 # whose trust is "trusted RPC" (it trusts one RPC endpoint; it is not proof), a tape of exactly what
 # it read, run.json and SHA256SUMS, and uploads them as an artifact. Nothing is kept between runs.
 #
-# It never calls an RPC write method, never sends anything but GET, uses no secrets, pushes nothing,
-# opens no issue or comment, and uses no cache. Permissions are contents: read only, and checkout
-# does not persist credentials. The read only guard in observatory/src/guard.ts refuses any write
-# before it is sent, and the transport reaches only rpc.devnet.flop.network, faucet.flop.network
-# and api.flop.network.
+# The live job never calls an RPC write method, never sends anything but GET, uses no secrets,
+# pushes nothing, opens no issue or comment, and uses no cache. Its permissions are contents: read
+# only, and checkout does not persist credentials. The read only guard in observatory/src/guard.ts
+# refuses any write before it is sent, and the transport reaches only rpc.devnet.flop.network,
+# faucet.flop.network and api.flop.network.
 #
 # The command exits 0 when a truthful snapshot was written, even with a service down or unknown,
 # 3 for a reset signal (reset_detected true, or a conflict), 4 when a request was refused, and 1
 # when the run broke. A push that changes this file or the live source files gives a smoke run.
+#
+# The publish job puts the reading on the branch observatory-data (observatory/RULES.md section 7).
+# It runs only on main, only when the live job uploaded its folder, and also when the live run
+# exited 3, so a reset signal is published; the run stays red then. It is the only job that may
+# write, and only contents. It runs no code from the repository: it downloads this run's artifact,
+# checks every file against SHA256SUMS before anything else, publishes only a run that exited 0 or
+# 3, and then uses plain git. It replaces latest/ with the folder, appends the snapshot line to
+# log/<UTC date>.jsonl, writes README.md when it is missing, and pushes to
+# refs/heads/observatory-data only, never with force. A refused push is fetched again and retried
+# once, then the job fails.
 
 name: observatory live
 
@@ -29,6 +39,7 @@ on:
       - "observatory/src/live-source.ts"
       - "observatory/src/live-run.ts"
       - "observatory/src/live-bin.ts"
+      - "observatory/src/sums.ts"
 
 permissions:
   contents: read
@@ -42,6 +53,9 @@ jobs:
     name: observatory live network status
     runs-on: ubuntu-latest
     timeout-minutes: 12
+    # Empty unless the output folder was uploaded: the publish job runs only when it is set.
+    outputs:
+      artifact-id: ${{ steps.upload.outputs.artifact-id }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -67,6 +81,7 @@ jobs:
         run: node dist/live-bin.js --out "$RUNNER_TEMP/observatory-live" --source-sha "$GITHUB_SHA"
 
       - name: Upload what was read
+        id: upload
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v4
         with:
@@ -74,3 +89,134 @@ jobs:
           path: ${{ runner.temp }}/observatory-live
           retention-days: 14
           if-no-files-found: error
+
+  publish:
+    name: publish the reading to observatory-data
+    needs: live
+    # main only, for every event; the live job may have failed (exit 3 is a reset signal).
+    if: ${{ !cancelled() && github.ref == 'refs/heads/main' && (needs.live.result == 'success' || needs.live.result == 'failure') && needs.live.outputs.artifact-id != '' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - name: Download what was read
+        uses: actions/download-artifact@v4
+        with:
+          artifact-ids: ${{ needs.live.outputs.artifact-id }}
+          merge-multiple: true
+          path: ${{ runner.temp }}/reading
+
+      - name: Check the files against SHA256SUMS
+        id: check
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/reading"
+          fail() { echo "::error::$1"; exit 1; }
+          # The files a live run writes, as SHA256SUMS lists them (PUBLISHED_FILES in
+          # observatory/src/published.ts). Names come from this list, never from the artifact.
+          files=(census.json drift.json escrows.json run.json snapshot.json snapshots.jsonl status.json tape.jsonl)
+          present=()
+          for f in "${files[@]}"; do if [ -f "$f" ] && [ ! -L "$f" ]; then present+=("$f"); fi; done
+          { [ -f SHA256SUMS ] && [ ! -L SHA256SUMS ] && [ "${#present[@]}" -gt 0 ]; } || fail "the artifact holds no SHA256SUMS or no file it lists"
+          # Nothing else at all: no other name, no folder, no link.
+          [ "$(find . -mindepth 1 -printf x | wc -c)" -eq "$((${#present[@]} + 1))" ] || fail "the artifact holds something that is not on the list"
+          # Before anything reads a file: SHA256SUMS must be exactly the sums of the files here.
+          sha256sum -- "${present[@]}" | cmp -s - SHA256SUMS || fail "a file differs from SHA256SUMS"
+          code="$(jq -r '.exit_code' run.json)"
+          if [ "$code" != 0 ] && [ "$code" != 3 ]; then
+            echo "::notice::the live run wrote no truthful snapshot (its exit code is not 0 or 3), so nothing is published"
+            echo "publish=false" >>"$GITHUB_OUTPUT"
+            exit 0
+          fi
+          [ "${#present[@]}" -eq "${#files[@]}" ] || fail "a file of a truthful run is missing"
+          observed_at="$(jq -r '.observed_at' snapshot.json)"
+          hash="$(jq -r '.hash' snapshot.json)"
+          iso='^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\.[0-9]{1,9})?(Z|[+-][0-9]{2}:[0-9]{2})$'
+          hex='^[0-9a-f]{64}$'
+          ymd='^[0-9]{4}-[0-9]{2}-[0-9]{2}$'
+          [[ "$observed_at" =~ $iso ]] || fail "snapshot.json holds no observed_at in the written form"
+          [[ "$hash" =~ $hex ]] || fail "snapshot.json holds no hash in the written form"
+          [ "$(jq -r '.snapshot_hash' run.json)" = "$hash" ] || fail "run.json names another snapshot"
+          { [ "$(wc -l <snapshots.jsonl)" -eq 1 ] && [ -z "$(tail -c 1 snapshots.jsonl)" ]; } || fail "snapshots.jsonl is not one whole line"
+          day="$(date -u -d "$observed_at" +%Y-%m-%d)"
+          [[ "$day" =~ $ymd ]] || fail "observed_at has no UTC date"
+          {
+            echo "publish=true"
+            echo "observed_at=$observed_at"
+            echo "snapshot_hash=$hash"
+            echo "day=$day"
+            echo "exit_code=$code"
+          } >>"$GITHUB_OUTPUT"
+
+      - name: Publish to observatory-data
+        if: ${{ steps.check.outputs.publish == 'true' }}
+        env:
+          PUSH_TOKEN: ${{ github.token }}
+          OBSERVED_AT: ${{ steps.check.outputs.observed_at }}
+          SNAPSHOT_HASH: ${{ steps.check.outputs.snapshot_hash }}
+          DAY: ${{ steps.check.outputs.day }}
+          EXIT_CODE: ${{ steps.check.outputs.exit_code }}
+        run: |
+          set -euo pipefail
+          reading="$RUNNER_TEMP/reading"
+          files=(census.json drift.json escrows.json run.json snapshot.json snapshots.jsonl status.json tape.jsonl SHA256SUMS)
+          remote="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY.git"
+          # The token reaches git through its environment only, as an HTTP header, never in a URL.
+          basic=$(printf 'x-access-token:%s' "$PUSH_TOKEN" | base64 -w0)
+          echo "::add-mask::$basic"
+          export GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0="http.$GITHUB_SERVER_URL/.extraheader" GIT_CONFIG_VALUE_0="AUTHORIZATION: basic $basic"
+          # One try: a new repository on the branch as it is now, or on no commit when it does
+          # not exist yet (an orphan), with this reading laid on top and committed.
+          prepare() {
+            work="$RUNNER_TEMP/data-$1"
+            git init -q -b observatory-data "$work"
+            cd "$work"
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            found=0
+            git ls-remote --exit-code "$remote" refs/heads/observatory-data >/dev/null || found=$?
+            if [ "$found" -eq 0 ]; then
+              git fetch -q --depth=1 "$remote" refs/heads/observatory-data
+              git reset -q --hard FETCH_HEAD
+            elif [ "$found" -ne 2 ]; then
+              echo "::error::cannot read observatory-data"
+              exit 1
+            fi
+            rm -rf latest
+            mkdir -p latest log
+            for f in "${files[@]}"; do cp -- "$reading/$f" "latest/$f"; done
+            # A reading already in the day's log, from a run attempted again, is not added twice.
+            if [ ! -f "log/$DAY.jsonl" ] || ! grep -qxF -f "$reading/snapshots.jsonl" "log/$DAY.jsonl"; then
+              cat -- "$reading/snapshots.jsonl" >>"log/$DAY.jsonl"
+            fi
+            if [ ! -f README.md ]; then
+              printf '%s\n' \
+                "# observatory-data" \
+                "" \
+                "Live readings of FLOP devnet network status, published by the read only FLOP Observatory." \
+                "The code is in uxp-labs/flop-devnet-lab on main: observatory/ and .github/workflows/observatory-live.yml." \
+                "Every file here is written by that workflow. Nothing here holds a key or anything personal." \
+                "" \
+                "- latest/ holds the newest reading: snapshot.json, the feeds, snapshots.jsonl, tape.jsonl, run.json and SHA256SUMS." \
+                "- log/<UTC date>.jsonl holds one snapshot per line, one line for each reading of that day." \
+                "" \
+                "The trust is \"trusted RPC\": one RPC endpoint was trusted. It is not proof." \
+                "A reader must check every file against SHA256SUMS, check observed_at, and refuse a reading that is stale." \
+                "judgeLatest in observatory/src/published.ts does all of that." >README.md
+            fi
+            git add -A -- latest log README.md
+            changed=yes
+            if git diff --cached --quiet; then
+              changed=no
+            else
+              git commit -q -m "observatory-data: reading at $OBSERVED_AT" -m "snapshot $SNAPSHOT_HASH" -m "exit code $EXIT_CODE, run $GITHUB_RUN_ID, revision $GITHUB_SHA"
+            fi
+          }
+          prepare 1
+          if [ "$changed" = no ]; then echo "observatory-data already holds this reading"; exit 0; fi
+          if git push "$remote" refs/heads/observatory-data:refs/heads/observatory-data; then exit 0; fi
+          echo "::warning::the push was refused; fetching observatory-data again and trying once more"
+          prepare 2
+          if [ "$changed" = no ]; then echo "observatory-data already holds this reading"; exit 0; fi
+          git push "$remote" refs/heads/observatory-data:refs/heads/observatory-data

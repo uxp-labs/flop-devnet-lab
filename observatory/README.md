@@ -116,12 +116,55 @@ stuck height checks do not run, and its `reset_detected` speaks for that one rea
 `status` command's does. It reads no events, so it writes no census, no escrow state and no drift.
 
 `.github/workflows/observatory-live.yml` runs it at 7 and 37 past each hour, by hand, and on a push
-that changes the workflow or a live source file, and uploads the folder as an artifact. No secrets.
+that changes the workflow or a live source file, and uploads the folder as an artifact. The live
+job uses no secrets. On main, a second job publishes the folder to a branch
+([Published readings](#published-readings)).
 
 Offline, `npm test` covers it without a network: synthetic tapes in `fixtures/live-*` replayed
 through the status code, the transport with a fake socket class and a fake HTTP call, a run whose
 tape replays to the same snapshot, and the workflow read as data. `npm run check` runs those with
 everything else, and `mutants/live.json` holds the bugs they must catch.
+
+## Published readings
+
+On main, the publish job in `.github/workflows/observatory-live.yml` puts each live reading on the
+branch `observatory-data` of this repository. It holds block heights, hashes and service health.
+It holds no key and nothing personal. Every commit on it is made by that job.
+
+| Path on `observatory-data` | What |
+|---|---|
+| `latest/` | the output folder of the newest published run: `snapshot.json`, `status.json`, `escrows.json`, `census.json`, `drift.json`, `snapshots.jsonl`, `tape.jsonl`, `run.json` and `SHA256SUMS`. Each run replaces it whole |
+| `log/<UTC date>.jsonl` | one snapshot per line, one line for each reading published that day, as the run's `snapshots.jsonl` holds it. Each line is `seq` 0 of its own run: the lines are not a hash chain |
+| `README.md` | what the branch is, written when it is missing |
+
+A run is published only when it wrote a truthful snapshot: exit 0, or exit 3 for a reset signal.
+A run that broke or was refused leaves the branch as it was, so `latest/` can be old: check its
+time.
+
+Read it with a plain GET of the raw file, no login:
+
+```sh
+curl -s https://raw.githubusercontent.com/uxp-labs/flop-devnet-lab/observatory-data/latest/status.json
+```
+
+`status.json` holds `reset_detected`, `conflicts`, the heights and each service's health. Its trust
+is `"trusted RPC"`: one RPC endpoint was trusted. It is not proof. A reader must check
+`observed_at` and refuse a stale reading. `judgeLatest` in `src/published.ts` is the reader
+contract: given the text of every file in `latest/`, a time it trusts as now and the oldest age it
+accepts, it says whether the reading may be used, and the reset signal it holds. It refuses, and
+reads no further, when:
+
+1. the files are not exactly the nine above,
+2. a file differs from its line in `SHA256SUMS`, or `SHA256SUMS` is not in the written form,
+3. `snapshot.json` is not JSON in the written form, breaks a check in `src/snapshot-check.ts`, fails
+   its hash check, or its trust is not `"trusted RPC"`,
+4. a feed or `snapshots.jsonl` is not the one the snapshot gives, or `run.json` names another
+   snapshot or another exit (3 with a reset signal, else 0),
+5. the snapshot's `observed_at` or its status's is after now, or older than the limit.
+
+It is pure: it reads no file, clock or network. The sums show the files are the ones the job
+checked. They do not show the reading is true. A raw GET can also be served from a cache for a
+few minutes, which is one more reason to check the time.
 
 ## Rules
 
@@ -145,6 +188,8 @@ The two interfaces other teams import are in [../interfaces](../interfaces).
 | `src/tape.ts` | the recording of a live run, and its replay, which refuses any request that is not next |
 | `src/rpc-head.ts`, `src/live-source.ts` | the RPC answers turned into a head, and the Source over a transport |
 | `src/live-run.ts`, `src/live-bin.ts` | one live run and its files, and the command, the one module that names the real socket class and HTTP call |
+| `src/sums.ts` | the one form of `SHA256SUMS`, for the live run that writes it and the reader that checks it |
+| `src/published.ts` | the reader contract for `latest/` on the branch `observatory-data` |
 | `src/snapshot.ts`, `src/cli.ts` | one pass and the command line |
 | `src/snapshot-check.ts`, `src/mcp-bin.ts` | every check a snapshot must pass before the MCP binary serves it, each by name, and the binary that reads, checks and serves it |
 | `src/own.ts` | the one way src reads a data record by a key only known at run time |
