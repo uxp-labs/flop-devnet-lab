@@ -495,14 +495,20 @@ describe("R4 (low, test gap): reconcile's seat and did checks are pinned by no t
 /**
  * Multi process stress: real child processes against one IMD_FLOP_HOME, each running `run` (dist/cli.js
  * main with a stub provider) and `receipt --refresh` on random requests of the shared ledger, with random
- * reads, failures and small delays so the lock is contested. The gateway stub is consistent: each request
- * has one final outcome (settled at an amount at or below the padded quote, as max_cost_flop requires, with
- * that amount as its reported cost or none; released at 0; or released with no amount), and before it a
- * read may be pending, failed or for another request id. A request that failed before send is answered 404
- * only, so no read takes a released hold back (R3 covers that). A gateway that revised a settlement upward
- * broke the cap before the hold floor (R9); it is outside this stub, and R9's own tests pin it.
- * Then the whole ledger is replayed and checked. Size: STRESS_PROCS processes x STRESS_OPS operations x
- * STRESS_ROUNDS rounds (defaults 4 x 25 x 2 here; the review ran 6 x 60 x 20 by env).
+ * reads, failures and small delays so the lock is contested. Two gateway stubs:
+ *  - consistent: each request has one final outcome (settled at an amount at or below the padded quote, as
+ *    max_cost_flop requires, with that amount as its reported cost or none; released at 0; or released with
+ *    no amount), and before it a read may be pending, failed or for another request id.
+ *  - erratic (review fixes 2): every read of the same request answers anew: any of the four states in any
+ *    order, a settled amount at or below the padded quote or none, an exact amount or none, and failed or
+ *    foreign reads as before. The completion is slow and reports its cost late, at or below the padded quote
+ *    or not at all, so other processes often book the request first. This is the shape of stub that found
+ *    the high finding (R9). With the hold floor the day must never pass the cap.
+ * In both, a request that failed before send is answered 404 only, so no read takes a released hold back
+ * (R3 covers that), and a gateway that reports more than the padded quote is outside the stub (R9's own
+ * tests pin it). Then the whole ledger is replayed and checked. Size: STRESS_PROCS processes x STRESS_OPS
+ * operations x STRESS_ROUNDS rounds per mode (defaults 4 x 25 x 2 here; the review ran 6 x 60 x 20 by env).
+ * STRESS_REPORT, when set, is a path prefix: each mode writes its numbers to <prefix>.<mode>.json.
  */
 describe("stress: the cap, the booking step and the lock under real concurrent processes", () => {
   const PROCS = Number(process.env.STRESS_PROCS ?? 4);
@@ -510,8 +516,9 @@ describe("stress: the cap, the booking step and the lock under real concurrent p
   const ROUNDS = Number(process.env.STRESS_ROUNDS ?? 2);
   const CAP = 2;
   const root = join(import.meta.dirname, "..");
+  type Mode = "consistent" | "erratic";
 
-  function worker(home: string, seed: number): Promise<{ code: number; out: string; err: string }> {
+  function worker(home: string, seed: number, mode: Mode): Promise<{ code: number; out: string; err: string }> {
     const script = join(home, `worker-${seed}.mjs`);
     writeFileSync(script, `
 import { main } from ${JSON.stringify(join(root, "dist", "cli.js"))};
@@ -521,12 +528,14 @@ const rnd = () => { s ^= s << 13; s >>>= 0; s ^= s >>> 17; s ^= s << 5; s >>>= 0
 const pick = (a) => a[Math.floor(rnd() * a.length)];
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const home = ${JSON.stringify(home)};
-const preSent = new Set();
+const MODE = ${JSON.stringify(mode)};
 const HOLD = 0.186;
-/** One consistent gateway: each request has one final outcome, chosen from its id. */
+const AMOUNTS = [0, 0.01, 0.05, 0.07, HOLD];
+const rawOf = (amt) => amt === null ? null : String(Math.round(amt * 1e6)) + "000000000000";
+/** The consistent gateway: each request has one final outcome, chosen from its id. */
 function outcome(id) {
   let x = 0; for (const ch of id) x = (x * 31 + ch.charCodeAt(0)) >>> 0;
-  const amt = [0, 0.01, 0.05, 0.07, HOLD][x % 5];
+  const amt = AMOUNTS[x % 5];
   return { final: ["settled", "settled", "released", "released-unknown"][(x >>> 3) % 4], amt, cost: (x >>> 5) % 2 ? amt : undefined };
 }
 function read(id) {
@@ -534,11 +543,16 @@ function read(id) {
   const k = rnd();
   if (k < 0.15) return { http: 503, error: "HTTP 503", receipt: null };
   if (k < 0.25) return { http: 200, error: null, receipt: { request_id: "other", state: "settled", settled_spend: 0.001 } };
+  if (MODE === "erratic") {
+    // Every read answers anew: any state in any order, an amount at or below the hold or none.
+    const state = pick(["reserved", "estimated", "settled", "released", null]);
+    const settled = pick([null, ...AMOUNTS]);
+    return { http: 200, error: null, receipt: { request_id: id, correlation_id: "c", state, settled_spend: settled, settled_spend_raw: pick([null, rawOf(settled)]), reserved_spend: HOLD } };
+  }
   const o = outcome(id);
   if (k < 0.5) return { http: 200, error: null, receipt: { request_id: id, correlation_id: "c", state: pick(["reserved", "estimated"]), settled_spend: null, settled_spend_raw: null, reserved_spend: HOLD } };
   const settled = o.final === "settled" ? o.amt : o.final === "released" ? 0 : null;
-  const raw = settled === null ? null : String(Math.round(settled * 1e6)) + "000000000000";
-  return { http: 200, error: null, receipt: { request_id: id, correlation_id: "c", state: o.final === "settled" ? "settled" : "released", settled_spend: settled, settled_spend_raw: pick([null, raw]), reserved_spend: HOLD } };
+  return { http: 200, error: null, receipt: { request_id: id, correlation_id: "c", state: o.final === "settled" ? "settled" : "released", settled_spend: settled, settled_spend_raw: pick([null, rawOf(settled)]), reserved_spend: HOLD } };
 }
 class P {
   name = "mock"; calls = 0;
@@ -549,8 +563,15 @@ class P {
     if (k < 0.1) { const { appendFileSync } = await import("node:fs"); appendFileSync(home + "/presend.txt", req.requestId + "\\n"); const { PreSendError } = await import(${JSON.stringify(join(root, "dist", "gateway.js"))}); throw new PreSendError("mint failed"); }
     if (k < 0.2) { const { FlopHTTPError } = await import(${JSON.stringify(join(root, "node_modules", "@flop-labs", "client", "dist", "index.js"))}); throw new FlopHTTPError(500, {}, null); }
     if (k < 0.3) { await new Promise((_, rej) => { if (req.signal.aborted) rej(req.signal.reason); else req.signal.addEventListener("abort", () => rej(req.signal.reason), { once: true }); }); }
-    const o = outcome(req.requestId);
-    const cost = o.final === "settled" ? o.cost : undefined;
+    let cost;
+    if (MODE === "erratic") {
+      // The cost comes late: other processes have time to refresh and book the request first.
+      await sleep(rnd() * 25);
+      cost = pick([undefined, ...AMOUNTS]);
+    } else {
+      const o = outcome(req.requestId);
+      cost = o.final === "settled" ? o.cost : undefined;
+    }
     return { request_id: req.requestId, text: "ok", usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2, ...(cost === undefined ? {} : { cost_flop: cost }) } };
   }
   async readReceipt(id) { await sleep(rnd() * 20); return read(id); }
@@ -559,7 +580,7 @@ const io = (p) => ({ out: () => {}, err: () => {}, env: { IMD_FLOP_HOME: home },
 const codes = {};
 for (let i = 0; i < ${OPS}; i++) {
   let code;
-  if (rnd() < 0.55) code = await main(["run", "--seat", "${SEAT}", "--job", "j" + Math.floor(rnd() * 3), "--prompt", "hi", "--provider", "mock", "--max-tokens", "8", "--timeout-ms", "30"], io(new P()));
+  if (rnd() < 0.55) code = await main(["run", "--seat", "${SEAT}", "--job", "j" + Math.floor(rnd() * 3), "--prompt", "hi", "--provider", "mock", "--max-tokens", "8", "--timeout-ms", "${mode === "erratic" ? 60 : 30}"], io(new P()));
   else {
     const ids = existsSync(home + "/ledger.jsonl") ? readFileSync(home + "/ledger.jsonl", "utf8").split("\\n").filter(Boolean).map((l) => JSON.parse(l).request_id).filter(Boolean) : [];
     if (ids.length === 0) continue;
@@ -595,13 +616,15 @@ process.stdout.write(JSON.stringify(codes));
         if ((e.spent_before as number) + (e.quote_padded as number) > CAP + 1e-9) problems.push(`line ${i}: admitted over the cap`);
       }
       if (prev) {
-        const settles = (s: string) => s === "settled" || s === "released";
+        const settles = (st: string) => st === "settled" || st === "released";
         if (settles(prev.state) && !settles(e.state)) problems.push(`line ${i}: left a settling state`);
         if (settles(prev.state) && typeof prev.spend === "number" && !(typeof e.spend === "number" && e.spend >= prev.spend)) problems.push(`line ${i}: booked settlement lowered`);
         if (e.state === "refused_local" && prev.state !== "sent") problems.push(`line ${i}: released a row in state ${prev.state}`);
         if (typeof e.spend === "number" && (e.cap_charge as number) < Math.max(e.spend, (e.cost_reported as number | null) ?? 0) - 1e-12) problems.push(`line ${i}: charge below max(spend, cost)`);
         if (e.spend === null && e.state !== "refused_local" && (e.cap_charge as number) < (e.quote_padded as number) - 1e-12) problems.push(`line ${i}: hold released with spend unknown`);
       }
+      // The hold floor: a row the call was sent for is never charged below its padded quote.
+      if (e.state !== "refused_local" && (e.cap_charge as number) < (e.quote_padded as number) - 1e-12) problems.push(`line ${i}: charge ${e.cap_charge} below its hold ${e.quote_padded}`);
       if (e.request_id) latest.set(e.request_id, e);
     }
     let total = 0;
@@ -609,18 +632,24 @@ process.stdout.write(JSON.stringify(codes));
     return { lines: lines.length, sent, total, problems };
   }
 
-  it(`${PROCS} processes x ${OPS} operations x ${ROUNDS} rounds: no line breaks a rule and the day stays within the cap`, async () => {
-    execFileSync("npx", ["tsc", "-p", "tsconfig.json"], { cwd: root });
-    const summary: { lines: number; sent: number; total: number }[] = [];
-    for (let round = 0; round < ROUNDS; round++) {
-      const h = await ready(String(CAP));
-      const results = await Promise.all(Array.from({ length: PROCS }, (_, p) => worker(h, round * 1000 + p + 1)));
-      for (const r of results) expect(r.code, r.err).toBe(0);
-      const c = check(h);
-      expect(c.problems).toEqual([]);
-      expect(c.total).toBeLessThanOrEqual(CAP + 1e-9);
-      summary.push({ lines: c.lines, sent: c.sent, total: c.total });
-    }
-    if (process.env.STRESS_REPORT) writeFileSync(process.env.STRESS_REPORT, JSON.stringify(summary));
-  }, 600_000);
+  for (const mode of ["consistent", "erratic"] as const) {
+    it(`${mode} gateway, ${PROCS} processes x ${OPS} operations x ${ROUNDS} rounds: no line breaks a rule and the day stays within the cap`, async () => {
+      execFileSync("npx", ["tsc", "-p", "tsconfig.json"], { cwd: root });
+      const summary: { lines: number; sent: number; total: number }[] = [];
+      const codes: Record<string, number> = {};
+      for (let round = 0; round < ROUNDS; round++) {
+        const h = await ready(String(CAP));
+        const results = await Promise.all(Array.from({ length: PROCS }, (_, p) => worker(h, round * 1000 + p + 1 + (mode === "erratic" ? 500 : 0), mode)));
+        for (const r of results) {
+          expect(r.code, r.err).toBe(0);
+          for (const [k, n] of Object.entries(JSON.parse(r.out) as Record<string, number>)) codes[k] = (codes[k] ?? 0) + n;
+        }
+        const c = check(h);
+        expect(c.problems).toEqual([]);
+        expect(c.total).toBeLessThanOrEqual(CAP + 1e-9);
+        summary.push({ lines: c.lines, sent: c.sent, total: c.total });
+      }
+      if (process.env.STRESS_REPORT) writeFileSync(`${process.env.STRESS_REPORT}.${mode}.json`, JSON.stringify({ mode, procs: PROCS, ops: OPS, rounds: ROUNDS, codes, summary }));
+    }, 1_800_000);
+  }
 });
