@@ -31,9 +31,11 @@ export const ALLOWED_HOSTS: ReadonlyMap<string, ReadonlySet<string>> = new Map([
   ["https:", new Set(["faucet.flop.network", "api.flop.network"])],
 ]);
 
-/** One event a socket hands its listeners. Only a message's data is read. */
+/** One event a socket hands its listeners: a message's data, an error's message, a close's code. */
 export interface SocketEvent {
   readonly data?: unknown;
+  readonly message?: unknown;
+  readonly code?: unknown;
 }
 
 /** What the transport uses of a socket: the standard browser and Node socket interface. */
@@ -178,8 +180,8 @@ export class NetTransport implements Transport {
       for (const p of this.queue.splice(0)) s.send(p);
     });
     s.addEventListener("message", (e) => this.answer(e.data));
-    s.addEventListener("error", () => this.fail("rpc socket error"));
-    s.addEventListener("close", () => this.fail("rpc socket closed"));
+    s.addEventListener("error", (e) => this.fail(typeof e.message === "string" && e.message !== "" ? `rpc socket error: ${e.message}` : "rpc socket error"));
+    s.addEventListener("close", (e) => this.fail(typeof e.code === "number" ? `rpc socket closed (code ${e.code})` : "rpc socket closed"));
   }
 
   /** Every waiting call fails with why, and the socket is never used again. */

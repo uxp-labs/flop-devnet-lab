@@ -354,6 +354,18 @@ describe("NetTransport", () => {
     expect(sockets.made.length).toBe(1);
   });
 
+  it("says why the socket failed, when the socket says it", async () => {
+    const one = transport();
+    const a = one.t.rpc("system_chain", []);
+    one.sockets.made.at(0)!.emit("error", { message: "getaddrinfo ENOTFOUND rpc.devnet.flop.network" });
+    await expect(a).rejects.toEqual(new TransportError("rpc socket error: getaddrinfo ENOTFOUND rpc.devnet.flop.network"));
+    const two = transport();
+    const b = two.t.rpc("system_chain", []);
+    two.sockets.made.at(0)!.emit("open");
+    two.sockets.made.at(0)!.emit("close", { code: 1006 });
+    await expect(b).rejects.toEqual(new TransportError("rpc socket closed (code 1006)"));
+  });
+
   it("fails the call when the socket cannot be made", async () => {
     class Refusing implements SocketLike {
       constructor() {

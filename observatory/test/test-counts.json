@@ -40,8 +40,8 @@
     "names": "386c37c6722d7c6b8032fa68be18daf2f1e8fdd3a9b4e6fb438036ff79a6cb5a"
   },
   "net.test.ts": {
-    "tests": 30,
-    "names": "43460da0d64f5d4112a762ea2dde98c26ade0a4d0abc242e1f6ebb02a86d42c7"
+    "tests": 31,
+    "names": "6c475f5284b85a6146e58adad5571ced6c7eac01d956a15ddbf0fb109c5d836e"
   },
   "page.test.ts": {
     "tests": 40,
