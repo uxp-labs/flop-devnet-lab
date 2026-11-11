@@ -20,8 +20,8 @@
     "names": "bd439ca49837d3e62977352e9315883dd115a9abd92613ad412e6457ee0f7bc5"
   },
   "guard.test.ts": {
-    "tests": 64,
-    "names": "f9bbc307371e1af586aff3796eb96210c0a396fb29331eb3c7ab939dc72bcd81"
+    "tests": 66,
+    "names": "9eec1f14fcc5064d57fe8eaa1c336c1c2b0fec26f4b33e7ece061fe401dcab0a"
   },
   "mcp.test.ts": {
     "tests": 13,
@@ -62,5 +62,9 @@
   "strict.test.ts": {
     "tests": 66,
     "names": "feb547fca27c35b8f15b2d53db50c47d5b0a630fc9e1414cf987ad060f51f401"
+  },
+  "tape.test.ts": {
+    "tests": 26,
+    "names": "8930de395c29d17c77813be51e2c5ec36cd04b7d46a1e906592736ab8ac5da72"
   }
 }
