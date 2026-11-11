@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
-"""Independent review of the fixes for the swarm audit of 33f3b9f, the viewer's side. Each test is named DEFECT
-<n> (<severity>) and asserts today's wrong behavior: it passes now and fails once the defect is fixed. The imd-flop
-side of each shared rule is imd-flop/test/review-audit2.test.ts. Standard library only, never runs node. Offline."""
+"""Independent review of the fixes for the swarm audit of 33f3b9f, the viewer's side. The reviewer named each test
+DEFECT <n> and made it assert the wrong behavior. Each now asserts the fixed behavior, named "review defect <n>,
+fixed". The imd-flop side of each shared rule is imd-flop/test/review-audit2.test.ts, on the same contract files.
+Standard library only, never runs node. Offline."""
 import json
 import sys
 import unittest

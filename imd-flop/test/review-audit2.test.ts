@@ -1,8 +1,9 @@
 /**
  * Independent review of the fixes for the swarm audit of 33f3b9f (branch claude/audit-33f3b9f at 23b8df3).
- * Each test is named DEFECT <n> (<severity>) and asserts today's wrong behavior: it passes now and fails once
- * the defect is fixed. Stub providers, stub fetch and library calls only; no network (test/setup.ts).
- * The viewer's side of DEFECT 1 and DEFECT 8 is viewer/test_review_audit2.py.
+ * The reviewer named each test DEFECT <n> and made it assert the wrong behavior. Each is now named
+ * "review defect <n>, fixed" and asserts the fixed behavior. More blocks pin the decided rules, kill the
+ * review's surviving mutants and cover its source only notes. Stub providers, stub fetch and library calls
+ * only; no network (test/setup.ts). The viewer's side is viewer/test_review_audit2.py.
  */
 import { chmodSync, existsSync, mkdirSync, readdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
