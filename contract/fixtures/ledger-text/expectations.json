@@ -622,6 +622,30 @@
    "charges": {
     "1": 0.186
    }
+  },
+  "lone-surrogate.jsonl": {
+   "note": "a lone surrogate escape, as an older version's cut could leave one (review of the audit 33f3b9f fixes, defect 11): JSON.parse reads it, and the viewer reads it too and shows U+FFFD in its place, so its page still builds",
+   "lines": 2,
+   "blank": [],
+   "unreadable": [],
+   "groups": [
+    [
+     "r1",
+     [
+      1
+     ]
+    ],
+    [
+     "r2",
+     [
+      2
+     ]
+    ]
+   ],
+   "charges": {
+    "1": 0.186,
+    "2": 0.186
+   }
   }
  }
 }

@@ -117,9 +117,18 @@ def loads(text):
     """One JSON value in JSON.parse's grammar: NaN, Infinity and -Infinity are not JSON, and every number is a
     double. Raises ValueError for anything else (RecursionError on very deep nesting is treated the same)."""
     try:
-        return json.loads(text, parse_constant=_no_constant, parse_int=_double_int)
+        return _whole_chars(json.loads(text, parse_constant=_no_constant, parse_int=_double_int))
     except RecursionError as ex:
         raise ValueError("nested too deep") from ex
+LONE_SURROGATE = re.compile("[\ud800-\udfff]")
+def _whole_chars(v):
+    """A lone surrogate escape (an older or foreign ledger can hold one, and JSON.parse reads it) shown as U+FFFD,
+    in every string and key, so the page can always be written as UTF-8 (review defect 11). json joins a valid
+    escaped pair into one character, so any surrogate left is a lone one."""
+    if isinstance(v, str): return LONE_SURROGATE.sub("\ufffd", v)
+    if isinstance(v, list): return [_whole_chars(x) for x in v]
+    if isinstance(v, dict): return {_whole_chars(k): _whole_chars(x) for k, x in v.items()}
+    return v
 MAX_DEPTH = _C["LEDGER_TEXT"]["value"]["max_depth"]
 def nested_too_deep(text):
     """True when the text is nested deeper than MAX_DEPTH (the row object is level 1), the twin of imd-flop's
@@ -588,7 +597,14 @@ def main():
     s = open(VIEWER).read()
     a, b = s.index("<!-- lane:start -->"), s.index("<!-- lane:end -->")
     s = s[:a] + "<!-- lane:start -->\n" + "".join(out) + s[b:]
-    open(VIEWER, "w").write(s)
+    # Written to a temporary file in the same folder, then renamed: the old page is never emptied before the
+    # new one is complete (review defect 11).
+    tmp = f"{VIEWER}.tmp-{os.getpid()}"
+    try:
+        with open(tmp, "w", encoding="utf-8") as fh: fh.write(s)
+        os.replace(tmp, VIEWER)
+    finally:
+        if os.path.exists(tmp): os.unlink(tmp)
     print(f"lane rebuilt: {len(demo)} receipt rows, {len(ex)} example rows")
 if __name__ == "__main__":
     main()

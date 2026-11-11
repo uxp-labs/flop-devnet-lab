@@ -147,7 +147,7 @@ export interface Mark { forms: string[]; mark: string }
  *  2. every code point of category Cc, Cf, Zl or Zp and every lone surrogate becomes one space, and every 0x
  *     and 64 hex run (a public hash, or a key) is replaced by [hash];
  *  3. if the secret scan finds anything after the marks, the whole text is withheld (OUTSIDE_WITHHELD);
- *  4. the text is cut to `max` characters, and a cut text ends with "[cut]".
+ *  4. the text is cut to `max` code points, and a cut text ends with "[cut]".
  * The scan runs before the cut, so a cut never hides part of a key from it.
  */
 export function outsideText(text: unknown, opts: { marks?: Mark[]; max?: number } = {}): string {
@@ -162,7 +162,9 @@ export function outsideText(text: unknown, opts: { marks?: Mark[]; max?: number 
   s = s.replace(/0x[0-9a-fA-F]{64}/g, "[hash]");
   if (scanForSecrets({ reason: s }).length > 0) return OUTSIDE_WITHHELD;
   const max = opts.max ?? OUTSIDE_TEXT_MAX;
-  return s.length > max ? `${s.slice(0, max)}[cut]` : s;
+  // The cut is on code point boundaries, so it never leaves half of a surrogate pair (review defect 11).
+  const points = Array.from(s);
+  return points.length > max ? `${points.slice(0, max).join("")}[cut]` : s;
 }
 
 /** The longest string value a message may quote. */

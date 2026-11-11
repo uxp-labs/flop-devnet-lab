@@ -374,24 +374,22 @@ describe("review defect 10 (low), fixed: outside text cannot write its own lines
   });
 });
 
-describe("DEFECT 11 (low): the cut in outsideText splits a surrogate pair, so the ledger gets a lone surrogate the viewer cannot write", () => {
-  it("DEFECT 11 (low): a 200 character cut through an emoji stores \\ud83d alone in the refused_local reason (viewer side in test_review_audit2.py)", async () => {
+describe("review defect 11 (low), fixed: the cut is on code point boundaries", () => {
+  it("review defect 11, fixed: a cut through an emoji keeps it whole or drops it, never half (viewer side in test_review_audit2.py)", async () => {
     const h = tmpHome();
     expect((await cli(h, ["init", "--seat", "7"])).code).toBe(0);
     expect((await cli(h, ["cap", "set", "1", "--seat", "7"])).code).toBe(0);
     const provider = {
       name: "mock",
       estimate: async () => ({ estimated_cost_flop: 0.066, estimated_input_tokens: 3, estimated_output_tokens: 8 }),
-      complete: async () => {
-        // Moved with defects 2 and 3: RPC server text is no longer quoted, so a pre-send failure carries the text.
-        throw new PreSendError("z".repeat(999) + "\u{1F600} after");
-      },
+      complete: async () => { throw new PreSendError("z".repeat(999) + "\u{1F600} after"); },
       readReceipt: async () => ({ http: 0, receipt: null, error: null }),
     } as unknown as Provider;
     await expect(runJob(h, provider, { job: "j1", prompt: "hi", maxTokens: 8, seat: "7", noLink: true, timeoutMs: 5000 }, { warn() {} })).rejects.toThrow(/nothing sent/);
     const text = readFileSync(ledgerFile(h), "utf8");
-    expect(text).toContain("z\\ud83d[cut]");
-    expect(text).not.toContain("\\ude00");
+    expect(text).toContain("z\u{1F600}[cut]");
+    expect(text).not.toMatch(/\\ud83d|\\ude00/);
+    expect(outsideText("ab\u{1F600}cd", { max: 3 })).toBe("ab\u{1F600}[cut]");
   });
 });
 

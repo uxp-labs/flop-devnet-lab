@@ -88,16 +88,11 @@ class Defect8(unittest.TestCase):
 
 
 class Defect11(unittest.TestCase):
-    """DEFECT 11 (low): imd-flop's outsideText cuts outside text by UTF-16 code units, so a cut through an emoji
-    leaves a lone high surrogate, and JSON.stringify writes it as the escape \\ud83d (imd-flop side in
-    review-audit2.test.ts). The viewer reads that line, renders the reason, and its main() cannot write the page:
-    UnicodeEncodeError, after the page was already truncated, so the page is left empty. imd-flop reads the same ledger without complaint."""
+    """review defect 11 (low), fixed: the viewer reads a lone surrogate escape as U+FFFD, so its page builds, and it
+    writes the page to a temporary file in the same folder and renames it, so the old page is never emptied."""
 
-    def test_DEFECT_11_low_a_lone_surrogate_in_a_reason_stops_the_lane_build(self):
+    def build(self, line):
         import shutil, tempfile
-        reason = "nothing sent: eth_chainId error: " + "z" * 199 + "\\ud83d[cut]"
-        line = json.dumps(dict(LED, state="refused_local", request_id=None, cap_charge=0, reason=None))[:-1] + ', "reason": "' + reason + '"}'
-        self.assertEqual(NS["read_ledger_text"](line.encode())[0][1], "row")
         with tempfile.TemporaryDirectory() as tmp:
             Path(tmp, "ledger.jsonl").write_text(line + "\n")
             page = Path(tmp, "index.html")
@@ -107,12 +102,44 @@ class Defect11(unittest.TestCase):
             try:
                 ns = load_lane()
                 ns["VIEWER"] = str(page)
-                with self.assertRaises(UnicodeEncodeError):
-                    ns["main"]()
-                # open(VIEWER, "w") truncated the page before the write failed: the page is left empty.
-                self.assertEqual(page.stat().st_size, 0)
+                ns["main"]()
+                return page.read_text(encoding="utf-8"), sorted(p.name for p in Path(tmp).iterdir())
             finally:
                 sys.argv = old
+
+    def test_review_defect_11_fixed_a_lone_surrogate_in_a_reason_shows_ufffd_and_the_page_builds(self):
+        reason = "nothing sent: eth_chainId error: " + "z" * 199 + "\\ud83d[cut]"
+        line = json.dumps(dict(LED, state="refused_local", request_id=None, cap_charge=0, reason=None))[:-1] + ', "reason": "' + reason + '"}'
+        self.assertEqual(NS["read_ledger_text"](line.encode())[0][2]["reason"], reason.replace("\\ud83d", "\ufffd"))
+        page, files = self.build(line)
+        self.assertIn("z\ufffd[cut]", page)
+        self.assertEqual(files, ["index.html", "ledger.jsonl"])
+
+    def test_review_defect_11_fixed_a_failed_write_leaves_the_old_page_whole(self):
+        import shutil, tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            Path(tmp, "ledger.jsonl").write_text(json.dumps(LED) + "\n")
+            page = Path(tmp, "index.html")
+            shutil.copy(NS["VIEWER"], page)
+            before = page.read_bytes()
+            old = sys.argv
+            sys.argv = ["build-lane.py", tmp]
+            try:
+                ns = load_lane()
+                ns["VIEWER"] = str(page)
+                real_replace = ns["os"].replace
+                def failing(*a):
+                    raise OSError("disk full")
+                ns["os"].replace = failing
+                try:
+                    with self.assertRaises(OSError):
+                        ns["main"]()
+                finally:
+                    ns["os"].replace = real_replace
+            finally:
+                sys.argv = old
+            self.assertEqual(page.read_bytes(), before)
+            self.assertEqual(sorted(p.name for p in Path(tmp).iterdir()), ["index.html", "ledger.jsonl"])
 
 
 if __name__ == "__main__":
