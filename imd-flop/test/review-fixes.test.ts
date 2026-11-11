@@ -429,6 +429,9 @@ describe("R4 (low, test gap): reconcile's seat and did checks are pinned by no t
   // job null on both sides, so the job check alone decides them. Dropping "seat" and "did" from
   // settlement.ts sameAttempt passes all 605 tests at 7f57b4b (run in a scratch copy). These two blocks pass
   // at 7f57b4b and fail on that mutant. They are not marked it.fails: the code is right, the tests were not.
+  // Review fixes 2: those 8 vectors now hold job j1 on both sides, so each varies exactly one field, and
+  // reconcile.json gains -job-differs, -seat-differs and -did-differs. Dropping the seat or the did check
+  // from sameAttempt now fails 5 contract vectors each, in imd-flop and in the viewer alike.
   const row = { request_id: "req-1", job: "j1", seat: "9001", did: "did:key:zA", state: "settled", spend: 0.07 };
   const receipt = { request_id: "req-1", job: "j1", seat: "9001", did: "did:key:zA", state: "settled", settled: 0.05, http: 200, error: null, flag: null, chain_final: false };
   it("a receipt for another seat is not compared", () => {

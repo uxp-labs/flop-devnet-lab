@@ -1248,6 +1248,150 @@
    "note": "a receipt for another request is not compared: imd-flop shows match=mismatch, the viewer its red mismatch chip"
   },
   {
+   "id": "reconcile-not-compared-identity-job-differs",
+   "rule": "reconcile",
+   "input": {
+    "ledger": {
+     "ts": "2026-11-11T15:00:00Z",
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zA",
+     "provider": "mock",
+     "network": "devnet",
+     "payer": "holder",
+     "state": "settled",
+     "spend": 0.07,
+     "cap_charge": 0.07,
+     "quote_padded": 0.186,
+     "per_call_cap": 1,
+     "daily_cap": 5,
+     "spent_before": 0
+    },
+    "receipt": {
+     "request_id": "req-1",
+     "job": "j2",
+     "seat": "9001",
+     "did": "did:key:zA",
+     "state": "settled",
+     "settled": 0.05,
+     "stage": "gateway observed",
+     "chain_final": false,
+     "flag": null,
+     "http": 200,
+     "error": null
+    }
+   },
+   "expect": {
+    "imd-flop": {
+     "verdict": "not_compared"
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard is a dry run: it keeps no ledger row to compare a receipt with"
+    },
+    "viewer": {
+     "verdict": "not_compared"
+    }
+   },
+   "note": "Review fixes 2 (R4): request_id, job, seat and did are equal non-empty strings on both sides except the job, j1 in the ledger and j2 in the receipt. That one field decides: neither part compares the amounts."
+  },
+  {
+   "id": "reconcile-not-compared-identity-seat-differs",
+   "rule": "reconcile",
+   "input": {
+    "ledger": {
+     "ts": "2026-11-11T15:00:00Z",
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zA",
+     "provider": "mock",
+     "network": "devnet",
+     "payer": "holder",
+     "state": "settled",
+     "spend": 0.07,
+     "cap_charge": 0.07,
+     "quote_padded": 0.186,
+     "per_call_cap": 1,
+     "daily_cap": 5,
+     "spent_before": 0
+    },
+    "receipt": {
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9002",
+     "did": "did:key:zA",
+     "state": "settled",
+     "settled": 0.05,
+     "stage": "gateway observed",
+     "chain_final": false,
+     "flag": null,
+     "http": 200,
+     "error": null
+    }
+   },
+   "expect": {
+    "imd-flop": {
+     "verdict": "not_compared"
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard is a dry run: it keeps no ledger row to compare a receipt with"
+    },
+    "viewer": {
+     "verdict": "not_compared"
+    }
+   },
+   "note": "Review fixes 2 (R4): request_id, job, seat and did are equal non-empty strings on both sides except the seat, 9001 in the ledger and 9002 in the receipt. That one field decides: neither part compares the amounts."
+  },
+  {
+   "id": "reconcile-not-compared-identity-did-differs",
+   "rule": "reconcile",
+   "input": {
+    "ledger": {
+     "ts": "2026-11-11T15:00:00Z",
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zA",
+     "provider": "mock",
+     "network": "devnet",
+     "payer": "holder",
+     "state": "settled",
+     "spend": 0.07,
+     "cap_charge": 0.07,
+     "quote_padded": 0.186,
+     "per_call_cap": 1,
+     "daily_cap": 5,
+     "spent_before": 0
+    },
+    "receipt": {
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zB",
+     "state": "settled",
+     "settled": 0.05,
+     "stage": "gateway observed",
+     "chain_final": false,
+     "flag": null,
+     "http": 200,
+     "error": null
+    }
+   },
+   "expect": {
+    "imd-flop": {
+     "verdict": "not_compared"
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard is a dry run: it keeps no ledger row to compare a receipt with"
+    },
+    "viewer": {
+     "verdict": "not_compared"
+    }
+   },
+   "note": "Review fixes 2 (R4): request_id, job, seat and did are equal non-empty strings on both sides except the did, did:key:zA in the ledger and did:key:zB in the receipt. That one field decides: neither part compares the amounts."
+  },
+  {
    "id": "reconcile-not-compared-refused-row",
    "rule": "reconcile",
    "input": {
@@ -1527,7 +1671,7 @@
     "ledger": {
      "ts": "2026-11-11T15:00:00Z",
      "request_id": "req-1",
-     "job": null,
+     "job": "j1",
      "seat": null,
      "did": "did:key:zA",
      "provider": "mock",
@@ -1543,7 +1687,7 @@
     },
     "receipt": {
      "request_id": "req-1",
-     "job": null,
+     "job": "j1",
      "seat": null,
      "did": "did:key:zA",
      "state": "settled",
@@ -1566,7 +1710,7 @@
      "verdict": "not_compared"
     }
    },
-   "note": "review of the booking step: the seat is null on both sides. A receipt is compared only when its identity matches by the viewer's rule (build-lane.py identity_ok): request_id, job, seat and did each a non-empty string on both sides, and equal. So neither part compares the amounts (the ledger books 0.07, the receipt reads 0.05). This replaces the vector reconcile-identity-null-job-on-both-sides, where imd-flop compared and the viewer did not."
+   "note": "review of the booking step: the seat is null on both sides. A receipt is compared only when its identity matches by the viewer's rule (build-lane.py identity_ok): request_id, job, seat and did each a non-empty string on both sides, and equal. So neither part compares the amounts (the ledger books 0.07, the receipt reads 0.05). This replaces the vector reconcile-identity-null-job-on-both-sides, where imd-flop compared and the viewer did not. Review fixes 2 (R4): the job is j1 on both sides, so the seat is the one field that varies and the seat check alone decides this vector."
   },
   {
    "id": "reconcile-not-compared-identity-seat-empty-on-both-sides",
@@ -1575,7 +1719,7 @@
     "ledger": {
      "ts": "2026-11-11T15:00:00Z",
      "request_id": "req-1",
-     "job": null,
+     "job": "j1",
      "seat": "",
      "did": "did:key:zA",
      "provider": "mock",
@@ -1591,7 +1735,7 @@
     },
     "receipt": {
      "request_id": "req-1",
-     "job": null,
+     "job": "j1",
      "seat": "",
      "did": "did:key:zA",
      "state": "settled",
@@ -1614,7 +1758,7 @@
      "verdict": "not_compared"
     }
    },
-   "note": "review of the booking step: the seat is the empty string on both sides. A receipt is compared only when its identity matches by the viewer's rule (build-lane.py identity_ok): request_id, job, seat and did each a non-empty string on both sides, and equal. So neither part compares the amounts (the ledger books 0.07, the receipt reads 0.05). This replaces the vector reconcile-identity-null-job-on-both-sides, where imd-flop compared and the viewer did not."
+   "note": "review of the booking step: the seat is the empty string on both sides. A receipt is compared only when its identity matches by the viewer's rule (build-lane.py identity_ok): request_id, job, seat and did each a non-empty string on both sides, and equal. So neither part compares the amounts (the ledger books 0.07, the receipt reads 0.05). This replaces the vector reconcile-identity-null-job-on-both-sides, where imd-flop compared and the viewer did not. Review fixes 2 (R4): the job is j1 on both sides, so the seat is the one field that varies and the seat check alone decides this vector."
   },
   {
    "id": "reconcile-not-compared-identity-seat-absent-on-both-sides",
@@ -1623,7 +1767,7 @@
     "ledger": {
      "ts": "2026-11-11T15:00:00Z",
      "request_id": "req-1",
-     "job": null,
+     "job": "j1",
      "did": "did:key:zA",
      "provider": "mock",
      "network": "devnet",
@@ -1638,7 +1782,7 @@
     },
     "receipt": {
      "request_id": "req-1",
-     "job": null,
+     "job": "j1",
      "did": "did:key:zA",
      "state": "settled",
      "settled": 0.05,
@@ -1660,7 +1804,7 @@
      "verdict": "not_compared"
     }
    },
-   "note": "review of the booking step: the seat is absent on both sides. A receipt is compared only when its identity matches by the viewer's rule (build-lane.py identity_ok): request_id, job, seat and did each a non-empty string on both sides, and equal. So neither part compares the amounts (the ledger books 0.07, the receipt reads 0.05). This replaces the vector reconcile-identity-null-job-on-both-sides, where imd-flop compared and the viewer did not."
+   "note": "review of the booking step: the seat is absent on both sides. A receipt is compared only when its identity matches by the viewer's rule (build-lane.py identity_ok): request_id, job, seat and did each a non-empty string on both sides, and equal. So neither part compares the amounts (the ledger books 0.07, the receipt reads 0.05). This replaces the vector reconcile-identity-null-job-on-both-sides, where imd-flop compared and the viewer did not. Review fixes 2 (R4): the job is j1 on both sides, so the seat is the one field that varies and the seat check alone decides this vector."
   },
   {
    "id": "reconcile-not-compared-identity-seat-number-on-both-sides",
@@ -1669,7 +1813,7 @@
     "ledger": {
      "ts": "2026-11-11T15:00:00Z",
      "request_id": "req-1",
-     "job": null,
+     "job": "j1",
      "seat": 9001,
      "did": "did:key:zA",
      "provider": "mock",
@@ -1685,7 +1829,7 @@
     },
     "receipt": {
      "request_id": "req-1",
-     "job": null,
+     "job": "j1",
      "seat": 9001,
      "did": "did:key:zA",
      "state": "settled",
@@ -1708,7 +1852,7 @@
      "verdict": "not_compared"
     }
    },
-   "note": "review of the booking step: the seat is the number 9001 on both sides. A receipt is compared only when its identity matches by the viewer's rule (build-lane.py identity_ok): request_id, job, seat and did each a non-empty string on both sides, and equal. So neither part compares the amounts (the ledger books 0.07, the receipt reads 0.05). This replaces the vector reconcile-identity-null-job-on-both-sides, where imd-flop compared and the viewer did not."
+   "note": "review of the booking step: the seat is the number 9001 on both sides. A receipt is compared only when its identity matches by the viewer's rule (build-lane.py identity_ok): request_id, job, seat and did each a non-empty string on both sides, and equal. So neither part compares the amounts (the ledger books 0.07, the receipt reads 0.05). This replaces the vector reconcile-identity-null-job-on-both-sides, where imd-flop compared and the viewer did not. Review fixes 2 (R4): the job is j1 on both sides, so the seat is the one field that varies and the seat check alone decides this vector."
   },
   {
    "id": "reconcile-not-compared-identity-did-null-on-both-sides",
@@ -1717,7 +1861,7 @@
     "ledger": {
      "ts": "2026-11-11T15:00:00Z",
      "request_id": "req-1",
-     "job": null,
+     "job": "j1",
      "seat": "9001",
      "did": null,
      "provider": "mock",
@@ -1733,7 +1877,7 @@
     },
     "receipt": {
      "request_id": "req-1",
-     "job": null,
+     "job": "j1",
      "seat": "9001",
      "did": null,
      "state": "settled",
@@ -1756,7 +1900,7 @@
      "verdict": "not_compared"
     }
    },
-   "note": "review of the booking step: the did is null on both sides. A receipt is compared only when its identity matches by the viewer's rule (build-lane.py identity_ok): request_id, job, seat and did each a non-empty string on both sides, and equal. So neither part compares the amounts (the ledger books 0.07, the receipt reads 0.05). This replaces the vector reconcile-identity-null-job-on-both-sides, where imd-flop compared and the viewer did not."
+   "note": "review of the booking step: the did is null on both sides. A receipt is compared only when its identity matches by the viewer's rule (build-lane.py identity_ok): request_id, job, seat and did each a non-empty string on both sides, and equal. So neither part compares the amounts (the ledger books 0.07, the receipt reads 0.05). This replaces the vector reconcile-identity-null-job-on-both-sides, where imd-flop compared and the viewer did not. Review fixes 2 (R4): the job is j1 on both sides, so the did is the one field that varies and the did check alone decides this vector."
   },
   {
    "id": "reconcile-not-compared-identity-did-empty-on-both-sides",
@@ -1765,7 +1909,7 @@
     "ledger": {
      "ts": "2026-11-11T15:00:00Z",
      "request_id": "req-1",
-     "job": null,
+     "job": "j1",
      "seat": "9001",
      "did": "",
      "provider": "mock",
@@ -1781,7 +1925,7 @@
     },
     "receipt": {
      "request_id": "req-1",
-     "job": null,
+     "job": "j1",
      "seat": "9001",
      "did": "",
      "state": "settled",
@@ -1804,7 +1948,7 @@
      "verdict": "not_compared"
     }
    },
-   "note": "review of the booking step: the did is the empty string on both sides. A receipt is compared only when its identity matches by the viewer's rule (build-lane.py identity_ok): request_id, job, seat and did each a non-empty string on both sides, and equal. So neither part compares the amounts (the ledger books 0.07, the receipt reads 0.05). This replaces the vector reconcile-identity-null-job-on-both-sides, where imd-flop compared and the viewer did not."
+   "note": "review of the booking step: the did is the empty string on both sides. A receipt is compared only when its identity matches by the viewer's rule (build-lane.py identity_ok): request_id, job, seat and did each a non-empty string on both sides, and equal. So neither part compares the amounts (the ledger books 0.07, the receipt reads 0.05). This replaces the vector reconcile-identity-null-job-on-both-sides, where imd-flop compared and the viewer did not. Review fixes 2 (R4): the job is j1 on both sides, so the did is the one field that varies and the did check alone decides this vector."
   },
   {
    "id": "reconcile-not-compared-identity-did-absent-on-both-sides",
@@ -1813,7 +1957,7 @@
     "ledger": {
      "ts": "2026-11-11T15:00:00Z",
      "request_id": "req-1",
-     "job": null,
+     "job": "j1",
      "seat": "9001",
      "provider": "mock",
      "network": "devnet",
@@ -1828,7 +1972,7 @@
     },
     "receipt": {
      "request_id": "req-1",
-     "job": null,
+     "job": "j1",
      "seat": "9001",
      "state": "settled",
      "settled": 0.05,
@@ -1850,7 +1994,7 @@
      "verdict": "not_compared"
     }
    },
-   "note": "review of the booking step: the did is absent on both sides. A receipt is compared only when its identity matches by the viewer's rule (build-lane.py identity_ok): request_id, job, seat and did each a non-empty string on both sides, and equal. So neither part compares the amounts (the ledger books 0.07, the receipt reads 0.05). This replaces the vector reconcile-identity-null-job-on-both-sides, where imd-flop compared and the viewer did not."
+   "note": "review of the booking step: the did is absent on both sides. A receipt is compared only when its identity matches by the viewer's rule (build-lane.py identity_ok): request_id, job, seat and did each a non-empty string on both sides, and equal. So neither part compares the amounts (the ledger books 0.07, the receipt reads 0.05). This replaces the vector reconcile-identity-null-job-on-both-sides, where imd-flop compared and the viewer did not. Review fixes 2 (R4): the job is j1 on both sides, so the did is the one field that varies and the did check alone decides this vector."
   },
   {
    "id": "reconcile-not-compared-identity-did-number-on-both-sides",
@@ -1859,7 +2003,7 @@
     "ledger": {
      "ts": "2026-11-11T15:00:00Z",
      "request_id": "req-1",
-     "job": null,
+     "job": "j1",
      "seat": "9001",
      "did": 7,
      "provider": "mock",
@@ -1875,7 +2019,7 @@
     },
     "receipt": {
      "request_id": "req-1",
-     "job": null,
+     "job": "j1",
      "seat": "9001",
      "did": 7,
      "state": "settled",
@@ -1898,7 +2042,7 @@
      "verdict": "not_compared"
     }
    },
-   "note": "review of the booking step: the did is the number 7 on both sides. A receipt is compared only when its identity matches by the viewer's rule (build-lane.py identity_ok): request_id, job, seat and did each a non-empty string on both sides, and equal. So neither part compares the amounts (the ledger books 0.07, the receipt reads 0.05). This replaces the vector reconcile-identity-null-job-on-both-sides, where imd-flop compared and the viewer did not."
+   "note": "review of the booking step: the did is the number 7 on both sides. A receipt is compared only when its identity matches by the viewer's rule (build-lane.py identity_ok): request_id, job, seat and did each a non-empty string on both sides, and equal. So neither part compares the amounts (the ledger books 0.07, the receipt reads 0.05). This replaces the vector reconcile-identity-null-job-on-both-sides, where imd-flop compared and the viewer did not. Review fixes 2 (R4): the job is j1 on both sides, so the did is the one field that varies and the did check alone decides this vector."
   },
   {
    "id": "reconcile-amounts-above-2-53-are-unknown",
