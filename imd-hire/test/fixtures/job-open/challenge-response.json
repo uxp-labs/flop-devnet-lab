@@ -1,0 +1,58 @@
+{
+  "status": 402,
+  "headers": {
+    "payment-required": "eyJ4NDAyVmVyc2lvbiI6MiwicmVzb3VyY2UiOnsidXJsIjoiaHR0cHM6Ly9hcGkuaW1kLmZ1bi9yZXF1ZXN0cy8wNjQyM2IwNy1kZGRmLTQxYWYtOGJkZi1mOGQwM2RkOTI1ZDgiLCJkZXNjcmlwdGlvbiI6Ik9uZSBqb2Iub3BlbiByZXF1ZXN0IiwibWltZVR5cGUiOiJhcHBsaWNhdGlvbi9qc29uIn0sImFjY2VwdHMiOlt7InNjaGVtZSI6ImV4YWN0IiwibmV0d29yayI6ImVpcDE1NToxIiwiYXNzZXQiOiIweGQzNGE5OWJjMGY2N2FlMWJiZDYzYzY2MGU2ZDBiMGRkMDNlMjYzYjciLCJhbW91bnQiOiI1MDAwMDAwMDAwMDAwMDAwMDAiLCJwYXlUbyI6IjB4NGUwZmE1N2JkZTcyNjA3OTM1NjUzN2UyZjM0ZDY3MWU5ZjQxYWRiYyIsIm1heFRpbWVvdXRTZWNvbmRzIjozMDAsImV4dHJhIjp7ImFzc2V0VHJhbnNmZXJNZXRob2QiOiJwZXJtaXQyIn19XX0="
+  },
+  "body": {
+    "x402Version": 2,
+    "resource": {
+      "url": "https://api.imd.fun/requests/06423b07-dddf-41af-8bdf-f8d03dd925d8",
+      "description": "One job.open request",
+      "mimeType": "application/json"
+    },
+    "accepts": [
+      {
+        "scheme": "exact",
+        "network": "eip155:1",
+        "asset": "0xd34a99bc0f67ae1bbd63c660e6d0b0dd03e263b7",
+        "amount": "500000000000000000",
+        "payTo": "0x4e0fa57bde726079356537e2f34d671e9f41adbc",
+        "maxTimeoutSeconds": 300,
+        "extra": {
+          "assetTransferMethod": "permit2"
+        }
+      }
+    ],
+    "quote": {
+      "v": 1,
+      "id": "06423b07-dddf-41af-8bdf-f8d03dd925d8",
+      "action": "job.open",
+      "policyVersion": "job-1",
+      "inputHash": "d0112e1b2bc30913617ce9a4400e7fc3f8bab680781c18d0c31b1d69810377e8",
+      "issuedAt": 1794357918,
+      "expiresAt": 1794358518,
+      "payment": {
+        "network": "eip155:1",
+        "asset": "0xd34a99bc0f67ae1bbd63c660e6d0b0dd03e263b7",
+        "amount": "500000000000000000",
+        "payTo": "0x4e0fa57bde726079356537e2f34d671e9f41adbc",
+        "decimals": 18,
+        "scheme": "exact"
+      },
+      "terms": {
+        "purchase": "action-admission",
+        "resultGuaranteed": false
+      },
+      "quoteHash": "ad8a1cdd3e3154fd7b5574c042b38aee306b842a500b79f20dd73d2f89ed01cb"
+    },
+    "requesterScopeHash": "f0dd59fe85f63e3917dd8c5092670ae76ca3e291856aa81c26450a3c618f4010",
+    "resourceUrl": "https://api.imd.fun/requests/06423b07-dddf-41af-8bdf-f8d03dd925d8",
+    "input": {
+      "baseCommit": "8ddc5d2ba2e523e3230a86b6f259dd6125f8aa57",
+      "contracts": [],
+      "objective": "Audit the FLOP spend path of uxp-labs/flop-devnet-lab at this commit.\nScope: imd-flop/ (TypeScript CLI that lets an IMD worker pay FLOP for inference), spend-guard/ (Python), viewer/ (Python) and contract/ (shared rules and test vectors). Leave observatory/ and tclk-rehearsal/ out.\nWork offline and read only: no network, no faucet, no keys, no paid calls. Do not run as root: one imd-flop test needs a read only file.\nRun first: in imd-flop, npm ci then npm test (295 tests). In spend-guard and in viewer, python3 -m unittest discover -s . -p 'test_*.py' (66 and 59 tests).\nLook for:\n1. Any path in imd-flop/src/run.ts, providers.ts or gateway.ts that mints a child key or sends a paid call after a local refusal, or after the run deadline.\n2. Any receipt or refresh that lowers a booked charge or releases a reservation without a proven settlement (settlement.ts, ledger.ts, receipts.ts, contract/vectors).\n3. Any way a key shaped value, a gateway bearer or the Ethereum RPC URL reaches the ledger, a receipt, a response file, stdout or stderr (secrets.ts, store.ts, gateway.ts).\n4. Any case where imd-flop, spend-guard and the viewer disagree on a contract vector, or on how unknown spend is shown.\n5. Whether findings 1 to 7 of the earlier audit are closed at this commit (its report: https://api.imd.fun/jobs/ba164ffa-1c3e-4183-93bd-4a11d24b76bd/report.md), and whether the refactor that moved the rules into shared modules (settlement.ts, policy.ts, receipt-store.ts) changed any refusal or booking decision.\nFor every finding give file and line, severity, impact and a reproduction that runs offline. Say which checks you ran and which you only read.",
+      "repoUrl": "https://github.com/uxp-labs/flop-devnet-lab.git",
+      "template": "audit"
+    }
+  }
+}

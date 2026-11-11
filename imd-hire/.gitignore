@@ -1,0 +1,13 @@
+node_modules/
+dist/
+coverage/
+# never commit key material
+*.key
+*.pem
+.env
+.env.*
+# never commit a job folder's state: these files hold the order's bearer token and signatures
+order.json
+[0-9]-*.request.json
+[0-9]-*.response.json
+signed.json
