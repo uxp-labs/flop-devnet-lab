@@ -2,54 +2,62 @@
   "census": null,
   "drift": null,
   "escrows": [],
-  "hash": "c4d0f15fb0b3afd8d2ff0e172e27bef4a5b6e78c9e5ecf45b59544318ce85f8c",
-  "observed_at": "2026-11-11T18:29:39.219Z",
+  "hash": "4721a4b2d5afe548a3f7b08cdbcbbf22f7206c7e7627b2e9a6d9ce20002b1d76",
+  "observed_at": "2026-11-11T19:38:47.010Z",
   "pin": {
-    "finalized_hash": "0xb0912e10c1c90bb0e52148bf0c9e8179cd3cac237e8d9b7475dcd2de6647b372",
-    "finalized_height": 3494411,
-    "genesis": "0x99c172c095340ace980631f9123544c6bebd4839f3437e463533422d8be2d631",
+    "finalized_hash": null,
+    "finalized_height": null,
+    "genesis": null,
     "node": "v22.23.4",
     "source": "live:rpc wss://rpc.devnet.flop.network",
     "source_sha": "9b0d06f5bfcdcc2a7a843b0eee4dc57c1cf20ba1"
   },
-  "prev_hash": "ebe335e38cc1a5b295fa90a1d7a542cc5dc86dacca6063ee7ebca58cce975c08",
+  "prev_hash": "c4d0f15fb0b3afd8d2ff0e172e27bef4a5b6e78c9e5ecf45b59544318ce85f8c",
   "schema": "flop-observatory/snapshot@0",
-  "seq": 9,
+  "seq": 10,
   "status": {
-    "best_height": 3494422,
+    "best_height": null,
     "conflicts": [],
     "faucet": {
-      "detail": "GET timed out after 15000 ms; the /chain reading does not count: GET timed out after 15000 ms",
-      "health": "unknown",
-      "http": null,
-      "limits": null,
-      "observed_at": null,
-      "ready": null
+      "detail": "status degraded, ready false, http 200",
+      "health": "degraded",
+      "http": 200,
+      "limits": {
+        "addressCooldownMs": 86400000,
+        "dailyCapExemptionConfigured": true,
+        "dailyCapFlop": 10000000,
+        "identityCooldownMs": 86400000,
+        "ipCooldownMs": 10000,
+        "ipGrantsPerDay": 300,
+        "ipPrefixGrantsPerDay": 10000
+      },
+      "observed_at": "2026-11-11T19:38:39.621Z",
+      "ready": false
     },
-    "finality_lag": 11,
-    "finalized_hash": "0xb0912e10c1c90bb0e52148bf0c9e8179cd3cac237e8d9b7475dcd2de6647b372",
-    "finalized_height": 3494411,
+    "finality_lag": null,
+    "finalized_hash": null,
+    "finalized_height": null,
     "gateway": {
       "detail": null,
       "health": "ok",
       "http": 200,
-      "observed_at": "2026-11-11T18:29:34.956Z"
+      "observed_at": "2026-11-11T19:38:41.134Z"
     },
     "genesis": {
-      "faucet": null,
+      "faucet": "0x99c172c095340ace980631f9123544c6bebd4839f3437e463533422d8be2d631",
       "pinned": "0x99c172c095340ace980631f9123544c6bebd4839f3437e463533422d8be2d631",
-      "rpc": "0x99c172c095340ace980631f9123544c6bebd4839f3437e463533422d8be2d631"
+      "rpc": null
     },
-    "observed_at": "2026-11-11T18:29:39.219Z",
+    "observed_at": "2026-11-11T19:38:47.010Z",
     "reset_detected": null,
     "rpc": {
-      "detail": null,
-      "health": "ok",
+      "detail": "chain_getBlockHash(0): rpc socket error: Received network error or non-101 status code.; chain_getFinalizedHead(): rpc socket error: Received network error or non-101 status code.; chain_getHeader(): rpc socket error: Received network error or non-101 status code.; the anchor, finalized block 3494411 an earlier snapshot logged, could not be read back (chain_getBlockHash(3494411): rpc socket error: Received network error or non-101 status code.), so whether the finalized chain is the one the log saw is unknown",
+      "health": "down",
       "http": null,
-      "observed_at": "2026-11-11T18:29:34.968Z",
-      "stale": false
+      "observed_at": "2026-11-11T19:38:41.150Z",
+      "stale": null
     },
-    "runtime_version": 1014014,
+    "runtime_version": null,
     "schema": "flop-observatory/network-status@0",
     "trust": "trusted RPC"
   },
