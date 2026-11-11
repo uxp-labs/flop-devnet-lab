@@ -179,7 +179,6 @@ const SRC = join(pkg, "src");
 // The decoder's pure folders, by their path inside src, and what a module there may not name.
 const PURE_FOLDERS = ["scale/", "hash/"];
 const PURE_MODULES = new Set(["node:crypto"]);
-const PURE_BANNED = new Set(["Date", "performance", "setTimeout", "setInterval", "setImmediate", "queueMicrotask", "process", "getRandomValues", "randomBytes", "randomUUID"]);
 const isPure = (file) => PURE_FOLDERS.some((f) => file.startsWith(f));
 // The only globals a pure module may name: the language built ins the decoder uses. Any other name
 // a pure module does not declare itself (a clock, a timer, console, Intl, Atomics, an event) fails.
@@ -458,7 +457,6 @@ function problems(code, file = "sample.ts", scanned = SCANNED) {
           rootUses.set(n.name, (rootUses.get(n.name) ?? 0) + 1);
           if (rootUses.get(n.name) > 1) out.push(`names ${n.name} more than once in the composition root`);
         }
-        if (isPure(file) && PURE_BANNED.has(n.name)) out.push(`names ${n.name} in the pure folder src/${file.split("/").at(0)}`);
         if (BANNED.has(n.name) && !ownConstructor && !exempt) out.push(`uses ${n.name}`);
         else if (/mnemonic/i.test(n.name)) out.push(`uses ${n.name}`);
         else if (INTERNAL.test(n.name)) out.push(`uses the internal ${n.name}`);
