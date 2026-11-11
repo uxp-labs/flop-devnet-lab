@@ -4,7 +4,7 @@
  * States: refused_local, sent, timeout_unknown, error, reserved, estimated, settled, released.
  * A pre-mint refusal appends refused_local (cap charge 0). That latest line supersedes the pre-call sent line.
  */
-import { closeSync, existsSync, linkSync, openSync, readFileSync, renameSync, statSync, unlinkSync, writeSync } from "node:fs";
+import { existsSync, linkSync, readFileSync, renameSync, statSync, unlinkSync, writeFileSync } from "node:fs";
 import { randomBytes } from "node:crypto";
 import { hostname } from "node:os";
 import { knownAmount } from "./amount.js";
@@ -317,14 +317,30 @@ function lockAge(path: string): string {
 export class LedgerUnlockable extends Error {}
 const UNLOCKABLE = new Set(["EACCES", "EPERM", "EROFS"]);
 
-function takeLock(path: string): { fd: number; token: string } {
+/**
+ * Create the lock with its owner already in it: the owner is written to a temporary file that is then linked
+ * to the lock path, which fails with EEXIST when a lock is there. So a lock this tool creates is never seen
+ * empty, and an empty or unreadable lock is only ever a leftover (an older version, or damage), which
+ * reclaimable() may take once it is old. With open and then write, a holder's lock was empty for an instant,
+ * and a reader whose clock ran ahead could take it for an old ownerless lock (review fixes 4, item 5).
+ */
+function createLock(path: string, owner: LockOwner): void {
+  const tmp = `${path}.${process.pid}.${randomBytes(4).toString("hex")}.tmp`;
+  writeFileSync(tmp, JSON.stringify(owner), { flag: "wx" });
+  try {
+    linkSync(tmp, path);
+  } finally {
+    try { unlinkSync(tmp); } catch { /* gone */ }
+  }
+}
+
+function takeLock(path: string): { token: string } {
   const start = Date.now();
   const owner: LockOwner = { pid: process.pid, host: hostname(), token: randomBytes(16).toString("hex") };
   for (;;) {
     try {
-      const fd = openSync(path, "wx");
-      writeSync(fd, JSON.stringify(owner));
-      return { fd, token: owner.token };
+      createLock(path, owner);
+      return { token: owner.token };
     } catch (e) {
       const code = (e as NodeJS.ErrnoException).code;
       if (code !== undefined && UNLOCKABLE.has(code)) throw new LedgerUnlockable(`the ledger could not be locked: ${path} cannot be created (${code})`);
@@ -370,12 +386,11 @@ export function withLedgerLock<T>(h: string, fn: () => T): T {
     try { return syncResult(fn()); }
     finally { lockDepth.set(key, depth); }
   }
-  const { fd, token } = takeLock(`${key}.lock`);
+  const { token } = takeLock(`${key}.lock`);
   lockDepth.set(key, 1);
   try { return syncResult(fn()); }
   finally {
     lockDepth.set(key, 0);
-    try { closeSync(fd); } catch { /* already closed */ }
     releaseLock(`${key}.lock`, token);
   }
 }

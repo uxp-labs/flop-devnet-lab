@@ -490,7 +490,7 @@ class P {
   }
   async readReceipt(id) { await sleep(rnd() * 20); return read(id); }
 }
-const tally = { codes: {}, damaged: 0, damagedByCode: {}, placed: 0, exit1: [] };
+const tally = { codes: {}, damaged: 0, damagedByCode: {}, placed: 0, exit1: [], contested: 0, exit10: [] };
 for (let i = 0; i < ${OPS}; i++) {
   if (MIDNIGHT && i === Math.floor(${OPS} / 2)) OFFSET = MIDNIGHT + 5000 - Real.now();
   const errs = [];
@@ -514,6 +514,8 @@ for (let i = 0; i < ${OPS}; i++) {
   tally.codes[code] = (tally.codes[code] ?? 0) + 1;
   if (errs.some((m) => m.includes("cannot be read"))) { tally.damaged++; tally.damagedByCode[code] = (tally.damagedByCode[code] ?? 0) + 1; }
   if (errs.some((m) => m.includes("cannot be placed"))) tally.placed++;
+  if (errs.some((m) => m.includes("ledger lock contested"))) tally.contested++;
+  if (code === 10 && tally.exit10.length < 3) tally.exit10.push(errs.join(" | ").slice(0, 200));
   if (code === 1 && tally.exit1.length < 3) tally.exit1.push(errs.join(" | ").slice(0, 200));
 }
 process.stdout.write(JSON.stringify(tally));
@@ -587,7 +589,7 @@ process.stdout.write(JSON.stringify(tally));
   for (const mode of ["consistent", "erratic", "requester", "revive", "midnight"] as const) {
     it(`${mode}: ${PROCS} processes x ${OPS} operations x ${ROUNDS} rounds: no line breaks a rule; damaged line reports are counted`, async () => {
       const summary: ReturnType<typeof check>[] = [];
-      const tally = { codes: {} as Record<string, number>, damaged: 0, damagedByCode: {} as Record<string, number>, placed: 0, exit1: [] as string[] };
+      const tally = { codes: {} as Record<string, number>, damaged: 0, damagedByCode: {} as Record<string, number>, placed: 0, exit1: [] as string[], contested: 0, exit10: [] as string[] };
       for (let round = 0; round < ROUNDS; round++) {
         const h = await ready(String(CAP));
         // midnight: each worker's clock reads 5 s before the next UTC midnight, and 5 s after it from its
@@ -602,6 +604,8 @@ process.stdout.write(JSON.stringify(tally));
           for (const [k, n] of Object.entries(t.damagedByCode)) tally.damagedByCode[k] = (tally.damagedByCode[k] ?? 0) + n;
           tally.damaged += t.damaged;
           tally.placed += t.placed;
+          tally.contested += t.contested;
+          tally.exit10.push(...t.exit10.slice(0, Math.max(0, 3 - tally.exit10.length)));
           tally.exit1.push(...t.exit1.slice(0, Math.max(0, 6 - tally.exit1.length)));
         }
         const c = check(h, mode);
@@ -609,6 +613,10 @@ process.stdout.write(JSON.stringify(tally));
         expect(c.problems).toEqual([]);
       }
       expect({ damaged: tally.damaged, byCode: tally.damagedByCode }).toEqual({ damaged: 0, byCode: {} });
+      // Review fixes 4: a lock is created with its owner in it, so a reclaim never meets a live holder's lock
+      // (that is the only way to "ledger lock contested"), whatever the processes' clocks say. A lock timeout
+      // (exit 10) under load is a busy ledger, not a broken rule: its messages are recorded in the report.
+      expect(tally.contested).toBe(0);
       if (process.env.STRESS_REPORT) writeFileSync(`${process.env.STRESS_REPORT}.${mode}.json`, JSON.stringify({ mode, procs: PROCS, ops: OPS, rounds: ROUNDS, tally, summary: summary.map(({ problems: _p, ...s }) => s) }));
     }, 3_600_000);
   }
