@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
-"""Independent review of the hold floor branch (b839bf3..bf9087c): viewer findings. Standard library only, never
-runs node. Each DEFECT test asserts what the viewer does today, which is wrong, so it passes at bf9087c and
-fails once the defect is fixed; its docstring says what the right behavior is and what imd-flop says for the
-same files (imd-flop's side is pinned by imd-flop/test/review-hold.test.ts and review-fixes.test.ts R3)."""
+"""Independent review of the hold floor branch (b839bf3..bf9087c): viewer findings, fixed by review fixes 3.
+Standard library only, never runs node. Each test asserts the decided behavior; its docstring says what imd-flop
+says for the same files (imd-flop's side is pinned by imd-flop/test/review-hold.test.ts)."""
 import unittest
 
 from pathlib import Path
@@ -65,12 +64,12 @@ class ReviewHold(unittest.TestCase):
         rows, _ = lane([dict(LED, request_id=None, state="refused_local", cap_charge=0)], {})
         self.assertFalse(any("cannot be placed" in f for f in rows[0]["spend_flags"]))
 
-    def test_DEFECT_10_a_row_imd_flop_admitted_under_its_cap_is_not_an_unreadable_row(self):
-        """DEFECT 10: a row imd-flop admitted under its cap is not an unreadable row in the lane. Today: `cap set
-        1e16` is accepted by imd-flop, which admits calls and records daily_cap 1e16 on each row
-        (imd-flop/test/review-hold.test.ts DEFECT 10). The lane reads 1e16 as not an amount (above AMOUNT_MAX)
-        and shows the row as a red unreadable row, for the daily cap and for a job budget alike. Right: neither
-        part accepts a limit above AMOUNT_MAX, so the two never disagree on such a row."""
+    def test_a_row_from_elsewhere_with_a_limit_above_AMOUNT_MAX_is_an_unreadable_row(self):
+        """Item 10 (review fixes 3): imd-flop refuses a limit above AMOUNT_MAX when it is set (exit 2) and treats a
+        config holding one as no usable cap (exit 3), so no row this tool writes records one
+        (imd-flop/test/review-hold.test.ts, item 10). A row from elsewhere that does is not a row the lane can
+        check: it reads 1e16 as not an amount and shows a red unreadable row, for the daily cap and a job budget
+        alike. This is the lane's stated behavior, not a disagreement between the parts."""
         for row in (dict(LED, daily_cap=1e16), dict(LED, payer="requester", job_budget=1e16, job_spent_before=0)):
             rows, _ = lane([row], {"req-1": REC})
             self.assertEqual(rows[0]["chips"], [["red", "unreadable"]])

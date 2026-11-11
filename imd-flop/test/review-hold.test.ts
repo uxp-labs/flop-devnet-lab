@@ -624,24 +624,24 @@ describe("DEFECT 9 (low, words): decideBooking's comment still counts exceptions
   });
 });
 
-describe("DEFECT 10 (low): a daily cap or job budget above AMOUNT_MAX is a usable limit to imd-flop and an unreadable row to the viewer", () => {
-  // Rule 8: an amount above 9007199254740991 is unknown. `cap set` and --job-budget take any finite number of
-  // at least MIN_CAP (policy.ts parseAmount, requireCap, validatePayer), so `cap set 1e16` (a holder's
-  // "no limit") is a known cap: calls are admitted, and every row records daily_cap 1e16. The viewer reads
-  // daily_cap 1e16 as not an amount and shows every such row as a red unreadable row
-  // (viewer/test_review_hold.py DEFECT 10). The two parts give different verdicts on every row of the seat.
-  // Right: a limit above AMOUNT_MAX is refused when it is set (exit 2), as a limit below MIN_CAP is, and a
-  // config that holds one is no usable cap (exit 3), so no row ever records one.
-  it("DEFECT 10: a cap of 1e16 is refused when it is set, and a run under a config holding one is refused", async () => {
+describe("10 (low): a limit above AMOUNT_MAX is refused", () => {
+  // `cap set`, --per-call and --job-budget took any finite number of at least MIN_CAP, so `cap set 1e16` was
+  // a usable cap and every row recorded daily_cap 1e16, which the viewer reads as not an amount.
+  // Decided (review fixes 3): a limit is a known amount at or above MIN_CAP. Above AMOUNT_MAX it is refused
+  // when it is set (exit 2), and a config that holds one is no usable cap (exit 3).
+  it("cap set 1e16, --per-call 1e16 and --job-budget 1e16 are refused with exit 2; a config holding a cap of 1e16 refuses the run with exit 3", async () => {
     const h = await ready("1");
-    const set = await cli(h, ["cap", "set", "1e16", "--seat", SEAT]);
-    expect(set.code, set.err).toBe(0);
-    const r = await cli(h, runArgs("jA"), { provider: new P() });
-    expect(r.code, r.err).toBe(0);
-    expect(ledger(h).at(-1)!.daily_cap).toBe(1e16);
+    expect((await cli(h, ["cap", "set", "1e16", "--seat", SEAT])).code).toBe(2);
+    expect((await cli(h, ["cap", "set", "1", "--per-call", "1e16", "--seat", SEAT])).code).toBe(2);
     await cli(h, ["config", "set", "payer", "requester"]);
-    const q = await cli(h, [...runArgs("jB"), "--job-budget", "1e16"], { provider: new P() });
-    expect(q.code, q.err).toBe(0);
-    expect(ledger(h).at(-1)!.job_budget).toBe(1e16);
+    const p = new P();
+    expect((await cli(h, [...runArgs("jB"), "--job-budget", "1e16"], { provider: p })).code).toBe(2);
+    await cli(h, ["config", "set", "payer", "holder"]);
+    const cfgPath = join(h, "config.json");
+    const cfg = JSON.parse(readFileSync(cfgPath, "utf8"));
+    cfg.caps[SEAT] = { daily: 1e16, perCall: 1 };
+    writeFileSync(cfgPath, JSON.stringify(cfg));
+    const r = await cli(h, runArgs("jA"), { provider: p });
+    expect({ code: r.code, sent: p.calls }, r.err).toEqual({ code: 3, sent: 0 });
   });
 });

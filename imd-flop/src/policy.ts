@@ -4,7 +4,7 @@
  * order of checks and their exit codes. Behavior is pinned by contract/vectors (quote, cap-compare,
  * cap-payer, amount-text, max-tokens) and the older run/cap tests.
  */
-import { knownAmount } from "./amount.js";
+import { AMOUNT_MAX, knownAmount } from "./amount.js";
 import { CliError, EXIT } from "./errors.js";
 import type { Payer, SeatCap } from "./config.js";
 import { ceil6, floor6 } from "./rounding.js";
@@ -52,7 +52,14 @@ export function parseAmount(v: string | undefined, name: string): number | undef
   const n = Number(v);
   if (!Number.isFinite(n) || n <= 0) throw new CliError(`${name} must be a positive number`, EXIT.USAGE);
   if (n < MIN_CAP) throw new CliError(`${name} must be at least ${MIN_CAP} FLOP: a padded quote is never below that, so a smaller limit would refuse every call`, EXIT.USAGE);
+  if (!usableLimit(n)) throw new CliError(`${name} must be at most ${AMOUNT_MAX} FLOP (AMOUNT_MAX): a larger amount is not a known amount`, EXIT.USAGE);
   return n;
+}
+
+/** A spend limit (daily cap, per call cap, job budget) is a known amount (amount.ts knownAmount, so at most AMOUNT_MAX) at or above MIN_CAP. */
+export function usableLimit(v: unknown): v is number {
+  const n = knownAmount(v);
+  return n !== null && n >= MIN_CAP;
 }
 
 /** The shape of a job id: 1 to 120 printable ASCII characters, no space. */
@@ -76,12 +83,12 @@ export function validateRunMaxTokens(n: number): number {
   return n;
 }
 
-/** The seat's cap. Missing, or without finite positive numbers with perCall <= daily, is no cap: fail closed. */
+/** The seat's cap. Missing, or without usable limits (usableLimit) with perCall <= daily, is no cap: fail closed. */
 export function requireCap(caps: Record<string, SeatCap>, seat: string): SeatCap {
   const cap = caps[seat];
   if (!cap) throw new CliError(`no daily cap for seat ${seat}: FLOP stays off. Set one with \`imd-flop cap set <FLOP/day>\``, EXIT.REFUSED_CAP);
-  if (!posFinite(cap.daily) || !posFinite(cap.perCall) || cap.perCall > cap.daily) {
-    throw new CliError(`cap for seat ${seat} is malformed (daily and perCall must be positive numbers, perCall <= daily): FLOP stays off. Set it again with \`imd-flop cap set <FLOP/day>\``, EXIT.REFUSED_CAP);
+  if (!usableLimit(cap.daily) || !usableLimit(cap.perCall) || cap.perCall > cap.daily) {
+    throw new CliError(`cap for seat ${seat} is malformed (daily and perCall must be known amounts from ${MIN_CAP} to ${AMOUNT_MAX} FLOP, perCall <= daily): FLOP stays off. Set it again with \`imd-flop cap set <FLOP/day>\``, EXIT.REFUSED_CAP);
   }
   return cap;
 }
