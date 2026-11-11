@@ -198,7 +198,8 @@ export type Failure = "timeout_unknown" | "error" | "refused_local";
 /**
  * The one decision for a failure report, beside decideBooking. `prev` is the latest ledger row of the
  * request: another process may have refreshed the request and booked its read while the call ran. Returns
- * the next booking, or null when the report is not booked and the row stays exactly as it is.
+ * the next booking, or null when the report is not booked and the booking stays exactly as it is. The booking
+ * step still records a report that is not booked (keptReason).
  *  - A failure report never replaces a booked settlement. A row in a settling state stays. `run` keeps its
  *    own exit code and message for what it saw.
  *  - A timeout or a gateway error moves a row that does not settle to timeout_unknown or error. The spend
@@ -221,6 +222,19 @@ export const CHARGE_RAISED = "cap charge raised to reported cost";
 /** The ledger reason for a booking: the receipt flag when there is one, else a note when the charge was raised. */
 export function bookingReason(b: Booking, flag: string | null): string | null {
   return flag ?? (b.spend !== null && b.cap_charge > b.spend ? CHARGE_RAISED : null);
+}
+
+/** How the ledger reason names a failure report that was recorded and not booked. */
+const REPORTED: Record<Failure, string> = { timeout_unknown: "timeout reported", error: "gateway error reported", refused_local: "nothing sent reported" };
+
+/**
+ * The ledger reason for a row that records a failure report decideFailure did not book. It names the report
+ * and says the booking was kept, and it keeps the note of a charge raised to the reported cost.
+ */
+export function keptReason(failure: Failure, kept: Booking): string {
+  const what = SETTLES.has(kept.state) ? "booked settlement kept" : "booked row kept";
+  const raised = bookingReason(kept, null);
+  return [REPORTED[failure], what, ...(raised ? [raised] : [])].join("; ");
 }
 
 /** Ledger states of a call whose outcome is not known: it timed out, or the gateway answered it with an error. */

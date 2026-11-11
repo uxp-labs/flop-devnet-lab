@@ -319,19 +319,24 @@ describe("fails on 9adfd17: what run writes when its paid call fails goes throug
     return fail(req);
   };
   const failures = {
-    "the call times out": { fail: hang, code: 6, says: /^imd-flop: no answer within 50 ms/, state: "timeout_unknown", charge: 0.186 },
-    "the gateway answers HTTP 500": { fail: async () => { throw new FlopHTTPError(500, {}, null); }, code: 1, says: /^imd-flop: gateway refused the call \(HTTP 500\)/, state: "error", charge: 0.186 },
-    "nothing was sent (a pre send failure)": { fail: async () => { throw new PreSendError("child key mint failed"); }, code: 11, says: /^imd-flop: nothing sent: child key mint failed/, state: "refused_local", charge: 0 },
+    "the call times out": { fail: hang, code: 6, says: /^imd-flop: no answer within 50 ms/, state: "timeout_unknown", charge: 0.186, kept: "timeout reported; booked settlement kept", http: null },
+    "the gateway answers HTTP 500": { fail: async () => { throw new FlopHTTPError(500, {}, null); }, code: 1, says: /^imd-flop: gateway refused the call \(HTTP 500\)/, state: "error", charge: 0.186, kept: "gateway error reported; booked settlement kept", http: 500 },
+    "nothing was sent (a pre send failure)": { fail: async () => { throw new PreSendError("child key mint failed"); }, code: 11, says: /^imd-flop: nothing sent: child key mint failed/, state: "refused_local", charge: 0, kept: "nothing sent reported; booked settlement kept", http: null },
   };
 
   for (const [name, f] of Object.entries(failures)) {
-    it(`${name} after another reader booked settled 0.3: the settlement stays, nothing is appended, run keeps its exit code and message`, async () => {
+    it(`${name} after another reader booked settled 0.3: the settlement stays, the report is recorded, run keeps its exit code and says the settlement was kept`, async () => {
       const h = await ready();
       const run = await cli(h, runArgs(["--timeout-ms", "50"]), { provider: new P({ complete: failsAfter(h, settledAt(0.3), f.fail) }) });
       expect(run.code, run.err).toBe(f.code);
       expect(run.err).toMatch(f.says);
+      expect(run.err).toContain("The ledger already holds a settlement for this request (settled); it was kept.");
+      expect(run.err.toLowerCase()).not.toContain("unknown");
       // 0.3 is above the 0.186 hold: writing the failure row from the sent row lowered both spend and charge.
-      expect(ledger(h).map(booked)).toEqual([{ state: "sent", spend: null, cap_charge: 0.186 }, { state: "settled", spend: 0.3, cap_charge: 0.3 }]);
+      // Moved (review of the booking step): this expected no third row. The report that is not booked is now
+      // recorded on one row that keeps state, spend and charge exactly.
+      expect(ledger(h).map(booked)).toEqual([{ state: "sent", spend: null, cap_charge: 0.186 }, { state: "settled", spend: 0.3, cap_charge: 0.3 }, { state: "settled", spend: 0.3, cap_charge: 0.3 }]);
+      expect({ reason: ledger(h).at(-1)!.reason, http: ledger(h).at(-1)!.http }).toEqual({ reason: f.kept, http: f.http });
       expect(await today(h)).toBe(0.3);
       const shown = (await cli(h, ["receipt", ledger(h)[0].request_id!, "--json"])).json();
       expect({ ledger_state: shown.ledger_state, ledger_spend: shown.ledger_spend, status: shown.status }).toEqual({ ledger_state: "settled", ledger_spend: 0.3, status: undefined });
@@ -384,6 +389,7 @@ describe("fails on a3d71d6: a trusted read beats a \"nothing was sent\" report, 
     expect(run.code, run.err).toBe(11);
     expect(booked(ledger(h).at(-1)!)).toEqual({ state: "estimated", spend: null, cap_charge: 0.186 });
     expect(await today(h)).toBe(0.186);
+    expect(run.err).toBe("imd-flop: nothing sent: child key mint failed. The ledger kept its estimated row for this request.");
   });
 
   it("report first: the call fails before send, then a refresh reads a trusted pending receipt: the padded quote is held again", async () => {
@@ -904,22 +910,40 @@ describe("bookFailure: a failed call goes through the same booking step", () => 
     expect({ ...booked(last), reason: last.reason }).toEqual({ state: "refused_local", spend: null, cap_charge: 0, reason: "nothing sent: mint failed" });
   });
 
-  it("a settling row stays, whatever is reported: nothing is appended, not even the report's reason or HTTP status", () => {
-    const h = ledgerWith({ state: "settled", spend: 0.3, cap_charge: 0.3 });
-    const before = readFileSync(ledgerPath(h), "utf8");
-    for (const [report, info] of [["timeout_unknown", timeout], ["error", { reason: "HTTP 500", http: 500 }], ["refused_local", { reason: "nothing sent: mint failed", http: null }]] as const) {
+  it("fails on a3d71d6: a settling row stays, whatever is reported, and one row records the report", () => {
+    // Moved (review of the booking step): this expected nothing appended, not even the report's reason or
+    // HTTP status, so the ledger never said that the call failed from this process's side.
+    for (const [report, info, words] of [["timeout_unknown", timeout, "timeout reported"], ["error", { reason: "HTTP 500", http: 500 }, "gateway error reported"], ["refused_local", { reason: "nothing sent: mint failed", http: null }, "nothing sent reported"]] as const) {
+      const h = ledgerWith({ state: "settled", spend: 0.3, cap_charge: 0.3, http: 200 });
       const r = bookFailure(h, "r1", report, info);
-      expect(r.outcome, report).toBe("unchanged");
-      expect(r.outcome !== "no_row" && booked(r.row as Row), report).toEqual({ state: "settled", spend: 0.3, cap_charge: 0.3 });
+      expect(r.outcome, report).toBe("recorded");
+      expect(ledger(h), report).toHaveLength(2);
+      const last = ledger(h).at(-1)!;
+      expect({ ...booked(last), reason: last.reason, http: last.http }, report).toEqual({ state: "settled", spend: 0.3, cap_charge: 0.3, reason: `${words}; booked settlement kept`, http: info.http });
+      expect(r.outcome !== "no_row" && r.row, report).toEqual(readLines(ledgerPath(h)).at(-1));
     }
-    expect(readFileSync(ledgerPath(h), "utf8")).toBe(before);
+    // A charge raised to the reported cost keeps saying so.
+    const raised = ledgerWith({ state: "settled", spend: 0.05, cap_charge: 0.15, cost_reported: 0.15, reason: CHARGE_RAISED });
+    bookFailure(raised, "r1", "timeout_unknown", timeout);
+    expect(ledger(raised).at(-1)!.reason).toBe(`timeout reported; booked settlement kept; ${CHARGE_RAISED}`);
   });
 
-  it("a charge that is not a known amount: the row stays as it is, also for \"nothing was sent\"", () => {
-    const h = ledgerWith({ cap_charge: null });
-    const before = readFileSync(ledgerPath(h), "utf8");
-    for (const report of ["timeout_unknown", "error", "refused_local"] as const) expect(bookFailure(h, "r1", report, timeout).outcome, report).toBe("unchanged");
-    expect(readFileSync(ledgerPath(h), "utf8")).toBe(before);
+  it("fails on a3d71d6: \"nothing was sent\" on a row a trusted read produced: the row stays, and one row records the report", () => {
+    const h = ledgerWith({ state: "estimated", http: 200 });
+    expect(bookFailure(h, "r1", "refused_local", { reason: "nothing sent: mint failed", http: null }).outcome).toBe("recorded");
+    const last = ledger(h).at(-1)!;
+    expect({ ...booked(last), reason: last.reason, http: last.http }).toEqual({ state: "estimated", spend: null, cap_charge: 0.186, reason: "nothing sent reported; booked row kept", http: null });
+  });
+
+  it("a charge that is not a known amount: the booking stays as it is, also for \"nothing was sent\", and one row records the report", () => {
+    // Moved (review of the booking step): this expected the ledger file unchanged. A report that is not
+    // booked is now recorded; state, spend and the unknown charge are kept exactly.
+    for (const report of ["timeout_unknown", "error", "refused_local"] as const) {
+      const h = ledgerWith({ cap_charge: null });
+      expect(bookFailure(h, "r1", report, timeout).outcome, report).toBe("recorded");
+      const rows = readLines(ledgerPath(h));
+      expect(rows.map(booked), report).toEqual([{ state: "sent", spend: null, cap_charge: null }, { state: "sent", spend: null, cap_charge: null }]);
+    }
   });
 
   it("no ledger row for the request: nothing appended", () => {

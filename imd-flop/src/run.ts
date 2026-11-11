@@ -13,7 +13,7 @@ import { checkBudget, noRoom, padQuote, requireCap, validateJob, validatePayer, 
 import { appendLedger, jobSpent, LedgerLockError, spentToday, UnusableLedgerCharge, utcDay, withLedgerLock, type LedgerEntry } from "./ledger.js";
 import { classifyReceipt, type Classified } from "./receipts.js";
 import { bookFailure, bookRead } from "./booking.js";
-import { DISAGREE, isFreshRead, receiptIdentity, reportedCost } from "./settlement.js";
+import { DISAGREE, isFreshRead, receiptIdentity, reportedCost, SETTLES } from "./settlement.js";
 import { receiptPath, receiptVerdicts, writeReceipt } from "./receipt-store.js";
 import { responsePath } from "./response-store.js";
 import type { Provider } from "./providers.js";
@@ -79,6 +79,14 @@ export async function checkLinkForRun(h: string, seat: string, requireWallet: bo
   if (revokedDids(h).has(lf.statement.flopDid)) why.push("link names a revoked DID");
   if (requireWallet && !(v.wallet.checked && v.wallet.ok)) why.push("seat-wallet EIP-712 signature missing or invalid (required for --provider flop)");
   return { ok: why.length === 0, why };
+}
+
+/**
+ * The sentence `run` adds to its failure message when the booking step only recorded its report
+ * (booking.ts, outcome recorded): what the ledger kept for the request instead.
+ */
+function keptByLedger(row: LedgerEntry): string {
+  return SETTLES.has(row.state) ? `The ledger already holds a settlement for this request (${row.state}); it was kept.` : `The ledger kept its ${row.state} row for this request.`;
 }
 
 /** What run needs from its caller. `warn` receives the DISAGREE line when run's own receipt read is not booked. */
@@ -237,16 +245,20 @@ export async function runJob(h: string, provider: Provider, o: RunOpts, deps: Ru
     const preSendWithheld = preSend && scanForSecrets({ reason }).length > 0;
     if (preSendWithheld) reason = "nothing sent: provider error withheld by the secret scan";
     // What run saw is a report, not a receipt read (settlement.ts decideFailure). It never replaces a
-    // settlement another process booked meanwhile: then nothing is appended, and the exit code and message
-    // below still say what this call saw.
-    bookFailure(h, requestId, timedOut ? "timeout_unknown" : preSend ? "refused_local" : "error", { reason, http }, sent);
+    // settlement another process booked meanwhile, and "nothing was sent" never releases a row a trusted
+    // read produced: then the report is only recorded, and the exit code below still says what this call
+    // saw. The message also says what the ledger kept.
+    const { outcome, row } = bookFailure(h, requestId, timedOut ? "timeout_unknown" : preSend ? "refused_local" : "error", { reason, http }, sent);
+    const kept = outcome === "recorded" ? keptByLedger(row) : null;
+    const settled = kept !== null && SETTLES.has(row.state);
+    const also = kept ? ` ${kept}` : "";
     if (timedOut) {
-      throw new CliError(`no answer within ${o.timeoutMs} ms. Spend is UNKNOWN (recorded as null). Not retried. Check later with \`imd-flop receipt ${requestId}\`.`, EXIT.TIMEOUT_UNKNOWN);
+      throw new CliError(`no answer within ${o.timeoutMs} ms. ${settled ? "" : "Spend is UNKNOWN (recorded as null). "}Not retried.${also} Check later with \`imd-flop receipt ${requestId}\`.`, EXIT.TIMEOUT_UNKNOWN);
     }
     // The gate refusing at its pre-mint recheck is the same rule refusal as at the first check above.
     // Any other pre-send failure exits NOT_SENT, so it is told apart from a gateway error on the paid call below.
-    if (preSend) throw new CliError(preSendWithheld ? reason : `nothing sent: ${err.message}`, e instanceof PaidGateError ? EXIT.REFUSED_RULE : EXIT.NOT_SENT);
-    throw new CliError(`gateway refused the call (HTTP ${http}); spend recorded as unknown`, EXIT.ERROR);
+    if (preSend) throw new CliError(`${preSendWithheld ? reason : `nothing sent: ${err.message}`}${kept ? "." + also : ""}`, e instanceof PaidGateError ? EXIT.REFUSED_RULE : EXIT.NOT_SENT);
+    throw new CliError(`gateway refused the call (HTTP ${http})${settled ? "" : "; spend recorded as unknown"}${kept ? "." + also : ""}`, EXIT.ERROR);
   } finally {
     clearTimeout(timer);
   }
