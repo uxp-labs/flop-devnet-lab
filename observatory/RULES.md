@@ -943,3 +943,47 @@ checks. Section 4 holds for everything it reads.
   Each job lays only its own paths on the branch as fetched and pushes a fast forward; a push
   refused because the other job pushed in between is fetched again, checked again and laid on top.
   The live job's checks read `log/` and the tree's modes alone, so recordings never change them.
+
+## 9. The decoder
+
+The decoder turns the bytes of a recording into values: `src/scale/` and `src/hash/`. No command
+uses it yet. It reads bytes that came from the network, so every input is hostile.
+
+- What it decodes: the runtime metadata, version 14 only, read whole to its last byte; any value of
+  a type that metadata defines, by the type and never by its name; the storage key of an entry,
+  with the hashers the metadata states for it, each map key one whole value of its key type; and a
+  block's System.Events, by the type the metadata gives that entry. Each event gets its pallet name
+  and index, its name and variant index, its fields and its phase.
+- Values are JSON safe. u8 to u32 and i8 to i32 are numbers. Every wider integer is a decimal
+  string, whatever its size, so no value is a float or past 2^53. Bytes are hex. A variant is
+  `{ variant, fields }`. A bit sequence is refused, since the reviewed metadata holds none.
+- A decoded value is evidence, not proof. It is what one RPC endpoint answered (section 8), read.
+  Nothing in it is checked against the chain.
+- Pure: no module there reads a file, the network, a clock or a random source, or names process.
+  It imports only from `src/scale/`, `src/hash/` and createHash from node:crypto. The source scan
+  holds it to this (section 4).
+- The shape pin. Real chain data is decoded only through `decodeBlockEvents` in
+  `src/scale/block.ts`, and only when `pinShape` in `src/scale/shape.ts` pins the block. It
+  refuses, and names the reason, when:
+  1. the spec name and version are not in `REVIEWED`,
+  2. the metadata bytes differ in length or sha256 from the reviewed bytes for that spec,
+  3. the shape file given is not the reviewed file, by sha256,
+  4. the shape derived again from the metadata differs from that file, byte for byte, or
+  5. the block's System.LastRuntimeUpgrade does not decode, or names another spec.
+  `REVIEWED` starts with `tzkv-runtime` 1014014, metadata sha256
+  `f4fd2addba7fff1129483d0e66b8e6bc69141292f56443e201d3f073aab03444` of 482132 bytes, and
+  `shapes/tzkv-runtime-1014014.json`. Each line there is a review: a person read the shape file
+  and the metadata it came from. A runtime upgrade is refused until a person adds its line.
+- Bounds on hostile input, each a refusal with a `ScaleError`, never another exception:
+  - a count or length that claims more than the bytes left is refused before anything is read
+    or built for it, so no allocation is sized from an untrusted length;
+  - a compact integer must be in its shortest form and fit its type;
+  - a type nests at most 32 levels (`MAX_DEPTH`), so a type that refers to itself ends;
+  - one decode takes at most `1024 + 8 * bytes` steps (`valueBudget`), one for each type it
+    visits, the types a compact wraps included; each step does one pass over its type's fields
+    or variants, which the metadata bounds;
+  - a type name in a shape nests at most 16 levels and names at most 256 types.
+- The reference decoder (`@polkadot-api/substrate-bindings` and `@polkadot-api/metadata-builders`)
+  is a dev dependency for tests only, pinned exactly. Tests compare the two decoders on the
+  recorded metadata and on every recorded value. No src module imports it, which the source scan
+  checks.
