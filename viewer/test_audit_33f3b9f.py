@@ -27,5 +27,25 @@ class Finding2Low(unittest.TestCase):
         self.assertEqual(lines[2][2]["request_id"], "r3")
 
 
+class Finding4Medium(unittest.TestCase):
+    """One spelling per seat: the viewer's seat rule is contract/rules.json SEAT_ID, as imd-flop's isSeatId is. The
+    placement vectors placement-seat-* in contract/vectors/ledger-placement.json pin both parts on whole rows."""
+    MAX = str(2 ** 256 - 1)
+
+    def test_canonical_seats_only(self):
+        usable = NS["unplaced"]
+        row = dict(request_id="req-1", day="2026-11-11", provider="mock", payer="holder", state="settled", cap_charge=0.1)
+        for seat in ("unassigned", "0", "7", "42", self.MAX):
+            self.assertEqual(usable(dict(row, seat=seat)), [], seat)
+        for seat in ("042", "00", "0042", "", "-1", "4 2", "42\n", str(2 ** 256), "9" * 5000, 42, None):
+            self.assertEqual(usable(dict(row, seat=seat)), ["seat"], repr(seat)[:20])
+
+    def test_rule_is_read_from_rules_json(self):
+        rule = json.loads((CONTRACT / "rules.json").read_text())["constants"]["SEAT_ID"]["value"]
+        self.assertEqual(NS["SEAT_ID"].pattern, rule["digits"])
+        self.assertEqual(NS["SEAT_MAX"], int(rule["max"]))
+        self.assertEqual(NS["SEAT_PLACEHOLDER"], rule["placeholder"])
+
+
 if __name__ == "__main__":
     unittest.main()

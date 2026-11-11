@@ -30,13 +30,32 @@ export interface Signer {
   sign(msg: Uint8Array): Uint8Array;
 }
 
-/** A seat id this tool accepts: an NFT tokenId in decimal (1 to 78 digits), or the unassigned placeholder. */
+/** The largest tokenId: the chain reads one as a uint256. contract/rules.json SEAT_ID.max. */
+export const SEAT_MAX = 2n ** 256n - 1n;
+/** Decimal digits with no leading zero, 0 alone allowed. contract/rules.json SEAT_ID.digits. */
+const CANONICAL_DIGITS = /^(0|[1-9][0-9]*)$/;
+/** Digits only, the shape a tokenId may be spelled in before it is made canonical. */
+const ANY_DIGITS = /^[0-9]+$/;
+const atMostMax = (digits: string): boolean => digits.length <= 78 && BigInt(digits) <= SEAT_MAX;
+
+/**
+ * A seat id this tool accepts: the unassigned placeholder, or an NFT tokenId in canonical decimal (no leading
+ * zero, 0 alone allowed) whose value is at most 2^256 - 1. One spelling per seat: the chain reads a tokenId as
+ * a number, so 42 and 042 are one seat there, and every comparison here is of the text (swarm audit 33f3b9f,
+ * finding 4). contract/rules.json SEAT_ID.
+ */
 export function isSeatId(seat: unknown): seat is string {
-  return typeof seat === "string" && (seat === UNASSIGNED || /^[0-9]{1,78}$/.test(seat));
+  return typeof seat === "string" && (seat === UNASSIGNED || (CANONICAL_DIGITS.test(seat) && atMostMax(seat)));
 }
 
+/** A seat from the command line or config.json: canonical, or a usage error that shows the canonical spelling when only leading zeros are wrong. */
 export function validateSeat(seat: string): string {
-  if (isSeatId(seat)) return seat;
+  if (isSeatId(seat as unknown)) return seat;
+  if (ANY_DIGITS.test(seat)) {
+    const canonical = seat.replace(/^0+/, "") || "0";
+    if (atMostMax(canonical)) throw new CliError(`seat must be written without leading zeros: write ${canonical}, not ${seat}`, EXIT.USAGE);
+    throw new CliError("seat must be an NFT tokenId of at most 2^256 - 1", EXIT.USAGE);
+  }
   throw new CliError(`seat must be an NFT tokenId (decimal), got "${seat}"`, EXIT.USAGE);
 }
 

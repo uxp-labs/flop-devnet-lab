@@ -80,6 +80,17 @@
       "spend-guard": null,
       "viewer": "build-lane.py REQUEST_ID (read from this file), the same grouping in read_ledger"
     },
+    "SEAT_ID": {
+      "value": {
+        "placeholder": "unassigned",
+        "digits": "^(0|[1-9][0-9]*)$",
+        "max": "115792089237316195423570985008687907853269984665640564039457584007913129639935"
+      },
+      "imd-flop": "src/keys.ts isSeatId and validateSeat (their own literals; test/audit-33f3b9f.test.ts checks them against this value). A seat on the command line that is not canonical is a usage error (exit 2), and the message shows the canonical spelling when the input only has leading zeros. A ledger row whose seat is not canonical cannot be placed in a total (ledger.ts placed)",
+      "spend-guard": null,
+      "viewer": "build-lane.py SEAT_ID and usable_seat (read from this file): a row whose seat is not canonical carries the flag 'ledger row cannot be placed in a total (seat)'",
+      "note": "swarm audit 33f3b9f, finding 4: one spelling per seat. A seat id is the unassigned placeholder, or decimal digits with no leading zero (0 alone is allowed) whose value is at most 2^256 - 1. The chain reads a tokenId as a number, so 42 and 042 are one seat there. Before, both spellings were accepted and compared as text, so one seat could hold two keys, two caps and two daily totals. Pinned by contract/vectors/ledger-placement.json placement-seat-*"
+    },
     "LEDGER_TEXT": {
       "value": {
         "bytes": "the file is bytes, decoded as UTF-8 the way Node does it: an invalid byte becomes U+FFFD and never aborts the file",
@@ -572,6 +583,17 @@
       "target": "the exact spend is set only by the read that books the float spend, as a pair",
       "status": "fixed: hold floor",
       "fixed_behavior": "A read that books a float spend the row did not hold (unknown, or a different known amount) sets the pair: its own exact amount, or unknown. A read whose float amount is unknown never sets or changes the exact spend beside a known float spend. When both floats are unknown the exact spend only rises, as before. Two trusted reads now book the same pair in either order with no counted exception (decision-properties.test.ts). Pinned by imd-flop/test/review-fixes.test.ts (R5) and the vectors refresh-released-no-float-then-settled-sets-pair and refresh-settled-then-released-no-float-keeps-pair."
+    },
+    {
+      "id": "KD-16",
+      "source": "swarm audit of 33f3b9f (IMD job b4e8e103), finding 6 (low), 2026-11-11",
+      "parts": [
+        "imd-flop"
+      ],
+      "where": "src/ledger.ts placed: the message about a row that cannot be placed quoted the unusable value raw",
+      "today": "when the value is key shaped (64 or more hex digits, a bearer, a flop_ token), refuse() cannot write its refused_local row: the secret scan blocks it, run exits 5, and the message names no line. A seat of 2^256 is 78 decimal digits, so it is key shaped too",
+      "target": "the message names the line and the field, and quotes the value only when it is a string of at most 32 characters that the secret scan passes; otherwise it says the type and the length. refuse() writes its row, run exits 3 and names the line",
+      "status": "open"
     }
   ]
 }

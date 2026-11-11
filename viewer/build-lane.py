@@ -244,7 +244,18 @@ def below_hold(e):
     return e.get("state") != "refused_local" and None not in (cap_charge, quote) and cap_charge < quote
 
 UNPLACED = "ledger row cannot be placed in a total"
-SEAT_ID = re.compile(r"[0-9]{1,78}")
+# contract/rules.json SEAT_ID (swarm audit 33f3b9f, finding 4): one spelling per seat. The placeholder, or decimal
+# digits with no leading zero (0 alone allowed) whose value is at most 2^256 - 1. The twin of imd-flop's isSeatId.
+_SEAT = _C["SEAT_ID"]["value"]
+SEAT_PLACEHOLDER = _SEAT["placeholder"]
+SEAT_ID = re.compile(_SEAT["digits"])
+SEAT_MAX = int(_SEAT["max"])
+def usable_seat(v):
+    """A canonical seat id: SEAT_PLACEHOLDER, or SEAT_ID digits (full match) of at most SEAT_MAX. The length check
+    goes before int(), so a long run of digits never meets Python's limit on digits."""
+    if not isinstance(v, str): return False
+    if v == SEAT_PLACEHOLDER: return True
+    return bool(SEAT_ID.fullmatch(v)) and len(v) <= len(str(SEAT_MAX)) and int(v) <= SEAT_MAX
 JOB_ID = re.compile(r"[\x21-\x7e]{1,120}")
 REQUEST_ID = re.compile(r"[\x21-\x7e]{1,128}")
 def usable_day(v):
@@ -264,7 +275,7 @@ def unplaced(e):
     refusal = e.get("state") == "refused_local" and e.get("cap_charge") == 0 and not isinstance(e.get("cap_charge"), bool)
     checks = [("request_id", (isinstance(rid, str) and bool(REQUEST_ID.fullmatch(rid))) or refusal),
               ("day", usable_day(e.get("day"))),
-              ("seat", isinstance(e.get("seat"), str) and (e["seat"] == "unassigned" or bool(SEAT_ID.fullmatch(e["seat"])))),
+              ("seat", usable_seat(e.get("seat"))),
               ("provider", e.get("provider") in LEDGER_PROVIDERS)]
     if e.get("payer") == "requester": checks.append(("job", isinstance(e.get("job"), str) and bool(JOB_ID.fullmatch(e["job"]))))
     return [field for field, ok in checks if not ok]

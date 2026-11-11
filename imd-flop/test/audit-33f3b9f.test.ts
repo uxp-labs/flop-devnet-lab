@@ -5,14 +5,16 @@
  * The viewer's side of the shared rules is viewer/test_audit_33f3b9f.py on the same contract files.
  * Stub providers and library calls only; no network (test/setup.ts disables fetch).
  */
-import { readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { CompleteReq, CompleteRes, Provider } from "../src/providers.js";
 import { appendLedger, reportedSpendToday, spentToday, utcDay, type LedgerEntry } from "../src/ledger.js";
 import { readLedgerText } from "../src/ledger-text.js";
-import { ledgerFile } from "../src/paths.js";
+import { ledgerFile, seatDir } from "../src/paths.js";
 import { appendJsonlSafe } from "../src/store.js";
+import { isSeatId, UNASSIGNED, validateSeat } from "../src/keys.js";
+import { EXIT } from "../src/errors.js";
 import { cli, readLines, tmpHome } from "./helpers.js";
 
 const CONTRACT = join(import.meta.dirname, "..", "..", "contract");
@@ -180,5 +182,60 @@ describe("finding 13 (info): an unknown spend is never shown as 0", () => {
     expect(two).toContain("mock 0.05 (2 calls with no reported spend)");
     expect(two).toContain("flop 0 ");
     expect(two).not.toContain("flop 0 (");
+  });
+});
+
+describe("finding 4 (medium): one spelling per seat", () => {
+  const rules = JSON.parse(readFileSync(join(CONTRACT, "rules.json"), "utf8"));
+  const MAX = (2n ** 256n - 1n).toString();
+  const OVER = (2n ** 256n).toString();
+
+  it("isSeatId accepts the placeholder and canonical decimal tokenIds up to 2^256 - 1, nothing else", () => {
+    for (const ok of [UNASSIGNED, "0", "7", "42", "9001", MAX]) expect(isSeatId(ok), ok).toBe(true);
+    for (const bad of ["042", "00", "0042", "", "-1", "+1", "4 2", " 42", "42 ", "1e3", "0x2a", OVER, "9".repeat(79), 42, null]) expect(isSeatId(bad), String(bad)).toBe(false);
+  });
+
+  it("rules.json SEAT_ID is the rule keys.ts holds", () => {
+    const seat = rules.constants.SEAT_ID.value;
+    expect(seat.placeholder).toBe(UNASSIGNED);
+    expect(seat.max).toBe(MAX);
+    const digits = new RegExp(seat.digits);
+    for (const v of ["0", "42", "042", "00", MAX, OVER]) expect(isSeatId(v), v).toBe(digits.test(v) && BigInt(v) <= BigInt(seat.max));
+  });
+
+  it("validateSeat refuses a non canonical seat with exit 2, and shows the canonical spelling for leading zeros", () => {
+    const err = (v: string) => { try { validateSeat(v); return null; } catch (e) { return e as Error & { code: number }; } };
+    expect(err("042")?.code).toBe(EXIT.USAGE);
+    expect(err("042")?.message).toContain("write 42, not 042");
+    expect(err("00")?.message).toContain("write 0, not 00");
+    expect(err(OVER)?.code).toBe(EXIT.USAGE);
+    expect(err(OVER)?.message).not.toContain("write");
+    expect(err("0" + OVER)?.message).not.toContain("write");
+    expect(err("42")).toBeNull();
+  });
+
+  it("init --seat 042 after init --seat 42 is a usage error and makes no second key", async () => {
+    const h = tmpHome();
+    expect((await cli(h, ["init", "--seat", "42"])).code).toBe(0);
+    const second = await cli(h, ["init", "--seat", "042"]);
+    expect({ code: second.code, hint: second.err.includes("write 42, not 042") }).toEqual({ code: EXIT.USAGE, hint: true });
+    expect(existsSync(seatDir(h, "042"))).toBe(false);
+    expect((await cli(h, ["cap", "set", "0.2", "--seat", "042"])).code).toBe(EXIT.USAGE);
+    expect((await cli(h, ["run", "--seat", "042", "--job", "j1", "--prompt", "hi", "--no-link", "--json"], { provider: new Stub() })).code).toBe(EXIT.USAGE);
+  });
+
+  it("the audit's reproduction: a seat has one cap and one daily total, and a row spelled with a leading zero refuses the next call", async () => {
+    const h = await seat7("0.2");
+    const args = (job: string) => ["run", "--seat", "7", "--job", job, "--prompt", "hi", "--max-tokens", "8", "--no-link", "--json"];
+    expect((await cli(h, args("j1"), { provider: new Stub() })).code).toBe(0);
+    const p = new Stub();
+    const again = await cli(h, args("j2"), { provider: p });
+    expect({ code: again.code, sent: p.calls }).toEqual({ code: 3, sent: 0 });
+    // A row an edit or an older version wrote with seat 07: it cannot be placed, so the call is refused and the line named.
+    appendLedger(h, row("mock-07-x", { seat: "07", cap_charge: 0.186 }));
+    const n = ledgerRows(h).length;
+    const q = new Stub();
+    const r = await cli(h, args("j3"), { provider: q });
+    expect({ code: r.code, sent: q.calls, line: r.err.includes(`ledger line ${n} cannot be placed`) }, r.err).toEqual({ code: 3, sent: 0, line: true });
   });
 });

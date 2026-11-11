@@ -1,6 +1,6 @@
 {
  "file": "ledger-placement.json",
- "description": "Review fixes 2, finding R6: a ledger row that cannot be placed in a total. imd-flop: the ledger rows are written to a seat 9001 home with a daily cap of 1 (\"$today\" is the current UTC day), then one mock `run` with the given payer and job (a requester run passes --job-budget 1); the answer is its exit code, how many paid calls were made, and whether stderr names the ledger line (names_line: 1 means the line of the damaged row). viewer: build_row on the latest row of the request with the receipt file; the answer is the placement flag, whether the row is bad, and its green chips. A usable day is a UTC calendar date YYYY-MM-DD, a usable seat is a decimal tokenId of 1 to 78 digits (or \"unassigned\"), a usable provider is mock or flop, and a usable job is 1 to 120 printable characters with no space.",
+ "description": "Review fixes 2, finding R6: a ledger row that cannot be placed in a total. imd-flop: the ledger rows are written to a seat 9001 home with a daily cap of 1 (\"$today\" is the current UTC day), then one mock `run` with the given payer and job (a requester run passes --job-budget 1); the answer is its exit code, how many paid calls were made, and whether stderr names the ledger line (names_line: 1 means the line of the damaged row). viewer: build_row on the latest row of the request with the receipt file; the answer is the placement flag, whether the row is bad, and its green chips. A usable day is a UTC calendar date YYYY-MM-DD, a usable seat is a canonical tokenId (rules.json SEAT_ID: decimal digits with no leading zero, 0 alone allowed, at most 2^256 - 1) or \"unassigned\", a usable provider is mock or flop, and a usable job is 1 to 120 printable characters with no space.",
  "status": "review fixes 2",
  "vectors": [
   {
@@ -791,6 +791,312 @@
     }
    },
    "note": "Review fixes 3, item C: 0000-01-01 has the shape of a date but year 0 is not a usable day, in both parts (the viewer's Python dates start at year 1)."
+  },
+  {
+   "id": "placement-seat-leading-zero",
+   "rule": "ledger.placement",
+   "input": {
+    "rows": [
+     {
+      "ts": "2026-11-11T15:00:00Z",
+      "day": "$today",
+      "request_id": "req-1",
+      "job": "j1",
+      "seat": "042",
+      "did": "did:key:zA",
+      "provider": "mock",
+      "network": "devnet",
+      "payer": "holder",
+      "quote_padded": 0.186,
+      "per_call_cap": 1,
+      "daily_cap": 1,
+      "spent_before": 0,
+      "state": "settled",
+      "spend": 0.186,
+      "cap_charge": 0.186,
+      "mock": true
+     }
+    ],
+    "receipt": {
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "042",
+     "did": "did:key:zA",
+     "state": "settled",
+     "settled": 0.186,
+     "stage": "settled on chain",
+     "chain_final": true,
+     "http": 200,
+     "error": null
+    },
+    "run": {
+     "payer": "holder",
+     "job": "j2"
+    }
+   },
+   "expect": {
+    "imd-flop": {
+     "exit": 3,
+     "sent": 0,
+     "names_line": 1
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard keeps no ledger: it checks one call against --cap"
+    },
+    "viewer": {
+     "flag": "ledger row cannot be placed in a total (seat)",
+     "bad": true,
+     "greens": []
+    }
+   },
+   "note": "swarm audit 33f3b9f, finding 4: a seat with a leading zero is not canonical. On chain 042 is seat 42, so a row that spells it 042 would split the seat's daily total in two. It cannot be placed: imd-flop refuses the next call and names the line, and the lane flags the row"
+  },
+  {
+   "id": "placement-seat-zeros",
+   "rule": "ledger.placement",
+   "input": {
+    "rows": [
+     {
+      "ts": "2026-11-11T15:00:00Z",
+      "day": "$today",
+      "request_id": "req-1",
+      "job": "j1",
+      "seat": "00",
+      "did": "did:key:zA",
+      "provider": "mock",
+      "network": "devnet",
+      "payer": "holder",
+      "quote_padded": 0.186,
+      "per_call_cap": 1,
+      "daily_cap": 1,
+      "spent_before": 0,
+      "state": "settled",
+      "spend": 0.186,
+      "cap_charge": 0.186,
+      "mock": true
+     }
+    ],
+    "receipt": {
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "00",
+     "did": "did:key:zA",
+     "state": "settled",
+     "settled": 0.186,
+     "stage": "settled on chain",
+     "chain_final": true,
+     "http": 200,
+     "error": null
+    },
+    "run": {
+     "payer": "holder",
+     "job": "j2"
+    }
+   },
+   "expect": {
+    "imd-flop": {
+     "exit": 3,
+     "sent": 0,
+     "names_line": 1
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard keeps no ledger: it checks one call against --cap"
+    },
+    "viewer": {
+     "flag": "ledger row cannot be placed in a total (seat)",
+     "bad": true,
+     "greens": []
+    }
+   },
+   "note": "finding 4: 00 is not canonical (0 is): not usable"
+  },
+  {
+   "id": "placement-seat-zero",
+   "rule": "ledger.placement",
+   "input": {
+    "rows": [
+     {
+      "ts": "2026-11-11T15:00:00Z",
+      "day": "$today",
+      "request_id": "req-1",
+      "job": "j1",
+      "seat": "0",
+      "did": "did:key:zA",
+      "provider": "mock",
+      "network": "devnet",
+      "payer": "holder",
+      "quote_padded": 0.186,
+      "per_call_cap": 1,
+      "daily_cap": 1,
+      "spent_before": 0,
+      "state": "settled",
+      "spend": 0.186,
+      "cap_charge": 0.186,
+      "mock": true
+     }
+    ],
+    "receipt": {
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "0",
+     "did": "did:key:zA",
+     "state": "settled",
+     "settled": 0.186,
+     "stage": "settled on chain",
+     "chain_final": true,
+     "http": 200,
+     "error": null
+    },
+    "run": {
+     "payer": "holder",
+     "job": "j2"
+    }
+   },
+   "expect": {
+    "imd-flop": {
+     "exit": 0,
+     "sent": 1
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard keeps no ledger: it checks one call against --cap"
+    },
+    "viewer": {
+     "flag": null,
+     "bad": false,
+     "greens": [
+      "chain final"
+     ]
+    }
+   },
+   "note": "finding 4: 0 alone is canonical. It is another seat than 9001, so the call is admitted and the lane shows the row as fine"
+  },
+  {
+   "id": "placement-seat-max",
+   "rule": "ledger.placement",
+   "input": {
+    "rows": [
+     {
+      "ts": "2026-11-11T15:00:00Z",
+      "day": "$today",
+      "request_id": "req-1",
+      "job": "j1",
+      "seat": "115792089237316195423570985008687907853269984665640564039457584007913129639935",
+      "did": "did:key:zA",
+      "provider": "mock",
+      "network": "devnet",
+      "payer": "holder",
+      "quote_padded": 0.186,
+      "per_call_cap": 1,
+      "daily_cap": 1,
+      "spent_before": 0,
+      "state": "settled",
+      "spend": 0.186,
+      "cap_charge": 0.186,
+      "mock": true
+     }
+    ],
+    "receipt": {
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "115792089237316195423570985008687907853269984665640564039457584007913129639935",
+     "did": "did:key:zA",
+     "state": "settled",
+     "settled": 0.186,
+     "stage": "settled on chain",
+     "chain_final": true,
+     "http": 200,
+     "error": null
+    },
+    "run": {
+     "payer": "holder",
+     "job": "j2"
+    }
+   },
+   "expect": {
+    "imd-flop": {
+     "exit": 0,
+     "sent": 1
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard keeps no ledger: it checks one call against --cap"
+    },
+    "viewer": {
+     "flag": null,
+     "bad": false,
+     "greens": [
+      "chain final"
+     ]
+    }
+   },
+   "note": "finding 4: 2^256 - 1, the largest tokenId, is canonical. It is another seat than 9001: the call is admitted and the row is fine"
+  },
+  {
+   "id": "placement-seat-above-max",
+   "rule": "ledger.placement",
+   "input": {
+    "rows": [
+     {
+      "ts": "2026-11-11T15:00:00Z",
+      "day": "$today",
+      "request_id": "req-1",
+      "job": "j1",
+      "seat": "115792089237316195423570985008687907853269984665640564039457584007913129639936",
+      "did": "did:key:zA",
+      "provider": "mock",
+      "network": "devnet",
+      "payer": "holder",
+      "quote_padded": 0.186,
+      "per_call_cap": 1,
+      "daily_cap": 1,
+      "spent_before": 0,
+      "state": "settled",
+      "spend": 0.186,
+      "cap_charge": 0.186,
+      "mock": true
+     }
+    ],
+    "receipt": {
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "115792089237316195423570985008687907853269984665640564039457584007913129639936",
+     "did": "did:key:zA",
+     "state": "settled",
+     "settled": 0.186,
+     "stage": "settled on chain",
+     "chain_final": true,
+     "http": 200,
+     "error": null
+    },
+    "run": {
+     "payer": "holder",
+     "job": "j2"
+    }
+   },
+   "expect": {
+    "imd-flop": {
+     "exit": 5,
+     "sent": 0,
+     "names_line": null
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard keeps no ledger: it checks one call against --cap"
+    },
+    "viewer": {
+     "flag": "ledger row cannot be placed in a total (seat)",
+     "bad": true,
+     "greens": []
+    }
+   },
+   "note": "finding 4: 2^256 is above the largest tokenId: not a usable seat. Today imd-flop exits 5 and names no line: the refusal quotes the 78 digit value, which the secret scan calls key shaped (KD-16)",
+   "status": "known_defect",
+   "defect": "KD-16",
+   "target": {
+    "imd-flop": {
+     "exit": 3,
+     "sent": 0,
+     "names_line": 1
+    }
+   }
   }
  ]
 }
