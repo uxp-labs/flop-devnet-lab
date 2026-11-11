@@ -54,3 +54,14 @@ the float figures. The cap still runs on the float figures.
   `MIN_CAP` in imd-flop (known defect KD-11, fixed).
 - The settlement vectors carry `spend_raw`, the ledger row's exact spend, and the `viewer.exact_spend`
   vectors in `vectors/viewer-labels.json` pin how the viewer shows it.
+
+## Review fixes 2
+
+- `rules.json` constant `AMOUNT_MAX` (2^53 - 1): a float amount above it is unknown in imd-flop
+  (`amount.ts knownAmount`) and the viewer (`build-lane.py amount`). The `amount.json` vectors and
+  `reconcile-amounts-above-2-53-are-unknown` pin it.
+- `rules.json` constant `LEDGER_PROVIDERS` and `vectors/ledger-placement.json` (rule `ledger.placement`) pin
+  a ledger row that cannot be placed in a total: imd-flop refuses the next call and names the line, and the
+  viewer flags the row and never shows it green.
+- `vectors/rounding.json` rule `rounding.ceil6` pins the total already charged rounding up, and residual
+  `R-g` says what the 1e-12 FLOP rounding tolerance can do to amounts off the 6 decimal grid.

@@ -1,10 +1,10 @@
 /**
  * Independent review of the ten review fixes on claude/review-fixes (e52d7f4 .. f762a4d, merged at 7f57b4b).
- * Each `it.fails` block is a finding: it asserts the safe or stated outcome, fails at 7f57b4b, and is
- * marked it.fails so the suite stays green. When the defect is fixed the block starts to pass, vitest
- * reports it as failing, and the marker must be removed. Blocks with a plain `it` are not findings: they
- * hold a rule that the existing tests do not pin (finding R4 says which mutant they kill), or they are the
- * multi process stress run that found nothing.
+ * Each finding block asserted the safe or stated outcome and failed at 7f57b4b; it carried a marker for an
+ * expected failure so the suite stayed green, and the fix that made it pass removed the marker. No block
+ * carries one now: the hold floor fixed R2, R3, R5 and R9, and review fixes 2 fixed R1, R6, R8 and R10,
+ * pinned R7 as residual R-g, and added the blocks A to E. R4's two blocks hold a rule the existing tests did
+ * not pin (it says which mutant they kill), and the stress block is the multi process run.
  * Stub providers only; test/setup.ts disables fetch. A second process is stood in for by a stub whose
  * readReceipt or complete runs `receipt <id> --refresh` first, as booking.test.ts does, or by real child
  * processes in the stress block.
@@ -477,7 +477,7 @@ describe("R4 (low, test gap): reconcile's seat and did checks are pinned by no t
   // e3f2456 added vectors reconcile-not-compared-identity-seat-* and -did-*, but every one of them also has
   // job null on both sides, so the job check alone decides them. Dropping "seat" and "did" from
   // settlement.ts sameAttempt passes all 605 tests at 7f57b4b (run in a scratch copy). These two blocks pass
-  // at 7f57b4b and fail on that mutant. They are not marked it.fails: the code is right, the tests were not.
+  // at 7f57b4b and fail on that mutant. They never carried a failure marker: the code is right, the tests were not.
   // Review fixes 2: those 8 vectors now hold job j1 on both sides, so each varies exactly one field, and
   // reconcile.json gains -job-differs, -seat-differs and -did-differs. Dropping the seat or the did check
   // from sameAttempt now fails 5 contract vectors each, in imd-flop and in the viewer alike.

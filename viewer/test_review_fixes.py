@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Independent review of the review fixes at 7f57b4b: viewer findings. Each expectedFailure test fails at
-7f57b4b and is marked so the suite stays green; when the defect is fixed it starts to pass and unittest
-reports an unexpected success, and the marker must be removed.
+"""Independent review of the review fixes at 7f57b4b: viewer findings. The R10 test failed at 7f57b4b and
+carried a marker for an expected failure so the suite stayed green. Review fixes 2 fixed R10 (an amount above
+2^53 - 1 is unknown in both parts, contract/rules.json AMOUNT_MAX) and removed the marker.
 
 R10 (low): the viewer and imd-flop read the same ledger and receipt text differently when an amount is an
 integer above 2^53. Python's json keeps such an integer exact; JavaScript's JSON.parse rounds it to the
