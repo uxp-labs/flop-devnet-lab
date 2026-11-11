@@ -48,6 +48,12 @@ describe("the record workflow", () => {
     expect([...seen].sort()).toEqual(RECORD_MODULES);
   });
 
+  it("is read by the offline check's tests, so a change to it runs that check", () => {
+    const on = check.on as { push: { paths: string[] }; pull_request: { paths: string[] } };
+    expect(on.push.paths).toContain(".github/workflows/observatory-record.yml");
+    expect(on.pull_request.paths).toContain(".github/workflows/observatory-record.yml");
+  });
+
   it("may read the repository and nothing else, in one group that never cancels a run", () => {
     expect(wf.permissions).toEqual({ contents: "read" });
     expect(job.permissions).toBeUndefined();

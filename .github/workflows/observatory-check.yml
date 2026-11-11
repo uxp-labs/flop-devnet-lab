@@ -14,6 +14,8 @@ on:
       - ".github/workflows/observatory-check.yml"
       # observatory/test/live-workflow.test.ts reads the live workflow.
       - ".github/workflows/observatory-live.yml"
+      # observatory/test/record-workflow.test.ts and publish-shell.test.ts read the record workflow.
+      - ".github/workflows/observatory-record.yml"
   pull_request:
     paths:
       - "observatory/**"
@@ -23,6 +25,8 @@ on:
       - ".github/workflows/observatory-check.yml"
       # observatory/test/live-workflow.test.ts reads the live workflow.
       - ".github/workflows/observatory-live.yml"
+      # observatory/test/record-workflow.test.ts and publish-shell.test.ts read the record workflow.
+      - ".github/workflows/observatory-record.yml"
 
 permissions:
   contents: read
