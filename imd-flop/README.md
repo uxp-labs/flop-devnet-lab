@@ -23,7 +23,7 @@ no network and no spend.
 | `faucet [--dry-run]` | Refuses with exit code 9, because our team doesn't use faucets. `--dry-run` prints the request it would have made. |
 | `enroll [--dry-run \| --live]` | Dry run by default: prints the challenge and enroll calls it would make. `--live` does real devnet enrollment and is meant for a human on the holder's machine. |
 
-Data lives in `~/.imd-flop/`, or in `$IMD_FLOP_HOME` if that's set. Exit codes are listed below.
+Data lives in `~/.imd-flop/`, or in `$IMD_FLOP_HOME` if that's set. The ledger must be readable and writable by the user who runs the tool. Exit codes are listed below.
 
 ## Exit codes
 

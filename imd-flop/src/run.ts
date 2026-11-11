@@ -169,9 +169,10 @@ export async function runJob(h: string, provider: Provider, o: RunOpts, deps: Ru
   // Every row records both totals. Null is unknown. job_spent_before is also null on a holder row.
   const recorded = (spent: Spent | null): Required<Pick<LedgerEntry, "spent_before" | "job_spent_before">> => ({ spent_before: spent?.spentBefore ?? null, job_spent_before: spent?.jobSpentBefore ?? null });
   // `day` is the UTC day the check that refuses ran on. A refusal inside the locked check is dated the day read
-  // inside the lock, as the `sent` row is (swarm audit 33f3b9f, finding 12). Like the `sent` row, it keeps base.ts.
+  // inside the lock, as the `sent` row is (swarm audit 33f3b9f, finding 12). Its ts is the time the row is
+  // written, not a time from before the estimate.
   const refuse = (reason: string, code: number, q: { raw: number | null; padded: number | null }, spent: Spent | null, day = base.day): never => {
-    appendLedger(h, { ...base, day, request_id: null, quote_raw: q.raw, quote_padded: q.padded, ...recorded(spent), state: "refused_local", reason, spend: null, spend_raw: null, cost_reported: null, cap_charge: 0, http: null });
+    appendLedger(h, { ...base, ts: new Date().toISOString(), day, request_id: null, quote_raw: q.raw, quote_padded: q.padded, ...recorded(spent), state: "refused_local", reason, spend: null, spend_raw: null, cost_reported: null, cap_charge: 0, http: null });
     throw new CliError(`refused locally, nothing sent: ${reason}`, code);
   };
 
@@ -202,7 +203,8 @@ export async function runJob(h: string, provider: Provider, o: RunOpts, deps: Ru
   try {
     q = padQuote(await provider.estimate({ model, prompt: estPrompt, max_tokens: o.maxTokens }));
   } catch (e) {
-    refuse(`estimate failed (${(e as Error).message})`, EXIT.ESTIMATE_FAILED, NO_QUOTE, null);
+    // The estimate's error carries server text (a JSON parse error quotes the body): through outsideText.
+    refuse(`estimate failed (${outsideText((e as Error).message, { max: 200 })})`, EXIT.ESTIMATE_FAILED, NO_QUOTE, null);
   }
   if (!q) return refuse("estimate returned no usable cost", EXIT.ESTIMATE_FAILED, NO_QUOTE, null);
 

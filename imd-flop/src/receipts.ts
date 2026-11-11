@@ -9,6 +9,7 @@
  *  - channel_id keeps the gateway's channel id when it is a usable id (knownChannelId), else null.
  */
 import { knownAmount } from "./amount.js";
+import { outsideText } from "./secrets.js";
 
 /** A receipt as the gateway returns it. Field notes are per the gateway's OpenAPI (CredentialReceipt), read 2026-11-11. */
 export interface GatewayReceipt {
@@ -71,6 +72,9 @@ export function classifyReceipt(
   ctx: { job: string | null; provider: string; http?: number; error?: string | null; requestId?: string; chainVerified?: boolean; mock?: boolean },
 ): Classified {
   const err = ctx.error ?? null;
+  // The error text is the gateway's or the transport's: stored and shown only through outsideText. The flag is
+  // decided on the text as it came.
+  const shownError = err === null ? null : outsideText(err, { max: 200 });
   return {
     request_id: r?.request_id ?? ctx.requestId ?? "",
     correlation_id: r?.correlation_id ?? null,
@@ -86,7 +90,7 @@ export function classifyReceipt(
     terminal_event: r?.terminal_event ?? null,
     flag: ctx.http === 401 && err === "api_key_expired" ? "key_expired" : null,
     http: ctx.http ?? null,
-    error: err,
+    error: shownError,
     observed_at: new Date().toISOString(),
     mock: ctx.mock === true,
   };

@@ -527,4 +527,42 @@ describe("review source only notes and follow ups", () => {
     expect(err?.message).toContain("faucet unavailable: down imd-flop: genesis ok");
     expect(err?.message).not.toContain("\n");
   });
+
+  it("a refusal row's ts is the time the row is written, not a time from before the estimate", async () => {
+    const h = tmpHome();
+    expect((await cli(h, ["init", "--seat", "7"])).code).toBe(0);
+    expect((await cli(h, ["cap", "set", "1", "--seat", "7", "--per-call", "0.5"])).code).toBe(0);
+    let before = "";
+    const provider = {
+      name: "mock",
+      estimate: async () => { before = new Date().toISOString(); await new Promise((r) => setTimeout(r, 20)); return { estimated_cost_flop: 0.3, estimated_input_tokens: 3, estimated_output_tokens: 8 }; },
+      complete: async () => ({}), readReceipt: async () => ({}),
+    } as unknown as Provider;
+    const code = await runJob(h, provider, { job: "j1", prompt: "hi", maxTokens: 8, seat: "7", noLink: true, timeoutMs: 5000 }, { warn() {} }).then(() => 0, (e: { code: number }) => e.code);
+    const last = JSON.parse(readFileSync(ledgerFile(h), "utf8").trim().split("\n").at(-1)!);
+    expect({ code, state: last.state }).toEqual({ code: 3, state: "refused_local" });
+    expect(last.ts > before).toBe(true);
+  });
+
+  it("an estimate failure's text goes through outsideText: a key in it is withheld and the refusal row is written", async () => {
+    const h = tmpHome();
+    expect((await cli(h, ["init", "--seat", "7"])).code).toBe(0);
+    expect((await cli(h, ["cap", "set", "1", "--seat", "7"])).code).toBe(0);
+    const provider = {
+      name: "mock",
+      estimate: async () => { throw new SyntaxError(`Unexpected token in JSON at "Bearer abcdefgh12345678"\nnext`); },
+      complete: async () => ({}), readReceipt: async () => ({}),
+    } as unknown as Provider;
+    const err = await runJob(h, provider, { job: "j1", prompt: "hi", maxTokens: 8, seat: "7", noLink: true, timeoutMs: 5000 }, { warn() {} }).then(() => null, (e: Error & { code: number }) => e);
+    const last = JSON.parse(readFileSync(ledgerFile(h), "utf8").trim().split("\n").at(-1)!);
+    expect({ code: err?.code, state: last.state, reason: last.reason }).toEqual({ code: 7, state: "refused_local", reason: `estimate failed (${OUTSIDE_WITHHELD})` });
+    expect(err?.message).toBe(`refused locally, nothing sent: ${last.reason}`);
+  });
+
+  it("a receipt's error text is stored and shown only through outsideText; the key_expired flag is still decided", async () => {
+    const { classifyReceipt } = await import("../src/receipts.js");
+    expect(classifyReceipt(null, { job: "j1", provider: "flop", http: 500, error: "boom\n\u001b[2J Bearer abcdefgh12345678" }).error).toBe(OUTSIDE_WITHHELD);
+    expect(classifyReceipt(null, { job: "j1", provider: "flop", http: 500, error: "line one\nline two" }).error).toBe("line one line two");
+    expect(classifyReceipt(null, { job: "j1", provider: "flop", http: 401, error: "api_key_expired" })).toMatchObject({ flag: "key_expired", error: "api_key_expired" });
+  });
 });
