@@ -89,11 +89,13 @@ describe("v8 item 2 (TS-b, run.ts:250): a pre-send refusal releases its reservat
   };
   const controls: Record<string, string> = { "clean (control)": "eth_chainId mismatch", "0x+64hex (control)": "tx 0x" + HEX };
   for (const [name, msg] of Object.entries({ ...flagged, ...controls })) {
-    it(`TS-b ${name}: exit 1, latest row refused_local with cap_charge 0, next run is not capped`, async () => {
+    // Swarm audit of 8ddc5d2, finding 9: this pinned exit 1. A pre-send failure now exits 11 (NOT_SENT),
+    // apart from a gateway error on the paid call, which stays 1. The released reservation is unchanged.
+    it(`TS-b ${name}: exit 11, latest row refused_local with cap_charge 0, next run is not capped`, async () => {
       const h = await ready("0.186");
       const p = new P({ complete: async () => { throw new PreSendError(msg); } });
       const r1 = await cli(h, runArgs("m1"), { provider: p });
-      expect(r1.code).toBe(1);
+      expect(r1.code).toBe(11);
       const ids = [...new Set(ledger(h).filter((r) => r.request_id).map((r) => r.request_id))];
       expect(ids).toHaveLength(1);
       const latest = ledger(h).filter((r) => r.request_id === ids[0]).at(-1)!;

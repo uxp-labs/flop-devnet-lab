@@ -1,8 +1,9 @@
 /**
- * Receipt files: where they live, how they are written (one secret-scan fallback), and the
+ * Receipt files: where they live, how they are listed and written (one secret-scan fallback), and the
  * `receipt --refresh` flow that re-reads a receipt and books the result through settlement.ts.
  * Behavior is pinned by contract/vectors/settlement-refresh.json and failed-read.json.
  */
+import { existsSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { CliError, EXIT } from "./errors.js";
 import { readIdentity } from "./keys.js";
@@ -11,7 +12,7 @@ import { receiptsDir } from "./paths.js";
 import type { Provider } from "./providers.js";
 import { classifyReceipt, type Classified } from "./receipts.js";
 import { redactFlagged } from "./secrets.js";
-import { DISAGREE, isFreshRead, receiptIdentity, refreshBooking } from "./settlement.js";
+import { bookingReason, DISAGREE, isFreshRead, receiptIdentity, refreshBooking } from "./settlement.js";
 import { readJson, writeJsonSafe } from "./store.js";
 
 export type SavedReceipt = Classified & { seat: string; mock_scenario?: string };
@@ -20,6 +21,36 @@ export const receiptPath = (h: string, requestId: string): string => join(receip
 
 export function readSavedReceipt(h: string, requestId: string): SavedReceipt | null {
   return readJson<SavedReceipt>(receiptPath(h, requestId));
+}
+
+/** One receipt file as an object, or null when it cannot be read as one (not JSON, or not a JSON object). */
+function readReceiptFile(path: string): Classified | null {
+  try {
+    const body = readJson<unknown>(path);
+    return body !== null && typeof body === "object" && !Array.isArray(body) ? (body as Classified) : null;
+  } catch {
+    return null;
+  }
+}
+
+const observedAt = (c: Classified): string => (typeof c.observed_at === "string" ? c.observed_at : "");
+
+/**
+ * Every readable receipt, newest first, and the names of the receipt files that could not be read.
+ * One bad file never hides the others.
+ */
+export function listReceipts(h: string): { receipts: Classified[]; unreadable: string[] } {
+  const dir = receiptsDir(h);
+  if (!existsSync(dir)) return { receipts: [], unreadable: [] };
+  const receipts: Classified[] = [];
+  const unreadable: string[] = [];
+  for (const name of readdirSync(dir).filter((f) => f.endsWith(".json"))) {
+    const receipt = readReceiptFile(join(dir, name));
+    if (receipt) receipts.push(receipt);
+    else unreadable.push(name);
+  }
+  receipts.sort((a, b) => observedAt(b).localeCompare(observedAt(a)));
+  return { receipts, unreadable: unreadable.sort() };
 }
 
 /**
@@ -77,19 +108,21 @@ export async function refreshReceipt(
   // No file yet, or an older file without seat/did (716819c era): seed them from the ledger row. Stored values win.
   const lacksIdentity = !stored || (ledgerRow !== undefined && (!present(stored.seat) || !present((stored as { did?: unknown }).did)));
   const ident = lacksIdentity ? identityFromLedger(h, ledgerRow!) : {};
-  let saved = writeReceipt(receiptPath(h, rid), refreshedBody(stored, ident, c, { fresh, rawId, identityOk })).body as SavedReceipt;
+  const written = writeReceipt(receiptPath(h, rid), refreshedBody(stored, ident, c, { fresh, rawId, identityOk }));
+  let saved = written.body as SavedReceipt;
 
   const prev = latestAttempts(h).find((e) => e.request_id === rid);
   if (!prev) return { saved, ledgerRow };
-  const next = refreshBooking(prev, { fresh, identityOk, state: saved?.state ?? null, settled: saved?.settled });
+  const next = refreshBooking(prev, { fresh, identityOk, redacted: written.redacted, state: saved?.state ?? null, settled: saved?.settled });
   const disagree = () => {
     warn(DISAGREE);
     saved = { ...saved, status: DISAGREE } as SavedReceipt;
   };
-  if (next.kind === "disagree") disagree(); // unknown charge and no exact-identity settlement: never substitute 0
+  // Disagree: an unknown charge with no exact-identity settlement (never substitute 0), or a read below a booked settlement.
+  if (next.kind === "disagree") disagree();
   else if (next.kind === "append") {
     try {
-      appendLedger(h, { ...prev, ts: new Date().toISOString(), state: next.booking.state, reason: saved?.flag ?? null, spend: next.booking.spend, cap_charge: next.booking.cap_charge });
+      appendLedger(h, { ...prev, ts: new Date().toISOString(), state: next.booking.state, reason: bookingReason(next.booking, saved?.flag ?? null), spend: next.booking.spend, cap_charge: next.booking.cap_charge });
     } catch {
       disagree();
     }

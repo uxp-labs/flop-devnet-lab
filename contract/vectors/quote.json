@@ -303,6 +303,62 @@
      "not_applicable": "viewer never computes a quote; it renders quote_padded from the ledger"
     }
    }
+  },
+  {
+   "id": "quote-negative-output-tokens",
+   "rule": "quote.pad",
+   "input": {
+    "estimate": {
+     "estimated_cost_flop": 0.066,
+     "estimated_input_tokens": 3,
+     "estimated_output_tokens": -2
+    },
+    "max_tokens": 8
+   },
+   "expect": {
+    "imd-flop": {
+     "padded": null
+    },
+    "spend-guard": {
+     "decision": "refused_local",
+     "quote_padded": null
+    },
+    "viewer": {
+     "not_applicable": "viewer never computes a quote; it renders quote_padded from the ledger"
+    }
+   },
+   "quirks": [
+    "Q-QUOTE-COUNTS"
+   ],
+   "note": "[swarm audit of 8ddc5d2, finding 11] a negative token count is not a usable count: imd-flop padQuote returns null, as spend-guard already refused; imd-flop was padded 1.386 (the negative count shrank the divisor)"
+  },
+  {
+   "id": "quote-negative-input-tokens",
+   "rule": "quote.pad",
+   "input": {
+    "estimate": {
+     "estimated_cost_flop": 0.066,
+     "estimated_input_tokens": -1,
+     "estimated_output_tokens": 8
+    },
+    "max_tokens": 8
+   },
+   "expect": {
+    "imd-flop": {
+     "padded": null
+    },
+    "spend-guard": {
+     "decision": "refused_local",
+     "quote_padded": null
+    },
+    "viewer": {
+     "not_applicable": "viewer never computes a quote; it renders quote_padded from the ledger"
+    }
+   },
+   "quirks": [
+    "Q-QUOTE-COUNTS"
+   ],
+   "note": "[swarm audit of 8ddc5d2, finding 11] a negative token count is not a usable count: imd-flop padQuote returns null, as spend-guard already refused; imd-flop was padded 0.254572 (the negative count shrank the divisor)"
   }
  ]
 }

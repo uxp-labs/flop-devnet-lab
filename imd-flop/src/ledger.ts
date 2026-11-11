@@ -8,6 +8,7 @@ import { closeSync, linkSync, openSync, readFileSync, renameSync, statSync, unli
 import { randomBytes } from "node:crypto";
 import { hostname } from "node:os";
 import { ledgerFile } from "./paths.js";
+import { ceil6 } from "./rounding.js";
 import { appendJsonlSafe, readJsonl } from "./store.js";
 import type { Payer } from "./config.js";
 
@@ -34,7 +35,7 @@ export interface LedgerEntry {
   reason: string | null;
   spend: number | null; // finite settled spend >= 0; null = unknown (negative, non-finite, and missing are unknown, never coerced to 0)
   cost_reported: number | null; // usage.cost_flop from the completion, if any. Recorded as reported; not a settlement.
-  cap_charge: number; // known finite settled spend, including explicit 0; while spend is unknown, the padded quote, raised if reported cost is higher
+  cap_charge: number; // known finite settled spend (explicit 0 included), or while spend is unknown the padded quote; either is raised to the reported cost when that is higher
   http: number | null;
   mock: boolean;
 }
@@ -56,8 +57,6 @@ export function latestAttempts(h: string): LedgerEntry[] {
   return [...m.values()];
 }
 
-const round6 = (n: number) => Math.round(n * 1e6) / 1e6;
-
 export class UnusableLedgerCharge extends Error {}
 
 /** A cap charge counts only when it is a finite number and not negative. Null is not 0. */
@@ -65,13 +64,14 @@ export function usableCapCharge(value: unknown): boolean {
   return typeof value === "number" && Number.isFinite(value) && value >= 0;
 }
 
+/** The total of these rows' cap charges. Money already spent rounds up to 6 decimals, so the total never understates it. */
 function sumCharges(rows: LedgerEntry[]): number {
   let sum = 0;
   for (const row of rows) {
     if (!usableCapCharge(row.cap_charge)) throw new UnusableLedgerCharge("ledger cap_charge unusable; next call refused");
     sum += row.cap_charge;
   }
-  return round6(sum);
+  return ceil6(sum);
 }
 
 export function spentToday(h: string, seat: string, provider: string, day = utcDay()): number {

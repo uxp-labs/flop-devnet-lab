@@ -6,6 +6,7 @@
  */
 import { CliError, EXIT } from "./errors.js";
 import type { Payer, SeatCap } from "./config.js";
+import { ceil6, floor6 } from "./rounding.js";
 import { scanForSecrets } from "./secrets.js";
 
 export const TEMPLATE_PAD = 20; // measured: Qwen chat wrap 23 tokens vs 3 raw for "Be brief.\nHi"
@@ -13,17 +14,10 @@ export const TEMPLATE_PAD = 20; // measured: Qwen chat wrap 23 tokens vs 3 raw f
 /** A finite, positive number. */
 export const posFinite = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v) && v > 0;
 
-function finiteTokenCount(value: unknown): number | null {
-  if (typeof value !== "number" || !Number.isFinite(value)) return null;
+/** A usable token count is a finite number that is not negative. A negative count would shrink the divisor and inflate the pad. */
+function usableTokenCount(value: unknown): number | null {
+  if (typeof value !== "number" || !Number.isFinite(value) || value < 0) return null;
   return value;
-}
-
-/** Round up to 6 decimals. A value already on a 1e-6 boundary stays put. */
-function ceil6(n: number): number {
-  const scaled = n * 1e6;
-  const nearest = Math.round(scaled);
-  if (Math.abs(scaled - nearest) <= 1e-6) return nearest / 1e6;
-  return Math.ceil(scaled) / 1e6;
 }
 
 export function padQuote(est: { estimated_cost_flop?: number; estimated_input_tokens?: number; estimated_output_tokens?: number }): { raw: number; padded: number } | null {
@@ -31,8 +25,8 @@ export function padQuote(est: { estimated_cost_flop?: number; estimated_input_to
   if (typeof raw !== "number" || !Number.isFinite(raw) || !(raw > 0)) return null;
   const tinIn = (est as { estimated_input_tokens?: unknown }).estimated_input_tokens;
   const toutIn = (est as { estimated_output_tokens?: unknown }).estimated_output_tokens;
-  const tin = tinIn === undefined ? 0 : finiteTokenCount(tinIn);
-  const tout = toutIn === undefined ? 0 : finiteTokenCount(toutIn);
+  const tin = tinIn === undefined ? 0 : usableTokenCount(tinIn);
+  const tout = toutIn === undefined ? 0 : usableTokenCount(toutIn);
   if (tin === null || tout === null || tin + tout <= 0) return null;
   const perTok = raw / (tin + tout);
   const unrounded = raw + TEMPLATE_PAD * perTok;
@@ -92,22 +86,44 @@ export function validatePayer(payer: unknown, jobBudget: number | undefined): Pa
 
 export interface BudgetRefusal { reason: string; code: number }
 
+/** What a budget check needs besides the quote. `spentBefore` is the ledger total, already rounded up (ledger.ts). */
+export interface BudgetState { cap: SeatCap; payer: Payer; spentBefore: number; jobBudget?: number }
+
+const refusedCap = (reason: string): BudgetRefusal => ({ reason, code: EXIT.REFUSED_CAP });
+
 /**
- * The cap check made under the ledger lock. Holder: per-call cap, then the remaining daily cap.
- * Requester: per-call cap, then the remaining job budget. Null means the padded quote fits.
+ * Room left for this payer: the daily cap (holder) or the job budget (requester), less what is already
+ * charged. Rounded down to 6 decimals, so rounding never adds room.
  */
-export function checkBudget(a: { padded: number; cap: SeatCap; payer: Payer; spentBefore: number; jobBudget?: number }): BudgetRefusal | null {
-  const { padded, cap, payer, spentBefore } = a;
-  if (padded > cap.perCall) return { reason: `padded quote ${padded} FLOP is over the per-call cap ${cap.perCall}`, code: EXIT.REFUSED_CAP };
-  if (payer === "holder") {
-    const left = Math.round((cap.daily - spentBefore) * 1e6) / 1e6;
-    if (left <= 0) return { reason: `daily cap reached (${spentBefore}/${cap.daily} FLOP today, UTC)`, code: EXIT.REFUSED_CAP };
-    if (padded > left) return { reason: `padded quote ${padded} FLOP is over the remaining daily cap ${left}`, code: EXIT.REFUSED_CAP };
-    return null;
-  }
+export function roomLeft(a: BudgetState): number {
+  return floor6((a.payer === "holder" ? a.cap.daily : a.jobBudget!) - a.spentBefore);
+}
+
+/**
+ * A refusal that needs no quote: nothing can fit, whatever the estimate says. Holder: no daily room left.
+ * Requester: no job budget left, or no usable budget. Null means a quote may still fit.
+ * `run` asks this before the estimate, so the prompt does not leave the machine for nothing, and
+ * checkBudget asks it again under the ledger lock.
+ */
+export function noRoom(a: BudgetState): BudgetRefusal | null {
+  const left = roomLeft(a);
+  if (a.payer === "holder") return left <= 0 ? refusedCap(`daily cap reached (${a.spentBefore}/${a.cap.daily} FLOP today, UTC)`) : null;
   // A non-finite budget left would skip the cap, so refuse it (and any payer other than requester).
-  const left = Math.round((a.jobBudget! - spentBefore) * 1e6) / 1e6;
-  if (payer !== "requester" || !Number.isFinite(left)) return { reason: `no usable requester budget for payer ${JSON.stringify(payer)}`, code: EXIT.REFUSED_CAP };
-  if (padded > left) return { reason: `padded quote ${padded} FLOP is over this job's remaining requester budget ${left}`, code: EXIT.REFUSED_CAP };
+  if (a.payer !== "requester" || !Number.isFinite(left)) return refusedCap(`no usable requester budget for payer ${JSON.stringify(a.payer)}`);
+  return left <= 0 ? refusedCap(`requester budget reached (${a.spentBefore}/${a.jobBudget} FLOP on this job)`) : null;
+}
+
+/**
+ * The cap check made under the ledger lock. First the refusal that needs no quote (noRoom), then the
+ * per-call cap, then the room left: the daily cap for the holder, the job budget for the requester.
+ * Null means the padded quote fits.
+ */
+export function checkBudget(a: BudgetState & { padded: number }): BudgetRefusal | null {
+  const { padded, cap, payer } = a;
+  const none = noRoom(a);
+  if (none) return none;
+  if (padded > cap.perCall) return refusedCap(`padded quote ${padded} FLOP is over the per-call cap ${cap.perCall}`);
+  const left = roomLeft(a);
+  if (padded > left) return refusedCap(payer === "holder" ? `padded quote ${padded} FLOP is over the remaining daily cap ${left}` : `padded quote ${padded} FLOP is over this job's remaining requester budget ${left}`);
   return null;
 }

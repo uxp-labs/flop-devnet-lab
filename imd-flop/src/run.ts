@@ -10,10 +10,10 @@ import { readJson, writeJsonSafe } from "./store.js";
 import { loadSigner, readIdentity, revokedDids } from "./keys.js";
 import { verifyLink, type LinkFile } from "./link.js";
 import { DEFAULT_MODEL, network, SEAT_COLLECTION } from "./networks.js";
-import { checkBudget, padQuote, requireCap, validateJob, validatePayer, validateRunMaxTokens } from "./policy.js";
+import { checkBudget, noRoom, padQuote, requireCap, validateJob, validatePayer, validateRunMaxTokens } from "./policy.js";
 import { appendLedger, jobSpent, LedgerLockError, spentToday, UnusableLedgerCharge, utcDay, withLedgerLock, type LedgerEntry } from "./ledger.js";
 import { classifyReceipt, type Classified } from "./receipts.js";
-import { holdCharge, isFreshRead, nextBooking, receiptIdentity } from "./settlement.js";
+import { bookingReason, holdCharge, isFreshRead, nextBooking, receiptIdentity, reportedCost } from "./settlement.js";
 import { receiptPath, writeReceipt } from "./receipt-store.js";
 import type { Provider } from "./providers.js";
 import { assertPaidNetwork, checkImdJob, PaidGateError, PreSendError, readVerifiedSeatOwner, type Fetch } from "./gateway.js";
@@ -150,26 +150,38 @@ export async function runJob(h: string, provider: Provider, o: RunOpts, deps: { 
     throw new CliError(`refused locally, nothing sent: ${reason}`, code);
   };
 
-  // Quote first; fail closed.
+  const NO_QUOTE = { raw: null, padded: null };
+  // What the cap is checked against: today's holder-paid total, or this job's requester-paid total.
+  // An unusable ledger charge refuses the run.
+  const spentSoFar = (day: string, quote: { raw: number | null; padded: number | null }): number => {
+    try {
+      return payer === "holder" ? spentToday(h, seat, provider.name, day) : jobSpent(h, job, provider.name);
+    } catch (e) {
+      if (e instanceof UnusableLedgerCharge) refuse(e.message, EXIT.REFUSED_CAP, quote, null);
+      throw e;
+    }
+  };
+
+  // A refusal that needs no quote comes before the estimate, so the prompt does not leave the machine
+  // for nothing. The check under the ledger lock below stays the authority.
+  const spentEarly = spentSoFar(base.day, NO_QUOTE);
+  const early = noRoom({ cap, payer, spentBefore: spentEarly, jobBudget: o.jobBudget });
+  if (early) refuse(early.reason, early.code, NO_QUOTE, spentEarly);
+
+  // Then the quote; fail closed.
   let q: { raw: number; padded: number } | null = null;
   try {
     q = padQuote(await provider.estimate({ model, prompt: estPrompt, max_tokens: o.maxTokens }));
   } catch (e) {
-    refuse(`estimate failed (${(e as Error).message})`, EXIT.ESTIMATE_FAILED, { raw: null, padded: null }, null);
+    refuse(`estimate failed (${(e as Error).message})`, EXIT.ESTIMATE_FAILED, NO_QUOTE, null);
   }
-  if (!q) return refuse("estimate returned no usable cost", EXIT.ESTIMATE_FAILED, { raw: null, padded: null }, null);
+  if (!q) return refuse("estimate returned no usable cost", EXIT.ESTIMATE_FAILED, NO_QUOTE, null);
 
   const requestId = `${provider.name === "mock" ? "mock" : "imdflop"}-${seat}-${bytesToHex(randomBytes(8))}`;
   const lockedCheck = (): LedgerEntry => {
     // The UTC day is read once, inside the lock, and used for both the cap check and the rows.
     const day = utcDay();
-    let spentBefore: number;
-    try {
-      spentBefore = payer === "holder" ? spentToday(h, seat, provider.name, day) : jobSpent(h, job, provider.name);
-    } catch (e) {
-      if (e instanceof UnusableLedgerCharge) refuse(e.message, EXIT.REFUSED_CAP, q, null);
-      throw e;
-    }
+    const spentBefore = spentSoFar(day, q);
     const refusal = checkBudget({ padded: q.padded, cap, payer, spentBefore, jobBudget: o.jobBudget });
     if (refusal) refuse(refusal.reason, refusal.code, q, spentBefore);
     const row: LedgerEntry = { ...base, day, request_id: requestId, quote_raw: q.raw, quote_padded: q.padded, spent_before: spentBefore, state: "sent", reason: null, spend: null, cost_reported: null, cap_charge: q.padded, http: null };
@@ -209,7 +221,8 @@ export async function runJob(h: string, provider: Provider, o: RunOpts, deps: { 
       throw new CliError(`no answer within ${o.timeoutMs} ms. Spend is UNKNOWN (recorded as null). Not retried. Check later with \`imd-flop receipt ${requestId}\`.`, EXIT.TIMEOUT_UNKNOWN);
     }
     // The gate refusing at its pre-mint recheck is the same rule refusal as at the first check above.
-    if (preSend) throw new CliError(preSendWithheld ? reason : `nothing sent: ${err.message}`, e instanceof PaidGateError ? EXIT.REFUSED_RULE : EXIT.ERROR);
+    // Any other pre-send failure exits NOT_SENT, so it is told apart from a gateway error on the paid call below.
+    if (preSend) throw new CliError(preSendWithheld ? reason : `nothing sent: ${err.message}`, e instanceof PaidGateError ? EXIT.REFUSED_RULE : EXIT.NOT_SENT);
     throw new CliError(`gateway refused the call (HTTP ${http}); spend recorded as unknown`, EXIT.ERROR);
   } finally {
     clearTimeout(timer);
@@ -260,13 +273,12 @@ export async function runJob(h: string, provider: Provider, o: RunOpts, deps: { 
     for (const k of Object.keys(r0)) if (k in cleaned) r0[k] = cleaned[k] ?? null;
   }
 
-  const usage = res.usage;
-  const costReported = typeof usage?.cost_flop === "number" && Number.isFinite(usage.cost_flop) ? usage.cost_flop : null;
-  // Same freshness rule as receipt --refresh: a failed read (not HTTP 200 with a receipt object) proves nothing
-  // and never releases the reservation. A receipt body that had to be redacted never proves a settlement.
-  const outcome = { fresh: isFreshRead(rr), identityOk: identityOk && !receiptRedacted, state: classified.state, settled: classified.settled };
-  const booking = nextBooking({ state: sent.state, spend: sent.spend }, outcome, holdCharge(q.padded, costReported));
-  appendLedger(h, { ...sent, ts: new Date().toISOString(), ...booking, reason: classified.flag, cost_reported: costReported, http: rr.http });
+  const costReported = reportedCost(res.usage?.cost_flop);
+  // Same rules as receipt --refresh, held in settlement.ts: a failed read (not HTTP 200 with a receipt object)
+  // or a receipt body that had to be redacted proves nothing and never releases the reservation.
+  const outcome = { fresh: isFreshRead(rr), identityOk, redacted: receiptRedacted, state: classified.state, settled: classified.settled };
+  const booking = nextBooking({ state: sent.state, spend: sent.spend }, outcome, holdCharge(q.padded, costReported), costReported);
+  appendLedger(h, { ...sent, ts: new Date().toISOString(), ...booking, reason: bookingReason(booking, classified.flag), cost_reported: costReported, http: rr.http });
 
   const match = await matchReceipt(h, receipt0, latestAttempts(h).find((e) => e.request_id === requestId) ?? null);
   const receipt = { ...receipt0, match };

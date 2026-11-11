@@ -11,6 +11,7 @@ export const EXIT = {
   VERIFY_FAILED: 8, // link verify found a bad signature or mismatch
   FAUCET_REFUSED: 9, // team rule: no faucets
   REFUSED_LOCK: 10, // ledger lock timeout or contested before the paid call; nothing sent
+  NOT_SENT: 11, // the provider failed before the paid request was sent (child-key mint, abort before send): nothing sent, nothing charged
 } as const;
 
 export class CliError extends Error {
