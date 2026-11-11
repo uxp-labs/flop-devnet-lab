@@ -132,13 +132,14 @@
     },
     {
       "id": "Q-AMOUNT-JSON",
-      "status": "current behavior",
+      "status": "fixed: swarm audit of 8ddc5d2, finding 7",
       "parts": [
         "imd-flop",
         "spend-guard",
         "viewer"
       ],
-      "summary": "Viewer amount() accepts negative numbers; imd-flop knownSettledSpend/usableCapCharge and spend-guard spend_amount require >= 0."
+      "summary": "Viewer amount() accepts negative numbers; imd-flop knownSettledSpend/usableCapCharge and spend-guard spend_amount require >= 0.",
+      "fixed_behavior": "Viewer amount() returns unknown (None) for a negative number, as imd-flop knownSettledSpend/usableCapCharge and spend-guard spend_amount do. A negative cap_charge, spent_before, quote, cap or settled amount shows blank and is never subtracted. spend-guard json_number still passes a negative number through."
     },
     {
       "id": "Q-MAXTOK-RANGE",

@@ -34,8 +34,10 @@ def num(v): return BLANK if v is None else f'<span class="mono">{v}</span>'
 def r6(x): return float(f"{x:.6f}")
 def esc(v): return html.escape("" if v is None else str(v), quote=True)
 def amount(v):
-    """A file value used as an amount: a finite int/float (not a bool), else None (blank, never 0)."""
-    if isinstance(v, bool) or not isinstance(v, (int, float)) or v != v or v in (float("inf"), float("-inf")): return None
+    """A file value used as an amount: a finite int/float that is not negative (and not a bool), else None
+    (blank, never 0). A negative number is not an amount, as in imd-flop and spend-guard: it is unknown, so
+    nothing shows it or subtracts it."""
+    if isinstance(v, bool) or not isinstance(v, (int, float)) or v != v or v in (float("inf"), float("-inf")) or v < 0: return None
     return v
 def short(s, n=10):
     """Head and tail of an id, so distinct random tails stay distinct. The full id goes in a title attribute."""
@@ -113,7 +115,7 @@ def spend_limit(e):
     limit = SPEND_LIMITS.get(payer) if isinstance(payer, str) else None
     if limit is None: return None, None
     spent_before, cap_charge, cap = amount(e.get("spent_before")), amount(e.get("cap_charge")), amount(e.get(limit["field"]))
-    if e.get(limit["field"]) is not None and cap is None: raise ValueError(f'{limit["field"]} is not a number')
+    if e.get(limit["field"]) is not None and cap is None: raise ValueError(f'{limit["field"]} is not an amount')
     return limit, (r6(cap - spent_before - cap_charge) if None not in (cap, spent_before, cap_charge) else None)
 
 def over_limit(e, r):

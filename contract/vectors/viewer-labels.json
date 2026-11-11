@@ -1,6 +1,6 @@
 {
  "file": "viewer-labels.json",
- "description": "Viewer lane labels for one ledger row and its receipt file (FIXER rules V-PRECEDENCE, V-FAILED-READ, V-UNKNOWN-SETTLED, V-LINK-GREY, plus known defects KD-1/KD-2). receipt: an object, a raw string (written as is) or null (no file). Chip text \"DISAGREE\" stands for rules.constants.DISAGREE. reservation: the value on the row's 'reservation' line, or \"absent\". greens: every c-green chip in the row. label_rules names the FIXER rules (rules.json viewer_label_rules) a vector pins; on a known_defect vector they are the rules its target follows and today's output breaks. The label-requester vectors pin the swarm audit of 8ddc5d2, finding 5: a requester paid row is checked against its job budget, never the seat's daily cap. The label-settled-amount-unknown vectors and the two label-disagree controls after them pin finding 6: settled on both sides with both amounts unknown is agreement, with its own amber label. Vectors with status known_defect assert today's output in expect; target is not asserted.",
+ "description": "Viewer lane labels for one ledger row and its receipt file (FIXER rules V-PRECEDENCE, V-FAILED-READ, V-UNKNOWN-SETTLED, V-LINK-GREY, plus known defects KD-1/KD-2). receipt: an object, a raw string (written as is) or null (no file). Chip text \"DISAGREE\" stands for rules.constants.DISAGREE. reservation: the value on the row's 'reservation' line, or \"absent\". greens: every c-green chip in the row. label_rules names the FIXER rules (rules.json viewer_label_rules) a vector pins; on a known_defect vector they are the rules its target follows and today's output breaks. The label-requester vectors pin the swarm audit of 8ddc5d2, finding 5: a requester paid row is checked against its job budget, never the seat's daily cap. The label-settled-amount-unknown vectors and the two label-disagree controls after them pin finding 6: settled on both sides with both amounts unknown is agreement, with its own amber label. The label-negative vectors pin finding 7: a negative amount is unknown. Vectors with status known_defect assert today's output in expect; target is not asserted.",
  "status": "current behavior at 3ae1cdf",
  "vectors": [
   {
@@ -1464,6 +1464,130 @@
     }
    },
    "note": "swarm audit of 8ddc5d2, finding 6, control: the settled receipt has an amount and the settled ledger row has none. Still DISAGREE, before and after the fix."
+  },
+  {
+   "id": "label-negative-cap-charge-is-unknown",
+   "rule": "viewer.label",
+   "input": {
+    "ledger": {
+     "ts": "2026-11-10T15:00:00Z",
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zSONAR",
+     "provider": "mock",
+     "network": "devnet",
+     "payer": "holder",
+     "state": "sent",
+     "spend": null,
+     "cap_charge": -0.3,
+     "quote_padded": 0.186,
+     "per_call_cap": 1,
+     "daily_cap": 5,
+     "spent_before": 0
+    },
+    "receipt": {
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zSONAR",
+     "state": "estimated",
+     "settled": null,
+     "chain_final": false,
+     "http": 200,
+     "error": null
+    }
+   },
+   "expect": {
+    "imd-flop": {
+     "not_applicable": "imd-flop does not render the viewer lane"
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard does not render the viewer lane"
+    },
+    "viewer": {
+     "chips": [
+      [
+       "grey",
+       "sent"
+      ]
+     ],
+     "reservation": 0.186,
+     "matches_shown": true,
+     "greens": [],
+     "link": [
+      "grey",
+      "not checked",
+      null
+     ]
+    }
+   },
+   "note": "swarm audit of 8ddc5d2, finding 7: a negative amount is not an amount. A cap_charge of -0.3 is unknown, so the held reservation shown is the padded quote (0.186), as for a null cap_charge. Was reservation -0.3.",
+   "quirks": [
+    "Q-AMOUNT-JSON"
+   ]
+  },
+  {
+   "id": "label-negative-settled-amounts-are-unknown",
+   "rule": "viewer.label",
+   "input": {
+    "ledger": {
+     "ts": "2026-11-10T15:00:00Z",
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zSONAR",
+     "provider": "mock",
+     "network": "devnet",
+     "payer": "holder",
+     "state": "settled",
+     "spend": -0.05,
+     "cap_charge": 0.186,
+     "quote_padded": 0.186,
+     "per_call_cap": 1,
+     "daily_cap": 5,
+     "spent_before": 0
+    },
+    "receipt": {
+     "request_id": "req-1",
+     "job": "j1",
+     "seat": "9001",
+     "did": "did:key:zSONAR",
+     "state": "settled",
+     "settled": -0.05,
+     "chain_final": true,
+     "http": 200,
+     "error": null
+    }
+   },
+   "expect": {
+    "imd-flop": {
+     "not_applicable": "imd-flop does not render the viewer lane"
+    },
+    "spend-guard": {
+     "not_applicable": "spend-guard does not render the viewer lane"
+    },
+    "viewer": {
+     "chips": [
+      [
+       "amber",
+       "settled, amount unknown; reservation held"
+      ]
+     ],
+     "reservation": 0.186,
+     "matches_shown": false,
+     "greens": [],
+     "link": [
+      "grey",
+      "not checked",
+      null
+     ]
+    }
+   },
+   "note": "swarm audit of 8ddc5d2, finding 7: equal negative amounts on the ledger row and the receipt are two unknown amounts, so the row is 'settled, amount unknown' (finding 6), never 'matches' or green. Was grey sent + green chain final, matches, observed spend -0.05.",
+   "quirks": [
+    "Q-AMOUNT-JSON"
+   ]
   }
  ]
 }

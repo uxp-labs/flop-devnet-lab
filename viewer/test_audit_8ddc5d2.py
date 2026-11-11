@@ -13,6 +13,11 @@ vector run-settled-null-spend), so the two agree. Rule: both in a settling state
 agreement on an unknown amount. The row shows amber 'settled, amount unknown; reservation held' as chip and
 flag, keeps the reservation line and keeps chain final green blocked. Every other disagreement stays one.
 
+Finding 7 (low): amount() accepted negative numbers, so a negative cap_charge or spent_before became extra
+headroom ('daily cap left 0.8' under a 0.5 cap) and 'reservation -0.3 (held)'. imd-flop refuses the next call
+on such a row and spend-guard treats negatives as unknown. Rule: a negative amount is not an amount. amount()
+returns unknown (None), so every place that shows or subtracts it shows blank.
+
 Each test asserts the fixed outcome, so it fails on 8ddc5d2 and passes after the fix. Controls say so.
 Offline: build-lane.py is exec'd on temp dirs (lane_harness.lane).
 """
@@ -20,7 +25,8 @@ import unittest
 
 from lane_harness import LED, REC, greens, lane, load_lane, visible
 
-DISAGREE = load_lane()["DISAGREE"]
+NS = load_lane()
+DISAGREE = NS["DISAGREE"]
 SETTLED_UNKNOWN = "settled, amount unknown; reservation held"
 BLANK = '<span class="unk blank" title="unknown spend">&nbsp;</span>'
 OVER_DAILY = "over the daily cap"
@@ -226,6 +232,102 @@ class Finding6SettledAmountUnknown(unittest.TestCase):
         self.assertFalse(rows[0]["bad"])
         self.assertIn("matches", visible(page))
         self.assertIn("chain final", greens(page))
+
+
+def spend_line(label, value=BLANK):
+    return f'<div><span class="k">{label}</span> {value}</div>'
+
+
+NEGATIVE_FIGURE = 'class="mono">-'  # any number the page prints that starts with a minus sign
+
+
+class Finding7NegativeAmountsAreUnknown(unittest.TestCase):
+    def test_F7_amount_gives_unknown_for_a_negative_number(self):
+        amount = NS["amount"]
+        for v in (-0.3, -1, -0.000001, -1e308):
+            with self.subTest(value=v):
+                self.assertIsNone(amount(v))
+        for v in (0, 0.05, 7, 1e308):  # control: zero and positive amounts are still amounts
+            with self.subTest(value=v):
+                self.assertEqual(amount(v), v)
+
+    def test_F7_negative_cap_charge_is_not_extra_headroom(self):
+        """The audit's repro: cap_charge -0.3 under a 0.5 daily cap showed 'daily cap left 0.8', no flag."""
+        rows, page = lane([dict(LED, cap_charge=-0.3)], {"req-1": dict(REC, http=200)})
+        row, text = rows[0], visible(page)
+        self.assertIsNone(row["daily_left"])
+        self.assertIn(spend_line("daily cap left"), page)
+        self.assertNotIn("0.8", text)
+        self.assertNotIn(NEGATIVE_FIGURE, page)
+
+    def test_F7_negative_cap_charge_is_never_shown_as_the_reservation(self):
+        """It showed 'reservation -0.3 (held)'. An unknown cap_charge shows the padded quote, as a null one does."""
+        rows, page = lane([dict(LED, cap_charge=-0.3)], {"req-1": dict(REC, http=200)})
+        self.assertEqual([v for k, v in rows[0]["flop"] if k == "reservation"], [0.198])
+        self.assertIn("reservation 0.198 (held)", visible(page))
+        # No usable quote either: the reservation line stays, blank.
+        rows, page = lane([dict(LED, cap_charge=-0.3, quote_padded=-0.2)], {"req-1": dict(REC, http=200)})
+        self.assertEqual([v for k, v in rows[0]["flop"] if k == "reservation"], [None])
+        self.assertIn(f'<span class="k">reservation</span> {BLANK} <span class="note">(held)</span>', page)
+        self.assertNotIn(NEGATIVE_FIGURE, page)
+
+    def test_F7_negative_spent_before_is_not_extra_headroom(self):
+        """The audit's repro: spent_before -1 showed 'daily cap left 1.302'."""
+        rows, page = lane([dict(LED, spent_before=-1)], {"req-1": dict(REC, http=200)})
+        self.assertIsNone(rows[0]["daily_left"])
+        self.assertIn(spend_line("daily cap left"), page)
+        self.assertNotIn("1.302", visible(page))
+
+    def test_F7_negative_inputs_leave_the_job_budget_figure_blank_too(self):
+        for name, change in (("cap_charge", dict(cap_charge=-0.3)), ("spent_before", dict(spent_before=-1))):
+            with self.subTest(name):
+                rows, page = lane([dict(REQ, **change)], {"req-1": dict(REC, http=200)})
+                self.assertIsNone(rows[0]["job_left"])
+                self.assertIn(spend_line("job budget left"), page)
+                self.assertEqual(rows[0]["spend_flags"], [])
+
+    def test_F7_negative_quote_and_per_call_cap_show_blank(self):
+        rows, page = lane([dict(LED, quote_padded=-0.2, per_call_cap=-1)], {"req-1": dict(REC, http=200)})
+        self.assertIsNone(rows[0]["est"])
+        self.assertIsNone(rows[0]["per_call"])
+        self.assertIn(spend_line("est.") + spend_line("per-call cap"), page)
+        self.assertNotIn(NEGATIVE_FIGURE, page)
+
+    def test_F7_negative_limit_is_an_unreadable_row(self):
+        """A cap that is present but not an amount makes the row unreadable, as a cap that is a string does."""
+        for name, led in (("daily_cap", dict(LED, daily_cap=-1)), ("job_budget", dict(REQ, job_budget=-5))):
+            with self.subTest(name):
+                rows, page = lane([led], {"req-1": dict(REC, http=200)})
+                self.assertEqual(rows[0]["chips"], [["red", "unreadable"]])
+                self.assertTrue(rows[0]["bad"])
+                self.assertEqual(greens(page), [])
+
+    def test_F7_negative_settlement_on_both_sides_never_matches_or_goes_green(self):
+        """Equal negative amounts used to pass as a match: 'observed spend -0.05' and green chain final."""
+        led = dict(LED, state="settled", spend=-0.05, cap_charge=0.198)
+        rows, page = lane([led], {"req-1": dict(REC, state="settled", settled=-0.05, chain_final=True, http=200, error=None)})
+        self.assertEqual(rows[0]["chips"], [["amber", SETTLED_UNKNOWN]])
+        self.assertEqual(greens(page), [])
+        self.assertNotIn("matches", visible(page))
+        self.assertNotIn(NEGATIVE_FIGURE, page)
+        self.assertIn(["reservation", 0.198], rows[0]["flop"])
+
+    def test_F7_negative_receipt_amount_beside_the_row_imd_flop_books_is_amount_unknown(self):
+        """imd-flop books a settled_spend of -1 as settled, spend null, hold kept (contract vector run-settled-negative)."""
+        rows, page = lane([HELD_LED], {"req-1": dict(NO_AMOUNT, settled=-1, chain_final=True)})
+        self.assertEqual(rows[0]["chips"], [["amber", SETTLED_UNKNOWN]])
+        self.assertNotIn("disagree", visible(page))
+        self.assertNotIn(NEGATIVE_FIGURE, page)
+        self.assertEqual(greens(page), [])
+
+    def test_F7_control_known_amount_beside_a_negative_one_still_disagrees(self):
+        """Passes before and after: one side knows the amount, the other does not."""
+        for name, led, rec in (("receipt negative", dict(HELD_LED, spend=0.05, cap_charge=0.05), dict(NO_AMOUNT, settled=-0.05)),
+                               ("ledger negative", dict(HELD_LED, spend=-0.05), dict(NO_AMOUNT, settled=0.05))):
+            with self.subTest(name):
+                rows, page = lane([led], {"req-1": dict(rec, chain_final=True)})
+                self.assertEqual(rows[0]["chips"], [["amber", DISAGREE]])
+                self.assertEqual(greens(page), [])
 
 
 if __name__ == "__main__":
