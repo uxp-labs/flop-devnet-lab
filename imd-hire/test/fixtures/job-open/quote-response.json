@@ -1,0 +1,36 @@
+{
+  "status": 201,
+  "body": {
+    "created": true,
+    "order": {
+      "id": "06423b07-dddf-41af-8bdf-f8d03dd925d8",
+      "requestKey": "dca0635d-0fd6-4f85-8879-805fbb3775c5",
+      "status": "quoted",
+      "via": "api.imd.fun",
+      "createdAt": "2026-11-11T00:45:18.222Z",
+      "paidAt": null,
+      "quote": {
+        "v": 1,
+        "id": "06423b07-dddf-41af-8bdf-f8d03dd925d8",
+        "action": "job.open",
+        "policyVersion": "job-1",
+        "inputHash": "d0112e1b2bc30913617ce9a4400e7fc3f8bab680781c18d0c31b1d69810377e8",
+        "issuedAt": 1794357918,
+        "expiresAt": 1794358518,
+        "payment": {
+          "network": "eip155:1",
+          "asset": "0xd34a99bc0f67ae1bbd63c660e6d0b0dd03e263b7",
+          "amount": "500000000000000000",
+          "payTo": "0x4e0fa57bde726079356537e2f34d671e9f41adbc",
+          "decimals": 18,
+          "scheme": "exact"
+        },
+        "terms": {
+          "purchase": "action-admission",
+          "resultGuaranteed": false
+        },
+        "quoteHash": "ad8a1cdd3e3154fd7b5574c042b38aee306b842a500b79f20dd73d2f89ed01cb"
+      }
+    }
+  }
+}

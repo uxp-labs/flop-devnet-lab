@@ -1,0 +1,8 @@
+node_modules/
+dist/
+coverage/
+# never commit key material or job state
+*.key
+*.pem
+.env
+.env.*

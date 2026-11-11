@@ -1,0 +1,48 @@
+# Offline CI for imd-hire, the signer that pays for IMD swarm jobs.
+# Workflow permissions are contents: read only. No secrets, wallet keys,
+# deploys, or publishing. Checkout does not persist credentials.
+# The package never touches the network, and test/setup.ts fails any test
+# that tries. Its only network use here is `npm ci`, from the lockfile.
+
+name: imd-hire offline
+
+on:
+  push:
+    paths:
+      - "imd-hire/**"
+      - ".github/workflows/imd-hire-offline.yml"
+  pull_request:
+    paths:
+      - "imd-hire/**"
+      - ".github/workflows/imd-hire-offline.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-test:
+    name: build and offline tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+
+      - name: Use Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install from the lockfile
+        working-directory: imd-hire
+        run: npm ci --no-audit --no-fund
+
+      - name: Typecheck and offline tests
+        working-directory: imd-hire
+        run: npm test
+
+      - name: Build
+        working-directory: imd-hire
+        run: npm run build

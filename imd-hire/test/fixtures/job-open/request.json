@@ -1,0 +1,9 @@
+{
+  "action": "job.open",
+  "input": {
+    "objective": "Audit the FLOP spend path of uxp-labs/flop-devnet-lab at this commit.\nScope: imd-flop/ (TypeScript CLI that lets an IMD worker pay FLOP for inference), spend-guard/ (Python), viewer/ (Python) and contract/ (shared rules and test vectors). Leave observatory/ and tclk-rehearsal/ out.\nWork offline and read only: no network, no faucet, no keys, no paid calls. Do not run as root: one imd-flop test needs a read only file.\nRun first: in imd-flop, npm ci then npm test (295 tests). In spend-guard and in viewer, python3 -m unittest discover -s . -p 'test_*.py' (66 and 59 tests).\nLook for:\n1. Any path in imd-flop/src/run.ts, providers.ts or gateway.ts that mints a child key or sends a paid call after a local refusal, or after the run deadline.\n2. Any receipt or refresh that lowers a booked charge or releases a reservation without a proven settlement (settlement.ts, ledger.ts, receipts.ts, contract/vectors).\n3. Any way a key shaped value, a gateway bearer or the Ethereum RPC URL reaches the ledger, a receipt, a response file, stdout or stderr (secrets.ts, store.ts, gateway.ts).\n4. Any case where imd-flop, spend-guard and the viewer disagree on a contract vector, or on how unknown spend is shown.\n5. Whether findings 1 to 7 of the earlier audit are closed at this commit (its report: https://api.imd.fun/jobs/ba164ffa-1c3e-4183-93bd-4a11d24b76bd/report.md), and whether the refactor that moved the rules into shared modules (settlement.ts, policy.ts, receipt-store.ts) changed any refusal or booking decision.\nFor every finding give file and line, severity, impact and a reproduction that runs offline. Say which checks you ran and which you only read.",
+    "template": "audit",
+    "repoUrl": "https://github.com/uxp-labs/flop-devnet-lab.git",
+    "baseCommit": "8ddc5d2ba2e523e3230a86b6f259dd6125f8aa57"
+  }
+}
