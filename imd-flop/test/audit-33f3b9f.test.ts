@@ -7,12 +7,13 @@
  */
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import type { CompleteReq, CompleteRes, Provider } from "../src/providers.js";
 import { appendLedger, spentToday, utcDay, type LedgerEntry } from "../src/ledger.js";
 import { readLedgerText } from "../src/ledger-text.js";
 import { ledgerFile } from "../src/paths.js";
 import { appendJsonlSafe } from "../src/store.js";
-import { tmpHome } from "./helpers.js";
+import { cli, readLines, tmpHome } from "./helpers.js";
 
 const CONTRACT = join(import.meta.dirname, "..", "..", "contract");
 
@@ -65,5 +66,72 @@ describe("finding 2 (low): every row starts on a fresh line", () => {
     writeFileSync(empty, "");
     appendJsonlSafe(empty, { d: 4 });
     expect(readFileSync(empty, "utf8")).toBe('{"d":4}\n');
+  });
+});
+
+/** Two instants on either side of 00:00 UTC. */
+const D = "2026-11-11";
+const D1 = "2026-11-12";
+const BEFORE_MIDNIGHT = new Date(`${D}T23:59:59.000Z`);
+const AFTER_MIDNIGHT = new Date(`${D1}T00:00:01.000Z`);
+
+/** A mock-named stub whose estimate can move the clock, so a UTC day change lands between the early check and the lock. */
+class Stub implements Provider {
+  readonly name = "mock" as const;
+  calls = 0;
+  constructor(private readonly o: { estimate?: Record<string, unknown>; onEstimate?: () => void; complete?: (req: CompleteReq) => Promise<CompleteRes> } = {}) {}
+  async estimate() {
+    this.o.onEstimate?.();
+    return (this.o.estimate ?? { estimated_cost_flop: 0.066, estimated_input_tokens: 3, estimated_output_tokens: 8 }) as never;
+  }
+  async complete(req: CompleteReq): Promise<CompleteRes> {
+    this.calls += 1;
+    if (this.o.complete) return this.o.complete(req);
+    return { request_id: req.requestId, text: "ok", usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 } as CompleteRes["usage"] };
+  }
+  async readReceipt(id: string) {
+    return { http: 200, error: null, receipt: { request_id: id, correlation_id: "imd-job-j1", model: "m", reserved_spend: 0.186, settled_spend: null, state: "estimated" } } as never;
+  }
+}
+
+/** A seat with a cap, ready for `run --no-link` with the mock name. */
+async function seat7(cap: string, perCall?: string) {
+  const h = tmpHome();
+  expect((await cli(h, ["init", "--seat", "7"])).code).toBe(0);
+  expect((await cli(h, ["cap", "set", cap, "--seat", "7", ...(perCall ? ["--per-call", perCall] : [])])).code).toBe(0);
+  return h;
+}
+const runArgs = (job = "j1") => ["run", "--seat", "7", "--job", job, "--prompt", "hi", "--provider", "mock", "--max-tokens", "8", "--no-link", "--json"];
+const ledgerRows = (h: string) => readLines(ledgerFile(h)) as LedgerEntry[];
+
+/** Run with the clock just before 00:00 UTC, and let the estimate move it just past. */
+async function runAcrossMidnight(h: string, provider: (cross: () => void) => Stub) {
+  vi.useFakeTimers({ toFake: ["Date"] });
+  vi.setSystemTime(BEFORE_MIDNIGHT);
+  return cli(h, runArgs(), { provider: provider(() => vi.setSystemTime(AFTER_MIDNIGHT)) });
+}
+
+describe("finding 12 (info): a refusal row carries the day the locked check used", () => {
+  afterEach(() => vi.useRealTimers());
+
+  it("a refusal written inside the lock after the estimate crossed 00:00 UTC is dated the new day", async () => {
+    const h = await seat7("1", "0.5");
+    // 0.3 pads to 0.845455, over the per-call cap 0.5: refused inside the locked check.
+    const r = await runAcrossMidnight(h, (cross) => new Stub({ estimate: { estimated_cost_flop: 0.3, estimated_input_tokens: 3, estimated_output_tokens: 8 }, onEstimate: cross }));
+    expect(r.code, r.err).toBe(3);
+    expect(r.err).toContain("over the per-call cap 0.5");
+    const last = ledgerRows(h).at(-1)!;
+    expect({ state: last.state, day: last.day }).toEqual({ state: "refused_local", day: D1 });
+  });
+
+  it("control: a refusal before the estimate keeps the day the early check used", async () => {
+    const h = await seat7("0.1");
+    appendLedger(h, row("mock-7-seed", { day: D, cap_charge: 0.1 }));
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(BEFORE_MIDNIGHT);
+    const r = await cli(h, runArgs(), { provider: new Stub() });
+    expect(r.code, r.err).toBe(3);
+    expect(r.err).toContain("daily cap reached");
+    expect(ledgerRows(h).at(-1)!.day).toBe(D);
   });
 });

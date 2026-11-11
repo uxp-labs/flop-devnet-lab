@@ -167,8 +167,10 @@ export async function runJob(h: string, provider: Provider, o: RunOpts, deps: Ru
   type Spent = Pick<BudgetState, "spentBefore" | "jobSpentBefore">;
   // Every row records both totals. Null is unknown. job_spent_before is also null on a holder row.
   const recorded = (spent: Spent | null): Required<Pick<LedgerEntry, "spent_before" | "job_spent_before">> => ({ spent_before: spent?.spentBefore ?? null, job_spent_before: spent?.jobSpentBefore ?? null });
-  const refuse = (reason: string, code: number, q: { raw: number | null; padded: number | null }, spent: Spent | null): never => {
-    appendLedger(h, { ...base, request_id: null, quote_raw: q.raw, quote_padded: q.padded, ...recorded(spent), state: "refused_local", reason, spend: null, spend_raw: null, cost_reported: null, cap_charge: 0, http: null });
+  // `day` is the UTC day the check that refuses ran on. A refusal inside the locked check is dated the day read
+  // inside the lock, as the `sent` row is (swarm audit 33f3b9f, finding 12). Like the `sent` row, it keeps base.ts.
+  const refuse = (reason: string, code: number, q: { raw: number | null; padded: number | null }, spent: Spent | null, day = base.day): never => {
+    appendLedger(h, { ...base, day, request_id: null, quote_raw: q.raw, quote_padded: q.padded, ...recorded(spent), state: "refused_local", reason, spend: null, spend_raw: null, cost_reported: null, cap_charge: 0, http: null });
     throw new CliError(`refused locally, nothing sent: ${reason}`, code);
   };
 
@@ -181,7 +183,7 @@ export async function runJob(h: string, provider: Provider, o: RunOpts, deps: Ru
       const spentBefore = spentToday(h, seat, provider.name, day);
       return payer === "requester" ? { spentBefore, jobSpentBefore: jobSpent(h, job, provider.name) } : { spentBefore };
     } catch (e) {
-      if (e instanceof UnusableLedgerRow) refuse(e.message, EXIT.REFUSED_CAP, quote, null);
+      if (e instanceof UnusableLedgerRow) refuse(e.message, EXIT.REFUSED_CAP, quote, null, day);
       // A busy ledger (a line in flight that could not be read again under the lock): nothing was sent.
       if (e instanceof LedgerLockError) throw new CliError(`refused locally, nothing sent: ${e.message}`, EXIT.REFUSED_LOCK);
       throw e;
@@ -209,7 +211,7 @@ export async function runJob(h: string, provider: Provider, o: RunOpts, deps: Ru
     const day = utcDay();
     const spent = spentSoFar(day, q);
     const refusal = checkBudget({ padded: q.padded, cap, payer, jobBudget: o.jobBudget, ...spent });
-    if (refusal) refuse(refusal.reason, refusal.code, q, spent);
+    if (refusal) refuse(refusal.reason, refusal.code, q, spent, day);
     const row: LedgerEntry = { ...base, day, request_id: requestId, quote_raw: q.raw, quote_padded: q.padded, ...recorded(spent), state: "sent", reason: null, spend: null, spend_raw: null, cost_reported: null, cap_charge: q.padded, http: null };
     appendLedger(h, row); // written before the call so a crash still leaves the attempt on the books. A later refused_local line wins if the provider refuses before mint.
     return row;
