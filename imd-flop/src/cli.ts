@@ -325,7 +325,7 @@ export async function main(argv: string[], io: IO): Promise<number> {
             timeoutMs: timeoutMs(values["timeout-ms"]),
             checkJob: values["check-job"],
           },
-          { fetch: io.fetch, ethRpc: io.env.ETH_RPC_URL },
+          { fetch: io.fetch, ethRpc: io.env.ETH_RPC_URL, warn: io.err },
         );
         if (values.json) print(r);
         else {

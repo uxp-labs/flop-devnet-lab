@@ -1,15 +1,23 @@
 /**
  * The booking step (review of the audit 8ddc5d2 fixes). An independent review of those fixes found that
  * the rule "a booked settlement is never lowered by a later read" did not hold when two readers booked the
- * same request, and that a stored read below the booked amount printed as fine. The fix starts with:
- *   - one decision for every receipt read (settlement.ts decideBooking).
+ * same request, and that a stored read below the booked amount printed as fine. The fix is:
+ *   - one decision for every receipt read (settlement.ts decideBooking),
+ *   - one booking step under the ledger lock for `run` and `receipt --refresh` (booking.ts bookRead).
  * Each test asserts the safe outcome. The blocks named "fails on dbffac0" failed on that commit, the one the
- * review read, and pass with the booking step.
- * Stub providers only; no network (test/setup.ts disables fetch).
+ * review read, and pass with the booking step. The blocks named "pin" passed there too: they hold a behavior
+ * the booking step must keep.
+ * Stub providers only; no network (test/setup.ts disables fetch). A second process is stood in for by a
+ * stub whose readReceipt runs the other reader before it answers, or by a child process that holds the real
+ * ledger lock.
  */
-import { appendFileSync, existsSync } from "node:fs";
+import { execFileSync, spawn } from "node:child_process";
+import { appendFileSync, chmodSync, existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { hostname } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
+import { bookRead } from "../src/booking.js";
+import { utcDay } from "../src/ledger.js";
 import type { CompleteReq, CompleteRes, Provider } from "../src/providers.js";
 import { CHARGE_RAISED, decideBooking, DISAGREE } from "../src/settlement.js";
 import { cli, readLines, readySeat, tmpHome } from "./helpers.js";
@@ -29,6 +37,7 @@ const receiptFor = (id: string, fields: Record<string, unknown> = {}): Read => (
   receipt: { request_id: id, correlation_id: "imd-job-j1", model: "m", reserved_spend: 0.186, settled_spend: null, state: "estimated", ...fields },
 });
 const settledAt = (spend: number) => (id: string) => receiptFor(id, { settled_spend: spend, state: "settled" });
+const releasedAt = (spend: number) => (id: string) => receiptFor(id, { settled_spend: spend, state: "released" });
 const pending = (id: string) => receiptFor(id);
 const failed: Reader = () => ({ http: 503, error: "HTTP 503", receipt: null });
 class P implements Provider {
@@ -59,6 +68,12 @@ async function ready(cap = "1") {
   await readySeat(h, SEAT, cap);
   return h;
 }
+/** A reader that first lets another reader refresh the same request, as a second process would, then answers. */
+const after = (home: string, other: Reader, own: Reader): Reader => async (id) => {
+  const r = await cli(home, refreshArgs(id), { provider: new P({ read: other }) });
+  expect(r.code, r.err).toBe(0);
+  return own(id);
+};
 /** A run whose own receipt read is pending: the row holds the padded quote, 0.186. */
 async function pendingRun(home: string, opts: Opts = {}): Promise<string> {
   const run = await cli(home, runArgs(), { provider: new P(opts) });
@@ -150,5 +165,303 @@ describe("fails on dbffac0: a reported cost raises a charge on a hold and on a s
     const refreshed = await cli(h, refreshArgs(rid), { provider: new P({ read: settledAt(0.01) }) });
     expect(refreshed.code, refreshed.err).toBe(0);
     expect({ ...booked(ledger(h).at(-1)!), warned: refreshed.err.includes(DISAGREE) }).toEqual({ state: "settled", spend: 0.05, cap_charge: 0.15, warned: true });
+  });
+});
+
+describe("fails on dbffac0: run books its own read against the latest row, not the row from before the call", () => {
+  // While run waits for its receipt, another reader refreshes the same request and books settled 0.07.
+  // Per the gateway's OpenAPI (CredentialReceipt), read 2026-11-11, later reconciliation can change the
+  // gateway's ledger observation, so two reads of one request can differ.
+  it("(a) own read settled 0.05: 0.07 stays booked, and DISAGREE is on stderr", async () => {
+    const h = await ready();
+    const run = await cli(h, runArgs(), { provider: new P({ read: after(h, settledAt(0.07), settledAt(0.05)) }) });
+    expect(run.code, run.err).toBe(0);
+    const rows = ledger(h);
+    // The third row is run's own: it records the HTTP status of its read. The booking in it is the other reader's.
+    expect(rows.map((r) => r.state)).toEqual(["sent", "settled", "settled"]);
+    expect(booked(rows.at(-1)!)).toEqual({ state: "settled", spend: 0.07, cap_charge: 0.07 });
+    expect({ warned: run.err.includes(DISAGREE), cap_charge: run.json().cap_charge, settled_read: run.json().receipt.settled }).toEqual({ warned: true, cap_charge: 0.07, settled_read: 0.05 });
+    expect(await today(h)).toBe(0.07);
+  });
+
+  it("(b) own read released 0: 0.07 stays booked and charged, and DISAGREE is on stderr", async () => {
+    const h = await ready();
+    const run = await cli(h, runArgs(), { provider: new P({ read: after(h, settledAt(0.07), releasedAt(0)) }) });
+    expect(run.code, run.err).toBe(0);
+    expect(booked(ledger(h).at(-1)!)).toEqual({ state: "settled", spend: 0.07, cap_charge: 0.07 });
+    expect({ warned: run.err.includes(DISAGREE), cap_charge: run.json().cap_charge }).toEqual({ warned: true, cap_charge: 0.07 });
+    expect(await today(h)).toBe(0.07);
+  });
+
+  it("(c) own read pending: the settling state does not go back", async () => {
+    const h = await ready();
+    const run = await cli(h, runArgs(), { provider: new P({ read: after(h, settledAt(0.07), pending) }) });
+    expect(run.code, run.err).toBe(0);
+    expect(booked(ledger(h).at(-1)!)).toEqual({ state: "settled", spend: 0.07, cap_charge: 0.07 });
+    // A pending read refuses no settlement, so the booking step does not warn (as vector
+    // refresh-settled-then-fresh-pending-keeps-booking pins for a refresh).
+    expect({ warned: run.err.includes(DISAGREE), cap_charge: run.json().cap_charge }).toEqual({ warned: false, cap_charge: 0.07 });
+    expect(await today(h)).toBe(0.07);
+  });
+
+  it("run records what only it knows even when its read is refused: the reported cost raises the other reader's charge", async () => {
+    const h = await ready();
+    const run = await cli(h, runArgs(), { provider: new P({ usage: usage(0.15), read: after(h, settledAt(0.07), settledAt(0.05)) }) });
+    expect(run.code, run.err).toBe(0);
+    const last = ledger(h).at(-1)!;
+    expect({ ...booked(last), cost_reported: last.cost_reported, reason: last.reason, http: last.http })
+      .toEqual({ state: "settled", spend: 0.07, cap_charge: 0.15, cost_reported: 0.15, reason: CHARGE_RAISED, http: 200 });
+    expect(run.err).toContain(DISAGREE);
+    expect(await today(h)).toBe(0.15);
+  });
+
+  it("control: an own read above the other reader's is booked, and nothing disagrees", async () => {
+    const h = await ready();
+    const run = await cli(h, runArgs(), { provider: new P({ read: after(h, settledAt(0.05), settledAt(0.07)) }) });
+    expect(run.code, run.err).toBe(0);
+    expect(booked(ledger(h).at(-1)!)).toEqual({ state: "settled", spend: 0.07, cap_charge: 0.07 });
+    expect(run.err).toBe("");
+  });
+
+  it("control: with no other reader, run books its read as before and reports nothing", async () => {
+    const h = await ready();
+    const run = await cli(h, runArgs(), { provider: new P({ read: settledAt(0.05) }) });
+    expect(run.code, run.err).toBe(0);
+    expect(ledger(h).map((r) => r.state)).toEqual(["sent", "settled"]);
+    expect(booked(ledger(h).at(-1)!)).toEqual({ state: "settled", spend: 0.05, cap_charge: 0.05 });
+    expect(run.err).toBe("");
+  });
+});
+
+describe("a refresh racing a refresh", () => {
+  /** A process that takes the real ledger lock, holds it, then books settled 0.07 for the request and lets go. */
+  function holderThatBooks(home: string, rid: string, holdMs: number) {
+    const root = join(import.meta.dirname, "..");
+    execFileSync("npx", ["tsc", "-p", "tsconfig.json"], { cwd: root });
+    const script = join(home, "lock-holder.mjs");
+    writeFileSync(script, `
+import { appendLedger, latestAttempts, withLedgerLock } from ${JSON.stringify(join(root, "dist", "ledger.js"))};
+const home = ${JSON.stringify(home)};
+withLedgerLock(home, () => {
+  process.stdout.write("HOLDING\\n");
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ${holdMs});
+  const prev = latestAttempts(home).find((e) => e.request_id === ${JSON.stringify(rid)});
+  appendLedger(home, { ...prev, ts: new Date().toISOString(), state: "settled", spend: 0.07, cap_charge: 0.07 });
+});
+`);
+    const child = spawn(process.execPath, [script], { env: { ...process.env, IMD_FLOP_HOME: home } });
+    const exited = new Promise<number>((resolve) => child.on("exit", (c) => resolve(c ?? 1)));
+    const holding = new Promise<void>((resolve, reject) => {
+      child.stdout.on("data", (d) => { if (String(d).includes("HOLDING")) resolve(); });
+      child.on("exit", (c) => reject(new Error("holder exited before holding the lock: " + c)));
+    });
+    return { exited, holding };
+  }
+
+  it("fails on dbffac0: another process books settled 0.07 while this refresh waits for the lock: its lower read is refused", async () => {
+    // On dbffac0 the refresh read the previous row before it took the lock, so it appended settled 0.05
+    // over the 0.07 the other process booked in between.
+    const h = await ready();
+    const rid = await pendingRun(h);
+    const holder = holderThatBooks(h, rid, 1000);
+    await holder.holding;
+    const refreshed = await cli(h, refreshArgs(rid), { provider: new P({ read: settledAt(0.05) }) });
+    expect(await holder.exited).toBe(0);
+    expect(refreshed.code, refreshed.err).toBe(0);
+    const rows = ledger(h).filter((r) => r.request_id === rid);
+    expect(rows.map(booked)).toEqual([
+      { state: "sent", spend: null, cap_charge: 0.186 },
+      { state: "estimated", spend: null, cap_charge: 0.186 },
+      { state: "settled", spend: 0.07, cap_charge: 0.07 },
+    ]);
+    expect({ warned: refreshed.err.includes(DISAGREE), status: refreshed.json().status, ledger_spend: refreshed.json().ledger_spend }).toEqual({ warned: true, status: DISAGREE, ledger_spend: 0.07 });
+    expect(await today(h)).toBe(0.07);
+  }, 30_000);
+
+  it("pin: the second refresh runs inside the first one's read: the first one's lower read is refused", async () => {
+    // This form passed on dbffac0 too: refreshReceipt read the previous row after its own network read.
+    const h = await ready();
+    const rid = await pendingRun(h);
+    const before = ledger(h).length;
+    const first = await cli(h, refreshArgs(rid), { provider: new P({ read: after(h, settledAt(0.07), settledAt(0.05)) }) });
+    expect(first.code, first.err).toBe(0);
+    expect({ appended: ledger(h).length - before, last: booked(ledger(h).at(-1)!), warned: first.err.includes(DISAGREE), status: first.json().status, ledger_spend: first.json().ledger_spend })
+      .toEqual({ appended: 1, last: { state: "settled", spend: 0.07, cap_charge: 0.07 }, warned: true, status: DISAGREE, ledger_spend: 0.07 });
+  });
+
+  it("pin: the two orders of two refreshes book the same spend and charge", async () => {
+    const outcome = async (firstRead: Reader, secondRead: Reader) => {
+      const h = await ready();
+      const rid = await pendingRun(h);
+      for (const read of [firstRead, secondRead]) expect((await cli(h, refreshArgs(rid), { provider: new P({ read }) })).code).toBe(0);
+      const last = ledger(h).at(-1)!;
+      return { spend: last.spend, cap_charge: last.cap_charge, today: await today(h) };
+    };
+    expect(await outcome(settledAt(0.05), settledAt(0.07))).toEqual({ spend: 0.07, cap_charge: 0.07, today: 0.07 });
+    expect(await outcome(settledAt(0.07), settledAt(0.05))).toEqual({ spend: 0.07, cap_charge: 0.07, today: 0.07 });
+  });
+});
+
+describe("pin: after the paid call, when the booking step cannot run", () => {
+  it("the ledger lock cannot be taken: exit 1, the sent row keeps the reservation, the answer is in the response file", async () => {
+    const h = await ready();
+    const lock = `${ledgerPath(h)}.lock`;
+    // Another live process takes the lock while run waits for its receipt, and keeps it.
+    const read: Reader = (id) => {
+      writeFileSync(lock, JSON.stringify({ pid: process.pid, host: hostname(), token: "other" }));
+      return settledAt(0.05)(id);
+    };
+    const p = new P({ read });
+    const run = await cli(h, runArgs(), { provider: p });
+    rmSync(lock);
+    expect({ code: run.code, out: run.out, err: run.err, calls: p.calls }).toEqual({ code: 1, out: "", err: "imd-flop: ledger lock timeout", calls: 1 });
+    const rows = ledger(h);
+    expect(rows.map(booked)).toEqual([{ state: "sent", spend: null, cap_charge: 0.186 }]);
+    const rid = rows[0].request_id!;
+    expect(JSON.parse(readFileSync(join(h, "responses", `${rid}.json`), "utf8")).text).toBe("ok");
+    expect(JSON.parse(readFileSync(join(h, "receipts", `${rid}.json`), "utf8")).settled).toBe(0.05);
+    expect(await today(h)).toBe(0.186);
+    // The read was stored and not booked. A later refresh books it.
+    const refreshed = await cli(h, refreshArgs(rid), { provider: new P({ read: settledAt(0.05) }) });
+    expect({ code: refreshed.code, last: booked(ledger(h).at(-1)!) }).toEqual({ code: 0, last: { state: "settled", spend: 0.05, cap_charge: 0.05 } });
+  }, 30_000);
+
+  it("the ledger append fails: exit 1, the sent row keeps the reservation, the answer is in the response file", async () => {
+    const h = await ready();
+    const read: Reader = (id) => {
+      chmodSync(ledgerPath(h), 0o400);
+      return settledAt(0.05)(id);
+    };
+    const run = await cli(h, runArgs(), { provider: new P({ read }) });
+    chmodSync(ledgerPath(h), 0o644);
+    expect({ code: run.code, out: run.out }).toEqual({ code: 1, out: "" });
+    expect(run.err).toMatch(/^imd-flop: EACCES/);
+    const rows = ledger(h);
+    expect(rows.map(booked)).toEqual([{ state: "sent", spend: null, cap_charge: 0.186 }]);
+    expect(JSON.parse(readFileSync(join(h, "responses", `${rows[0].request_id}.json`), "utf8")).text).toBe("ok");
+    expect(await today(h)).toBe(0.186);
+  });
+
+  it("receipt --refresh, the lock cannot be taken: the read is stored, nothing is booked, DISAGREE is printed, exit 0", async () => {
+    const h = await ready();
+    const rid = await pendingRun(h);
+    const before = readFileSync(ledgerPath(h), "utf8");
+    const lock = `${ledgerPath(h)}.lock`;
+    writeFileSync(lock, JSON.stringify({ pid: process.pid, host: hostname(), token: "other" }));
+    const refreshed = await cli(h, refreshArgs(rid), { provider: new P({ read: settledAt(0.05) }) });
+    rmSync(lock);
+    expect({ code: refreshed.code, err: refreshed.err, status: refreshed.json().status, settled: refreshed.json().settled, ledger_state: refreshed.json().ledger_state })
+      .toEqual({ code: 0, err: DISAGREE, status: DISAGREE, settled: 0.05, ledger_state: "estimated" });
+    expect(readFileSync(ledgerPath(h), "utf8")).toBe(before);
+  }, 30_000);
+});
+
+describe("after the paid call, when the ledger no longer holds the request's row", () => {
+  it("run writes the row again and books against it, so the paid call stays on the books", async () => {
+    // On dbffac0 run appended one full row, built from the row it held in memory. The booking is the same.
+    const h = await ready();
+    const read: Reader = (id) => {
+      rmSync(ledgerPath(h));
+      return settledAt(0.05)(id);
+    };
+    const run = await cli(h, runArgs(), { provider: new P({ read }) });
+    expect(run.code, run.err).toBe(0);
+    expect(ledger(h).map(booked)).toEqual([{ state: "sent", spend: null, cap_charge: 0.186 }, { state: "settled", spend: 0.05, cap_charge: 0.05 }]);
+    expect({ cap_charge: run.json().cap_charge, text: run.json().text }).toEqual({ cap_charge: 0.05, text: "ok" });
+    expect(await today(h)).toBe(0.05);
+  });
+});
+
+describe("bookRead: the one booking step", () => {
+  const trusted = (state: string | null, settled: unknown) => ({ fresh: true, identityOk: true, redacted: false, state, settled });
+  /** A ledger with one held row for request r1, as a run leaves it while its receipt is pending. */
+  function held(fields: Record<string, unknown> = {}) {
+    const h = tmpHome();
+    const row = { ts: "2026-11-11T00:00:00.000Z", day: utcDay(), request_id: "r1", seat: SEAT, did: "did:key:zseed", job: "j1", provider: "mock", network: "devnet", payer: "holder", model: "m", max_tokens: 8,
+      prompt_sha256: "ab".repeat(32), quote_raw: 0.066, quote_padded: 0.186, per_call_cap: 1, daily_cap: 1, job_budget: null, spent_before: 0, job_spent_before: null, state: "estimated", reason: null,
+      spend: null, cost_reported: null, cap_charge: 0.186, http: 200, mock: true, ...fields };
+    appendFileSync(ledgerPath(h), JSON.stringify(row) + "\n");
+    return h;
+  }
+  const rowOf = (r: ReturnType<typeof bookRead>) => (r.outcome === "no_row" ? null : r.row);
+
+  it("appends one row when the booking changes, and returns it as the latest row", () => {
+    const h = held();
+    const r = bookRead(h, "r1", trusted("settled", 0.05), { flag: null });
+    expect(r.outcome).toBe("appended");
+    expect(ledger(h).map(booked)).toEqual([{ state: "estimated", spend: null, cap_charge: 0.186 }, { state: "settled", spend: 0.05, cap_charge: 0.05 }]);
+    expect(rowOf(r)).toEqual(readLines(ledgerPath(h)).at(-1));
+    expect(rowOf(r)!.ts).not.toBe("2026-11-11T00:00:00.000Z");
+  });
+
+  it("appends nothing when no recorded field changes, and returns the row that stays", () => {
+    const h = held();
+    for (const read of [trusted("estimated", null), { ...trusted("settled", 0.05), fresh: false }, { ...trusted("settled", 0.05), redacted: true }, { ...trusted("settled", 0.05), identityOk: false }]) {
+      const r = bookRead(h, "r1", read, { flag: null });
+      expect(r.outcome).toBe("unchanged");
+      expect(rowOf(r)).toEqual(readLines(ledgerPath(h))[0]);
+    }
+    expect(ledger(h)).toHaveLength(1);
+  });
+
+  it("a read below the booked settlement: disagree, nothing appended, the booked row returned", () => {
+    const h = held({ state: "settled", spend: 0.07, cap_charge: 0.07 });
+    for (const read of [trusted("settled", 0.05), trusted("released", 0)]) {
+      const r = bookRead(h, "r1", read, { flag: null });
+      expect(r.outcome).toBe("disagree");
+      expect(booked(rowOf(r) as Row)).toEqual({ state: "settled", spend: 0.07, cap_charge: 0.07 });
+    }
+    expect(ledger(h)).toHaveLength(1);
+  });
+
+  it("a charge that is not a known amount and no proven settlement: disagree, the row stays as it is, never 0", () => {
+    const h = held({ cap_charge: null });
+    expect(bookRead(h, "r1", trusted("estimated", null), { flag: null }).outcome).toBe("disagree");
+    expect(ledger(h).map(booked)).toEqual([{ state: "estimated", spend: null, cap_charge: null }]);
+    // A proven settlement is a known charge, so it is booked.
+    expect(bookRead(h, "r1", trusted("settled", 0.05), { flag: null }).outcome).toBe("appended");
+    expect(booked(ledger(h).at(-1)!)).toEqual({ state: "settled", spend: 0.05, cap_charge: 0.05 });
+  });
+
+  it("no ledger row for the request: nothing appended", () => {
+    const h = held();
+    expect(bookRead(h, "other", trusted("settled", 0.05), { flag: null })).toEqual({ outcome: "no_row" });
+    expect(bookRead(tmpHome(), "r1", trusted("settled", 0.05), { flag: null })).toEqual({ outcome: "no_row" });
+    expect(ledger(h)).toHaveLength(1);
+  });
+
+  it("what only run knows is recorded on the row: its reported cost and the HTTP status of its read", () => {
+    const h = held({ state: "sent", http: null });
+    const r = bookRead(h, "r1", { ...trusted("settled", 0.05), fresh: false }, { flag: null, cost_reported: 0.3, http: 503 });
+    expect(r.outcome).toBe("appended");
+    const last = ledger(h).at(-1)!;
+    expect({ ...booked(last), cost_reported: last.cost_reported, http: last.http }).toEqual({ state: "sent", spend: null, cap_charge: 0.3, cost_reported: 0.3, http: 503 });
+  });
+
+  it("a refused read still records what only run knows, and the outcome stays disagree", () => {
+    const h = held({ state: "settled", spend: 0.07, cap_charge: 0.07, http: null });
+    const r = bookRead(h, "r1", trusted("settled", 0.05), { flag: null, cost_reported: 0.15, http: 200 });
+    expect(r.outcome).toBe("disagree");
+    expect(ledger(h)).toHaveLength(2);
+    const last = ledger(h).at(-1)!;
+    expect({ ...booked(last), cost_reported: last.cost_reported, http: last.http, reason: last.reason }).toEqual({ state: "settled", spend: 0.07, cap_charge: 0.15, cost_reported: 0.15, http: 200, reason: CHARGE_RAISED });
+    expect(rowOf(r)).toEqual(readLines(ledgerPath(h)).at(-1));
+  });
+
+  it("a refresh uses the cost the row records, and ignores one that is not a finite number", () => {
+    const withCost = held({ cost_reported: 0.15 });
+    bookRead(withCost, "r1", trusted("settled", 0.05), { flag: null });
+    expect({ ...booked(ledger(withCost).at(-1)!), reason: ledger(withCost).at(-1)!.reason }).toEqual({ state: "settled", spend: 0.05, cap_charge: 0.15, reason: CHARGE_RAISED });
+    const notANumber = held({ cost_reported: "0.15" });
+    bookRead(notANumber, "r1", trusted("settled", 0.05), { flag: null });
+    expect(booked(ledger(notANumber).at(-1)!)).toEqual({ state: "settled", spend: 0.05, cap_charge: 0.05 });
+  });
+
+  it("the receipt flag is the reason of an appended row, and a flag alone appends nothing", () => {
+    const h = held();
+    expect(bookRead(h, "r1", { ...trusted(null, null), fresh: false }, { flag: "key_expired" }).outcome).toBe("unchanged");
+    expect(ledger(h)).toHaveLength(1);
+    bookRead(h, "r1", trusted("reserved", null), { flag: "key_expired" });
+    expect({ state: ledger(h).at(-1)!.state, reason: ledger(h).at(-1)!.reason }).toEqual({ state: "reserved", reason: "key_expired" });
   });
 });

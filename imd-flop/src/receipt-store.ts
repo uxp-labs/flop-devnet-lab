@@ -1,19 +1,20 @@
 /**
  * Receipt files: where they live, how they are listed and written (one secret-scan fallback), and the
- * `receipt --refresh` flow that re-reads a receipt and books the result through settlement.ts.
- * Behavior is pinned by contract/vectors/settlement-refresh.json and failed-read.json.
+ * `receipt --refresh` flow that re-reads a receipt, stores it and books it through the booking step
+ * (booking.ts). Behavior is pinned by contract/vectors/settlement-refresh.json and failed-read.json.
  */
 import { existsSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { CliError, EXIT } from "./errors.js";
 import { readIdentity } from "./keys.js";
-import { appendLedger, latestAttempts, type LedgerEntry } from "./ledger.js";
+import { bookRead } from "./booking.js";
+import { latestAttempts, type LedgerEntry } from "./ledger.js";
 import { matchable } from "./match.js";
 import { receiptsDir } from "./paths.js";
 import type { Provider } from "./providers.js";
 import { classifyReceipt, type Classified } from "./receipts.js";
 import { redactFlagged } from "./secrets.js";
-import { bookingReason, decideBooking, DISAGREE, isFreshRead, receiptIdentity, reportedCost } from "./settlement.js";
+import { DISAGREE, isFreshRead, receiptIdentity } from "./settlement.js";
 import { readJson, writeJsonSafe } from "./store.js";
 
 export type SavedReceipt = Classified & { seat: string; mock_scenario?: string };
@@ -93,8 +94,9 @@ function refreshedBody(saved: SavedReceipt | null, ident: Record<string, unknown
 }
 
 /**
- * `receipt <id> --refresh`: read the receipt again, store it, and book what it proves against the latest
- * ledger row. `warn` receives the DISAGREE line when the ledger cannot be reconciled.
+ * `receipt <id> --refresh`: read the receipt again, store it, and book what it proves through the booking
+ * step, against the latest ledger row of the request. `warn` receives the DISAGREE line when the read is
+ * not booked: the booking step refused it, or the step could not run.
  */
 export async function refreshReceipt(
   h: string,
@@ -113,25 +115,20 @@ export async function refreshReceipt(
   const lacksIdentity = !stored || (ledgerRow !== undefined && (!present(stored.seat) || !present((stored as { did?: unknown }).did)));
   const ident = lacksIdentity ? identityFromLedger(h, ledgerRow!) : {};
   const written = writeReceipt(receiptPath(h, rid), refreshedBody(stored, ident, c, { fresh, rawId, identityOk }));
-  let saved = written.body as SavedReceipt;
-
-  const prev = latestAttempts(h).find((e) => e.request_id === rid);
-  if (!prev) return { saved, ledgerRow };
-  // The reported cost is the one the ledger row recorded.
-  const { booking, disagree } = decideBooking(prev, { fresh, identityOk, redacted: written.redacted, state: saved?.state ?? null, settled: saved?.settled }, reportedCost(prev.cost_reported));
-  const refused = () => {
+  const saved = written.body as SavedReceipt;
+  const refused = (row: LedgerEntry | undefined) => {
     warn(DISAGREE);
-    saved = { ...saved, status: DISAGREE } as SavedReceipt;
+    return { saved: { ...saved, status: DISAGREE } as SavedReceipt, ledgerRow: row };
   };
-  // Disagree: an unknown charge with no exact-identity settlement (never substitute 0), or a read below a booked settlement.
-  if (disagree) refused();
-  // A row is appended only when a booked field changes.
-  if (booking.state !== prev.state || booking.spend !== prev.spend || booking.cap_charge !== prev.cap_charge) {
-    try {
-      appendLedger(h, { ...prev, ts: new Date().toISOString(), ...booking, reason: bookingReason(booking, saved?.flag ?? null) });
-    } catch {
-      refused();
-    }
+
+  try {
+    const booked = bookRead(h, rid, { fresh, identityOk, redacted: written.redacted, state: saved.state ?? null, settled: saved.settled }, { flag: saved.flag ?? null });
+    if (booked.outcome === "no_row") return { saved, ledgerRow: undefined };
+    // Disagree: a read below a booked settlement, or an unknown charge with no proven settlement (never substitute 0).
+    return booked.outcome === "disagree" ? refused(booked.row) : { saved, ledgerRow: booked.row };
+  } catch {
+    // The booking step could not run: the ledger lock could not be taken, or the append failed. The read
+    // is stored and not booked, and the latest row keeps its reservation.
+    return refused(latestAttempts(h).find((e) => e.request_id === rid));
   }
-  return { saved, ledgerRow: latestAttempts(h).find((e) => e.request_id === rid) };
 }

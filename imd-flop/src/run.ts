@@ -13,13 +13,13 @@ import { DEFAULT_MODEL, network, SEAT_COLLECTION } from "./networks.js";
 import { checkBudget, noRoom, padQuote, requireCap, validateJob, validatePayer, validateRunMaxTokens, type BudgetState } from "./policy.js";
 import { appendLedger, jobSpent, LedgerLockError, spentToday, UnusableLedgerCharge, utcDay, withLedgerLock, type LedgerEntry } from "./ledger.js";
 import { classifyReceipt, type Classified } from "./receipts.js";
-import { bookingReason, decideBooking, isFreshRead, receiptIdentity, reportedCost } from "./settlement.js";
+import { bookRead } from "./booking.js";
+import { DISAGREE, isFreshRead, receiptIdentity, reportedCost } from "./settlement.js";
 import { receiptPath, writeReceipt } from "./receipt-store.js";
 import type { Provider } from "./providers.js";
 import { assertPaidNetwork, checkImdJob, PaidGateError, PreSendError, readVerifiedSeatOwner, type Fetch } from "./gateway.js";
 import { FlopHTTPError } from "@flop-labs/client";
 import { matchReceipt } from "./match.js";
-import { latestAttempts } from "./ledger.js";
 import type { MatchResult } from "./receipts.js";
 
 export { padQuote, TEMPLATE_PAD } from "./policy.js";
@@ -81,7 +81,14 @@ export async function checkLinkForRun(h: string, seat: string, requireWallet: bo
   return { ok: why.length === 0, why };
 }
 
-export async function runJob(h: string, provider: Provider, o: RunOpts, deps: { fetch?: Fetch; ethRpc?: string } = {}): Promise<RunResult> {
+/** What run needs from its caller. `warn` receives the DISAGREE line when run's own receipt read is not booked. */
+export interface RunDeps {
+  fetch?: Fetch;
+  ethRpc?: string;
+  warn: (s: string) => void;
+}
+
+export async function runJob(h: string, provider: Provider, o: RunOpts, deps: RunDeps): Promise<RunResult> {
   const cfg = loadConfig(h);
   const net = network(cfg.network);
   const seat = o.seat ?? cfg.seat;
@@ -279,14 +286,25 @@ export async function runJob(h: string, provider: Provider, o: RunOpts, deps: { 
     for (const k of Object.keys(r0)) if (k in cleaned) r0[k] = cleaned[k] ?? null;
   }
 
-  const costReported = reportedCost(res.usage?.cost_flop);
-  // Same rules as receipt --refresh, held in settlement.ts: a failed read (not HTTP 200 with a receipt object)
-  // or a receipt body that had to be redacted proves nothing and never releases the reservation.
-  const outcome = { fresh: isFreshRead(rr), identityOk, redacted: receiptRedacted, state: classified.state, settled: classified.settled };
-  const { booking } = decideBooking(sent, outcome, costReported);
-  appendLedger(h, { ...sent, ts: new Date().toISOString(), ...booking, reason: bookingReason(booking, classified.flag), cost_reported: costReported, http: rr.http });
+  // The same booking step as receipt --refresh (booking.ts), with the rules held in settlement.ts: a failed
+  // read (not HTTP 200 with a receipt object) or a receipt body that had to be redacted proves nothing and
+  // never releases the reservation. The read is booked against the request's latest ledger row, not against
+  // `sent`: another process may have refreshed this request and booked its own read while the call ran.
+  // If the lock cannot be taken or the append fails, this throws (exit 1). The `sent` row then stays the
+  // latest one and keeps the reservation, and the answer is in the response file written above.
+  const read = { fresh: isFreshRead(rr), identityOk, redacted: receiptRedacted, state: classified.state, settled: classified.settled };
+  const own = { flag: classified.flag, cost_reported: reportedCost(res.usage?.cost_flop), http: rr.http };
+  let booked = bookRead(h, requestId, read, own);
+  if (booked.outcome === "no_row") {
+    // The ledger no longer holds the row written before the call (the file was moved or removed while the
+    // call ran). Write it again and book against it, so the paid call stays on the books.
+    appendLedger(h, sent);
+    booked = bookRead(h, requestId, read, own);
+  }
+  if (booked.outcome === "no_row") throw new Error(`ledger has no row for ${requestId}; its receipt read was not booked`);
+  if (booked.outcome === "disagree") deps.warn(DISAGREE);
 
-  const match = await matchReceipt(h, receipt0, latestAttempts(h).find((e) => e.request_id === requestId) ?? null);
+  const match = await matchReceipt(h, receipt0, booked.row);
   const receipt = { ...receipt0, match };
-  return { request_id: requestId, job, provider: provider.name, payer, quote_padded: q.padded, cap_charge: booking.cap_charge, receipt, response_file: responseFile, text, ...(withheld !== undefined ? { withheld } : {}), link_bypassed: linkBypassed };
+  return { request_id: requestId, job, provider: provider.name, payer, quote_padded: q.padded, cap_charge: booked.row.cap_charge, receipt, response_file: responseFile, text, ...(withheld !== undefined ? { withheld } : {}), link_bypassed: linkBypassed };
 }
