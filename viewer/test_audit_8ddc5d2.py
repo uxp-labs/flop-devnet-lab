@@ -34,7 +34,10 @@ every row, whatever its payer. A payer that is neither holder nor requester is c
 and carries the spend flag 'payer unknown'. A requester row with no job_spent_before key shows its job budget
 left, worked out from spent_before, and its daily cap cannot be checked. A limit that applies and cannot be
 worked out shows a blank figure and '<limit> not checked', as a spend flag, or as one amber chip where the
-green chain final chip would be.
+green chain final chip would be. Item 2: imd-flop can book a settled row whose cap_charge is above its spend
+(the completion reported a higher cost). The viewer showed the settled spend only. A settled row whose cap
+charge is a known amount that is not its settled spend shows a 'cap charge' line, with the ledger reason
+beside it when there is one. Nothing else on the row changes.
 
 Each test asserts the fixed outcome, so it fails on 8ddc5d2 and passes after the fix. The review tests fail
 on 36b23fe, the commit the review read. Controls say so.
@@ -642,6 +645,75 @@ class Review1ALimitThatCannotBeCheckedIsNeverShownAsFine(unittest.TestCase):
                 self.assertFalse(rows[0]["bad"])
                 self.assertNotIn(DAILY_NOT_CHECKED, visible(page))
                 self.assertNotIn(JOB_NOT_CHECKED, visible(page))
+
+
+# The reviewer's repro: the completion reported 0.3, the receipt settled 0.05. imd-flop books the higher charge.
+RAISED = dict(LED, state="settled", spend=0.05, cap_charge=0.3, cost_reported=0.3, reason="cap charge raised to reported cost")
+
+
+def cap_charge_line(value):
+    return f'<div><span class="k">cap charge</span> {value}</div>'
+
+
+class Review2TheCapChargeIsShownWhenItIsNotTheSettledAmount(unittest.TestCase):
+    """Review of the audit 8ddc5d2 fixes, item 2."""
+
+    def test_review_cap_charge_above_the_settled_spend_is_shown_with_the_ledger_reason(self):
+        rows, page = lane([RAISED], {"req-1": dict(SETTLED, settled=0.05)})
+        self.assertIn(cap_charge_line(mono(0.3) + ' <span class="note">(cap charge raised to reported cost)</span>'), page)
+        self.assertIn("cap charge 0.3 (cap charge raised to reported cost)", visible(page))
+        self.assertEqual([k for k, _ in rows[0]["flop"]], ["match", "observed spend", "cap charge"])
+
+    def test_review_nothing_else_changes_on_a_row_with_a_raised_cap_charge(self):
+        """Passes before and after: still green and 'matches', and the daily cap figure uses the cap charge (0.5 - 0 - 0.3)."""
+        rows, page = lane([RAISED], {"req-1": dict(SETTLED, settled=0.05)})
+        self.assertEqual(rows[0]["chips"], SENT + [["green", "chain final"]])
+        self.assertIn(["match", "matches"], rows[0]["flop"])
+        self.assertIn(["observed spend", 0.05], rows[0]["flop"])
+        self.assertEqual(rows[0]["daily_left"], 0.2)
+        self.assertEqual(rows[0]["spend_flags"], [])
+        self.assertFalse(rows[0]["bad"])
+        self.assertNotIn("reservation", visible(page))
+
+    def test_review_cap_charge_line_without_a_ledger_reason_shows_the_amount_alone(self):
+        for name, reason in (("null", None), ("empty", ""), ("not a string", 7)):
+            with self.subTest(reason=name):
+                rows, page = lane([dict(RAISED, reason=reason)], {"req-1": dict(SETTLED, settled=0.05)})
+                self.assertIn(["cap charge", 0.3], rows[0]["flop"])
+                self.assertIn(cap_charge_line(mono(0.3)), page)
+
+    def test_review_cap_charge_line_escapes_the_ledger_reason(self):
+        rows, page = lane([dict(RAISED, reason="<b>raised</b>")], {"req-1": dict(SETTLED, settled=0.05)})
+        self.assertIn(cap_charge_line(mono(0.3) + ' <span class="note">(&lt;b&gt;raised&lt;/b&gt;)</span>'), page)
+
+    def test_review_cap_charge_line_is_shown_on_a_settlement_over_a_limit(self):
+        """0.5 - 0.3 - 0.3 is below 0: amber 'over the daily cap'. The held reservation shown is the padded quote."""
+        rows, page = lane([dict(RAISED, spent_before=0.3)], {"req-1": dict(SETTLED, settled=0.05)})
+        self.assertEqual(rows[0]["chips"], [["amber", OVER_DAILY]])
+        self.assertEqual([k for k, _ in rows[0]["flop"]], ["reservation", "settled", "cap charge"])
+        self.assertIn(["reservation", 0.198], rows[0]["flop"])
+        self.assertIn(["settled", 0.05], rows[0]["flop"])
+        self.assertIn("cap charge 0.3 (cap charge raised to reported cost)", visible(page))
+
+    def test_review_cap_charge_below_the_settled_spend_is_shown_too(self):
+        """Any known cap charge that is not the settled spend. imd-flop never books one below it."""
+        rows, page = lane([dict(RAISED, cap_charge=0.01, reason=None)], {"req-1": dict(SETTLED, settled=0.05)})
+        self.assertIn(["cap charge", 0.01], rows[0]["flop"])
+
+    def test_review_control_no_cap_charge_line_when_it_is_the_settled_amount_or_unknown(self):
+        """Passes before and after."""
+        for name, led in (("equal", dict(RAISED, cap_charge=0.05)), ("unknown", dict(RAISED, cap_charge=None)),
+                          ("negative", dict(RAISED, cap_charge=-0.3))):
+            with self.subTest(cap_charge=name):
+                rows, page = lane([led], {"req-1": dict(SETTLED, settled=0.05)})
+                self.assertNotIn("cap charge", visible(page))
+                self.assertIn("matches", visible(page))
+
+    def test_review_control_pending_row_shows_its_reservation_and_no_cap_charge_line(self):
+        """Passes before and after: a pending row's cap charge is its held reservation, which has its own line."""
+        rows, page = lane([dict(LED)], {"req-1": dict(REC, http=200)})
+        self.assertIn(["reservation", 0.198], rows[0]["flop"])
+        self.assertNotIn("cap charge", visible(page))
 
 
 if __name__ == "__main__":
