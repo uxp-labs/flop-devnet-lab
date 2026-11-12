@@ -595,7 +595,7 @@
     "id": "fill-absent-without-null",
     "file": "test/helpers/rerun-fill.ts",
     "find": "      if (answer === null) out.reads_after[f] = \"absent\";",
-    "replace": "      out.reads_after[f] = \"absent\";",
+    "replace": "      if (answer === null || answer !== null) out.reads_after[f] = \"absent\";",
     "test": "test/rerun-results.test.ts",
     "why": "absent only when the batch answer lists the key with null (M1)"
   },

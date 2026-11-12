@@ -147,6 +147,19 @@ describe("the fill refuses, never guesses: a step's fill fields stay null when i
     expect(fill(withValue(0, new Uint8Array([0x04])))).toEqual({ ...nothing, last_runtime_upgrade_spec: 1014020 });
   });
 
+  it("when the node holds a value for FailedAcks, which the decoder does not state: not absent, the value unknown and its bytes kept", () => {
+    const a9 = blockOf("A9");
+    const s9 = stepOf("A9");
+    if (!a9.answer.read) throw new Error("A9 was read");
+    const j = a9.reads.findIndex((r) => r.entry === "FailedAcks");
+    const values = new Map(a9.answer.values);
+    values.set(a9.keys[j] as string, new Uint8Array([1, 0, 0, 0]));
+    const f = fillStep({ ...a9, answer: { read: true, values } }, R.inputs, R.metadata, s9.extrinsic_index, Object.keys(s9.reads_after) as ReadField[], ERRORS);
+    expect(f.reads_after.failed_acks_of_named).toBeNull();
+    expect(f.reads_not_decoded).toEqual({ failed_acks_of_named: { entry: "ComputeChannel.FailedAcks", bytes: "0x01000000", why: "the reviewed shape does not state this entry" } });
+    expect(f.reads_after.session_nonce).toBe(s9.reads_after.session_nonce);
+  });
+
   it("when a read does not decode, that read alone stays null", () => {
     const j = b.reads.findIndex((r) => r.entry === "CircuitBreakers");
     const f = fill(withValue(j, new Uint8Array([0x01])));
