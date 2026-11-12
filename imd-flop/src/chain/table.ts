@@ -66,18 +66,17 @@ export interface RuntimeId {
 
 const TABLE: readonly Runtime[] = RUNTIMES;
 
-/** The reviewed runtime with exactly these four names, or a RUNTIME_UNKNOWN refusal. */
+/**
+ * The table's runtime with exactly these four names, or a RUNTIME_UNKNOWN refusal. Each name is read once.
+ * The entry returned is the frozen one of runtimes.ts, never an object of the caller's.
+ */
 export function runtimeFor(id: RuntimeId): Runtime {
-  const found = TABLE.find(
-    (r) => r.specName === id?.specName && r.specVersion === id?.specVersion && r.transactionVersion === id?.transactionVersion && r.genesisHash === id?.genesisHash,
-  );
-  if (!found) refuse("RUNTIME_UNKNOWN", `no reviewed runtime is ${JSON.stringify(id)}`);
-  return found;
-}
-
-/** The table's entry for a call, or a CALL_NOT_ALLOWED refusal. */
-export function callEntry(rt: Runtime, pallet: string, name: string): CallEntry {
-  const found = rt.calls.find((c) => c.pallet === pallet && c.name === name);
-  if (!found) refuse("CALL_NOT_ALLOWED", `${pallet}.${name} is not in the table of ${rt.specName} ${rt.specVersion}`);
+  const ok = id !== null && typeof id === "object";
+  const specName: unknown = ok ? id.specName : undefined;
+  const specVersion: unknown = ok ? id.specVersion : undefined;
+  const transactionVersion: unknown = ok ? id.transactionVersion : undefined;
+  const genesisHash: unknown = ok ? id.genesisHash : undefined;
+  const found = TABLE.find((r) => r.specName === specName && r.specVersion === specVersion && r.transactionVersion === transactionVersion && r.genesisHash === genesisHash);
+  if (!found) refuse("RUNTIME_UNKNOWN", `no reviewed runtime is ${JSON.stringify({ specName, specVersion, transactionVersion, genesisHash }, (_k, v) => (typeof v === "bigint" ? `${v}n` : v))}`);
   return found;
 }

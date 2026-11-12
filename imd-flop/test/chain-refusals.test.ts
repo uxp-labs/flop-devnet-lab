@@ -9,13 +9,12 @@ import { mkdtempSync, readdirSync, readFileSync, statSync, writeFileSync } from 
 import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
 import { ed25519 } from "@noble/curves/ed25519.js";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { INNER_NAMES, type InnerCall } from "../src/chain/calls.js";
 import { ChainEncodeError } from "../src/chain/errors.js";
 import { encodeSessionCall, signSessionCall, type ExtrinsicInput } from "../src/chain/extrinsic.js";
 import { readCall, readExtrinsic } from "../src/chain/reader.js";
 import { compact, concat } from "../src/chain/scale.js";
-import { checkRuntime } from "../src/chain/shape.js";
 import type { Runtime } from "../src/chain/table.js";
 import { EXIT } from "../src/errors.js";
 import { filled, OWNER, PKG, RT, RUNTIME_ID, sampleInner, testDevice, U128_MAX, U32_MAX, U64_MAX, unhex } from "./lib/chain-fixtures.js";
@@ -277,58 +276,90 @@ describe("the strict reader refuses bytes it does not know", () => {
 });
 
 describe("a table entry of a shape the encoder does not write is refused", () => {
+  // The shape check has no export: it is reached only through the public functions, with the table of
+  // runtimes.ts. So each case replaces that module with one forged entry, in a fresh module graph.
   const copy = () => structuredClone(RT) as unknown as { -readonly [K in keyof Runtime]: any };
-  const refusedShape = (rt: unknown) => expect(codeOf(() => checkRuntime(rt as Runtime))).toBe("RUNTIME_UNKNOWN");
+  async function refusedShape(rt: unknown) {
+    vi.resetModules();
+    vi.doMock("../src/chain/runtimes.js", () => ({ RUNTIMES: [rt] }));
+    try {
+      const x = await import("../src/chain/extrinsic.js");
+      const r = await import("../src/chain/reader.js");
+      const e = await import("../src/chain/errors.js");
+      const freshCode = (f: () => unknown) => {
+        try {
+          f();
+        } catch (err) {
+          return err instanceof e.ChainEncodeError ? err.refusal : `not a ChainEncodeError: ${String(err)}`;
+        }
+        return null;
+      };
+      const call = encodeSessionCall({ runtime: RUNTIME_ID, owner: OWNER, inner: S.timeout, sessionNonce: 0n });
+      expect(freshCode(() => x.encodeSessionCall({ runtime: RUNTIME_ID, owner: OWNER, inner: S.timeout, sessionNonce: 0n }))).toBe("RUNTIME_UNKNOWN");
+      expect(freshCode(() => r.readCall(RUNTIME_ID, call))).toBe("RUNTIME_UNKNOWN");
+    } finally {
+      vi.doUnmock("../src/chain/runtimes.js");
+      vi.resetModules();
+    }
+  }
 
-  it("the committed entry is accepted (control)", () => {
-    expect(checkRuntime(RT).inner.map((e) => e.name)).toEqual([...INNER_NAMES]);
+  it("the committed entry is accepted, also through the mock (control)", async () => {
+    vi.resetModules();
+    vi.doMock("../src/chain/runtimes.js", () => ({ RUNTIMES: [copy()] }));
+    try {
+      const x = await import("../src/chain/extrinsic.js");
+      expect(x.encodeSessionCall({ runtime: RUNTIME_ID, owner: OWNER, inner: S.timeout, sessionNonce: 0n })).toEqual(encodeSessionCall({ runtime: RUNTIME_ID, owner: OWNER, inner: S.timeout, sessionNonce: 0n }));
+    } finally {
+      vi.doUnmock("../src/chain/runtimes.js");
+      vi.resetModules();
+    }
   });
 
-  it("an extrinsic version other than 4", () => {
+  it("an extrinsic version other than 4", async () => {
     const rt = copy();
     rt.extrinsicVersion = 5;
-    refusedShape(rt);
+    await refusedShape(rt);
   });
 
-  it("an unknown, a doubled or a missing signed extension, or one whose types changed", () => {
+  it("an unknown, a doubled or a missing signed extension, or one whose types changed", async () => {
     let rt = copy();
     rt.signedExtensions.push({ identifier: "CheckSomethingNew", extra: { kind: "unit" }, additionalSigned: { kind: "unit" } });
-    refusedShape(rt);
+    await refusedShape(rt);
     rt = copy();
     rt.signedExtensions.push(rt.signedExtensions[0]);
-    refusedShape(rt);
+    await refusedShape(rt);
     for (const id of ["CheckSpecVersion", "CheckTxVersion", "CheckGenesis", "CheckMortality", "CheckNonce", "ChargeTransactionPayment", "CheckMetadataHash"]) {
       rt = copy();
       rt.signedExtensions = rt.signedExtensions.filter((e: { identifier: string }) => e.identifier !== id);
-      refusedShape(rt);
+      await refusedShape(rt);
     }
     rt = copy();
     rt.signedExtensions.find((e: { identifier: string }) => e.identifier === "CheckNonce").extra = { kind: "compact", of: "u64" };
-    refusedShape(rt);
+    await refusedShape(rt);
     rt = copy();
     rt.signedExtensions.find((e: { identifier: string }) => e.identifier === "CheckMetadataHash").additionalSigned = { kind: "bytes32" };
-    refusedShape(rt);
+    await refusedShape(rt);
   });
 
-  it("an outer call with another field, an inner call missing, a spend field not an amount, two calls on one index", () => {
+  it("an outer call with another field, an inner call missing, a spend field not an amount, two calls on one index", async () => {
     let rt = copy();
     rt.calls[0].fields.push({ name: "memo", type: { kind: "u32" } });
-    refusedShape(rt);
+    await refusedShape(rt);
     rt = copy();
     rt.calls[0].fields[2].type = { kind: "u64" };
-    refusedShape(rt);
+    await refusedShape(rt);
     rt = copy();
     rt.calls = rt.calls.filter((c: { name: string }) => c.name !== "top_up_escrow");
-    refusedShape(rt);
+    await refusedShape(rt);
     rt = copy();
     rt.calls.find((c: { name: string }) => c.name === "force_open").fields.find((f: { name: string }) => f.name === "escrow").type = { kind: "u64" };
-    refusedShape(rt);
+    await refusedShape(rt);
     rt = copy();
     rt.calls.find((c: { name: string }) => c.name === "timeout").callIndex = rt.calls.find((c: { name: string }) => c.name === "expire_force_open").callIndex;
-    refusedShape(rt);
+    await refusedShape(rt);
     rt = copy();
     rt.calls.find((c: { name: string }) => c.name === "timeout").fields.push({ name: "call", type: { kind: "call" } });
-    refusedShape(rt);
+    await refusedShape(rt);
   });
 });
 

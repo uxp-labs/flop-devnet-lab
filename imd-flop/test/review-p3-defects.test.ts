@@ -2,7 +2,14 @@
  * Review of P3 (the chain encoder), reviewer's own tests. Each test in this file states a line of the
  * promise (P1 to P15 of the review brief) and fails on 165432c when the encoder breaks it.
  * Test keys are made in memory by testDevice() and never written.
+ *
+ * The lead ruled in brief 2026-11-12-fix-p3-chain-extrinsic (H11) that the two tests of findings 7 and 8
+ * (P2/P8 describeCall and P2/P9 readCall) are rewritten by the builder to hold the new guarantee of H5 and
+ * H6: no exported function takes a caller's data for words, and none takes a caller's Runtime. Every other
+ * test body here is the reviewer's, unchanged.
  */
+import { readdirSync, readFileSync } from "node:fs";
+import { join } from "node:path";
 import { ed25519 } from "@noble/curves/ed25519.js";
 import { describe, expect, it, vi } from "vitest";
 import type { InnerCall } from "../src/chain/calls.js";
@@ -205,14 +212,22 @@ describe("P2, P8, P9: no exported function describes or reads as allowed what th
     expect(code).not.toBeNull();
   });
 
-  it("P2/P9 readCall: a Runtime object that is not in the table is refused, so Balances bytes are never read as ComputeChannel", () => {
+  it("P2/P9 readCall (rewritten for H6): no exported function takes a Runtime; a forged one with the four names is read by the frozen table", () => {
     // A copy of the reviewed runtime in which "ComputeChannel" sits at Balances' index 4.
     const fake = JSON.parse(JSON.stringify(RT)) as Runtime & { calls: { pallet: string; palletIndex: number }[] };
     for (const c of fake.calls) if (c.pallet === "ComputeChannel") c.palletIndex = 4;
     const real = encodeSessionCall({ runtime: RUNTIME_ID, owner: OWNER, inner: S.timeout, sessionNonce: 1n });
     const forged = Uint8Array.from(real);
     forged[2 + 32] = 4; // the inner pallet byte: Balances
-    expect(codeOf(() => readCall(fake, forged))).toBe("RUNTIME_UNKNOWN");
+    // The forged object is taken as names only: the frozen table's entry is used, and pallet 4 is refused.
+    expect(codeOf(() => readCall(fake, forged))).toBe("CALL_NOT_ALLOWED");
+    expect(codeOf(() => readCall({ ...fake, specVersion: fake.specVersion + 1 }, forged))).toBe("RUNTIME_UNKNOWN");
+    // And no exported function of src/chain has a parameter typed Runtime or Reviewed.
+    const dir = join(import.meta.dirname, "..", "src", "chain");
+    const takes = readdirSync(dir)
+      .filter((f) => f.endsWith(".ts"))
+      .flatMap((f) => [...readFileSync(join(dir, f), "utf8").matchAll(/export function (\w+)(?:<[^>]*>)?\(([^)]*)\)/g)].filter((m) => /:\s*(?:Runtime|Reviewed)\b/.test(m[2])).map((m) => `${f} ${m[1]}`));
+    expect(takes).toEqual([]);
   });
 });
 

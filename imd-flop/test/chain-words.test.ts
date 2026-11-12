@@ -10,7 +10,7 @@ import { amountText, describeExtrinsic, FLOP_DECIMALS } from "../src/chain/descr
 import { ChainEncodeError } from "../src/chain/errors.js";
 import { PAYLOAD_HASH_ABOVE, signSessionCall, toSign } from "../src/chain/extrinsic.js";
 import { readExtrinsic } from "../src/chain/reader.js";
-import { callEntry, type Field } from "../src/chain/table.js";
+import type { Field } from "../src/chain/table.js";
 import { boundaryInner, hex, OWNER, readJson, RT, RUNTIME_ID, sampleInner, testDevice, U128_MAX, U32_MAX, U64_MAX, unhex } from "./lib/chain-fixtures.js";
 
 const BIRTH = { number: 3552594, hash: unhex("0xa85d1dcb67ae73c8c910634c75c043e62f83cf06dd4a90bbb5abe19c8674d08e") };
@@ -102,7 +102,7 @@ describe("E9: the description names every value the bytes hold", () => {
         `session nonce ${c.sessionNonce};`,
         `declared spend ${amountText(out.fields.spend)}`,
         `inner call ComputeChannel.${c.inner.call}:`,
-        ...expectedFieldWords(callEntry(RT, "ComputeChannel", c.inner.call).fields, c.inner as unknown as Record<string, unknown>),
+        ...expectedFieldWords(RT.calls.find((e) => e.pallet === "ComputeChannel" && e.name === c.inner.call)!.fields, c.inner as unknown as Record<string, unknown>),
       ];
       for (const w of want) expect(words).toContain(w);
     });

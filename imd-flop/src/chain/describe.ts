@@ -7,7 +7,8 @@ import { INNER_PALLET, OUTER } from "./calls.js";
 import type { FieldValue } from "./fields.js";
 import type { ExtrinsicData, SessionCallData } from "./reader.js";
 import { toHex } from "./scale.js";
-import { callEntry, type Field, type Runtime } from "./table.js";
+import { reviewedRuntime } from "./shape.js";
+import type { Field, RuntimeId } from "./table.js";
 
 /** Base units per FLOP are 10^18. contract/rules.json FLOP_DECIMALS (test/chain-describe.test.ts holds it). */
 export const FLOP_DECIMALS = 18;
@@ -32,8 +33,8 @@ function valueText(field: Field, value: FieldValue): string {
 }
 
 /** The words of a session call: the outer call, the declared spend, the session nonce and the inner call. */
-export function describeCall(rt: Runtime, data: SessionCallData): string {
-  const entry = callEntry(rt, INNER_PALLET, data.inner.call);
+export function describeCall(runtime: RuntimeId, data: SessionCallData): string {
+  const entry = reviewedRuntime(runtime).inner[data.inner.call];
   const inner = data.inner as unknown as Record<string, FieldValue>;
   const fields = entry.fields.map((f) => `${f.name} ${valueText(f, inner[f.name])}`).join(", ");
   return [
@@ -45,7 +46,8 @@ export function describeCall(rt: Runtime, data: SessionCallData): string {
 }
 
 /** The words of a signed session call. The birth block's number and hash are the caller's: the era bytes hold its phase, the signed payload its hash. */
-export function describeExtrinsic(rt: Runtime, x: ExtrinsicData, birth: { number: number; hash: Uint8Array }, lastValid: number): string {
+export function describeExtrinsic(runtime: RuntimeId, x: ExtrinsicData, birth: { number: number; hash: Uint8Array }, lastValid: number): string {
+  const rt = reviewedRuntime(runtime).rt;
   return [
     `signed by device ${toHex(x.signer)} (MultiAddress ${rt.address.variant}), ${rt.signature.variant} signature ${toHex(x.signature)}`,
     `account nonce ${x.accountNonce}, tip ${amountText(x.tip)}, metadata hash check ${x.metadataHashMode}`,

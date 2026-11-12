@@ -8,10 +8,10 @@
 import { refuse } from "./errors.js";
 import { INNER_PALLET, spendOf, type Bytes32, type InnerCall, type InnerName } from "./calls.js";
 import { readEra } from "./era.js";
-import { readValue } from "./fields.js";
+import { bytesOf, readValue } from "./fields.js";
 import { ByteReader } from "./scale.js";
-import { checkRuntime } from "./shape.js";
-import type { CallEntry, Runtime } from "./table.js";
+import { reviewedRuntime, type Reviewed } from "./shape.js";
+import type { CallEntry, RuntimeId } from "./table.js";
 
 /** What a session call holds. */
 export interface SessionCallData {
@@ -42,17 +42,16 @@ function readFields(r: ByteReader, entry: CallEntry, readCallField: () => unknow
   return out;
 }
 
-function readInner(r: ByteReader, inner: readonly CallEntry[]): InnerCall {
+function readInner(r: ByteReader, inner: Reviewed["inner"]): InnerCall {
   const pallet = r.byte();
   const index = r.byte();
-  const entry = inner.find((e) => e.palletIndex === pallet && e.callIndex === index);
+  const entry = Object.values(inner).find((e) => e.palletIndex === pallet && e.callIndex === index);
   if (!entry || entry.pallet !== INNER_PALLET) refuse("CALL_NOT_ALLOWED", `inner call ${pallet}/${index} is not one of the five`);
   const fields = readFields(r, entry, () => refuse("CALL_NOT_ALLOWED", "an inner call carries no call"));
   return { call: entry.name as InnerName, ...fields } as unknown as InnerCall;
 }
 
-function readSessionCall(r: ByteReader, rt: Runtime): SessionCallData {
-  const { outer, inner } = checkRuntime(rt);
+function readSessionCall(r: ByteReader, { outer, inner }: Reviewed): SessionCallData {
   const pallet = r.byte();
   const index = r.byte();
   if (pallet !== outer.palletIndex || index !== outer.callIndex) refuse("CALL_NOT_ALLOWED", `call ${pallet}/${index} is not ${outer.pallet}.${outer.name}`);
@@ -64,16 +63,19 @@ function readSessionCall(r: ByteReader, rt: Runtime): SessionCallData {
 }
 
 /** Reads call bytes: execute_via_session around one of the five inner calls, and nothing left over. */
-export function readCall(rt: Runtime, bytes: Uint8Array): SessionCallData {
-  const r = new ByteReader(bytes);
-  const data = readSessionCall(r, rt);
+export function readCall(runtime: RuntimeId, bytes: Uint8Array): SessionCallData {
+  const reviewed = reviewedRuntime(runtime);
+  const r = new ByteReader(bytesOf(bytes, null, "the call bytes"));
+  const data = readSessionCall(r, reviewed);
   r.done("the call");
   return data;
 }
 
 /** Reads a signed extrinsic of this runtime, its extensions in the table's order. */
-export function readExtrinsic(rt: Runtime, bytes: Uint8Array): ExtrinsicData {
-  checkRuntime(rt);
+export function readExtrinsic(runtime: RuntimeId, input: Uint8Array): ExtrinsicData {
+  const reviewed = reviewedRuntime(runtime);
+  const rt = reviewed.rt;
+  const bytes = bytesOf(input, null, "the extrinsic bytes");
   const r = new ByteReader(bytes);
   const length = r.compact();
   if (length !== BigInt(bytes.length - r.position)) refuse("BAD_BYTES", `the length prefix says ${length}, the body has ${bytes.length - r.position} bytes`);
@@ -103,7 +105,7 @@ export function readExtrinsic(rt: Runtime, bytes: Uint8Array): ExtrinsicData {
   }
   if (accountNonce === null || era === null || tip === null || metadataHashMode === null) refuse("RUNTIME_UNKNOWN", "the table lacks an extension the reader needs");
   const start = r.position;
-  const call = readSessionCall(r, rt);
+  const call = readSessionCall(r, reviewed);
   const callBytes = bytes.slice(start, r.position);
   r.done("the extrinsic");
   return { signer, signature, accountNonce, era, tip, metadataHashMode, call, callBytes };

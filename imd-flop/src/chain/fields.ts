@@ -27,15 +27,15 @@ const LENGTH = getter("byteLength");
 
 /**
  * A fresh copy of the bytes of `value`, which must be a Uint8Array (a Node buffer is one) of exactly `n` bytes
- * by its own internal state (rule H3). Anything else is refused: another width, an array, a string.
+ * (any length when `n` is null) by its own internal state (rule H3). Anything else is refused: another width, an array, a string.
  */
-export function bytesOf(value: unknown, n: number, what: string): Uint8Array {
+export function bytesOf(value: unknown, n: number | null, what: string): Uint8Array {
   const kind = ArrayBuffer.isView(value) ? KIND.call(value) : undefined;
-  if (kind !== "Uint8Array") refuse("BAD_INPUT", `${what} must be a Uint8Array of ${n} bytes`);
+  if (kind !== "Uint8Array") refuse("BAD_INPUT", `${what} must be a Uint8Array${n === null ? "" : ` of ${n} bytes`}`);
   const length = LENGTH.call(value) as number;
-  if (length !== n) refuse("WRONG_LENGTH", `${what} has ${length} bytes, not ${n}`);
+  if (n !== null && length !== n) refuse("WRONG_LENGTH", `${what} has ${length} bytes, not ${n}`);
   const view = new Uint8Array(BUFFER.call(value) as ArrayBuffer, OFFSET.call(value) as number, length);
-  const copy = new Uint8Array(n);
+  const copy = new Uint8Array(length);
   copy.set(view);
   return copy;
 }

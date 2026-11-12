@@ -20,8 +20,8 @@ import { lastValidBlock, mortalEra } from "./era.js";
 import { bytesOf, exactKeys, writeValue } from "./fields.js";
 import { readExtrinsic, type SessionCallData } from "./reader.js";
 import { compact, concat, toHex, uintLE } from "./scale.js";
-import { checkRuntime } from "./shape.js";
-import { callEntry, runtimeFor, type Runtime, type RuntimeId } from "./table.js";
+import { reviewedRuntime, type Reviewed } from "./shape.js";
+import type { Runtime, RuntimeId } from "./table.js";
 
 /** A payload longer than this is hashed with blake2b 256 before it is signed. */
 export const PAYLOAD_HASH_ABOVE = 256;
@@ -69,17 +69,17 @@ export interface SignedSessionCall {
   readonly description: string;
 }
 
-function innerBytes(rt: Runtime, inner: InnerCall): Uint8Array {
+function innerBytes({ inner: entries }: Reviewed, inner: InnerCall): Uint8Array {
   const name: unknown = (inner as { call?: unknown } | null)?.call;
   if (!isInnerName(name)) refuse("CALL_NOT_ALLOWED", `${String(name)} is not one of ${INNER_NAMES.join(", ")}`);
-  const entry = callEntry(rt, INNER_PALLET, name);
+  const entry = entries[name];
   const obj = exactKeys(inner, entry.fields, name, ["call"]);
   return concat(Uint8Array.of(entry.palletIndex, entry.callIndex), ...entry.fields.map((f) => writeValue(f.type, obj[f.name], `${name}.${f.name}`)));
 }
 
-function sessionCallBytes(rt: Runtime, input: SessionCallInput): Uint8Array {
-  const { outer } = checkRuntime(rt);
-  const inner = innerBytes(rt, input.inner);
+function sessionCallBytes(reviewed: Reviewed, input: SessionCallInput): Uint8Array {
+  const { outer } = reviewed;
+  const inner = innerBytes(reviewed, input.inner);
   const values: Record<string, unknown> = { owner: input.owner, spend_amount: spendOf(input.inner), nonce: input.sessionNonce };
   return concat(
     Uint8Array.of(outer.palletIndex, outer.callIndex),
@@ -101,7 +101,7 @@ function onlyKeys(input: unknown, keys: readonly string[], what: string): void {
 /** The call bytes of execute_via_session around one inner call. Nothing is signed. */
 export function encodeSessionCall(input: SessionCallInput): Uint8Array {
   onlyKeys(input, CALL_KEYS, "the session call input");
-  return sessionCallBytes(runtimeFor(input.runtime), input);
+  return sessionCallBytes(reviewedRuntime(input.runtime), input);
 }
 
 /** What is signed: the payload itself up to 256 bytes, its blake2b 256 hash above. */
@@ -159,8 +159,9 @@ function hexBytes(h: string): Uint8Array {
 export function signSessionCall(input: ExtrinsicInput): SignedSessionCall {
   onlyKeys(input, EXTRINSIC_KEYS, "the extrinsic input");
   onlyKeys(input.birth, ["number", "hash"], "the birth block");
-  const rt = runtimeFor(input.runtime);
-  const call = sessionCallBytes(rt, input);
+  const reviewed = reviewedRuntime(input.runtime);
+  const rt = reviewed.rt;
+  const call = sessionCallBytes(reviewed, input);
   const publicKey = bytes32(input.signer?.publicKey, "the device public key");
   const birthHash = bytes32(input.birth?.hash, "the birth block hash");
   const birth = { number: input.birth.number, hash: birthHash };
