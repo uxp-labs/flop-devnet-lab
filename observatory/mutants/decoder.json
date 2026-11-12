@@ -690,7 +690,7 @@
   {
     "id": "r18-closure-root-dropped",
     "file": "src/scale/shape.ts",
-    "find": "  const roots = [events.value, upgrade.value, channels.value, ...(channels.key === null ? [] : [channels.key]), version.type];",
+    "find": "  const roots = [events.value, upgrade.value, channels.value, ...keyOf(channels), version.type, ...[sessions, nonces, breakers].flatMap((e) => [e.value, ...keyOf(e)])];",
     "replace": "  const roots = [events.value, upgrade.value, channels.value];",
     "test": "test/shape.test.ts",
     "why": "the closure starts from every root the observatory relies on"

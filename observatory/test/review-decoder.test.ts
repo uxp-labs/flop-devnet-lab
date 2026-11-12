@@ -76,7 +76,8 @@ const H256 = idOf((t) => t.path.at(-1) === "H256");
 
 /**
  * A small metadata with what deriveShape and decodeEvents look for: System (a Version constant,
- * Events, LastRuntimeUpgrade) and ComputeChannel (its event enum, Channels). The event enum has one
+ * Events, LastRuntimeUpgrade), ComputeChannel (its event enum, Channels) and FlopSessionKeys
+ * (Sessions, SessionNonces, CircuitBreakers). The event enum has one
  * event E, whose fields are given; extra types follow from id 12.
  */
 function shapeMetadata(o: { eventFields?: { name: string; type: number }[]; record?: { name: string; type: number }[]; extra?: TypeSpec[]; constants?: { name: string; type: number; value: Uint8Array }[] }): Uint8Array {
@@ -103,6 +104,11 @@ function shapeMetadata(o: { eventFields?: { name: string; type: number }[]; reco
       constants: o.constants ?? [{ name: "Version", type: 3, value: cat(str("tzkv-runtime"), u32(1014014)) }],
     },
     { name: "ComputeChannel", index: 1, event: 8, entries: [{ name: "Channels", map: { hashers: ["Blake2_128Concat"], key: 0, value: 10 } }] },
+    {
+      name: "FlopSessionKeys",
+      index: 2,
+      entries: ["Sessions", "SessionNonces", "CircuitBreakers"].map((name) => ({ name, map: { hashers: ["Blake2_128Concat"], key: 0, value: 2 } })),
+    },
   ];
   return metadata(types, pallets);
 }
@@ -130,7 +136,7 @@ describe("crashes that are not a ScaleError", () => {
     deriveShape(MD, n);
     const steps = MAX_SHAPE_STEPS - n.steps.left;
     const chars = MAX_SHAPE_CHARS - n.chars.left;
-    expect({ steps, chars }).toEqual({ steps: 9672, chars: 18167 });
+    expect({ steps, chars }).toEqual({ steps: 9733, chars: 18414 });
     // Past either budget, a ScaleError.
     const tight = namer(MD);
     tight.steps.left = 100;
@@ -501,6 +507,7 @@ describe("the shape pin", () => {
       if (x === undefined) throw new Error("no entry");
       const map = x.type.tag === "map";
       return {
+        default: x.fallback,
         hashers: map ? (x.type.value as { hashers: { tag: string }[] }).hashers.map((h) => HASH[h.tag]) : [],
         key: map ? name((x.type.value as { key: number }).key) : null,
         modifier: x.modifier === 0 ? "Optional" : "Default",
@@ -549,6 +556,10 @@ describe("the shape pin", () => {
     const channels = entry("ComputeChannel", "Channels");
     const channel = composite(channels.valueId);
     const state = channel.find((f) => f.name === "state");
+    const fsk = pallet("FlopSessionKeys");
+    const sessions = entry("FlopSessionKeys", "Sessions");
+    const nonces = entry("FlopSessionKeys", "SessionNonces");
+    const breakers = entry("FlopSessionKeys", "CircuitBreakers");
     const versionConstant = sys?.constants.find((c) => c.name === "Version");
     const version = BUILDER.buildConstant("System", "Version").dec(versionConstant?.value ?? "0x") as { spec_name: string; spec_version: number };
     const mine = {
@@ -558,7 +569,13 @@ describe("the shape pin", () => {
         events: variants(cc?.events ?? -1),
         index: cc?.index,
       },
-      schema: "flop-observatory/decoder-shape@1",
+      flop_session_keys: {
+        circuit_breakers: strip(breakers),
+        index: fsk?.index,
+        session_nonces: strip(nonces),
+        sessions: strip(sessions),
+      },
+      schema: "flop-observatory/decoder-shape@2",
       spec_name: version.spec_name,
       spec_version: version.spec_version,
       system: {
@@ -567,9 +584,10 @@ describe("the shape pin", () => {
         last_runtime_upgrade: { ...strip(upgrade), fields: fields(composite(upgrade.valueId)) },
         version: name(versionConstant?.type ?? -1),
       },
-      types: closure([events.valueId, upgrade.valueId, channels.valueId, ...channels.keyId, versionConstant?.type ?? -1]),
+      types: closure([events.valueId, upgrade.valueId, channels.valueId, ...channels.keyId, versionConstant?.type ?? -1, ...[sessions, nonces, breakers].flatMap((e) => [e.valueId, ...e.keyId])]),
     };
-    expect(Object.keys(mine.types).length).toBe(464);
+    expect(Object.keys(mine.types).length).toBe(469);
+    expect(mine.flop_session_keys.index).toBe(94);
     expect(mine.compute_channel.events.length).toBe(60);
     expect(mine.compute_channel.index).toBe(103);
     expect(mine).toEqual(JSON.parse(SHAPE));

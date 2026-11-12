@@ -41,6 +41,7 @@
       }
     ],
     "channels": {
+      "default": "0x00",
       "fields": [
         {
           "name": "agent",
@@ -1366,11 +1367,44 @@
     ],
     "index": 103
   },
-  "schema": "flop-observatory/decoder-shape@1",
+  "flop_session_keys": {
+    "circuit_breakers": {
+      "default": "0x00",
+      "hashers": [
+        "Blake2_128Concat"
+      ],
+      "key": "AccountId32#0",
+      "modifier": "Optional",
+      "value": "CircuitBreakerState#701"
+    },
+    "index": 94,
+    "session_nonces": {
+      "default": "0x0000000000000000",
+      "hashers": [
+        "Blake2_128Concat",
+        "Blake2_128Concat"
+      ],
+      "key": "(AccountId32#0, AccountId32#0)",
+      "modifier": "Default",
+      "value": "u64"
+    },
+    "sessions": {
+      "default": "0x00",
+      "hashers": [
+        "Blake2_128Concat",
+        "Blake2_128Concat"
+      ],
+      "key": "(AccountId32#0, AccountId32#0)",
+      "modifier": "Optional",
+      "value": "SessionToken#697"
+    }
+  },
+  "schema": "flop-observatory/decoder-shape@2",
   "spec_name": "tzkv-runtime",
   "spec_version": 1014014,
   "system": {
     "events": {
+      "default": "0x00",
       "hashers": [],
       "key": null,
       "modifier": "Default",
@@ -1392,6 +1426,7 @@
     },
     "index": 0,
     "last_runtime_upgrade": {
+      "default": "0x00",
       "fields": [
         {
           "name": "spec_version",
@@ -1414,6 +1449,14 @@
       "kind": "tuple",
       "path": [],
       "types": []
+    },
+    "(AccountId32#0, AccountId32#0)": {
+      "kind": "tuple",
+      "path": [],
+      "types": [
+        "AccountId32#0",
+        "AccountId32#0"
+      ]
     },
     "(AccountId32#0, AirdropTier#226, u128, Option<u32>#93)": {
       "kind": "tuple",
@@ -2542,6 +2585,20 @@
         {
           "name": null,
           "type": "Vec<BoundedVec<u8>#180>"
+        }
+      ],
+      "kind": "composite",
+      "path": [
+        "bounded_collections",
+        "bounded_vec",
+        "BoundedVec"
+      ]
+    },
+    "BoundedVec<BoundedVec<u8>#186>#698": {
+      "fields": [
+        {
+          "name": null,
+          "type": "Vec<BoundedVec<u8>#186>"
         }
       ],
       "kind": "composite",
@@ -10220,6 +10277,32 @@
           "index": 3,
           "name": "PendingAck"
         }
+      ]
+    },
+    "CircuitBreakerState#701": {
+      "fields": [
+        {
+          "name": "period_start",
+          "type": "u32"
+        },
+        {
+          "name": "tx_count",
+          "type": "u32"
+        },
+        {
+          "name": "total_spend",
+          "type": "u128"
+        },
+        {
+          "name": "tripped",
+          "type": "bool"
+        }
+      ],
+      "kind": "composite",
+      "path": [
+        "pallet_session_keys",
+        "pallet",
+        "CircuitBreakerState"
       ]
     },
     "Combinator#188": {
@@ -24598,6 +24681,60 @@
         "SessionMeteringRecord"
       ]
     },
+    "SessionToken#697": {
+      "fields": [
+        {
+          "name": "owner",
+          "type": "AccountId32#0"
+        },
+        {
+          "name": "delegate",
+          "type": "AccountId32#0"
+        },
+        {
+          "name": "spending_cap",
+          "type": "u128"
+        },
+        {
+          "name": "per_tx_limit",
+          "type": "u128"
+        },
+        {
+          "name": "daily_cap",
+          "type": "u128"
+        },
+        {
+          "name": "epoch_spent",
+          "type": "u128"
+        },
+        {
+          "name": "epoch_start",
+          "type": "u32"
+        },
+        {
+          "name": "spent",
+          "type": "u128"
+        },
+        {
+          "name": "expires_at",
+          "type": "u32"
+        },
+        {
+          "name": "allowed_pallets",
+          "type": "BoundedVec<BoundedVec<u8>#186>#698"
+        },
+        {
+          "name": "active",
+          "type": "bool"
+        }
+      ],
+      "kind": "composite",
+      "path": [
+        "pallet_session_keys",
+        "pallet",
+        "SessionToken"
+      ]
+    },
     "SettlementClass#295": {
       "kind": "variant",
       "path": [
@@ -25508,6 +25645,11 @@
     },
     "Vec<BoundedVec<u8>#180>": {
       "element": "BoundedVec<u8>#180",
+      "kind": "sequence",
+      "path": []
+    },
+    "Vec<BoundedVec<u8>#186>": {
+      "element": "BoundedVec<u8>#186",
       "kind": "sequence",
       "path": []
     },

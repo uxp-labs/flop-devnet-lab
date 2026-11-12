@@ -8,8 +8,10 @@
 //   deriveShape and written by shapeText: what the observatory relies on, in a form a reviewer can
 //   read. The System.Version constant, the ComputeChannel pallet index, its event table, its
 //   Channels entry with the fields and states of a channel, the System entries the events and the
-//   spec are read from, and a table of every type reachable from those, each with its kind, its
-//   path and what the kind holds.
+//   spec are read from, the FlopSessionKeys pallet index and its Sessions, SessionNonces and
+//   CircuitBreakers entries, and a table of every type reachable from those, each with its kind,
+//   its path and what the kind holds. Each storage entry is stated with its modifier, hashers, key
+//   type, value type and the default bytes the metadata gives it.
 // - pinShape, the one function that says whether a block may be decoded, and why not.
 //
 // A type is named by its shape: a primitive by itself, a type with a path by the last part of its
@@ -23,10 +25,24 @@ import { createHash } from "node:crypto";
 import { type Decoded, decodeValue } from "./decode.js";
 import type { Field, Metadata, StorageEntry, TypeEntry, Variant } from "./metadata.js";
 import { parseMetadata } from "./metadata.js";
-import { ScaleError } from "./reader.js";
+import { ScaleError, toHex } from "./reader.js";
 import { storageEntryOf } from "./storage-key.js";
 
-export const SHAPE_SCHEMA = "flop-observatory/decoder-shape@1";
+/** @2: each entry states its default bytes, and the FlopSessionKeys entries are stated. */
+export const SHAPE_SCHEMA = "flop-observatory/decoder-shape@2";
+
+/**
+ * The storage entries the shape states, by pallet and entry name: the only entries whose values
+ * real chain data is decoded from (src/scale/block.ts).
+ */
+export const STATED_ENTRIES: readonly (readonly [pallet: string, entry: string])[] = [
+  ["System", "Events"],
+  ["System", "LastRuntimeUpgrade"],
+  ["ComputeChannel", "Channels"],
+  ["FlopSessionKeys", "Sessions"],
+  ["FlopSessionKeys", "SessionNonces"],
+  ["FlopSessionKeys", "CircuitBreakers"],
+];
 /** How deep one name may nest. */
 export const MAX_NAME_DEPTH = 16;
 /** How many types one name may visit, a type named again included. */
@@ -59,7 +75,7 @@ export const REVIEWED: readonly ReviewedShape[] = [
     metadataSha256: "f4fd2addba7fff1129483d0e66b8e6bc69141292f56443e201d3f073aab03444",
     metadataBytes: 482132,
     shapeFile: "shapes/tzkv-runtime-1014014.json",
-    shapeSha256: "4b50e851350028f6114c9a81217599fee8f7d18df725ff97ac40b3d80b6be82a",
+    shapeSha256: "6c0f448801c913c069239af039119e569f5951c1e7738607832873f79385b7e5",
   },
 ];
 
@@ -185,7 +201,7 @@ function variantsOf(n: Namer, variants: Variant[]): ShapeValue {
 }
 
 function entryShape(n: Namer, e: StorageEntry): { [key: string]: ShapeValue } {
-  return { modifier: e.modifier, hashers: [...e.hashers], key: e.key === null ? null : nameOf(n, e.key), value: nameOf(n, e.value) };
+  return { modifier: e.modifier, hashers: [...e.hashers], key: e.key === null ? null : nameOf(n, e.key), value: nameOf(n, e.value), default: toHex(e.fallback) };
 }
 
 /** The fields of a composite type, or a refusal naming what was looked for. */
@@ -269,7 +285,9 @@ function closure(n: Namer, roots: number[]): { [name: string]: ShapeValue } {
 export function deriveShape(md: Metadata, n: Namer = namer(md)): ShapeValue {
   const system = md.pallets.find((p) => p.name === "System");
   const cc = md.pallets.find((p) => p.name === "ComputeChannel");
+  const fsk = md.pallets.find((p) => p.name === "FlopSessionKeys");
   if (system === undefined || cc === undefined) throw new ScaleError("the metadata has no System or no ComputeChannel pallet");
+  if (fsk === undefined) throw new ScaleError("the metadata has no FlopSessionKeys pallet");
   const version = system.constants.find((c) => c.name === "Version");
   if (version === undefined) throw new ScaleError("the System pallet has no Version constant");
   const v = decodeValue(md, version.type, version.value);
@@ -277,11 +295,15 @@ export function deriveShape(md: Metadata, n: Namer = namer(md)): ShapeValue {
   const events = storageEntryOf(md, "System", "Events").entry;
   const upgrade = storageEntryOf(md, "System", "LastRuntimeUpgrade").entry;
   const channels = storageEntryOf(md, "ComputeChannel", "Channels").entry;
+  const sessions = storageEntryOf(md, "FlopSessionKeys", "Sessions").entry;
+  const nonces = storageEntryOf(md, "FlopSessionKeys", "SessionNonces").entry;
+  const breakers = storageEntryOf(md, "FlopSessionKeys", "CircuitBreakers").entry;
+  const keyOf = (e: StorageEntry): number[] => (e.key === null ? [] : [e.key]);
   const recordType = md.types.at(events.value)?.def;
   if (recordType?.kind !== "sequence") throw new ScaleError("System.Events is not a list");
   const channel = compositeFields(md, channels.value, "the value of ComputeChannel.Channels");
   const state = channel.find((f) => f.name === "state");
-  const roots = [events.value, upgrade.value, channels.value, ...(channels.key === null ? [] : [channels.key]), version.type];
+  const roots = [events.value, upgrade.value, channels.value, ...keyOf(channels), version.type, ...[sessions, nonces, breakers].flatMap((e) => [e.value, ...keyOf(e)])];
   return {
     schema: SHAPE_SCHEMA,
     spec_name: v.spec_name ?? null,
@@ -297,6 +319,12 @@ export function deriveShape(md: Metadata, n: Namer = namer(md)): ShapeValue {
       events: variantsOf(n, variants(md, cc.event, "the ComputeChannel event type")),
       channels: { ...entryShape(n, channels), fields: fieldsOf(n, channel) },
       channel_states: variantsOf(n, variants(md, state?.type ?? null, "the state of a channel")),
+    },
+    flop_session_keys: {
+      index: fsk.index,
+      sessions: entryShape(n, sessions),
+      session_nonces: entryShape(n, nonces),
+      circuit_breakers: entryShape(n, breakers),
     },
     types: closure(n, roots),
   };
