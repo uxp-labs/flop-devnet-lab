@@ -65,6 +65,8 @@ Device: a key made for this test, `5GmkbyGrAAMoQCvhZsEqz9gYKkqML82qS39TaTjS84NCh
 Named miner: the first probe's device account, `5Cm4uUXzfKUWWpi9xJgrCaMupmnZ1UiAhMD1XW6WvMFLkDvB`.
 Channel: `0xe5655fd56d18ac9816623fd975d501322a7427fe5568c7aa02a19cf04dfd12dc`.
 Chain: genesis `0x99c172c0…2d631`, spec 1014014, metadata sha256 `f4fd2add…3444`.
+Since then the devnet has moved to spec 1014020 (2026-11-12, see `../2026-11-12-runtime-upgrade/`).
+What is measured here is for spec 1014014 until it is run again.
 
 | # | Signed by | Call | Finalized in block | Result |
 |---|---|---|---|---|

@@ -77,6 +77,8 @@ account but fees.
 Owner: the lab's FLOP identity, `5HEA8QECFwBg1F9cxoXzvQzryu2d5qj5zASJS7owNW2zebBz`.
 Device: a key made for this test, `5Fq51jK1yw2VzfeWjAjo1RCsDeCALYVX81n72oGtxTj8Nkd5`.
 Chain: genesis `0x99c172c0…2d631`, spec 1014014, metadata sha256 `f4fd2add…3444`.
+Since then the devnet has moved to spec 1014020 (2026-11-12, see `../2026-11-12-runtime-upgrade/`).
+What is measured here is for spec 1014014 until it is run again.
 
 | # | Signed by | Call | Finalized in block | Result |
 |---|---|---|---|---|
