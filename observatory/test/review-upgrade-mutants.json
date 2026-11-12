@@ -1,0 +1,194 @@
+[
+  {
+    "id": "rv-rt-no-copy",
+    "file": "src/scale/block.ts",
+    "find": "new Reader(copyBytes(lastRuntimeUpgrade, \"the LastRuntimeUpgrade\"))",
+    "replace": "new Reader(lastRuntimeUpgrade)",
+    "builder_tests": "killed"
+  },
+  {
+    "id": "rv-rt-u32-off-by-one",
+    "file": "src/scale/block.ts",
+    "find": "if (version > U32_MAX)",
+    "replace": "if (version >= U32_MAX)",
+    "builder_tests": "survived"
+  },
+  {
+    "id": "rv-rt-name-off-by-one",
+    "file": "src/scale/block.ts",
+    "find": "if (name.length > MAX_NAME_INPUT)",
+    "replace": "if (name.length >= MAX_NAME_INPUT)",
+    "builder_tests": "killed"
+  },
+  {
+    "id": "rv-rt-name-unquoted",
+    "file": "src/scale/block.ts",
+    "find": "names spec ${JSON.stringify(name)} ${version}",
+    "replace": "names spec ${name} ${version}",
+    "builder_tests": "killed"
+  },
+  {
+    "id": "rv-rt-label",
+    "file": "src/scale/block.ts",
+    "find": "name = r.text(\"the spec name\");",
+    "replace": "name = r.text(\"the spec version\");",
+    "builder_tests": "killed"
+  },
+  {
+    "id": "rv-rt-prefix",
+    "file": "src/scale/block.ts",
+    "find": "return { found: false, refused: `no reviewed runtime: ${e.message}` };",
+    "replace": "return { found: false, refused: e.message };",
+    "builder_tests": "killed"
+  },
+  {
+    "id": "rv-rt-version-number",
+    "file": "src/scale/block.ts",
+    "find": "BigInt(x.specVersion) === version",
+    "replace": "x.specVersion === Number(version) % 2 ** 32",
+    "builder_tests": "survived",
+    "note": "equivalent: the u32 check before it makes the modulo a no op"
+  },
+  {
+    "id": "rv-diff-cyclic-memo",
+    "file": "scripts/shape-diff.mjs",
+    "find": "    if (!cyclic) memo.set(name, h);",
+    "replace": "    memo.set(name, h);",
+    "builder_tests": "survived",
+    "note": "changes only a diff over a recursive type; no test kills it until DEFECT 2 is fixed"
+  },
+  {
+    "id": "rv-diff-variant-index-not-in-structure",
+    "file": "scripts/shape-diff.mjs",
+    "find": "`${v.index} ${v.name}(${fields(v.fields)})`",
+    "replace": "`${v.name}(${fields(v.fields)})`",
+    "builder_tests": "survived"
+  },
+  {
+    "id": "rv-diff-array-len-not-in-structure",
+    "file": "scripts/shape-diff.mjs",
+    "find": "text = `array ${t.len} ${of(t.element)}`",
+    "replace": "text = `array ${of(t.element)}`",
+    "builder_tests": "survived"
+  },
+  {
+    "id": "rv-diff-path-not-in-structure",
+    "file": "scripts/shape-diff.mjs",
+    "find": "text = `composite ${t.path.join(\"::\")} {${fields(t.fields)}}`",
+    "replace": "text = `composite {${fields(t.fields)}}`",
+    "builder_tests": "survived"
+  },
+  {
+    "id": "rv-diff-names-unchecked",
+    "file": "scripts/shape-diff.mjs",
+    "find": "    if (na !== nb) {",
+    "replace": "    if (false) {",
+    "builder_tests": "survived"
+  },
+  {
+    "id": "rv-diff-removed-dropped",
+    "file": "scripts/shape-diff.mjs",
+    "find": "for (const [n, v] of ma) if (!mb.has(n)) out.add(",
+    "replace": "for (const [n, v] of ma) if (false) out.add(",
+    "builder_tests": "survived"
+  },
+  {
+    "id": "rv-diff-moved-dropped",
+    "file": "scripts/shape-diff.mjs",
+    "find": "if (x.index !== y.index) out.add(",
+    "replace": "if (false) out.add(",
+    "builder_tests": "survived"
+  },
+  {
+    "id": "rv-diff-modifier-dropped",
+    "file": "scripts/shape-diff.mjs",
+    "find": "    same(`${name} modifier`, x.modifier, y.modifier);\n",
+    "replace": "",
+    "builder_tests": "survived"
+  },
+  {
+    "id": "rv-diff-key-dropped",
+    "file": "scripts/shape-diff.mjs",
+    "find": "    else if (x.key !== null) typeDiff(x.key, y.key, `${name} key`);\n",
+    "replace": "\n",
+    "builder_tests": "survived"
+  },
+  {
+    "id": "rv-diff-version-dropped",
+    "file": "scripts/shape-diff.mjs",
+    "find": "  typeDiff(a.system.version, b.system.version, \"System.Version\");\n",
+    "replace": "",
+    "builder_tests": "survived"
+  },
+  {
+    "id": "rv-diff-tuple-not-in-structure",
+    "file": "scripts/shape-diff.mjs",
+    "find": "text = `tuple (${t.types.map(of).join(\",\")})`",
+    "replace": "text = `tuple ${t.types.length}`",
+    "builder_tests": "survived"
+  },
+  {
+    "id": "rv-diff-compact-not-in-structure",
+    "file": "scripts/shape-diff.mjs",
+    "find": "text = `compact ${of(t.type)}`",
+    "replace": "text = `compact`",
+    "builder_tests": "survived"
+  },
+  {
+    "id": "rv-diff-prefix-dropped",
+    "file": "scripts/shape-diff.mjs",
+    "find": "    same(`${name} storage prefix`, a[k].storage_prefix, b[k].storage_prefix);\n",
+    "replace": "",
+    "builder_tests": "killed"
+  },
+  {
+    "id": "rv-diff-tuple-length",
+    "file": "scripts/shape-diff.mjs",
+    "find": "if (ta.types.length !== tb.types.length) out.add",
+    "replace": "if (false) out.add",
+    "builder_tests": "survived"
+  },
+  {
+    "id": "rv-help-upgrade-wrong-read",
+    "file": "test/helpers/recorded-upgrade.ts",
+    "find": "upgradeOf: (b: Block) => hexBytes(at(b, \"state_getStorage\", true) as string),",
+    "replace": "upgradeOf: (b: Block) => hexBytes(at(b === \"runtime-upgrade/carries-upgrade\" ? \"runtime-upgrade/first-of-new-runtime\" : b, \"state_getStorage\", true) as string),",
+    "builder_tests": "killed"
+  },
+  {
+    "id": "rv-help-events-first-read",
+    "file": "test/helpers/recorded-upgrade.ts",
+    "find": "reads.find((x) => x.block === b && x.read.entry === \"Events\")",
+    "replace": "reads.find((x) => x.block === b)",
+    "builder_tests": "survived",
+    "note": "equivalent on this fixture: System.Events is the first read at each upgrade block"
+  },
+  {
+    "id": "rv-help-meta-first",
+    "file": "test/helpers/recorded-upgrade.ts",
+    "find": "      const m = metadata.get(sha);",
+    "replace": "      const m = [...metadata.values()].at(0);",
+    "builder_tests": "killed"
+  },
+  {
+    "id": "rv-ref-hasher",
+    "file": "test/helpers/reference-shape.ts",
+    "find": "Blake2128Concat: \"Blake2_128Concat\"",
+    "replace": "Blake2128Concat: \"Blake2_128\"",
+    "builder_tests": "killed"
+  },
+  {
+    "id": "rv-ref-modifier",
+    "file": "test/helpers/reference-shape.ts",
+    "find": "x.modifier === 0 ? \"Optional\" : \"Default\"",
+    "replace": "x.modifier === 1 ? \"Optional\" : \"Default\"",
+    "builder_tests": "killed"
+  },
+  {
+    "id": "rv-ref-path-first",
+    "file": "test/helpers/reference-shape.ts",
+    "find": "return `${t.path.at(-1)}${ps.length",
+    "replace": "return `${t.path.at(0)}${ps.length",
+    "builder_tests": "killed"
+  }
+]

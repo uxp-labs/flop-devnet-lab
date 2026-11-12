@@ -213,6 +213,9 @@ describe("D. the shape diff script against hand made pairs", () => {
       ["a key type changed to another 32 byte type", (c) => { c.compute_channel.channels.key = "AccountId32#0"; }, /^ComputeChannel\.Channels key: type was H256, now AccountId32$/],
       ["the System.Version type changed", (c) => { ty(c, c.system.version).fields[1].type = "u64"; }, /^System\.Version\.impl_name:/],
       ["a type reachable only from LastRuntimeUpgrade", (c) => { ty(c, c.system.last_runtime_upgrade.value).fields[0].type = "u32"; }, /^System\.LastRuntimeUpgrade value\.spec_version: type was Compact<u32>, now u32$/],
+      ["an array length changed", (c) => { ty(c, "[u8; 32]").len = 33; }, /^ComputeChannel\.Channels key: length was 32, now 33$/],
+      ["a compact's inner type changed", (c) => { c.types["Compact<u64>"] = { kind: "compact", path: [], type: "u64" }; ty(c, c.system.last_runtime_upgrade.value).fields[0].type = "Compact<u64>"; }, /^System\.LastRuntimeUpgrade value\.spec_version inner: type was u32, now u64$/],
+      ["a tuple key lost a part", (c) => { ty(c, c.flop_session_keys.sessions.key).types.pop(); }, /^FlopSessionKeys\.Sessions key: type was \(AccountId32, AccountId32\), now \(AccountId32, AccountId32\)$/],
       ["a tuple key part changed", (c) => { ty(c, c.flop_session_keys.sessions.key).types[1] = "H256#13"; }, /^FlopSessionKeys\.Sessions key\.1:/],
     ];
     for (const [what, f, line] of cases) {
@@ -380,4 +383,14 @@ describe("G. the damage test's skips", () => {
     expect(plainSkip).toBe(0);
     expect(values).toHaveLength(13);
   }, 600_000);
+});
+
+describe("G. how the tests find the metadata they pin", () => {
+  it("DEFECT 4 (low): test/upgrade-shape.test.ts pins with the metadata taken by the block it was read at (U.metadataAt(CARRIES)), not found by sha256", () => {
+    const src = readFileSync(new URL("./upgrade-shape.test.ts", import.meta.url), "utf8");
+    const pins = [...src.matchAll(/pinShape\(\{[^}]*\}/g)].map((m) => m[0]);
+    expect(pins.length).toBeGreaterThan(0);
+    // The pin's input there is `base`, whose metadata is META; META must come from metadataBySha.
+    expect(src).not.toMatch(/const META = U\.metadataAt\(/);
+  });
 });
