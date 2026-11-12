@@ -24,7 +24,7 @@ import { MAX_INPUT_BYTES, ScaleError } from "../src/scale/reader.js";
 import { REVIEWED, pinShape } from "../src/scale/shape.js";
 import { type Plain, plain } from "./helpers/plain.js";
 import { hexBytes, recorded } from "./helpers/recorded.js";
-import { type StorageRead, recordedStorage } from "./helpers/recorded-storage.js";
+import { STORAGE_RECORDING, type StorageRead, recordedStorage } from "./helpers/recorded-storage.js";
 import type { Block, Read } from "./helpers/requests-derive.js";
 
 const S = recordedStorage();
@@ -92,6 +92,16 @@ function bothSides(r: StorageRead): { ours: Plain; reference: Plain } {
 }
 
 describe("the storage door, on the second recording", () => {
+  it("decodes the answers the fixture's tape holds, byte for byte, read here from the tape's own text", () => {
+    // The tape's files are held to SHA256SUMS (test/storage-recording.test.ts); this holds the
+    // bytes every test here decodes to that tape, apart from the helper that lays them out.
+    const tape = readFileSync(new URL(`../fixtures/${STORAGE_RECORDING}/tape.jsonl`, import.meta.url), "utf8").split("\n").filter((l) => l !== "").slice(1).map((l) => JSON.parse(l) as { seq: number; answer: { result: string | null } });
+    for (const r of S.reads) {
+      const line = tape.find((x) => x.seq === r.seq);
+      expect([r.seq, r.answer === null ? null : `0x${Buffer.from(r.answer).toString("hex")}`]).toEqual([r.seq, line?.answer.result]);
+    }
+  });
+
   it("decodes all 28 reads through decodeStorageValue, each pinned to the reviewed shape: 27 stored, one absent", () => {
     const all = [...DECODED.values()];
     expect(all.length).toBe(28);
