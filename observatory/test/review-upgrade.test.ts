@@ -263,3 +263,121 @@ describe("D. the shape diff script against hand made pairs", () => {
     expect(said).not.toMatch(/^TypeError/);
   });
 });
+
+describe("E. an independent diff of the two real shapes", () => {
+  /** Canonical text of a type by structure, ids dropped, a type met again on its own path written by its path. */
+  const canon = (s: any) => {
+    const c = (n: string, st: string[] = []): string => {
+      const t = s.types[n];
+      if (t === undefined) return `missing ${n.replace(/#\d+/g, "")}`;
+      if (st.includes(n)) return `rec ${t.path.join("::")}`;
+      const x = [...st, n];
+      const f = (fs: { name: string | null; type: string }[]) => fs.map((q) => `${q.name}:${c(q.type, x)}`).join(",");
+      if (t.kind === "primitive") return t.primitive;
+      if (t.kind === "composite") return `${t.path.join("::")}{${f(t.fields)}}`;
+      if (t.kind === "variant") return `${t.path.join("::")}<${t.variants.map((v: any) => `${v.index}:${v.name}(${f(v.fields)})`).join(";")}>`;
+      if (t.kind === "sequence") return `Vec<${c(t.element, x)}>`;
+      if (t.kind === "array") return `[${c(t.element, x)};${t.len}]`;
+      if (t.kind === "tuple") return `(${t.types.map((y: string) => c(y, x)).join(",")})`;
+      return `Compact<${c(t.type, x)}>`;
+    };
+    return c;
+  };
+  const reach = (s: any, root: string | null) => {
+    const out = new Set<string>();
+    if (root === null) return out;
+    const c = canon(s);
+    const seen = new Set<string>();
+    const go = (n: string) => {
+      const t = s.types[n];
+      if (seen.has(n) || t === undefined) return;
+      seen.add(n);
+      out.add(c(n));
+      const r: string[] = t.kind === "composite" ? t.fields.map((f: any) => f.type) : t.kind === "variant" ? t.variants.flatMap((v: any) => v.fields.map((f: any) => f.type)) : t.kind === "tuple" ? t.types : t.kind === "compact" ? [t.type] : t.kind === "primitive" ? [] : [t.element];
+      r.forEach(go);
+    };
+    go(root);
+    return out;
+  };
+  const roots = (s: any): Record<string, string | null> => {
+    const out: Record<string, string | null> = { "System.Version": s.system.version };
+    for (const [p, e, name] of [["system", "events", "System.Events"], ["system", "last_runtime_upgrade", "System.LastRuntimeUpgrade"], ["compute_channel", "channels", "ComputeChannel.Channels"], ["flop_session_keys", "sessions", "FlopSessionKeys.Sessions"], ["flop_session_keys", "session_nonces", "FlopSessionKeys.SessionNonces"], ["flop_session_keys", "circuit_breakers", "FlopSessionKeys.CircuitBreakers"]] as const) {
+      out[`${name} value`] = s[p][e].value;
+      out[`${name} key`] = s[p][e].key;
+    }
+    return out;
+  };
+
+  it("HELD: compared as sets of canonical types per stated root, only System.Events changed, by exactly the outer event enum, its record, the ComputeChannel and Aleph event types; nothing else the shapes state", () => {
+    const a = JSON.parse(OLD_TEXT);
+    const b = JSON.parse(NEW_TEXT);
+    const ra = roots(a);
+    const rb = roots(b);
+    const changedRoots: string[] = [];
+    let onlyOld: string[] = [];
+    for (const k of Object.keys(ra)) {
+      const A = reach(a, ra[k] ?? null);
+      const B = reach(b, rb[k] ?? null);
+      const old = [...A].filter((x) => !B.has(x));
+      const added = [...B].filter((x) => !A.has(x));
+      expect(old.length, k).toBe(added.length);
+      if (old.length > 0) {
+        changedRoots.push(k);
+        onlyOld = old;
+      }
+    }
+    expect(changedRoots).toEqual(["System.Events value"]);
+    expect(onlyOld.map((x) => x.match(/^(Vec<)?([\w:]+)/)?.[0])).toEqual(["Vec<frame_system::EventRecord", "frame_system::EventRecord", "zkv_runtime::RuntimeEvent", "pallet_compute_channel::pallet::Event", "pallet_aleph::pallet::Event"]);
+    const keep = (s: any) => JSON.stringify([["system", "compute_channel", "flop_session_keys"].map((p) => [s[p].index, s[p].storage_prefix]), s.system.events.modifier, s.system.events.default, s.compute_channel.channels.hashers, s.flop_session_keys.sessions.hashers, s.flop_session_keys.session_nonces.default]);
+    expect(keep(b)).toBe(keep(a));
+    // The two ComputeChannel events and the one Aleph event the six lines name, and nothing more.
+    const ev = (s: any) => new Set(s.compute_channel.events.map((e: any) => `${e.index}:${e.name}(${e.fields.map((f: any) => `${f.name}:${canon(s)(f.type)}`).join(",")})`));
+    const EA = ev(a);
+    const EB = ev(b);
+    expect([...EA].filter((x) => !EB.has(x))).toEqual([]);
+    expect([...EB].filter((x) => !EA.has(x)).map((x) => (x as string).split("(")[0])).toEqual(["60:CapacityReservationRateSet", "61:CapacityReservationDropped"]);
+  });
+});
+
+describe("G. the damage test's skips", () => {
+  it("HELD: no bit flip of a new runtime value is passed over by the damage test: ours never decodes what the reference refuses, and the plain form never refuses", () => {
+    const md = parseMetadata(NEW_MD);
+    const builder = getDynamicBuilder(getLookupFn(unifyMetadata(decAnyMetadata(NEW_MD))));
+    const values = U.reads.filter((r) => r.answer !== null && runtimeOfBlock(U.upgradeOf(r.block)).found && (runtimeOfBlock(U.upgradeOf(r.block)) as { reviewed: ReviewedShape }).reviewed.specVersion === NEW.specVersion);
+    const skipped: string[] = [];
+    let plainSkip = 0;
+    for (const r of values) {
+      const e = md.pallets.find((p) => p.name === r.read.pallet)?.storage?.entries.find((x) => x.name === r.read.entry);
+      const type = e?.value ?? -1;
+      const codec = builder.buildStorage(r.read.pallet, r.read.entry).value;
+      const b = r.answer as Uint8Array;
+      for (let i = 0; i < b.length; i++) for (const bit of b.length <= 512 ? [0, 1, 2, 3, 4, 5, 6, 7] : [i % 8]) {
+        const m = b.slice();
+        m.set([(m.at(i) as number) ^ (1 << bit)], i);
+        let v: unknown;
+        try {
+          v = decodeValue(md, type, m);
+        } catch (x) {
+          if (x instanceof ScaleError) continue;
+          throw x;
+        }
+        let ref: unknown;
+        try {
+          ref = codec.dec(toHex(m));
+        } catch {
+          skipped.push(`${r.read.entry} at ${r.height} byte ${i} bit ${bit}`);
+          continue;
+        }
+        try {
+          plain(md, "reference", type, ref);
+          plain(md, "ours", type, v as never);
+        } catch {
+          plainSkip++;
+        }
+      }
+    }
+    expect(skipped).toEqual([]);
+    expect(plainSkip).toBe(0);
+    expect(values).toHaveLength(13);
+  }, 600_000);
+});
