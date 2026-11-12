@@ -69,7 +69,7 @@ const BLOCKS: [number, string, string][] = [
 ];
 
 // The first list is kept in its recording's fixture folder, byte for byte as it was recorded:
-// recordings/requests.json has moved on to the next list (test/storage-requests.test.ts).
+// recordings/requests.json has moved on to the current list (test/upgrade-requests.test.ts).
 describe("the first request list, as its recording's fixture keeps it", () => {
   const text = REQUESTS_TEXT;
   const read = readRequests(bytes(text));

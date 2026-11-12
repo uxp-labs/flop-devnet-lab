@@ -10,6 +10,11 @@
       "file": "research/2026-11-11-session-escrow/results.json",
       "value": "0xd03f3dc1fa4ff1d0a615285a474e11c0d6f00dbaa5f4d827ad487239502bc3d2"
     },
+    "device_3": {
+      "field": "device.public_key",
+      "file": "research/2026-11-11-session-deny-list/results.json",
+      "value": "0xa68ab764d2b02c8d8179df350b56c873b832e2b1f63e858bd1a376d2b89bba23"
+    },
     "owner": {
       "field": "owner.public_key",
       "file": "research/2026-11-11-session-escrow/results.json",
@@ -17,148 +22,112 @@
     }
   },
   "blocks": {
-    "gateway/settled": {
+    "runtime-upgrade/carries-upgrade": {
       "hash": {
-        "field": "the answer to the chain_getBlockHash call at seq 18",
-        "file": "observatory/fixtures/recording-20261111160917-3c228907aa129a01/tape.jsonl",
-        "value": "0xeba1182c9f2bbf5a8fd012afddc201c2ebed11b64f59b10c1d3c4fcc4b2ee18e"
+        "field": "boundary.1.hash",
+        "file": "research/2026-11-12-runtime-upgrade/results.json",
+        "value": "0x187a4c5b16a8d3c20f710ccd4a275d7bb2426311dd89ae14da0728d6504145c2"
       },
       "height": {
-        "field": "the params of the chain_getBlockHash call at seq 18",
-        "file": "observatory/fixtures/recording-20261111160917-3c228907aa129a01/tape.jsonl",
-        "value": 3479299
+        "field": "boundary.1.height",
+        "file": "research/2026-11-12-runtime-upgrade/results.json",
+        "value": 3528528
       }
     },
-    "session-escrow/2-create-session": {
+    "runtime-upgrade/first-of-new-runtime": {
+      "hash": {
+        "field": "boundary.2.hash",
+        "file": "research/2026-11-12-runtime-upgrade/results.json",
+        "value": "0x1507e7343ff4914ea9ad6871731c0307ffbbb1b244def06d9f071557f6cf9d94"
+      },
+      "height": {
+        "field": "boundary.2.height",
+        "file": "research/2026-11-12-runtime-upgrade/results.json",
+        "value": 3528529
+      }
+    },
+    "runtime-upgrade/last-of-old-runtime": {
+      "hash": {
+        "field": "boundary.0.hash",
+        "file": "research/2026-11-12-runtime-upgrade/results.json",
+        "value": "0x57d233b502269f6658673c7059331a9ff926680dcceb2fc9af0d00275fdb4e71"
+      },
+      "height": {
+        "field": "boundary.0.height",
+        "file": "research/2026-11-12-runtime-upgrade/results.json",
+        "value": 3528527
+      }
+    },
+    "runtime-upgrade/later-of-new-runtime": {
+      "hash": {
+        "field": "a_later_block_of_the_new_spec.hash",
+        "file": "research/2026-11-12-runtime-upgrade/results.json",
+        "value": "0x1bfd0be722963f829c4f8c732fbb237e4f5f1c06dd7a399b8d3cd9be1ab8174f"
+      },
+      "height": {
+        "field": "a_later_block_of_the_new_spec.height",
+        "file": "research/2026-11-12-runtime-upgrade/results.json",
+        "value": 3530299
+      }
+    },
+    "session-deny-list/10-lower-case-allow-entry": {
+      "hash": {
+        "field": "steps.9.block_hash",
+        "file": "research/2026-11-11-session-deny-list/results.json",
+        "value": "0xdc706da614fed4edfacc76199c592f90afb0e15779014396559cb2eb38dfb06c"
+      },
+      "height": {
+        "field": "steps.9.finalized_in_block",
+        "file": "research/2026-11-11-session-deny-list/results.json",
+        "value": 3513466
+      }
+    },
+    "session-deny-list/11-allowed-control": {
+      "hash": {
+        "field": "steps.10.block_hash",
+        "file": "research/2026-11-11-session-deny-list/results.json",
+        "value": "0xcdb827d48098fbb49c6e130414edcc16dba0fe5cc7b808d694646564ab4e232f"
+      },
+      "height": {
+        "field": "steps.10.finalized_in_block",
+        "file": "research/2026-11-11-session-deny-list/results.json",
+        "value": 3513488
+      }
+    },
+    "session-deny-list/12-revoke-session": {
+      "hash": {
+        "field": "steps.11.block_hash",
+        "file": "research/2026-11-11-session-deny-list/results.json",
+        "value": "0xa1ad0bf8ae96d1264fb84eeedf5e81487db55c4e1f05c5bc95d6979d9d93983c"
+      },
+      "height": {
+        "field": "steps.11.finalized_in_block",
+        "file": "research/2026-11-11-session-deny-list/results.json",
+        "value": 3513523
+      }
+    },
+    "session-deny-list/2-create-session": {
       "hash": {
         "field": "steps.1.block_hash",
-        "file": "research/2026-11-11-session-escrow/results.json",
-        "value": "0x059113d6f9b3cc8223b06205d58aa923957c97afeb1292f03fbce0fb65bc8f19"
+        "file": "research/2026-11-11-session-deny-list/results.json",
+        "value": "0x2069c88edcb7bd41f43aeb5cbaab692994042f1b52417b3db3fbc4cb874286be"
       },
       "height": {
         "field": "steps.1.finalized_in_block",
-        "file": "research/2026-11-11-session-escrow/results.json",
-        "value": 3497525
+        "file": "research/2026-11-11-session-deny-list/results.json",
+        "value": 3513199
       }
     },
-    "session-escrow/3-force-open-declared-0": {
+    "session-deny-list/3-denied-utility": {
       "hash": {
         "field": "steps.2.block_hash",
-        "file": "research/2026-11-11-session-escrow/results.json",
-        "value": "0x7f3bf8ee33abd68baf3a3c18b596f6cf8985de1f53decd1d30de0fd70cfb9cec"
+        "file": "research/2026-11-11-session-deny-list/results.json",
+        "value": "0xcec70c1e8872fcfca85676567f930ace0f0599628757a4c9185501e51be41466"
       },
       "height": {
         "field": "steps.2.finalized_in_block",
-        "file": "research/2026-11-11-session-escrow/results.json",
-        "value": 3497567
-      }
-    },
-    "session-escrow/4-force-open-declared-0.012": {
-      "hash": {
-        "field": "steps.3.block_hash",
-        "file": "research/2026-11-11-session-escrow/results.json",
-        "value": "0x22bc7a1b0b6cb5a97167829922060bffecb48e91e7f8565e0c39f2420f23826e"
-      },
-      "height": {
-        "field": "steps.3.finalized_in_block",
-        "file": "research/2026-11-11-session-escrow/results.json",
-        "value": 3497611
-      }
-    },
-    "session-escrow/6-force-open-over-daily": {
-      "hash": {
-        "field": "steps.5.block_hash",
-        "file": "research/2026-11-11-session-escrow/results.json",
-        "value": "0x628665f5659eae91882d50dec962cdf2657aa2b8e07163c59b7838687a410abc"
-      },
-      "height": {
-        "field": "steps.5.finalized_in_block",
-        "file": "research/2026-11-11-session-escrow/results.json",
-        "value": 3497716
-      }
-    },
-    "session-escrow/7-expire-force-open": {
-      "hash": {
-        "field": "steps.6.block_hash",
-        "file": "research/2026-11-11-session-escrow/results.json",
-        "value": "0xde307547f56509cde3fb4164abee3dbc6aa5136036134f5f7773f2b6f8a21d6f"
-      },
-      "height": {
-        "field": "steps.6.finalized_in_block",
-        "file": "research/2026-11-11-session-escrow/results.json",
-        "value": 3498234
-      }
-    },
-    "session-escrow/8-revoke-session": {
-      "hash": {
-        "field": "steps.7.block_hash",
-        "file": "research/2026-11-11-session-escrow/results.json",
-        "value": "0x6b1d673ace135876c9524e73146e7146308aaf1978e25b7921dd2ae6670e22a8"
-      },
-      "height": {
-        "field": "steps.7.finalized_in_block",
-        "file": "research/2026-11-11-session-escrow/results.json",
-        "value": 3498288
-      }
-    },
-    "session-escrow/9-return-funds": {
-      "hash": {
-        "field": "steps.8.block_hash",
-        "file": "research/2026-11-11-session-escrow/results.json",
-        "value": "0xc8f0ce149b3cfd96353479917ac91aed15a13e0a3af93f26e40cc0589d01aed8"
-      },
-      "height": {
-        "field": "steps.8.finalized_in_block",
-        "file": "research/2026-11-11-session-escrow/results.json",
-        "value": 3498313
-      }
-    },
-    "session-probe/2-create-session": {
-      "hash": {
-        "field": "steps.1.block_hash",
-        "file": "research/2026-11-11-session-probe/results.json",
-        "value": "0xc5276d1898ce0048d6eea4e868a026f380cf4f8292ba77d554da14e42db104ee"
-      },
-      "height": {
-        "field": "steps.1.finalized_in_block",
-        "file": "research/2026-11-11-session-probe/results.json",
-        "value": 3492718
-      }
-    },
-    "session-probe/3-timeout-via-session": {
-      "hash": {
-        "field": "steps.2.block_hash",
-        "file": "research/2026-11-11-session-probe/results.json",
-        "value": "0x818d5a0569dbefbfd8194d1169fab268b75050ce236f71a47ba64dcef4df1751"
-      },
-      "height": {
-        "field": "steps.2.finalized_in_block",
-        "file": "research/2026-11-11-session-probe/results.json",
-        "value": 3492760
-      }
-    },
-    "session-probe/4-remark-via-session": {
-      "hash": {
-        "field": "steps.3.block_hash",
-        "file": "research/2026-11-11-session-probe/results.json",
-        "value": "0xb0712e68445cce6875c1ebddf7656da45bf982f424724411284afdd7f456d1b4"
-      },
-      "height": {
-        "field": "steps.3.finalized_in_block",
-        "file": "research/2026-11-11-session-probe/results.json",
-        "value": 3492808
-      }
-    },
-    "session-probe/5-revoke-session": {
-      "hash": {
-        "field": "steps.4.block_hash",
-        "file": "research/2026-11-11-session-probe/results.json",
-        "value": "0x8789d38843a400719db0be8c02cc290ebc79408dd83aa01a759c4abcddf583ca"
-      },
-      "height": {
-        "field": "steps.4.finalized_in_block",
-        "file": "research/2026-11-11-session-probe/results.json",
-        "value": 3492879
+        "file": "research/2026-11-11-session-deny-list/results.json",
+        "value": 3513325
       }
     }
   },
@@ -174,14 +143,6 @@
       "value": "0xe5655fd56d18ac9816623fd975d501322a7427fe5568c7aa02a19cf04dfd12dc"
     }
   },
-  "mentioned": {
-    "session-escrow/5-force-open-over-per-call": {
-      "height": {
-        "field": "steps.4.finalized_in_block",
-        "file": "research/2026-11-11-session-escrow/results.json",
-        "value": 3497694
-      }
-    }
-  },
+  "mentioned": {},
   "schema": "flop-observatory/requests-inputs@0"
 }
