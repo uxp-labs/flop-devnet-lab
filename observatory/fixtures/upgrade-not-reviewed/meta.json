@@ -1,0 +1,14 @@
+{
+  "scenario": "upgrade-not-reviewed",
+  "description": "Synthetic reading of the upgrade watch (RULES.md 7.2), made from fixtures/live-healthy (every time moved 0 s later): a block whose System.LastRuntimeUpgrade names a runtime no reviewed line names. A first run. The finalized head is the block named in from_results, best two above it; the runtime version is 1014020. state_getStorage of System.LastRuntimeUpgrade answers {\"result\":\"0x16e43d0030747a6b762d72756e74696d65\"} (a whole record of tzkv-runtime 1014021, one past the newest reviewed line, made for this test (test/upgrade-live.test.ts builds it again from REVIEWED)), and of System.AuthorizedUpgrade {\"result\":null}; upgrade_answers names where each comes from. Every other value is live-healthy's, made up.",
+  "from_results": {
+    "finalized head": "research/2026-11-12-runtime-upgrade/results.json boundary.2.hash and boundary.2.height",
+    "runtime version": "research/2026-11-12-runtime-upgrade/results.json boundary.2.state_getRuntimeVersion_spec"
+  },
+  "now": "2026-11-11T06:00:01.000Z",
+  "synthetic": true,
+  "upgrade_answers": {
+    "System.AuthorizedUpgrade": "research/2026-11-12-runtime-upgrade/results.json authorization.authorized_upgrade_at.4.value",
+    "System.LastRuntimeUpgrade": "made for this test, as the description says"
+  }
+}

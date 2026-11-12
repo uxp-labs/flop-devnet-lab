@@ -1,0 +1,9 @@
+{
+  "scenario": "watch-authorized",
+  "description": "The two reads of the upgrade watch (RULES.md 7.2) for the snapshot command's --upgrade, counted as read at the status fixture's finalized head: System.LastRuntimeUpgrade and System.AuthorizedUpgrade as the lab read them at the authorising block 3528478 (upgrade_answers names each field). The block they are counted at is the status fixture's own, so only the two answers are real values; where they are read is made up.",
+  "synthetic": true,
+  "upgrade_answers": {
+    "System.AuthorizedUpgrade": "research/2026-11-12-runtime-upgrade/results.json authorization.authorized_upgrade_at.2.value",
+    "System.LastRuntimeUpgrade": "research/2026-11-12-runtime-upgrade/results.json authorization.authorizing_block.last_runtime_upgrade"
+  }
+}
