@@ -1,0 +1,21 @@
+{
+  "description": "Real data, nothing made up: the second recording the record workflow published, recordings/20261112004113-0b2b505d2d4b703b/ on observatory-data at commit a94073b. tape.jsonl, run.json and SHA256SUMS are those three files, byte for byte. It holds what one RPC endpoint answered to the 56 calls of the second request list, the storage the lab's two devnet session tests left behind: evidence for building the storage decoder, never proof of chain state (RULES.md section 8). requests.json in this folder is that list, byte for byte as recordings/requests.json held it when it was recorded; its sha256 is the one run.json names.",
+  "provenance": {
+    "data_branch": "observatory-data",
+    "data_branch_commit": "a94073b6cf36e45b15fed216fd64f4bf60cf7cb0",
+    "ended_at": "2026-11-12T00:41:51.697Z",
+    "metadata_sha256": "f4fd2addba7fff1129483d0e66b8e6bc69141292f56443e201d3f073aab03444",
+    "recording_id": "20261112004113-0b2b505d2d4b703b",
+    "request_list": "recordings/requests.json",
+    "request_list_copy": "requests.json",
+    "request_list_sha256": "0b2b505d2d4b703b84d017f670e2c3bd10938af75ee3373dfae5fea23d6a1f58",
+    "revision": "4e011e3e8d8ea59996bdb0177c62b6666249e368",
+    "revision_from": "run.json source_sha",
+    "started_at": "2026-11-12T00:41:13.805Z",
+    "tape_sha256": "8ded440a4741c34212f6be9cd519ee8838e64b0c25267b831effad40af2c42ef",
+    "workflow_run": 43129072484,
+    "workflow_run_from": "the data branch commit message"
+  },
+  "scenario": "recording-20261112004113-0b2b505d2d4b703b",
+  "synthetic": false
+}

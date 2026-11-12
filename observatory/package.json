@@ -9,7 +9,7 @@
     "flop-observatory-mcp": "./dist/mcp-bin.js"
   },
   "engines": {
-    "node": ">=22"
+    "node": ">=22.18"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",

@@ -8,8 +8,11 @@
 //   deriveShape and written by shapeText: what the observatory relies on, in a form a reviewer can
 //   read. The System.Version constant, the ComputeChannel pallet index, its event table, its
 //   Channels entry with the fields and states of a channel, the System entries the events and the
-//   spec are read from, and a table of every type reachable from those, each with its kind, its
-//   path and what the kind holds.
+//   spec are read from, the FlopSessionKeys pallet index and its Sessions, SessionNonces and
+//   CircuitBreakers entries, the storage prefix of each of the three pallets, and a table of every
+//   type reachable from those, each with its kind,
+//   its path and what the kind holds. Each storage entry is stated with its modifier, hashers, key
+//   type, value type and the default bytes the metadata gives it.
 // - pinShape, the one function that says whether a block may be decoded, and why not.
 //
 // A type is named by its shape: a primitive by itself, a type with a path by the last part of its
@@ -23,10 +26,24 @@ import { createHash } from "node:crypto";
 import { type Decoded, decodeValue } from "./decode.js";
 import type { Field, Metadata, StorageEntry, TypeEntry, Variant } from "./metadata.js";
 import { parseMetadata } from "./metadata.js";
-import { ScaleError } from "./reader.js";
+import { MAX_INPUT_BYTES, ScaleError, toHex } from "./reader.js";
 import { storageEntryOf } from "./storage-key.js";
 
-export const SHAPE_SCHEMA = "flop-observatory/decoder-shape@1";
+/** @2: each entry states its default bytes, each stated pallet its storage prefix, and the FlopSessionKeys entries are stated. */
+export const SHAPE_SCHEMA = "flop-observatory/decoder-shape@2";
+
+/**
+ * The storage entries the shape states, by pallet and entry name: the only entries whose values
+ * real chain data is decoded from (src/scale/block.ts).
+ */
+export const STATED_ENTRIES: readonly (readonly [pallet: string, entry: string])[] = [
+  ["System", "Events"],
+  ["System", "LastRuntimeUpgrade"],
+  ["ComputeChannel", "Channels"],
+  ["FlopSessionKeys", "Sessions"],
+  ["FlopSessionKeys", "SessionNonces"],
+  ["FlopSessionKeys", "CircuitBreakers"],
+];
 /** How deep one name may nest. */
 export const MAX_NAME_DEPTH = 16;
 /** How many types one name may visit, a type named again included. */
@@ -59,7 +76,7 @@ export const REVIEWED: readonly ReviewedShape[] = [
     metadataSha256: "f4fd2addba7fff1129483d0e66b8e6bc69141292f56443e201d3f073aab03444",
     metadataBytes: 482132,
     shapeFile: "shapes/tzkv-runtime-1014014.json",
-    shapeSha256: "4b50e851350028f6114c9a81217599fee8f7d18df725ff97ac40b3d80b6be82a",
+    shapeSha256: "679f98aa06abf1d9b376fe4243e4d13c1b5ae80e9b6cdf1fd1e0190c1e7660e7",
   },
 ];
 
@@ -185,7 +202,7 @@ function variantsOf(n: Namer, variants: Variant[]): ShapeValue {
 }
 
 function entryShape(n: Namer, e: StorageEntry): { [key: string]: ShapeValue } {
-  return { modifier: e.modifier, hashers: [...e.hashers], key: e.key === null ? null : nameOf(n, e.key), value: nameOf(n, e.value) };
+  return { modifier: e.modifier, hashers: [...e.hashers], key: e.key === null ? null : nameOf(n, e.key), value: nameOf(n, e.value), default: toHex(e.fallback) };
 }
 
 /** The fields of a composite type, or a refusal naming what was looked for. */
@@ -269,7 +286,9 @@ function closure(n: Namer, roots: number[]): { [name: string]: ShapeValue } {
 export function deriveShape(md: Metadata, n: Namer = namer(md)): ShapeValue {
   const system = md.pallets.find((p) => p.name === "System");
   const cc = md.pallets.find((p) => p.name === "ComputeChannel");
+  const fsk = md.pallets.find((p) => p.name === "FlopSessionKeys");
   if (system === undefined || cc === undefined) throw new ScaleError("the metadata has no System or no ComputeChannel pallet");
+  if (fsk === undefined) throw new ScaleError("the metadata has no FlopSessionKeys pallet");
   const version = system.constants.find((c) => c.name === "Version");
   if (version === undefined) throw new ScaleError("the System pallet has no Version constant");
   const v = decodeValue(md, version.type, version.value);
@@ -277,26 +296,45 @@ export function deriveShape(md: Metadata, n: Namer = namer(md)): ShapeValue {
   const events = storageEntryOf(md, "System", "Events").entry;
   const upgrade = storageEntryOf(md, "System", "LastRuntimeUpgrade").entry;
   const channels = storageEntryOf(md, "ComputeChannel", "Channels").entry;
+  const sessions = storageEntryOf(md, "FlopSessionKeys", "Sessions").entry;
+  const nonces = storageEntryOf(md, "FlopSessionKeys", "SessionNonces").entry;
+  const breakers = storageEntryOf(md, "FlopSessionKeys", "CircuitBreakers").entry;
+  const keyOf = (e: StorageEntry): number[] => (e.key === null ? [] : [e.key]);
+  /** The storage prefix every key of the pallet starts from, written into the shape and paid for. */
+  const prefixOf = (p: { storage: { prefix: string } | null }): string => {
+    const prefix = p.storage?.prefix ?? "";
+    write(n, prefix.length);
+    return prefix;
+  };
   const recordType = md.types.at(events.value)?.def;
   if (recordType?.kind !== "sequence") throw new ScaleError("System.Events is not a list");
   const channel = compositeFields(md, channels.value, "the value of ComputeChannel.Channels");
   const state = channel.find((f) => f.name === "state");
-  const roots = [events.value, upgrade.value, channels.value, ...(channels.key === null ? [] : [channels.key]), version.type];
+  const roots = [events.value, upgrade.value, channels.value, ...keyOf(channels), version.type, ...[sessions, nonces, breakers].flatMap((e) => [e.value, ...keyOf(e)])];
   return {
     schema: SHAPE_SCHEMA,
     spec_name: v.spec_name ?? null,
     spec_version: v.spec_version ?? null,
     system: {
       index: system.index,
+      storage_prefix: prefixOf(system),
       events: { ...entryShape(n, events), record: fieldsOf(n, compositeFields(md, recordType.type, "an event record")) },
       last_runtime_upgrade: { ...entryShape(n, upgrade), fields: fieldsOf(n, compositeFields(md, upgrade.value, "the value of System.LastRuntimeUpgrade")) },
       version: nameOf(n, version.type),
     },
     compute_channel: {
       index: cc.index,
+      storage_prefix: prefixOf(cc),
       events: variantsOf(n, variants(md, cc.event, "the ComputeChannel event type")),
       channels: { ...entryShape(n, channels), fields: fieldsOf(n, channel) },
       channel_states: variantsOf(n, variants(md, state?.type ?? null, "the state of a channel")),
+    },
+    flop_session_keys: {
+      index: fsk.index,
+      storage_prefix: prefixOf(fsk),
+      sessions: entryShape(n, sessions),
+      session_nonces: entryShape(n, nonces),
+      circuit_breakers: entryShape(n, breakers),
     },
     types: closure(n, roots),
   };
@@ -337,24 +375,76 @@ export interface PinInput {
 
 const refuse = (refused: string): Pin => ({ pinned: false, refused });
 
-/** A copy of bytes the caller holds, or a refusal: what is hashed is then what is parsed. */
+/** The longest spec name, pallet name or entry name a door reads; a longer one is refused unread. */
+export const MAX_NAME_INPUT = 256;
+
+/**
+ * One field of a caller's input, read once. Anything thrown while it is read (a getter, a Proxy
+ * trap) is a refusal with this text of ours: the foreign error is never looked at, so its message,
+ * its class and its own getters never reach the caller.
+ */
+export function readField<T>(read: () => T, what: string): T {
+  try {
+    return read();
+  } catch {
+    throw new ScaleError(`${what} could not be read`);
+  }
+}
+
+/**
+ * The length of the bytes the caller holds, or a refusal. Nothing is copied. A typed array method
+ * reads its receiver's internal slots and refuses anything else, a Proxy over a typed array
+ * included. findLastIndex with a test that is always true answers the last index after one step,
+ * so the length is that plus one, whatever an own "length" property on the object says.
+ */
+export function bytesLength(v: unknown, what: string): number {
+  try {
+    if (!(v instanceof Uint8Array)) throw new ScaleError(what);
+    return Uint8Array.prototype.findLastIndex.call(v, () => true) + 1;
+  } catch {
+    throw new ScaleError(`${what} is not bytes`);
+  }
+}
+
+/**
+ * A copy of bytes the caller holds, or a refusal: what is hashed is then what is parsed. The bytes
+ * are taken only from a real typed array, whose length is read from its internal slots (a Proxy
+ * over one is refused there, see bytesLength). Past MAX_INPUT_BYTES it is refused before anything is copied. The
+ * copy is made once, into an array of our own, by the typed array's own set: no iterator is read
+ * and the caller's constructor and species are never asked.
+ */
 export function copyBytes(v: unknown, what: string): Uint8Array {
-  if (!(v instanceof Uint8Array)) throw new ScaleError(`${what} is not bytes`);
-  // The typed array constructor copies from the source's own buffer, through no getter.
-  return new Uint8Array(v);
+  const length = bytesLength(v, what);
+  if (length > MAX_INPUT_BYTES) throw new ScaleError(`${what} is ${length} bytes, more than the ${MAX_INPUT_BYTES} this decoder reads`);
+  const own = new Uint8Array(length);
+  try {
+    Uint8Array.prototype.set.call(own, v as Uint8Array);
+  } catch {
+    throw new ScaleError(`${what} is not bytes`);
+  }
+  return own;
+}
+
+/** The input as an object whose fields may be read, or a refusal. */
+export function inputObject(input: unknown): object {
+  if (typeof input !== "object" || input === null) throw new ScaleError("the input is not an object");
+  return input;
 }
 
 /**
  * Each field of the input read exactly once, the byte arrays copied. A getter, or a buffer the
  * caller changes later, can then never hand the hash one value and the parser another.
  */
-export function copyPinInput(input: PinInput): PinInput {
-  const specName = input.specName;
-  const specVersion = input.specVersion;
-  const metadata = input.metadata;
-  const lastRuntimeUpgrade = input.lastRuntimeUpgrade;
-  const shape = input.shapeText;
+export function copyPinInput(input: unknown): PinInput {
+  const i = inputObject(input) as PinInput;
+  const specName = readField(() => i.specName, "the spec name");
+  const specVersion = readField(() => i.specVersion, "the spec version");
+  const metadata = readField(() => i.metadata, "the metadata");
+  const lastRuntimeUpgrade = readField(() => i.lastRuntimeUpgrade, "the LastRuntimeUpgrade");
+  const shape = readField(() => i.shapeText, "the shape file");
   if (typeof specName !== "string" || typeof specVersion !== "number" || typeof shape !== "string") throw new ScaleError("the spec name, spec version and shape file must be a string, a number and a string");
+  if (specName.length > MAX_NAME_INPUT) throw new ScaleError(`the spec name is longer than ${MAX_NAME_INPUT} characters`);
+  if (shape.length > MAX_INPUT_BYTES) throw new ScaleError(`the shape file is longer than ${MAX_INPUT_BYTES} characters`);
   return { specName, specVersion, metadata: copyBytes(metadata, "the metadata"), lastRuntimeUpgrade: copyBytes(lastRuntimeUpgrade, "the LastRuntimeUpgrade"), shapeText: shape };
 }
 

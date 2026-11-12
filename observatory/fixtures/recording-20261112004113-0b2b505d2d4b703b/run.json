@@ -1,0 +1,15 @@
+{
+  "calls": {
+    "answered": 56,
+    "asked": 56,
+    "failed": 0
+  },
+  "ended_at": "2026-11-12T00:41:51.697Z",
+  "endpoint": "rpc wss://rpc.devnet.flop.network",
+  "exit_code": 0,
+  "exit_reason": "every call was made and recorded: 56 answered, 0 failed on the way",
+  "request_list_sha256": "0b2b505d2d4b703b84d017f670e2c3bd10938af75ee3373dfae5fea23d6a1f58",
+  "schema": "flop-observatory/record-run@0",
+  "source_sha": "4e011e3e8d8ea59996bdb0177c62b6666249e368",
+  "started_at": "2026-11-12T00:41:13.805Z"
+}

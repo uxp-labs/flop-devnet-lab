@@ -8,7 +8,7 @@ import { decodeBlockEvents } from "../src/scale/block.js";
 import { decodeValue } from "../src/scale/decode.js";
 import { parseMetadata } from "../src/scale/metadata.js";
 import { ScaleError } from "../src/scale/reader.js";
-import { MAX_NAME_DEPTH, type PinInput, REVIEWED, deriveShape, pinShape, shapeText, typeName } from "../src/scale/shape.js";
+import { MAX_NAME_DEPTH, type PinInput, REVIEWED, STATED_ENTRIES, deriveShape, pinShape, shapeText, typeName } from "../src/scale/shape.js";
 import { recorded } from "./helpers/recorded.js";
 import { bytes, cat, compact, def, metadata, str } from "./helpers/scale-write.js";
 
@@ -53,8 +53,8 @@ describe("the reviewed shapes", () => {
 
   it("name in the shape the ComputeChannel index, events, Channels entry and channel fields, and the System entries", () => {
     const s = JSON.parse(SHAPE);
-    expect(Object.keys(s)).toEqual(["compute_channel", "schema", "spec_name", "spec_version", "system", "types"]);
-    expect(s).toMatchObject({ schema: "flop-observatory/decoder-shape@1", spec_name: "tzkv-runtime", spec_version: 1014014 });
+    expect(Object.keys(s)).toEqual(["compute_channel", "flop_session_keys", "schema", "spec_name", "spec_version", "system", "types"]);
+    expect(s).toMatchObject({ schema: "flop-observatory/decoder-shape@2", spec_name: "tzkv-runtime", spec_version: 1014014 });
     expect(s.compute_channel.index).toBe(103);
     expect(s.compute_channel.events.length).toBe(60);
     expect(s.compute_channel.events.at(23)).toEqual({
@@ -68,13 +68,51 @@ describe("the reviewed shapes", () => {
         { name: "cooperative", type: "bool" },
       ],
     });
-    expect(s.compute_channel.channels).toMatchObject({ modifier: "Optional", hashers: ["Blake2_128Concat"], key: "H256#13", value: "Channel#805" });
+    expect(s.compute_channel.channels).toMatchObject({ modifier: "Optional", hashers: ["Blake2_128Concat"], key: "H256#13", value: "Channel#805", default: "0x00" });
     expect(s.compute_channel.channels.fields.map((f: { name: string }) => f.name)).toEqual([
       "agent", "miner", "model_hash", "measured_root", "precision", "enclave_key", "agent_key", "escrow", "sla", "nonce", "opened_at", "last_attested_at", "state", "transcript_ref", "weights_pin", "locked_compute_consumed",
     ]);
     expect(s.compute_channel.channel_states.map((v: { name: string }) => v.name)).toEqual(["Open", "Settling", "Closed", "PendingAck"]);
-    expect(s.system.events).toMatchObject({ modifier: "Default", hashers: [], key: null, value: "Vec<EventRecord<RuntimeEvent#21, H256#13>#20>" });
-    expect(s.system.last_runtime_upgrade).toMatchObject({ modifier: "Optional", hashers: [], key: null, value: "LastRuntimeUpgradeInfo#462" });
+    expect(s.system.events).toMatchObject({ modifier: "Default", hashers: [], key: null, value: "Vec<EventRecord<RuntimeEvent#21, H256#13>#20>", default: "0x00" });
+    expect(s.system.last_runtime_upgrade).toMatchObject({ modifier: "Optional", hashers: [], key: null, value: "LastRuntimeUpgradeInfo#462", default: "0x00" });
+  });
+
+  it("name in the shape the FlopSessionKeys index and its Sessions, SessionNonces and CircuitBreakers entries, each with its modifier and default bytes", () => {
+    const s = JSON.parse(SHAPE);
+    const pair = ["Blake2_128Concat", "Blake2_128Concat"];
+    expect(s.flop_session_keys).toEqual({
+      index: 94,
+      storage_prefix: "FlopSessionKeys",
+      sessions: { modifier: "Optional", hashers: pair, key: "(AccountId32#0, AccountId32#0)", value: "SessionToken#697", default: "0x00" },
+      session_nonces: { modifier: "Default", hashers: pair, key: "(AccountId32#0, AccountId32#0)", value: "u64", default: "0x0000000000000000" },
+      circuit_breakers: { modifier: "Optional", hashers: ["Blake2_128Concat"], key: "AccountId32#0", value: "CircuitBreakerState#701", default: "0x00" },
+    });
+    const fields = (t: string) => (s.types[t].fields as { name: string }[]).map((f) => f.name);
+    expect(fields("SessionToken#697")).toEqual(["owner", "delegate", "spending_cap", "per_tx_limit", "daily_cap", "epoch_spent", "epoch_start", "spent", "expires_at", "allowed_pallets", "active"]);
+    expect(fields("CircuitBreakerState#701")).toEqual(["period_start", "tx_count", "total_spend", "tripped"]);
+  });
+
+  it("state the storage prefix of each stated pallet as the metadata gives it, so a changed prefix changes the shape", () => {
+    const s = JSON.parse(SHAPE);
+    const prefix = (name: string) => MD.pallets.find((p) => p.name === name)?.storage?.prefix;
+    expect([s.system.storage_prefix, s.compute_channel.storage_prefix, s.flop_session_keys.storage_prefix]).toEqual([prefix("System"), prefix("ComputeChannel"), prefix("FlopSessionKeys")]);
+  });
+
+  it("state exactly the storage entries STATED_ENTRIES lists, each one the metadata's entry of that name", () => {
+    const s = JSON.parse(SHAPE);
+    const stated: [string, string, unknown][] = [
+      ["System", "Events", s.system.events],
+      ["System", "LastRuntimeUpgrade", s.system.last_runtime_upgrade],
+      ["ComputeChannel", "Channels", s.compute_channel.channels],
+      ["FlopSessionKeys", "Sessions", s.flop_session_keys.sessions],
+      ["FlopSessionKeys", "SessionNonces", s.flop_session_keys.session_nonces],
+      ["FlopSessionKeys", "CircuitBreakers", s.flop_session_keys.circuit_breakers],
+    ];
+    expect(STATED_ENTRIES).toEqual(stated.map(([p, e]) => [p, e]));
+    for (const [p, e, shape] of stated) {
+      const entry = MD.pallets.find((x) => x.name === p)?.storage?.entries.find((x) => x.name === e);
+      expect(shape, `${p}.${e}`).toMatchObject({ modifier: entry?.modifier, hashers: entry?.hashers, value: typeName(MD, entry?.value ?? -1), default: `0x${Buffer.from(entry?.fallback ?? []).toString("hex")}` });
+    }
   });
 });
 
@@ -91,12 +129,13 @@ describe("the type closure in the shape", () => {
     return [];
   };
 
-  it("describes 464 types, and every type a description names is described too", () => {
+  it("describes 469 types, and every type a description names is described too", () => {
     const types = s.types as Record<string, Record<string, unknown>>;
-    expect(Object.keys(types).length).toBe(464);
+    expect(Object.keys(types).length).toBe(469);
     for (const [k, d] of Object.entries(types)) for (const x of named(d)) expect(types[x], `${k} names ${x}`).toBeDefined();
     // The entry points name described types.
-    for (const x of [s.system.events.value, s.system.last_runtime_upgrade.value, s.system.version, s.compute_channel.channels.value, s.compute_channel.channels.key]) expect(types[x], x).toBeDefined();
+    const fsk = s.flop_session_keys;
+    for (const x of [s.system.events.value, s.system.last_runtime_upgrade.value, s.system.version, s.compute_channel.channels.value, s.compute_channel.channels.key, fsk.sessions.key, fsk.sessions.value, fsk.session_nonces.key, fsk.session_nonces.value, fsk.circuit_breakers.key, fsk.circuit_breakers.value]) expect(types[x], x).toBeDefined();
   });
 
   it("holds the outer event enum with every pallet's events, the phase, and the channel's fields and states", () => {

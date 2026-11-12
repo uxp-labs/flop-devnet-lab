@@ -76,10 +76,11 @@ const H256 = idOf((t) => t.path.at(-1) === "H256");
 
 /**
  * A small metadata with what deriveShape and decodeEvents look for: System (a Version constant,
- * Events, LastRuntimeUpgrade) and ComputeChannel (its event enum, Channels). The event enum has one
+ * Events, LastRuntimeUpgrade), ComputeChannel (its event enum, Channels) and FlopSessionKeys
+ * (Sessions, SessionNonces, CircuitBreakers). The event enum has one
  * event E, whose fields are given; extra types follow from id 12.
  */
-function shapeMetadata(o: { eventFields?: { name: string; type: number }[]; record?: { name: string; type: number }[]; extra?: TypeSpec[]; constants?: { name: string; type: number; value: Uint8Array }[] }): Uint8Array {
+function shapeMetadata(o: { eventFields?: { name: string; type: number }[]; record?: { name: string; type: number }[]; extra?: TypeSpec[]; constants?: { name: string; type: number; value: Uint8Array }[]; sessionKeys?: string[]; sessionFallback?: Uint8Array }): Uint8Array {
   const types: TypeSpec[] = [
     { def: def.primitive("u8") }, // 0
     { def: def.primitive("str") }, // 1
@@ -103,6 +104,11 @@ function shapeMetadata(o: { eventFields?: { name: string; type: number }[]; reco
       constants: o.constants ?? [{ name: "Version", type: 3, value: cat(str("tzkv-runtime"), u32(1014014)) }],
     },
     { name: "ComputeChannel", index: 1, event: 8, entries: [{ name: "Channels", map: { hashers: ["Blake2_128Concat"], key: 0, value: 10 } }] },
+    {
+      name: "FlopSessionKeys",
+      index: 2,
+      entries: (o.sessionKeys ?? ["Sessions", "SessionNonces", "CircuitBreakers"]).map((name) => ({ name, map: { hashers: ["Blake2_128Concat"], key: 0, value: 2 }, ...(name === "Sessions" && o.sessionFallback ? { fallback: o.sessionFallback } : {}) })),
+    },
   ];
   return metadata(types, pallets);
 }
@@ -130,7 +136,7 @@ describe("crashes that are not a ScaleError", () => {
     deriveShape(MD, n);
     const steps = MAX_SHAPE_STEPS - n.steps.left;
     const chars = MAX_SHAPE_CHARS - n.chars.left;
-    expect({ steps, chars }).toEqual({ steps: 9672, chars: 18167 });
+    expect({ steps, chars }).toEqual({ steps: 9733, chars: 18449 });
     // Past either budget, a ScaleError.
     const tight = namer(MD);
     tight.steps.left = 100;
@@ -252,6 +258,25 @@ describe("values decoded wrong, or valid values refused", () => {
     const b = cat(compact(1), u8(1), u8(0), u32(7));
     expect(decodeValue(md, 6, b)).toEqual([{ event: { variant: "ComputeChannel", fields: { variant: "E", fields: null } }, "phase,topics": 7 }]);
     expect(thrown(() => decodeEvents(md, b))).toEqual({ cls: "ScaleError", message: "an event record of System.Events does not have exactly the fields phase, event and topics" });
+  });
+
+  it("storage round: deriveShape refuses metadata without a FlopSessionKeys pallet or one of its three entries, with a ScaleError naming it", () => {
+    expect(() => deriveShape(parseMetadata(shapeMetadata({})))).not.toThrow();
+    const noPallet = parseMetadata(shapeMetadata({})).pallets.filter((p) => p.name !== "FlopSessionKeys");
+    expect(thrown(() => deriveShape({ ...parseMetadata(shapeMetadata({})), pallets: noPallet }))).toEqual({ cls: "ScaleError", message: "the metadata has no FlopSessionKeys pallet" });
+    for (const missing of ["Sessions", "SessionNonces", "CircuitBreakers"]) {
+      const md = parseMetadata(shapeMetadata({ sessionKeys: ["Sessions", "SessionNonces", "CircuitBreakers"].filter((e) => e !== missing) }));
+      expect(thrown(() => deriveShape(md))).toEqual({ cls: "ScaleError", message: `pallet FlopSessionKeys has no storage entry ${JSON.stringify(missing)}` });
+    }
+  });
+
+  it("review round 20: the shape states an Optional entry's default as the metadata gives it, also when it is not 0x00", () => {
+    const md = parseMetadata(shapeMetadata({ sessionFallback: new Uint8Array([1, 2, 3, 4]) }));
+    const sessions = md.pallets.find((p) => p.name === "FlopSessionKeys")?.storage?.entries.find((e) => e.name === "Sessions");
+    expect(sessions?.modifier).toBe("Optional");
+    const shape = JSON.parse(shapeText(deriveShape(md)));
+    expect(shape.flop_session_keys.sessions.default).toBe("0x01020304");
+    expect(shape.flop_session_keys.session_nonces.default).toBe("0x");
   });
 
   it("review defect 8, fixed: two constants of one name in a pallet are refused, so deriveShape never reads the spec from one of two", () => {
@@ -501,6 +526,7 @@ describe("the shape pin", () => {
       if (x === undefined) throw new Error("no entry");
       const map = x.type.tag === "map";
       return {
+        default: x.fallback,
         hashers: map ? (x.type.value as { hashers: { tag: string }[] }).hashers.map((h) => HASH[h.tag]) : [],
         key: map ? name((x.type.value as { key: number }).key) : null,
         modifier: x.modifier === 0 ? "Optional" : "Default",
@@ -549,6 +575,10 @@ describe("the shape pin", () => {
     const channels = entry("ComputeChannel", "Channels");
     const channel = composite(channels.valueId);
     const state = channel.find((f) => f.name === "state");
+    const fsk = pallet("FlopSessionKeys");
+    const sessions = entry("FlopSessionKeys", "Sessions");
+    const nonces = entry("FlopSessionKeys", "SessionNonces");
+    const breakers = entry("FlopSessionKeys", "CircuitBreakers");
     const versionConstant = sys?.constants.find((c) => c.name === "Version");
     const version = BUILDER.buildConstant("System", "Version").dec(versionConstant?.value ?? "0x") as { spec_name: string; spec_version: number };
     const mine = {
@@ -557,19 +587,29 @@ describe("the shape pin", () => {
         channels: { ...strip(channels), fields: fields(channel) },
         events: variants(cc?.events ?? -1),
         index: cc?.index,
+        storage_prefix: cc?.storage?.prefix,
       },
-      schema: "flop-observatory/decoder-shape@1",
+      flop_session_keys: {
+        circuit_breakers: strip(breakers),
+        index: fsk?.index,
+        storage_prefix: fsk?.storage?.prefix,
+        session_nonces: strip(nonces),
+        sessions: strip(sessions),
+      },
+      schema: "flop-observatory/decoder-shape@2",
       spec_name: version.spec_name,
       spec_version: version.spec_version,
       system: {
         events: { ...strip(events), record: fields(composite(seq.value)) },
         index: sys?.index,
+        storage_prefix: sys?.storage?.prefix,
         last_runtime_upgrade: { ...strip(upgrade), fields: fields(composite(upgrade.valueId)) },
         version: name(versionConstant?.type ?? -1),
       },
-      types: closure([events.valueId, upgrade.valueId, channels.valueId, ...channels.keyId, versionConstant?.type ?? -1]),
+      types: closure([events.valueId, upgrade.valueId, channels.valueId, ...channels.keyId, versionConstant?.type ?? -1, ...[sessions, nonces, breakers].flatMap((e) => [e.valueId, ...e.keyId])]),
     };
-    expect(Object.keys(mine.types).length).toBe(464);
+    expect(Object.keys(mine.types).length).toBe(469);
+    expect(mine.flop_session_keys.index).toBe(94);
     expect(mine.compute_channel.events.length).toBe(60);
     expect(mine.compute_channel.index).toBe(103);
     expect(mine).toEqual(JSON.parse(SHAPE));

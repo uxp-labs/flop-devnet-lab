@@ -222,8 +222,10 @@ building and testing decoders against real data. It is evidence, never proof of 
   account, channel id, height and block hash names the file and field it was taken from, and from
   the recorded metadata. `test/storage-requests.test.ts` holds the file to that function byte for
   byte, builds every storage key again with the reference decoder, and holds every input to the
-  test record or the recording it names. A storage value a node does not hold is answered as null,
-  and that is an answer too.
+  test record or the recording it names. `node scripts/write-requests.mjs --out recordings/requests.json`
+  writes the file through that same function, and the check runs it and compares the bytes. A
+  storage value a node does not hold is answered as null, and that is an answer too. Its recording
+  is `fixtures/recording-20261112004113-0b2b505d2d4b703b`, with that list beside it.
 - The first list asked the finalized head and the genesis hash, then for each of twelve blocks
   with compute channel events its hash by height, its header, `System.Events` and
   `System.LastRuntimeUpgrade` at its hash, then the runtime version and the metadata at the last.
@@ -272,8 +274,8 @@ against a local bare repository, on one branch.
 ## Decoder
 
 `src/scale/` and `src/hash/` turn the bytes of a recording into values: the runtime metadata, any
-value by its type, storage keys and the events of a block. No command uses them yet, and no output
-changes. They parse bytes that came from the network, so every input is treated as hostile. They
+value by its type, storage keys, the events of a block, and the value of a storage entry at a
+block. No command uses them yet, and no output changes. They parse bytes that came from the network, so every input is treated as hostile. They
 are pure: no file, network, clock or random access, which the source scan holds them to.
 
 | Module | What |
@@ -285,7 +287,7 @@ are pure: no file, network, clock or random access, which the source scan holds 
 | `src/scale/storage-key.ts` | a storage key from a pallet, an entry and its map keys, with the hashers the metadata states |
 | `src/scale/events.ts` | System.Events by the type the metadata gives it: each event with its pallet name and index, its name and variant index, its fields and its phase |
 | `src/scale/shape.ts`, `shapes/` | the shape pin: the reviewed shapes, the shape with its table of types, and the one function that refuses any other |
-| `src/scale/block.ts` | the one way a block's events are decoded: only once its shape is pinned |
+| `src/scale/block.ts` | the one way real chain data is decoded, only once the block's shape is pinned: a block's events (`decodeBlockEvents`), and the value of a storage entry the shape states (`decodeStorageValue`) |
 
 What a decoded value proves: nothing about the chain on its own. A recording is what one RPC
 endpoint answered (RULES.md section 8), and a decoded value is that answer read. It is evidence,
@@ -295,28 +297,58 @@ metadata, never by the form of the value.
 The shape pin. `REVIEWED` in `src/scale/shape.ts` lists each reviewed shape: a spec name and
 version, the sha256 and length of the metadata bytes at that spec, and the sha256 of the shape
 file. The first is `tzkv-runtime` 1014014, metadata `f4fd2add...3444` of 482132 bytes, and
-`shapes/tzkv-runtime-1014014.json` (sha256 `4b50e851...e82a`). A reviewer read the shape file and
-the metadata it came from, and a test derives the file a second way, from the reference decoder's
-own parse. The shape file is derived from that metadata: the spec, the ComputeChannel pallet index,
-its 60 events with each field's name and type, the Channels entry with its hasher, key and value,
-the fields and states of a channel, the System.Events and System.LastRuntimeUpgrade entries, the
-System.Version type, and a table of the 464 types reachable from those, each with its kind, path
-and what the kind holds. `pinShape` refuses, and says why, when the spec is not reviewed, the
+`shapes/tzkv-runtime-1014014.json` (sha256 `679f98aa...60e7`, `decoder-shape@2`). A reviewer read
+the shape file and the metadata it came from, and a test derives the file a second way, from the
+reference decoder's own parse. The shape file is derived from that metadata: the spec, the
+ComputeChannel pallet index, its 60 events with each field's name and type, the Channels entry, the
+fields and states of a channel, the System.Events and System.LastRuntimeUpgrade entries, the
+FlopSessionKeys pallet index (94) and its Sessions, SessionNonces and CircuitBreakers entries, the
+System.Version type, and a table of the 469 types reachable from those, each with its kind, path
+and what the kind holds. Each entry is stated with its modifier, hashers, key type, value type and
+the default bytes the metadata gives it, and each of the three pallets with the storage prefix
+every key of it starts from, so a changed prefix changes the file. `STATED_ENTRIES` lists those six
+entries. `pinShape` refuses, and says why, when the spec is not reviewed, the
 metadata bytes or the shape file are not the reviewed ones, the shape derived again differs from
 the file, or the block's LastRuntimeUpgrade names another spec. It reads each part of its input
-once and copies the bytes, so what is hashed is what is parsed. The shape file's own sha256 is what
+once and copies the bytes, so what is hashed is what is parsed. The first recording pins and
+decodes exactly as it did under `decoder-shape@1`. The shape file's own sha256 is what
 holds the deriving code to the review: a changed `deriveShape` with a file written again from it
 passes every other check. A new runtime spec is decoded only after its shape file and its line are
 added to `REVIEWED`. Outside `src/scale/`, only `block.ts` may be imported from it.
 
+Storage values. `decodeStorageValue` in `src/scale/block.ts` takes the pin input, the pallet and
+entry names, the SCALE bytes of each key part, the storage key that was asked (as the tape holds
+it) and the answer: bytes, or null when the node held no value. It reads its input in this order,
+each field once and only when its step comes: the pallet and the entry, strings of at most 256
+characters, and an entry the reviewed shape does not state is refused before any other field is
+read; then the pin input, and a block that does not pin is refused with the pin's reason; then the
+key parts, read by index once the list holds exactly as many as the entry takes; then the key
+asked, refused when its length is not the length of the key `src/scale/storage-key.ts` builds from
+that entry and those parts (never turned into text) or when a byte differs, so a value is never
+read under another entry or account, and no refusal prints it; then the answer, refused when it is
+not null and not one whole value of the entry's type, a byte after it included, or undefined. The
+three doors (`decodeStorageValue`, `decodeBlockEvents`, `pinShape`) trust no object they are
+handed: an input that is not an object is a refusal; anything thrown while a field is read (a
+getter, a Proxy trap) is a refusal with a fixed text, never the foreign error's message; bytes are
+taken only from a real Uint8Array, measured from its own slots before anything is copied and
+copied once by the typed array's own set, never through an iterator, its constructor or its
+species, so a Proxy over one is refused; and a byte array past 16 MiB, a spec name past 256 characters or a shape
+file past 16 MiB of text is refused. Absent is an answer, never an error and never a zero the
+chain did not send: a null answer for an Optional entry is the value null, and for a Default entry
+the default bytes the metadata states for it, decoded; either way `stored` is false. Any answer with
+bytes is `stored` true, even bytes equal to the default, so a caller can always tell a stored value
+from a default. Numbers and accounts come in the decoder's forms: every integer past u32 a decimal
+string, an account 0x and 32 bytes of hex.
+
 Bounds on hostile input, the metadata included. Every exported function of `src/scale/` ends in a
-value or a `ScaleError`. Metadata or a value of more than 16 MiB is refused unread. A count is
+value or a `ScaleError` (the three doors in a value that may be a refusal), for the inputs its
+types allow, and the three doors for any input at all. Metadata or a value of more than 16 MiB is refused unread. A count is
 refused when it claims more than the bytes left, before anything is read or built for it, so
 nothing is sized from an untrusted length. A type nests at most 32 levels (`MAX_DEPTH`). One decode
 takes at most `1024 + 8 * bytes` steps (`valueBudget`), one step for each type it visits, and a
 step that succeeds builds no text. One `deriveShape` takes at most 1,000,000 steps and 4,000,000
 characters of names, each name built once, at most 2048 characters and 16 levels deep; the reviewed
-shape takes 9,672 steps. RULES.md section 9 states each bound. The fuzz tests in
+shape takes 9,733 steps. RULES.md section 9 states each bound. The fuzz tests in
 `test/scale-fuzz.test.ts` count the steps of every decode against its bound.
 
 The reference. `@polkadot-api/substrate-bindings` and `@polkadot-api/metadata-builders` are pinned
@@ -330,7 +362,24 @@ Offline, `npm test` covers: the reader, the hashes against published values, `@n
 the reference, the metadata parser on every kind and every refusal, the decoder's forms and limits,
 the three storage keys read by hand, all twelve recorded blocks of events with the numbers read by
 hand at block 3479299, the shape pin and its refusals, the type closure, the reference, hostile
-bytes, and the review's defects, gaps and held attacks.
+bytes, and the review's defects, gaps and held attacks. On the second recording
+(`fixtures/recording-20261112004113-0b2b505d2d4b703b`), `test/storage-values.test.ts` decodes all 28
+storage reads through `decodeStorageValue` (22 of the session, nonce, breaker and channel entries,
+6 of System.Events) and holds each of the 22 to what the lab's two devnet session tests recorded in
+`research/*/results.json`. Every field of every one of the 21 stored entry values has a source,
+named in `FIELDS` there: 99 fields a results file gives (the session's terms in the steps' own
+words, spent and epoch_spent after each step, expires_at, allowed_pallets, active after the revoke,
+the nonce, the breaker after steps 4, 6 and 7, our channel after force_open, its state after
+expire_force_open), 2 the first recording's ToplocEvidenceSubmitted event gives (the gateway's
+miner), and 72 marked READ, held to the reference decoder's decode of the same bytes; each whole
+value is compared with the reference too, and the bytes decoded with the fixture tape's own text.
+The six System.Events reads are held to the test records: four to the sha256 the escrow file gives
+of the value, and all six to their step's outcome event at its extrinsic index, success or the
+module error the file names. An assert that rests on a chain rule and not on a results file is
+marked RULE there (a refused call leaves the record as it was, compared block with block). Every
+prefix of every stored value is refused, and every bit flip of each value of at most 512 bytes, and
+of each larger one the bit at its byte index mod 8 in every byte, ends in a value or a `ScaleError`
+within its budget.
 
 ## Published readings
 
@@ -410,6 +459,7 @@ The two interfaces other teams import are in [../interfaces](../interfaces).
 | `src/run-command.ts` | what the live run and the recorder share: exit codes, flags, `SHA256SUMS` over the folder, how the command ends |
 | `src/requests.ts`, `recordings/requests.json` | the request list's form, and the list to be recorded next |
 | `recordings/requests-inputs.json`, `test/helpers/requests-derive.ts` | the inputs of the list, each with the file and field it comes from, and the function that derives the list from them and the recorded metadata |
+| `scripts/write-requests.mjs`, `scripts/ts-resolve.mjs`, `test/helpers/requests-list.ts` | the writer of `recordings/requests.json` (`--out <file>`), through the same derive function the tests use, run under Node's own type stripping with a hook that resolves a relative .js import from a .ts module to the .ts file |
 | `src/record-run.ts`, `src/record-bin.ts` | one record run and its files, and the command |
 | `src/recording.ts` | the reader contract for a recording |
 | `src/scale/`, `src/hash/` | the decoder, pure: reader, hashes, metadata, decode by type, storage keys, events, the shape pin and the one entry point for a block's events ([Decoder](#decoder)) |
@@ -420,7 +470,7 @@ The two interfaces other teams import are in [../interfaces](../interfaces).
 | `src/own.ts` | the one way src reads a data record by a key only known at run time |
 | `src/files.ts` | the one way src reads a file it is handed: a regular file only, opened without waiting, so a named pipe is refused instead of blocking |
 | `tools/recount.py` | independent census recount, written from RULES.md alone |
-| `fixtures/` | saved scenarios; `meta.json` says which values are real and which are made up; `live-*` and `memory-*` are synthetic tapes; `published-*` are real readings from the data branch, with their provenance; `recording-*` are real recordings, byte for byte, each with the request list it was made from |
+| `fixtures/` | saved scenarios; `meta.json` says which values are real and which are made up; `live-*` and `memory-*` are synthetic tapes; `published-*` are real readings from the data branch, with their provenance; `recording-*` are real recordings, byte for byte, each with the request list it was made from: the first of compute channel events, the second of the storage the lab's two devnet session tests left behind |
 | `mutants/` | the injected bugs and the tests that must catch them |
 | `REVIEW-LOG.md` | what each outside review and independent rerun found, and the fix and proof for each, newest first |
 | `test/setup.ts` | the runtime block on every network and process path, its one exemption (`runShell`, for `test/publish-shell.test.ts` only, which runs both publish jobs' shells), the leftover attempt check, and the attempts journal |

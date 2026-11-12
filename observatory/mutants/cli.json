@@ -286,5 +286,21 @@
     "replace": "    print(await driftFor(src, dir, one(a, \"--spec\"), one(a, \"--now\") ?? src.data.meta.now));",
     "test": "scripts/cli-checks.mjs",
     "why": "third IMD audit J3: the drift command takes its time from the one checked resolver"
+  },
+  {
+    "id": "cli-write-requests-usage-exit-0",
+    "file": "scripts/write-requests.mjs",
+    "find": "  process.exit(2);",
+    "replace": "  process.exit(0);",
+    "test": "scripts/cli-checks.mjs",
+    "why": "the writer refuses a call without --out with exit 2"
+  },
+  {
+    "id": "cli-write-requests-old-node-accepted",
+    "file": "scripts/write-requests.mjs",
+    "find": "if (!(major > 22 || (major === 22 && minor >= 18)) || !process.features.typescript) {",
+    "replace": "if (false) {",
+    "test": "scripts/cli-checks.mjs",
+    "why": "the writer says in one line of its own that it needs type stripping, instead of a loader error"
   }
 ]
