@@ -184,3 +184,82 @@ describe("C. every pairing of spec, metadata, shape file and LastRuntimeUpgrade"
     }
   });
 });
+
+describe("D. the shape diff script against hand made pairs", () => {
+  const changed = (f: (c: any) => void) => {
+    const c = JSON.parse(NEW_TEXT);
+    f(c);
+    return shapeDiff(JSON.parse(NEW_TEXT), c).filter((l: string) => !l.endsWith(": no difference in what the shapes state"));
+  };
+  const ty = (c: any, n: string) => c.types[n];
+
+  it("HELD: each change that alters decoding prints a line that names where it is, and a change of ids alone prints none", () => {
+    const s = JSON.parse(NEW_TEXT);
+    const channel = s.compute_channel.channels.value as string;
+    const sla = ty(s, channel).fields.find((f: { name: string }) => f.name === "sla").type as string;
+    const state = ty(s, channel).fields.find((f: { name: string }) => f.name === "state").type as string;
+    const cases: [string, (c: any) => void, RegExp][] = [
+      ["a field renamed", (c) => { ty(c, c.flop_session_keys.sessions.value).fields.find((f: { name: string }) => f.name === "spent").name = "spend"; }, /^FlopSessionKeys\.Sessions value: fields were/],
+      ["two same typed fields swapped", (c) => { const f = ty(c, channel).fields; [f[0], f[1]] = [f[1], f[0]]; }, /^ComputeChannel\.Channels value: fields were \(agent: AccountId32, miner/],
+      ["a type changed deep inside", (c) => { ty(c, sla).fields[0].type = "u64"; }, /^ComputeChannel\.Channels value\.sla\.max_turns: type was u32, now u64$/],
+      ["a variant index moved", (c) => { ty(c, state).variants[3].index = 4; }, /moved from index 3 to index 4$/],
+      ["a variant removed", (c) => { ty(c, state).variants.pop(); }, /value\.state: variant PendingAck removed/],
+      ["an event removed", (c) => { c.compute_channel.events.pop(); }, /^ComputeChannel events: event \w+ removed/],
+      ["a hasher changed", (c) => { c.compute_channel.channels.hashers = ["Twox64Concat"]; }, /^ComputeChannel\.Channels hashers:/],
+      ["a modifier changed", (c) => { c.compute_channel.channels.modifier = "Default"; }, /^ComputeChannel\.Channels modifier:/],
+      ["default bytes changed", (c) => { c.flop_session_keys.sessions.default = "0x01"; }, /^FlopSessionKeys\.Sessions default bytes:/],
+      ["a storage prefix changed", (c) => { c.system.storage_prefix = "Sys"; }, /^System storage prefix:/],
+      ["a pallet index changed", (c) => { c.compute_channel.index += 1; }, /^ComputeChannel index:/],
+      ["a key type changed to another 32 byte type", (c) => { c.compute_channel.channels.key = "AccountId32#0"; }, /^ComputeChannel\.Channels key: type was H256, now AccountId32$/],
+      ["the System.Version type changed", (c) => { ty(c, c.system.version).fields[1].type = "u64"; }, /^System\.Version\.impl_name:/],
+      ["a type reachable only from LastRuntimeUpgrade", (c) => { ty(c, c.system.last_runtime_upgrade.value).fields[0].type = "u32"; }, /^System\.LastRuntimeUpgrade value\.spec_version: type was Compact<u32>, now u32$/],
+      ["a tuple key part changed", (c) => { ty(c, c.flop_session_keys.sessions.key).types[1] = "H256#13"; }, /^FlopSessionKeys\.Sessions key\.1:/],
+    ];
+    for (const [what, f, line] of cases) {
+      const lines = changed(f);
+      expect(lines.length, what).toBeGreaterThan(0);
+      expect(lines.some((l: string) => line.test(l)), `${what}: ${lines.slice(0, 3).join(" | ")}`).toBe(true);
+    }
+    expect(changed(() => {})).toEqual([]);
+  });
+
+  /** A shape whose SessionNonces value is a type that refers to itself, holding a field of type w. */
+  const recursive = (w: string) => {
+    const c = JSON.parse(NEW_TEXT);
+    c.types["Rec#9999"] = { kind: "composite", path: ["x", "Rec"], fields: [{ name: "v", type: w }, { name: "next", type: "Option<Rec#9999>#9998" }] };
+    c.types["Option<Rec#9999>#9998"] = { kind: "variant", path: ["Option"], variants: [{ index: 0, name: "None", fields: [] }, { index: 1, name: "Some", fields: [{ name: null, type: "Rec#9999" }] }] };
+    c.flop_session_keys.session_nonces.value = "Rec#9999";
+    return c;
+  };
+
+  it("HELD: a type that refers to itself and did not change ends with no line", () => {
+    expect(shapeDiff(recursive("u32"), recursive("u32")).filter((l: string) => !l.endsWith("no difference in what the shapes state"))).toEqual([]);
+  });
+
+  it("DEFECT 2 (low): a change inside a type that refers to itself never ends: the diff overflows the stack", () => {
+    let out: string[] | string;
+    try {
+      out = shapeDiff(recursive("u32"), recursive("u64"));
+    } catch (e) {
+      out = `threw ${(e as Error).constructor.name}: ${(e as Error).message}`;
+    }
+    expect(out).toContain("FlopSessionKeys.SessionNonces value.v: type was u32, now u64");
+  });
+
+  it("DEFECT 3 (low): a shape file of another format version is compared without a word, and one that lacks a stated pallet throws a TypeError", () => {
+    const other = JSON.parse(NEW_TEXT);
+    other.schema = "flop-observatory/decoder-shape@3";
+    const lines = shapeDiff(JSON.parse(NEW_TEXT), other);
+    expect(lines.some((l: string) => l.includes("schema") || l.includes("decoder-shape@3")), lines.join(" | ")).toBe(true);
+    const old = JSON.parse(NEW_TEXT);
+    old.schema = "flop-observatory/decoder-shape@1";
+    delete old.flop_session_keys;
+    let said: string;
+    try {
+      said = shapeDiff(old, JSON.parse(NEW_TEXT)).join(" | ");
+    } catch (e) {
+      said = `${(e as Error).constructor.name}: ${(e as Error).message}`;
+    }
+    expect(said).not.toMatch(/^TypeError/);
+  });
+});
