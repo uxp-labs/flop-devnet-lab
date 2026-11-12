@@ -350,8 +350,9 @@ the three storage keys read by hand, all twelve recorded blocks of events with t
 hand at block 3479299, the shape pin and its refusals, the type closure, the reference, hostile
 bytes, and the review's defects, gaps and held attacks. On the second recording
 (`fixtures/recording-20261112004113-0b2b505d2d4b703b`), `test/storage-values.test.ts` decodes all 28
-storage reads through `decodeStorageValue` and holds each to what the lab's two devnet session tests
-recorded in `research/*/results.json`: the session's terms (from the create_session calls those
+storage reads through `decodeStorageValue` (22 of the session, nonce, breaker and channel entries,
+6 of System.Events) and holds each of the 22 to what the lab's two devnet session tests recorded in
+`research/*/results.json`: the session's terms (from the create_session calls those
 files hold, decoded), spent and epoch_spent after each step, expires_at, allowed_pallets, active
 before and after the revoke, the session nonce, the circuit breaker, our channel after force_open
 and after expire_force_open, and the gateway channel at both blocks. An assert that rests on a chain

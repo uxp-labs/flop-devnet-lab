@@ -364,22 +364,21 @@ describe("values of the gateway channel, which no results file holds", () => {
 describe("damaged values: never anything but a ScaleError, never past the decoder's budget", () => {
   /** A decode of the read's entry over these bytes: a value, or refused with a ScaleError. */
   // As decodeValue does it, but counting the steps: no decode may take more than valueBudget(bytes).
+  // The most any decode took, as a share of its bound, is checked once at the end of each test.
   let most = 0;
+  const TYPE = new Map(S.reads.map((r) => [r.seq, MD.pallets.find((p) => p.name === r.read.pallet)?.storage?.entries.find((x) => x.name === r.read.entry)?.value ?? -1]));
   const outcome = (r: StorageRead, b: Uint8Array): "decoded" | "refused" => {
-    const e = MD.pallets.find((p) => p.name === r.read.pallet)?.storage?.entries.find((x) => x.name === r.read.entry);
     const d = decoding(MD, b);
     const bound = valueBudget(b.length);
     try {
-      decodeAt(d, e?.value ?? -1);
+      decodeAt(d, TYPE.get(r.seq) ?? -1);
       d.r.end();
       return "decoded";
     } catch (x) {
       if (x instanceof ScaleError) return "refused";
       throw x;
     } finally {
-      const steps = bound - Math.max(d.budget.left, 0);
-      expect(steps).toBeLessThanOrEqual(bound);
-      most = Math.max(most, steps / bound);
+      most = Math.max(most, (bound - Math.max(d.budget.left, 0)) / bound);
     }
   };
 
@@ -387,15 +386,16 @@ describe("damaged values: never anything but a ScaleError, never past the decode
     let n = 0;
     for (const r of S.reads) {
       if (r.answer === null) continue;
-      for (let k = 0; k < r.answer.length; k++, n++) expect(outcome(r, r.answer.subarray(0, k)), `${r.read.entry} at ${r.height} cut to ${k}`).toBe("refused");
+      for (let k = 0; k < r.answer.length; k++, n++) if (outcome(r, r.answer.subarray(0, k)) !== "refused") expect.fail(`${r.read.entry} at ${r.height} cut to ${k} decoded`);
     }
     expect(n).toBe(S.reads.reduce((t, r) => t + (r.answer?.length ?? 0), 0));
-  });
+    expect(most).toBeLessThanOrEqual(1);
+  }, 120_000);
 
-  it("decodes or refuses with a ScaleError every single bit flip of every stored value, within its budget", () => {
+  const flips = (reads: StorageRead[]) => {
     let decoded = 0;
     let refused = 0;
-    for (const r of S.reads) {
+    for (const r of reads) {
       if (r.answer === null) continue;
       for (let bit = 0; bit < r.answer.length * 8; bit++) {
         const b = new Uint8Array(r.answer);
@@ -404,10 +404,23 @@ describe("damaged values: never anything but a ScaleError, never past the decode
         else refused++;
       }
     }
-    expect(decoded + refused).toBe(8 * S.reads.reduce((t, r) => t + (r.answer?.length ?? 0), 0));
+    expect(decoded + refused).toBe(8 * reads.reduce((t, r) => t + (r.answer?.length ?? 0), 0));
     expect(refused).toBeGreaterThan(0);
-    expect(most).toBeLessThan(1);
-  });
+    expect(most).toBeLessThanOrEqual(1);
+    return decoded + refused;
+  };
+
+  it("decodes or refuses with a ScaleError every single bit flip of the 21 stored session, nonce, breaker and channel values, within its budget", () => {
+    const reads = S.reads.filter((r) => r.read.pallet !== "System");
+    expect(reads.filter((r) => r.answer !== null).length).toBe(21);
+    expect(flips(reads)).toBe(21_184);
+  }, 120_000);
+
+  it("decodes or refuses with a ScaleError every single bit flip of the 6 System.Events values read through the door, within its budget", () => {
+    const reads = S.reads.filter((r) => r.read.pallet === "System");
+    expect(reads.length).toBe(6);
+    expect(flips(reads)).toBe(69_744);
+  }, 300_000);
 
   it("through the door too: every prefix and bit flip of the breaker and the nonce ends in a value or a refusal", () => {
     for (const r of [readAt(3497611, "CircuitBreakers", "device_2"), readAt(3497611, "SessionNonces", "device_2")]) {

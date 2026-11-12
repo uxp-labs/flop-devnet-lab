@@ -168,8 +168,8 @@
     "names": "e2e3afc5e6e637192046cabccf8e12af4ce4c072bd85909f277bfac2ce8ca716"
   },
   "storage-values.test.ts": {
-    "tests": 25,
-    "names": "9f63f01ae0f562a9ab06d0de32207ba4aef628d1f5c89f8fc1e041f5272f2e87"
+    "tests": 26,
+    "names": "f9454c4bd7b89df28d5e6ad74ce645ca4378cf225b0820320faa6aea5e809666"
   },
   "store.test.ts": {
     "tests": 23,
