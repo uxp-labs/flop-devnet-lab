@@ -78,6 +78,14 @@ export const REVIEWED: readonly ReviewedShape[] = [
     shapeFile: "shapes/tzkv-runtime-1014014.json",
     shapeSha256: "679f98aa06abf1d9b376fe4243e4d13c1b5ae80e9b6cdf1fd1e0190c1e7660e7",
   },
+  {
+    specName: "tzkv-runtime",
+    specVersion: 1014020,
+    metadataSha256: "91294eb61225c4de7459e6a8fed3c37169a2c8a1b1906b46a5890d5e0d328238",
+    metadataBytes: 487100,
+    shapeFile: "shapes/tzkv-runtime-1014020.json",
+    shapeSha256: "650b34919b04744dbbfbaaf917ce83aa804ae361d53f8c15f3979f604574dc81",
+  },
 ];
 
 export type ShapeValue = null | boolean | number | string | ShapeValue[] | { [key: string]: ShapeValue };

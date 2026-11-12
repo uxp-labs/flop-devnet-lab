@@ -33,16 +33,16 @@ const refused = (over: Partial<PinInput>): string => {
 
 describe("the reviewed shapes", () => {
   it("start with spec 1014014 of tzkv-runtime, its 482132 metadata bytes by sha256, and the committed shape file", () => {
-    expect(REVIEWED).toEqual([
-      {
-        specName: "tzkv-runtime",
-        specVersion: 1014014,
-        metadataSha256: "f4fd2addba7fff1129483d0e66b8e6bc69141292f56443e201d3f073aab03444",
-        metadataBytes: 482132,
-        shapeFile: FILE,
-        shapeSha256: sha256(SHAPE),
-      },
-    ]);
+    expect(REVIEWED.at(0)).toEqual({
+      specName: "tzkv-runtime",
+      specVersion: 1014014,
+      metadataSha256: "f4fd2addba7fff1129483d0e66b8e6bc69141292f56443e201d3f073aab03444",
+      metadataBytes: 482132,
+      shapeFile: FILE,
+      shapeSha256: sha256(SHAPE),
+    });
+    // The second line, spec 1014020, is held in test/upgrade-shape.test.ts.
+    expect(REVIEWED.map((r) => `${r.specName} ${r.specVersion}`)).toEqual(["tzkv-runtime 1014014", "tzkv-runtime 1014020"]);
     expect(R.metadata.length).toBe(482132);
     expect(sha256(R.metadata)).toBe(REVIEWED.at(0)?.metadataSha256);
   });
