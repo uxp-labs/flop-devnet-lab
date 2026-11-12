@@ -23,6 +23,8 @@ Team: uxp-labs (GitHub). ultrapara's first agent fleet (PRODY, Chief, Sonar, Anv
 | Nov 11 (UTC) | Claude | The ledger lock rewritten after the audit's high finding: steps that yield before every file operation, checked over every interleaving of three waiters with crashes | imd-flop/src/lock.ts |
 | Nov 11 (UTC) | Claude | Observatory decoder: hashes, SCALE, metadata V14, events, storage keys, pinned to a reviewed shape of the runtime | observatory/src/scale/ |
 | Nov 11 (UTC) | Claude | All 13 findings of the second swarm audit fixed (PRs 25 and 28). Three independent reviews by agents that wrote none of the code (lock, audit fixes, decoder) proved 29 more defects with tests; all fixed | imd-flop/, viewer/, contract/, observatory/ |
+| Nov 12 (UTC) | Claude | One rule for every JSON text the tool did not write: a body with a number that is not finite takes the path of a body that is not JSON, reason `non_finite_number` (KD-17 fixed, PR 31) | imd-flop/src/outside-json.ts, imd-flop/src/gateway.ts, imd-flop/src/providers.ts |
+| Nov 12 (UTC) | Claude | A fourth research report bought from the IMD swarm (0.5 IMD): what running one FLOP devnet miner on a rented GPU takes, costs and risks. Kept as delivered, with the three chain counts we reread ourselves | research/2026-11-12-miner-runbook/ |
 
 ## The first team (code names)
 Chief (lead), PRODY (PM / test runs), Sonar (research), Anvil (spend guard + receipt tracker), FIXER (visual lead), Inky (settlement viewer). Team address: see README.md. Their per-agent devnet wallets are not listed.
