@@ -30,6 +30,9 @@
 #                         every known bad sample and passed every known good one
 #     canary.json         throwaway tests that each leave one forbidden attempt, all caught, two of
 #                         them from a timer that fires after the file's final check
+#     check-canary.json   scripts/check-lib.sh on a small driver: cut by SIGTERM, SIGINT and SIGHUP,
+#                         ended early, finished with an empty outputs/, a failing step or every step
+#                         passing, each read as it must be, and tampered copies of the library caught
 #     mutants.json        each injected bug, the test that caught it, and both controls
 #     mutants-canary.json the mutation runner classifying a real bug, an equivalent change, a
 #                         syntax error and a missing test correctly, copying exactly the tracked
@@ -106,6 +109,9 @@ step source-scan sh -c "node scripts/source-scan.mjs > '$evidence/source-scan.js
 
 # 3. The harness itself: a test that leaves any forbidden attempt in the log must fail.
 step canary sh -c "node scripts/canary.mjs > '$evidence/canary.json'"
+# The check itself, cut: a signal or an early exit is reported as not finished, never 0 and with
+# no digest, and the cut step's whole process tree is stopped. Run on a small driver, never here.
+step check-canary sh -c "node scripts/check-canary.mjs > '$evidence/check-canary.json'"
 
 # 4. Injected bugs, in a copy of every tracked file in the repo: an unmutated control must pass,
 #    then every mutant must make at least one test in its named file fail. The runner proves its
