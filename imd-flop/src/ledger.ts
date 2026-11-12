@@ -14,6 +14,7 @@ import { isJobId } from "./policy.js";
 import { ceilMicro } from "./rounding.js";
 import { outsideValue } from "./secrets.js";
 import { appendJsonlSafe } from "./store.js";
+import { PROVIDER_NAMES, type ProviderName } from "./providers/kinds.js";
 import type { Payer } from "./config.js";
 
 export interface LedgerEntry {
@@ -23,7 +24,7 @@ export interface LedgerEntry {
   seat: string; // NFT tokenId
   did: string | null; // the seat's FLOP did:key at call time
   job: string;
-  provider: "mock" | "flop";
+  provider: ProviderName;
   network: string;
   payer: Payer;
   model: string;
@@ -221,8 +222,8 @@ function isUtcDay(v: unknown): v is string {
   return typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v) && !v.startsWith("0000") && !Number.isNaN(Date.parse(`${v}T00:00:00Z`)) && utcDay(new Date(`${v}T00:00:00Z`)) === v;
 }
 
-/** The provider names a ledger row can hold. contract/rules.json LEDGER_PROVIDERS. */
-export const LEDGER_PROVIDERS: ReadonlySet<string> = new Set(["mock", "flop"]);
+/** The provider names a ledger row can hold: the table in providers/kinds.ts. contract/rules.json LEDGER_PROVIDERS. */
+export const LEDGER_PROVIDERS: ReadonlySet<string> = new Set(PROVIDER_NAMES);
 const PAYERS: ReadonlySet<string> = new Set(["holder", "requester"]);
 
 /** A field a total filters rows on, the value the total wants there, and what a usable value is. */

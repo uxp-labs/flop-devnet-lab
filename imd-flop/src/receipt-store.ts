@@ -12,7 +12,8 @@ import { bookRead } from "./booking.js";
 import { latestAttempts, LedgerLockError, UnusableLedgerRow, type LedgerEntry } from "./ledger.js";
 import { matchable, matchReceipt, type ReceiptIds } from "./match.js";
 import { receiptsDir } from "./paths.js";
-import type { Provider, ReceiptRead } from "./providers.js";
+import type { Provider, ReceiptRead } from "./providers/interface.js";
+import { kindOf } from "./providers/kinds.js";
 import { classifyReceipt, type Classified, type MatchResult } from "./receipts.js";
 import { redactFlagged } from "./secrets.js";
 import { DISAGREE, isFreshRead, PAST_ADMITTED, receiptIdentity, reconcile, type ReadOutcome, type StoredReceipt } from "./settlement.js";
@@ -196,7 +197,7 @@ export async function refreshReceipt(
   const { saved: stored, ledgerRow } = current;
   const pname = stored?.provider ?? ledgerRow!.provider;
   const rr = await provider.readReceipt(rid);
-  const c = classifyReceipt(rr.receipt, { job: stored?.job ?? ledgerRow?.job ?? null, provider: pname, http: rr.http, error: rr.error, requestId: rid, mock: pname === "mock" });
+  const c = classifyReceipt(rr.receipt, { job: stored?.job ?? ledgerRow?.job ?? null, provider: pname, http: rr.http, error: rr.error, requestId: rid, mock: kindOf(pname).mock });
   // No file yet, or an older file without seat/did (716819c era): seed them from the ledger row. Stored values win.
   const seed = (file: SavedReceipt | null) => {
     const lacksIdentity = !file || (ledgerRow !== undefined && (!present(file.seat) || !present((file as { did?: unknown }).did)));

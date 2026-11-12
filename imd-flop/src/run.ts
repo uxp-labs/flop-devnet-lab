@@ -16,7 +16,8 @@ import { bookFailure, bookRead } from "./booking.js";
 import { DISAGREE, PAST_ADMITTED, reportedCost, SETTLES } from "./settlement.js";
 import { receiptVerdicts, storeRead } from "./receipt-store.js";
 import { responsePath } from "./response-store.js";
-import type { Provider } from "./providers.js";
+import type { Provider } from "./providers/interface.js";
+import { isProviderName, kindOf, requestIdPrefix, UNLISTED_PROVIDER_REFUSAL } from "./providers/kinds.js";
 import { assertPaidNetwork, checkImdJob, ethRpcUrlMark, PaidGateError, PreSendError, readVerifiedSeatOwner, type Fetch } from "./gateway.js";
 import { FlopHTTPError } from "@flop-labs/client";
 import { notJsonBecause } from "./outside-json.js";
@@ -101,6 +102,14 @@ export interface RunDeps {
 }
 
 export async function runJob(h: string, provider: Provider, o: RunOpts, deps: RunDeps): Promise<RunResult> {
+  // The provider's name is read once, here: the kind, the request id, every row, the response, the receipt and the
+  // result all use this one value, so a name that changed between reads cannot split a run.
+  const providerName = provider.name;
+  // A provider object whose name is not in the table is refused before anything else: no link check, no gate,
+  // no estimate, no call, no row. No command makes one; only a caller that hands runJob its own object can.
+  if (!isProviderName(providerName)) throw new CliError(UNLISTED_PROVIDER_REFUSAL, EXIT.USAGE);
+  // The facts about the provider come from the table by that name (providers/kinds.ts).
+  const kind = kindOf(providerName);
   const cfg = loadConfig(h);
   const net = network(cfg.network);
   const seat = o.seat ?? cfg.seat;
@@ -115,14 +124,14 @@ export async function runJob(h: string, provider: Provider, o: RunOpts, deps: Ru
   // Rule 5: link must verify. Only the mock may bypass it, and the output says so.
   let linkBypassed = false;
   if (o.noLink) {
-    if (provider.name !== "mock") throw new CliError("--no-link is only allowed with --provider mock", EXIT.REFUSED_LINK);
+    if (!kind.mock) throw new CliError("--no-link is only allowed with --provider mock", EXIT.REFUSED_LINK);
     linkBypassed = true;
   }
 
-  // Paid calls only. The mock provider never reaches this, so offline demo runs stay local.
+  // Paid calls only, for every paid provider. The mock provider never reaches this, so offline demo runs stay local.
   // Wrong chain, reset genesis (including faucet and RPC agreeing on another hash), and
   // unavailable or malformed responses throw here, before estimate and before complete.
-  if (provider.name === "flop") {
+  if (kind.paid) {
     try {
       await assertPaidNetwork(net, deps.ethRpc, deps.fetch);
     } catch (e) {
@@ -132,7 +141,7 @@ export async function runJob(h: string, provider: Provider, o: RunOpts, deps: Ru
   }
 
   if (!linkBypassed) {
-    const lc = await checkLinkForRun(h, seat, provider.name === "flop", { fetch: deps.fetch, ethRpc: deps.ethRpc });
+    const lc = await checkLinkForRun(h, seat, kind.needsWalletLink, { fetch: deps.fetch, ethRpc: deps.ethRpc });
     if (!lc.ok) throw new CliError(`link does not verify, refusing: ${lc.why.join("; ")}`, EXIT.REFUSED_LINK);
   }
   const signer = loadSigner(h, seat); // also proves the key file is 0600 and matches identity.json
@@ -154,7 +163,7 @@ export async function runJob(h: string, provider: Provider, o: RunOpts, deps: Ru
     seat,
     did: signer.identity.did,
     job,
-    provider: provider.name,
+    provider: providerName,
     network: net.name,
     payer,
     model,
@@ -163,7 +172,7 @@ export async function runJob(h: string, provider: Provider, o: RunOpts, deps: Ru
     per_call_cap: cap.perCall,
     daily_cap: cap.daily,
     job_budget: payer === "requester" ? o.jobBudget! : null,
-    mock: provider.name === "mock",
+    mock: kind.mock,
   };
   /** What is already charged against this call's limits: the seat's spend today, and for a requester the job's spend. */
   type Spent = Pick<BudgetState, "spentBefore" | "jobSpentBefore">;
@@ -189,8 +198,8 @@ export async function runJob(h: string, provider: Provider, o: RunOpts, deps: Ru
   // A ledger row a total cannot use (an unusable charge, or a row that cannot be placed) refuses the run.
   const spentSoFar = (day: string, quote: { raw: number | null; padded: number | null }): Spent => {
     try {
-      const spentBefore = spentToday(h, seat, provider.name, day);
-      return payer === "requester" ? { spentBefore, jobSpentBefore: jobSpent(h, job, provider.name) } : { spentBefore };
+      const spentBefore = spentToday(h, seat, providerName, day);
+      return payer === "requester" ? { spentBefore, jobSpentBefore: jobSpent(h, job, providerName) } : { spentBefore };
     } catch (e) {
       if (e instanceof UnusableLedgerRow) refuse(e.message, EXIT.REFUSED_CAP, quote, null, day);
       // A busy ledger (a line in flight that could not be read again under the lock): nothing was sent.
@@ -215,7 +224,7 @@ export async function runJob(h: string, provider: Provider, o: RunOpts, deps: Ru
   }
   if (!q) return refuse("estimate returned no usable cost", EXIT.ESTIMATE_FAILED, NO_QUOTE, null);
 
-  const requestId = `${provider.name === "mock" ? "mock" : "imdflop"}-${seat}-${bytesToHex(randomBytes(8))}`;
+  const requestId = `${requestIdPrefix(kind)}-${seat}-${bytesToHex(randomBytes(8))}`;
   const lockedCheck = (): LedgerEntry => {
     // The UTC day is read once, inside the lock, and used for both the cap check and the rows.
     const day = utcDay();
@@ -287,7 +296,7 @@ export async function runJob(h: string, provider: Provider, o: RunOpts, deps: Ru
   }
 
   const responseFile = responsePath(h, requestId);
-  const responseRecord = { request_id: requestId, job, seat, provider: provider.name, model, usage: res.usage ?? null, output_sha256: bytesToHex(sha256(utf8ToBytes(res.text))), text: res.text, mock: provider.name === "mock", note: "not submitted to IMD; the holder decides what to use" };
+  const responseRecord = { request_id: requestId, job, seat, provider: providerName, model, usage: res.usage ?? null, output_sha256: bytesToHex(sha256(utf8ToBytes(res.text))), text: res.text, mock: kind.mock, note: "not submitted to IMD; the holder decides what to use" };
   // `run --json` prints this return value, so it has to be the text that was stored.
   let text: string | null = res.text;
   let withheld: string | undefined;
@@ -314,11 +323,11 @@ export async function runJob(h: string, provider: Provider, o: RunOpts, deps: Ru
   }
 
   const rr = await provider.readReceipt(requestId);
-  const classified = classifyReceipt(rr.receipt, { job, provider: provider.name, http: rr.http, error: rr.error, requestId, mock: provider.name === "mock" });
+  const classified = classifyReceipt(rr.receipt, { job, provider: providerName, http: rr.http, error: rr.error, requestId, mock: kind.mock });
   // The receipt file goes through the same owner as receipt --refresh (receipt-store.ts storeRead): another
   // process may have refreshed this request and stored its read while the call ran, and a failed read here
   // keeps every gateway field that file holds.
-  const ident = { seat, did: signer.identity.did, ss58: signer.identity.ss58, network: net.name, ...(provider.name === "mock" ? { mock_scenario: (provider as { scenario?: string }).scenario ?? "ok" } : {}) };
+  const ident = { seat, did: signer.identity.did, ss58: signer.identity.ss58, network: net.name, ...(kind.mock ? { mock_scenario: provider.scenario ?? "ok" } : {}) };
   const { saved, read } = storeRead(h, requestId, rr, classified, () => ident);
   // stdout shows what was stored: every field of the receipt as the file holds it, redacted fields included.
   const stored = saved as unknown as Record<string, unknown>;
@@ -333,5 +342,5 @@ export async function runJob(h: string, provider: Provider, o: RunOpts, deps: Ru
   if (pastAdmitted) deps.warn(PAST_ADMITTED);
 
   const receipt = { ...receipt0, ...(await receiptVerdicts(h, receipt0, row)) };
-  return { request_id: requestId, job, provider: provider.name, payer, quote_padded: q.padded, cap_charge: row.cap_charge, receipt, response_file: responseFile, text, ...(withheld !== undefined ? { withheld } : {}), link_bypassed: linkBypassed };
+  return { request_id: requestId, job, provider: providerName, payer, quote_padded: q.padded, cap_charge: row.cap_charge, receipt, response_file: responseFile, text, ...(withheld !== undefined ? { withheld } : {}), link_bypassed: linkBypassed };
 }

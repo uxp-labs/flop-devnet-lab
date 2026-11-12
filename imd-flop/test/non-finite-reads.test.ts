@@ -25,12 +25,12 @@ import { NETWORKS } from "../src/networks.js";
 import { FlopProvider } from "../src/providers.js";
 import { writeSecretFile } from "../src/store.js";
 import { clearSecretRegistry } from "../src/secrets.js";
-import { cli, readLines, readySeat, tmpHome } from "./helpers.js";
+import { cli, readLines, readySeat, tmpHome, withoutKnown } from "./helpers.js";
 import { ETH, failingStream, NOT_TEXT, paidRun, paidSeat, PIN, receiptText, refresh, type Answer } from "./lib/scripted-gateway.js";
 
 afterEach(() => clearSecretRegistry());
 
-type Row = { state: string; reason: string | null; cap_charge: number; spend: number | null; cost_reported: number | null; flag?: string | null };
+type Row = { request_id?: string | null; state: string; reason: string | null; cap_charge: number; spend: number | null; cost_reported: number | null; flag?: string | null };
 const ledger = (h: string): Row[] => (existsSync(join(h, "ledger.jsonl")) ? (readLines(join(h, "ledger.jsonl")) as Row[]) : []);
 const files = (dir: string): string[] => (existsSync(dir) ? readdirSync(dir).map((f) => readFileSync(join(dir, f), "utf8")) : []);
 const responses = (h: string) => files(join(h, "responses"));
@@ -80,7 +80,7 @@ describe("non-finite reads: the Ethereum RPC answers (eth_chainId, eth_call owne
       const r = await paidRun({ chainId: ok(`{"jsonrpc":"2.0","id":${n},"result":"0x1"}`) });
       expect(r.code).toBe(5);
       expect(r.err).toContain("eth_chainId returned malformed JSON (non_finite_number)");
-      expect(r.err).not.toContain("999");
+      expect(withoutKnown(r.err, [r.h, ...ledger(r.h).map((row) => row.request_id)])).not.toContain("999");
       expect(r.gw.seen).toEqual(["chainId"]);
       expect(ledger(r.h)).toEqual([]);
     });
@@ -199,8 +199,8 @@ describe("non-finite reads: the paid call's answer (parsed by @flop-labs/client,
         const r = await paidRun({ completion: ok(body) });
         expect(r.code).toBe(6);
         expect(r.err).toContain("(non_finite_number). Spend is UNKNOWN");
-        expect(r.err).not.toContain("999");
         const rows = ledger(r.h);
+        expect(withoutKnown(r.err, [r.h, ...rows.map((row) => row.request_id)])).not.toContain("999");
         expect(rows.at(-1)).toMatchObject({ state: "timeout_unknown", reason: "FlopValidationError: no answer; spend unknown, not retried (non_finite_number)", cap_charge: 0.132, spend: null, cost_reported: null });
         expect(rows.some((row) => row.state === "settled" || row.state === "refused_local")).toBe(false);
         expect(responses(r.h)).toEqual([]);
