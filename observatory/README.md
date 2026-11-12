@@ -360,8 +360,19 @@ Two reviewed runtimes. The second line of `REVIEWED` is `tzkv-runtime` 1014020, 
 from 1014014 is `shapes/diff-tzkv-runtime-1014014-1014020.txt`, written by `scripts/shape-diff.mjs`,
 which compares types by structure and never by id: ComputeChannel adds the events
 CapacityReservationRateSet and CapacityReservationDropped, Aleph adds CommitteeSeedFallback to the
-outer event enum, and FlopSessionKeys and every stated entry's prefix, hashers, key and value are
-unchanged. A test holds the committed diff to a fresh run.
+outer event enum, and FlopSessionKeys has no difference. Every stated entry's prefix, hashers, key,
+modifier and default bytes are unchanged, and so is the value type of every stated entry but
+System.Events, whose value is the outer event enum, which gained those three event variants. The
+diff's first line names both specs; it refuses, in one line on stderr and with exit code 2, a file
+that cannot be read, is not JSON, is not `decoder-shape@2`, or lacks or adds a part it reads. Exit
+code 0 means it compared, a difference found or not: a test holds the committed diff to a fresh run,
+and that test is the check.
+
+No caller can change what was reviewed. `REVIEWED` and each line, `STATED_ENTRIES` and each pair,
+`PRIMITIVES` and `HASHERS` are frozen when their module loads, and `pinShape`, `decodeBlockEvents`,
+`decodeStorageValue` and `runtimeOfBlock` each answer a fresh copy of the line
+(`reviewedCopy`), so a write to an answer changes nothing a later call pins
+(`test/reviewed-frozen.test.ts`).
 
 Which runtime reads a block. A block is in the encoding of the runtime that executed it, and
 `System.LastRuntimeUpgrade` at the block names that runtime. `runtimeOfBlock` in

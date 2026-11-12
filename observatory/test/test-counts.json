@@ -8,8 +8,8 @@
     "names": "5271db22d00de405d8b47cd068f20f211490fce67f0f95b7279fbb39431afdb2"
   },
   "block-runtime.test.ts": {
-    "tests": 8,
-    "names": "c2e6a23bcba8b51311cbf1d840194c0b2071d5807525d7220216426b4ac6d845"
+    "tests": 11,
+    "names": "d21316fb49111632f8e347a665e4b520f4e2a96c8349afcaa45769791a0dc458"
   },
   "census.test.ts": {
     "tests": 176,
@@ -115,6 +115,14 @@
     "tests": 5,
     "names": "eacd61bf5d2142e597151c0a5dffcbeaa5ebfd04e5188b1ce818afac0d48250f"
   },
+  "review-upgrade.test.ts": {
+    "tests": 10,
+    "names": "80f0b7fa5897c412a30433ffc79805a9e6e31a8d0729d67f5690cc9eb04b6729"
+  },
+  "reviewed-frozen.test.ts": {
+    "tests": 6,
+    "names": "5cf3b113aa49fe41f3f4ad18b91256753ce6a05ce248576dde104224ce96b816"
+  },
   "rpc-head.test.ts": {
     "tests": 19,
     "names": "91fe904982e61644eeb892bfad19b911f8c48c2e803742e26397ca7da72677fa"
@@ -204,8 +212,8 @@
     "names": "4d202cc7802b0f534823065fde04a88599f6370c65b1886936c7fa708d131aed"
   },
   "upgrade-shape.test.ts": {
-    "tests": 9,
-    "names": "b85aeea7c8d09c3d7c9981023e885d50da25cef05a77981ddbe690e326bfd86f"
+    "tests": 33,
+    "names": "965240c7a6d6a512f00f9c116e0f0fcf3f5874812453d380d74623fe831c2572"
   },
   "upgrade-storage.test.ts": {
     "tests": 14,

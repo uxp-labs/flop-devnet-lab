@@ -1066,6 +1066,12 @@ below.
   refusal. The metadata a caller then gives the doors is the one that line names by its sha256.
   The version and the metadata read at the block itself are never used to choose: they answer for
   the next block.
+- No caller can change what the decoder has reviewed. `REVIEWED` and each of its lines,
+  `STATED_ENTRIES` and each pair in it, and the parser's `PRIMITIVES` and `HASHERS` are frozen when
+  their module loads. No reference to a line ever leaves `src/scale`: `pinShape`,
+  `decodeBlockEvents`, `decodeStorageValue` and `runtimeOfBlock` each answer a fresh copy, made by
+  `reviewedCopy` in `src/scale/shape.ts`. The parsed metadata a pin holds is parsed again on every
+  call and never kept.
 - Bounds on hostile input, each a refusal with a `ScaleError`, never another exception:
   - metadata of more than 16 MiB is refused before it is read, and so is a value or a
     System.Events of more than 16 MiB (`MAX_INPUT_BYTES`), so no string the decoder builds can
@@ -1119,8 +1125,12 @@ runtime until these steps are done, in this order:
    read the metadata whole, or `deriveShape` needs a change of logic, the work stops for a rule
    from the lead before anything in `src/scale` changes.
 4. Diff. `scripts/shape-diff.mjs` writes what differs from the shape before, types compared by
-   structure, never by id, and its output is committed beside the shape file and held to a fresh
-   run by a test.
+   structure, never by id, each pair of types followed once, and its output is committed beside the
+   shape file and held to a fresh run by a test. Its first line names both specs. It refuses a file
+   that cannot be read, is not JSON, is not `decoder-shape@2`, or lacks or adds a part it reads,
+   with one line on stderr and exit code 2. Exit code 0 means it compared, whether or not something
+   differs: the diff is a report, and the test that holds the committed diff to a fresh run is the
+   check.
 5. The line. The builder adds the runtime's line to `REVIEWED`: the spec name and version, the
    metadata's sha256 and length, and the shape file's sha256.
 6. Independent review. A reviewer who wrote none of it reads the shape file, the metadata it came
