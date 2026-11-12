@@ -474,23 +474,295 @@ describe("values against the first session test (research/2026-11-11-session-pro
 describe("values of the gateway channel, which no results file holds", () => {
   const settled = heightOf("gateway/settled");
   const last = heightOf("session-escrow/9-return-funds");
+  const md = parseMetadata(FIRST.metadata);
+  const channel = S.inputs.channels.gateway.value;
+  const ofChannel = (e: { pallet: string; fields: unknown }) => e.pallet === "ComputeChannel" && (e.fields as Record<string, unknown>).channel_id === channel;
+  const events = FIRST.blocks.flatMap((b) => decodeEvents(md, b.events).filter(ofChannel).map((e) => ({ block: b.number, ...e })));
+  const one = (name: string) => {
+    const x = events.filter((e) => e.event === name);
+    expect([name, x.length]).toEqual([name, 1]);
+    return x.at(0)?.fields as Record<string, Decoded>;
+  };
 
-  it("RULE: the channel whose Settled event is in block 3479299 is Closed there, with the escrow its EscrowToppedUp event gave", () => {
-    const md = parseMetadata(FIRST.metadata);
-    const channel = S.inputs.channels.gateway.value;
-    const ofChannel = (e: { pallet: string; fields: unknown }) => e.pallet === "ComputeChannel" && (e.fields as Record<string, unknown>).channel_id === channel;
-    const events = FIRST.blocks.flatMap((b) => decodeEvents(md, b.events).filter(ofChannel).map((e) => ({ block: b.number, ...e })));
-    const settledEvent = events.find((e) => e.event === "Settled");
-    const topped = events.filter((e) => e.event === "EscrowToppedUp");
-    expect([settledEvent?.block, topped.length]).toEqual([settled, 1]);
+  it("(b) holds the miner to the first recording's ToplocEvidenceSubmitted, at both blocks", () => {
+    const toploc = one("ToplocEvidenceSubmitted");
+    for (const h of [settled, last]) expect(valueAt(h, "Channels", "gateway").value.miner).toBe(toploc.miner);
+  });
+
+  it("RULE: the channel whose Settled event is in block 3479299 is Closed there; READ: its escrow is the total its EscrowToppedUp event gave", () => {
+    expect(events.find((e) => e.event === "Settled")?.block).toBe(settled);
     const c = valueAt(settled, "Channels", "gateway");
     expect(c.stored).toBe(true);
     expect(c.value.state).toEqual({ variant: "Closed", fields: null });
-    expect(c.value.escrow).toBe((topped.at(0)?.fields as Record<string, Decoded>).total);
+    expect(c.value.escrow).toBe(one("EscrowToppedUp").total);
   });
 
-  it("READ: the record at the last block of the second test is the record at 3479299, field for field", () => {
-    expect(valueAt(last, "Channels", "gateway")).toEqual(valueAt(settled, "Channels", "gateway"));
+  it("READ: every other field at both blocks is the reference decoder's decode of the same bytes", () => {
+    for (const h of [settled, last]) {
+      const r = readAt(h, "Channels", "gateway");
+      const { ours, reference } = bothSides(r);
+      const o = ours as Record<string, Plain>;
+      const f = reference as Record<string, Plain>;
+      expect(o.agent, `${h} agent`).toEqual(f.agent);
+      expect(o.agent_key, `${h} agent_key`).toEqual(f.agent_key);
+      expect(o.enclave_key, `${h} enclave_key`).toEqual(f.enclave_key);
+      expect(o.model_hash, `${h} model_hash`).toEqual(f.model_hash);
+      expect(o.measured_root, `${h} measured_root`).toEqual(f.measured_root);
+      expect(o.precision, `${h} precision`).toEqual(f.precision);
+      expect(o.sla, `${h} sla`).toEqual(f.sla);
+      expect(o.nonce, `${h} nonce`).toEqual(f.nonce);
+      expect(o.opened_at, `${h} opened_at`).toEqual(f.opened_at);
+      expect(o.last_attested_at, `${h} last_attested_at`).toEqual(f.last_attested_at);
+      expect(o.transcript_ref, `${h} transcript_ref`).toEqual(f.transcript_ref);
+      expect(o.weights_pin, `${h} weights_pin`).toEqual(f.weights_pin);
+      expect(o.locked_compute_consumed, `${h} locked_compute_consumed`).toEqual(f.locked_compute_consumed);
+      expect(o.escrow, `${h} escrow`).toEqual(f.escrow);
+      expect(o.state, `${h} state`).toEqual(f.state);
+      expect(o.miner, `${h} miner`).toEqual(f.miner);
+    }
+  });
+});
+
+/**
+ * What each field of each stored entry read is held to: (a) a value from a results file, (b) a value
+ * from an event of a recording, or "c" for READ, the reference decoder's decode of the same bytes.
+ * A SessionNonces value has one field, "value". The six System.Events reads are held in the
+ * describe below this one.
+ */
+type Source = { a: Decoded } | { b: Decoded } | "c";
+const ESCROW_AFTER: Partial<Record<Block, string>> = {
+  "session-escrow/2-create-session": "after_step_2",
+  "session-escrow/3-force-open-declared-0": "after_step_3",
+  "session-escrow/4-force-open-declared-0.012": "after_step_4",
+  "session-escrow/6-force-open-over-daily": "after_step_6",
+  "session-escrow/7-expire-force-open": "after_step_7",
+  "session-escrow/8-revoke-session": "after_step_8",
+};
+const BREAKER_AFTER: Partial<Record<Block, string>> = {
+  "session-escrow/4-force-open-declared-0.012": "after_step_4",
+  "session-escrow/6-force-open-over-daily": "after_step_6",
+  "session-escrow/7-expire-force-open": "after_step_7",
+};
+function FIELDS(r: StorageRead): Record<string, Source> {
+  const a = (v: Decoded): Source => ({ a: v });
+  const c = "c" as const;
+  const escrow = r.block.startsWith("session-escrow/");
+  if (r.read.entry === "Sessions" && escrow) {
+    const rec = ESC.session_record[ESCROW_AFTER[r.block] ?? ""] ?? {};
+    const terms = sessionTerms(ESC);
+    return {
+      owner: a(ESC.owner.public_key),
+      delegate: a(ESC.device.public_key),
+      spending_cap: a(ESC.session.spending_cap_raw),
+      per_tx_limit: a(ESC.session.per_tx_limit_raw),
+      daily_cap: a(ESC.session.daily_cap_raw),
+      epoch_spent: rec.epoch_spent_raw === undefined ? c : a(rec.epoch_spent_raw),
+      epoch_start: c,
+      spent: rec.spent_raw === undefined ? c : a(rec.spent_raw),
+      expires_at: a(ESC.session.expires_at),
+      allowed_pallets: a(terms.allowed_pallets.map(hexText)),
+      active: rec.active === undefined ? c : a(rec.active),
+    };
+  }
+  if (r.read.entry === "Sessions") {
+    const terms = sessionTerms(PRB);
+    const revoked = r.block === "session-probe/5-revoke-session";
+    const expires = /expires at block (\d+)/.exec(String(stepOf(PRB, "2-create-session").note))?.[1];
+    return {
+      owner: a(PRB.owner.public_key),
+      delegate: a(PRB.device.public_key),
+      spending_cap: a(terms.spending_cap),
+      per_tx_limit: a(terms.per_tx_limit),
+      daily_cap: a(terms.daily_cap),
+      epoch_spent: c,
+      epoch_start: c,
+      spent: c,
+      expires_at: a(Number(expires)),
+      allowed_pallets: a(terms.allowed_pallets.map(hexText)),
+      // The revoke step's note: "The session record stays in storage with active false."
+      active: revoked && /active false/.test(String(stepOf(PRB, "5-revoke-session").note)) ? a(false) : c,
+    };
+  }
+  if (r.read.entry === "SessionNonces") {
+    const rec = ESC.session_record[ESCROW_AFTER[r.block] ?? ""];
+    return { value: rec?.nonce === undefined ? c : a(String(rec.nonce)) };
+  }
+  if (r.read.entry === "CircuitBreakers") {
+    const key = BREAKER_AFTER[r.block];
+    // After step 6 the record says "unchanged": the breaker after step 4.
+    const w = key === undefined ? undefined : ESC.circuit_breaker_of_device[key] === "unchanged" ? ESC.circuit_breaker_of_device.after_step_4 : ESC.circuit_breaker_of_device[key];
+    if (w === undefined) return { period_start: c, tx_count: c, total_spend: c, tripped: c };
+    return { period_start: a(w.period_start), tx_count: a(w.tx_count), total_spend: a(w.total_spend_raw), tripped: a(w.tripped) };
+  }
+  // Channels.
+  const all = ["agent", "miner", "model_hash", "measured_root", "precision", "enclave_key", "agent_key", "escrow", "sla", "nonce", "opened_at", "last_attested_at", "state", "transcript_ref", "weights_pin", "locked_compute_consumed"];
+  const read = Object.fromEntries(all.map((f) => [f, c as Source]));
+  if (r.read.keys.some((k) => "channel" in k && k.channel === "gateway")) {
+    const md = parseMetadata(FIRST.metadata);
+    const toploc = FIRST.blocks.flatMap((b) => decodeEvents(md, b.events)).find((e) => e.event === "ToplocEvidenceSubmitted" && (e.fields as Record<string, Decoded>).channel_id === S.inputs.channels.gateway.value);
+    return { ...read, miner: { b: (toploc?.fields as Record<string, Decoded>).miner } };
+  }
+  if (r.block === "session-escrow/7-expire-force-open") return { ...read, state: a({ variant: ESC.channel.record_after_step_7.state, fields: null }) };
+  const rec = ESC.channel.record_after_step_4;
+  const fo = ESC.force_open;
+  // The record says the enclave key is "all zero": 32 zero bytes, as the force_open call sends no key.
+  const enclave = rec.enclave_key === "all zero" ? `0x${"00".repeat(32)}` : undefined;
+  return {
+    ...read,
+    agent: a(ESC.owner.public_key),
+    miner: a(ESC.named_miner.public_key),
+    model_hash: a(fo.model_hash),
+    measured_root: a(fo.measured_root),
+    precision: a({ variant: fo.precision, fields: null }),
+    enclave_key: enclave === undefined ? c : a(enclave),
+    agent_key: a(ESC.device.public_key),
+    escrow: a(rec.escrow_raw),
+    sla: a(fo.sla),
+    nonce: a(fo.channel_nonces.A),
+    opened_at: a(rec.opened_at),
+    state: a({ variant: rec.state, fields: { ack_deadline: rec.ack_deadline } }),
+    weights_pin: a({ variant: "Some", fields: rec.weights_pin }),
+  };
+}
+
+describe("every field of every stored entry value, held to a results file, a recording's event or the reference decoder", () => {
+  const stored = S.reads.filter((r) => r.read.pallet !== "System" && r.answer !== null);
+
+  it("names a source for exactly the fields each of the 21 values holds", () => {
+    expect(stored.length).toBe(21);
+    for (const r of stored) {
+      const v = valueAt(r.height, r.read.entry, (r.read.keys.at(-1) as { account?: string; channel?: string }).account ?? (r.read.keys.at(-1) as { channel: string }).channel).value;
+      const fields = r.read.entry === "SessionNonces" ? ["value"] : Object.keys(v);
+      expect([r.seq, Object.keys(FIELDS(r)).sort()]).toEqual([r.seq, [...fields].sort()]);
+    }
+  });
+
+  it("(a) and (b): each field a results file or a recording's event gives equals it", () => {
+    const counts = { a: 0, b: 0 };
+    for (const r of stored) {
+      const v = DECODED.get(r.seq);
+      const value = (v?.decoded ? v.value : null) as Record<string, Decoded> | string;
+      for (const [f, src] of Object.entries(FIELDS(r))) {
+        if (src === "c") continue;
+        const got = r.read.entry === "SessionNonces" ? value : (value as Record<string, Decoded>)[f];
+        const want = "a" in src ? src.a : src.b;
+        expect([r.seq, r.read.entry, f, got]).toEqual([r.seq, r.read.entry, f, want]);
+        counts["a" in src ? "a" : "b"]++;
+      }
+    }
+    expect(counts).toEqual({ a: 99, b: 2 });
+  });
+
+  it("READ (c): every other field equals the reference decoder's decode of the same bytes", () => {
+    let n = 0;
+    for (const r of stored) {
+      const { ours, reference } = bothSides(r);
+      for (const [f, src] of Object.entries(FIELDS(r))) {
+        if (src !== "c") continue;
+        const o = r.read.entry === "SessionNonces" ? ours : (ours as Record<string, Plain>)[f];
+        const ref = r.read.entry === "SessionNonces" ? reference : (reference as Record<string, Plain>)[f];
+        expect([r.seq, f, o]).toEqual([r.seq, f, ref]);
+        n++;
+      }
+      // And the whole value, so no field is left out of the comparison.
+      expect(ours, String(r.seq)).toEqual(reference);
+    }
+    expect(n).toBe(72);
+  });
+});
+
+describe("the six System.Events reads, held to the test records", () => {
+  const events = S.reads.filter((r) => r.read.pallet === "System");
+  /** The test record and step whose block is this read's, by the block hash the record gives. */
+  const stepAt = (r: StorageRead) => {
+    for (const rec of [ESC, PRB]) {
+      const s = (rec.steps as Record<string, unknown>[]).find((x) => x.block_hash === r.hash);
+      if (s !== undefined) return s;
+    }
+    throw new Error(`no step names block ${r.hash}`);
+  };
+
+  it("are six, each at a block a test record names, and each value's sha256 is the events_value_sha256 the record gives, where it gives one", () => {
+    expect(events.length).toBe(6);
+    let named = 0;
+    for (const r of events) {
+      const s = stepAt(r);
+      if (s.events_value_sha256 === undefined) continue;
+      named++;
+      // The record's sha256 is of the value's 0x hex text, as the RPC answered it.
+      const text = `0x${Buffer.from(r.answer ?? []).toString("hex")}`;
+      expect([r.height, createHash("sha256").update(text).digest("hex")]).toEqual([r.height, s.events_value_sha256]);
+    }
+    expect(named).toBe(4);
+  });
+
+  it("hold each step's outcome at its extrinsic index: ExtrinsicSuccess, or ExtrinsicFailed with the module error the record names", () => {
+    for (const r of events) {
+      const s = stepAt(r);
+      const v = DECODED.get(r.seq);
+      expect(v?.decoded && v.stored).toBe(true);
+      const at = decodeEvents(MD, r.answer ?? new Uint8Array()).filter((e) => e.pallet === "System" && (e.event === "ExtrinsicSuccess" || e.event === "ExtrinsicFailed") && (e.phase as { variant: string; fields: unknown }).fields === s.extrinsic_index);
+      expect([r.height, at.length]).toEqual([r.height, 1]);
+      const outcome = at.at(0);
+      const result = String(s.result);
+      if (/^(?:success|ExtrinsicSuccess)$/.test(result)) {
+        expect([r.height, outcome?.event]).toEqual([r.height, "ExtrinsicSuccess"]);
+        continue;
+      }
+      const m = /pallet (\d+),? error (\d+)/.exec(result);
+      const name = /(\w+)\.(\w+)/.exec(result);
+      expect([r.height, outcome?.event, m !== null, name !== null]).toEqual([r.height, "ExtrinsicFailed", true, true]);
+      const err = (outcome?.fields as { dispatch_error: { variant: string; fields: { index: number; error: string } } }).dispatch_error;
+      expect([r.height, err.variant, err.fields.index, hexBytes(err.fields.error).at(0)]).toEqual([r.height, "Module", Number(m?.[1]), Number(m?.[2])]);
+      // The pallet and error named, as the metadata names that index.
+      const p = MD.pallets.find((x) => x.index === err.fields.index);
+      const errors = MD.types.at(p?.error ?? -1)?.def;
+      const variant = errors?.kind === "variant" ? errors.variants.find((x) => x.index === Number(m?.[2]))?.name : undefined;
+      expect([r.height, p?.name, variant]).toEqual([r.height, name?.[1], name?.[2]]);
+    }
+  });
+
+  it("READ: decode event for event as the reference decoder decodes the same bytes, a failed call's module error as the reference names it", () => {
+    // The reference reads a module error into the names of its pallet and error, so a failed call's
+    // record is compared part by part: its phase, topics and dispatch info in the plain form, and
+    // the pallet and error our index and error byte name in the metadata against the reference's.
+    const recordType = MD.types.at(typeOf(events.at(0) as StorageRead))?.def;
+    const record = recordType?.kind === "sequence" ? recordType.type : -1;
+    const fields = (id: number) => {
+      const d = MD.types.at(id)?.def;
+      return d?.kind === "composite" ? Object.fromEntries(d.fields.map((f) => [f.name, f.type])) : {};
+    };
+    const sys = MD.pallets.find((p) => p.name === "System");
+    const sysEvents = MD.types.at(sys?.event ?? -1)?.def;
+    const failed = sysEvents?.kind === "variant" ? sysEvents.variants.find((v) => v.name === "ExtrinsicFailed") : undefined;
+    const infoType = failed?.fields.find((f) => f.name === "dispatch_info")?.type ?? -1;
+    const rf = fields(record) as Record<string, number>;
+    let compared = 0;
+    let failedSeen = 0;
+    for (const r of events) {
+      const ours = decodeValue(MD, typeOf(r), r.answer ?? new Uint8Array()) as { phase: Decoded; event: { variant: string; fields: { variant: string; fields: Record<string, Decoded> } }; topics: Decoded }[];
+      const ref = BUILDER.buildStorage("System", "Events").value.dec((r.answer ?? new Uint8Array()).slice()) as { phase: unknown; event: { type: string; value: { type: string; value: Record<string, unknown> } }; topics: unknown }[];
+      expect(ours.length, String(r.height)).toBe(ref.length);
+      ours.forEach((o, i) => {
+        const f = ref.at(i);
+        if (o.event.variant === "System" && o.event.fields.variant === "ExtrinsicFailed") {
+          failedSeen++;
+          expect([f?.event.type, f?.event.value.type]).toEqual(["System", "ExtrinsicFailed"]);
+          for (const k of ["phase", "topics"] as const) expect(plain(MD, "ours", rf[k] ?? -1, o[k])).toEqual(plain(MD, "reference", rf[k] ?? -1, f?.[k]));
+          expect(plain(MD, "ours", infoType, o.event.fields.fields.dispatch_info)).toEqual(plain(MD, "reference", infoType, f?.event.value.value.dispatch_info));
+          const err = o.event.fields.fields.dispatch_error as { variant: string; fields: { index: number; error: string } };
+          const named = (f?.event.value.value.dispatch_error ?? {}) as { type: string; value: { type: string; value: { type: string } } };
+          const p = MD.pallets.find((x) => x.index === err.fields.index);
+          const ev = MD.types.at(p?.error ?? -1)?.def;
+          const errName = ev?.kind === "variant" ? ev.variants.find((x) => x.index === hexBytes(err.fields.error).at(0))?.name : undefined;
+          expect([err.variant, p?.name, errName]).toEqual([named.type, named.value.type, named.value.value.type]);
+        } else {
+          expect(plain(MD, "ours", record, o), `${r.height} event ${i}`).toEqual(plain(MD, "reference", record, f));
+        }
+        compared++;
+      });
+    }
+    expect([compared > 0, failedSeen]).toEqual([true, 3]);
   });
 });
 
@@ -523,37 +795,29 @@ describe("damaged values: never anything but a ScaleError, never past the decode
     }
     expect(n).toBe(S.reads.reduce((t, r) => t + (r.answer?.length ?? 0), 0));
     expect(most).toBeLessThanOrEqual(1);
-  }, 120_000);
+  });
 
-  const flips = (reads: StorageRead[]) => {
+  it("decodes or refuses with a ScaleError every bit flip of each stored value of at most 512 bytes, and of each larger one the bit at its byte index mod 8 in every byte, within its budget", () => {
     let decoded = 0;
     let refused = 0;
-    for (const r of reads) {
+    let expected = 0;
+    for (const r of S.reads) {
       if (r.answer === null) continue;
+      const all = r.answer.length <= 512;
+      expected += all ? 8 * r.answer.length : r.answer.length;
       for (let bit = 0; bit < r.answer.length * 8; bit++) {
+        if (!all && bit % 8 !== (bit >> 3) % 8) continue;
         const b = new Uint8Array(r.answer);
         b.set([(b.at(bit >> 3) ?? 0) ^ (1 << (bit & 7))], bit >> 3);
         if (outcome(r, b) === "decoded") decoded++;
         else refused++;
       }
     }
-    expect(decoded + refused).toBe(8 * reads.reduce((t, r) => t + (r.answer?.length ?? 0), 0));
+    expect(decoded + refused).toBe(expected);
+    expect(S.reads.filter((r) => (r.answer?.length ?? 0) > 512).map((r) => r.read.entry)).toEqual(["Events", "Events", "Events", "Events", "Events"]);
     expect(refused).toBeGreaterThan(0);
     expect(most).toBeLessThanOrEqual(1);
-    return decoded + refused;
-  };
-
-  it("decodes or refuses with a ScaleError every single bit flip of the 21 stored session, nonce, breaker and channel values, within its budget", () => {
-    const reads = S.reads.filter((r) => r.read.pallet !== "System");
-    expect(reads.filter((r) => r.answer !== null).length).toBe(21);
-    expect(flips(reads)).toBe(21_184);
-  }, 120_000);
-
-  it("decodes or refuses with a ScaleError every single bit flip of the 6 System.Events values read through the door, within its budget", () => {
-    const reads = S.reads.filter((r) => r.read.pallet === "System");
-    expect(reads.length).toBe(6);
-    expect(flips(reads)).toBe(69_744);
-  }, 300_000);
+  });
 
   it("through the door too: every prefix and bit flip of the breaker and the nonce ends in a value or a refusal", () => {
     for (const r of [readAt(3497611, "CircuitBreakers", "device_2"), readAt(3497611, "SessionNonces", "device_2")]) {
@@ -571,5 +835,5 @@ describe("damaged values: never anything but a ScaleError, never past the decode
         if (!v.decoded) expect(v.refused).toMatch(new RegExp(`^FlopSessionKeys\\.${r.read.entry}: `));
       }
     }
-  }, 120_000);
+  });
 });

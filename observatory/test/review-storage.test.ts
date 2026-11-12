@@ -1,6 +1,8 @@
 // Independent review of the storage round (round 19, 4e011e3 to f517fac): each test asserts what
-// the promise says SHOULD hold and fails on f517fac. The builder fixes the code or the tests and
-// renames each test when it passes. Not in test/test-counts.json on purpose.
+// the promise says SHOULD hold and failed on f517fac. Round 20 fixed each, and each test is renamed
+// "review n, fixed". In DEFECT 4 one assert changed with rule R4 of round 20: key parts are read by
+// index, never through the list's iterator, so a Proxy whose iterator throws is now read, and gives
+// the value; the assert is that its iterator was never asked for.
 //
 // Assert gaps (DEFECT 1 and 2) cannot be shown by running the builder's tests from here (the
 // harness blocks processes), so they are held two ways: a mutant in
@@ -46,7 +48,7 @@ const outcome = (f: () => unknown): string => {
 };
 
 describe("review of the storage round", () => {
-  it("DEFECT 1 (medium): the six System.Events reads are decoded but never held to the results files, which give the sha256 of four of them and the outcome of each step", () => {
+  it("review 1, fixed (medium): the six System.Events reads are decoded but never held to the results files, which give the sha256 of four of them and the outcome of each step", () => {
     // What a results file gives for these reads: the escrow test names the sha256 of the events
     // value (of its 0x hex text) at each step's block. They all match the recording, so the assert
     // is there to be made; storage-values.test.ts makes none. Mutants rs-data-events-swapped and
@@ -58,7 +60,7 @@ describe("review of the storage round", () => {
     expect(VALUES_TEST).toContain("events_value_sha256");
   });
 
-  it("DEFECT 2 (low): fields of the two channel records are held to nothing but themselves: our channel's last_attested_at, transcript_ref and locked_compute_consumed, and every field of the gateway channel but its state and escrow", () => {
+  it("review 2, fixed (low): fields of the two channel records are held to nothing but themselves: our channel's last_attested_at, transcript_ref and locked_compute_consumed, and every field of the gateway channel but its state and escrow", () => {
     // Our channel at step 4 is checked with toMatchObject on 13 of its 16 fields; at step 7 the rest
     // is compared with step 4's decode of the same layout. The gateway channel is checked on state
     // and escrow at 3479299 and compared with itself at 3498313. A decode wrong the same way at
@@ -71,7 +73,7 @@ describe("review of the storage round", () => {
     for (const f of ["agent", "miner", "agent_key", "enclave_key", "nonce", "opened_at"]) expect(gateway, f).toMatch(new RegExp(`\\.${f}\\b`));
   });
 
-  it("DEFECT 3 (low): the storage prefix the door builds and checks keys with is not in the shape: a metadata whose FlopSessionKeys prefix differs gives the same shape file", () => {
+  it("review 3, fixed (low): the storage prefix the door builds and checks keys with is not in the shape: a metadata whose FlopSessionKeys prefix differs gives the same shape file", () => {
     const m = Buffer.from(S.metadata);
     const name = Buffer.from([0x3c, ...Buffer.from("FlopSessionKeys")]);
     const at = m.indexOf(Buffer.concat([name, Buffer.from([0x01]), name]));
@@ -86,7 +88,7 @@ describe("review of the storage round", () => {
     expect(shapeText(deriveShape(md))).not.toBe(SHAPE);
   });
 
-  it("DEFECT 4 (low): an input that is not plain data ends in another exception or in bytes the caller's array does not hold, not in a refusal", () => {
+  it("review 4, fixed (low): an input that is not plain data ends in another exception or in bytes the caller's array does not hold, not in a refusal", () => {
     expect(outcome(() => decodeStorageValue(null as never))).toBe("refused");
     const getter = door();
     Object.defineProperty(getter, "pallet", {
@@ -95,13 +97,18 @@ describe("review of the storage round", () => {
       },
     });
     expect(outcome(() => decodeStorageValue(getter))).toBe("refused");
+    let iterated = 0;
     const keys = new Proxy([device2], {
       get(t, k) {
-        if (k === Symbol.iterator) throw new TypeError("no iterator");
+        if (k === Symbol.iterator) {
+          iterated++;
+          throw new TypeError("no iterator");
+        }
         return Reflect.get(t, k);
       },
     });
-    expect(outcome(() => decodeStorageValue(door({ keys })))).toBe("refused");
+    expect(outcome(() => decodeStorageValue(door({ keys })))).toBe("decoded");
+    expect(iterated).toBe(0);
     // A Proxy passes instanceof Uint8Array; the copy then reads its iterator, as long as it runs.
     let pulls = 0;
     const answer = new Proxy(new Uint8Array(breaker.answer ?? []), {
@@ -120,7 +127,7 @@ describe("review of the storage round", () => {
     expect(pulls).toBe(0);
   });
 
-  it("DEFECT 5 (low): the storage key asked has no size bound: a key past MAX_INPUT_BYTES is copied and turned into hex whole before it is compared", () => {
+  it("review 5, fixed (low): the storage key asked has no size bound: a key past MAX_INPUT_BYTES is copied and turned into hex whole before it is compared", () => {
     // 16 MiB takes about 3 s and 64 MiB about 11 s here, in toHex; the other inputs are refused unread past 16 MiB.
     const v = decodeStorageValue(door({ key: new Uint8Array(MAX_INPUT_BYTES + 1) }));
     expect(v).toMatchObject({ decoded: false, refused: expect.stringMatching(/bytes, more than/) });
