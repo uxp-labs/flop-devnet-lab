@@ -1,0 +1,14 @@
+{
+  "scenario": "upgrade-hostile",
+  "description": "Synthetic reading of the upgrade watch (RULES.md 7.2), made from fixtures/live-healthy (every time moved 0 s later): a block at which the node answers both reads with values that are no storage answer. A first run. The finalized head is the block named in from_results, best two above it; the runtime version is 1014020. state_getStorage of System.LastRuntimeUpgrade answers {\"result\":42} (a number, not storage bytes), and of System.AuthorizedUpgrade {\"result\":\"0xFD5AC06D81E461DA832C8F83402E155E8EB84CD31A2F08FC3F281CB5FB711E5B01\"} (the authorised bytes in upper case hex, not as a node answers storage); upgrade_answers names where each comes from. Every other value is live-healthy's, made up.",
+  "from_results": {
+    "finalized head": "research/2026-11-12-runtime-upgrade/results.json boundary.2.hash and boundary.2.height",
+    "runtime version": "research/2026-11-12-runtime-upgrade/results.json boundary.2.state_getRuntimeVersion_spec"
+  },
+  "now": "2026-11-11T06:00:01.000Z",
+  "synthetic": true,
+  "upgrade_answers": {
+    "System.AuthorizedUpgrade": "research/2026-11-12-runtime-upgrade/results.json authorization.authorized_upgrade_at.2.value, in upper case",
+    "System.LastRuntimeUpgrade": "made for this test, as the description says"
+  }
+}

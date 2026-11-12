@@ -1,0 +1,946 @@
+[
+  {
+    "id": "uw-null-read-as-present",
+    "file": "src/upgrade-watch.ts",
+    "find": "if (a.result === null) return { value: null };",
+    "replace": "if (a.result === null) return { value: \"0x\" };",
+    "test": "test/upgrade-watch.test.ts",
+    "why": "absent is only the null the node sent, never bytes"
+  },
+  {
+    "id": "uw-error-read-as-absent",
+    "file": "src/upgrade-watch.ts",
+    "find": "if (\"error\" in a) return { unknown: failed };",
+    "replace": "if (\"error\" in a) return { value: null };",
+    "test": "test/upgrade-watch.test.ts",
+    "why": "a failed read is unknown, never absent"
+  },
+  {
+    "id": "uw-error-echoed",
+    "file": "src/upgrade-watch.ts",
+    "find": "if (\"error\" in a) return { unknown: failed };",
+    "replace": "if (\"error\" in a) return { unknown: a.error };",
+    "test": "test/upgrade-watch.test.ts",
+    "why": "a failed call is named by its call, never by the error's text"
+  },
+  {
+    "id": "uw-found-ignored",
+    "file": "src/upgrade-watch.ts",
+    "find": "if (r.found) return { state:",
+    "replace": "if (false) return { state:",
+    "test": "test/upgrade-watch.test.ts",
+    "why": "a record runtimeOfBlock finds is reviewed"
+  },
+  {
+    "id": "uw-named-ignored",
+    "file": "src/upgrade-watch.ts",
+    "find": "if (r.named !== null) return",
+    "replace": "if (false) return",
+    "test": "test/upgrade-watch.test.ts",
+    "why": "a whole record no line names is not reviewed, with its name and version"
+  },
+  {
+    "id": "uw-refusal-replaced",
+    "file": "src/upgrade-watch.ts",
+    "find": "return { state: \"unknown\", spec_name: null, spec_version: null, detail: r.refused };",
+    "replace": "return { state: \"unknown\", spec_name: null, spec_version: null, detail: DETAIL.lruMalformed };",
+    "test": "test/upgrade-watch.test.ts",
+    "why": "bytes that are no record say why in the decoder's own words"
+  },
+  {
+    "id": "uw-upper-hex-accepted",
+    "file": "src/upgrade-watch.ts",
+    "find": "const HEX_BYTES = /^0x(?:[0-9a-f]{2})*$/;",
+    "replace": "const HEX_BYTES = /^0x(?:[0-9a-fA-F]{2})*$/;",
+    "test": "test/upgrade-watch.test.ts",
+    "why": "a storage answer is lower case hex"
+  },
+  {
+    "id": "uw-odd-length-accepted",
+    "file": "src/upgrade-watch.ts",
+    "find": "const HEX_BYTES = /^0x(?:[0-9a-f]{2})*$/;",
+    "replace": "const HEX_BYTES = /^0x[0-9a-f]*$/;",
+    "test": "test/upgrade-watch.test.ts",
+    "why": "a storage answer is whole bytes"
+  },
+  {
+    "id": "uw-unanchored-hex",
+    "file": "src/upgrade-watch.ts",
+    "find": "const HEX_BYTES = /^0x(?:[0-9a-f]{2})*$/;",
+    "replace": "const HEX_BYTES = /0x(?:[0-9a-f]{2})*/;",
+    "test": "test/upgrade-watch.test.ts",
+    "why": "a storage answer is 0x and hex from its first character to its last"
+  },
+  {
+    "id": "uw-bytes-misread",
+    "file": "src/upgrade-watch.ts",
+    "find": "Number.parseInt(b, 16)",
+    "replace": "Number.parseInt(b, 10)",
+    "test": "test/upgrade-watch.test.ts",
+    "why": "the record is read as the bytes the hex holds"
+  },
+  {
+    "id": "uw-length-counts-hex",
+    "file": "src/upgrade-watch.ts",
+    "find": "return { state: \"present\", bytes: v.value, length: raw.length, sha256, detail: null };",
+    "replace": "return { state: \"present\", bytes: v.value, length: v.value.length - 2, sha256, detail: null };",
+    "test": "test/upgrade-watch.test.ts",
+    "why": "the length is the bytes' count, not the text's"
+  },
+  {
+    "id": "uw-kept-bound-off",
+    "file": "src/upgrade-watch.ts",
+    "find": "if (raw.length > AUTHORIZED_KEPT) return",
+    "replace": "if (false) return",
+    "test": "test/upgrade-watch.test.ts",
+    "why": "bytes above 256 are not kept (rule F1, review defect 1)"
+  },
+  {
+    "id": "uw-kept-bound-off-by-one",
+    "file": "src/upgrade-watch.ts",
+    "find": "if (raw.length > AUTHORIZED_KEPT) return",
+    "replace": "if (raw.length >= AUTHORIZED_KEPT) return",
+    "test": "test/upgrade-watch.test.ts",
+    "why": "256 bytes are kept, 257 are not (rule F1)"
+  },
+  {
+    "id": "uw-kept-bound-other",
+    "file": "src/upgrade-watch.ts",
+    "find": "export const AUTHORIZED_KEPT = 256;",
+    "replace": "export const AUTHORIZED_KEPT = 1024;",
+    "test": "test/upgrade-watch.test.ts",
+    "why": "the bound is 256 bytes (rule F1)"
+  },
+  {
+    "id": "uw-sha-of-text",
+    "file": "src/upgrade-watch.ts",
+    "find": "createHash(\"sha256\").update(raw)",
+    "replace": "createHash(\"sha256\").update(v.value)",
+    "test": "test/upgrade-watch.test.ts",
+    "why": "the sha256 is of the raw bytes, never of the hex text (rule F1)"
+  },
+  {
+    "id": "uw-sha-dropped-not-kept",
+    "file": "src/upgrade-watch.ts",
+    "find": "bytes: null, length: raw.length, sha256, detail: DETAIL.auNotKept",
+    "replace": "bytes: null, length: raw.length, sha256: null, detail: DETAIL.auNotKept",
+    "test": "test/upgrade-watch.test.ts",
+    "why": "bytes not kept keep their sha256 (rule F1)"
+  },
+  {
+    "id": "uw-appeared-by-hex",
+    "file": "src/upgrade-watch.ts",
+    "find": "was.length !== authorized.length || was.sha256 !== authorized.sha256",
+    "replace": "was.bytes !== authorized.bytes",
+    "test": "test/upgrade-watch.test.ts",
+    "why": "the appearance compares length and sha256, never the hex (rule F1)"
+  },
+  {
+    "id": "uw-reads-swapped",
+    "file": "src/upgrade-watch.ts",
+    "find": "const executing = executingOf(i.reading.lastRuntimeUpgrade);",
+    "replace": "const executing = executingOf(i.reading.authorizedUpgrade);",
+    "test": "test/upgrade-watch.test.ts",
+    "why": "the two reads are never taken for each other"
+  },
+  {
+    "id": "uw-at-number-dropped",
+    "file": "src/upgrade-watch.ts",
+    "find": "at: { hash: i.reading.hash, number: i.reading.number }",
+    "replace": "at: { hash: i.reading.hash, number: null }",
+    "test": "test/upgrade-watch.test.ts",
+    "why": "the watch names the height it was read at"
+  },
+  {
+    "id": "uw-trust-fixed",
+    "file": "src/upgrade-watch.ts",
+    "find": "    trust: i.reading.trust,",
+    "replace": "    trust: \"fixture\",",
+    "test": "test/upgrade-watch.test.ts",
+    "why": "the watch carries its transport's trust"
+  },
+  {
+    "id": "uw-only-version-compared",
+    "file": "src/upgrade-watch.ts",
+    "find": "executing.spec_name !== b.spec_name || executing.spec_version !== b.spec_version",
+    "replace": "executing.spec_version !== b.spec_version",
+    "test": "test/upgrade-watch.test.ts",
+    "why": "a runtime changed when its name differs too"
+  },
+  {
+    "id": "uw-only-name-compared",
+    "file": "src/upgrade-watch.ts",
+    "find": "executing.spec_name !== b.spec_name || executing.spec_version !== b.spec_version",
+    "replace": "executing.spec_name !== b.spec_name",
+    "test": "test/upgrade-watch.test.ts",
+    "why": "a runtime changed when its version differs"
+  },
+  {
+    "id": "uw-unknown-runtime-counted",
+    "file": "src/upgrade-watch.ts",
+    "find": "if (executing.spec_name !== null && b.spec_name !== null)",
+    "replace": "if (b.spec_name !== null)",
+    "test": "test/upgrade-watch.test.ts",
+    "why": "no change is said of a runtime not named now"
+  },
+  {
+    "id": "uw-unknown-earlier-runtime-counted",
+    "file": "src/upgrade-watch.ts",
+    "find": "if (executing.spec_name !== null && b.spec_name !== null)",
+    "replace": "if (executing.spec_name !== null)",
+    "test": "test/upgrade-watch.test.ts",
+    "why": "no change is said against an earlier runtime not named"
+  },
+  {
+    "id": "uw-unknown-counted-as-change",
+    "file": "src/upgrade-watch.ts",
+    "find": "if (authorized.state !== \"unknown\" && was.state !== \"unknown\")",
+    "replace": "if (true)",
+    "test": "test/upgrade-watch.test.ts",
+    "why": "no appearance is said of an authorisation not known on either side"
+  },
+  {
+    "id": "uw-unknown-now-counted",
+    "file": "src/upgrade-watch.ts",
+    "find": "if (authorized.state !== \"unknown\" && was.state !== \"unknown\")",
+    "replace": "if (was.state !== \"unknown\")",
+    "test": "test/upgrade-watch.test.ts",
+    "why": "no appearance is said of an authorisation not known now"
+  },
+  {
+    "id": "uw-other-sha-ignored",
+    "file": "src/upgrade-watch.ts",
+    "find": "was.length !== authorized.length || was.sha256 !== authorized.sha256",
+    "replace": "was.length !== authorized.length",
+    "test": "test/upgrade-watch.test.ts",
+    "why": "present with another sha256 of the same length appeared (D5, rule F1)"
+  },
+  {
+    "id": "uw-oldest-earlier",
+    "file": "src/upgrade-watch.ts",
+    "find": "i.earlier.findLast(",
+    "replace": "i.earlier.find(",
+    "test": "test/upgrade-watch.test.ts",
+    "why": "the latest earlier watch is compared with, never the oldest"
+  },
+  {
+    "id": "uw-any-genesis",
+    "file": "src/upgrade-watch.ts",
+    "find": "(e) => e.genesis === i.genesis && e.watch.at.number",
+    "replace": "(e) => e.watch.at.number",
+    "test": "test/upgrade-watch.test.ts",
+    "why": "a watch on another genesis is never compared with"
+  },
+  {
+    "id": "uw-same-block-compared",
+    "file": "src/upgrade-watch.ts",
+    "find": "e.watch.at.number < n",
+    "replace": "e.watch.at.number <= n",
+    "test": "test/upgrade-watch.test.ts",
+    "why": "only a lower block is compared with"
+  },
+  {
+    "id": "uw-higher-block-compared",
+    "file": "src/upgrade-watch.ts",
+    "find": "e.watch.at.number < n",
+    "replace": "e.watch.at.number !== n",
+    "test": "test/upgrade-watch.test.ts",
+    "why": "a later block is never compared with"
+  },
+  {
+    "id": "uw-compared-with-now",
+    "file": "src/upgrade-watch.ts",
+    "find": "compared_with: before === null ? null : before.at.number",
+    "replace": "compared_with: before === null ? null : i.reading.number",
+    "test": "test/upgrade-watch.test.ts",
+    "why": "compared_with names the earlier block"
+  },
+  {
+    "id": "ls-reads-swapped",
+    "file": "src/live-source.ts",
+    "find": "    const lastRuntimeUpgrade = at === null ? null : await this.call(\"state_getStorage\", [UPGRADE_KEYS.lastRuntimeUpgrade, at]);\n    const authorizedUpgrade = at === null ? null : await this.call(\"state_getStorage\", [UPGRADE_KEYS.authorizedUpgrade, at]);",
+    "replace": "    const authorizedUpgrade = at === null ? null : await this.call(\"state_getStorage\", [UPGRADE_KEYS.authorizedUpgrade, at]);\n    const lastRuntimeUpgrade = at === null ? null : await this.call(\"state_getStorage\", [UPGRADE_KEYS.lastRuntimeUpgrade, at]);",
+    "test": "test/upgrade-live.test.ts",
+    "why": "LastRuntimeUpgrade is read first, then AuthorizedUpgrade"
+  },
+  {
+    "id": "ls-read-at-best-head",
+    "file": "src/live-source.ts",
+    "find": "[UPGRADE_KEYS.lastRuntimeUpgrade, at]",
+    "replace": "[UPGRADE_KEYS.lastRuntimeUpgrade]",
+    "test": "test/upgrade-live.test.ts",
+    "why": "the reads are made at F, never at the best head"
+  },
+  {
+    "id": "ls-read-with-no-F",
+    "file": "src/live-source.ts",
+    "find": "const lastRuntimeUpgrade = at === null ? null : await this.call(",
+    "replace": "const lastRuntimeUpgrade = await this.call(",
+    "test": "test/upgrade-live.test.ts",
+    "why": "no read is made when F is no hash"
+  },
+  {
+    "id": "ls-number-of-best",
+    "file": "src/live-source.ts",
+    "find": "number: rpcHead.finalized?.number ?? null",
+    "replace": "number: rpcHead.best_number",
+    "test": "test/upgrade-live.test.ts",
+    "why": "the watch's height is F's"
+  },
+  {
+    "id": "ls-reads-before-version",
+    "file": "src/live-source.ts",
+    "find": "    const runtimeVersion = at === null ? null : await this.call(\"state_getRuntimeVersion\", [at]);\n    // The upgrade watch",
+    "replace": "    // The upgrade watch",
+    "test": "test/live-source.test.ts",
+    "why": "the runtime version is still read, before the two reads"
+  },
+  {
+    "id": "hist-upgrades-dropped",
+    "file": "src/history.ts",
+    "find": "upgrade !== undefined && upgrade !== null) earlierUpgrades.push(",
+    "replace": "upgrade !== undefined && upgrade !== null && false) earlierUpgrades.push(",
+    "test": "test/upgrade-live.test.ts",
+    "why": "every earlier watch is passed on"
+  },
+  {
+    "id": "snap-genesis-pinned",
+    "file": "src/snapshot.ts",
+    "find": "genesis: status.genesis.rpc, earlier:",
+    "replace": "genesis: o.pinnedGenesis, earlier:",
+    "test": "test/upgrade-live.test.ts",
+    "why": "the watch is compared on the RPC genesis the status read, never the pinned one"
+  },
+  {
+    "id": "snap-earlier-ignored",
+    "file": "src/snapshot.ts",
+    "find": "earlier: o.earlierUpgrades ?? []",
+    "replace": "earlier: []",
+    "test": "test/upgrade-live.test.ts",
+    "why": "the watch is compared with the log's watches"
+  },
+  {
+    "id": "snap-watch-trust-ignored",
+    "file": "src/snapshot.ts",
+    "find": "    trusts.push(upgrade.trust);\n",
+    "replace": "",
+    "test": "test/upgrade-live.test.ts",
+    "why": "a fixture watch makes the snapshot a fixture"
+  },
+  {
+    "id": "snap-schema-0",
+    "file": "src/snapshot.ts",
+    "find": "schema: \"flop-observatory/snapshot@1\",",
+    "replace": "schema: \"flop-observatory/snapshot@0\",",
+    "test": "test/upgrade-live.test.ts",
+    "why": "a snapshot with the upgrade part is @1"
+  },
+  {
+    "id": "lr-reading-not-passed",
+    "file": "src/live-run.ts",
+    "find": "upgrade: reading === null ? null : { reading }",
+    "replace": "upgrade: null",
+    "test": "test/upgrade-live.test.ts",
+    "why": "the live run passes its reading to the snapshot"
+  },
+  {
+    "id": "lr-notice-authorized-dropped",
+    "file": "src/live-run.ts",
+    "find": "authorized_state: s.upgrade?.authorized.state ?? null,",
+    "replace": "authorized_state: null,",
+    "test": "test/upgrade-live.test.ts",
+    "why": "the notice names the authorised state (D6)"
+  },
+  {
+    "id": "lr-notice-runtime-dropped",
+    "file": "src/live-run.ts",
+    "find": "executing_spec_version: s.upgrade?.executing.spec_version ?? null,",
+    "replace": "executing_spec_version: null,",
+    "test": "test/upgrade-live.test.ts",
+    "why": "the notice names the executing runtime (D6)"
+  },
+  {
+    "id": "lr-notice-sha-dropped",
+    "file": "src/live-run.ts",
+    "find": "authorized_sha256: s.upgrade?.authorized.sha256 ?? null,",
+    "replace": "authorized_sha256: null,",
+    "test": "test/upgrade-live.test.ts",
+    "why": "the notice names the authorisation's sha256 (rule F1)"
+  },
+  {
+    "id": "lr-notice-length-dropped",
+    "file": "src/live-run.ts",
+    "find": "authorized_length: s.upgrade?.authorized.length ?? null,",
+    "replace": "authorized_length: null,",
+    "test": "test/upgrade-live.test.ts",
+    "why": "the notice names the authorisation's length (rule F1)"
+  },
+  {
+    "id": "page-sha-row-dropped",
+    "file": "src/page.ts",
+    "find": "    out.push(row(\"upgrade.authorized.sha256\", cell(\"upgrade.authorized.sha256\", u.authorized.sha256), \"upgrade.\"));\n",
+    "replace": "",
+    "test": "test/upgrade-live.test.ts",
+    "why": "the page shows the authorisation's sha256 (rule F1)"
+  },
+  {
+    "id": "feed-upgrade-missing",
+    "file": "src/feed.ts",
+    "find": "    [\"upgrade.json\", upgradeFeed(s)],\n",
+    "replace": "",
+    "test": "test/upgrade-live.test.ts",
+    "why": "upgrade.json is written"
+  },
+  {
+    "id": "feed-upgrade-time",
+    "file": "src/feed.ts",
+    "find": "observed_at: s.upgrade?.observed_at ?? s.observed_at",
+    "replace": "observed_at: s.observed_at",
+    "test": "test/upgrade-live.test.ts",
+    "why": "the feed carries the watch's own time"
+  },
+  {
+    "id": "mcp-upgrade-other-feed",
+    "file": "src/mcp.ts",
+    "find": "return ok(id, content(upgradeFeed(s)));",
+    "replace": "return ok(id, content(driftFeed(s)));",
+    "test": "test/upgrade-live.test.ts",
+    "why": "get_upgrade answers upgrade.json"
+  },
+  {
+    "id": "page-unknown-shown",
+    "file": "src/page.ts",
+    "find": "(v === \"unknown\" ? `<td",
+    "replace": "(false ? `<td",
+    "test": "test/upgrade-live.test.ts",
+    "why": "an unknown state is blank and marked unknown"
+  },
+  {
+    "id": "page-row-dropped",
+    "file": "src/page.ts",
+    "find": "    out.push(row(\"upgrade.authorized.detail\", cell(\"upgrade.authorized.detail\", u.authorized.detail), \"upgrade.\"));\n",
+    "replace": "",
+    "test": "test/upgrade-live.test.ts",
+    "why": "every field of the watch has its row"
+  },
+  {
+    "id": "sc-v0-refused",
+    "file": "src/snapshot-check.ts",
+    "find": "v.schema === \"flop-observatory/snapshot@0\" ? SNAPSHOT_V0 : SNAPSHOT",
+    "replace": "SNAPSHOT",
+    "test": "test/snapshot-check.test.ts",
+    "why": "an @0 line still reads"
+  },
+  {
+    "id": "sc-v0-always",
+    "file": "src/snapshot-check.ts",
+    "find": "v.schema === \"flop-observatory/snapshot@0\" ? SNAPSHOT_V0 : SNAPSHOT",
+    "replace": "SNAPSHOT_V0",
+    "test": "test/snapshot-check.test.ts",
+    "why": "a current snapshot holds the upgrade part"
+  },
+  {
+    "id": "sc-upgrade-off",
+    "file": "src/snapshot-check.ts",
+    "find": "[\"upgrade\", orNone(object)]];",
+    "replace": "[\"upgrade\", () => true]];",
+    "test": "test/snapshot-check.test.ts",
+    "why": "the upgrade part is an object or null"
+  },
+  {
+    "id": "sc-upgrade-required",
+    "file": "src/snapshot-check.ts",
+    "find": "[\"upgrade\", orNone(object)]];",
+    "replace": "[\"upgrade\", object]];",
+    "test": "test/snapshot-check.test.ts",
+    "why": "null is an upgrade part: none was read"
+  },
+  {
+    "id": "sc-upgrade-schema-off",
+    "file": "src/snapshot-check.ts",
+    "find": "[\"schema\", exactlyThis(\"flop-observatory/upgrade-watch@0\")],",
+    "replace": "[\"schema\", () => true],",
+    "test": "test/snapshot-check.test.ts",
+    "why": "the watch's schema"
+  },
+  {
+    "id": "sc-upgrade-time-weaker",
+    "file": "src/snapshot-check.ts",
+    "find": "  [\"observed_at\", time],\n  [\"trust\", oneOf(...TRUSTS)],\n  [\"at\", object],",
+    "replace": "  [\"observed_at\", text],\n  [\"trust\", oneOf(...TRUSTS)],\n  [\"at\", object],",
+    "test": "test/snapshot-check.test.ts",
+    "why": "the watch's time has a zone"
+  },
+  {
+    "id": "sc-upgrade-trust-off",
+    "file": "src/snapshot-check.ts",
+    "find": "  [\"trust\", oneOf(...TRUSTS)],\n  [\"at\", object],",
+    "replace": "  [\"trust\", () => true],\n  [\"at\", object],",
+    "test": "test/snapshot-check.test.ts",
+    "why": "the watch's trust is one of the two labels"
+  },
+  {
+    "id": "sc-upgrade-at-off",
+    "file": "src/snapshot-check.ts",
+    "find": "  [\"at\", object],",
+    "replace": "  [\"at\", () => true],",
+    "test": "test/snapshot-check.test.ts",
+    "why": "the watch's block is an object"
+  },
+  {
+    "id": "sc-upgrade-executing-off",
+    "file": "src/snapshot-check.ts",
+    "find": "  [\"executing\", object],",
+    "replace": "  [\"executing\", () => true],",
+    "test": "test/snapshot-check.test.ts",
+    "why": "the executing runtime is an object"
+  },
+  {
+    "id": "sc-upgrade-authorized-off",
+    "file": "src/snapshot-check.ts",
+    "find": "  [\"authorized\", object],",
+    "replace": "  [\"authorized\", () => true],",
+    "test": "test/snapshot-check.test.ts",
+    "why": "the authorisation is an object"
+  },
+  {
+    "id": "sc-compared-weaker",
+    "file": "src/snapshot-check.ts",
+    "find": "[\"compared_with\", orNone(count)],",
+    "replace": "[\"compared_with\", orNone(statusCode)],",
+    "test": "test/snapshot-check.test.ts",
+    "why": "compared_with is a height"
+  },
+  {
+    "id": "sc-changed-stricter",
+    "file": "src/snapshot-check.ts",
+    "find": "[\"executing_changed\", orNone(flag)],",
+    "replace": "[\"executing_changed\", flag],",
+    "test": "test/snapshot-check.test.ts",
+    "why": "executing_changed may be none"
+  },
+  {
+    "id": "sc-appeared-off",
+    "file": "src/snapshot-check.ts",
+    "find": "[\"authorization_appeared\", orNone(flag)],",
+    "replace": "[\"authorization_appeared\", () => true],",
+    "test": "test/snapshot-check.test.ts",
+    "why": "authorization_appeared is a flag or none"
+  },
+  {
+    "id": "sc-at-hash-weaker",
+    "file": "src/snapshot-check.ts",
+    "find": "  [\"hash\", hash],\n  [\"number\", orNone(count)],",
+    "replace": "  [\"hash\", text],\n  [\"number\", orNone(count)],",
+    "test": "test/snapshot-check.test.ts",
+    "why": "the block hash is 0x plus 64 lower case hex"
+  },
+  {
+    "id": "sc-at-number-stricter",
+    "file": "src/snapshot-check.ts",
+    "find": "  [\"hash\", hash],\n  [\"number\", orNone(count)],",
+    "replace": "  [\"hash\", hash],\n  [\"number\", count],",
+    "test": "test/snapshot-check.test.ts",
+    "why": "the block's height may be not known"
+  },
+  {
+    "id": "sc-state-stricter",
+    "file": "src/snapshot-check.ts",
+    "find": "oneOf(\"reviewed\", \"not reviewed\", \"absent\", \"unknown\")",
+    "replace": "oneOf(\"reviewed\", \"absent\", \"unknown\")",
+    "test": "test/snapshot-check.test.ts",
+    "why": "not reviewed is a state"
+  },
+  {
+    "id": "sc-spec-name-off",
+    "file": "src/snapshot-check.ts",
+    "find": "  [\"spec_name\", orNone(text)],",
+    "replace": "  [\"spec_name\", () => true],",
+    "test": "test/snapshot-check.test.ts",
+    "why": "the spec name is text or none"
+  },
+  {
+    "id": "sc-spec-version-weaker",
+    "file": "src/snapshot-check.ts",
+    "find": "  [\"spec_version\", orNone(count)],",
+    "replace": "  [\"spec_version\", orNone(statusCode)],",
+    "test": "test/snapshot-check.test.ts",
+    "why": "the spec version is a count"
+  },
+  {
+    "id": "sc-executing-detail-off",
+    "file": "src/snapshot-check.ts",
+    "find": "  [\"spec_version\", orNone(count)],\n  [\"detail\", orNone(text)],",
+    "replace": "  [\"spec_version\", orNone(count)],\n  [\"detail\", () => true],",
+    "test": "test/snapshot-check.test.ts",
+    "why": "the executing detail is text or none"
+  },
+  {
+    "id": "sc-auth-state-off",
+    "file": "src/snapshot-check.ts",
+    "find": "oneOf(\"absent\", \"present\", \"unknown\")",
+    "replace": "() => true",
+    "test": "test/snapshot-check.test.ts",
+    "why": "the authorised state is one of three words"
+  },
+  {
+    "id": "sc-bytes-weaker",
+    "file": "src/snapshot-check.ts",
+    "find": "  [\"bytes\", orNone(hexBytes)],",
+    "replace": "  [\"bytes\", orNone(text)],",
+    "test": "test/snapshot-check.test.ts",
+    "why": "the bytes are 0x and lower case hex of whole bytes"
+  },
+  {
+    "id": "sc-hexbytes-upper",
+    "file": "src/snapshot-check.ts",
+    "find": "const hexBytes: Check = (v) => typeof v === \"string\" && /^0x(?:[0-9a-f]{2})*$/.test(v);",
+    "replace": "const hexBytes: Check = (v) => typeof v === \"string\" && /^0x(?:[0-9a-fA-F]{2})*$/.test(v);",
+    "test": "test/snapshot-check.test.ts",
+    "why": "the bytes are lower case"
+  },
+  {
+    "id": "sc-hexbytes-odd",
+    "file": "src/snapshot-check.ts",
+    "find": "const hexBytes: Check = (v) => typeof v === \"string\" && /^0x(?:[0-9a-f]{2})*$/.test(v);",
+    "replace": "const hexBytes: Check = (v) => typeof v === \"string\" && /^0x[0-9a-f]*$/.test(v);",
+    "test": "test/snapshot-check.test.ts",
+    "why": "the bytes are whole bytes"
+  },
+  {
+    "id": "sc-length-weaker",
+    "file": "src/snapshot-check.ts",
+    "find": "  [\"length\", orNone(byteCount)],",
+    "replace": "  [\"length\", orNone(statusCode)],",
+    "test": "test/snapshot-check.test.ts",
+    "why": "the length is a count"
+  },
+  {
+    "id": "sc-length-unbounded",
+    "file": "src/snapshot-check.ts",
+    "find": "v >= 0 && v <= MAX_ANSWER_BYTES;",
+    "replace": "v >= 0;",
+    "test": "test/snapshot-check.test.ts",
+    "why": "the length is never above 1048576 (rule F1)"
+  },
+  {
+    "id": "sc-sha-shape-off",
+    "file": "src/snapshot-check.ts",
+    "find": "  [\"sha256\", orNone(sha256)],",
+    "replace": "  [\"sha256\", () => true],",
+    "test": "test/snapshot-check.test.ts",
+    "why": "the sha256 is 64 lower case hex or none (rule F1)"
+  },
+  {
+    "id": "sc-auth-detail-off",
+    "file": "src/snapshot-check.ts",
+    "find": "  [\"sha256\", orNone(sha256)],\n  [\"detail\", orNone(text)],",
+    "replace": "  [\"sha256\", orNone(sha256)],\n  [\"detail\", () => true],",
+    "test": "test/snapshot-check.test.ts",
+    "why": "the authorisation detail is text or none"
+  },
+  {
+    "id": "sc-at-not-read",
+    "file": "src/snapshot-check.ts",
+    "find": "if (isObject(own(upgrade, \"at\"))) shape(",
+    "replace": "if (false) shape(",
+    "test": "test/snapshot-check.test.ts",
+    "why": "the block's fields are checked"
+  },
+  {
+    "id": "sc-executing-not-read",
+    "file": "src/snapshot-check.ts",
+    "find": "if (isObject(own(upgrade, \"executing\"))) shape(",
+    "replace": "if (false) shape(",
+    "test": "test/snapshot-check.test.ts",
+    "why": "the executing runtime's fields are checked"
+  },
+  {
+    "id": "sc-authorized-not-read",
+    "file": "src/snapshot-check.ts",
+    "find": "if (isObject(own(upgrade, \"authorized\"))) shape(",
+    "replace": "if (false) shape(",
+    "test": "test/snapshot-check.test.ts",
+    "why": "the authorisation's fields are checked"
+  },
+  {
+    "id": "sc-upgrade-not-read",
+    "file": "src/snapshot-check.ts",
+    "find": "if (isObject(upgrade) && shape(\"upgrade\", upgrade, UPGRADE, broken)) {",
+    "replace": "if (false) {",
+    "test": "test/snapshot-check.test.ts",
+    "why": "the watch's fields are checked"
+  },
+  {
+    "id": "sc-at-head-off",
+    "file": "src/snapshot-check.ts",
+    "find": "watch((u, s) => s.status.finalized_hash === null || (u.at.hash === s.status.finalized_hash && u.at.number === s.status.finalized_height))",
+    "replace": "watch(() => true)",
+    "test": "test/snapshot-check.test.ts",
+    "why": "the watch is read at the status's finalized head"
+  },
+  {
+    "id": "sc-at-head-stricter",
+    "file": "src/snapshot-check.ts",
+    "find": "watch((u, s) => s.status.finalized_hash === null || (u.at.hash",
+    "replace": "watch((u, s) => (u.at.hash",
+    "test": "test/snapshot-check.test.ts",
+    "why": "a status with no finalized hash says nothing of the watch's block"
+  },
+  {
+    "id": "sc-at-number-ignored",
+    "file": "src/snapshot-check.ts",
+    "find": " && u.at.number === s.status.finalized_height))",
+    "replace": "))",
+    "test": "test/snapshot-check.test.ts",
+    "why": "the watch's height is the status's finalized height (rule F2, review defect 2)"
+  },
+  {
+    "id": "sc-names-off",
+    "file": "src/snapshot-check.ts",
+    "find": "watch((u) => (u.executing.spec_name !== null) === NAMED.includes(u.executing.state) && (u.executing.spec_version !== null) === NAMED.includes(u.executing.state))",
+    "replace": "watch(() => true)",
+    "test": "test/snapshot-check.test.ts",
+    "why": "a runtime is named exactly when read"
+  },
+  {
+    "id": "sc-names-weaker",
+    "file": "src/snapshot-check.ts",
+    "find": " && (u.executing.spec_version !== null) === NAMED.includes(u.executing.state))",
+    "replace": ")",
+    "test": "test/snapshot-check.test.ts",
+    "why": "the version is set exactly when the name is"
+  },
+  {
+    "id": "sc-says-why-off",
+    "file": "src/snapshot-check.ts",
+    "find": "watch((u) => (u.executing.detail !== null) === (u.executing.state !== \"reviewed\"))",
+    "replace": "watch(() => true)",
+    "test": "test/snapshot-check.test.ts",
+    "why": "every state but reviewed says why"
+  },
+  {
+    "id": "sc-says-why-weaker",
+    "file": "src/snapshot-check.ts",
+    "find": "watch((u) => (u.executing.detail !== null) === (u.executing.state !== \"reviewed\"))",
+    "replace": "watch((u) => u.executing.detail !== null || u.executing.state === \"reviewed\")",
+    "test": "test/snapshot-check.test.ts",
+    "why": "reviewed says nothing of why"
+  },
+  {
+    "id": "sc-measured-off",
+    "file": "src/snapshot-check.ts",
+    "find": "watch((u) => (u.authorized.length !== null) === (u.authorized.state === \"present\") && (u.authorized.sha256 !== null) === (u.authorized.state === \"present\"))",
+    "replace": "watch(() => true)",
+    "test": "test/snapshot-check.test.ts",
+    "why": "a present authorisation is measured, and only it (rule F1)"
+  },
+  {
+    "id": "sc-measured-weaker",
+    "file": "src/snapshot-check.ts",
+    "find": " && (u.authorized.sha256 !== null) === (u.authorized.state === \"present\"))",
+    "replace": ")",
+    "test": "test/snapshot-check.test.ts",
+    "why": "the sha256 is set exactly when present (rule F1)"
+  },
+  {
+    "id": "sc-bytes-only-off",
+    "file": "src/snapshot-check.ts",
+    "find": "watch((u) => u.authorized.bytes === null || u.authorized.state === \"present\")",
+    "replace": "watch(() => true)",
+    "test": "test/snapshot-check.test.ts",
+    "why": "bytes are kept only when present"
+  },
+  {
+    "id": "sc-kept-off",
+    "file": "src/snapshot-check.ts",
+    "find": "(u.authorized.bytes !== null) === (u.authorized.length <= KEPT_BYTES))",
+    "replace": "true)",
+    "test": "test/snapshot-check.test.ts",
+    "why": "bytes are kept exactly up to 256 (rule F1)"
+  },
+  {
+    "id": "sc-kept-off-by-one",
+    "file": "src/snapshot-check.ts",
+    "find": "(u.authorized.length <= KEPT_BYTES))",
+    "replace": "(u.authorized.length < KEPT_BYTES))",
+    "test": "test/snapshot-check.test.ts",
+    "why": "256 bytes are kept (rule F1)"
+  },
+  {
+    "id": "sc-sha-of-bytes-off",
+    "file": "src/snapshot-check.ts",
+    "find": "watch((u) => u.authorized.bytes === null || u.authorized.sha256 === sha256Of(u.authorized.bytes))",
+    "replace": "watch(() => true)",
+    "test": "test/snapshot-check.test.ts",
+    "why": "the sha256 is of the kept bytes (rule F1)"
+  },
+  {
+    "id": "sc-sha-of-text",
+    "file": "src/snapshot-check.ts",
+    "find": ".update(Uint8Array.from(hex.slice(2).match(/[0-9a-f]{2}/g) ?? [], (b) => Number.parseInt(b, 16)))",
+    "replace": ".update(hex)",
+    "test": "test/snapshot-check.test.ts",
+    "why": "the sha256 is of the raw bytes, not the hex text (rule F1)"
+  },
+  {
+    "id": "sc-length-off",
+    "file": "src/snapshot-check.ts",
+    "find": "watch((u) => u.authorized.bytes === null || u.authorized.length === (u.authorized.bytes.length - 2) / 2)",
+    "replace": "watch(() => true)",
+    "test": "test/snapshot-check.test.ts",
+    "why": "the length counts the bytes"
+  },
+  {
+    "id": "sc-length-0x",
+    "file": "src/snapshot-check.ts",
+    "find": "u.authorized.length === (u.authorized.bytes.length - 2) / 2",
+    "replace": "u.authorized.length === u.authorized.bytes.length / 2",
+    "test": "test/snapshot-check.test.ts",
+    "why": "the length does not count the 0x"
+  },
+  {
+    "id": "sc-auth-why-off",
+    "file": "src/snapshot-check.ts",
+    "find": "watch((u) => (u.authorized.detail !== null) === (u.authorized.state === \"unknown\" || (u.authorized.state === \"present\" && u.authorized.bytes === null)))",
+    "replace": "watch(() => true)",
+    "test": "test/snapshot-check.test.ts",
+    "why": "unknown and present not kept say why, nothing else"
+  },
+  {
+    "id": "sc-auth-why-not-kept",
+    "file": "src/snapshot-check.ts",
+    "find": " || (u.authorized.state === \"present\" && u.authorized.bytes === null)))",
+    "replace": "))",
+    "test": "test/snapshot-check.test.ts",
+    "why": "bytes not kept say why (rule F1)"
+  },
+  {
+    "id": "sc-changes-off",
+    "file": "src/snapshot-check.ts",
+    "find": "watch((u) => u.compared_with !== null || (u.executing_changed === null && u.authorization_appeared === null))",
+    "replace": "watch(() => true)",
+    "test": "test/snapshot-check.test.ts",
+    "why": "a change is said only against an earlier watch"
+  },
+  {
+    "id": "sc-changes-weaker",
+    "file": "src/snapshot-check.ts",
+    "find": " || (u.executing_changed === null && u.authorization_appeared === null))",
+    "replace": " || u.executing_changed === null)",
+    "test": "test/snapshot-check.test.ts",
+    "why": "an appearance too is said only against an earlier watch"
+  },
+  {
+    "id": "sc-lower-off",
+    "file": "src/snapshot-check.ts",
+    "find": "watch((u) => u.compared_with === null || (u.at.number !== null && u.compared_with < u.at.number))",
+    "replace": "watch(() => true)",
+    "test": "test/snapshot-check.test.ts",
+    "why": "compared only with a lower block"
+  },
+  {
+    "id": "sc-lower-weaker",
+    "file": "src/snapshot-check.ts",
+    "find": "u.compared_with < u.at.number",
+    "replace": "u.compared_with <= u.at.number",
+    "test": "test/snapshot-check.test.ts",
+    "why": "the same block is not lower"
+  },
+  {
+    "id": "sc-lower-null",
+    "file": "src/snapshot-check.ts",
+    "find": "(u.at.number !== null && u.compared_with < u.at.number)",
+    "replace": "(u.at.number === null || u.compared_with < u.at.number)",
+    "test": "test/snapshot-check.test.ts",
+    "why": "a block of no known height is compared with none"
+  },
+  {
+    "id": "sc-changed-named-off",
+    "file": "src/snapshot-check.ts",
+    "find": "watch((u) => u.executing_changed === null || NAMED.includes(u.executing.state))",
+    "replace": "watch(() => true)",
+    "test": "test/snapshot-check.test.ts",
+    "why": "a change of runtime is said only of a named one"
+  },
+  {
+    "id": "sc-appeared-known-off",
+    "file": "src/snapshot-check.ts",
+    "find": "watch((u) => u.authorization_appeared === null || u.authorized.state !== \"unknown\")",
+    "replace": "watch(() => true)",
+    "test": "test/snapshot-check.test.ts",
+    "why": "an appearance is said only of a known authorisation"
+  },
+  {
+    "id": "sc-appeared-present-off",
+    "file": "src/snapshot-check.ts",
+    "find": "watch((u) => u.authorization_appeared !== true || u.authorized.state === \"present\")",
+    "replace": "watch(() => true)",
+    "test": "test/snapshot-check.test.ts",
+    "why": "an authorisation appears only when present"
+  },
+  {
+    "id": "sc-fixture-upgrade-ignored",
+    "file": "src/snapshot-check.ts",
+    "find": "[s.status, ...s.escrows, s.census, s.drift, s.upgrade]",
+    "replace": "[s.status, ...s.escrows, s.census, s.drift]",
+    "test": "test/snapshot-check.test.ts",
+    "why": "a fixture watch makes the snapshot a fixture"
+  },
+  {
+    "id": "sc-watch-null-read",
+    "file": "src/snapshot-check.ts",
+    "find": "s.upgrade === undefined || s.upgrade === null || rule(s.upgrade, s)",
+    "replace": "s.upgrade === undefined || rule(s.upgrade as UpgradeWatch, s)",
+    "test": "test/snapshot-check.test.ts",
+    "why": "a snapshot with no watch passes every rule of the watch"
+  },
+  {
+    "id": "cli-upgrade-ignored",
+    "file": "src/cli.ts",
+    "find": "drift: driftPart, upgrade: upgradePart },",
+    "replace": "drift: driftPart, upgrade: null },",
+    "test": "scripts/cli-checks.mjs",
+    "why": "--upgrade gives the snapshot its watch"
+  },
+  {
+    "id": "cli-upgrade-no-head",
+    "file": "src/cli.ts",
+    "find": "  if (head.finalized === null) fail(`--upgrade needs a status fixture with a finalized head to read at; ${dir} has none to count as read at`);\n  return { hash: head.finalized.hash, number: head.finalized.number,",
+    "replace": "  const f = head.finalized as { hash: string; number: number };\n  return { hash: f.hash, number: f.number,",
+    "test": "scripts/cli-checks.mjs",
+    "why": "a watch needs a finalized head to count its reads at"
+  },
+  {
+    "id": "cli-upgrade-keys-unchecked",
+    "file": "src/cli.ts",
+    "find": "JSON.stringify(Object.keys(v).sort()) !== JSON.stringify(NAMES)) fail(",
+    "replace": "false) fail(",
+    "test": "scripts/cli-checks.mjs",
+    "why": "storage.json holds exactly the two reads"
+  },
+  {
+    "id": "cli-upgrade-pin-unchecked",
+    "file": "src/cli.ts",
+    "find": "const src = samePin(FixtureSource.fromDir(upgradeDir), upgradeDir);",
+    "replace": "const src = FixtureSource.fromDir(upgradeDir);",
+    "test": "scripts/cli-checks.mjs",
+    "why": "an upgrade fixture pinned to another genesis is refused"
+  },
+  {
+    "id": "cli-upgrade-answer-form",
+    "file": "src/cli.ts",
+    "find": "if (keys.length === 1 && keys[0] === \"result\")",
+    "replace": "if (keys.includes(\"result\"))",
+    "test": "scripts/cli-checks.mjs",
+    "why": "an answer is a result or an error, never both"
+  },
+  {
+    "id": "cli-upgrade-log-ignored",
+    "file": "src/cli.ts",
+    "find": "let earlier: Earlier = { previous: [], earlierTimes: [], earlierBest: [], earlierSpec: [], anchor: null, earlierUpgrades: [] };\n    if (log && existsSync(log)) {",
+    "replace": "let earlier: Earlier = { previous: [], earlierTimes: [], earlierBest: [], earlierSpec: [], anchor: null, earlierUpgrades: [] };\n    if (log && existsSync(log) && log === \"\") {",
+    "test": "scripts/cli-checks.mjs",
+    "why": "the next snapshot on a log is compared with the one before"
+  }
+]

@@ -13,6 +13,7 @@ import { REVIEWED, type ReviewedShape, STATED_ENTRIES, pinShape } from "../src/s
 import { recordedUpgrade } from "./helpers/recorded-upgrade.js";
 import { keyBytes } from "./helpers/requests/core.js";
 import { UPGRADE_BLOCKS } from "./helpers/requests/list-3.js";
+import { cat, compact, str } from "./helpers/scale-write.js";
 
 const U = recordedUpgrade();
 const [OLD, NEW] = REVIEWED as [ReviewedShape, ReviewedShape];
@@ -90,6 +91,20 @@ describe("what the decoder has reviewed cannot be changed by a caller", () => {
     line.shapeSha256 = NEW.shapeSha256;
     expect(refusedAfter()).toBe(true);
     expect(TABLES()).toBe(SAVED);
+  });
+
+  it("hands out no table through a refusal of runtimeOfBlock: what it names is a fresh object, and a write to it changes no table and no later answer", () => {
+    const named = { specName: OLD.specName, specVersion: OLD.specVersion + 1 };
+    const other = cat(compact(named.specVersion), str(named.specName));
+    const r = runtimeOfBlock(other);
+    if (r.found || r.named === null) throw new Error("not a refusal that names a spec");
+    expect(r.named).toEqual(named);
+    r.named.specName = NEW.specName;
+    r.named.specVersion = NEW.specVersion;
+    expect(TABLES()).toBe(SAVED);
+    const again = runtimeOfBlock(other);
+    expect(again.found ? "found" : again.named).toEqual(named);
+    expect(runtimeOfBlock(U.upgradeOf(BEFORE))).toEqual({ found: true, reviewed: OLD });
   });
 
   it("refuses a write through the import to REVIEWED, a line of it, STATED_ENTRIES, a pair of it, PRIMITIVES and HASHERS, and changes nothing", () => {

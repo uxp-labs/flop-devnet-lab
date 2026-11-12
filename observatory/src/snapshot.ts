@@ -5,13 +5,16 @@ import { escrowStates } from "./escrow.js";
 import type { Source } from "./source.js";
 import { assessNetwork, type StatusOptions } from "./status.js";
 import type { NewSnapshot } from "./store.js";
-import type { CensusReport, DriftReport, EscrowState, RunPin, Trust } from "./types.js";
+import type { CensusReport, DriftReport, EscrowState, RunPin, Trust, UpgradeWatch } from "./types.js";
+import { type EarlierUpgrade, type UpgradeReading, watchUpgrade } from "./upgrade-watch.js";
 
 export interface SnapshotParts {
   status: Source;
   escrows?: { source: Source; ids: string[] } | null;
   census?: { report: CensusReport; label: string } | null;
   drift?: { report: DriftReport; label: string } | null;
+  /** The two reads of the upgrade watch (src/upgrade-watch.ts); the label when they came from a source of their own. */
+  upgrade?: { reading: UpgradeReading; label?: string } | null;
 }
 
 export interface SnapshotOptions {
@@ -28,6 +31,8 @@ export interface SnapshotOptions {
   earlierSpec?: StatusOptions["earlierSpec"];
   /** The latest finalized head logged on the pinned genesis (RULES.md 1.1, the anchor). */
   anchor?: StatusOptions["anchor"];
+  /** Every earlier upgrade watch and the RPC genesis it was read on, oldest first (RULES.md 7.2). */
+  earlierUpgrades?: readonly EarlierUpgrade[];
 }
 
 /** The weakest trust among the parts: one fixture input makes the whole snapshot "fixture". */
@@ -73,6 +78,13 @@ export async function buildSnapshot(parts: SnapshotParts, o: SnapshotOptions): P
     labels.push(parts.drift.label);
     trusts.push(parts.drift.report.trust);
   }
+  // Compared on the RPC genesis the status judged, so a watch on another chain is never compared with this one.
+  let upgrade: UpgradeWatch | null = null;
+  if (parts.upgrade) {
+    upgrade = watchUpgrade({ reading: parts.upgrade.reading, genesis: status.genesis.rpc, earlier: o.earlierUpgrades ?? [] });
+    if (parts.upgrade.label !== undefined) labels.push(parts.upgrade.label);
+    trusts.push(upgrade.trust);
+  }
   const pin: RunPin = {
     source_sha: o.sourceSha,
     source: labels.join(" + "),
@@ -83,7 +95,7 @@ export async function buildSnapshot(parts: SnapshotParts, o: SnapshotOptions): P
     node: process.version,
   };
   return {
-    schema: "flop-observatory/snapshot@0",
+    schema: "flop-observatory/snapshot@1",
     observed_at: o.now,
     trust: weakest(trusts),
     pin,
@@ -91,5 +103,6 @@ export async function buildSnapshot(parts: SnapshotParts, o: SnapshotOptions): P
     escrows,
     census: parts.census?.report ?? null,
     drift: parts.drift?.report ?? null,
+    upgrade,
   };
 }

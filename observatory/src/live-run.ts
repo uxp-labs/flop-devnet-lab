@@ -11,7 +11,7 @@
 // The output folder holds, and nothing else:
 //   snapshots.jsonl  the one new line of the log: the snapshot, with the seq and prev_hash that
 //                    follow the log's last line (src/store.ts). It is what the publish job appends.
-//   status.json, escrows.json, census.json, drift.json, snapshot.json   the feeds (src/feed.ts)
+//   status.json, escrows.json, census.json, drift.json, upgrade.json, snapshot.json   the feeds (src/feed.ts)
 //   tape.jsonl       every request and its answer, in order (src/tape.ts)
 //   run.json         when the run started and ended, the source revision if given, which case the
 //                    published log was in (src/history.ts), and how the run ended
@@ -88,6 +88,13 @@ export function noticeLine(s: Snapshot): string {
     finalized_height: st.finalized_height,
     best_height: st.best_height,
     runtime_version: st.runtime_version,
+    // The upgrade watch: the runtime that executed the finalized head, and whether an upgrade is authorised.
+    executing_state: s.upgrade?.executing.state ?? null,
+    executing_spec_name: s.upgrade?.executing.spec_name ?? null,
+    executing_spec_version: s.upgrade?.executing.spec_version ?? null,
+    authorized_state: s.upgrade?.authorized.state ?? null,
+    authorized_length: s.upgrade?.authorized.length ?? null,
+    authorized_sha256: s.upgrade?.authorized.sha256 ?? null,
     rpc: st.rpc.health,
     faucet: st.faucet.health,
     gateway: st.gateway.health,
@@ -135,7 +142,8 @@ export async function runLive(transport: Transport, o: RunOptions): Promise<RunR
       await source.read();
       // The snapshot time is taken once every reading is in, so no reading is later than it.
       const now = recorder.now();
-      const fresh = await buildSnapshot({ status: source }, { pinnedGenesis: DEVNET_GENESIS, now, sourceSha: o.sourceSha, ...earlier });
+      const reading = await source.upgradeReading();
+      const fresh = await buildSnapshot({ status: source, upgrade: reading === null ? null : { reading } }, { pinnedGenesis: DEVNET_GENESIS, now, sourceSha: o.sourceSha, ...earlier });
       snapshot = sealSnapshot(fresh, history.snapshots.at(-1));
       writeFileSync(join(o.out, "snapshots.jsonl"), logLine(snapshot));
       writeFeeds(o.out, snapshot);

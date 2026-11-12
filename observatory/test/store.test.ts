@@ -396,7 +396,7 @@ describe("feeds", () => {
     const d2 = tmp();
     const names = writeFeeds(d1, s);
     writeFeeds(d2, s);
-    expect(names).toEqual(["status.json", "escrows.json", "census.json", "drift.json", "snapshot.json"]);
+    expect(names).toEqual(["status.json", "escrows.json", "census.json", "drift.json", "upgrade.json", "snapshot.json"]);
     for (const n of names) {
       const t = readFileSync(join(d1, n), "utf8");
       expect(t).toBe(readFileSync(join(d2, n), "utf8"));

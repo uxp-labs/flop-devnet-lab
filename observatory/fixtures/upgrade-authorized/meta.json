@@ -1,0 +1,14 @@
+{
+  "scenario": "upgrade-authorized",
+  "description": "Synthetic reading of the upgrade watch (RULES.md 7.2), made from fixtures/live-healthy (every time moved 1800 s later): the authorising block, 3528478, at which System.AuthorizedUpgrade held the 33 bytes the lab read. Read on top of a log holding the upgrade-before reading: it reads back that reading's finalized head, 3528477, and the node gives the hash the log holds. The finalized head is the block named in from_results, best two above it; the runtime version is 1014014. state_getStorage of System.LastRuntimeUpgrade answers {\"result\":\"0xfae33d0030747a6b762d72756e74696d65\"}, and of System.AuthorizedUpgrade {\"result\":\"0xfd5ac06d81e461da832c8f83402e155e8eb84cd31a2f08fc3f281cb5fb711e5b01\"}; upgrade_answers names where each comes from. Every other value is live-healthy's, made up.",
+  "from_results": {
+    "finalized head": "research/2026-11-12-runtime-upgrade/results.json authorization.authorizing_block.hash and authorization.authorizing_block.height",
+    "anchor": "research/2026-11-12-runtime-upgrade/results.json authorization.authorizing_block.block_before.hash and authorization.authorizing_block.block_before.height"
+  },
+  "now": "2026-11-11T06:30:01.000Z",
+  "synthetic": true,
+  "upgrade_answers": {
+    "System.AuthorizedUpgrade": "research/2026-11-12-runtime-upgrade/results.json authorization.authorized_upgrade_at.2.value",
+    "System.LastRuntimeUpgrade": "research/2026-11-12-runtime-upgrade/results.json authorization.authorizing_block.last_runtime_upgrade"
+  }
+}

@@ -8,8 +8,8 @@
     "names": "5271db22d00de405d8b47cd068f20f211490fce67f0f95b7279fbb39431afdb2"
   },
   "block-runtime.test.ts": {
-    "tests": 11,
-    "names": "d21316fb49111632f8e347a665e4b520f4e2a96c8349afcaa45769791a0dc458"
+    "tests": 14,
+    "names": "3076b819a808aeae774c1c12a0cb2b6c6326e83c0ae42342cc6f860b0b844c10"
   },
   "census.test.ts": {
     "tests": 176,
@@ -32,8 +32,8 @@
     "names": "e7024b8929983879ef611eefd8fe938828383c55ebdccd3d2a0cfc0b4e161a1a"
   },
   "guard.test.ts": {
-    "tests": 91,
-    "names": "989ff0747394e7cbdf481c206e47df631103442f9b37d77d52a05dc1c3a1eb07"
+    "tests": 92,
+    "names": "3d49332e58864fd317333b61f19428f2a62f2a91af665a1d52180241441ba944"
   },
   "hash.test.ts": {
     "tests": 20,
@@ -61,7 +61,7 @@
   },
   "memory.test.ts": {
     "tests": 28,
-    "names": "6411fd587a94ddb736eee8a5b021a067f97eccd35b396d37f8cf6149f60402eb"
+    "names": "f7c3d8ddb7d9159d878b24283a2664f04738f9ab65598d15fb7ea67b1033e487"
   },
   "net.test.ts": {
     "tests": 36,
@@ -72,12 +72,12 @@
     "names": "c1629a5c9e7fa1134a7e062494c93ae5e762fbe1cc26328108e74d808eb49693"
   },
   "publish-shell.test.ts": {
-    "tests": 75,
-    "names": "57d0c78fe86ba9a18330d52dec56cbef6befb541db5c36f144d4a1d54a5216ea"
+    "tests": 76,
+    "names": "b656456cbc9354684b72dcd5a8ddaef2b6331d564b2b18e99102453bd2635b59"
   },
   "published.test.ts": {
-    "tests": 21,
-    "names": "903d704885ae6f13255754cd80c7df684a1f721cb9c697dc7dd4a3825d546ce8"
+    "tests": 22,
+    "names": "9c86a583a920a26736d870146e8805fc1deadbd4910a0ffdd99dc7f32d02487a"
   },
   "real-recording.test.ts": {
     "tests": 3,
@@ -131,9 +131,13 @@
     "tests": 10,
     "names": "80f0b7fa5897c412a30433ffc79805a9e6e31a8d0729d67f5690cc9eb04b6729"
   },
+  "review-watch.test.ts": {
+    "tests": 63,
+    "names": "c5c97f7a9986792ab10c23b46c1e575db94d9326428f84328d3317b7093891e5"
+  },
   "reviewed-frozen.test.ts": {
-    "tests": 6,
-    "names": "5cf3b113aa49fe41f3f4ad18b91256753ce6a05ce248576dde104224ce96b816"
+    "tests": 7,
+    "names": "ae81d706fb49f476ef00ad0e4af847632fd32c8fc41c1034ede03d5888e99f5f"
   },
   "rpc-head.test.ts": {
     "tests": 19,
@@ -160,12 +164,12 @@
     "names": "6b1c23e7d622d51fc80028a7dacb8212d1c2087a46bdaa85037cce7397bab326"
   },
   "snapshot-check-grid.test.ts": {
-    "tests": 43,
-    "names": "5a272b240add649be9d418c419bfdc6a65b76e7db13154803460d63bc7cb4b41"
+    "tests": 55,
+    "names": "75c024d150663df401e6c2efbb285fdf2ed1ca38a6be1e2d28f37b75360a1bd6"
   },
   "snapshot-check.test.ts": {
-    "tests": 199,
-    "names": "8ebdc51baf646a1a9b8e6cf0f64ec7dfa40fa19d1ca817bf8bf6970304784b38"
+    "tests": 291,
+    "names": "6e5ba42ad16799956ae6ac19b1381f40a0b67c7782a7c3073620ebf20fa2d65d"
   },
   "snapshot.test.ts": {
     "tests": 22,
@@ -215,6 +219,10 @@
     "tests": 9,
     "names": "589180382a40bf137c057cf61ea705ba94721219cac7adda656c40c61db2ad5e"
   },
+  "upgrade-live.test.ts": {
+    "tests": 24,
+    "names": "4928d77de0190e17b04fa7d36905e0d45f3c1ed7b1a05b6c5eaf771913d4a188"
+  },
   "upgrade-recording.test.ts": {
     "tests": 9,
     "names": "16aec6aa9ace2425763bcafa97c1c8fab4f87f01b2e6573a79bf7d19f0e37982"
@@ -230,5 +238,9 @@
   "upgrade-storage.test.ts": {
     "tests": 14,
     "names": "c77b4e54c3efd7b7ddc12de1031cc0f9f2289baf2a39b3e32146563c82b81ef2"
+  },
+  "upgrade-watch.test.ts": {
+    "tests": 22,
+    "names": "651213586a47a09ae258f9bbf6cbf903591fc6418fd41e3d85ba67dee16f96d0"
   }
 }

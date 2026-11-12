@@ -107,7 +107,7 @@ describe("judgeLatest", () => {
 
   it("refuses a snapshot that breaks a snapshot check, naming the check", async () => {
     const f = await latest("live-healthy");
-    const j = judge(withSnapshot(f, (s) => ((s as unknown as Record<string, unknown>).schema = "flop-observatory/snapshot@1")));
+    const j = judge(withSnapshot(f, (s) => ((s as unknown as Record<string, unknown>).schema = "flop-observatory/snapshot@2")));
     expect(j).toEqual({ usable: false, refused: ["snapshot.json breaks snapshot.schema"] });
   });
 
@@ -122,7 +122,7 @@ describe("judgeLatest", () => {
     expect(j).toEqual({ usable: false, refused: ['snapshot.json has trust "fixture", not "trusted RPC"'] });
   });
 
-  it.each(["status.json", "escrows.json", "census.json", "drift.json", "snapshots.jsonl"])("refuses a %s that is not the one the snapshot gives", async (name) => {
+  it.each(["status.json", "escrows.json", "census.json", "drift.json", "upgrade.json", "snapshots.jsonl"])("refuses a %s that is not the one the snapshot gives", async (name) => {
     const f = await latest("live-healthy");
     const changed = (f[name] as string).replace(/\n$/, " \n");
     expect(judge(resummed({ ...f, [name]: changed }))).toEqual({ usable: false, refused: [`${name} is not the one the snapshot gives`] });

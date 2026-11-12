@@ -43,6 +43,43 @@ const meta = JSON.parse(readFileSync(join(otherPin, "meta.json"), "utf8"));
 meta.pinned_genesis = "0x" + "ab".repeat(32);
 writeFileSync(join(otherPin, "meta.json"), JSON.stringify(meta, null, 2));
 
+// The snapshot command's --upgrade (RULES.md 7.2): copies of watch-authorized with its storage.json
+// gone, not JSON, holding a key more, with an answer of another form, or pinned to another genesis;
+// and a status a little later, so a second watch on one log is compared with the first.
+const upgradeCopy = (name, edit) => {
+  const d = join(work, name);
+  cpSync(join(pkg, fx("watch-authorized")), d, { recursive: true });
+  edit(d);
+  return d;
+};
+const upNoFile = upgradeCopy("up-no-file", (d) => rmSync(join(d, "storage.json")));
+const upNotJson = upgradeCopy("up-not-json", (d) => writeFileSync(join(d, "storage.json"), "{"));
+const upKeyMore = upgradeCopy("up-key-more", (d) => {
+  const o = JSON.parse(readFileSync(join(d, "storage.json"), "utf8"));
+  o["System.Code"] = { result: null };
+  writeFileSync(join(d, "storage.json"), JSON.stringify(o));
+});
+const upBadAnswer = upgradeCopy("up-bad-answer", (d) => {
+  const o = JSON.parse(readFileSync(join(d, "storage.json"), "utf8"));
+  o["System.AuthorizedUpgrade"] = { result: null, error: "both" };
+  writeFileSync(join(d, "storage.json"), JSON.stringify(o));
+});
+const upOtherPin = upgradeCopy("up-other-pin", (d) => {
+  const o = JSON.parse(readFileSync(join(d, "meta.json"), "utf8"));
+  o.pinned_genesis = "0x" + "ab".repeat(32);
+  writeFileSync(join(d, "meta.json"), JSON.stringify(o));
+});
+const upLater = join(work, "up-later");
+cpSync(join(pkg, fx("status-healthy")), upLater, { recursive: true });
+{
+  const p = join(upLater, "rpc-head.json");
+  const o = JSON.parse(readFileSync(p, "utf8"));
+  o.finalized = { number: o.finalized.number + 10, hash: "0x" + "12".repeat(32) };
+  o.best_number += 10;
+  writeFileSync(p, JSON.stringify(o, null, 2));
+}
+const upLog = join(work, "up.jsonl");
+
 // Two snapshots into one log: the second rolls the finalized height back on the same genesis.
 const rollA = join(work, "roll-a");
 const rollB = join(work, "roll-b");
@@ -311,6 +348,41 @@ const cases = [
     name: "a snapshot refuses a census with an unreadable page file",
     run: () => cli("snapshot", "--status", fx("status-healthy"), "--census", fx("census-unreadable-page"), "--out", join(work, "snap-census")),
     ok: (r) => r.exit === 2 && /(unreadable|unusable) event page/.test(r.stderr),
+  },
+  {
+    name: "a snapshot with --upgrade refuses a storage.json that is missing, not JSON, holds a key more or an answer of another form",
+    run: () => {
+      const got = [upNoFile, upNotJson, upKeyMore, upBadAnswer].map((d, i) => cli("snapshot", "--status", fx("status-healthy"), "--upgrade", d, "--out", join(work, `up-refused-${i}`)));
+      const want = [/storage\.json cannot be read as a regular file/, /storage\.json is not valid JSON/, /must hold exactly System\.AuthorizedUpgrade and System\.LastRuntimeUpgrade/, /System\.AuthorizedUpgrade must be \{"result": \.\.\.\} or \{"error": "\.\.\."\}/];
+      const bad = got.findIndex((r, i) => !(r.exit === 2 && want[i].test(r.stderr)));
+      return bad === -1 ? { exit: 2, json: null, stderr: "ok" } : got[bad];
+    },
+    ok: (r) => r.exit === 2 && r.stderr === "ok",
+  },
+  {
+    name: "a snapshot with --upgrade refuses a status with no finalized head to count the reads at, and a part pinned to another genesis",
+    run: () => {
+      const none = cli("snapshot", "--status", fx("status-unknown"), "--upgrade", fx("watch-authorized"), "--out", join(work, "up-no-head"));
+      if (!(none.exit === 2 && /--upgrade needs a status fixture with a finalized head/.test(none.stderr))) return none;
+      return cli("snapshot", "--status", fx("status-healthy"), "--upgrade", upOtherPin, "--out", join(work, "up-pin"));
+    },
+    ok: (r) => r.exit === 2 && /pinned to genesis 0xabab/.test(r.stderr),
+  },
+  {
+    name: "a snapshot with --upgrade writes the watch at the status's finalized head, and the next one on the log is compared with it",
+    run: () => {
+      const first = cli("snapshot", "--status", fx("status-healthy"), "--upgrade", fx("watch-authorized"), "--out", join(work, "up-o1"), "--log", upLog);
+      if (first.exit !== 0) return first;
+      const second = cli("snapshot", "--status", upLater, "--upgrade", fx("watch-authorized"), "--out", join(work, "up-o2"), "--log", upLog);
+      if (second.exit !== 0) return second;
+      const a = JSON.parse(readFileSync(join(work, "up-o1", "upgrade.json"), "utf8")).upgrade;
+      const b = JSON.parse(readFileSync(join(work, "up-o2", "upgrade.json"), "utf8")).upgrade;
+      const head = JSON.parse(readFileSync(join(upLater, "rpc-head.json"), "utf8")).finalized;
+      const said = [a?.compared_with, a?.executing?.state, a?.authorized?.state, b?.at?.hash, b?.at?.number, b?.compared_with, b?.executing_changed, b?.authorization_appeared];
+      const want = [null, "reviewed", "present", head.hash, head.number, a?.at?.number, false, false];
+      return { exit: JSON.stringify(said) === JSON.stringify(want) ? 0 : 1, json: null, stderr: JSON.stringify(said) };
+    },
+    ok: (r) => r.exit === 0,
   },
   {
     name: "a snapshot refuses a part pinned to a different genesis",

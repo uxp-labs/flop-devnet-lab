@@ -27,7 +27,7 @@ export function exchangesFor(snapshot) {
   };
   add("initialize", { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "observatory-check", version: "0" } });
   add("tools/list");
-  for (const name of ["get_status", "list_escrows", "get_census", "get_drift", "get_snapshot_meta"]) add("tools/call", { name, arguments: {} });
+  for (const name of ["get_status", "list_escrows", "get_census", "get_drift", "get_upgrade", "get_snapshot_meta"]) add("tools/call", { name, arguments: {} });
   for (const e of snapshot.escrows ?? []) add("tools/call", { name: "get_escrow_state", arguments: { escrow_id: e.escrow_id } });
   add("tools/call", { name: "get_escrow_state", arguments: { escrow_id: unseenEscrowId(snapshot) } });
   add("tools/call", { name: "sign_transaction", arguments: {} }, true);

@@ -1,6 +1,10 @@
 {
   "scenario": "live-healthy",
-  "description": "A healthy devnet reading: faucet, gateway and RPC all answer, on the pinned genesis, finalized 2 blocks behind best. Every value is made up for this test, shaped after the devnet as read on 2026-11-11.",
+  "description": "A healthy devnet reading: faucet, gateway and RPC all answer, on the pinned genesis, finalized 2 blocks behind best. Every value is made up for this test, shaped after the devnet as read on 2026-11-11. The two reads of the upgrade watch at the finalized head, right after its runtime version, are synthetic too: state_getStorage of System.LastRuntimeUpgrade answers the record research/2026-11-12-runtime-upgrade/results.json gives at boundary.0.last_runtime_upgrade.hex (tzkv-runtime 1014014), and of System.AuthorizedUpgrade answers null, as authorization.authorized_upgrade_at.0.value gives; upgrade_answers names both.",
   "now": "2026-11-11T06:00:01.000Z",
-  "synthetic": true
+  "synthetic": true,
+  "upgrade_answers": {
+    "System.AuthorizedUpgrade": "research/2026-11-12-runtime-upgrade/results.json authorization.authorized_upgrade_at.0.value",
+    "System.LastRuntimeUpgrade": "research/2026-11-12-runtime-upgrade/results.json boundary.0.last_runtime_upgrade.hex"
+  }
 }

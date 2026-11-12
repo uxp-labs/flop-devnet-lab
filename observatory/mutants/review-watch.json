@@ -1,0 +1,218 @@
+[
+  {
+    "id": "rw-empty-read-as-absent",
+    "file": "src/upgrade-watch.ts",
+    "find": "if (a.result === null) return { value: null };",
+    "replace": "if (a.result === null || a.result === \"0x\") return { value: null };",
+    "test": "test/upgrade-watch.test.ts",
+    "why": "an empty value read as absent"
+  },
+  {
+    "id": "rw-empty-hex-malformed",
+    "file": "src/upgrade-watch.ts",
+    "find": "const HEX_BYTES = /^0x(?:[0-9a-f]{2})*$/;",
+    "replace": "const HEX_BYTES = /^0x(?:[0-9a-f]{2})+$/;",
+    "test": "test/upgrade-watch.test.ts",
+    "why": "0x refused as malformed"
+  },
+  {
+    "id": "rw-length-capped",
+    "file": "src/upgrade-watch.ts",
+    "find": "const raw = bytesOf(v.value);",
+    "replace": "const raw = bytesOf(v.value).subarray(0, 64);",
+    "test": "test/review-watch.test.ts",
+    "why": "length capped (retargeted by the fix round, rule F1: the length is the raw bytes count)"
+  },
+  {
+    "id": "rw-same-block-compared",
+    "file": "src/upgrade-watch.ts",
+    "find": "e.watch.at.number < n)",
+    "replace": "e.watch.at.number <= n)",
+    "test": "test/upgrade-watch.test.ts",
+    "why": "a watch at the same block compared"
+  },
+  {
+    "id": "rw-bytes-by-length",
+    "file": "src/upgrade-watch.ts",
+    "find": "was.length !== authorized.length || was.sha256 !== authorized.sha256",
+    "replace": "was.length !== authorized.length",
+    "test": "test/review-watch.test.ts",
+    "why": "bytes compared by count only (retargeted, rule F1: length and sha256)"
+  },
+  {
+    "id": "rw-other-bytes-ignored",
+    "file": "src/upgrade-watch.ts",
+    "find": "(was.state === \"absent\" || was.length !== authorized.length || was.sha256 !== authorized.sha256)",
+    "replace": "(was.state === \"absent\")",
+    "test": "test/upgrade-watch.test.ts",
+    "why": "other bytes never an appearance (retargeted, rule F1)"
+  },
+  {
+    "id": "rw-only-upgrade-counts",
+    "file": "src/upgrade-watch.ts",
+    "find": "executing.spec_version !== b.spec_version",
+    "replace": "executing.spec_version > b.spec_version",
+    "test": "test/upgrade-watch.test.ts",
+    "why": "a lower version is no change"
+  },
+  {
+    "id": "rw-not-reviewed-only-own-name",
+    "file": "src/upgrade-watch.ts",
+    "find": "if (r.named !== null) return",
+    "replace": "if (r.named !== null && r.named.specName === \"tzkv-runtime\") return",
+    "test": "test/upgrade-watch.test.ts",
+    "why": "another name is unknown"
+  },
+  {
+    "id": "rw-not-reviewed-echoes",
+    "file": "src/upgrade-watch.ts",
+    "find": "detail: DETAIL.notReviewed",
+    "replace": "detail: r.refused",
+    "test": "test/upgrade-watch.test.ts",
+    "why": "the refusal quoting the name is the detail"
+  },
+  {
+    "id": "rw-absent-as-empty",
+    "file": "src/upgrade-watch.ts",
+    "find": "return { state: \"absent\", bytes: null, length: null, sha256: null, detail: null };",
+    "replace": "return { state: \"absent\", bytes: \"0x\", length: 0, sha256: null, detail: null };",
+    "test": "test/upgrade-watch.test.ts",
+    "why": "absent given empty bytes (retargeted, rule F1 added sha256)"
+  },
+  {
+    "id": "rw-compared-with-now",
+    "file": "src/upgrade-watch.ts",
+    "find": "compared_with: before === null ? null : before.at.number,",
+    "replace": "compared_with: before === null ? null : i.reading.number,",
+    "test": "test/upgrade-watch.test.ts",
+    "why": "compared_with names this block"
+  },
+  {
+    "id": "rw-au-at-best",
+    "file": "src/live-source.ts",
+    "find": "[UPGRADE_KEYS.authorizedUpgrade, at]",
+    "replace": "[UPGRADE_KEYS.authorizedUpgrade]",
+    "test": "test/upgrade-live.test.ts",
+    "why": "AuthorizedUpgrade read at the best block"
+  },
+  {
+    "id": "rw-number-dropped",
+    "file": "src/live-source.ts",
+    "find": "number: rpcHead.finalized?.number ?? null",
+    "replace": "number: null",
+    "test": "test/upgrade-live.test.ts",
+    "why": "height never known, never compared"
+  },
+  {
+    "id": "rw-trust-fixture",
+    "file": "src/live-source.ts",
+    "find": "trust: this.trust, lastRuntimeUpgrade",
+    "replace": "trust: \"fixture\" as const, lastRuntimeUpgrade",
+    "test": "test/upgrade-live.test.ts",
+    "why": "the live watch called a fixture"
+  },
+  {
+    "id": "rw-notice-absent-default",
+    "file": "src/live-run.ts",
+    "find": "authorized_state: s.upgrade?.authorized.state ?? null,",
+    "replace": "authorized_state: s.upgrade?.authorized.state ?? \"absent\",",
+    "test": "test/upgrade-live.test.ts",
+    "why": "no watch shown as absent"
+  },
+  {
+    "id": "rw-notice-version-from-rv",
+    "file": "src/live-run.ts",
+    "find": "executing_spec_version: s.upgrade?.executing.spec_version ?? null,",
+    "replace": "executing_spec_version: s.status.runtime_version,",
+    "test": "test/review-watch.test.ts",
+    "why": "notice version from state_getRuntimeVersion"
+  },
+  {
+    "id": "rw-watch-pushes-conflict",
+    "file": "src/snapshot.ts",
+    "find": "trusts.push(upgrade.trust);",
+    "replace": "trusts.push(upgrade.trust); if (upgrade.executing_changed === true) status.conflicts.push(\"the runtime changed\");",
+    "test": "test/upgrade-live.test.ts",
+    "why": "a conflict pushed by the watch"
+  },
+  {
+    "id": "rw-version-from-rv",
+    "file": "src/snapshot.ts",
+    "find": "earlier: o.earlierUpgrades ?? [] });",
+    "replace": "earlier: o.earlierUpgrades ?? [] }); if (upgrade.executing.spec_version !== null && status.runtime_version !== null) upgrade.executing.spec_version = status.runtime_version;",
+    "test": "test/upgrade-live.test.ts",
+    "why": "executing version taken from state_getRuntimeVersion"
+  },
+  {
+    "id": "rw-no-earlier",
+    "file": "src/snapshot.ts",
+    "find": "earlier: o.earlierUpgrades ?? [] });",
+    "replace": "earlier: [] });",
+    "test": "test/upgrade-live.test.ts",
+    "why": "never compared"
+  },
+  {
+    "id": "rw-history-pinned",
+    "file": "src/history.ts",
+    "find": "earlierUpgrades.push({ genesis: st.genesis.rpc, watch: upgrade })",
+    "replace": "earlierUpgrades.push({ genesis: pinned, watch: upgrade })",
+    "test": "test/review-watch.test.ts",
+    "why": "earlier watch filed under the pinned genesis"
+  },
+  {
+    "id": "rw-check-hex-upper",
+    "file": "src/snapshot-check.ts",
+    "find": "const hexBytes: Check = (v) => typeof v === \"string\" && /^0x(?:[0-9a-f]{2})*$/.test(v);",
+    "replace": "const hexBytes: Check = (v) => typeof v === \"string\" && /^0x[0-9a-fA-F]*$/.test(v);",
+    "test": "test/snapshot-check.test.ts",
+    "why": "upper case and odd hex served"
+  },
+  {
+    "id": "rw-check-length-any",
+    "file": "src/snapshot-check.ts",
+    "find": "u.authorized.length === (u.authorized.bytes.length - 2) / 2",
+    "replace": "u.authorized.length >= 0",
+    "test": "test/snapshot-check.test.ts",
+    "why": "length not tied to the bytes"
+  },
+  {
+    "id": "rw-check-compared-at-or-below",
+    "file": "src/snapshot-check.ts",
+    "find": "(u.at.number !== null && u.compared_with < u.at.number)",
+    "replace": "(u.at.number === null || u.compared_with <= u.at.number)",
+    "test": "test/snapshot-check.test.ts",
+    "why": "compared with the same block, or with no height"
+  },
+  {
+    "id": "rw-page-absent-blank",
+    "file": "src/page.ts",
+    "find": "(v === \"unknown\" ?",
+    "replace": "(v === \"unknown\" || v === \"absent\" ?",
+    "test": "test/review-watch.test.ts",
+    "why": "absent shown as unknown"
+  },
+  {
+    "id": "rw-mcp-bare-part",
+    "file": "src/mcp.ts",
+    "find": "return ok(id, content(upgradeFeed(s)));",
+    "replace": "return ok(id, content(s.upgrade ?? null));",
+    "test": "test/upgrade-live.test.ts",
+    "why": "get_upgrade not the feed"
+  },
+  {
+    "id": "rw-feed-time-of-snapshot",
+    "file": "src/feed.ts",
+    "find": "observed_at: s.upgrade?.observed_at ?? s.observed_at, trust: s.upgrade?.trust",
+    "replace": "observed_at: s.observed_at, trust: s.upgrade?.trust",
+    "test": "test/upgrade-live.test.ts",
+    "why": "feed time of the snapshot"
+  },
+  {
+    "id": "rw-named-cut",
+    "file": "src/scale/block.ts",
+    "find": "named: { specName: name, specVersion: Number(version) }",
+    "replace": "named: { specName: name.slice(0, 64), specVersion: Number(version) }",
+    "test": "test/block-runtime.test.ts",
+    "why": "named cut to 64"
+  }
+]

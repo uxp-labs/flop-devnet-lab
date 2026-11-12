@@ -1,0 +1,13 @@
+{
+  "scenario": "upgrade-before",
+  "description": "Synthetic reading of the upgrade watch (RULES.md 7.2), made from fixtures/live-healthy (every time moved 0 s later): the block before the authorisation, 3528477, at which System.AuthorizedUpgrade held nothing. A first run. The finalized head is the block named in from_results, best two above it; the runtime version is 1014014. state_getStorage of System.LastRuntimeUpgrade answers {\"result\":\"0xfae33d0030747a6b762d72756e74696d65\"}, and of System.AuthorizedUpgrade {\"result\":null}; upgrade_answers names where each comes from. Every other value is live-healthy's, made up.",
+  "from_results": {
+    "finalized head": "research/2026-11-12-runtime-upgrade/results.json authorization.authorizing_block.block_before.hash and authorization.authorizing_block.block_before.height"
+  },
+  "now": "2026-11-11T06:00:01.000Z",
+  "synthetic": true,
+  "upgrade_answers": {
+    "System.AuthorizedUpgrade": "research/2026-11-12-runtime-upgrade/results.json authorization.authorized_upgrade_at.1.value",
+    "System.LastRuntimeUpgrade": "research/2026-11-12-runtime-upgrade/results.json authorization.authorizing_block.block_before.last_runtime_upgrade"
+  }
+}

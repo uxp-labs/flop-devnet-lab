@@ -1,0 +1,14 @@
+{
+  "scenario": "upgrade-read-failed",
+  "description": "Synthetic reading of the upgrade watch (RULES.md 7.2), made from fixtures/live-healthy (every time moved 0 s later): a block at which both reads of the watch timed out, the error the transport gives (src/net.ts). A first run. The finalized head is the block named in from_results, best two above it; the runtime version is 1014020. state_getStorage of System.LastRuntimeUpgrade answers {\"error\":\"rpc state_getStorage timed out after 15000 ms\"}, and of System.AuthorizedUpgrade {\"error\":\"rpc state_getStorage timed out after 15000 ms\"}; upgrade_answers names where each comes from. Every other value is live-healthy's, made up.",
+  "from_results": {
+    "finalized head": "research/2026-11-12-runtime-upgrade/results.json boundary.2.hash and boundary.2.height",
+    "runtime version": "research/2026-11-12-runtime-upgrade/results.json boundary.2.state_getRuntimeVersion_spec"
+  },
+  "now": "2026-11-11T06:00:01.000Z",
+  "synthetic": true,
+  "upgrade_answers": {
+    "System.AuthorizedUpgrade": "made for this test, as the description says",
+    "System.LastRuntimeUpgrade": "made for this test, as the description says"
+  }
+}

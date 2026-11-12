@@ -7,8 +7,8 @@ M0 runs on saved fixtures only. No network, no keys, no spend, no signatures. Th
 live reads is one command that reads network status from FLOP devnet, read only, and nothing else
 ([Live network status](#live-network-status)). A second one records what the RPC answers to a
 reviewed list of read calls, for building decoders ([Recordings](#recordings)). Every other command
-still reads saved fixtures. The decoder turns recorded bytes into values, and no command uses it yet
-([Decoder](#decoder)).
+still reads saved fixtures. The decoder turns recorded bytes into values; the upgrade watch uses one door of it, `runtimeOfBlock`,
+in the live run and in the snapshot command's `--upgrade`, and nothing else does ([Decoder](#decoder)).
 
 ## Check
 
@@ -33,8 +33,8 @@ and `SHA256SUMS`:
 | mutants-canary | the mutation runner classifies a real bug, an equivalent change, a syntax error, a missing test, a replacement holding `$$`, and a command line bug and no-op correctly; its copy holds exactly the tracked files of a throwaway repo; a copy it cannot make is reported as setup-failed; it still works when the temp folder is reached through a link; and a mutant file with no mutant fails the run |
 | recount | the TypeScript census and an independent Python recount agree on every census fixture, and on scenarios made at run time for inputs git cannot hold (a page file name that is not UTF-8, a scenario whose event-pages, or whose one page file, is past the system's path limit, which both refuse as a page file problem naming it). Where both refuse, they must refuse for the same reason and name the same file (RULES.md 3.1 clause 16). A nudged total, or a changed refusal reason, is caught in every scenario, and the canary fails unless it nudged at least one count and one refusal. A page file name that holds a colon and a semicolon is compared whole, and so are two that differ only after a line break, which both sides show as %0A. Command line inputs both sides must refuse alike are compared too: request numbers that are not plain digits or are too long, an inverted range, an empty genesis, a missing folder, and flags read other than as `--name` and then its value (`--name=value`, an abbreviation, an unknown flag, a flag twice, with no value or an empty one, a stray argument, the folder flag left out); a value that starts with a dash is a value on both sides, and the same flags in another order count the same. The recount's own tests read recount.py as a syntax tree: five plain imports with no alias and no submodule, only the builtins and the attributes it uses, no match statement, no frame or code field, and no call that runs code, starts a process, opens a socket or writes |
 | cli-checks | the command line passes unreadable pages to the census and escrows, refuses parts pinned to another chain and an escrow id listed twice, catches a rollback even across a snapshot with no RPC reading or after one with no head time, a restart that keeps the genesis but reports a low best height and no finalized head, and a log that runs backwards, refuses a log line that is not in canonical form, reads request numbers as plain digits and refuses a missing folder as an input problem after any request problem, writes pin.json in the feed format, reports the health rules, takes an earlier best height as a floor though that snapshot read no finalized head, says in the faucet's detail when a usable /chain reading names no genesis, refuses an escrow id that is not 0x plus 64 hex, refuses a flag a command does not read, one given twice, a value after =, a stray argument, an empty value and a --now that is no time, refuses census without its folder flag, or with no range given and none in meta.json, as a request problem, names a missing folder in one line with a line break in its name as %0A, and after a finality stall reads a fall of the best height further than the lag limit as a conflict until it is back within the limit; every command refuses a scenario whose meta.json now is missing or no time unless --now gives one; a saved reading, a meta.json, a snapshot log, a drift spec and a served snapshot that is a named pipe are refused at once, never waited on; every node it starts runs with its warnings off, so a warning Node prints for its environment cannot fail a check; the MCP binary serves a snapshot whose hash verifies and refuses one that does not, one with a key twice, one that is not valid UTF-8, one behind a byte order mark, one with an integer the parser would round, one nested 20000 levels deep, an object that hashes to itself but is no snapshot and one whose status is an empty shell, a refusal naming the checks of `src/snapshot-check.ts` the file breaks (one shape, one agreement, two at once, and the first five of fourteen with how many more), and serves what the snapshot command writes, an http status of -1 included |
-| snapshot, mcp, consistency | six real snapshots (healthy, reset, nothing read, degraded faucet, conflicting evidence, and accounts named `__proto__`, `constructor` and other inherited names), each rendered as feeds, page, snapshot log and a real MCP stdio transcript. Every page cell is resolved in the snapshot and compared, in data-v, in its whole visible text and in its class; every td and span must carry data-k; each row's label must name its cell, and each escrow card and drift row may hold only its own cells; each table holds only its own section's cells, under that section's heading, and the drift columns come in the order every row holds its cells; nothing is hidden (no comment, only the elements and attributes the page writes, each attribute once, only its own stylesheet); no text states a value outside the compared cells (every th is read as a label or a column, the head is fixed, tags are lower case and every < opens one, the banner is one of two whole sentences, every other piece of text is the page's fixed words, aria-label only says unknown); every file is read as strict UTF-8 and every JSON file and MCP line is parsed first, so a file cut short fails at once, then read with no key twice and in its written format, the transcript included (one compact server line per exchange, the script's key order, nothing else in the file); every element's class is the renderer's (a class on a row, a table or a card fails) and the page holds exactly its paragraphs, cards and tables; every value cell carries its data-v, compared as a value; every value sits in a labeled row or a drift item row (data-row only drift.<index>), each label plain text with scope="row", and a bare code element only around an escrow id; snapshot.json must be an observatory snapshot, and an output of any shape the check cannot read ends it with a failure; each feed holds exactly its five keys and equals the snapshot; the MCP transcript is exactly the exchanges the transcript script makes, the initialize answer and the tool list are exactly the server's, each refusal has its own code and words, an escrow id the snapshot does not hold reads unverified, and each answer is exactly one text item equal to the feeds byte for byte; the folder holds exactly its nine files, the whole log's hash chain verifies and its last line is snapshot.json in canonical form; a marked cell holds no markup but a bare code element, sits in the element the renderer writes it in (a td for every value but the snapshot's hash, time and trust and the census status), and the page holds exactly the renderer's keys in its order; and last, every file equals what the code writes for the snapshot, byte for byte, MCP lines included |
-| consistency-canary | clean copies pass, and 109 tampered copies (an attribute named twice on a cell, two labeled rows turned into item rows, a value cut out of its row, a row turned into a bare span, two heights cut to bare cells, a label wrapped in h1 or stripped of its scope, a value wrapped in code, a blank cell that says data-v null, snapshot.json null or with escrows that are no list, status.json null, a transcript line null, snapshot.json, status.json or a transcript line cut short, snapshot.json not UTF-8, the transcript respelled with its keys reversed, CR LF line ends and blank lines, every server line respelled, a row, a table or an escrow card painted with a class, an empty banner and card added, a cell's data-v removed, initialize instructions that say spend, tool descriptions and schemas changed, an extra answer for an unseen escrow or under a tool name with a trailing space, a refusal that says signed, lines of the transcript removed or given a note, the unseen escrow answered claimed, two lines added before the log's real one, two extra files in the folder, pin.json keys reversed, a health word painted down in a nested span, two rows removed, escrow cards swapped, an upper case row, table or paragraph, bare text typed into a row or a card, words behind a lone <, a th outside every row or inside a drift item row, a banner whose later words say the opposite, a head with another charset, a feed with extra top level keys, a key said twice or a renamed schema, the same in snapshot.json, pin.json and the log line, an MCP answer with a second item, structuredContent or isError, a server line with a key twice, a signing tool listed or answered, an account named `__proto__` dropped from a feed or from snapshot.json, a reset flipped on the page or in the feed, stale flipped, a conflict dropped, a census total nudged, an empty list shown blank, a key dropped or invented, a wrong value hidden in a nested span or shown in a cell without data-k, value cells swapped between rows or escrow cards, a row label renamed, a row commented out, hidden or styled away, a section folded or rewritten by a script, a row moved to another section, headings swapped, drift columns swapped or dropped, a fabricated row of two th cells, a free paragraph, a second h1, the title, a stray code element or a changed seq stating a value, an aria-label or a class that misreads a cell, the snapshot edited after hashing, ...) each fail, the newer ones by the check they name. A run that prints no report, exits other than 0 or 1, or runs past its time limit gives no verdict and never counts as a catch, and a tamper that names no check is caught only by a failure other than the check's own crash report. Each tamper is checked twice, with and without the final byte comparison, and must fail both, so the rules alone catch it; one tamper that changes only bytes the rules do not model (a line break) passes the rules and fails the byte comparison, which shows that comparison bites |
+| snapshot, mcp, consistency | seven real snapshots (healthy, reset, nothing read, degraded faucet, conflicting evidence, accounts named `__proto__`, `constructor` and other inherited names, and an upgrade watch read at the status's finalized head), each rendered as feeds, page, snapshot log and a real MCP stdio transcript. Every page cell is resolved in the snapshot and compared, in data-v, in its whole visible text and in its class; every td and span must carry data-k; each row's label must name its cell, and each escrow card and drift row may hold only its own cells; each table holds only its own section's cells, under that section's heading, and the drift columns come in the order every row holds its cells; nothing is hidden (no comment, only the elements and attributes the page writes, each attribute once, only its own stylesheet); no text states a value outside the compared cells (every th is read as a label or a column, the head is fixed, tags are lower case and every < opens one, the banner is one of two whole sentences, every other piece of text is the page's fixed words, aria-label only says unknown); every file is read as strict UTF-8 and every JSON file and MCP line is parsed first, so a file cut short fails at once, then read with no key twice and in its written format, the transcript included (one compact server line per exchange, the script's key order, nothing else in the file); every element's class is the renderer's (a class on a row, a table or a card fails) and the page holds exactly its paragraphs, cards and tables; every value cell carries its data-v, compared as a value; every value sits in a labeled row or a drift item row (data-row only drift.<index>), each label plain text with scope="row", and a bare code element only around an escrow id; snapshot.json must be an observatory snapshot, and an output of any shape the check cannot read ends it with a failure; each feed holds exactly its five keys and equals the snapshot; the MCP transcript is exactly the exchanges the transcript script makes, the initialize answer and the tool list are exactly the server's, each refusal has its own code and words, an escrow id the snapshot does not hold reads unverified, and each answer is exactly one text item equal to the feeds byte for byte; the folder holds exactly its ten files, the whole log's hash chain verifies and its last line is snapshot.json in canonical form; a marked cell holds no markup but a bare code element, sits in the element the renderer writes it in (a td for every value but the snapshot's hash, time and trust and the census status), and the page holds exactly the renderer's keys in its order; and last, every file equals what the code writes for the snapshot, byte for byte, MCP lines included |
+| consistency-canary | clean copies pass, and 117 tampered copies (the upgrade watch's sha256 changed on the page, the upgrade watch's authorised state, a reviewed runtime shown unknown, its bytes cut on the page, its appearance flipped or a watch invented in upgrade.json and get_upgrade, its heading renamed and its table named status, an attribute named twice on a cell, two labeled rows turned into item rows, a value cut out of its row, a row turned into a bare span, two heights cut to bare cells, a label wrapped in h1 or stripped of its scope, a value wrapped in code, a blank cell that says data-v null, snapshot.json null or with escrows that are no list, status.json null, a transcript line null, snapshot.json, status.json or a transcript line cut short, snapshot.json not UTF-8, the transcript respelled with its keys reversed, CR LF line ends and blank lines, every server line respelled, a row, a table or an escrow card painted with a class, an empty banner and card added, a cell's data-v removed, initialize instructions that say spend, tool descriptions and schemas changed, an extra answer for an unseen escrow or under a tool name with a trailing space, a refusal that says signed, lines of the transcript removed or given a note, the unseen escrow answered claimed, two lines added before the log's real one, two extra files in the folder, pin.json keys reversed, a health word painted down in a nested span, two rows removed, escrow cards swapped, an upper case row, table or paragraph, bare text typed into a row or a card, words behind a lone <, a th outside every row or inside a drift item row, a banner whose later words say the opposite, a head with another charset, a feed with extra top level keys, a key said twice or a renamed schema, the same in snapshot.json, pin.json and the log line, an MCP answer with a second item, structuredContent or isError, a server line with a key twice, a signing tool listed or answered, an account named `__proto__` dropped from a feed or from snapshot.json, a reset flipped on the page or in the feed, stale flipped, a conflict dropped, a census total nudged, an empty list shown blank, a key dropped or invented, a wrong value hidden in a nested span or shown in a cell without data-k, value cells swapped between rows or escrow cards, a row label renamed, a row commented out, hidden or styled away, a section folded or rewritten by a script, a row moved to another section, headings swapped, drift columns swapped or dropped, a fabricated row of two th cells, a free paragraph, a second h1, the title, a stray code element or a changed seq stating a value, an aria-label or a class that misreads a cell, the snapshot edited after hashing, ...) each fail, the newer ones by the check they name. A run that prints no report, exits other than 0 or 1, or runs past its time limit gives no verdict and never counts as a catch, and a tamper that names no check is caught only by a failure other than the check's own crash report. Each tamper is checked twice, with and without the final byte comparison, and must fail both, so the rules alone catch it; one tamper that changes only bytes the rules do not model (a line break) passes the rules and fails the byte comparison, which shows that comparison bites |
 
 The last line of the check prints the outputs digest, and `report.txt` records it, so a CI log
 can be compared with a local run without downloading anything.
@@ -83,14 +83,17 @@ node dist/cli.js escrow   --fixtures fixtures/escrows-verification
 node dist/cli.js census   --fixtures fixtures/census-complete
 node dist/cli.js drift    --fixtures fixtures/drift-seeded
 node dist/cli.js snapshot --status fixtures/status-healthy --escrows fixtures/escrows-verification \
-  --census fixtures/census-complete --drift fixtures/drift-seeded --out out --log out/snapshots.jsonl
+  --census fixtures/census-complete --drift fixtures/drift-seeded [--upgrade fixtures/watch-authorized] \
+  --out out --log out/snapshots.jsonl
 node dist/mcp-bin.js out/snapshot.json    # MCP over stdio, read-only tools
 ```
 
 Every flag is `--name` followed by its value as the next argument. A flag the command does not
 read, one given twice, `--name=value`, an empty value (an unset shell variable gives one) and an
 argument that is no flag's value are refused (for `census` as a request refusal, as
-`tools/recount.py` reads its own flags). `--now` must be a time with a zone; without it a command
+`tools/recount.py` reads its own flags). `--upgrade` names a folder whose `storage.json` holds the
+two reads of the upgrade watch, each a call's answer as a tape keeps it, counted as read at the
+status fixture's finalized head ([The upgrade watch](#the-upgrade-watch)). `--now` must be a time with a zone; without it a command
 takes the scenario's `meta.json` `now`, which must be one too. The `status` command
 reads no log, so the checks against earlier snapshots run only in `snapshot`.
 
@@ -119,7 +122,9 @@ What it does, once per run:
 - GETs the faucet's `/health` and `/chain` and the gateway's `/v1/models`.
 - Opens one WebSocket to `wss://rpc.devnet.flop.network` and calls `system_chain`,
   `chain_getBlockHash(0)`, `chain_getFinalizedHead`, `chain_getHeader` for the finalized head (by
-  its hash) and for the best head, and `state_getRuntimeVersion` at the finalized head. When the log
+  its hash) and for the best head, `state_getRuntimeVersion` at the finalized head, and right after it
+  the two reads of the upgrade watch at that same head, `state_getStorage` of `System.LastRuntimeUpgrade`
+  then of `System.AuthorizedUpgrade` ([The upgrade watch](#the-upgrade-watch)). When the log
   holds a finalized head on the pinned genesis, it then calls `chain_getBlockHash` at the height of
   the latest one, the anchor, to read that block back. A first run makes no such call.
 - Builds a `networkStatus` snapshot from those answers with the same code the fixtures go through,
@@ -131,12 +136,14 @@ What it does, once per run:
   under another hash, or gone (the node has no block at that height), is a conflict and
   `reset_detected` true: the finalized chain is not the one the log saw. An anchor read that failed
   gives no verdict: `reset_detected` is not `false` then, and the RPC detail says why.
-- Writes into the folder, which must be new or empty: the snapshot (`snapshot.json`, the feeds and
+- Writes into the folder, which must be new or empty: the snapshot (`snapshot.json`, the feeds, `upgrade.json` among them, and
   `snapshots.jsonl`, its one new line of the log, with the `seq` and `prev_hash` that follow the
   log's last line), `tape.jsonl` (every request and its answer, in order), `run.json` (start, end,
   the revision if given, which case the log was in, how it ended) and `SHA256SUMS`.
 - Prints one line in the GitHub Actions notice format with the trust, the three geneses,
-  `reset_detected`, the heights, the runtime version, each service's health, the snapshot's `seq`
+  `reset_detected`, the heights, the runtime version, the runtime that executed the finalized head and
+  whether an upgrade is authorised (the watch's executing state, spec name and version, and authorised
+  state, each null when no watch was read), each service's health, the snapshot's `seq`
   and `prev_hash`, and the snapshot hash.
 - Exits 0 when a truthful snapshot was written, even with a service down or unknown. It exits 3 for a
   reset signal (`reset_detected` true, or any conflict), 4 when the guard or the transport refused a
@@ -185,6 +192,47 @@ other), or the whole log removed cannot be detected from the log itself. The cha
 and reordering after its first chained line; it is no defence against someone who can write to the
 branch, who can rebuild every hash. It reads no events, so it writes no census, no escrow state and
 no drift.
+
+### The upgrade watch
+
+At the finalized head F the live run reads two storage values, right after `state_getRuntimeVersion(F)`
+and only when it reads that, through the same guard and transport (`state_getStorage` was already on
+the guard's list, which does not change). `src/upgrade-watch.ts` turns them into the snapshot's part
+`upgrade` (RULES.md 7.2):
+
+- `executing`: which runtime executed F, from `System.LastRuntimeUpgrade` read by the decoder's door
+  `runtimeOfBlock`. `reviewed` when a `REVIEWED` line names it, `not reviewed` when the record is
+  whole but no line names it (the name and version it states are given), `absent` when the node held
+  no value, `unknown` when the call failed, the answer was no storage answer, or the bytes are no
+  record.
+- `authorized`: whether `System.AuthorizedUpgrade` held a value at F: `present`, `absent` or
+  `unknown`. A present authorisation always carries `length` in bytes and `sha256` of the raw bytes,
+  lower case hex; `bytes` is the hex as answered only when `length` is at most 256, and above that
+  null, with a fixed detail. Nothing of it is decoded.
+- `compared_with`, `executing_changed`, `authorization_appeared`: against the latest earlier watch in
+  the log on the same RPC genesis at a lower block. An authorisation appeared when it is present now
+  and was absent there, or is present with another length or another sha256; the hex is never
+  compared. `at` is the status's finalized head, its hash and its height.
+
+A failed or malformed read is `unknown`, never `absent`, and no answer's text is echoed. The watch
+adds no conflict, never touches `reset_detected` and never changes an exit code; the spec floor and
+`runtime_version` stay where they are. The part has its own feed, `upgrade.json`, a page section,
+Runtime upgrade, and an MCP tool, `get_upgrade`. A snapshot with the part is `snapshot@1`; the lines
+already in the log stay `snapshot@0`, keep their hashes and still read, and an `@0` line after `@1`
+lines is read as a line with no watch, never refused.
+
+What it can see: the live run is at 7 and 37 past each hour, twice an hour. The authorisation of
+Nov 12 was pending for 50 seconds before the upgrade landed (`research/2026-11-12-runtime-upgrade`),
+so the watch will mostly show a landed change, a new runtime against the one before it, and shows an
+authorisation only when a run falls inside its window. A more frequent read is a separate decision.
+
+The real tapes in `fixtures/published-*` were recorded before runs made these reads: a test answers
+them, synthetic, from the table in `test/helpers/tapes.ts`, which says why for each. The synthetic
+tapes that read a runtime version hold both reads, and their `meta.json` names where each answer
+comes from. `fixtures/upgrade-*` show each case: before the authorisation, the authorising block, the
+first block of the new runtime (each on a log of the ones before it), a runtime no line names, both
+reads failed, and answers that are no storage answer. `mutants/upgrade.json` holds the bugs they must
+catch.
 
 `.github/workflows/observatory-live.yml` runs it at 7 and 37 past each hour, by hand, and on a push
 that changes the workflow or a live source file, and uploads the folder as an artifact. The live
@@ -362,7 +410,9 @@ against a local bare repository, on one branch.
 
 `src/scale/` and `src/hash/` turn the bytes of a recording into values: the runtime metadata, any
 value by its type, storage keys, the events of a block, and the value of a storage entry at a
-block. No command uses them yet, and no output changes. They parse bytes that came from the network, so every input is treated as hostile. They
+block. One door is used: the upgrade watch reads `System.LastRuntimeUpgrade` through `runtimeOfBlock`, in
+the live run and in the snapshot command's `--upgrade` ([The upgrade watch](#the-upgrade-watch));
+nothing else of the decoder reaches an output. They parse bytes that came from the network, so every input is treated as hostile. They
 are pure: no file, network, clock or random access, which the source scan holds them to.
 
 | Module | What |
@@ -428,7 +478,9 @@ Which runtime reads a block. A block is in the encoding of the runtime that exec
 `System.LastRuntimeUpgrade` at the block names that runtime. `runtimeOfBlock` in
 `src/scale/block.ts` reads those bytes and nothing else, whole (a Compact<u32> spec version then a
 string spec name, as each reviewed shape states the record), and answers a copy of the `REVIEWED`
-line of that spec, or a refusal. The caller then takes that line's metadata by its sha256 and its
+line of that spec, or a refusal, which carries what the record names (`named`: the spec name and
+version when the bytes are a whole record no line names, null when they are no record), a fresh
+object each call. The caller then takes that line's metadata by its sha256 and its
 shape file, and the pin checks all of it again. Never the version or the metadata read at the
 block itself: those answer for the next block, so at a block that carries an upgrade they name the
 new runtime though the old one executed it. On the third recording
@@ -515,7 +567,7 @@ alone.
 
 | Path on `observatory-data` | What |
 |---|---|
-| `latest/` | the output folder of the newest published run: `snapshot.json`, `status.json`, `escrows.json`, `census.json`, `drift.json`, `snapshots.jsonl`, `tape.jsonl`, `run.json` and `SHA256SUMS`. Each run replaces it whole |
+| `latest/` | the output folder of the newest published run: `snapshot.json`, `status.json`, `escrows.json`, `census.json`, `drift.json`, `upgrade.json`, `snapshots.jsonl`, `tape.jsonl`, `run.json` and `SHA256SUMS`. Each run replaces it whole |
 | `log/<UTC date>.jsonl` | one snapshot per line, one line for each reading published that day, as the run's `snapshots.jsonl` holds it. Read in name order, the day files are one hash chained log: each line names the hash of the line before it. The readings published before runs kept memory are each `seq` 0 with no `prev_hash`, at the start of the log |
 | `README.md` | what the branch is, written when it is missing |
 | `recordings/<id>/` | one recording each: `tape.jsonl`, `run.json` and `SHA256SUMS`, written once by the record workflow's publish job and never changed ([Recordings](#recordings)) |
@@ -539,7 +591,8 @@ contract: given the text of every file in `latest/`, a time it trusts as now and
 accepts, it says whether the reading may be used, and the reset signal it holds. It refuses, and
 reads no further, when:
 
-1. the files are not exactly the nine above,
+1. the files are not exactly the ten above (a `latest/` written before the upgrade watch, nine files
+   and no `upgrade.json`, is refused until the next run replaces it),
 2. a file differs from its line in `SHA256SUMS`, or `SHA256SUMS` is not in the written form,
 3. `snapshot.json` is not JSON in the written form, breaks a check in `src/snapshot-check.ts`, fails
    its hash check, or its trust is not `"trusted RPC"`,
@@ -576,6 +629,7 @@ The two interfaces other teams import are in [../interfaces](../interfaces).
 | `src/net.ts` | the live transport: the guard and the allow list before every send, time and size limits, one socket |
 | `src/tape.ts` | the recording of a live run, and its replay, which refuses any request that is not next |
 | `src/rpc-head.ts`, `src/live-source.ts` | the RPC answers turned into a head, and the Source over a transport |
+| `src/upgrade-watch.ts` | the two reads at the finalized head turned into the upgrade watch, and its comparison with the one before |
 | `src/live-run.ts`, `src/live-bin.ts` | one live run and its files, and the command |
 | `src/net-root.ts` | the one module that names the real socket class and HTTP call: the live command and the recorder take their transport from it |
 | `src/sums.ts` | the one form of `SHA256SUMS`, and the check of a folder against it, for the runs that write it and the readers that check it |

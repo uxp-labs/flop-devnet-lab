@@ -1,6 +1,10 @@
 {
   "scenario": "anchor-spec-above-floor",
-  "description": "Synthetic second reading, made from the real tape in fixtures/published-2026-11-11-0808 (every time moved 1800 s later): the chain went on, finalized block 3457787 under the hash 0xd1...d1, best 3457791, and its runtime spec version is 1014015, above the 1014014 the log holds: an upgrade. Then, as a run on a log holding that real reading does, it reads back the anchor, block 3457487, the latest finalized head the log holds, with chain_getBlockHash(3457487), and the node gives the hash the log holds. It is read on top of a log holding that real reading.",
+  "description": "Synthetic second reading, made from the real tape in fixtures/published-2026-11-11-0808 (every time moved 1800 s later): the chain went on, finalized block 3457787 under the hash 0xd1...d1, best 3457791, and its runtime spec version is 1014015, above the 1014014 the log holds: an upgrade. Then, as a run on a log holding that real reading does, it reads back the anchor, block 3457487, the latest finalized head the log holds, with chain_getBlockHash(3457487), and the node gives the hash the log holds. It is read on top of a log holding that real reading. The two reads of the upgrade watch at the finalized head, right after its runtime version, are synthetic too: state_getStorage of System.LastRuntimeUpgrade answers the record research/2026-11-12-runtime-upgrade/results.json gives at boundary.0.last_runtime_upgrade.hex (tzkv-runtime 1014014), and of System.AuthorizedUpgrade answers null, as authorization.authorized_upgrade_at.0.value gives; upgrade_answers names both.",
   "now": "2026-11-11T08:38:57.648Z",
-  "synthetic": true
+  "synthetic": true,
+  "upgrade_answers": {
+    "System.AuthorizedUpgrade": "research/2026-11-12-runtime-upgrade/results.json authorization.authorized_upgrade_at.0.value",
+    "System.LastRuntimeUpgrade": "research/2026-11-12-runtime-upgrade/results.json boundary.0.last_runtime_upgrade.hex"
+  }
 }

@@ -151,9 +151,12 @@ scenario conflict --status fixtures/status-conflict --escrows fixtures/escrows-o
 # Accounts named after properties every JavaScript object inherits (__proto__ among them), so a
 # writer that assigns keys one by one would drop one from a feed and break snapshot.json's hash.
 scenario odd-accounts --status fixtures/status-healthy --census fixtures/census-odd-accounts
+# The upgrade watch (RULES.md 7.2): the two reads saved at the status fixture's finalized head, so
+# a non null watch goes through every output, the page section, upgrade.json and get_upgrade.
+scenario upgrade --status fixtures/status-healthy --upgrade fixtures/watch-authorized
 # The comparison itself: tampered copies of these outputs must each fail it, and clean copies pass.
 step consistency-canary sh -c "node scripts/consistency-canary.mjs '$evidence/outputs/healthy' '$evidence/outputs/reset' \
   '$evidence/outputs/nothing-read' '$evidence/outputs/degraded-faucet' '$evidence/outputs/conflict' \
-  '$evidence/outputs/odd-accounts' > '$evidence/consistency-canary.json'"
+  '$evidence/outputs/odd-accounts' '$evidence/outputs/upgrade' > '$evidence/consistency-canary.json'"
 
 finish

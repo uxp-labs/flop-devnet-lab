@@ -552,7 +552,7 @@ Tests fail if any attempt is left in the log.
 The page, the JSON feeds and the MCP tools are rendered from the same snapshot. Unknown values are
 blank on the page and `null` in JSON and MCP.
 
-- Each feed's payload (`status`, `escrows`, `census`, `drift`) equals the matching part of the
+- Each feed's payload (`status`, `escrows`, `census`, `drift`, `upgrade`) equals the matching part of the
   snapshot exactly, every field included. MCP tool text equals the feed file byte for byte.
   `snapshot.json` equals the last line of the snapshot log, and its hash verifies.
 - Every output is read as strict UTF-8, and every JSON output strictly: it is parsed first, and one
@@ -566,7 +566,7 @@ blank on the page and `null` in JSON and MCP.
   snapshot's meta (`schema` `flop-observatory/feed-snapshot-meta@0`, hash, seq, previous hash,
   `observed_at`, trust and pin), in the feed format. A tool answer is exactly one text item: no
   `isError`, no `structuredContent`, no second item a client could read instead. `tools/list`
-  names exactly the six read-only tools, and is exactly the server's declared list (descriptions,
+  names exactly the seven read-only tools (`get_upgrade` among them, whose text is `upgrade.json`), and is exactly the server's declared list (descriptions,
   input schemas and annotations); the initialize answer is exactly the server's name, version and
   read-only instructions; each refusal has its own code and words. The transcript holds exactly
   the exchanges `scripts/mcp-transcript.mjs` makes, in order, one of them a well formed escrow id
@@ -593,7 +593,16 @@ blank on the page and `null` in JSON and MCP.
   a safe integer or none and its other fields of their types, its conflicts text), every escrow (its
   id `0x` plus 64 lower case hex and listed once, `observed_at` a time with a zone, its notes text)
   and every evidence item (one of the three escrow events, its block hash and genesis hashes); the
-  census and the drift report are checked for their schema only. An object whose set of fields is
+  census and the drift report are checked for their schema only. The snapshot's fields are chosen by
+  its schema: `snapshot@0`, a line written before the upgrade watch, holds no `upgrade` field and
+  still reads; any other schema is held to `snapshot@1`'s fields, `upgrade` among them (null or an
+  object), and refused unless it is `snapshot@1`. The upgrade watch (7.2) holds exactly its fields:
+  its schema, `observed_at` a time with a zone, the trust, `at` (`hash` 0x plus 64 lower case hex,
+  `number` a count or none), `executing` (`state` one of reviewed, not reviewed, absent and unknown,
+  `spec_name` text or none, `spec_version` a count or none, `detail` text or none), `authorized`
+  (`state` one of absent, present and unknown, `bytes` 0x and lower case hex of whole bytes or none,
+  `length` a count from 0 to 1048576 or none, `sha256` 64 lower case hex or none, `detail` text or
+  none), `compared_with` a count or none and the two changes flags or none. An object whose set of fields is
   wrong is named once, as `<object>.fields`, and its values and parts are not read.
   Once every shape holds, the values the settlement rules tie together agree: `reset_detected` false
   only with both genesis readings on the pinned genesis and both heights read, and true only with a
@@ -604,8 +613,16 @@ blank on the page and `null` in JSON and MCP.
   one open and no event of the other kind, every item on the pinned genesis; an escrow's finalized
   height none or the status's, and none unless the status's RPC genesis is the pinned one, with no
   evidence above it; no finalized event evidence twice, for two escrows or for one; the pin's
-  genesis, finalized height and hash the status's RPC genesis, finalized height and hash; and the
-  snapshot a fixture when any part is. Anything else is refused and nothing is served. A call it
+  genesis, finalized height and hash the status's RPC genesis, finalized height and hash; the
+  snapshot a fixture when any part is, the upgrade watch included; and, for a watch: its block the
+  status's finalized head, its hash and its height, whenever the status has a finalized hash; a spec name and version exactly when the state
+  is reviewed or not reviewed; a detail for every executing state but reviewed and none for it; bytes
+  a length and a sha256 exactly when the authorisation is present, bytes only then and exactly when
+  the length is at most 256, their byte count the length and their sha256 the sha256; an
+  authorisation detail exactly when it is unknown, or present with its bytes not kept; both changes none when nothing was compared;
+  `compared_with` below `at.number`, which is then known; `executing_changed` none unless the runtime
+  is named now; `authorization_appeared` none when the authorisation is unknown, and true only when it
+  is present. Anything else is refused and nothing is served. A call it
   cannot answer gets a JSON-RPC error, never a dead server. These are all the binary checks: times
   are not compared with each other, nor the parts' trust labels beyond the fixture rule. The hash is
   no signature: whoever writes the file can write a hash that verifies, so these checks catch a file
@@ -618,7 +635,7 @@ blank on the page and `null` in JSON and MCP.
   blank line and nothing after the last newline, and in canonical form byte for byte. A line that
   is padded, ends in a carriage return or spells a number another way breaks the chain, and the
   snapshot command neither extends nor trusts it.
-- The outputs folder holds exactly the nine files the commands write, the whole log's hash chain
+- The outputs folder holds exactly the ten files the commands write, the whole log's hash chain
   verifies, and the last line's `seq` is its position.
 - Nothing on the page is hidden, so nothing the check compares can be invisible to a reader:
   - the head is the renderer's fixed head (charset, viewport, colour scheme, title and
@@ -633,7 +650,9 @@ blank on the page and `null` in JSON and MCP.
     to nothing or paint it invisible (`test/page.test.ts` reviews each property it sets).
 - Every table carries `data-section` (`status`, `escrow`, `census` or `drift`), holds only keys
   of that section, and sits under that section's heading. The headings are Network status,
-  Escrows, Census and Spec drift, in that order. Only the intro line's snapshot values and the
+  Runtime upgrade, Escrows, Census and Spec drift, in that order. The upgrade watch's two states are
+  words like a health: `unknown` is a blank grey cell with `data-v="unknown"`, and a null watch is one
+  blank `upgrade` row. Only the intro line's snapshot values and the
   census banner sit outside a section table.
 - The drift item table's header cells carry `data-col` with the field each column shows and read
   that field's name, with underscores as spaces. Each field of a drift item is a column, named
@@ -737,7 +756,8 @@ it adds.
 - The head is read once, one call at a time, in a fixed order: `system_chain`,
   `chain_getBlockHash(0)` for the genesis, `chain_getFinalizedHead` for the finalized hash,
   `chain_getHeader` at that hash for the finalized height, `chain_getHeader` with no hash for the
-  best height, and `state_getRuntimeVersion` at the finalized hash. Then, when the published log
+  best height, `state_getRuntimeVersion` at the finalized hash, and then the two reads of the upgrade
+  watch at that same hash (7.2). Then, when the published log
   holds a finalized head on the pinned genesis, one more call: `chain_getBlockHash` at the height of
   the latest one, the anchor (1.1). Its height comes from the log, never from a reading, and a first
   run makes no such call. `state_getRuntimeVersion` is called only at the finalized head: at an old
@@ -834,7 +854,7 @@ everything the observatory reads.
   from the artifact. The artifact must hold only regular files from that list and `SHA256SUMS`, and
   `SHA256SUMS` must be exactly the sums of those files. That is checked before any file is read.
   A difference stops the job.
-- Only a run that exited 0 or 3 is published, with all nine files. A run that broke or was refused
+- Only a run that exited 0 or 3 is published, with all ten files. A run that broke or was refused
   is not published, and the branch stays as it was.
 - `observed_at` and the snapshot hash are checked against fixed patterns before use, reach the
   publishing step only through environment variables, and are used only inside double quotes. No
@@ -867,7 +887,8 @@ everything the observatory reads.
   last line again, lays the reading on top and pushes once more. A second refusal fails the job.
 - The sums show the files are the ones the live job wrote. They do not show the reading is true:
   its trust is still `"trusted RPC"`. A reader judges `latest/` with `judgeLatest` in
-  `src/published.ts`: exactly the nine files, each matching `SHA256SUMS`, the snapshot passing
+  `src/published.ts`: exactly the ten files (a `latest/` written before the upgrade watch, nine
+  files with no `upgrade.json`, is refused until the next run replaces it), each matching `SHA256SUMS`, the snapshot passing
   every check of section 5 and its hash check with trust `"trusted RPC"`, every feed, the log line
   and `run.json` the ones the snapshot gives, `run.json` a `flop-observatory/live-run@1` that names
   the log line the snapshot follows (its `history.last_hash` is the snapshot's `prev_hash`, or the
@@ -875,6 +896,52 @@ everything the observatory reads.
   its status neither after the reader's now nor older than the limit the reader passes. A
   `run.json` from before runs kept memory (`live-run@0`) is refused: its reading spoke for itself
   only. `judgeLatest` does not read `log/`.
+
+### 7.2 The upgrade watch
+
+- Right after `state_getRuntimeVersion(F)`, at the same finalized hash F and only when F is 0x plus
+  64 lower case hex, the run reads `state_getStorage` of `System.LastRuntimeUpgrade` then of
+  `System.AuthorizedUpgrade`, each by its key (twox128 of the pallet then of the entry), through the
+  same guard and transport. The guard's list does not change. When F is no such hash neither is read
+  and the snapshot's `upgrade` is null. The snapshot command's `--upgrade` gives the same two answers
+  from a file, counted as read at the status fixture's finalized head; without it `upgrade` is null.
+- A storage answer is null (the node holds no value) or 0x and lower case hex of whole bytes. A call
+  that failed on the way, and any other answer, is unknown. Absent is only the null the node sent.
+  A failed or malformed read is never absent and never a zero.
+- `executing` reads `System.LastRuntimeUpgrade` through `runtimeOfBlock` (section 9) and nothing
+  else: `reviewed` when it answers a line, `not reviewed` when the bytes are a whole record no line
+  names (its name and version as the record states them), `absent` for null, and `unknown` when the
+  read failed, the answer is malformed, or the bytes are no record (its detail is the decoder's
+  refusal). The version and metadata read at F are never used: they answer for the next block.
+- `authorized` reads `System.AuthorizedUpgrade`: `present` for bytes, `absent` for null, `unknown`
+  otherwise. A present authorisation always carries `length` in bytes and `sha256` of the raw bytes,
+  lower case hex. `bytes` is the hex only when `length` is at most 256. Above that it is null, with a
+  fixed detail. Nothing of it is decoded. The snapshot check holds them to each other: with `bytes`
+  not null, its byte count equals `length`, is at most 256, and its sha256 equals `sha256`; with
+  `bytes` null and the state present, `length` is above 256; `length` is never above 1048576.
+  Anything else is refused. Every surface (the feed, the page, the MCP tool, the notice line) shows
+  the length and the sha256, and the bytes when kept.
+- `at` is the block both reads were made at: its hash, and its height when known. When the status
+  has a finalized head, `at` equals it in both fields, hash and number; the check refuses any other.
+  A status with no finalized head says nothing of `at`: the run reads at F once F is a hash, and a
+  header of F that failed or holds no valid number leaves the status with none and the watch at F,
+  its height not known.
+- No answer's text is echoed: a detail is a fixed sentence or the decoder's refusal, and a failed
+  call is named by its call.
+- The watch is compared with the latest earlier watch in the log on the same RPC genesis the status
+  read now, at a lower block; with none when there is none, when the height is not known or when the
+  RPC genesis is not. `executing_changed` is none unless both sides name a runtime, and true when the
+  name or the version differs. `authorization_appeared` is none unless both sides' authorised state is
+  known, and true when it is present now and was absent in the watch compared with, or is present
+  with another length or another sha256. The hex is never compared.
+- The watch adds no conflict, never touches `reset_detected` and never changes an exit code. The spec
+  floor of section 1.1 and `runtime_version` are unchanged. The notice line names the executing state,
+  spec name and version and the authorised state.
+- A log may hold `@0` lines after `@1` lines. Such a line is accepted and read as a line with no
+  watch; it is not refused, since a refused log stops every later run and accepting it costs one line
+  with no watch.
+- It runs twice an hour, and the authorisation of Nov 12 was pending for 50 seconds: the watch mostly
+  shows a landed change, and an authorisation only when a run falls inside its window.
 
 ## 8. Recordings
 
@@ -1079,7 +1146,9 @@ below.
   `src/scale/block.ts` takes the bytes of `System.LastRuntimeUpgrade` read at the block and nothing
   else, reads them whole as a Compact<u32> spec version then a string spec name of at most 256
   characters, and answers a copy of the `REVIEWED` line of that spec name and version, or a
-  refusal. The metadata a caller then gives the doors is the one that line names by its sha256.
+  refusal. A refusal carries `named`: the spec name and version, as a number, when the bytes are a
+  whole record no line names, and null when they are no record; a fresh object on each call, so no
+  table leaves through it. The metadata a caller then gives the doors is the one that line names by its sha256.
   The version and the metadata read at the block itself are never used to choose: they answer for
   the next block.
 - No caller can change what the decoder has reviewed. `REVIEWED` and each of its lines,

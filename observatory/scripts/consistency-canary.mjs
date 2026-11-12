@@ -149,7 +149,58 @@ const hasDriftItems = (d) => snap(d).drift !== null && snap(d).drift.items.lengt
 
 const hasEmptyListCell = (dir) => /data-k="[^"]*" data-n="0"/.test(readFileSync(join(dir, "index.html"), "utf8"));
 
+const hasWatch = (d) => snap(d).upgrade !== null;
+
 const tampers = [
+  // The upgrade watch (RULES.md 7.2): its section, cells, feed and MCP answer.
+  {
+    name: "upgrade-authorized-shown-absent-on-page",
+    expect: /page upgrade\.authorized\.state data-v/,
+    applies: (d) => hasWatch(d) && snap(d).upgrade.authorized.state === "present",
+    run: (d) => editCell(d, "upgrade.authorized.state", (a) => [a.replace('data-v="present"', 'data-v="absent"'), "absent"]),
+  },
+  {
+    name: "upgrade-reviewed-runtime-shown-unknown-on-page",
+    expect: /page upgrade\.executing\.state/,
+    applies: (d) => hasWatch(d) && snap(d).upgrade.executing.state === "reviewed",
+    run: (d) => editCell(d, "upgrade.executing.state", (a) => [a.replace('data-v="reviewed"', 'data-v="unknown" class="unk" aria-label="unknown"'), ""]),
+  },
+  {
+    name: "upgrade-authorised-bytes-cut-on-page",
+    expect: /page upgrade\.authorized\.bytes/,
+    applies: (d) => hasWatch(d) && snap(d).upgrade.authorized.bytes !== null,
+    run: (d) => editCell(d, "upgrade.authorized.bytes", (a, t) => [a.replace(/data-v="0x[0-9a-f]*"/, `data-v="${t.slice(0, 10)}"`), t.slice(0, 10)]),
+  },
+  {
+    name: "upgrade-sha256-changed-on-page",
+    expect: /page upgrade\.authorized\.sha256/,
+    applies: (d) => hasWatch(d) && snap(d).upgrade.authorized.sha256 !== null,
+    run: (d) => editCell(d, "upgrade.authorized.sha256", (a, t) => [a.replace(/data-v="[0-9a-f]{64}"/, `data-v="${"0".repeat(64)}"`), "0".repeat(64)]),
+  },
+  {
+    name: "upgrade-appearance-flipped-in-feed-and-mcp",
+    expect: /upgrade\.json upgrade equals snapshot\.upgrade/,
+    applies: hasWatch,
+    run: (d) => editFeed(d, "upgrade.json", "get_upgrade", (f) => (f.upgrade.authorization_appeared = f.upgrade.authorization_appeared !== true)),
+  },
+  {
+    name: "upgrade-watch-invented-in-feed-and-mcp",
+    expect: /upgrade\.json upgrade equals snapshot\.upgrade/,
+    applies: (d) => !hasWatch(d),
+    run: (d) => editFeed(d, "upgrade.json", "get_upgrade", (f) => (f.upgrade = { executing: { state: "reviewed" }, authorized: { state: "absent" } })),
+  },
+  {
+    name: "upgrade-section-heading-renamed",
+    expect: /the section headings, in order/,
+    applies: () => true,
+    run: (d) => editHtml(d, (h) => h.replace("<h2>Runtime upgrade</h2>", "<h2>Upgrade</h2>")),
+  },
+  {
+    name: "upgrade-table-named-status",
+    expect: /every table names its section|a status table holds only status cells/,
+    applies: () => true,
+    run: (d) => editHtml(d, (h) => h.replace('<table data-section="upgrade">', '<table data-section="status">')),
+  },
   {
     name: "escrow-state-in-feed-only",
     applies: (d) => snap(d).escrows.length > 0,
@@ -628,7 +679,7 @@ const tampers = [
   },
   {
     name: "mcp-tools-list-offers-a-signing-tool",
-    expect: /names exactly the six read-only tools/,
+    expect: /names exactly the seven read-only tools/,
     applies: () => true,
     run: (d) =>
       editTranscript(d, (l) => l.request?.method === "tools/list", (x) => {
@@ -756,7 +807,7 @@ const tampers = [
   },
   {
     name: "the-outputs-folder-gains-two-files",
-    expect: /the outputs folder holds exactly the nine files the commands write/,
+    expect: /the outputs folder holds exactly the ten files the commands write/,
     applies: () => true,
     run: (d) => {
       writeFileSync(join(d, "status-latest.json"), '{"reset_detected": false}\n');

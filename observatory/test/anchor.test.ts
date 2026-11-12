@@ -16,7 +16,7 @@ import { hashSnapshot, logLine } from "../src/store.js";
 import { TapeTransport } from "../src/tape.js";
 import type { Transport } from "../src/transport.js";
 import type { NetworkStatus, Snapshot } from "../src/types.js";
-import { anchoredAs, answeringAnchor } from "./helpers/tapes.js";
+import { anchoredAs, answeringAnchor, upgradeAs } from "./helpers/tapes.js";
 
 const FIXTURES = new URL("../fixtures/", import.meta.url);
 const fixture = (dir: string, name: string) => readFileSync(new URL(`${dir}/${name}`, FIXTURES), "utf8");
@@ -172,7 +172,7 @@ describe("the anchor and the spec floor, over synthetic tapes on top of the firs
   it("on no log, a tape that holds an anchor call is refused: a first run makes none, and a replay never skips a request", async () => {
     const { r } = await run(tapeOf("anchor-same"), join(box, "no-log"));
     expect([r.code, r.snapshot]).toEqual([EXIT.crashed, null]);
-    expect(r.reason).toBe("the run broke before a snapshot was written: request 10 is the clock, but the next one on the tape is rpc chain_getBlockHash [3457487]");
+    expect(r.reason).toBe("the run broke before a snapshot was written: request 12 is the clock, but the next one on the tape is rpc chain_getBlockHash [3457487]");
   });
 
   it("a lost anchor's reading is published and read back: the reader serves it, and the next run builds on it", async () => {
@@ -193,7 +193,8 @@ describe("the anchor and the spec floor, over synthetic tapes on top of the firs
 
 describe("the real readings on the data branch, and the anchor", () => {
   it.each([FIRST, SECOND])("%s: a first run's tape, replayed on a log that names an anchor, is refused at the anchor call it does not hold", async (dir) => {
-    const { r } = await run(tapeOf(dir), logOf(fixture(FIRST, `log/${DAY}`)));
+    // The upgrade watch's two reads are answered as UPGRADE_ANSWERS says (synthetic), so the replay reaches the anchor call.
+    const { r } = await run(upgradeAs(dir, tapeOf(dir)), logOf(fixture(FIRST, `log/${DAY}`)));
     expect([r.code, r.snapshot]).toEqual([EXIT.crashed, null]);
     expect(r.reason).toBe("the run broke before a snapshot was written: request 10 is rpc chain_getBlockHash [3457487], but the next one on the tape is the clock");
   });
@@ -224,9 +225,9 @@ describe("the real readings on the data branch, and the anchor", () => {
     const lines = fixture(LATE, `log/${DAY}`).split("\n");
     const recorded = json<Snapshot>(LATE, "snapshot.json");
     const logged = "0x01480d968331997ce13e0c949f9879fdb2193693f24f18c51efaf7e949a40794";
-    const bare = await run(tapeOf(LATE), logOf(lines.slice(0, -2).join("\n") + "\n"));
+    const bare = await run(upgradeAs(LATE, tapeOf(LATE)), logOf(lines.slice(0, -2).join("\n") + "\n"));
     expect(bare.r.reason).toBe("the run broke before a snapshot was written: request 10 is rpc chain_getBlockHash [3469732], but the next one on the tape is the clock");
-    const { r, s } = await run(answeringAnchor(tapeOf(LATE), (h) => ({ result: h === 3469732 ? logged : null })), logOf(lines.slice(0, -2).join("\n") + "\n"));
+    const { r, s } = await run(answeringAnchor(upgradeAs(LATE, tapeOf(LATE)), (h) => ({ result: h === 3469732 ? logged : null })), logOf(lines.slice(0, -2).join("\n") + "\n"));
     expect(s.status).toEqual({ ...recorded.status, trust: "fixture" });
     expect([r.code, s.seq, s.prev_hash, s.status.reset_detected]).toEqual([EXIT.ok, 2, recorded.prev_hash, false]);
   });

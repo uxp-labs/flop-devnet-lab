@@ -2,7 +2,8 @@
 //
 // earlierOf is the one owner of how a log's snapshots become the inputs the status checks against
 // earlier snapshots read: previous, earlierTimes, earlierBest, earlierSpec and the anchor, the one
-// earlier finalized block a live run reads back (RULES.md 1.1). The snapshot command passes it the
+// earlier finalized block a live run reads back (RULES.md 1.1), and every earlier upgrade watch
+// (RULES.md 7.2). The snapshot command passes it the
 // snapshots of its --log file; a live run passes it the published log, read by readHistory. The
 // checks themselves stay in src/status.ts.
 //
@@ -20,6 +21,7 @@ import { checkSnapshot } from "./snapshot-check.js";
 import type { Anchor, EarlierBest, EarlierSpec, PreviousHead } from "./status.js";
 import { LogRefused, readDayLog } from "./store.js";
 import type { Snapshot } from "./types.js";
+import type { EarlierUpgrade } from "./upgrade-watch.js";
 
 export interface Earlier {
   previous: PreviousHead[];
@@ -28,6 +30,8 @@ export interface Earlier {
   earlierSpec: EarlierSpec[];
   /** The latest finalized head logged on the pinned genesis, or null when none was. */
   anchor: Anchor | null;
+  /** Every earlier upgrade watch with the RPC genesis its snapshot read, oldest first (src/upgrade-watch.ts picks the one compared with). */
+  earlierUpgrades: EarlierUpgrade[];
 }
 
 /**
@@ -41,7 +45,10 @@ export function earlierOf(snapshots: readonly Snapshot[], pinned: string): Earli
   const earlierTimes: (string | null)[] = [];
   const earlierBest: EarlierBest[] = [];
   const earlierSpec: EarlierSpec[] = [];
-  for (const { status: st, observed_at: taken } of snapshots) {
+  const earlierUpgrades: EarlierUpgrade[] = [];
+  for (const { status: st, observed_at: taken, upgrade } of snapshots) {
+    // Every earlier watch read on a genesis; an @0 line holds none.
+    if (st.genesis.rpc !== null && upgrade !== undefined && upgrade !== null) earlierUpgrades.push({ genesis: st.genesis.rpc, watch: upgrade });
     // Every earlier snapshot's own time, whatever it read, so a log that runs backwards shows.
     earlierTimes.push(typeof taken === "string" ? taken : null);
     // Every best height on a genesis counts, with or without a finalized head (round 8 review L1).
@@ -61,7 +68,7 @@ export function earlierOf(snapshots: readonly Snapshot[], pinned: string): Earli
   // The anchor: the latest of those heads on the pinned genesis, read back by its height.
   const last = previous.findLast((p) => p.genesis === pinned);
   const anchor = last === undefined ? null : { height: last.finalized_height, hash: last.finalized_hash };
-  return { previous, earlierTimes, earlierBest, earlierSpec, anchor };
+  return { previous, earlierTimes, earlierBest, earlierSpec, anchor, earlierUpgrades };
 }
 
 export type HistoryState = "absent" | "empty" | "read" | "unreadable" | "broken" | "unchecked";

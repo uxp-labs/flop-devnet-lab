@@ -1,0 +1,15 @@
+{
+  "scenario": "upgrade-landed",
+  "description": "Synthetic reading of the upgrade watch (RULES.md 7.2), made from fixtures/live-healthy (every time moved 3600 s later): the first block the new runtime executed, 3528529. Read on top of a log holding the upgrade-before and upgrade-authorized readings: it reads back the latest finalized head the log holds, 3528478, and the node gives the hash the log holds. The finalized head is the block named in from_results, best two above it; the runtime version is 1014020. state_getStorage of System.LastRuntimeUpgrade answers {\"result\":\"0x12e43d0030747a6b762d72756e74696d65\"}, and of System.AuthorizedUpgrade {\"result\":null} (read at 3528528, the block that carries the upgrade; the lab read none at 3528529); upgrade_answers names where each comes from. Every other value is live-healthy's, made up.",
+  "from_results": {
+    "finalized head": "research/2026-11-12-runtime-upgrade/results.json boundary.2.hash and boundary.2.height",
+    "runtime version": "research/2026-11-12-runtime-upgrade/results.json boundary.2.state_getRuntimeVersion_spec",
+    "anchor": "research/2026-11-12-runtime-upgrade/results.json authorization.authorizing_block.hash and authorization.authorizing_block.height"
+  },
+  "now": "2026-11-11T07:00:01.000Z",
+  "synthetic": true,
+  "upgrade_answers": {
+    "System.AuthorizedUpgrade": "research/2026-11-12-runtime-upgrade/results.json authorization.authorized_upgrade_at.4.value",
+    "System.LastRuntimeUpgrade": "research/2026-11-12-runtime-upgrade/results.json boundary.2.last_runtime_upgrade.hex"
+  }
+}

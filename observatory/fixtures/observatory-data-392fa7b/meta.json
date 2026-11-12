@@ -1,0 +1,20 @@
+{
+  "scenario": "observatory-data-392fa7b",
+  "description": "The public branch observatory-data at commit 392fa7b3a217a125ca2344f139af3ed7fef9798e (2026-11-12 14:58 UTC, the reading at 2026-11-12T14:57:55.219Z): its log/ and latest/ copied unchanged by the independent reviewer of round 26, recordings/ left out. Real readings, all written before the upgrade watch, so every line is snapshot@0. files names the sha256 of each file as copied.",
+  "branch": "observatory-data",
+  "commit": "392fa7b3a217a125ca2344f139af3ed7fef9798e",
+  "synthetic": false,
+  "files": {
+    "latest/SHA256SUMS": "ac6bf39ebeb5194c9c419ae093e9745ebab6cc9f45addcdc9b6a27b9dce9f3f0",
+    "latest/census.json": "85aa361014bfc5cd2291534d4f36c288b1fc7c4d2f4936eb3f39017821e73911",
+    "latest/drift.json": "04c7d4ff756b7dacef1ba57baca2d794f09f0062b7c1884f0a9e86ec81901ec9",
+    "latest/escrows.json": "d57a404726c987442f2e3d6bbdd49b4cc58d8175f223e30ed7b4050e0da39f0a",
+    "latest/run.json": "6ffd845fa60a4fac4f8eea85290ec8a9ff1638d69ff29e8add399d1c7f7f4f0d",
+    "latest/snapshot.json": "1e761b42e9e1c4de099bfb6a000cd3f7bbcaa64dd78887a5aebf861ae0e1d557",
+    "latest/snapshots.jsonl": "33238c8c51475334e0a2cd1b3b86f3d2cb9f3eec1edbe44108c5f6740c0ff8dc",
+    "latest/status.json": "b59dc4c7b37bed68dc8c4f3bf6eeaf720b3840145820fa4f86e3a4fc94c8c6b2",
+    "latest/tape.jsonl": "7fb27fcd80d51199d5f57b6bc1643a593e72c70dedda0b613bff7c0e88937de2",
+    "log/2026-11-11.jsonl": "30bb130d7a0703effc2f1b48e36ec2c4b2601a25520b8677e8122f400e28dab5",
+    "log/2026-11-12.jsonl": "7f11d94089ece3262199474d262d424afb0ae08d36a563d7ea9973a8246f8562"
+  }
+}

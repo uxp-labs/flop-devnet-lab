@@ -32,7 +32,7 @@ import { sumsRefusals } from "./sums.js";
 import type { Snapshot } from "./types.js";
 
 /** Every file latest/ holds but SHA256SUMS, in the order SHA256SUMS lists them. */
-export const PUBLISHED_FILES = ["census.json", "drift.json", "escrows.json", "run.json", "snapshot.json", "snapshots.jsonl", "status.json", "tape.jsonl"] as const;
+export const PUBLISHED_FILES = ["census.json", "drift.json", "escrows.json", "run.json", "snapshot.json", "snapshots.jsonl", "status.json", "tape.jsonl", "upgrade.json"] as const;
 
 export type Judgement = { usable: true; snapshot: Snapshot; reset: string | null } | { usable: false; refused: string[] };
 

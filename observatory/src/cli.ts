@@ -6,7 +6,7 @@
 //   flop-observatory census   --fixtures <dir> [--genesis <0x..>] [--from <n> --to <n>] [--now <iso>]
 //   flop-observatory drift    --fixtures <dir> [--spec <yaml>] [--now <iso>]
 //   flop-observatory snapshot --status <dir> [--escrows <dir>] [--census <dir>] [--drift <dir>]
-//                             --out <dir> [--log <file>] [--now <iso>] [--source-sha <sha>]
+//                             [--upgrade <dir>] --out <dir> [--log <file>] [--now <iso>] [--source-sha <sha>]
 //
 // JSON goes to stdout. Errors go to stderr with exit 2 for bad usage or input.
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
@@ -18,13 +18,17 @@ import { escrowStates, isHash32 } from "./escrow.js";
 import { feedText, writeFeeds } from "./feed.js";
 import { readRegularFile } from "./files.js";
 import { type Earlier, earlierOf } from "./history.js";
+import { own } from "./own.js";
 import { renderPage } from "./page.js";
+import type { Answer } from "./rpc-head.js";
 import { buildSnapshot } from "./snapshot.js";
 import { type FixtureMeta, FixtureSource } from "./source.js";
 import { DEVNET_GENESIS, networkStatus } from "./status.js";
 import { appendSnapshot, hashSnapshot, readSnapshots, verifyChain } from "./store.js";
 import { parseZoned } from "./strict.js";
-import type { Snapshot } from "./types.js";
+import { strictJson } from "./transport.js";
+import type { RpcHead, Snapshot } from "./types.js";
+import type { UpgradeReading } from "./upgrade-watch.js";
 
 const PKG = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -34,7 +38,7 @@ const COMMANDS = new Map<string, { one: readonly string[]; many: readonly string
   ["escrow", { one: ["--fixtures", "--now"], many: ["--id"] }],
   ["census", { one: ["--fixtures", "--genesis", "--from", "--to", "--now"], many: [] }],
   ["drift", { one: ["--fixtures", "--spec", "--now"], many: [] }],
-  ["snapshot", { one: ["--status", "--escrows", "--census", "--drift", "--out", "--log", "--now", "--source-sha"], many: [] }],
+  ["snapshot", { one: ["--status", "--escrows", "--census", "--drift", "--upgrade", "--out", "--log", "--now", "--source-sha"], many: [] }],
 ]);
 
 type Args = { cmd: string; flags: Map<string, string[]> };
@@ -114,6 +118,36 @@ function distinctIds(ids: unknown, where: string): string[] {
     seen.add(k);
   }
   return ids as string[];
+}
+
+/**
+ * The two reads of the upgrade watch saved in <dir>/storage.json (RULES.md 7.2): an object of
+ * exactly "System.LastRuntimeUpgrade" and "System.AuthorizedUpgrade", each a call's answer as a
+ * tape keeps it, {"result": ...} or {"error": "..."}. They count as read at the status fixture's
+ * finalized head, which must be there: a watch is always at a block.
+ */
+async function savedUpgrade(dir: string, trust: UpgradeReading["trust"], head: RpcHead, now: string): Promise<UpgradeReading> {
+  const where = `${dir}/storage.json`;
+  let bytes: Uint8Array;
+  try {
+    bytes = readRegularFile(join(dir, "storage.json"));
+  } catch {
+    fail(`${where} cannot be read as a regular file`);
+  }
+  const read = strictJson(bytes);
+  if ("problem" in read) fail(`${where} is ${read.problem}`);
+  const v = read.value;
+  const NAMES = ["System.AuthorizedUpgrade", "System.LastRuntimeUpgrade"];
+  if (v === null || typeof v !== "object" || Array.isArray(v) || JSON.stringify(Object.keys(v).sort()) !== JSON.stringify(NAMES)) fail(`${where} must hold exactly ${NAMES.join(" and ")}`);
+  const answer = (name: string): Answer => {
+    const x = own(v as object, name);
+    const keys = x !== null && typeof x === "object" && !Array.isArray(x) ? Object.keys(x) : [];
+    if (keys.length === 1 && keys[0] === "result") return { result: own(x as object, "result") };
+    if (keys.length === 1 && keys[0] === "error" && typeof own(x as object, "error") === "string") return { error: own(x as object, "error") as string };
+    return fail(`${where}: ${name} must be {"result": ...} or {"error": "..."}`);
+  };
+  if (head.finalized === null) fail(`--upgrade needs a status fixture with a finalized head to read at; ${dir} has none to count as read at`);
+  return { hash: head.finalized.hash, number: head.finalized.number, observedAt: head.observed_at ?? now, trust, lastRuntimeUpgrade: answer("System.LastRuntimeUpgrade"), authorizedUpgrade: answer("System.AuthorizedUpgrade") };
 }
 
 async function main(): Promise<void> {
@@ -199,6 +233,7 @@ async function main(): Promise<void> {
     const escrowDir = one(a, "--escrows");
     const censusDir = one(a, "--census");
     const driftDir = one(a, "--drift");
+    const upgradeDir = one(a, "--upgrade");
     // A snapshot describes one chain: every part must be pinned to the snapshot's genesis.
     const samePin = (src: FixtureSource, dir: string): FixtureSource => {
       const g = src.data.meta.pinned_genesis;
@@ -230,17 +265,22 @@ async function main(): Promise<void> {
       const src = samePin(FixtureSource.fromDir(driftDir), driftDir);
       driftPart = { label: `fixture:${src.data.meta.scenario}`, report: await driftFor(src, driftDir, one(a, "--spec"), now) };
     }
+    let upgradePart = null;
+    if (upgradeDir) {
+      const src = samePin(FixtureSource.fromDir(upgradeDir), upgradeDir);
+      upgradePart = { label: src.label, reading: await savedUpgrade(upgradeDir, src.trust, await status.rpcHead(), now) };
+    }
     const log = one(a, "--log");
     // RULES.md 1.1: the rollback, changed hash and stuck height checks need the earlier snapshots.
     // They come from the log, and only after the log's whole hash chain verifies (src/history.ts).
-    let earlier: Earlier = { previous: [], earlierTimes: [], earlierBest: [], earlierSpec: [], anchor: null };
+    let earlier: Earlier = { previous: [], earlierTimes: [], earlierBest: [], earlierSpec: [], anchor: null, earlierUpgrades: [] };
     if (log && existsSync(log)) {
       const broken = verifyChain(log);
       if (broken !== null) fail(`snapshot log ${log} is broken at line ${broken}; it is never extended or trusted`);
       earlier = earlierOf(readSnapshots(log), pinned);
     }
     const fresh = await buildSnapshot(
-      { status, escrows, census: censusPart, drift: driftPart },
+      { status, escrows, census: censusPart, drift: driftPart, upgrade: upgradePart },
       { pinnedGenesis: pinned, now, sourceSha: one(a, "--source-sha") ?? null, ...earlier },
     );
     let snap: Snapshot;

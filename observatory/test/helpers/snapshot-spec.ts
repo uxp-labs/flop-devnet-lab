@@ -9,6 +9,8 @@
 //   snapshot whose fields all hold their types.
 // The check names are the binary's own, so its refusals and this reference can be compared.
 
+import { createHash } from "node:crypto";
+
 // Snapshots here are plain JSON, as the binary reads them.
 export type Json = any;
 
@@ -118,6 +120,13 @@ const part = (schema: string): Kind =>
   );
 /** A nested object whose own fields are checked apart: here only what is no object at all. */
 const OBJECT = kind([], [null, [], "x", 1, true]);
+/** 0x and lower case hex of whole bytes: storage bytes as a node answers them, none included. */
+const HEX_BYTES = kind(
+  ["0x", "0x00", "0xab", "0x" + hex64, "0x" + hex64 + "01"],
+  ["0xAB", "0X00", "0xabc", "0x0", "ab", "", " 0xab", "0xab ", "0xab\n", "x\n0xab", "0xgg", "null", 0, 1, false, null, [], {}],
+);
+/** A count of bytes a node's storage answer can hold: the 1 MiB answer limit at most. */
+const BYTE_COUNT = kind([0, 1, 256, 257, 1048576], [1048577, 2 ** 32, -1, 1.5, NaN, Infinity, "33", "", null, true, [], {}]);
 /** A list whose items are checked apart: here only an empty list, and what is no list. */
 const LIST = kind([[]], [null, {}, "x", "", 1, true]);
 
@@ -142,7 +151,7 @@ export const TYPES: readonly (readonly [string, readonly (readonly [string, Kind
   [
     "snapshot",
     [
-      ["schema", fixed("flop-observatory/snapshot@0")],
+      ["schema", fixed("flop-observatory/snapshot@1")],
       ["seq", COUNT],
       ["prev_hash", orNone(SHA256)],
       ["hash", SHA256],
@@ -153,6 +162,7 @@ export const TYPES: readonly (readonly [string, readonly (readonly [string, Kind
       ["escrows", LIST],
       ["census", orNone(part("flop-observatory/census@0"))],
       ["drift", orNone(part("flop-observatory/drift@0"))],
+      ["upgrade", orNone(OBJECT)],
     ],
   ],
   [
@@ -220,6 +230,53 @@ export const TYPES: readonly (readonly [string, readonly (readonly [string, Kind
       ["genesis", HASH],
     ],
   ],
+  // RULES.md 7.2: the upgrade watch, its block, the runtime that executed it and the authorisation.
+  [
+    "upgrade",
+    [
+      ["schema", fixed("flop-observatory/upgrade-watch@0")],
+      ["observed_at", TIME],
+      ["trust", oneOf(...TRUSTS)],
+      ["at", OBJECT],
+      ["executing", OBJECT],
+      ["authorized", OBJECT],
+      ["compared_with", orNone(COUNT)],
+      ["executing_changed", orNone(FLAG)],
+      ["authorization_appeared", orNone(FLAG)],
+    ],
+  ],
+  [
+    "upgrade.at",
+    [
+      ["hash", HASH],
+      ["number", orNone(COUNT)],
+    ],
+  ],
+  [
+    "upgrade.executing",
+    [
+      ["state", oneOf("reviewed", "not reviewed", "absent", "unknown")],
+      ["spec_name", orNone(TEXT)],
+      ["spec_version", orNone(COUNT)],
+      ["detail", orNone(TEXT)],
+    ],
+  ],
+  [
+    "upgrade.authorized",
+    [
+      ["state", oneOf("absent", "present", "unknown")],
+      ["bytes", orNone(HEX_BYTES)],
+      ["length", orNone(BYTE_COUNT)],
+      ["sha256", orNone(SHA256)],
+      ["detail", orNone(TEXT)],
+    ],
+  ],
+];
+
+/** The snapshot as written before the upgrade watch: its schema @0 and no upgrade field; such a line still reads. */
+export const SNAPSHOT_V0: readonly (readonly [string, Kind])[] = [
+  ["schema", fixed("flop-observatory/snapshot@0")],
+  ...(TYPES[0]?.[1] ?? []).filter(([k]) => k !== "schema" && k !== "upgrade"),
 ];
 
 /** Every shape check's name: each object's field set, and each of its fields. */
@@ -252,6 +309,20 @@ export const AGREEMENT_NAMES: readonly string[] = [
   "pin.height-is-the-status-height",
   "pin.hash-is-the-status-hash",
   "snapshot.fixture-when-a-part-is",
+  "upgrade.at-is-the-status-finalized-head",
+  "upgrade.executing-names-a-spec-only-when-read",
+  "upgrade.executing-says-why-unless-reviewed",
+  "upgrade.authorized-measured-exactly-when-present",
+  "upgrade.authorized-bytes-only-when-present",
+  "upgrade.authorized-bytes-kept-up-to-256",
+  "upgrade.authorized-length-counts-the-bytes",
+  "upgrade.authorized-sha256-of-the-bytes",
+  "upgrade.authorized-says-why-when-unknown-or-not-kept",
+  "upgrade.changes-only-when-compared",
+  "upgrade.compared-with-a-lower-block",
+  "upgrade.executing-changed-only-when-named",
+  "upgrade.appeared-only-when-known",
+  "upgrade.appeared-only-when-present",
 ];
 
 /**
@@ -319,7 +390,41 @@ export function expectedAgreements(s: Json): string[] {
   rule("pin.height-is-the-status-height", s.pin.finalized_height === f);
   rule("pin.hash-is-the-status-hash", s.pin.finalized_hash === st.finalized_hash);
   // "the snapshot a fixture when any part is"
-  const parts = [st, ...escrows, s.census, s.drift].filter((p) => p !== null && typeof p === "object");
+  const parts = [st, ...escrows, s.census, s.drift, s.upgrade].filter((p) => p !== null && typeof p === "object");
   rule("snapshot.fixture-when-a-part-is", s.trust === "fixture" || parts.every((p) => p.trust !== "fixture"));
+  // RULES.md 7.2, each sentence a rule, read only when the snapshot holds a watch.
+  const u = s.upgrade;
+  if (u !== null && u !== undefined) {
+    const x = u.executing;
+    const a = u.authorized;
+    const names = x.state === "reviewed" || x.state === "not reviewed";
+    // "upgrade.at is the status's finalized head, its hash and its height, whenever the status has one"
+    rule("upgrade.at-is-the-status-finalized-head", st.finalized_hash === null || (u.at.hash === st.finalized_hash && u.at.number === st.finalized_height));
+    // "spec_name and spec_version are set exactly when the state is reviewed or not reviewed"
+    rule("upgrade.executing-names-a-spec-only-when-read", (x.spec_name !== null) === names && (x.spec_version !== null) === names);
+    // "executing.detail says why for every state but reviewed, and is none for reviewed"
+    rule("upgrade.executing-says-why-unless-reviewed", x.state === "reviewed" ? x.detail === null : x.detail !== null);
+    // "a present authorisation always carries its length in bytes and the sha256 of the raw bytes", and nothing else does
+    rule("upgrade.authorized-measured-exactly-when-present", a.state === "present" ? a.length !== null && a.sha256 !== null : a.length === null && a.sha256 === null);
+    // "bytes is the hex only of a present authorisation"
+    rule("upgrade.authorized-bytes-only-when-present", a.bytes === null || a.state === "present");
+    // "bytes is the hex only when length is at most 256; above that it is null"
+    if (a.state === "present" && a.length !== null) rule("upgrade.authorized-bytes-kept-up-to-256", a.length > 256 ? a.bytes === null : a.bytes !== null);
+    // "with bytes not null, its byte count equals length"
+    rule("upgrade.authorized-length-counts-the-bytes", a.bytes === null || (typeof a.length === "number" && a.length * 2 + 2 === a.bytes.length));
+    // "and its sha256 equals sha256"
+    rule("upgrade.authorized-sha256-of-the-bytes", a.bytes === null || createHash("sha256").update(Buffer.from(a.bytes.slice(2), "hex")).digest("hex") === a.sha256);
+    // "unknown says why, and so does present with its bytes not kept, with a fixed detail"; nothing else does
+    rule("upgrade.authorized-says-why-when-unknown-or-not-kept", a.state === "unknown" || (a.state === "present" && a.bytes === null) ? a.detail !== null : a.detail === null);
+    // "with nothing compared, both changes are none"
+    rule("upgrade.changes-only-when-compared", u.compared_with !== null || [u.executing_changed, u.authorization_appeared].every((v) => v === null));
+    // "compared_with is a block below at.number, which is then known"
+    rule("upgrade.compared-with-a-lower-block", u.compared_with === null || (u.at.number !== null && u.at.number > u.compared_with));
+    // "executing_changed is none unless the runtime is named now"
+    rule("upgrade.executing-changed-only-when-named", u.executing_changed === null || names);
+    // "authorization_appeared is none unless the authorised state is known now, and true only when it is present"
+    rule("upgrade.appeared-only-when-known", u.authorization_appeared === null || a.state === "absent" || a.state === "present");
+    rule("upgrade.appeared-only-when-present", u.authorization_appeared !== true || a.state === "present");
+  }
   return broken;
 }

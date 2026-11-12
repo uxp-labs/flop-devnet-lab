@@ -98,6 +98,33 @@ export function renderPage(s: Snapshot): string {
   out.push(row("status.faucet.ready", cell("status.faucet.ready", st.faucet.ready), "status."));
   out.push(`</table></div>`);
 
+  // Runtime upgrade (RULES.md 7.2): its states read as words, and unknown is blank, never absent.
+  out.push(`<h2>Runtime upgrade</h2>`);
+  const u = s.upgrade ?? null;
+  if (u === null) {
+    out.push(`<div class="card"><table data-section="upgrade">${row("upgrade", cell("upgrade", null))}</table></div>`);
+  } else {
+    const state = (k: string, v: string) => (v === "unknown" ? `<td data-k="${esc(k)}" data-v="unknown" class="unk" aria-label="unknown"></td>` : cell(k, v));
+    out.push(`<div class="card"><table data-section="upgrade">`);
+    out.push(row("upgrade.observed_at", cell("upgrade.observed_at", u.observed_at), "upgrade."));
+    out.push(row("upgrade.trust", cell("upgrade.trust", u.trust), "upgrade."));
+    out.push(row("upgrade.at.hash", cell("upgrade.at.hash", u.at.hash), "upgrade."));
+    out.push(row("upgrade.at.number", cell("upgrade.at.number", u.at.number), "upgrade."));
+    out.push(row("upgrade.executing.state", state("upgrade.executing.state", u.executing.state), "upgrade."));
+    out.push(row("upgrade.executing.spec_name", cell("upgrade.executing.spec_name", u.executing.spec_name), "upgrade."));
+    out.push(row("upgrade.executing.spec_version", cell("upgrade.executing.spec_version", u.executing.spec_version), "upgrade."));
+    out.push(row("upgrade.executing.detail", cell("upgrade.executing.detail", u.executing.detail), "upgrade."));
+    out.push(row("upgrade.authorized.state", state("upgrade.authorized.state", u.authorized.state), "upgrade."));
+    out.push(row("upgrade.authorized.bytes", cell("upgrade.authorized.bytes", u.authorized.bytes), "upgrade."));
+    out.push(row("upgrade.authorized.length", cell("upgrade.authorized.length", u.authorized.length), "upgrade."));
+    out.push(row("upgrade.authorized.sha256", cell("upgrade.authorized.sha256", u.authorized.sha256), "upgrade."));
+    out.push(row("upgrade.authorized.detail", cell("upgrade.authorized.detail", u.authorized.detail), "upgrade."));
+    out.push(row("upgrade.compared_with", cell("upgrade.compared_with", u.compared_with), "upgrade."));
+    out.push(row("upgrade.executing_changed", cell("upgrade.executing_changed", u.executing_changed), "upgrade."));
+    out.push(row("upgrade.authorization_appeared", cell("upgrade.authorization_appeared", u.authorization_appeared), "upgrade."));
+    out.push(`</table></div>`);
+  }
+
   // Escrows
   out.push(`<h2>Escrows</h2><p class="note">Settlement only; says nothing about output quality. Only finalized events on the pinned genesis count. A gateway report is not chain proof.</p>`);
   if (s.escrows.length === 0) out.push(`<p class="note">No escrows in this snapshot.</p>`);

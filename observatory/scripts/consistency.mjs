@@ -42,7 +42,7 @@
 // Prints {"dir", "checks", "keys", "failures"}; exit 1 on any failure.
 import { readdirSync, readFileSync, writeSync } from "node:fs";
 import { basename, join, resolve } from "node:path";
-import { censusFeed, driftFeed, escrowsFeed, feedText as writtenFeed, snapshotMeta, statusFeed } from "../dist/feed.js";
+import { censusFeed, driftFeed, escrowsFeed, feedText as writtenFeed, snapshotMeta, statusFeed, upgradeFeed } from "../dist/feed.js";
 import { TOOLS, handleMcp } from "../dist/mcp.js";
 import { PAGE_CSS, renderPage } from "../dist/page.js";
 import { canonicalJson, hashSnapshot, verifyChain } from "../dist/store.js";
@@ -129,8 +129,8 @@ const sameKeys = (o, keys) => o !== null && typeof o === "object" && !Array.isAr
 
 // 0. The folder holds exactly the files the snapshot command and the transcript script write, so
 //    no other file can sit beside them and say something else (round 7 review L7).
-const FILES = ["census.json", "drift.json", "escrows.json", "index.html", "mcp-transcript.jsonl", "pin.json", "snapshot.json", "snapshots.jsonl", "status.json"];
-expectSame("the outputs folder holds exactly the nine files the commands write", readdirSync(dir).sort(), FILES);
+const FILES = ["census.json", "drift.json", "escrows.json", "index.html", "mcp-transcript.jsonl", "pin.json", "snapshot.json", "snapshots.jsonl", "status.json", "upgrade.json"];
+expectSame("the outputs folder holds exactly the ten files the commands write", readdirSync(dir).sort(), FILES);
 
 // 1. Snapshot integrity.
 const snapshotText = read("snapshot.json");
@@ -138,11 +138,12 @@ const snapshot = strictJson("snapshot.json", snapshotText);
 {
   const isObject = (v) => v !== null && typeof v === "object" && !Array.isArray(v);
   const shaped =
-    isObject(snapshot) && snapshot.schema === "flop-observatory/snapshot@0" && isObject(snapshot.status) && Array.isArray(snapshot.escrows) &&
-    snapshot.escrows.every(isObject) && (snapshot.census === null || isObject(snapshot.census)) && (snapshot.drift === null || isObject(snapshot.drift));
+    isObject(snapshot) && snapshot.schema === "flop-observatory/snapshot@1" && isObject(snapshot.status) && Array.isArray(snapshot.escrows) &&
+    snapshot.escrows.every(isObject) && (snapshot.census === null || isObject(snapshot.census)) && (snapshot.drift === null || isObject(snapshot.drift)) &&
+    (snapshot.upgrade === null || (isObject(snapshot.upgrade) && isObject(snapshot.upgrade.at) && isObject(snapshot.upgrade.executing) && isObject(snapshot.upgrade.authorized)));
   if (!shaped) {
     checks++;
-    failures.push({ what: "snapshot.json is an observatory snapshot (its schema, a status, a list of escrows, a census and a drift report or null)", detail: snapshotText.slice(0, 120) });
+    failures.push({ what: "snapshot.json is an observatory snapshot (its schema, a status, a list of escrows, a census, a drift report and an upgrade watch or null)", detail: snapshotText.slice(0, 120) });
     report();
   }
 }
@@ -170,14 +171,16 @@ const feedText = {
   list_escrows: read("escrows.json"),
   get_census: read("census.json"),
   get_drift: read("drift.json"),
+  get_upgrade: read("upgrade.json"),
 };
-const FEED_FILE = { get_status: "status.json", list_escrows: "escrows.json", get_census: "census.json", get_drift: "drift.json" };
+const FEED_FILE = { get_status: "status.json", list_escrows: "escrows.json", get_census: "census.json", get_drift: "drift.json", get_upgrade: "upgrade.json" };
 const feed = Object.fromEntries(Object.entries(feedText).map(([k, t]) => [k, strictJson(FEED_FILE[k], t)]));
 const wrappers = [
   ["status.json", feed.get_status, "status", snapshot.status, snapshot.status.observed_at, snapshot.status.trust],
   ["escrows.json", feed.list_escrows, "escrows", snapshot.escrows, snapshot.observed_at, snapshot.trust],
   ["census.json", feed.get_census, "census", snapshot.census, snapshot.census?.observed_at ?? snapshot.observed_at, snapshot.census?.trust ?? snapshot.trust],
   ["drift.json", feed.get_drift, "drift", snapshot.drift, snapshot.drift?.observed_at ?? snapshot.observed_at, snapshot.drift?.trust ?? snapshot.trust],
+  ["upgrade.json", feed.get_upgrade, "upgrade", snapshot.upgrade, snapshot.upgrade?.observed_at ?? snapshot.observed_at, snapshot.upgrade?.trust ?? snapshot.trust],
 ];
 for (const [name, f, key, part, observedAt, trust] of wrappers) {
   expectEq(`${name} holds exactly schema, snapshot_hash, observed_at, trust and ${key}`, sameKeys(f, ["schema", "snapshot_hash", "observed_at", "trust", key]), true);
@@ -196,7 +199,7 @@ for (const [name, f, key, part, observedAt, trust] of wrappers) {
 //    them, a tool answer as exactly one text item (no isError, no structuredContent and no second
 //    item, any of which a client could read instead), and each refusal with its own code and words.
 const INSTRUCTIONS = "Read-only observatory for FLOP devnet. Escrow state is settlement only and says nothing about output quality. null means unknown.";
-const TOOL_NAMES = ["get_status", "get_escrow_state", "list_escrows", "get_census", "get_drift", "get_snapshot_meta"];
+const TOOL_NAMES = ["get_status", "get_escrow_state", "list_escrows", "get_census", "get_drift", "get_upgrade", "get_snapshot_meta"];
 const expectedExchanges = exchangesFor(snapshot);
 const unseen = unseenEscrowId(snapshot);
 const REFUSALS = {
@@ -262,7 +265,7 @@ for (const [i, x] of transcript.entries()) {
   }
   if (request?.method === "tools/list") {
     const tools = response?.result?.tools ?? [];
-    expectSame("mcp tools/list names exactly the six read-only tools", tools.map((t) => t.name).sort(), [...TOOL_NAMES].sort());
+    expectSame("mcp tools/list names exactly the seven read-only tools", tools.map((t) => t.name).sort(), [...TOOL_NAMES].sort());
     for (const t of tools) expectEq(`mcp tool ${t.name} is marked read only and not destructive`, t.annotations?.readOnlyHint === true && t.annotations?.destructiveHint === false, true);
     expectSame("mcp tools/list is exactly the server's declared tools: names, descriptions, input schemas and annotations", response?.result, { tools: TOOLS });
   }
@@ -366,6 +369,13 @@ function pageKeys(s) {
   for (const f of ["observed_at", "trust", "genesis.pinned", "genesis.faucet", "genesis.rpc", "reset_detected", "conflicts", "finalized_height", "finalized_hash", "best_height", "finality_lag", "runtime_version"]) k.push(`status.${f}`);
   for (const svc of ["rpc", "gateway", "faucet"]) for (const f of ["health", "http", "detail", "observed_at"]) k.push(`status.${svc}.${f}`);
   k.push("status.rpc.stale", "status.faucet.ready");
+  if (s.upgrade === null) k.push("upgrade");
+  else {
+    k.push("upgrade.observed_at", "upgrade.trust", "upgrade.at.hash", "upgrade.at.number");
+    for (const f of ["state", "spec_name", "spec_version", "detail"]) k.push(`upgrade.executing.${f}`);
+    for (const f of ["state", "bytes", "length", "sha256", "detail"]) k.push(`upgrade.authorized.${f}`);
+    k.push("upgrade.compared_with", "upgrade.executing_changed", "upgrade.authorization_appeared");
+  }
   for (const e of s.escrows) for (const f of ["escrow_id", "state", "observed_at", "trust", "finalized_height", "evidence", "notes", "scope"]) k.push(`escrow.${e.escrow_id}.${f}`);
   if (s.census === null) k.push("census");
   else {
@@ -416,7 +426,7 @@ for (const [k, c] of cells) {
 {
   const partialCensus = snapshot.census !== null && (snapshot.census.status !== "complete" || snapshot.census.complete !== true);
   const labelFor = (key) => {
-    if (key === "census" || key === "drift") return key;
+    if (key === "census" || key === "drift" || key === "upgrade") return key;
     const rest = key.startsWith("escrow.") ? key.slice(key.lastIndexOf(".") + 1) : key.slice(key.indexOf(".") + 1);
     const label = rest.replace(/[._]/g, " ");
     return partialCensus && key.startsWith("census.totals.") ? `partial ${label}` : label;
@@ -507,6 +517,7 @@ function resolvePath(key) {
   let cur;
   if (head === "status") cur = snapshot.status;
   else if (head === "census") cur = snapshot.census;
+  else if (head === "upgrade") cur = snapshot.upgrade;
   else if (head === "drift") {
     cur = snapshot.drift;
     if (cur && parts.length > 1 && /^\d+$/.test(parts[1])) {
@@ -530,7 +541,7 @@ function joinList(list) {
   if (list.every((x) => typeof x === "string")) return list.join("; ");
   return null;
 }
-const isUnknownWord = (key) => /^status\.(rpc|gateway|faucet)\.health$/.test(key) || /^drift\.\d+\.status$/.test(key);
+const isUnknownWord = (key) => /^status\.(rpc|gateway|faucet)\.health$/.test(key) || /^drift\.\d+\.status$/.test(key) || /^upgrade\.(executing|authorized)\.state$/.test(key);
 
 /** The class the renderer gives a cell for its value (src/page.ts); anything else fails. */
 function classFor(key, value) {
@@ -630,6 +641,11 @@ const required = [
 for (const e of snapshot.escrows) {
   for (const f of ["escrow_id", "state", "evidence", "notes", "observed_at", "trust", "scope", "finalized_height"]) required.push(`escrow.${e.escrow_id}.${f}`);
 }
+if (snapshot.upgrade === null) required.push("upgrade");
+else {
+  required.push("upgrade.observed_at", "upgrade.trust", "upgrade.at.hash", "upgrade.at.number", "upgrade.executing.state", "upgrade.executing.spec_name", "upgrade.executing.spec_version");
+  required.push("upgrade.authorized.state", "upgrade.authorized.bytes", "upgrade.authorized.length", "upgrade.authorized.sha256", "upgrade.compared_with", "upgrade.executing_changed", "upgrade.authorization_appeared");
+}
 if (snapshot.census === null) required.push("census");
 else {
   required.push(
@@ -716,7 +732,7 @@ for (const k of required) {
     unmarked.filter((o) => o.tag === "p").map((o) => attr(o.attrs, "class")),
     ["note", "banner", "note", ...(snapshot.escrows.length === 0 ? ["note"] : [])],
   );
-  const cards = 1 + snapshot.escrows.length + 1 + (snapshot.drift === null ? 1 : 2);
+  const cards = 1 + 1 + snapshot.escrows.length + 1 + (snapshot.drift === null ? 1 : 2);
   expectSame("every div is a card, and the page holds the renderer's cards", unmarked.filter((o) => o.tag === "div").map((o) => attr(o.attrs, "class")), Array(cards).fill("card"));
   expectEq("the page holds the renderer's tables, one in each card", opened.filter((o) => o.tag === "table").length, cards);
 }
@@ -725,6 +741,7 @@ for (const k of required) {
 {
   const HEADINGS = [
     ["status", "Network status"],
+    ["upgrade", "Runtime upgrade"],
     ["escrow", "Escrows"],
     ["census", "Census"],
     ["drift", "Spec drift"],
@@ -830,6 +847,7 @@ for (const k of required) {
     ". Blank grey cells mean unknown; none means known empty.",
     "Escrow state is settlement only. It says nothing about output quality.",
     "Network status",
+    "Runtime upgrade",
     "Escrows",
     "Settlement only; says nothing about output quality. Only finalized events on the pinned genesis count. A gateway report is not chain proof.",
     ...(snapshot.escrows.length === 0 ? ["No escrows in this snapshot."] : []),
@@ -856,6 +874,7 @@ if (!semanticOnly) {
     ["escrows.json", escrowsFeed],
     ["census.json", censusFeed],
     ["drift.json", driftFeed],
+    ["upgrade.json", upgradeFeed],
   ]) {
     expectEq(`${file} is exactly what src/feed.ts writes for this snapshot`, read(file), writtenFeed(writer(snapshot)));
   }
