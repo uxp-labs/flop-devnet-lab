@@ -1,0 +1,217 @@
+/**
+ * Review of P3 (the chain encoder), reviewer's own tests. Each test in this file states a line of the
+ * promise (P1 to P15 of the review brief) and fails on 165432c when the encoder breaks it.
+ * Test keys are made in memory by testDevice() and never written.
+ */
+import { ed25519 } from "@noble/curves/ed25519.js";
+import { describe, expect, it } from "vitest";
+import type { InnerCall } from "../src/chain/calls.js";
+import { describeCall } from "../src/chain/describe.js";
+import { ChainEncodeError } from "../src/chain/errors.js";
+import { encodeSessionCall, signSessionCall, type ExtrinsicInput } from "../src/chain/extrinsic.js";
+import { readCall } from "../src/chain/reader.js";
+import type { Runtime } from "../src/chain/table.js";
+import { hex, OWNER, refCall, RT, RUNTIME_ID, sampleInner, testDevice, unhex } from "./lib/chain-fixtures.js";
+
+const S = sampleInner();
+const BIRTH_HASH = "0xa85d1dcb67ae73c8c910634c75c043e62f83cf06dd4a90bbb5abe19c8674d08e";
+const birth = () => ({ number: 3552594, hash: unhex(BIRTH_HASH) });
+
+function codeOf(f: () => unknown): string | null {
+  try {
+    f();
+  } catch (e) {
+    return e instanceof ChainEncodeError ? e.refusal : `not a ChainEncodeError: ${String(e)}`;
+  }
+  return null;
+}
+
+/** The declared spend and the moved amount of call bytes, read by the reference decoder, not by src/chain. */
+function refSpend(bytes: Uint8Array): { declared: bigint; moves: bigint; inner: string } {
+  const d = refCall.dec(bytes).value.value;
+  const inner = d.call.value;
+  const moves = inner.type === "top_up_escrow" ? inner.value.additional : inner.type === "open_channel" || inner.type === "force_open" ? inner.value.escrow : 0n;
+  return { declared: d.spend_amount, moves, inner: inner.type };
+}
+
+/** A force_open whose escrow answers `first` on its first read and `later` after. */
+function flipEscrow(first: bigint, later: bigint): InnerCall {
+  let reads = 0;
+  const o: Record<string, unknown> = { ...S.force_open };
+  delete o.escrow;
+  Object.defineProperty(o, "escrow", { enumerable: true, get: () => (reads++ === 0 ? first : later) });
+  return o as unknown as InnerCall;
+}
+
+describe("P3: the declared spend always equals what the inner call moves", () => {
+  it("P3 encodeSessionCall: an escrow getter that answers 1000 FLOP then 1 raw cannot make the declared spend 1 raw", () => {
+    const big = 1000n * 10n ** 18n;
+    let bytes: Uint8Array | null = null;
+    const code = codeOf(() => (bytes = encodeSessionCall({ runtime: RUNTIME_ID, owner: OWNER, inner: flipEscrow(big, 1n), sessionNonce: 1n })));
+    if (code === null) {
+      const s = refSpend(bytes!);
+      expect({ declared: s.declared, moves: s.moves }).toEqual({ declared: s.moves, moves: s.moves });
+    } else expect(code).not.toMatch(/^not a/);
+  });
+
+  it("P3 encodeSessionCall: a call name getter (force_open, then timeout) cannot make a force_open declare 0", () => {
+    let reads = 0;
+    const o: Record<string, unknown> = { ...S.force_open };
+    delete o.call;
+    Object.defineProperty(o, "call", { enumerable: true, get: () => (reads++ === 0 ? "force_open" : "timeout") });
+    let bytes: Uint8Array | null = null;
+    const code = codeOf(() => (bytes = encodeSessionCall({ runtime: RUNTIME_ID, owner: OWNER, inner: o as unknown as InnerCall, sessionNonce: 1n })));
+    if (code === null) {
+      const s = refSpend(bytes!);
+      expect(s.inner).toBe("force_open");
+      expect(s.declared).toBe(s.moves);
+    } else expect(code).not.toMatch(/^not a/);
+  });
+
+  it("P3 encodeSessionCall: an input whose inner getter answers two different calls cannot declare the spend of the second", () => {
+    let reads = 0;
+    const big = { ...S.open_channel, escrow: 5n * 10n ** 18n } as InnerCall;
+    const small = { ...S.open_channel, escrow: 0n } as InnerCall;
+    const input = { runtime: RUNTIME_ID, owner: OWNER, sessionNonce: 1n } as Record<string, unknown>;
+    Object.defineProperty(input, "inner", { enumerable: true, get: () => (reads++ < 1 ? big : small) });
+    let bytes: Uint8Array | null = null;
+    const code = codeOf(() => (bytes = encodeSessionCall(input as never)));
+    if (code === null) {
+      const s = refSpend(bytes!);
+      expect(s.declared).toBe(s.moves);
+    } else expect(code).not.toMatch(/^not a/);
+  });
+
+  it("P3 encodeSessionCall: a Proxy over top_up_escrow that answers the amount differently on each read cannot lower the spend", () => {
+    let reads = 0;
+    const target = { ...S.top_up_escrow };
+    const p = new Proxy(target, { get: (t, k) => (k === "additional" ? (reads++ === 0 ? 7n * 10n ** 18n : 0n) : Reflect.get(t, k)) });
+    let bytes: Uint8Array | null = null;
+    const code = codeOf(() => (bytes = encodeSessionCall({ runtime: RUNTIME_ID, owner: OWNER, inner: p as InnerCall, sessionNonce: 1n })));
+    if (code === null) {
+      const s = refSpend(bytes!);
+      expect(s.declared).toBe(s.moves);
+    } else expect(code).not.toMatch(/^not a/);
+  });
+});
+
+describe("P10: every refusal comes before any call of sign", () => {
+  it("P10 signSessionCall: the changing escrow getter is refused before sign is called, not after", () => {
+    const device = testDevice();
+    const i = { runtime: RUNTIME_ID, owner: OWNER, inner: flipEscrow(10n ** 21n, 1n), sessionNonce: 1n, accountNonce: 0, birth: birth(), signer: device } as ExtrinsicInput;
+    const code = codeOf(() => signSessionCall(i));
+    expect(code).not.toBeNull();
+    // The payload with an understated spend must never reach the device key.
+    expect(device.calls).toHaveLength(0);
+  });
+
+  it("P10 signSessionCall: a 32 byte field whose length lies (33 real bytes) is refused before sign is called", () => {
+    class Liar extends Uint8Array {
+      override get length() {
+        return 32;
+      }
+    }
+    const device = testDevice();
+    const miner = new Liar(33).fill(0x11);
+    const i = { runtime: RUNTIME_ID, owner: OWNER, inner: { ...S.force_open, miner }, sessionNonce: 1n, accountNonce: 0, birth: birth(), signer: device } as ExtrinsicInput;
+    codeOf(() => signSessionCall(i));
+    expect(device.calls).toHaveLength(0);
+  });
+});
+
+describe("P4: a 32 byte field is exactly 32 bytes", () => {
+  it("P4 encodeSessionCall: a Uint8Array subclass that says length 32 but holds 33 bytes is refused or written as 32", () => {
+    class Liar extends Uint8Array {
+      override get length() {
+        return 32;
+      }
+    }
+    const channel_id = new Liar(33).fill(0x22);
+    let bytes: Uint8Array | null = null;
+    const code = codeOf(() => (bytes = encodeSessionCall({ runtime: RUNTIME_ID, owner: OWNER, inner: { call: "timeout", channel_id }, sessionNonce: 1n })));
+    if (code === null) {
+      const honest = encodeSessionCall({ runtime: RUNTIME_ID, owner: OWNER, inner: { call: "timeout", channel_id: new Uint8Array(32).fill(0x22) }, sessionNonce: 1n });
+      expect(bytes!.length).toBe(honest.length);
+    } else expect(code).not.toMatch(/^not a/);
+  });
+});
+
+describe("P4: an input changed during sign or after the result cannot make the result say something else", () => {
+  it("P4: the birth hash changed inside sign leaves the description naming the hash that was signed", () => {
+    const device = testDevice();
+    const b = birth();
+    const signer = {
+      publicKey: device.publicKey,
+      sign(m: Uint8Array) {
+        const sig = device.sign(m);
+        b.hash.fill(0xee);
+        return sig;
+      },
+    };
+    const out = signSessionCall({ runtime: RUNTIME_ID, owner: OWNER, inner: S.timeout, sessionNonce: 1n, accountNonce: 0, birth: b, signer });
+    // The payload holds BIRTH_HASH (verified: the signature checks against it). The words must say so.
+    expect(out.description).toContain(BIRTH_HASH);
+    expect(hex(out.fields.birth.hash)).toBe(BIRTH_HASH);
+  });
+
+  it("P4: changing the caller's birth hash after the result is returned does not change the result", () => {
+    const device = testDevice();
+    const b = birth();
+    const out = signSessionCall({ runtime: RUNTIME_ID, owner: OWNER, inner: S.timeout, sessionNonce: 1n, accountNonce: 0, birth: b, signer: device });
+    b.hash.fill(0);
+    expect(hex(out.fields.birth.hash)).toBe(BIRTH_HASH);
+  });
+
+  it("P4: the public key swapped inside sign cannot make the result name another signer", () => {
+    const device = testDevice();
+    const other = ed25519.utils.randomSecretKey();
+    const otherPub = ed25519.getPublicKey(other);
+    const pk = Uint8Array.from(device.publicKey);
+    const signer = {
+      publicKey: pk,
+      sign(m: Uint8Array) {
+        pk.set(otherPub);
+        return ed25519.sign(m, other);
+      },
+    };
+    const original = Uint8Array.from(device.publicKey);
+    const code = codeOf(() => {
+      const out = signSessionCall({ runtime: RUNTIME_ID, owner: OWNER, inner: S.timeout, sessionNonce: 1n, accountNonce: 0, birth: birth(), signer });
+      expect(hex(out.fields.signer)).toBe(hex(original));
+    });
+    expect(code === null || code === "SIGNATURE_INVALID").toBe(true);
+  });
+});
+
+describe("P7: a signer that throws gets a typed refusal", () => {
+  it("P7: a sign function that throws gives a ChainEncodeError, not its own error", () => {
+    const device = testDevice();
+    const signer = {
+      publicKey: device.publicKey,
+      sign(): Uint8Array {
+        throw new Error("device unplugged");
+      },
+    };
+    const code = codeOf(() => signSessionCall({ runtime: RUNTIME_ID, owner: OWNER, inner: S.timeout, sessionNonce: 1n, accountNonce: 0, birth: birth(), signer }));
+    expect(code).not.toBeNull();
+    expect(code).not.toMatch(/^not a/);
+  });
+});
+
+describe("P2, P8, P9: no exported function describes or reads as allowed what the table does not allow", () => {
+  it("P2/P8 describeCall: data whose declared spend is below what the inner call moves is refused, not put into words", () => {
+    const data = { owner: OWNER, inner: { ...S.force_open, escrow: 10n ** 21n } as InnerCall, spend: 1n, sessionNonce: 1n };
+    const code = codeOf(() => describeCall(RT, data));
+    expect(code).not.toBeNull();
+  });
+
+  it("P2/P9 readCall: a Runtime object that is not in the table is refused, so Balances bytes are never read as ComputeChannel", () => {
+    // A copy of the reviewed runtime in which "ComputeChannel" sits at Balances' index 4.
+    const fake = JSON.parse(JSON.stringify(RT)) as Runtime & { calls: { pallet: string; palletIndex: number }[] };
+    for (const c of fake.calls) if (c.pallet === "ComputeChannel") c.palletIndex = 4;
+    const real = encodeSessionCall({ runtime: RUNTIME_ID, owner: OWNER, inner: S.timeout, sessionNonce: 1n });
+    const forged = Uint8Array.from(real);
+    forged[2 + 32] = 4; // the inner pallet byte: Balances
+    expect(codeOf(() => readCall(fake, forged))).toBe("RUNTIME_UNKNOWN");
+  });
+});
