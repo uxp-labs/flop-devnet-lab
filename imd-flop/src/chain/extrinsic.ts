@@ -87,8 +87,20 @@ function sessionCallBytes(rt: Runtime, input: SessionCallInput): Uint8Array {
   );
 }
 
+const CALL_KEYS = ["runtime", "owner", "inner", "sessionNonce"] as const;
+const EXTRINSIC_KEYS = [...CALL_KEYS, "accountNonce", "birth", "signer"] as const;
+
+/**
+ * Refuses an input with a key it does not name: there is no spend, era or tip to pass. The declared spend
+ * is computed, the era is always mortal and the tip always 0.
+ */
+function onlyKeys(input: unknown, keys: readonly string[], what: string): void {
+  exactKeys(input, keys.map((name) => ({ name, type: { kind: "unit" } as const })), what);
+}
+
 /** The call bytes of execute_via_session around one inner call. Nothing is signed. */
 export function encodeSessionCall(input: SessionCallInput): Uint8Array {
+  onlyKeys(input, CALL_KEYS, "the session call input");
   return sessionCallBytes(runtimeFor(input.runtime), input);
 }
 
@@ -149,6 +161,8 @@ function hexBytes(h: string): Uint8Array {
 
 /** Encodes and signs a session call. Every refusal but SIGNATURE_INVALID comes before the sign function is called. */
 export function signSessionCall(input: ExtrinsicInput): SignedSessionCall {
+  onlyKeys(input, EXTRINSIC_KEYS, "the extrinsic input");
+  onlyKeys(input.birth, ["number", "hash"], "the birth block");
   const rt = runtimeFor(input.runtime);
   const call = sessionCallBytes(rt, input);
   const publicKey = bytes32(input.signer?.publicKey, "the device public key");
