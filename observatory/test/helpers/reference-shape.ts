@@ -11,7 +11,8 @@ export function referenceShape(metadata: Uint8Array) {
   const REF = decAnyMetadata(metadata);
   const BUILDER = getDynamicBuilder(getLookupFn(unifyMetadata(REF)));
   if (REF.metadata.tag !== "v14") throw new Error("not v14");
-  const lk = REF.metadata.value.lookup;
+  const v14 = REF.metadata.value;
+  const lk = v14.lookup;
   const name = (id: number): string => {
     const t = lk[id];
     if (t === undefined) throw new Error(`no type ${id}`);
@@ -39,7 +40,7 @@ export function referenceShape(metadata: Uint8Array) {
     if (d?.tag !== "composite") throw new Error("not a composite");
     return d.value;
   };
-  const pallet = (n: string) => REF.metadata.value.pallets.find((p) => p.name === n);
+  const pallet = (n: string) => v14.pallets.find((p) => p.name === n);
   const entry = (p: string, e: string) => {
     const x = pallet(p)?.storage?.items.find((i) => i.name === e);
     if (x === undefined) throw new Error("no entry");

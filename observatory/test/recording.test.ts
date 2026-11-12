@@ -102,7 +102,7 @@ describe("judgeRecording", () => {
     expect(judgeRecording(files, OTHER_LIST)).toEqual({ usable: false, refused: ["run.json names another request list"] });
     const other = await recorded(OTHER_LIST, "other");
     // run.json names the list given, but the tape holds the calls of another, in another order.
-    const swapped = { ...other, "tape.jsonl": files["tape.jsonl"] as string };
+    const swapped: Record<string, string> = { ...other, "tape.jsonl": files["tape.jsonl"] as string };
     const doctored = { ...swapped, SHA256SUMS: sumsOf(RECORDING_FILES.map((n) => [n, swapped[n] as string] as const)) };
     expect(judgeRecording(doctored, OTHER_LIST)).toEqual({ usable: false, refused: ["tape.jsonl call 0 is not call 0 of the request list", "tape.jsonl call 1 is not call 1 of the request list"] });
     expect(judgeRecording(files, `${LIST} `)).toEqual({ usable: false, refused: ["the request list given is not in the written form"] });

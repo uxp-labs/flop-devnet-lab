@@ -378,7 +378,7 @@ describe("values decoded wrong, or valid values refused", () => {
           throw e;
         }
         const k = w.rnd.int(3);
-        let m = b.slice();
+        let m: Uint8Array = b.slice();
         if (k === 0 && m.length > 0) m.set([(m.at(w.rnd.int(m.length)) ?? 0) ^ (1 << w.rnd.int(8))], w.rnd.int(m.length));
         else if (k === 1 && m.length > 0) m = m.subarray(0, w.rnd.int(m.length));
         else m = cat(m, u8(w.rnd.int(256)));

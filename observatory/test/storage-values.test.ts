@@ -79,7 +79,7 @@ function sessionTerms(rec: { steps: { step: string; what: string }[] }) {
   const what = String(stepOf(rec as never, "2-create-session").what);
   const m = /lifetime cap (\d+) raw .*, per call (\d+) raw .*, per day (\d+) raw .*, for (\d+) blocks, allowed pallets (\w+(?:, \w+)*)$/.exec(what);
   if (m === null) throw new Error(`the create_session step does not state its terms: ${what}`);
-  return { spending_cap: m[1], per_tx_limit: m[2], daily_cap: m[3], duration_blocks: Number(m[4]), allowed_pallets: String(m[5]).split(", ") };
+  return { spending_cap: String(m[1]), per_tx_limit: String(m[2]), daily_cap: String(m[3]), duration_blocks: Number(m[4]), allowed_pallets: String(m[5]).split(", ") };
 }
 const hexText = (s: string) => `0x${Buffer.from(s, "utf8").toString("hex")}`;
 const BUILDER = getDynamicBuilder(getLookupFn(unifyMetadata(decAnyMetadata(S.metadata))));
@@ -647,7 +647,9 @@ function FIELDS(r: StorageRead): Record<string, Source> {
   if (r.read.keys.some((k) => "channel" in k && k.channel === "gateway")) {
     const md = parseMetadata(FIRST.metadata);
     const toploc = FIRST.blocks.flatMap((b) => decodeEvents(md, b.events)).find((e) => e.event === "ToplocEvidenceSubmitted" && (e.fields as Record<string, Decoded>).channel_id === S.inputs.channels.gateway.value);
-    return { ...read, miner: { b: (toploc?.fields as Record<string, Decoded>).miner } };
+    const miner = (toploc?.fields as Record<string, Decoded>).miner;
+    if (miner === undefined) throw new Error("the gateway's ToplocEvidenceSubmitted event names no miner");
+    return { ...read, miner: { b: miner } };
   }
   if (r.block === "session-escrow/7-expire-force-open") return { ...read, state: a({ variant: ESC.channel.record_after_step_7.state, fields: null }) };
   const rec = ESC.channel.record_after_step_4;

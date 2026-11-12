@@ -87,7 +87,7 @@ started_utc="$(utc)"
 # 1. Clean install from the lockfile, then a clean build.
 step install npm ci --no-audit --no-fund
 rm -rf dist
-step typecheck npx --no-install tsc -p tsconfig.json --noEmit
+step typecheck npx --no-install tsc -p tsconfig.check.json
 step build npx --no-install tsc -p tsconfig.json
 
 # 2. Unit, boundary and consistency tests. Any network, write, sign or spend attempt left in the

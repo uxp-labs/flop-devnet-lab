@@ -204,7 +204,7 @@ describe("page", () => {
     const base: Omit<Snapshot, "hash"> = {
       ...s,
       escrows: [{ ...esc1(ID_CLAIMED, "claimed", null), escrow_id: evil }],
-      drift: { schema: "flop-observatory/drift@0", observed_at: T, trust: "fixture", genesis: null, finalized_height: null, runtime_version: null, spec_source: evil, items: [{ param: evil, runtime_path: null, spec: evil, runtime: null, status: "unknown", note: evil }], mismatches: 0, unknown: 1 },
+      drift: { schema: "flop-observatory/drift@0", observed_at: T, trust: "fixture", genesis: null, finalized_height: null, runtime_version: null, spec_source: evil, items: [{ param: evil, runtime_path: null, spec: evil, runtime: null, status: "unknown", note: evil, mapping: "none", unit: null, expected: null }], runtime_observed_at: null, matches: 0, mismatches: 0, unknown: 1 },
     };
     const h = renderPage({ ...base, hash: hashSnapshot(base) });
     expect(h).not.toContain("<script");

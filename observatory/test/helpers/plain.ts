@@ -114,7 +114,8 @@ export function plain(md: Metadata, side: Side, id: number, v: unknown, depth = 
       if (side === "reference" && name === "Result" && v !== null && typeof v === "object" && "success" in v) {
         const r = v as { success: boolean; value: unknown };
         const x = d.variants.find((y) => y.name === (r.success ? "Ok" : "Err"));
-        return { tag: x?.name ?? fail("reference: a Result with no such variant", v), value: fieldsOf(md, side, x.fields, r.value, depth) };
+        if (x === undefined) return fail("reference: a Result with no such variant", v);
+        return { tag: x.name, value: fieldsOf(md, side, x.fields, r.value, depth) };
       }
       const tag = side === "ours" ? (v as { variant?: unknown } | null)?.variant : (v as { type?: unknown } | null)?.type;
       const value = side === "ours" ? (v as { fields?: unknown }).fields : (v as { value?: unknown }).value;

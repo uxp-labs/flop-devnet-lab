@@ -21,7 +21,11 @@ import { pathToFileURL } from "node:url";
 
 const EVENTS = new Set(["attempt", "reset", "checked"]);
 
-/** Checks journal text. Returns counts and every problem found, oldest first. */
+/**
+ * Checks journal text. Returns counts and every problem found, oldest first.
+ * @param {string} text
+ * @param {number | null} [expectFiles]
+ */
 export function checkJournal(text, expectFiles = null) {
   const runs = new Map();
   const problems = [];

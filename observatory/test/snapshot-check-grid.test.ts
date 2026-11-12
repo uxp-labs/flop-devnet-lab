@@ -86,10 +86,16 @@ const PLACES: Record<string, readonly (readonly [string, (s: Json) => Json])[]> 
   "upgrade.executing": [["the executing runtime", (s) => s.upgrade.executing]],
   "upgrade.authorized": [["the authorisation", (s) => s.upgrade.authorized]],
 };
+/** The places of one object; an object with none is a mistake in this table, so it throws. */
+function placesOf(object: string): readonly (readonly [string, (s: Json) => Json])[] {
+  const places = PLACES[object];
+  if (places === undefined) throw new Error(`no places for ${object}`);
+  return places;
+}
 
 describe("every field holds its type, wherever it sits (RULES.md section 5)", () => {
   for (const [object, fields] of TYPES)
-    for (const [place, at] of PLACES[object])
+    for (const [place, at] of placesOf(object))
       it(`${object} fields, in ${place}`, () => {
         const wrong: string[] = [];
         for (const [key, type] of fields)
@@ -134,7 +140,7 @@ function spoil(o: Json, object: string): void {
 
 describe("every object holds exactly its fields (RULES.md section 5)", () => {
   for (const [object, fields] of TYPES)
-    for (const [place, at] of PLACES[object])
+    for (const [place, at] of placesOf(object))
       it(`${object} field set, in ${place}`, () => {
         const edits: [string, (o: Json) => void][] = [["a field more", (o) => (o.more = 1)]];
         for (const [key] of fields) {
@@ -201,7 +207,7 @@ describe("many broken fields are each named once, in the order of checks (RULES.
   it("two broken fields, wherever each sits", () => {
     const places = TYPES.flatMap(([object, fields]) => {
       const [key, type] = fields.find(([k]) => PARTS[`${object}.${k}`] === undefined) as readonly [string, { outside: readonly Json[] }];
-      return PLACES[object].map(([place, at]) => ({ name: `${object}.${key}`, place, at, key, value: type.outside[0] }));
+      return placesOf(object).map(([place, at]) => ({ name: `${object}.${key}`, place, at, key, value: type.outside[0] }));
     });
     const wrong: string[] = [];
     for (const a of places)

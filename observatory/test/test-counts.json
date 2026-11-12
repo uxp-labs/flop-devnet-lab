@@ -215,6 +215,10 @@
     "tests": 26,
     "names": "8930de395c29d17c77813be51e2c5ec36cd04b7d46a1e906592736ab8ac5da72"
   },
+  "typecheck-config.test.ts": {
+    "tests": 4,
+    "names": "2bd52170161325d22d6fff54691ec7a95a5a28857ed1b7fe4045f5796a8a5617"
+  },
   "upgrade-decode.test.ts": {
     "tests": 9,
     "names": "589180382a40bf137c057cf61ea705ba94721219cac7adda656c40c61db2ad5e"

@@ -429,7 +429,7 @@ describe("the reader contract over a reading built on the log", () => {
     const { sumsOf } = await import("../src/sums.js");
     const { PUBLISHED_FILES } = await import("../src/published.js");
     const withHistory = (history: unknown) => {
-      const g = { ...f, "run.json": feedText({ ...runJson, history }) };
+      const g: Record<string, string> = { ...f, "run.json": feedText({ ...runJson, history }) };
       return judgeLatest({ ...g, SHA256SUMS: sumsOf(PUBLISHED_FILES.map((n) => [n, g[n] as string] as const)) }, { now: NOW, maxAgeSeconds: 3600 });
     };
     const why = { usable: false, refused: ["run.json does not name the published log the snapshot follows"] };

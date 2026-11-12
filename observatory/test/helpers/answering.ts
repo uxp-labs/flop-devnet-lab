@@ -16,7 +16,7 @@ export function network(reply: (method: string, params: unknown[]) => Reply, o: 
     private readonly listeners: [string, (e: SocketEvent) => void][] = [];
     constructor(_url: string) {
       made.push(this.sent);
-      setTimeout(() => (o.failOpen ? this.emit("error", { message: "connection refused" }) : this.emit("open")), 0);
+      setTimeout(() => (o.failOpen ? this.emit("error", { message: "connection refused" }) : this.emit("open", {})), 0);
     }
     addEventListener(type: string, l: (e: SocketEvent) => void): void {
       this.listeners.push([type, l]);
