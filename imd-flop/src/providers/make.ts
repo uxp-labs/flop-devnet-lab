@@ -25,23 +25,24 @@ interface Maker {
   quote(ctx: MakeContext): Provider;
 }
 
-const MAKERS: Record<ProviderName, Maker> = {
-  mock: {
+/** The makers, frozen with the table: a caller cannot swap one at run time. */
+const MAKERS: Readonly<Record<ProviderName, Readonly<Maker>>> = Object.freeze({
+  mock: Object.freeze<Maker>({
     run(_ctx, use) {
       const sc = (use.scenario ?? "ok") as MockScenario;
       if (!MOCK_SCENARIOS.includes(sc)) throw new CliError(`--mock-scenario must be one of ${MOCK_SCENARIOS.join(", ")}`, EXIT.USAGE);
       return new MockProvider(sc);
     },
     quote: () => new MockProvider(),
-  },
-  flop: {
+  }),
+  flop: Object.freeze<Maker>({
     run(ctx, use) {
       if (!use.live) throw new CliError("--provider flop spends real devnet FLOP: it needs --live, a cap, a fully signed link and an enrolled gateway key", EXIT.REFUSED_RULE);
       return new FlopProvider(network(loadConfig(ctx.home).network), gatewayKeyFile(ctx.home, use.seat), ctx.fetch, ctx.env.ETH_RPC_URL);
     },
-    quote: (ctx) => gatewayQuoteProvider(() => network(loadConfig(ctx.home).network), ctx.fetch ?? globalThis.fetch),
-  },
-};
+    quote: (ctx) => gatewayQuoteProvider(() => network(loadConfig(ctx.home).network), ctx.fetch),
+  }),
+});
 
 /**
  * A provider of the named kind, for its use. A name not in the table: a run (or a refresh) refuses with a usage

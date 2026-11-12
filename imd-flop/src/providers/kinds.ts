@@ -14,18 +14,21 @@ export interface ProviderKind {
   readonly needsWalletLink: boolean;
 }
 
-const TABLE = [
-  { name: "mock", kind: { paid: false, mock: true, needsWalletLink: false } },
-  { name: "flop", kind: { paid: true, mock: false, needsWalletLink: true } },
-] as const satisfies readonly { name: string; kind: ProviderKind }[];
+/** An entry and its kind, frozen: nothing in the table can be changed at run time. */
+const entry = <N extends string>(name: N, kind: ProviderKind) => Object.freeze({ name, kind: Object.freeze({ ...kind }) });
+
+const TABLE = Object.freeze([
+  entry("mock", { paid: false, mock: true, needsWalletLink: false }),
+  entry("flop", { paid: true, mock: false, needsWalletLink: true }),
+] as const);
 
 export type ProviderName = (typeof TABLE)[number]["name"];
 
 /** Every provider name, in the order of contract/rules.json LEDGER_PROVIDERS. */
-export const PROVIDER_NAMES: readonly ProviderName[] = TABLE.map((e) => e.name);
+export const PROVIDER_NAMES: readonly ProviderName[] = Object.freeze(TABLE.map((e) => e.name));
 
 /** The same names with the paid ones first: the order `status` and `cap show` print them in. */
-export const PROVIDER_NAMES_PAID_FIRST: readonly ProviderName[] = [...TABLE.filter((e) => e.kind.paid), ...TABLE.filter((e) => !e.kind.paid)].map((e) => e.name);
+export const PROVIDER_NAMES_PAID_FIRST: readonly ProviderName[] = Object.freeze([...TABLE.filter((e) => e.kind.paid), ...TABLE.filter((e) => !e.kind.paid)].map((e) => e.name));
 
 /** The provider a command uses when none is named. */
 export const DEFAULT_PROVIDER: ProviderName = TABLE[0].name;
