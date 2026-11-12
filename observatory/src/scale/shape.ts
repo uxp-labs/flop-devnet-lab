@@ -36,14 +36,14 @@ export const SHAPE_SCHEMA = "flop-observatory/decoder-shape@2";
  * The storage entries the shape states, by pallet and entry name: the only entries whose values
  * real chain data is decoded from (src/scale/block.ts).
  */
-export const STATED_ENTRIES: readonly (readonly [pallet: string, entry: string])[] = [
-  ["System", "Events"],
-  ["System", "LastRuntimeUpgrade"],
-  ["ComputeChannel", "Channels"],
-  ["FlopSessionKeys", "Sessions"],
-  ["FlopSessionKeys", "SessionNonces"],
-  ["FlopSessionKeys", "CircuitBreakers"],
-];
+export const STATED_ENTRIES: readonly (readonly [pallet: string, entry: string])[] = Object.freeze([
+  Object.freeze(["System", "Events"] as const),
+  Object.freeze(["System", "LastRuntimeUpgrade"] as const),
+  Object.freeze(["ComputeChannel", "Channels"] as const),
+  Object.freeze(["FlopSessionKeys", "Sessions"] as const),
+  Object.freeze(["FlopSessionKeys", "SessionNonces"] as const),
+  Object.freeze(["FlopSessionKeys", "CircuitBreakers"] as const),
+]);
 /** How deep one name may nest. */
 export const MAX_NAME_DEPTH = 16;
 /** How many types one name may visit, a type named again included. */
@@ -68,17 +68,33 @@ export interface ReviewedShape {
 /**
  * Each entry here is a review: a reviewer read the shape file and the metadata it came from, and a
  * test derives the file a second way, from the reference decoder's own parse of that metadata.
+ * The list and each line are frozen when the module loads, and no reference to a line ever leaves
+ * src/scale: every answer carries a fresh copy (reviewedCopy), so no caller can change what was
+ * reviewed.
  */
-export const REVIEWED: readonly ReviewedShape[] = [
-  {
+export const REVIEWED: readonly ReviewedShape[] = Object.freeze([
+  Object.freeze({
     specName: "tzkv-runtime",
     specVersion: 1014014,
     metadataSha256: "f4fd2addba7fff1129483d0e66b8e6bc69141292f56443e201d3f073aab03444",
     metadataBytes: 482132,
     shapeFile: "shapes/tzkv-runtime-1014014.json",
     shapeSha256: "679f98aa06abf1d9b376fe4243e4d13c1b5ae80e9b6cdf1fd1e0190c1e7660e7",
-  },
-];
+  }),
+  Object.freeze({
+    specName: "tzkv-runtime",
+    specVersion: 1014020,
+    metadataSha256: "91294eb61225c4de7459e6a8fed3c37169a2c8a1b1906b46a5890d5e0d328238",
+    metadataBytes: 487100,
+    shapeFile: "shapes/tzkv-runtime-1014020.json",
+    shapeSha256: "650b34919b04744dbbfbaaf917ce83aa804ae361d53f8c15f3979f604574dc81",
+  }),
+]);
+
+/** A fresh copy of a reviewed line: the one way a line leaves src/scale, so a write to an answer changes no line. */
+export function reviewedCopy(r: ReviewedShape): ReviewedShape {
+  return { specName: r.specName, specVersion: r.specVersion, metadataSha256: r.metadataSha256, metadataBytes: r.metadataBytes, shapeFile: r.shapeFile, shapeSha256: r.shapeSha256 };
+}
 
 export type ShapeValue = null | boolean | number | string | ShapeValue[] | { [key: string]: ShapeValue };
 
@@ -461,12 +477,11 @@ function upgradeOf(md: Metadata, bytes: Uint8Array): { [name: string]: Decoded }
 }
 
 /**
- * Whether a block may be decoded with this metadata: only when the spec is a reviewed one, the
- * metadata bytes are the reviewed bytes, the shape file is the reviewed file and equals the shape
- * derived again from the metadata, and the block's LastRuntimeUpgrade names the same spec.
- * Otherwise it refuses, and says which of these failed.
+ * The pin with the reviewed line itself, for the doors in src/scale/block.ts only: each copies the
+ * line into its own answer with reviewedCopy. Nothing outside src/scale calls it (the source scan
+ * lets a src module outside src/scale import only block.ts), and the line it holds is frozen.
  */
-export function pinShape(input: PinInput): Pin {
+export function pinLine(input: PinInput): Pin {
   let i: PinInput;
   try {
     i = copyPinInput(input);
@@ -494,4 +509,15 @@ export function pinShape(input: PinInput): Pin {
     if (e instanceof ScaleError) return refuse(e.message);
     throw e;
   }
+}
+
+/**
+ * Whether a block may be decoded with this metadata: only when the spec is a reviewed one, the
+ * metadata bytes are the reviewed bytes, the shape file is the reviewed file and equals the shape
+ * derived again from the metadata, and the block's LastRuntimeUpgrade names the same spec.
+ * Otherwise it refuses, and says which of these failed. Its answer carries a fresh copy of the line.
+ */
+export function pinShape(input: PinInput): Pin {
+  const p = pinLine(input);
+  return p.pinned ? { pinned: true, metadata: p.metadata, reviewed: reviewedCopy(p.reviewed) } : p;
 }

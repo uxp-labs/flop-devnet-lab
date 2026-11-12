@@ -1,0 +1,490 @@
+{
+  "calls": [
+    {
+      "method": "chain_getFinalizedHead",
+      "params": [],
+      "why": "the finalized head when the run read it: every block below must be at or under it"
+    },
+    {
+      "method": "chain_getBlockHash",
+      "params": [
+        0
+      ],
+      "why": "the genesis hash, so the recording names the chain it was read from"
+    },
+    {
+      "method": "chain_getBlockHash",
+      "params": [
+        3528527
+      ],
+      "why": "the canonical hash at height 3528527, to compare with 0x57d233b502269f6658673c7059331a9ff926680dcceb2fc9af0d00275fdb4e71, the hash the lab's reads of the runtime upgrade hold for the last block before the runtime upgrade"
+    },
+    {
+      "method": "chain_getBlockHash",
+      "params": [
+        3528528
+      ],
+      "why": "the canonical hash at height 3528528, to compare with 0x187a4c5b16a8d3c20f710ccd4a275d7bb2426311dd89ae14da0728d6504145c2, the hash the lab's reads of the runtime upgrade hold for the block that carries the runtime upgrade, executed by the old runtime"
+    },
+    {
+      "method": "chain_getBlockHash",
+      "params": [
+        3528529
+      ],
+      "why": "the canonical hash at height 3528529, to compare with 0x1507e7343ff4914ea9ad6871731c0307ffbbb1b244def06d9f071557f6cf9d94, the hash the lab's reads of the runtime upgrade hold for the first block the new runtime executed"
+    },
+    {
+      "method": "chain_getBlockHash",
+      "params": [
+        3530299
+      ],
+      "why": "the canonical hash at height 3530299, to compare with 0x1bfd0be722963f829c4f8c732fbb237e4f5f1c06dd7a399b8d3cd9be1ab8174f, the hash the lab's reads of the runtime upgrade hold for a later finalized block of the new runtime, the finalized block of the lab's own published reading after the upgrade"
+    },
+    {
+      "method": "state_getRuntimeVersion",
+      "params": [
+        "0x57d233b502269f6658673c7059331a9ff926680dcceb2fc9af0d00275fdb4e71"
+      ],
+      "why": "the runtime version at block 3528527, the last block before the runtime upgrade: it answers for the runtime of the next block, 3528528, which the old runtime executed"
+    },
+    {
+      "method": "state_getRuntimeVersion",
+      "params": [
+        "0x187a4c5b16a8d3c20f710ccd4a275d7bb2426311dd89ae14da0728d6504145c2"
+      ],
+      "why": "the runtime version at block 3528528, the block that carries the runtime upgrade, executed by the old runtime: it answers for the runtime of the next block, 3528529, the first the new runtime executed, and not for this block, which the old runtime executed"
+    },
+    {
+      "method": "state_getRuntimeVersion",
+      "params": [
+        "0x1507e7343ff4914ea9ad6871731c0307ffbbb1b244def06d9f071557f6cf9d94"
+      ],
+      "why": "the runtime version at block 3528529, the first block the new runtime executed: it answers for the runtime of the next block, the new runtime again"
+    },
+    {
+      "method": "state_getRuntimeVersion",
+      "params": [
+        "0x1bfd0be722963f829c4f8c732fbb237e4f5f1c06dd7a399b8d3cd9be1ab8174f"
+      ],
+      "why": "the runtime version at block 3530299, a later finalized block of the new runtime, the finalized block of the lab's own published reading after the upgrade: it answers for the runtime of the next block, the new runtime"
+    },
+    {
+      "method": "state_getMetadata",
+      "params": [
+        "0x57d233b502269f6658673c7059331a9ff926680dcceb2fc9af0d00275fdb4e71"
+      ],
+      "why": "the metadata at block 3528527, the last block before the runtime upgrade: it answers for the runtime of the next block, 3528528, so it should be the old runtime's, the metadata every block up to 3528528 is decoded with"
+    },
+    {
+      "method": "state_getMetadata",
+      "params": [
+        "0x187a4c5b16a8d3c20f710ccd4a275d7bb2426311dd89ae14da0728d6504145c2"
+      ],
+      "why": "the metadata at block 3528528, the block that carries the runtime upgrade, executed by the old runtime: it answers for the runtime of the next block, so it should be the new runtime's, the metadata blocks 3528529 and later are decoded with, and not the metadata of this block itself"
+    },
+    {
+      "method": "state_getStorage",
+      "params": [
+        "0x26aa394eea5630e07c48ae0c9558cef7f9cce9c888469bb1a0dceaa129672ef8",
+        "0x57d233b502269f6658673c7059331a9ff926680dcceb2fc9af0d00275fdb4e71"
+      ],
+      "why": "System.LastRuntimeUpgrade at block 3528527, the last block before the runtime upgrade: the runtime that executed the block, which the shape pin reads before anything is decoded; it should name the old runtime"
+    },
+    {
+      "method": "state_getStorage",
+      "params": [
+        "0x26aa394eea5630e07c48ae0c9558cef7f9cce9c888469bb1a0dceaa129672ef8",
+        "0x187a4c5b16a8d3c20f710ccd4a275d7bb2426311dd89ae14da0728d6504145c2"
+      ],
+      "why": "System.LastRuntimeUpgrade at block 3528528, the block that carries the runtime upgrade, executed by the old runtime: the runtime that executed the block, which the shape pin reads before anything is decoded; it should still name the old runtime, which executed this block though the version and metadata read here answer for the new one"
+    },
+    {
+      "method": "state_getStorage",
+      "params": [
+        "0x26aa394eea5630e07c48ae0c9558cef7f9cce9c888469bb1a0dceaa129672ef8",
+        "0x1507e7343ff4914ea9ad6871731c0307ffbbb1b244def06d9f071557f6cf9d94"
+      ],
+      "why": "System.LastRuntimeUpgrade at block 3528529, the first block the new runtime executed: the runtime that executed the block, which the shape pin reads before anything is decoded; the first block where it should name the new runtime"
+    },
+    {
+      "method": "state_getStorage",
+      "params": [
+        "0x26aa394eea5630e07c48ae0c9558cef7f9cce9c888469bb1a0dceaa129672ef8",
+        "0x1bfd0be722963f829c4f8c732fbb237e4f5f1c06dd7a399b8d3cd9be1ab8174f"
+      ],
+      "why": "System.LastRuntimeUpgrade at block 3530299, a later finalized block of the new runtime, the finalized block of the lab's own published reading after the upgrade: the runtime that executed the block, which the shape pin reads before anything is decoded; it should name the new runtime"
+    },
+    {
+      "method": "state_getStorage",
+      "params": [
+        "0x26aa394eea5630e07c48ae0c9558cef780d41e5e16056765bc8461851072c9d7",
+        "0x57d233b502269f6658673c7059331a9ff926680dcceb2fc9af0d00275fdb4e71"
+      ],
+      "why": "System.Events at block 3528527, the last block before the runtime upgrade, in the old runtime's encoding"
+    },
+    {
+      "method": "state_getStorage",
+      "params": [
+        "0x26aa394eea5630e07c48ae0c9558cef780d41e5e16056765bc8461851072c9d7",
+        "0x187a4c5b16a8d3c20f710ccd4a275d7bb2426311dd89ae14da0728d6504145c2"
+      ],
+      "why": "System.Events at block 3528528, the block that carries the runtime upgrade, executed by the old runtime, the events of the upgrade itself, System.CodeUpdated among them, in the old runtime's encoding"
+    },
+    {
+      "method": "state_getStorage",
+      "params": [
+        "0x26aa394eea5630e07c48ae0c9558cef780d41e5e16056765bc8461851072c9d7",
+        "0x1507e7343ff4914ea9ad6871731c0307ffbbb1b244def06d9f071557f6cf9d94"
+      ],
+      "why": "System.Events at block 3528529, the first block the new runtime executed, in the new runtime's encoding, decoded only once the next phase has a reviewed shape for it"
+    },
+    {
+      "method": "state_getStorage",
+      "params": [
+        "0x26aa394eea5630e07c48ae0c9558cef780d41e5e16056765bc8461851072c9d7",
+        "0x1bfd0be722963f829c4f8c732fbb237e4f5f1c06dd7a399b8d3cd9be1ab8174f"
+      ],
+      "why": "System.Events at block 3530299, a later finalized block of the new runtime, the finalized block of the lab's own published reading after the upgrade, in the new runtime's encoding, decoded only once the next phase has a reviewed shape for it"
+    },
+    {
+      "method": "state_getStorage",
+      "params": [
+        "0x26d6680094539fc341d5ea8ffc79d76f028685274e698e781f7f2766cba0cc83f9edc9e72d99b3c30da8e2d40b25bd41e462d014cab1239a123233647052f4e3b572322e982441d6b7a5c1694d8419e20c9f9689bab3fb3a3594476c696ec0001ec8abdfa88707679f8a2fbfc0bcd80184e2f731d91bb9fa152b750210556c7f",
+        "0x57d233b502269f6658673c7059331a9ff926680dcceb2fc9af0d00275fdb4e71"
+      ],
+      "why": "FlopSessionKeys.Sessions of owner S 0xe462d014... and device D1 0x1ec8abdf... at block 3528527, the last block before the runtime upgrade: the control for the same key at block 3530299, so the next phase can say byte for byte whether the upgrade changed this stored value"
+    },
+    {
+      "method": "state_getStorage",
+      "params": [
+        "0x26d6680094539fc341d5ea8ffc79d76fa8bf8c9b4fb4963e0d891d0ea6eb7b2cf9edc9e72d99b3c30da8e2d40b25bd41e462d014cab1239a123233647052f4e3b572322e982441d6b7a5c1694d8419e20c9f9689bab3fb3a3594476c696ec0001ec8abdfa88707679f8a2fbfc0bcd80184e2f731d91bb9fa152b750210556c7f",
+        "0x57d233b502269f6658673c7059331a9ff926680dcceb2fc9af0d00275fdb4e71"
+      ],
+      "why": "FlopSessionKeys.SessionNonces of owner S 0xe462d014... and device D1 0x1ec8abdf... at block 3528527, the last block before the runtime upgrade: the control for the same key at block 3530299, so the next phase can say byte for byte whether the upgrade changed this stored value"
+    },
+    {
+      "method": "state_getStorage",
+      "params": [
+        "0x26d6680094539fc341d5ea8ffc79d76f8ab2f41796e7514fa8610f8d361c94e70c9f9689bab3fb3a3594476c696ec0001ec8abdfa88707679f8a2fbfc0bcd80184e2f731d91bb9fa152b750210556c7f",
+        "0x57d233b502269f6658673c7059331a9ff926680dcceb2fc9af0d00275fdb4e71"
+      ],
+      "why": "FlopSessionKeys.CircuitBreakers of device D1 0x1ec8abdf... at block 3528527, the last block before the runtime upgrade: the control for the same key at block 3530299, so the next phase can say byte for byte whether the upgrade changed this stored value"
+    },
+    {
+      "method": "state_getStorage",
+      "params": [
+        "0x26d6680094539fc341d5ea8ffc79d76f028685274e698e781f7f2766cba0cc83f9edc9e72d99b3c30da8e2d40b25bd41e462d014cab1239a123233647052f4e3b572322e982441d6b7a5c1694d8419e2f965517ca088055ccc7117b1775fdec6d03f3dc1fa4ff1d0a615285a474e11c0d6f00dbaa5f4d827ad487239502bc3d2",
+        "0x57d233b502269f6658673c7059331a9ff926680dcceb2fc9af0d00275fdb4e71"
+      ],
+      "why": "FlopSessionKeys.Sessions of owner S 0xe462d014... and device D2 0xd03f3dc1... at block 3528527, the last block before the runtime upgrade: the control for the same key at block 3530299, so the next phase can say byte for byte whether the upgrade changed this stored value"
+    },
+    {
+      "method": "state_getStorage",
+      "params": [
+        "0x26d6680094539fc341d5ea8ffc79d76fa8bf8c9b4fb4963e0d891d0ea6eb7b2cf9edc9e72d99b3c30da8e2d40b25bd41e462d014cab1239a123233647052f4e3b572322e982441d6b7a5c1694d8419e2f965517ca088055ccc7117b1775fdec6d03f3dc1fa4ff1d0a615285a474e11c0d6f00dbaa5f4d827ad487239502bc3d2",
+        "0x57d233b502269f6658673c7059331a9ff926680dcceb2fc9af0d00275fdb4e71"
+      ],
+      "why": "FlopSessionKeys.SessionNonces of owner S 0xe462d014... and device D2 0xd03f3dc1... at block 3528527, the last block before the runtime upgrade: the control for the same key at block 3530299, so the next phase can say byte for byte whether the upgrade changed this stored value"
+    },
+    {
+      "method": "state_getStorage",
+      "params": [
+        "0x26d6680094539fc341d5ea8ffc79d76f8ab2f41796e7514fa8610f8d361c94e7f965517ca088055ccc7117b1775fdec6d03f3dc1fa4ff1d0a615285a474e11c0d6f00dbaa5f4d827ad487239502bc3d2",
+        "0x57d233b502269f6658673c7059331a9ff926680dcceb2fc9af0d00275fdb4e71"
+      ],
+      "why": "FlopSessionKeys.CircuitBreakers of device D2 0xd03f3dc1... at block 3528527, the last block before the runtime upgrade: the control for the same key at block 3530299, so the next phase can say byte for byte whether the upgrade changed this stored value"
+    },
+    {
+      "method": "state_getStorage",
+      "params": [
+        "0x26d6680094539fc341d5ea8ffc79d76f028685274e698e781f7f2766cba0cc83f9edc9e72d99b3c30da8e2d40b25bd41e462d014cab1239a123233647052f4e3b572322e982441d6b7a5c1694d8419e2b20971a78bf668f110f8371dc6ba44efa68ab764d2b02c8d8179df350b56c873b832e2b1f63e858bd1a376d2b89bba23",
+        "0x57d233b502269f6658673c7059331a9ff926680dcceb2fc9af0d00275fdb4e71"
+      ],
+      "why": "FlopSessionKeys.Sessions of owner S 0xe462d014... and device D3 0xa68ab764... at block 3528527, the last block before the runtime upgrade: the control for the same key at block 3530299, so the next phase can say byte for byte whether the upgrade changed this stored value"
+    },
+    {
+      "method": "state_getStorage",
+      "params": [
+        "0x26d6680094539fc341d5ea8ffc79d76fa8bf8c9b4fb4963e0d891d0ea6eb7b2cf9edc9e72d99b3c30da8e2d40b25bd41e462d014cab1239a123233647052f4e3b572322e982441d6b7a5c1694d8419e2b20971a78bf668f110f8371dc6ba44efa68ab764d2b02c8d8179df350b56c873b832e2b1f63e858bd1a376d2b89bba23",
+        "0x57d233b502269f6658673c7059331a9ff926680dcceb2fc9af0d00275fdb4e71"
+      ],
+      "why": "FlopSessionKeys.SessionNonces of owner S 0xe462d014... and device D3 0xa68ab764... at block 3528527, the last block before the runtime upgrade: the control for the same key at block 3530299, so the next phase can say byte for byte whether the upgrade changed this stored value"
+    },
+    {
+      "method": "state_getStorage",
+      "params": [
+        "0x26d6680094539fc341d5ea8ffc79d76f8ab2f41796e7514fa8610f8d361c94e7b20971a78bf668f110f8371dc6ba44efa68ab764d2b02c8d8179df350b56c873b832e2b1f63e858bd1a376d2b89bba23",
+        "0x57d233b502269f6658673c7059331a9ff926680dcceb2fc9af0d00275fdb4e71"
+      ],
+      "why": "FlopSessionKeys.CircuitBreakers of device D3 0xa68ab764... at block 3528527, the last block before the runtime upgrade: the control for the same key at block 3530299, so the next phase can say byte for byte whether the upgrade changed this stored value"
+    },
+    {
+      "method": "state_getStorage",
+      "params": [
+        "0x130ba67ef498736437f36679a246a7547759ccc18de172078306ca5973251a7baff357bcc05bbc82594d4b684487230ae5655fd56d18ac9816623fd975d501322a7427fe5568c7aa02a19cf04dfd12dc",
+        "0x57d233b502269f6658673c7059331a9ff926680dcceb2fc9af0d00275fdb4e71"
+      ],
+      "why": "ComputeChannel.Channels of our channel 0xe5655fd5... at block 3528527, the last block before the runtime upgrade: the control for the same key at block 3530299, so the next phase can say byte for byte whether the upgrade changed this stored value"
+    },
+    {
+      "method": "state_getStorage",
+      "params": [
+        "0x130ba67ef498736437f36679a246a7547759ccc18de172078306ca5973251a7b4cbe4c8d8d511e4fa7196fdba7c3819c9f81f65bc93855d394329e4996bc78d949bb786178f3471c13d3853f9813ddd7",
+        "0x57d233b502269f6658673c7059331a9ff926680dcceb2fc9af0d00275fdb4e71"
+      ],
+      "why": "ComputeChannel.Channels of the gateway channel 0x9f81f65b... at block 3528527, the last block before the runtime upgrade: the control for the same key at block 3530299, so the next phase can say byte for byte whether the upgrade changed this stored value"
+    },
+    {
+      "method": "state_getStorage",
+      "params": [
+        "0x26d6680094539fc341d5ea8ffc79d76fa8bf8c9b4fb4963e0d891d0ea6eb7b2c0c9f9689bab3fb3a3594476c696ec0001ec8abdfa88707679f8a2fbfc0bcd80184e2f731d91bb9fa152b750210556c7ff9edc9e72d99b3c30da8e2d40b25bd41e462d014cab1239a123233647052f4e3b572322e982441d6b7a5c1694d8419e2",
+        "0x57d233b502269f6658673c7059331a9ff926680dcceb2fc9af0d00275fdb4e71"
+      ],
+      "why": "FlopSessionKeys.SessionNonces of device D1 0x1ec8abdf... and owner S 0xe462d014... at block 3528527, the last block before the runtime upgrade: the control for the same key at block 3530299, so the next phase can say byte for byte whether the upgrade changed this stored value; device D1 as owner and owner S as device are a pair that never had a session, so its nonce should be the default"
+    },
+    {
+      "method": "state_getStorage",
+      "params": [
+        "0x26d6680094539fc341d5ea8ffc79d76f028685274e698e781f7f2766cba0cc83f9edc9e72d99b3c30da8e2d40b25bd41e462d014cab1239a123233647052f4e3b572322e982441d6b7a5c1694d8419e20c9f9689bab3fb3a3594476c696ec0001ec8abdfa88707679f8a2fbfc0bcd80184e2f731d91bb9fa152b750210556c7f",
+        "0x1bfd0be722963f829c4f8c732fbb237e4f5f1c06dd7a399b8d3cd9be1ab8174f"
+      ],
+      "why": "FlopSessionKeys.Sessions of owner S 0xe462d014... and device D1 0x1ec8abdf... at block 3530299, a later finalized block of the new runtime, the finalized block of the lab's own published reading after the upgrade, the same key as at block 3528527; the key is built from the old runtime's metadata, since no committed file holds the new one yet, so a null here is not read as absent until the next phase has built the same key again from the recorded new metadata, and the read at block 3528527 is the control"
+    },
+    {
+      "method": "state_getStorage",
+      "params": [
+        "0x26d6680094539fc341d5ea8ffc79d76fa8bf8c9b4fb4963e0d891d0ea6eb7b2cf9edc9e72d99b3c30da8e2d40b25bd41e462d014cab1239a123233647052f4e3b572322e982441d6b7a5c1694d8419e20c9f9689bab3fb3a3594476c696ec0001ec8abdfa88707679f8a2fbfc0bcd80184e2f731d91bb9fa152b750210556c7f",
+        "0x1bfd0be722963f829c4f8c732fbb237e4f5f1c06dd7a399b8d3cd9be1ab8174f"
+      ],
+      "why": "FlopSessionKeys.SessionNonces of owner S 0xe462d014... and device D1 0x1ec8abdf... at block 3530299, a later finalized block of the new runtime, the finalized block of the lab's own published reading after the upgrade, the same key as at block 3528527; the key is built from the old runtime's metadata, since no committed file holds the new one yet, so a null here is not read as absent until the next phase has built the same key again from the recorded new metadata, and the read at block 3528527 is the control"
+    },
+    {
+      "method": "state_getStorage",
+      "params": [
+        "0x26d6680094539fc341d5ea8ffc79d76f8ab2f41796e7514fa8610f8d361c94e70c9f9689bab3fb3a3594476c696ec0001ec8abdfa88707679f8a2fbfc0bcd80184e2f731d91bb9fa152b750210556c7f",
+        "0x1bfd0be722963f829c4f8c732fbb237e4f5f1c06dd7a399b8d3cd9be1ab8174f"
+      ],
+      "why": "FlopSessionKeys.CircuitBreakers of device D1 0x1ec8abdf... at block 3530299, a later finalized block of the new runtime, the finalized block of the lab's own published reading after the upgrade, the same key as at block 3528527; the key is built from the old runtime's metadata, since no committed file holds the new one yet, so a null here is not read as absent until the next phase has built the same key again from the recorded new metadata, and the read at block 3528527 is the control"
+    },
+    {
+      "method": "state_getStorage",
+      "params": [
+        "0x26d6680094539fc341d5ea8ffc79d76f028685274e698e781f7f2766cba0cc83f9edc9e72d99b3c30da8e2d40b25bd41e462d014cab1239a123233647052f4e3b572322e982441d6b7a5c1694d8419e2f965517ca088055ccc7117b1775fdec6d03f3dc1fa4ff1d0a615285a474e11c0d6f00dbaa5f4d827ad487239502bc3d2",
+        "0x1bfd0be722963f829c4f8c732fbb237e4f5f1c06dd7a399b8d3cd9be1ab8174f"
+      ],
+      "why": "FlopSessionKeys.Sessions of owner S 0xe462d014... and device D2 0xd03f3dc1... at block 3530299, a later finalized block of the new runtime, the finalized block of the lab's own published reading after the upgrade, the same key as at block 3528527; the key is built from the old runtime's metadata, since no committed file holds the new one yet, so a null here is not read as absent until the next phase has built the same key again from the recorded new metadata, and the read at block 3528527 is the control"
+    },
+    {
+      "method": "state_getStorage",
+      "params": [
+        "0x26d6680094539fc341d5ea8ffc79d76fa8bf8c9b4fb4963e0d891d0ea6eb7b2cf9edc9e72d99b3c30da8e2d40b25bd41e462d014cab1239a123233647052f4e3b572322e982441d6b7a5c1694d8419e2f965517ca088055ccc7117b1775fdec6d03f3dc1fa4ff1d0a615285a474e11c0d6f00dbaa5f4d827ad487239502bc3d2",
+        "0x1bfd0be722963f829c4f8c732fbb237e4f5f1c06dd7a399b8d3cd9be1ab8174f"
+      ],
+      "why": "FlopSessionKeys.SessionNonces of owner S 0xe462d014... and device D2 0xd03f3dc1... at block 3530299, a later finalized block of the new runtime, the finalized block of the lab's own published reading after the upgrade, the same key as at block 3528527; the key is built from the old runtime's metadata, since no committed file holds the new one yet, so a null here is not read as absent until the next phase has built the same key again from the recorded new metadata, and the read at block 3528527 is the control"
+    },
+    {
+      "method": "state_getStorage",
+      "params": [
+        "0x26d6680094539fc341d5ea8ffc79d76f8ab2f41796e7514fa8610f8d361c94e7f965517ca088055ccc7117b1775fdec6d03f3dc1fa4ff1d0a615285a474e11c0d6f00dbaa5f4d827ad487239502bc3d2",
+        "0x1bfd0be722963f829c4f8c732fbb237e4f5f1c06dd7a399b8d3cd9be1ab8174f"
+      ],
+      "why": "FlopSessionKeys.CircuitBreakers of device D2 0xd03f3dc1... at block 3530299, a later finalized block of the new runtime, the finalized block of the lab's own published reading after the upgrade, the same key as at block 3528527; the key is built from the old runtime's metadata, since no committed file holds the new one yet, so a null here is not read as absent until the next phase has built the same key again from the recorded new metadata, and the read at block 3528527 is the control"
+    },
+    {
+      "method": "state_getStorage",
+      "params": [
+        "0x26d6680094539fc341d5ea8ffc79d76f028685274e698e781f7f2766cba0cc83f9edc9e72d99b3c30da8e2d40b25bd41e462d014cab1239a123233647052f4e3b572322e982441d6b7a5c1694d8419e2b20971a78bf668f110f8371dc6ba44efa68ab764d2b02c8d8179df350b56c873b832e2b1f63e858bd1a376d2b89bba23",
+        "0x1bfd0be722963f829c4f8c732fbb237e4f5f1c06dd7a399b8d3cd9be1ab8174f"
+      ],
+      "why": "FlopSessionKeys.Sessions of owner S 0xe462d014... and device D3 0xa68ab764... at block 3530299, a later finalized block of the new runtime, the finalized block of the lab's own published reading after the upgrade, the same key as at block 3528527; the key is built from the old runtime's metadata, since no committed file holds the new one yet, so a null here is not read as absent until the next phase has built the same key again from the recorded new metadata, and the read at block 3528527 is the control"
+    },
+    {
+      "method": "state_getStorage",
+      "params": [
+        "0x26d6680094539fc341d5ea8ffc79d76fa8bf8c9b4fb4963e0d891d0ea6eb7b2cf9edc9e72d99b3c30da8e2d40b25bd41e462d014cab1239a123233647052f4e3b572322e982441d6b7a5c1694d8419e2b20971a78bf668f110f8371dc6ba44efa68ab764d2b02c8d8179df350b56c873b832e2b1f63e858bd1a376d2b89bba23",
+        "0x1bfd0be722963f829c4f8c732fbb237e4f5f1c06dd7a399b8d3cd9be1ab8174f"
+      ],
+      "why": "FlopSessionKeys.SessionNonces of owner S 0xe462d014... and device D3 0xa68ab764... at block 3530299, a later finalized block of the new runtime, the finalized block of the lab's own published reading after the upgrade, the same key as at block 3528527; the key is built from the old runtime's metadata, since no committed file holds the new one yet, so a null here is not read as absent until the next phase has built the same key again from the recorded new metadata, and the read at block 3528527 is the control"
+    },
+    {
+      "method": "state_getStorage",
+      "params": [
+        "0x26d6680094539fc341d5ea8ffc79d76f8ab2f41796e7514fa8610f8d361c94e7b20971a78bf668f110f8371dc6ba44efa68ab764d2b02c8d8179df350b56c873b832e2b1f63e858bd1a376d2b89bba23",
+        "0x1bfd0be722963f829c4f8c732fbb237e4f5f1c06dd7a399b8d3cd9be1ab8174f"
+      ],
+      "why": "FlopSessionKeys.CircuitBreakers of device D3 0xa68ab764... at block 3530299, a later finalized block of the new runtime, the finalized block of the lab's own published reading after the upgrade, the same key as at block 3528527; the key is built from the old runtime's metadata, since no committed file holds the new one yet, so a null here is not read as absent until the next phase has built the same key again from the recorded new metadata, and the read at block 3528527 is the control"
+    },
+    {
+      "method": "state_getStorage",
+      "params": [
+        "0x130ba67ef498736437f36679a246a7547759ccc18de172078306ca5973251a7baff357bcc05bbc82594d4b684487230ae5655fd56d18ac9816623fd975d501322a7427fe5568c7aa02a19cf04dfd12dc",
+        "0x1bfd0be722963f829c4f8c732fbb237e4f5f1c06dd7a399b8d3cd9be1ab8174f"
+      ],
+      "why": "ComputeChannel.Channels of our channel 0xe5655fd5... at block 3530299, a later finalized block of the new runtime, the finalized block of the lab's own published reading after the upgrade, the same key as at block 3528527; the key is built from the old runtime's metadata, since no committed file holds the new one yet, so a null here is not read as absent until the next phase has built the same key again from the recorded new metadata, and the read at block 3528527 is the control"
+    },
+    {
+      "method": "state_getStorage",
+      "params": [
+        "0x130ba67ef498736437f36679a246a7547759ccc18de172078306ca5973251a7b4cbe4c8d8d511e4fa7196fdba7c3819c9f81f65bc93855d394329e4996bc78d949bb786178f3471c13d3853f9813ddd7",
+        "0x1bfd0be722963f829c4f8c732fbb237e4f5f1c06dd7a399b8d3cd9be1ab8174f"
+      ],
+      "why": "ComputeChannel.Channels of the gateway channel 0x9f81f65b... at block 3530299, a later finalized block of the new runtime, the finalized block of the lab's own published reading after the upgrade, the same key as at block 3528527; the key is built from the old runtime's metadata, since no committed file holds the new one yet, so a null here is not read as absent until the next phase has built the same key again from the recorded new metadata, and the read at block 3528527 is the control"
+    },
+    {
+      "method": "state_getStorage",
+      "params": [
+        "0x26d6680094539fc341d5ea8ffc79d76fa8bf8c9b4fb4963e0d891d0ea6eb7b2c0c9f9689bab3fb3a3594476c696ec0001ec8abdfa88707679f8a2fbfc0bcd80184e2f731d91bb9fa152b750210556c7ff9edc9e72d99b3c30da8e2d40b25bd41e462d014cab1239a123233647052f4e3b572322e982441d6b7a5c1694d8419e2",
+        "0x1bfd0be722963f829c4f8c732fbb237e4f5f1c06dd7a399b8d3cd9be1ab8174f"
+      ],
+      "why": "FlopSessionKeys.SessionNonces of device D1 0x1ec8abdf... and owner S 0xe462d014... at block 3530299, a later finalized block of the new runtime, the finalized block of the lab's own published reading after the upgrade, the same key as at block 3528527; the key is built from the old runtime's metadata, since no committed file holds the new one yet, so a null here is not read as absent until the next phase has built the same key again from the recorded new metadata, and the read at block 3528527 is the control; device D1 as owner and owner S as device are a pair that never had a session, so its nonce should be the default"
+    },
+    {
+      "method": "chain_getBlockHash",
+      "params": [
+        3513199
+      ],
+      "why": "the canonical hash at height 3513199, to compare with 0x2069c88edcb7bd41f43aeb5cbaab692994042f1b52417b3db3fbc4cb874286be, the hash the lab's deny list test holds for that block"
+    },
+    {
+      "method": "state_getStorage",
+      "params": [
+        "0x26aa394eea5630e07c48ae0c9558cef7f9cce9c888469bb1a0dceaa129672ef8",
+        "0x2069c88edcb7bd41f43aeb5cbaab692994042f1b52417b3db3fbc4cb874286be"
+      ],
+      "why": "System.LastRuntimeUpgrade at block 3513199: the runtime the block was written under, which the shape pin reads before anything is decoded"
+    },
+    {
+      "method": "state_getStorage",
+      "params": [
+        "0x26aa394eea5630e07c48ae0c9558cef780d41e5e16056765bc8461851072c9d7",
+        "0x2069c88edcb7bd41f43aeb5cbaab692994042f1b52417b3db3fbc4cb874286be"
+      ],
+      "why": "System.Events at block 3513199, where owner S created a session for device D3 in the lab's deny list test, with an allow list of nine pallet names"
+    },
+    {
+      "method": "chain_getBlockHash",
+      "params": [
+        3513325
+      ],
+      "why": "the canonical hash at height 3513325, to compare with 0xcec70c1e8872fcfca85676567f930ace0f0599628757a4c9185501e51be41466, the hash the lab's deny list test holds for that block"
+    },
+    {
+      "method": "state_getStorage",
+      "params": [
+        "0x26aa394eea5630e07c48ae0c9558cef7f9cce9c888469bb1a0dceaa129672ef8",
+        "0xcec70c1e8872fcfca85676567f930ace0f0599628757a4c9185501e51be41466"
+      ],
+      "why": "System.LastRuntimeUpgrade at block 3513325: the runtime the block was written under, which the shape pin reads before anything is decoded"
+    },
+    {
+      "method": "state_getStorage",
+      "params": [
+        "0x26aa394eea5630e07c48ae0c9558cef780d41e5e16056765bc8461851072c9d7",
+        "0xcec70c1e8872fcfca85676567f930ace0f0599628757a4c9185501e51be41466"
+      ],
+      "why": "System.Events at block 3513325, where device D3 sent Utility.batch through the session, the first call refused with PalletNotAllowed though the allow list names Utility"
+    },
+    {
+      "method": "chain_getBlockHash",
+      "params": [
+        3513466
+      ],
+      "why": "the canonical hash at height 3513466, to compare with 0xdc706da614fed4edfacc76199c592f90afb0e15779014396559cb2eb38dfb06c, the hash the lab's deny list test holds for that block"
+    },
+    {
+      "method": "state_getStorage",
+      "params": [
+        "0x26aa394eea5630e07c48ae0c9558cef7f9cce9c888469bb1a0dceaa129672ef8",
+        "0xdc706da614fed4edfacc76199c592f90afb0e15779014396559cb2eb38dfb06c"
+      ],
+      "why": "System.LastRuntimeUpgrade at block 3513466: the runtime the block was written under, which the shape pin reads before anything is decoded"
+    },
+    {
+      "method": "state_getStorage",
+      "params": [
+        "0x26aa394eea5630e07c48ae0c9558cef780d41e5e16056765bc8461851072c9d7",
+        "0xdc706da614fed4edfacc76199c592f90afb0e15779014396559cb2eb38dfb06c"
+      ],
+      "why": "System.Events at block 3513466, where device D3 sent ComputeChannel.timeout through the session for a made up channel, let through by the lower case allow entry and failed in that pallet with ChannelNotFound"
+    },
+    {
+      "method": "chain_getBlockHash",
+      "params": [
+        3513488
+      ],
+      "why": "the canonical hash at height 3513488, to compare with 0xcdb827d48098fbb49c6e130414edcc16dba0fe5cc7b808d694646564ab4e232f, the hash the lab's deny list test holds for that block"
+    },
+    {
+      "method": "state_getStorage",
+      "params": [
+        "0x26aa394eea5630e07c48ae0c9558cef7f9cce9c888469bb1a0dceaa129672ef8",
+        "0xcdb827d48098fbb49c6e130414edcc16dba0fe5cc7b808d694646564ab4e232f"
+      ],
+      "why": "System.LastRuntimeUpgrade at block 3513488: the runtime the block was written under, which the shape pin reads before anything is decoded"
+    },
+    {
+      "method": "state_getStorage",
+      "params": [
+        "0x26aa394eea5630e07c48ae0c9558cef780d41e5e16056765bc8461851072c9d7",
+        "0xcdb827d48098fbb49c6e130414edcc16dba0fe5cc7b808d694646564ab4e232f"
+      ],
+      "why": "System.Events at block 3513488, where device D3 sent System.remark through the session, the one call through the session that succeeded"
+    },
+    {
+      "method": "chain_getBlockHash",
+      "params": [
+        3513523
+      ],
+      "why": "the canonical hash at height 3513523, to compare with 0xa1ad0bf8ae96d1264fb84eeedf5e81487db55c4e1f05c5bc95d6979d9d93983c, the hash the lab's deny list test holds for that block"
+    },
+    {
+      "method": "state_getStorage",
+      "params": [
+        "0x26aa394eea5630e07c48ae0c9558cef7f9cce9c888469bb1a0dceaa129672ef8",
+        "0xa1ad0bf8ae96d1264fb84eeedf5e81487db55c4e1f05c5bc95d6979d9d93983c"
+      ],
+      "why": "System.LastRuntimeUpgrade at block 3513523: the runtime the block was written under, which the shape pin reads before anything is decoded"
+    },
+    {
+      "method": "state_getStorage",
+      "params": [
+        "0x26aa394eea5630e07c48ae0c9558cef780d41e5e16056765bc8461851072c9d7",
+        "0xa1ad0bf8ae96d1264fb84eeedf5e81487db55c4e1f05c5bc95d6979d9d93983c"
+      ],
+      "why": "System.Events at block 3513523, where owner S revoked the session of device D3"
+    },
+    {
+      "method": "state_getStorage",
+      "params": [
+        "0x26d6680094539fc341d5ea8ffc79d76f028685274e698e781f7f2766cba0cc83f9edc9e72d99b3c30da8e2d40b25bd41e462d014cab1239a123233647052f4e3b572322e982441d6b7a5c1694d8419e2b20971a78bf668f110f8371dc6ba44efa68ab764d2b02c8d8179df350b56c873b832e2b1f63e858bd1a376d2b89bba23",
+        "0x2069c88edcb7bd41f43aeb5cbaab692994042f1b52417b3db3fbc4cb874286be"
+      ],
+      "why": "FlopSessionKeys.Sessions of owner S 0xe462d014... and device D3 0xa68ab764... at block 3513199, where owner S created a session for device D3 in the lab's deny list test, with an allow list of nine pallet names: the record that holds the nine names of the allow list as given"
+    },
+    {
+      "method": "state_getStorage",
+      "params": [
+        "0x26d6680094539fc341d5ea8ffc79d76f028685274e698e781f7f2766cba0cc83f9edc9e72d99b3c30da8e2d40b25bd41e462d014cab1239a123233647052f4e3b572322e982441d6b7a5c1694d8419e2b20971a78bf668f110f8371dc6ba44efa68ab764d2b02c8d8179df350b56c873b832e2b1f63e858bd1a376d2b89bba23",
+        "0xa1ad0bf8ae96d1264fb84eeedf5e81487db55c4e1f05c5bc95d6979d9d93983c"
+      ],
+      "why": "FlopSessionKeys.Sessions of owner S 0xe462d014... and device D3 0xa68ab764... at block 3513523, where owner S revoked the session of device D3: the same record after the revoke"
+    },
+    {
+      "method": "state_getStorage",
+      "params": [
+        "0x26d6680094539fc341d5ea8ffc79d76fa8bf8c9b4fb4963e0d891d0ea6eb7b2cf9edc9e72d99b3c30da8e2d40b25bd41e462d014cab1239a123233647052f4e3b572322e982441d6b7a5c1694d8419e2b20971a78bf668f110f8371dc6ba44efa68ab764d2b02c8d8179df350b56c873b832e2b1f63e858bd1a376d2b89bba23",
+        "0xcdb827d48098fbb49c6e130414edcc16dba0fe5cc7b808d694646564ab4e232f"
+      ],
+      "why": "FlopSessionKeys.SessionNonces of owner S 0xe462d014... and device D3 0xa68ab764... at block 3513488, where device D3 sent System.remark through the session, the one call through the session that succeeded: the nonce after the one call that succeeded"
+    },
+    {
+      "method": "state_getStorage",
+      "params": [
+        "0x26d6680094539fc341d5ea8ffc79d76f8ab2f41796e7514fa8610f8d361c94e7b20971a78bf668f110f8371dc6ba44efa68ab764d2b02c8d8179df350b56c873b832e2b1f63e858bd1a376d2b89bba23",
+        "0xcdb827d48098fbb49c6e130414edcc16dba0fe5cc7b808d694646564ab4e232f"
+      ],
+      "why": "FlopSessionKeys.CircuitBreakers of device D3 0xa68ab764... at block 3513488, where device D3 sent System.remark through the session, the one call through the session that succeeded: the breaker after the one call that succeeded"
+    }
+  ],
+  "schema": "flop-observatory/requests@0"
+}

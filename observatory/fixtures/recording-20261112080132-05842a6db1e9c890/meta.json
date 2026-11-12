@@ -1,0 +1,37 @@
+{
+  "description": "Real data, nothing made up: the third recording the record workflow published, recordings/20261112080132-05842a6db1e9c890/ on observatory-data at commit 37ef465. tape.jsonl, run.json and SHA256SUMS are those three files, byte for byte. It holds what one RPC endpoint answered to the 63 calls of the third request list: FLOP devnet's runtime upgrade from spec 1014014 to spec 1014020, the lab's own storage records on both sides of it and the blocks of the deny list test. Evidence for building the decoder of the new runtime, never proof of chain state (RULES.md section 8). requests.json and requests-inputs.json in this folder are that list and the inputs it was derived from, byte for byte as recordings/requests.json and recordings/requests-inputs.json held them when it was recorded; the list's sha256 is the one run.json names.",
+  "provenance": {
+    "data_branch": "observatory-data",
+    "data_branch_commit": "37ef465ea0741dcc070dd7274d9cd735994c1865",
+    "data_branch_commit_from": "the commit of the branch observatory-data that added recordings/20261112080132-05842a6db1e9c890/, read with git log; no file in this repository gives it",
+    "ended_at": "2026-11-12T08:02:01.234Z",
+    "metadata": [
+      {
+        "bytes": 482132,
+        "seq": 10,
+        "sha256": "f4fd2addba7fff1129483d0e66b8e6bc69141292f56443e201d3f073aab03444"
+      },
+      {
+        "bytes": 487100,
+        "seq": 11,
+        "sha256": "91294eb61225c4de7459e6a8fed3c37169a2c8a1b1906b46a5890d5e0d328238"
+      }
+    ],
+    "recording_id": "20261112080132-05842a6db1e9c890",
+    "request_inputs": "recordings/requests-inputs.json",
+    "request_inputs_copy": "requests-inputs.json",
+    "request_inputs_sha256": "c40d05f9bb5f3dad7fa59f63006eaff31a6761a5bdafc939c34c20fe646f1be6",
+    "request_inputs_sha256_from": "the sha256 of requests-inputs.json in this folder, which equals recordings/requests-inputs.json at the revision run.json names; run.json names only the request list's sha256",
+    "request_list": "recordings/requests.json",
+    "request_list_copy": "requests.json",
+    "request_list_sha256": "05842a6db1e9c890bc41d89aac3210b1a57f23e1b5953f485e2f2a374e73c669",
+    "revision": "2887ae81c9b3b60c4daecbe3d3d77072cbea7b33",
+    "revision_from": "run.json source_sha",
+    "started_at": "2026-11-12T08:01:32.301Z",
+    "tape_sha256": "4e64eeffb4cb076bcfdb746acfef3d2f687bc279be51c88dc9ffd72595daf7f6",
+    "workflow_run": 43179583179,
+    "workflow_run_from": "the data branch commit message, which names the run; no file in this repository gives it"
+  },
+  "scenario": "recording-20261112080132-05842a6db1e9c890",
+  "synthetic": false
+}

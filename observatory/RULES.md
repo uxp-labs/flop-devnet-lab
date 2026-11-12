@@ -1056,6 +1056,22 @@ below.
   `shapes/tzkv-runtime-1014014.json`. Each line there is a review: a reviewer read the shape file
   and the metadata it came from, and a test derives the file a second way, from the reference
   decoder's own parse of the same metadata. A runtime upgrade is refused until its line is added.
+- The second line is `tzkv-runtime` 1014020, metadata sha256
+  `91294eb61225c4de7459e6a8fed3c37169a2c8a1b1906b46a5890d5e0d328238` of 487100 bytes, and
+  `shapes/tzkv-runtime-1014020.json`, made as section 10 says.
+- Which runtime reads a block is the decoder's decision, never the caller's: `runtimeOfBlock` in
+  `src/scale/block.ts` takes the bytes of `System.LastRuntimeUpgrade` read at the block and nothing
+  else, reads them whole as a Compact<u32> spec version then a string spec name of at most 256
+  characters, and answers a copy of the `REVIEWED` line of that spec name and version, or a
+  refusal. The metadata a caller then gives the doors is the one that line names by its sha256.
+  The version and the metadata read at the block itself are never used to choose: they answer for
+  the next block.
+- No caller can change what the decoder has reviewed. `REVIEWED` and each of its lines,
+  `STATED_ENTRIES` and each pair in it, and the parser's `PRIMITIVES` and `HASHERS` are frozen when
+  their module loads. No reference to a line ever leaves `src/scale`: `pinShape`,
+  `decodeBlockEvents`, `decodeStorageValue` and `runtimeOfBlock` each answer a fresh copy, made by
+  `reviewedCopy` in `src/scale/shape.ts`. The parsed metadata a pin holds is parsed again on every
+  call and never kept.
 - Bounds on hostile input, each a refusal with a `ScaleError`, never another exception:
   - metadata of more than 16 MiB is refused before it is read, and so is a value or a
     System.Events of more than 16 MiB (`MAX_INPUT_BYTES`), so no string the decoder builds can
@@ -1089,3 +1105,38 @@ below.
   and `@noble/hashes` are dev dependencies for tests only, pinned exactly. Tests compare the two
   decoders on the recorded metadata, on every recorded value and on seeded values of every type.
   No src module imports them, which the source scan checks.
+
+## 10. At a runtime upgrade
+
+A block is in the encoding of the runtime that executed it. That is what `System.LastRuntimeUpgrade`
+at the block names, and it is the version and metadata read at the block's parent. The version and
+the metadata read at a block answer for the next block. The decoder refuses every block of a new
+runtime until these steps are done, in this order:
+
+1. Record. A request list reads the blocks around the upgrade (the last block before it, the block
+   that carries it, the first block the new runtime executed, and a later one): the hash, the
+   version, `LastRuntimeUpgrade` and the events at each, and the metadata at the last block before
+   it and at the block that carries it. The second is the new runtime's metadata. The record
+   workflow records it and publishes it (section 8).
+2. Fixture. The recording is copied into `fixtures/` byte for byte, with the request list and the
+   inputs it was made from, frozen, and held to the lab's own reads of the upgrade.
+3. Derive. The shape file is derived by `deriveShape` from the new metadata on the tape, and a test
+   derives it a second way from the reference decoder's own parse. If the strict parser does not
+   read the metadata whole, or `deriveShape` needs a change of logic, the work stops for a rule
+   from the lead before anything in `src/scale` changes.
+4. Diff. `scripts/shape-diff.mjs` writes what differs from the shape before, types compared by
+   structure, never by id, each pair of types followed once, and its output is committed beside the
+   shape file and held to a fresh run by a test. Its first line names both specs. It refuses a file
+   that cannot be read, is not JSON, is not `decoder-shape@2`, or lacks or adds a part it reads,
+   with one line on stderr and exit code 2. Exit code 0 means it compared, whether or not something
+   differs: the diff is a report, and the test that holds the committed diff to a fresh run is the
+   check.
+5. The line. The builder adds the runtime's line to `REVIEWED`: the spec name and version, the
+   metadata's sha256 and length, and the shape file's sha256.
+6. Independent review. A reviewer who wrote none of it reads the shape file, the metadata it came
+   from, the diff and the line, and attacks the work. The line reaches main only after that review
+   and the lead's rule for each defect it finds.
+
+The stored values of the lab's own records are read with the same key at the last block before the
+upgrade and at a block after it, and each key is built again from the new metadata, so the next
+reader can say whether the upgrade changed a prefix, a hasher or a stored value.
