@@ -168,8 +168,8 @@
     "names": "75c024d150663df401e6c2efbb285fdf2ed1ca38a6be1e2d28f37b75360a1bd6"
   },
   "snapshot-check.test.ts": {
-    "tests": 290,
-    "names": "587cabefcc552cb4d3dc4b7357f21e2977b3e52c734b42079233d743f759d0e7"
+    "tests": 291,
+    "names": "6e5ba42ad16799956ae6ac19b1381f40a0b67c7782a7c3073620ebf20fa2d65d"
   },
   "snapshot.test.ts": {
     "tests": 22,
@@ -220,8 +220,8 @@
     "names": "589180382a40bf137c057cf61ea705ba94721219cac7adda656c40c61db2ad5e"
   },
   "upgrade-live.test.ts": {
-    "tests": 23,
-    "names": "6ac24bb5d5244b532cf59996f6e9b9b1509ace96bba4266b4dcaf67c60984926"
+    "tests": 24,
+    "names": "4928d77de0190e17b04fa7d36905e0d45f3c1ed7b1a05b6c5eaf771913d4a188"
   },
   "upgrade-recording.test.ts": {
     "tests": 9,

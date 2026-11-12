@@ -923,6 +923,9 @@ everything the observatory reads.
   the length and the sha256, and the bytes when kept.
 - `at` is the block both reads were made at: its hash, and its height when known. When the status
   has a finalized head, `at` equals it in both fields, hash and number; the check refuses any other.
+  A status with no finalized head says nothing of `at`: the run reads at F once F is a hash, and a
+  header of F that failed or holds no valid number leaves the status with none and the watch at F,
+  its height not known.
 - No answer's text is echoed: a detail is a fixed sentence or the decoder's refusal, and a failed
   call is named by its call.
 - The watch is compared with the latest earlier watch in the log on the same RPC genesis the status

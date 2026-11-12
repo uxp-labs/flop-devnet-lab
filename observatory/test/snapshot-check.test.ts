@@ -130,6 +130,10 @@ const CASES: readonly (readonly [string, (s: Json) => void, readonly string[]])[
   ["an upgrade part that is text", (s) => (s.upgrade = "reviewed"), ["snapshot.upgrade"]],
   // The upgrade watch (RULES.md 7.2): values the live run writes, which the binary must serve.
   ["an upgrade watch at the finalized head, every field set", watched(), []],
+  // The honest path to this state (the lead's question on F2): the live run reads at F once F is a
+  // hash, and a failed or malformed header of F leaves the status with no finalized head
+  // (fixtures/live-malformed-header, test/upgrade-live.test.ts).
+  ["the live run's watch at F when F's header could not be read: its height not known, the status naming no finalized head", watched((u, s) => (Object.assign(u, { at: { ...u.at, number: null }, compared_with: null, executing_changed: null, authorization_appeared: null }), Object.assign(s.status, { finalized_hash: null, finalized_height: null, finality_lag: null, reset_detected: null }), Object.assign(s.pin, { finalized_hash: null, finalized_height: null }), s.escrows.forEach((e: Json) => (e.finalized_height = null)))), []],
   ["an upgrade watch at a head whose height is not known, compared with none, the status having read no finalized hash", watched((u, s) => (Object.assign(u, { at: { ...u.at, number: null }, compared_with: null, executing_changed: null, authorization_appeared: null }), (s.status.finalized_hash = null), (s.pin.finalized_hash = null))), []],
   ["an upgrade watch at another hash, the status having read no finalized hash", watched((u, s) => ((u.at.hash = OTHER), (s.status.finalized_hash = null), (s.pin.finalized_hash = null))), []],
   ["an upgrade watch at block 0, compared with none, the status having read no finalized hash", watched((u, s) => (Object.assign(u, { at: { ...u.at, number: 0 }, compared_with: null, executing_changed: null, authorization_appeared: null }), (s.status.finalized_hash = null), (s.pin.finalized_hash = null))), []],

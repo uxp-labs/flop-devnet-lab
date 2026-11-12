@@ -149,6 +149,13 @@ describe("the tapes that read the watch", () => {
     expect([r?.hash, r?.number, (await s.rpcHead()).finalized]).toEqual(["0x" + "7a".repeat(32), null, null]);
   });
 
+  it("an honest run writes a watch while the status names no finalized head: F a hash, its header malformed, so the check lets that state through on purpose", async () => {
+    const { r, s } = await run(tapeOf("live-malformed-header"), join(box, "no-log"));
+    expect([r.code, s.status.finalized_hash, s.status.finalized_height, s.upgrade?.at]).toEqual([EXIT.ok, null, null, { hash: "0x" + "7a".repeat(32), number: null }]);
+    expect(s.upgrade?.executing.state).toBe("reviewed");
+    expect(checkSnapshot(s)).toEqual([]);
+  });
+
   it("passes the read only guard, whose list is unchanged", () => {
     expect(() => guardRpc("state_getStorage")).not.toThrow();
   });
