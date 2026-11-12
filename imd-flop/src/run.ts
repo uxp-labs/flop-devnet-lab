@@ -19,6 +19,7 @@ import { responsePath } from "./response-store.js";
 import type { Provider } from "./providers.js";
 import { assertPaidNetwork, checkImdJob, ethRpcUrlMark, PaidGateError, PreSendError, readVerifiedSeatOwner, type Fetch } from "./gateway.js";
 import { FlopHTTPError } from "@flop-labs/client";
+import { notJsonBecause } from "./outside-json.js";
 import type { MatchResult } from "./receipts.js";
 
 export { padQuote, TEMPLATE_PAD } from "./policy.js";
@@ -261,7 +262,9 @@ export async function runJob(h: string, provider: Provider, o: RunOpts, deps: Ru
     // The Ethereum RPC URL mark is defense in depth: the RPC server's own text is never quoted (gateway.ts).
     const marks = [ethRpcUrlMark(deps.ethRpc)].filter((m) => m !== null);
     const said = preSend ? outsideText(err.message, { marks }) : "";
-    const reason = timedOut ? `${outsideText(err.name)}: no answer; spend unknown, not retried` : preSend ? said === OUTSIDE_WITHHELD ? "nothing sent: provider error withheld by the secret scan" : `nothing sent: ${said}` : `HTTP ${http}`;
+    // An answer that held a number that is not finite took the path of one that is not JSON (outside-json.ts
+    // nonFiniteSeam), and its reason says so.
+    const reason = timedOut ? notJsonBecause(`${outsideText(err.name)}: no answer; spend unknown, not retried`, e) : preSend ? said === OUTSIDE_WITHHELD ? "nothing sent: provider error withheld by the secret scan" : `nothing sent: ${said}` : notJsonBecause(`HTTP ${http}`, e);
     // What run saw is a report, not a receipt read (settlement.ts decideFailure). It never replaces a
     // settlement another process booked meanwhile, and "nothing was sent" never releases a row a trusted
     // read produced: then the report is only recorded, and the exit code below still says what this call
@@ -273,12 +276,12 @@ export async function runJob(h: string, provider: Provider, o: RunOpts, deps: Ru
     const settled = kept !== null && SETTLES.has(row.state);
     const also = kept ? ` ${kept}` : "";
     if (timedOut) {
-      throw new CliError(`no answer within ${o.timeoutMs} ms. ${settled ? "" : "Spend is UNKNOWN (recorded as null). "}Not retried.${also} Check later with \`imd-flop receipt ${requestId}\`.`, EXIT.TIMEOUT_UNKNOWN);
+      throw new CliError(`${notJsonBecause(`no answer within ${o.timeoutMs} ms`, e)}. ${settled ? "" : "Spend is UNKNOWN (recorded as null). "}Not retried.${also} Check later with \`imd-flop receipt ${requestId}\`.`, EXIT.TIMEOUT_UNKNOWN);
     }
     // The gate refusing at its pre-mint recheck is the same rule refusal as at the first check above.
     // Any other pre-send failure exits NOT_SENT, so it is told apart from a gateway error on the paid call below.
     if (preSend) throw new CliError(`${reason}${kept ? "." + also : ""}`, e instanceof PaidGateError ? EXIT.REFUSED_RULE : EXIT.NOT_SENT);
-    throw new CliError(`gateway refused the call (HTTP ${http})${settled ? "" : "; spend recorded as unknown"}${kept ? "." + also : ""}`, EXIT.ERROR);
+    throw new CliError(`gateway refused the call (${reason})${settled ? "" : "; spend recorded as unknown"}${kept ? "." + also : ""}`, EXIT.ERROR);
   } finally {
     clearTimeout(timer);
   }
