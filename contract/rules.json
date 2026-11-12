@@ -34,7 +34,7 @@
     },
     "FLOP_DECIMALS": {
       "value": 18,
-      "imd-flop": null,
+      "imd-flop": "src/chain/describe.ts FLOP_DECIMALS (its own literal; test/chain-words.test.ts checks it against this value). The chain encoder writes every amount in raw units and in FLOP with it",
       "spend-guard": null,
       "viewer": "build-lane.py FLOP_DECIMALS (read from this file)",
       "note": "money stage 1. Base units per FLOP are 10^18. Per FLOP's own sources, read 2026-11-11: the chain counts money in whole base units, 10^18 per FLOP, and its spec forbids floating point conversion in encoders. The viewer shows an exact amount as FLOP with this many decimals."
