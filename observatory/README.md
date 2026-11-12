@@ -210,45 +210,66 @@ building and testing decoders against real data. It is evidence, never proof of 
   form (sorted keys, two space indent, a newline at the end), with no other key and no key twice,
   and 1 to 64 calls, each `method`, `params` (a list) and `why` (one plain line). It is reviewed
   like code, and it is the list to be recorded next.
-- The list it holds now is the third: FLOP devnet's runtime upgrade from spec 1014014 to spec
-  1014020 (`research/2026-11-12-runtime-upgrade`), the lab's own storage records on both sides of
-  it, and the blocks of the deny list test (`research/2026-11-11-session-deny-list`), 63 calls. Part
-  A asks the finalized head and the genesis hash, then for the four blocks around the upgrade
-  (3528527, the last before it; 3528528, which carries it; 3528529, the first the new runtime
-  executed; 3530299, a later finalized block of the new runtime) each hash by height, the runtime
-  version at each, the metadata at 3528527 and at 3528528, and `System.LastRuntimeUpgrade` and
-  `System.Events` at each. Part B reads our own records at 3528527 and again at 3530299 with the same
-  key: `FlopSessionKeys` `Sessions`, `SessionNonces` and `CircuitBreakers` of owner S with devices
-  D1, D2 and D3, `ComputeChannel` `Channels` of our channel and of the gateway channel, and
-  `SessionNonces` of a pair that never had a session (device D1 as owner, owner S as device). Part C
-  reads, at the blocks of steps 2, 3, 10, 11 and 12 of the deny list test, each hash by height,
-  `System.LastRuntimeUpgrade` and `System.Events`, then the session of D3 at the create and revoke
-  blocks and its nonce and breaker at the step that succeeded. By method: chain_getFinalizedHead 1,
-  chain_getBlockHash 10, state_getRuntimeVersion 4, state_getMetadata 2, state_getStorage 46.
-- Why it reads what it does: a block is in the encoding of the runtime that executed it. That is
-  what `System.LastRuntimeUpgrade` at the block names, and it is the version and metadata read at
-  the block's parent. `state_getRuntimeVersion` and `state_getMetadata` at a block describe the
-  runtime of the next block: at 3528528, which the old runtime executed, they already answer for the
-  new one. So the metadata the new runtime's blocks are decoded with is the one read at 3528528.
-  Every storage key of the list is built from the old runtime's metadata, the only one in a committed
-  file, the keys read at 3530299 too: a null there is not read as absent until the next phase builds
-  the same key again from the recorded new metadata, and the read at 3528527 is its control.
-- Nothing in it is typed by hand: `test/helpers/requests/list-3.ts`, its plan, derives it from
-  `recordings/requests-inputs.json`, where each account, channel id, height and block hash names the
-  file and field it was taken from, and from the recorded metadata. `test/upgrade-requests.test.ts`
-  holds the file to that plan byte for byte, reads its design a second way, builds every storage key
-  again with the reference decoder, holds every input to the record it names, and holds the lab's
-  reads of the upgrade to themselves where that can be done offline (each boundary block the child
-  of the one before, each `LastRuntimeUpgrade` hex the spec it states).
+- The list it holds now is the fourth: the lab's session rerun at spec 1014020
+  (`research/2026-11-12-session-rerun-1014020`), 23 transactions in blocks 3552721 to 3553566, 48
+  calls. It asks the finalized head and the genesis hash, then for each step, in the order of the
+  rerun's `steps.json`, the hash at the height its `results.json` gives and one
+  `state_queryStorageAt` at that hash. Each of those 23 batches asks `System.Events` and
+  `System.LastRuntimeUpgrade` first, so every block names the runtime that executed it, then the
+  stored values the step's `reads_after` names in `steps.json`, in one fixed order:
+  `FlopSessionKeys` `Sessions(owner, device)` (active, spent, epoch_spent), `SessionNonces(owner,
+  device)`, `CircuitBreakers(device)`, `ComputeChannel` `FailedAcks(named account)`,
+  `FlopSessionKeys` `DelegateSessions(device)`. The device is dev1 for the steps of session A and
+  dev2 for those of session B. 26 reads in all, 72 keys. By method: chain_getFinalizedHead 1,
+  chain_getBlockHash 24, state_queryStorageAt 23.
+- Why `state_queryStorageAt`: it is the first list to ask it. Asked one key a call, the events and
+  the runtime record of 23 blocks are 46 calls and the 26 reads 26 more, over the 64 call bound
+  (`MAX_CALLS`). One `state_queryStorageAt` asks all keys of one block in one call and is answered as
+  one set for that block, a key that holds nothing listed with null. The guard already allowed it;
+  nothing in src changed. How such an answer is read (exactly one set, the block asked, every key
+  asked once and nothing else, or the read is refused) is the next phase's.
+- Which read covers which claim of the rerun's `plan.md`: every claim that rests on a stored value
+  has the read of the step it names. probe:23 the session record and nonce at A3 (`steps.json` names no breaker read there, so the breaker part rests on the breaker read at A6 and A8); probe:28 the
+  session record and `DelegateSessions` at A10; escrow:19 and escrow:28 the session record at A6;
+  escrow:22 and escrow:31 the session record at A9; escrow:35 the session record and nonce at A5 and
+  those and the breaker at A8; escrow:46 `FailedAcks` at A9; escrow:99 the breaker at A8; deny:41 the nonce at B9
+  and B10. The reads at A2, A4, A7, B1 and B11 hold the fields `check.mjs` judges there. Every other
+  claim rests on the events of its step's extrinsic, which every batch reads: the outcomes and
+  errors, what moved and who paid the fee, `SessionCallExecuted`'s running totals (escrow:94), the
+  ack deadline (escrow:96) and the acceptance of a `force_open` naming a non miner (escrow:44).
+- Nothing in it is typed by hand: `test/helpers/requests/list-4.ts`, its plan, derives it from
+  `recordings/requests-inputs.json`, where each account, height and block hash names the file and
+  field it was taken from (the rerun's `results.json`, and the deny list test's record for the
+  named account), and from the 1014020 metadata, found on the third recording's tape by the sha256
+  its `REVIEWED` line gives. `test/rerun-requests.test.ts` holds the file to that plan byte for byte,
+  reads its design a second way from `steps.json` and `results.json`, builds every key again with
+  the reference decoder, and holds every input to the record it names.
   `node scripts/write-requests.mjs --out recordings/requests.json` writes the file through that same
   plan, and the check runs it and compares the bytes. A storage value a node does not hold is
   answered as null, and that is an answer too.
 - Which list is where: `recordings/requests.json` and `recordings/requests-inputs.json` are the
   current list. When a list is replaced, its request list and its inputs are already frozen in its
   recording's fixture folder. Each list has one plan module in `test/helpers/requests/`
-  (`list-2.ts`, `list-3.ts`) over one core (`core.ts`) that knows no list, and
+  (`list-2.ts`, `list-3.ts`, `list-4.ts`) over one core (`core.ts`) that knows no list, and
   `test/helpers/requests-list.ts` names the current one. The first list was not derived (it
   predates this) and stays as its fixture keeps it.
+- The third list read FLOP devnet's runtime upgrade from spec 1014014 to spec 1014020
+  (`research/2026-11-12-runtime-upgrade`), the lab's own storage records on both sides of it, and
+  the blocks of the deny list test (`research/2026-11-11-session-deny-list`), 63 calls. Part A
+  asked the finalized head and the genesis hash, then for the four blocks around the upgrade
+  (3528527, the last before it; 3528528, which carries it; 3528529, the first the new runtime
+  executed; 3530299, a later finalized block of the new runtime) each hash by height, the runtime
+  version at each, the metadata at 3528527 and at 3528528, and `System.LastRuntimeUpgrade` and
+  `System.Events` at each. Part B read our own records at 3528527 and again at 3530299 with the same
+  key. Part C read, at the blocks of steps 2, 3, 10, 11 and 12 of the deny list test, each hash by
+  height, `System.LastRuntimeUpgrade` and `System.Events`, then the session of D3 at the create and
+  revoke blocks and its nonce and breaker at the step that succeeded. A block is in the encoding of
+  the runtime that executed it, which is what `System.LastRuntimeUpgrade` at the block names;
+  `state_getRuntimeVersion` and `state_getMetadata` at a block describe the runtime of the next
+  block, so at 3528528 they already answered for the new one. Its recording is
+  `fixtures/recording-20261112080132-05842a6db1e9c890`, which keeps that list and the inputs it was
+  derived from byte for byte. `test/helpers/requests/list-3.ts` is its plan, and
+  `test/upgrade-requests.test.ts` holds the frozen list to it byte for byte.
 - The second list read the storage the lab's two devnet session tests left behind
   (`research/2026-11-11-session-probe` and `research/2026-11-11-session-escrow`), 56 calls: the
   finalized head and the genesis hash, then for each of twelve blocks (ten of those tests, and two
@@ -531,7 +552,7 @@ The two interfaces other teams import are in [../interfaces](../interfaces).
 | `src/sums.ts` | the one form of `SHA256SUMS`, and the check of a folder against it, for the runs that write it and the readers that check it |
 | `src/run-command.ts` | what the live run and the recorder share: exit codes, flags, `SHA256SUMS` over the folder, how the command ends |
 | `src/requests.ts`, `recordings/requests.json` | the request list's form, and the list to be recorded next |
-| `recordings/requests-inputs.json`, `test/helpers/requests/` | the inputs of the current list, each with the file and field it comes from; the core that turns a plan into calls (`core.ts`), and one plan module per list (`list-2.ts`, `list-3.ts`) |
+| `recordings/requests-inputs.json`, `test/helpers/requests/` | the inputs of the current list, each with the file and field it comes from; the core that turns a plan into calls (`core.ts`), and one plan module per list (`list-2.ts`, `list-3.ts`, `list-4.ts`) |
 | `scripts/write-requests.mjs`, `scripts/ts-resolve.mjs`, `test/helpers/requests-list.ts` | the writer of `recordings/requests.json` (`--out <file>`), through the current list's plan, the same the tests use, run under Node's own type stripping with a hook that resolves a relative .js import from a .ts module to the .ts file |
 | `src/record-run.ts`, `src/record-bin.ts` | one record run and its files, and the command |
 | `src/recording.ts` | the reader contract for a recording |

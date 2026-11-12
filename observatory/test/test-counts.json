@@ -84,8 +84,8 @@
     "names": "fbb55db87c6aa5772251733c776a9ab07d30c43e3fb49956c14772490373a33c"
   },
   "record-run.test.ts": {
-    "tests": 23,
-    "names": "d7836ff0249d8ed3b82f084684a6afef8827fff52e5dfdcb471866de5a1d72fc"
+    "tests": 24,
+    "names": "f2f17e9690e3719bc88216ec580614f0346a683979989bb3b44703bb1acf388e"
   },
   "record-workflow.test.ts": {
     "tests": 19,
@@ -102,6 +102,10 @@
   "requests.test.ts": {
     "tests": 22,
     "names": "a4e5b94af87687f1dcea07ad1bf36f4a7120c6badbae2518ce9da8fcc75ef94c"
+  },
+  "rerun-requests.test.ts": {
+    "tests": 21,
+    "names": "03de132138f11a5e9f603bb103271491b9fc44be20654193329de041cce6df98"
   },
   "review-decoder.test.ts": {
     "tests": 37,
@@ -208,8 +212,8 @@
     "names": "16aec6aa9ace2425763bcafa97c1c8fab4f87f01b2e6573a79bf7d19f0e37982"
   },
   "upgrade-requests.test.ts": {
-    "tests": 25,
-    "names": "4d202cc7802b0f534823065fde04a88599f6370c65b1886936c7fa708d131aed"
+    "tests": 24,
+    "names": "8d9898ccfe40644d18960ccba3a876684eacd6823cb6886b8eee8bd076d1f7e7"
   },
   "upgrade-shape.test.ts": {
     "tests": 33,
