@@ -13,6 +13,7 @@ import { buildSnapshot } from "../src/snapshot.js";
 import { FixtureSource } from "../src/source.js";
 import { DEVNET_GENESIS } from "../src/status.js";
 import { hashSnapshot } from "../src/store.js";
+import { watchOf } from "./helpers/upgrade.js";
 
 const fx = (name: string) => FixtureSource.fromDir(fileURLToPath(new URL(`../fixtures/${name}`, import.meta.url)));
 // The snapshot the command line checks serve: the healthy status with the two real escrows (claimed
@@ -29,6 +30,16 @@ const BASE = { ...first, hash: hashSnapshot(first) };
 type Json = any;
 const OTHER = "0x" + "ab".repeat(32);
 const hex = (n: number) => "0x" + "a".repeat(n);
+// An honest upgrade watch at BASE's finalized head, every field set (test/helpers/upgrade.ts).
+const WATCH: Json = JSON.parse(JSON.stringify(watchOf(BASE)));
+/** The snapshot given the honest watch, then edited. */
+const watched =
+  (edit: (u: Json, s: Json) => void = () => {}) =>
+  (s: Json) => {
+    s.upgrade = structuredClone(WATCH);
+    edit(s.upgrade, s);
+  };
+const NONE = { spec_name: null, spec_version: null };
 
 /** [name, edit, every check the edit breaks]. An empty list is a snapshot the binary must serve. */
 const CASES: readonly (readonly [string, (s: Json) => void, readonly string[]])[] = [
@@ -106,7 +117,80 @@ const CASES: readonly (readonly [string, (s: Json) => void, readonly string[]])[
   // Shapes: the snapshot.
   ["an object that is no snapshot", (s) => Object.keys(s).forEach((k) => delete s[k]), ["snapshot.fields"]],
   ["a snapshot with an extra field", (s) => (s.approved = true), ["snapshot.fields"]],
-  ["another snapshot schema", (s) => (s.schema = "flop-observatory/snapshot@1"), ["snapshot.schema"]],
+  ["another snapshot schema", (s) => (s.schema = "flop-observatory/snapshot@2"), ["snapshot.schema"]],
+  ["the snapshot schema before the watch, @1 fields kept", (s) => (s.schema = "flop-observatory/snapshot@0"), ["snapshot.fields"]],
+  ["an @0 snapshot with no upgrade part, as the log's old lines hold", (s) => ((s.schema = "flop-observatory/snapshot@0"), delete s.upgrade), []],
+  ["an @0 snapshot of another schema spelling and no upgrade part", (s) => ((s.schema = "flop-observatory/snapshot@0 "), delete s.upgrade), ["snapshot.fields"]],
+  ["an @1 snapshot with no upgrade part", (s) => delete s.upgrade, ["snapshot.fields"]],
+  ["an upgrade part that is no object", (s) => (s.upgrade = []), ["snapshot.upgrade"]],
+  ["an upgrade part that is text", (s) => (s.upgrade = "reviewed"), ["snapshot.upgrade"]],
+  // The upgrade watch (RULES.md 7.2): values the live run writes, which the binary must serve.
+  ["an upgrade watch at the finalized head, every field set", watched(), []],
+  ["an upgrade watch at a head whose height is not known, compared with none", watched((u) => Object.assign(u, { at: { ...u.at, number: null }, compared_with: null, executing_changed: null, authorization_appeared: null })), []],
+  ["an upgrade watch at another hash, the status having read no finalized hash", watched((u, s) => ((u.at.hash = OTHER), (s.status.finalized_hash = null), (s.pin.finalized_hash = null))), []],
+  ["an upgrade watch at block 0, compared with none", watched((u) => Object.assign(u, { at: { ...u.at, number: 0 }, compared_with: null, executing_changed: null, authorization_appeared: null })), []],
+  ["a runtime no reviewed line names", watched((u) => (u.executing = { state: "not reviewed", spec_name: "tzkv-runtime", spec_version: 1014021, detail: "no reviewed line names the runtime this record states" })), []],
+  ["a runtime whose name is empty", watched((u) => (u.executing = { state: "not reviewed", spec_name: "", spec_version: 0, detail: "" })), []],
+  ["no LastRuntimeUpgrade at the block", watched((u) => Object.assign(u, { executing: { state: "absent", ...NONE, detail: "none" }, executing_changed: null })), []],
+  ["an executing runtime not known", watched((u) => Object.assign(u, { executing: { state: "unknown", ...NONE, detail: "failed" }, executing_changed: null })), []],
+  ["no authorisation at the block", watched((u) => Object.assign(u, { authorized: { state: "absent", bytes: null, length: null, detail: null }, authorization_appeared: false })), []],
+  ["an authorisation of no bytes", watched((u) => Object.assign(u, { authorized: { state: "present", bytes: "0x", length: 0, detail: null } })), []],
+  ["an authorisation not known", watched((u) => Object.assign(u, { authorized: { state: "unknown", bytes: null, length: null, detail: "failed" }, authorization_appeared: null })), []],
+  ["a change of runtime and an authorisation gone, said as true and false", watched((u) => Object.assign(u, { executing_changed: true, authorized: { state: "absent", bytes: null, length: null, detail: null }, authorization_appeared: false })), []],
+  // Its shapes.
+  ["an upgrade watch with a field more", watched((u) => (u.approved = true)), ["upgrade.fields"]],
+  ["an upgrade watch with a field left out, whose parts are not read", watched((u) => (delete u.compared_with, (u.at = 1))), ["upgrade.fields"]],
+  ["an upgrade watch of another schema", watched((u) => (u.schema = "flop-observatory/upgrade-watch@1")), ["upgrade.schema"]],
+  ["an upgrade watch at no time", watched((u) => (u.observed_at = "2026-11-12 04:04:20")), ["upgrade.observed_at"]],
+  ["an upgrade watch of another trust", watched((u) => (u.trust = "proof")), ["upgrade.trust"]],
+  ["an upgrade watch whose block is no object", watched((u) => (u.at = null)), ["upgrade.at"]],
+  ["an upgrade watch whose executing runtime is no object", watched((u) => (u.executing = "reviewed")), ["upgrade.executing"]],
+  ["an upgrade watch whose authorisation is no object", watched((u) => (u.authorized = [])), ["upgrade.authorized"]],
+  ["compared with a height that is no count", watched((u) => (u.compared_with = -1)), ["upgrade.compared_with"]],
+  ["a change said as text", watched((u) => (u.executing_changed = "false")), ["upgrade.executing_changed"]],
+  ["an authorisation's appearance said as a number", watched((u) => (u.authorization_appeared = 1)), ["upgrade.authorization_appeared"]],
+  ["a block with a field more", watched((u) => (u.at.parent = OTHER)), ["upgrade.at.fields"]],
+  ["a block hash in upper case", watched((u, s) => ((u.at.hash = u.at.hash.toUpperCase().replace("0X", "0x")), (s.status.finalized_hash = null), (s.pin.finalized_hash = null))), ["upgrade.at.hash"]],
+  ["a block height that is a fraction", watched((u) => (u.at.number = 1.5)), ["upgrade.at.number"]],
+  ["an executing runtime with a field left out", watched((u) => delete u.executing.detail), ["upgrade.executing.fields"]],
+  ["an executing state of another word", watched((u) => (u.executing.state = "Reviewed")), ["upgrade.executing.state"]],
+  ["an executing spec name that is a number", watched((u) => (u.executing.spec_name = 1014014)), ["upgrade.executing.spec_name"]],
+  ["an executing spec version that is text", watched((u) => (u.executing.spec_version = "1014014")), ["upgrade.executing.spec_version"]],
+  ["an executing detail that is a flag", watched((u) => ((u.executing.state = "absent"), Object.assign(u.executing, NONE), (u.executing.detail = false), (u.executing_changed = null))), ["upgrade.executing.detail"]],
+  ["an authorisation with a field more", watched((u) => (u.authorized.decoded = {})), ["upgrade.authorized.fields"]],
+  ["an authorisation state of another word", watched((u) => (u.authorized.state = "authorized")), ["upgrade.authorized.state"]],
+  ["authorised bytes in upper case hex", watched((u) => (u.authorized.bytes = u.authorized.bytes.toUpperCase().replace("0X", "0x"))), ["upgrade.authorized.bytes"]],
+  ["authorised bytes of half a byte", watched((u) => ((u.authorized.bytes = "0xabc"), (u.authorized.length = 1))), ["upgrade.authorized.bytes"]],
+  ["authorised bytes with no 0x", watched((u) => ((u.authorized.bytes = u.authorized.bytes.slice(2)), (u.authorized.length = u.authorized.length))), ["upgrade.authorized.bytes"]],
+  ["an authorisation length that is text", watched((u) => (u.authorized.length = "33")), ["upgrade.authorized.length"]],
+  ["an authorisation detail that is a number", watched((u) => ((u.authorized = { state: "unknown", bytes: null, length: null, detail: 0 }), (u.authorization_appeared = null))), ["upgrade.authorized.detail"]],
+  // Its agreements.
+  ["an upgrade watch at another block than the status's finalized head", watched((u) => (u.at.hash = OTHER)), ["upgrade.at-is-the-status-finalized-head"]],
+  ["a reviewed runtime with no name", watched((u) => (u.executing.spec_name = null)), ["upgrade.executing-names-a-spec-only-when-read"]],
+  ["a reviewed runtime with no version", watched((u) => (u.executing.spec_version = null)), ["upgrade.executing-names-a-spec-only-when-read"]],
+  ["no LastRuntimeUpgrade, yet a runtime named", watched((u) => ((u.executing.state = "absent"), (u.executing.detail = "none"), (u.executing_changed = null))), ["upgrade.executing-names-a-spec-only-when-read"]],
+  ["an executing runtime not known, yet a version named", watched((u) => ((u.executing = { state: "unknown", spec_name: null, spec_version: 1014014, detail: "x" }), (u.executing_changed = null))), ["upgrade.executing-names-a-spec-only-when-read"]],
+  ["a reviewed runtime that says why", watched((u) => (u.executing.detail = "reviewed")), ["upgrade.executing-says-why-unless-reviewed"]],
+  ["a runtime not reviewed that says nothing of why", watched((u) => ((u.executing.state = "not reviewed"), (u.executing.detail = null))), ["upgrade.executing-says-why-unless-reviewed"]],
+  ["an authorisation present with no bytes", watched((u) => Object.assign(u.authorized, { bytes: null, length: null })), ["upgrade.authorized-bytes-only-when-present"]],
+  ["an authorisation present with bytes and no length", watched((u) => (u.authorized.length = null)), ["upgrade.authorized-bytes-only-when-present", "upgrade.authorized-length-counts-the-bytes"]],
+  ["no authorisation, yet bytes kept", watched((u) => ((u.authorized.state = "absent"), (u.authorization_appeared = false))), ["upgrade.authorized-bytes-only-when-present"]],
+  ["an authorisation length one more than its bytes", watched((u) => (u.authorized.length += 1)), ["upgrade.authorized-length-counts-the-bytes"]],
+  ["an authorisation length one less than its bytes", watched((u) => (u.authorized.length -= 1)), ["upgrade.authorized-length-counts-the-bytes"]],
+  ["an authorisation length counting the 0x", watched((u) => (u.authorized.length = u.authorized.bytes.length / 2)), ["upgrade.authorized-length-counts-the-bytes"]],
+  ["an authorisation length counting hex digits", watched((u) => (u.authorized.length = u.authorized.bytes.length - 2)), ["upgrade.authorized-length-counts-the-bytes"]],
+  ["an authorisation present that says why", watched((u) => (u.authorized.detail = "present")), ["upgrade.authorized-says-why-only-when-unknown"]],
+  ["no authorisation, saying why", watched((u) => ((u.authorized = { state: "absent", bytes: null, length: null, detail: "absent" }), (u.authorization_appeared = false))), ["upgrade.authorized-says-why-only-when-unknown"]],
+  ["an authorisation not known, saying nothing of why", watched((u) => ((u.authorized = { state: "unknown", bytes: null, length: null, detail: null }), (u.authorization_appeared = null))), ["upgrade.authorized-says-why-only-when-unknown"]],
+  ["a runtime change said with nothing compared", watched((u) => Object.assign(u, { compared_with: null, authorization_appeared: null })), ["upgrade.changes-only-when-compared"]],
+  ["an authorisation's appearance said with nothing compared", watched((u) => Object.assign(u, { compared_with: null, executing_changed: null })), ["upgrade.changes-only-when-compared"]],
+  ["compared with the same block", watched((u) => (u.compared_with = u.at.number)), ["upgrade.compared-with-a-lower-block"]],
+  ["compared with a later block", watched((u) => (u.compared_with = u.at.number + 1)), ["upgrade.compared-with-a-lower-block"]],
+  ["compared with a block, at a height not known", watched((u) => (u.at.number = null)), ["upgrade.compared-with-a-lower-block"]],
+  ["a runtime change said of a runtime not known", watched((u) => (u.executing = { state: "unknown", ...NONE, detail: "x" })), ["upgrade.executing-changed-only-when-named"]],
+  ["a runtime change said of no LastRuntimeUpgrade", watched((u) => (u.executing = { state: "absent", ...NONE, detail: "x" })), ["upgrade.executing-changed-only-when-named"]],
+  ["an authorisation's appearance said of one not known", watched((u) => ((u.authorized = { state: "unknown", bytes: null, length: null, detail: "x" }), (u.authorization_appeared = false))), ["upgrade.appeared-only-when-known"]],
+  ["an authorisation said to appear though none is there", watched((u) => (u.authorized = { state: "absent", bytes: null, length: null, detail: null })), ["upgrade.appeared-only-when-present"]],
   ["a seq of 1 as text", (s) => (s.seq = "1"), ["snapshot.seq"]],
   ["a seq of -1", (s) => (s.seq = -1), ["snapshot.seq"]],
   ["a seq of 1.5", (s) => (s.seq = 1.5), ["snapshot.seq"]],
@@ -497,6 +581,7 @@ const CASES: readonly (readonly [string, (s: Json) => void, readonly string[]])[
       ["one escrow", (s: Json) => (s.escrows[2].trust = "fixture")],
       ["the census", (s: Json) => (s.census = { schema: "flop-observatory/census@0", trust: "fixture" })],
       ["the drift report", (s: Json) => (s.drift = { schema: "flop-observatory/drift@0", trust: "fixture" })],
+      ["the upgrade watch", (s: Json) => (s.upgrade = structuredClone(WATCH))],
     ] as const
   ).map(
     ([part, edit]) =>

@@ -20,7 +20,7 @@ const FIXTURES = new URL("../fixtures/", import.meta.url);
 const tapeText = (name: string) => readFileSync(new URL(`${name}/tape.jsonl`, FIXTURES), "utf8");
 const RUN_CLOCK = () => "2026-11-11T06:10:00.000Z";
 const SHA = "0123456789abcdef0123456789abcdef01234567";
-const FILES = ["SHA256SUMS", "census.json", "drift.json", "escrows.json", "run.json", "snapshot.json", "snapshots.jsonl", "status.json", "tape.jsonl"];
+const FILES = ["SHA256SUMS", "census.json", "drift.json", "escrows.json", "run.json", "snapshot.json", "snapshots.jsonl", "status.json", "tape.jsonl", "upgrade.json"];
 
 let box: string;
 beforeEach(() => {
@@ -106,7 +106,8 @@ describe("runLive over a tape", () => {
     const s = r.snapshot as Snapshot;
     expect(r.notice).toBe(
       `::notice title=networkStatus::{"trust":"fixture","genesis_pinned":"${DEVNET_GENESIS}","genesis_rpc":"${DEVNET_GENESIS}","genesis_faucet":"${DEVNET_GENESIS}",` +
-        `"reset_detected":false,"finalized_height":3430000,"best_height":3430002,"runtime_version":1014014,"rpc":"ok","faucet":"ok","gateway":"ok","seq":0,"prev_hash":null,"snapshot_hash":"${s.hash}"}`,
+        `"reset_detected":false,"finalized_height":3430000,"best_height":3430002,"runtime_version":1014014,"executing_state":"reviewed","executing_spec_name":"tzkv-runtime","executing_spec_version":1014014,"authorized_state":"absent",` +
+        `"rpc":"ok","faucet":"ok","gateway":"ok","seq":0,"prev_hash":null,"snapshot_hash":"${s.hash}"}`,
     );
     expect(noticeLine(s)).toBe(r.notice);
     expect(r.notice).not.toMatch(/\n/);
@@ -260,9 +261,9 @@ describe("runLive over the live transport, with a fake network", () => {
     const replay = await run(TapeTransport.fromFile(join(first.out, "tape.jsonl"), "tape:live"), "replay");
     const again = replay.r.snapshot as Snapshot;
     // Only where it came from differs: the trust, the source label, and so the hash.
-    const asRecorded = { ...again, trust: recorded.trust, status: { ...again.status, trust: recorded.status.trust }, pin: { ...again.pin, source: recorded.pin.source } };
+    const asRecorded = { ...again, trust: recorded.trust, status: { ...again.status, trust: recorded.status.trust }, pin: { ...again.pin, source: recorded.pin.source }, upgrade: again.upgrade && { ...again.upgrade, trust: recorded.upgrade?.trust ?? "fixture" } };
     expect({ ...asRecorded, hash: hashSnapshot(asRecorded) }).toEqual(recorded);
-    expect([again.trust, again.status.trust]).toEqual(["fixture", "fixture"]);
+    expect([again.trust, again.status.trust, again.upgrade?.trust, recorded.upgrade?.trust]).toEqual(["fixture", "fixture", "fixture", "trusted RPC"]);
     expect(read(replay.out, "tape.jsonl")).toBe(read(first.out, "tape.jsonl"));
     expect(sumsText(replay.out)).toBe(read(replay.out, "SHA256SUMS"));
   });

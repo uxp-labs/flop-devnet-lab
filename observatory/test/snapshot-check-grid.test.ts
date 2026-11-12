@@ -18,7 +18,8 @@ import { buildSnapshot } from "../src/snapshot.js";
 import { FixtureSource } from "../src/source.js";
 import { DEVNET_GENESIS } from "../src/status.js";
 import { hashSnapshot } from "../src/store.js";
-import { AGREEMENT_NAMES, expectedAgreements, type Json, OPEN, REFUND, RELEASE, SHAPE_NAMES, TYPES } from "./helpers/snapshot-spec.js";
+import { AGREEMENT_NAMES, expectedAgreements, type Json, OPEN, REFUND, RELEASE, SHAPE_NAMES, SNAPSHOT_V0, TYPES } from "./helpers/snapshot-spec.js";
+import { watchOf } from "./helpers/upgrade.js";
 
 const fx = (name: string) => FixtureSource.fromDir(fileURLToPath(new URL(`../fixtures/${name}`, import.meta.url)));
 // The snapshot the table builds on (the healthy status with a claimed, a refunded and an unverified
@@ -28,7 +29,8 @@ const made = await buildSnapshot(
   { status: fx("status-healthy"), escrows: { source: escrowFixture, ids: escrowFixture.data.meta.escrow_ids ?? [] } },
   { pinnedGenesis: DEVNET_GENESIS, now: "2026-11-09T23:47:53Z", sourceSha: "test" },
 );
-const first = { ...made, seq: 0, prev_hash: null };
+// With an upgrade watch at its finalized head, every field of it set (test/helpers/upgrade.ts).
+const first = { ...made, seq: 0, prev_hash: null, upgrade: watchOf({ ...made, seq: 0, prev_hash: null, hash: "" }) };
 const BASE: Json = JSON.parse(JSON.stringify({ ...first, hash: hashSnapshot(first) }));
 const FH: number = BASE.status.finalized_height;
 {
@@ -78,6 +80,10 @@ const PLACES: Record<string, readonly (readonly [string, (s: Json) => Json])[]> 
     ["an escrow's second item", (s) => s.escrows[0].evidence[1]],
     ["another escrow's item", (s) => s.escrows[1].evidence[0]],
   ],
+  upgrade: [["the upgrade watch", (s) => s.upgrade]],
+  "upgrade.at": [["the watch's block", (s) => s.upgrade.at]],
+  "upgrade.executing": [["the executing runtime", (s) => s.upgrade.executing]],
+  "upgrade.authorized": [["the authorisation", (s) => s.upgrade.authorized]],
 };
 
 describe("every field holds its type, wherever it sits (RULES.md section 5)", () => {
@@ -110,6 +116,10 @@ const PARTS: Record<string, string> = {
   "status.gateway": "status.gateway",
   "status.faucet": "status.faucet",
   "escrow.evidence": "evidence",
+  "snapshot.upgrade": "upgrade",
+  "upgrade.at": "upgrade.at",
+  "upgrade.executing": "upgrade.executing",
+  "upgrade.authorized": "upgrade.authorized",
 };
 const FIELDS = new Map(TYPES);
 /** Gives every field of o, and of every part inside it, a value outside its type. */
@@ -143,6 +153,41 @@ describe("every object holds exactly its fields (RULES.md section 5)", () => {
           }
         expect(wrong).toEqual([]);
       });
+});
+
+describe("a snapshot written before the upgrade watch still reads (RULES.md section 5)", () => {
+  /** BASE as an @0 line holds it: no upgrade field. */
+  const zero = (): Json => {
+    const s = copy();
+    delete s.upgrade;
+    s.schema = "flop-observatory/snapshot@0";
+    return s;
+  };
+  it("snapshot fields of an @0 line, and its field set", () => {
+    const wrong: string[] = [];
+    for (const [key, type] of SNAPSHOT_V0)
+      for (const [values, want] of [
+        [type.inside, []],
+        [type.outside, key === "schema" ? ["snapshot.fields"] : [`snapshot.${key}`]],
+      ] as const)
+        for (const value of values) {
+          const s = zero();
+          s[key] = structuredClone(value);
+          const why = misjudged(s, want);
+          if (why) wrong.push(`${key} = ${show(value)}: ${why}`);
+        }
+    for (const [what, edit] of [
+      ["an upgrade field", (s: Json) => (s.upgrade = null)],
+      ["a field more", (s: Json) => (s.more = 1)],
+      ["drift left out", (s: Json) => delete s.drift],
+    ] as const) {
+      const s = zero();
+      edit(s);
+      const why = misjudged(s, ["snapshot.fields"]);
+      if (why) wrong.push(`${what}: ${why}`);
+    }
+    expect(wrong).toEqual([]);
+  });
 });
 
 describe("many broken fields are each named once, in the order of checks (RULES.md section 5)", () => {
@@ -281,6 +326,32 @@ const GRIDS: readonly (readonly [string, Record<string, readonly Json[]>, (s: Js
   ],
   ["escrow ids", { first: [A, B, C], second: [A, B, C], last: [A, B, C] }, (s, v) => ((s.escrows[0].escrow_id = v.first), (s.escrows[1].escrow_id = v.second), (s.escrows[2].escrow_id = v.last))],
   [
+    "the upgrade watch's executing runtime",
+    { state: ["reviewed", "not reviewed", "absent", "unknown"], name: [null, "tzkv-runtime"], version: [null, 0], detail: [null, "x"], changed: [null, false, true] },
+    (s, v) => {
+      s.upgrade.executing = { state: v.state, spec_name: v.name, spec_version: v.version, detail: v.detail };
+      s.upgrade.executing_changed = v.changed;
+    },
+  ],
+  [
+    "the upgrade watch's authorisation",
+    { state: ["absent", "present", "unknown"], bytes: [null, "0x", "0xab"], length: [null, 0, 1, 2], detail: [null, "x"], appeared: [null, false, true] },
+    (s, v) => {
+      s.upgrade.authorized = { state: v.state, bytes: v.bytes, length: v.length, detail: v.detail };
+      s.upgrade.authorization_appeared = v.appeared;
+    },
+  ],
+  [
+    "the upgrade watch's block and what it was compared with",
+    { at: [H1, H2], status: [H1, null], number: [null, 0, FH], compared: [null, 0, FH - 1, FH, FH + 1], changed: [null, false], appeared: [null, true] },
+    (s, v) => {
+      s.upgrade.at = { hash: v.at, number: v.number };
+      s.status.finalized_hash = v.status;
+      s.pin.finalized_hash = v.status;
+      Object.assign(s.upgrade, { compared_with: v.compared, executing_changed: v.changed, authorization_appeared: v.appeared });
+    },
+  ],
+  [
     "the trust labels",
     {
       snapshot: ["fixture", "trusted RPC"],
@@ -289,6 +360,7 @@ const GRIDS: readonly (readonly [string, Record<string, readonly Json[]>, (s: Js
       last: ["fixture", "trusted RPC"],
       census: [null, { schema: census }, { schema: census, trust: "fixture" }, { schema: census, trust: "trusted RPC" }],
       drift: [null, { schema: drift }, { schema: drift, trust: "fixture" }],
+      upgrade: [null, "fixture", "trusted RPC"],
     },
     (s, v) => {
       s.trust = v.snapshot;
@@ -298,6 +370,8 @@ const GRIDS: readonly (readonly [string, Record<string, readonly Json[]>, (s: Js
       s.escrows[2].trust = v.last;
       s.census = v.census;
       s.drift = v.drift;
+      if (v.upgrade === null) s.upgrade = null;
+      else s.upgrade.trust = v.upgrade;
     },
   ],
 ];

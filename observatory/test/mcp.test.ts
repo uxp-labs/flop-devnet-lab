@@ -144,7 +144,7 @@ describe("mcp protocol", () => {
     expect(handleMcp({ jsonrpc: "2.0", id: 2, method: "ping" }, ctx)?.result).toEqual({});
     const l = handleMcp({ jsonrpc: "2.0", id: 3, method: "tools/list" }, ctx);
     const tools = (l?.result as { tools: { name: string; annotations: { readOnlyHint: boolean } }[] }).tools;
-    expect(tools.map((t) => t.name)).toEqual(["get_status", "get_escrow_state", "list_escrows", "get_census", "get_drift", "get_snapshot_meta"]);
+    expect(tools.map((t) => t.name)).toEqual(["get_status", "get_escrow_state", "list_escrows", "get_census", "get_drift", "get_upgrade", "get_snapshot_meta"]);
     expect(tools.every((t) => t.annotations.readOnlyHint)).toBe(true);
   });
   it("notifications get no response", () => {

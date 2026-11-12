@@ -160,7 +160,7 @@ jobs:
           fail() { echo "::error::$1"; exit 1; }
           # The files a live run writes, as SHA256SUMS lists them (PUBLISHED_FILES in
           # observatory/src/published.ts). Names come from this list, never from the artifact.
-          files=(census.json drift.json escrows.json run.json snapshot.json snapshots.jsonl status.json tape.jsonl)
+          files=(census.json drift.json escrows.json run.json snapshot.json snapshots.jsonl status.json tape.jsonl upgrade.json)
           present=()
           for f in "${files[@]}"; do if [ -f "$f" ] && [ ! -L "$f" ]; then present+=("$f"); fi; done
           { [ -f SHA256SUMS ] && [ ! -L SHA256SUMS ] && [ "${#present[@]}" -gt 0 ]; } || fail "the artifact holds no SHA256SUMS or no file it lists"
@@ -215,7 +215,7 @@ jobs:
           # Day files compare and sort byte by byte.
           export LC_ALL=C
           reading="$RUNNER_TEMP/reading"
-          files=(census.json drift.json escrows.json run.json snapshot.json snapshots.jsonl status.json tape.jsonl SHA256SUMS)
+          files=(census.json drift.json escrows.json run.json snapshot.json snapshots.jsonl status.json tape.jsonl upgrade.json SHA256SUMS)
           remote="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY.git"
           # The token reaches git through its environment only, as an HTTP header, never in a URL.
           basic=$(printf 'x-access-token:%s' "$PUSH_TOKEN" | base64 -w0)

@@ -1,5 +1,5 @@
 // Read-only MCP over JSON-RPC 2.0. Pure: request in, response out. No tool writes.
-import { censusFeed, driftFeed, escrowsFeed, feedText, snapshotMeta, statusFeed } from "./feed.js";
+import { censusFeed, driftFeed, escrowsFeed, feedText, snapshotMeta, statusFeed, upgradeFeed } from "./feed.js";
 import type { EscrowState, Snapshot } from "./types.js";
 
 export interface McpContext {
@@ -29,6 +29,12 @@ export const TOOLS = [
   { name: "list_escrows", description: "All escrow states in the snapshot. Settlement only.", inputSchema: noArgs, annotations: READ },
   { name: "get_census", description: "Event census. null when not computed. Partial totals are labeled partial.", inputSchema: noArgs, annotations: READ },
   { name: "get_drift", description: "Spec drift report. null when not computed.", inputSchema: noArgs, annotations: READ },
+  {
+    name: "get_upgrade",
+    description: "Runtime upgrade watch at the finalized head: which runtime executed it and whether an upgrade is authorised. null when not read; unknown is never absent.",
+    inputSchema: noArgs,
+    annotations: READ,
+  },
   { name: "get_snapshot_meta", description: "Snapshot hash, seq, previous hash, observed_at, trust and run pin.", inputSchema: noArgs, annotations: READ },
 ] as const;
 
@@ -105,6 +111,8 @@ export function handleMcp(request: unknown, ctx: McpContext): JsonRpcResponse | 
           return ok(id, content(censusFeed(s)));
         case "get_drift":
           return ok(id, content(driftFeed(s)));
+        case "get_upgrade":
+          return ok(id, content(upgradeFeed(s)));
         case "get_snapshot_meta":
           return ok(id, content(snapshotMeta(s)));
         default:

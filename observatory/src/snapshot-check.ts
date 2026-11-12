@@ -13,7 +13,7 @@
 import { own } from "./own.js";
 import { ANCHOR_LOST } from "./status.js";
 import { parseZoned } from "./strict.js";
-import type { EscrowState, Snapshot } from "./types.js";
+import type { EscrowState, Snapshot, UpgradeWatch } from "./types.js";
 
 type Check = (v: unknown) => boolean;
 /** An object's fields in its schema's order, each with the check its value must pass. */
@@ -41,6 +41,8 @@ const list: Check = (v) => Array.isArray(v);
 const object: Check = (v) => isObject(v);
 /** 0x plus 64 lower case hex: a genesis, block or escrow id. */
 const hash: Check = (v) => typeof v === "string" && /^0x[0-9a-f]{64}$/.test(v);
+/** 0x and lower case hex of whole bytes: storage bytes as answered. */
+const hexBytes: Check = (v) => typeof v === "string" && /^0x(?:[0-9a-f]{2})*$/.test(v);
 /** 64 lower case hex: a snapshot hash. */
 const sha256: Check = (v) => typeof v === "string" && /^[0-9a-f]{64}$/.test(v);
 /** A height, a lag, a version or an index: a safe integer from 0. */
@@ -62,7 +64,8 @@ const OPENED = "hasStation.EscrowOpened";
 const RELEASED = "hasStation.EscrowReleased";
 const REFUNDED = "hasStation.EscrowRefunded";
 
-const SNAPSHOT: Fields = [
+/** A snapshot written before the upgrade watch: it has no upgrade part, and still reads. */
+const SNAPSHOT_V0: Fields = [
   ["schema", exactlyThis("flop-observatory/snapshot@0")],
   ["seq", count],
   ["prev_hash", orNone(sha256)],
@@ -76,6 +79,10 @@ const SNAPSHOT: Fields = [
   ["census", orNone(schemaPart("flop-observatory/census@0"))],
   ["drift", orNone(schemaPart("flop-observatory/drift@0"))],
 ];
+/** Every snapshot written now: the @0 fields and the upgrade watch, null when none was read. */
+const SNAPSHOT: Fields = [["schema", exactlyThis("flop-observatory/snapshot@1")], ...SNAPSHOT_V0.slice(1), ["upgrade", orNone(object)]];
+/** The snapshot's fields by its schema: @0 its own, any other the current one, whose schema check refuses what is not @1. */
+const snapshotFields = (v: unknown): Fields => (isObject(v) && v.schema === "flop-observatory/snapshot@0" ? SNAPSHOT_V0 : SNAPSHOT);
 const PIN: Fields = [
   // The revision as the snapshot command was given it: check.sh gives unknown outside a checkout.
   ["source_sha", orNone(text)],
@@ -133,6 +140,34 @@ const EVIDENCE: Fields = [
   ["genesis", hash],
 ];
 
+const UPGRADE: Fields = [
+  ["schema", exactlyThis("flop-observatory/upgrade-watch@0")],
+  ["observed_at", time],
+  ["trust", oneOf(...TRUSTS)],
+  ["at", object],
+  ["executing", object],
+  ["authorized", object],
+  ["compared_with", orNone(count)],
+  ["executing_changed", orNone(flag)],
+  ["authorization_appeared", orNone(flag)],
+];
+const UPGRADE_AT: Fields = [
+  ["hash", hash],
+  ["number", orNone(count)],
+];
+const UPGRADE_EXECUTING: Fields = [
+  ["state", oneOf("reviewed", "not reviewed", "absent", "unknown")],
+  ["spec_name", orNone(text)],
+  ["spec_version", orNone(count)],
+  ["detail", orNone(text)],
+];
+const UPGRADE_AUTHORIZED: Fields = [
+  ["state", oneOf("absent", "present", "unknown")],
+  ["bytes", orNone(hexBytes)],
+  ["length", orNone(count)],
+  ["detail", orNone(text)],
+];
+
 /** Every object the shape checks read, by the name its checks carry, with the object it sits in. */
 const OBJECTS: readonly (readonly [string, Fields])[] = [
   ["snapshot", SNAPSHOT],
@@ -144,6 +179,10 @@ const OBJECTS: readonly (readonly [string, Fields])[] = [
   ["status.faucet", FAUCET],
   ["escrow", ESCROW],
   ["evidence", EVIDENCE],
+  ["upgrade", UPGRADE],
+  ["upgrade.at", UPGRADE_AT],
+  ["upgrade.executing", UPGRADE_EXECUTING],
+  ["upgrade.authorized", UPGRADE_AUTHORIZED],
 ];
 
 /** Records the field checks one object breaks. True when its set of fields is exactly its schema's. */
@@ -158,7 +197,7 @@ function shape(name: string, v: unknown, fields: Fields, broken: Set<string>): v
 }
 
 function shapes(s: unknown, broken: Set<string>): void {
-  if (!shape("snapshot", s, SNAPSHOT, broken)) return;
+  if (!shape("snapshot", s, snapshotFields(s), broken)) return;
   // A part that is not an object is the snapshot's field check to report; its own are not read.
   const part = (key: string): unknown => own(s, key);
   if (isObject(part("pin"))) shape("pin", part("pin"), PIN, broken);
@@ -168,6 +207,12 @@ function shapes(s: unknown, broken: Set<string>): void {
     if (isObject(own(status, "rpc"))) shape("status.rpc", own(status, "rpc"), RPC, broken);
     if (isObject(own(status, "gateway"))) shape("status.gateway", own(status, "gateway"), SERVICE, broken);
     if (isObject(own(status, "faucet"))) shape("status.faucet", own(status, "faucet"), FAUCET, broken);
+  }
+  const upgrade = part("upgrade");
+  if (isObject(upgrade) && shape("upgrade", upgrade, UPGRADE, broken)) {
+    if (isObject(own(upgrade, "at"))) shape("upgrade.at", own(upgrade, "at"), UPGRADE_AT, broken);
+    if (isObject(own(upgrade, "executing"))) shape("upgrade.executing", own(upgrade, "executing"), UPGRADE_EXECUTING, broken);
+    if (isObject(own(upgrade, "authorized"))) shape("upgrade.authorized", own(upgrade, "authorized"), UPGRADE_AUTHORIZED, broken);
   }
   const escrows = part("escrows");
   if (!Array.isArray(escrows)) return;
@@ -183,6 +228,12 @@ const lagOf = (finalized: number | null, best: number | null): number | null => 
 const howMany = (e: EscrowState, event: string): number => e.evidence.filter((x) => x.event === event).length;
 const ofState = (s: Snapshot, state: string): EscrowState[] => s.escrows.filter((e) => e.state === state);
 const evidenceOf = (s: Snapshot) => s.escrows.flatMap((e) => e.evidence);
+/** A rule of the upgrade watch: it holds when the snapshot has none (null, or an @0 line). */
+const watch =
+  (rule: (u: UpgradeWatch, s: Snapshot) => boolean) =>
+  (s: Snapshot): boolean =>
+    s.upgrade === undefined || s.upgrade === null || rule(s.upgrade, s);
+const NAMED = ["reviewed", "not reviewed"];
 
 /** The values the settlement rules tie together, each a named rule over a snapshot whose shapes hold. */
 const AGREEMENTS: readonly (readonly [string, (s: Snapshot) => boolean])[] = [
@@ -231,7 +282,22 @@ const AGREEMENTS: readonly (readonly [string, (s: Snapshot) => boolean])[] = [
   ["pin.height-is-the-status-height", (s) => s.pin.finalized_height === s.status.finalized_height],
   ["pin.hash-is-the-status-hash", (s) => s.pin.finalized_hash === s.status.finalized_hash],
   // One fixture part makes the whole snapshot a fixture (snapshot.ts takes the weakest label).
-  ["snapshot.fixture-when-a-part-is", (s) => s.trust === "fixture" || ![s.status, ...s.escrows, s.census, s.drift].some((x) => isObject(x) && x.trust === "fixture")],
+  ["snapshot.fixture-when-a-part-is", (s) => s.trust === "fixture" || ![s.status, ...s.escrows, s.census, s.drift, s.upgrade].some((x) => isObject(x) && x.trust === "fixture")],
+  // The upgrade watch (RULES.md 7.2): read at the finalized head the status names.
+  ["upgrade.at-is-the-status-finalized-head", watch((u, s) => s.status.finalized_hash === null || u.at.hash === s.status.finalized_hash)],
+  // A runtime is named exactly when the record named one, and every state but reviewed says why.
+  ["upgrade.executing-names-a-spec-only-when-read", watch((u) => (u.executing.spec_name !== null) === NAMED.includes(u.executing.state) && (u.executing.spec_version !== null) === NAMED.includes(u.executing.state))],
+  ["upgrade.executing-says-why-unless-reviewed", watch((u) => (u.executing.detail !== null) === (u.executing.state !== "reviewed"))],
+  // The bytes are kept exactly when present, with their count, and only unknown says why.
+  ["upgrade.authorized-bytes-only-when-present", watch((u) => (u.authorized.bytes !== null) === (u.authorized.state === "present") && (u.authorized.length !== null) === (u.authorized.state === "present"))],
+  ["upgrade.authorized-length-counts-the-bytes", watch((u) => u.authorized.bytes === null || u.authorized.length === (u.authorized.bytes.length - 2) / 2)],
+  ["upgrade.authorized-says-why-only-when-unknown", watch((u) => (u.authorized.detail !== null) === (u.authorized.state === "unknown"))],
+  // A change is said only against an earlier watch at a lower block, and only of what both sides know.
+  ["upgrade.changes-only-when-compared", watch((u) => u.compared_with !== null || (u.executing_changed === null && u.authorization_appeared === null))],
+  ["upgrade.compared-with-a-lower-block", watch((u) => u.compared_with === null || (u.at.number !== null && u.compared_with < u.at.number))],
+  ["upgrade.executing-changed-only-when-named", watch((u) => u.executing_changed === null || NAMED.includes(u.executing.state))],
+  ["upgrade.appeared-only-when-known", watch((u) => u.authorization_appeared === null || u.authorized.state !== "unknown")],
+  ["upgrade.appeared-only-when-present", watch((u) => u.authorization_appeared !== true || u.authorized.state === "present")],
 ];
 
 /** Every check's name: each object's field set and fields, then each agreement. */

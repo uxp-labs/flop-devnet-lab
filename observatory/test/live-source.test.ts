@@ -9,6 +9,7 @@ import { DEVNET_GENESIS, networkStatus } from "../src/status.js";
 import { type TapeAnswer, TapeError, TapeTransport } from "../src/tape.js";
 import type { Transport } from "../src/transport.js";
 import type { NetworkStatus, Trust } from "../src/types.js";
+import { UPGRADE_KEYS } from "../src/upgrade-watch.js";
 import { answeringAnchor } from "./helpers/tapes.js";
 
 const FIXTURES = new URL("../fixtures/", import.meta.url);
@@ -209,6 +210,8 @@ describe("LiveSource over synthetic tapes", () => {
       `chain_getHeader ["${F}"]`,
       "chain_getHeader []",
       `state_getRuntimeVersion ["${F}"]`,
+      `state_getStorage ["${UPGRADE_KEYS.lastRuntimeUpgrade}","${F}"]`,
+      `state_getStorage ["${UPGRADE_KEYS.authorizedUpgrade}","${F}"]`,
     ]);
   });
 
@@ -222,7 +225,7 @@ describe("LiveSource over synthetic tapes", () => {
       const spy: Transport = { ...withTrust(t, "fixture"), rpc: (m, p) => (calls.push(`${m} ${JSON.stringify(p)}`), t.rpc(m, p)) };
       const s = new LiveSource(answeringAnchor(spy, (h) => (calls.push(`answered ${h}`), { result: F })), 3429000);
       await s.read();
-      expect(calls).toEqual(["system_chain []", "chain_getBlockHash [0]", "chain_getFinalizedHead []", `chain_getHeader ["${F}"]`, "chain_getHeader []", `state_getRuntimeVersion ["${F}"]`, "answered 3429000"]);
+      expect(calls).toEqual(["system_chain []", "chain_getBlockHash [0]", "chain_getFinalizedHead []", `chain_getHeader ["${F}"]`, "chain_getHeader []", `state_getRuntimeVersion ["${F}"]`, `state_getStorage ["${UPGRADE_KEYS.lastRuntimeUpgrade}","${F}"]`, `state_getStorage ["${UPGRADE_KEYS.authorizedUpgrade}","${F}"]`, "answered 3429000"]);
       expect(await s.anchorBlock()).toEqual({ height: 3429000, hash: F, error: null });
       // Only the snapshot clock read is left.
       expect(t.remaining()).toBe(1);
@@ -248,7 +251,7 @@ describe("LiveSource over synthetic tapes", () => {
 
     it("a tape recorded with no anchor call is never read as one that answered: the replay refuses", async () => {
       await expect(new LiveSource(tapeOf("live-healthy"), 3429000).read()).rejects.toThrow(
-        "request 10 is rpc chain_getBlockHash [3429000], but the next one on the tape is the clock",
+        "request 12 is rpc chain_getBlockHash [3429000], but the next one on the tape is the clock",
       );
     });
   });

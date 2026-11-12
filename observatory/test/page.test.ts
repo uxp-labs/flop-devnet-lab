@@ -324,7 +324,7 @@ describe("page rows and cards", () => {
 });
 
 describe("page sections, columns and hidden content", () => {
-  const sectionOf = (k: string) => (k.startsWith("status.") ? "status" : k.startsWith("escrow.") ? "escrow" : k.startsWith("census") ? "census" : k.startsWith("drift") ? "drift" : k.startsWith("snapshot.") ? "snapshot" : "?");
+  const sectionOf = (k: string) => (k.startsWith("status.") ? "status" : k.startsWith("escrow.") ? "escrow" : k.startsWith("census") ? "census" : k.startsWith("drift") ? "drift" : k.startsWith("upgrade") ? "upgrade" : k.startsWith("snapshot.") ? "snapshot" : "?");
   for (const [name, snap] of [["default", build()], ["reset", buildReset()], ["null parts", build({ census: null, drift: null })]] as const) {
     const h = renderPage(snap);
     it(`${name}: every table has a data-section and holds only that section's keys`, () => {
@@ -332,7 +332,7 @@ describe("page sections, columns and hidden content", () => {
       expect(tables.length).toBeGreaterThan(3);
       for (const t of tables) {
         const sec = /data-section="([^"]*)"/.exec(t[1] ?? "")?.[1];
-        expect(["status", "escrow", "census", "drift"], String(sec)).toContain(sec);
+        expect(["status", "upgrade", "escrow", "census", "drift"], String(sec)).toContain(sec);
         const keys = [...(t[2] as string).matchAll(/data-k="([^"]*)"/g)].map((k) => k[1] as string);
         expect(keys.length).toBeGreaterThan(0);
         for (const k of keys) expect(sectionOf(k), `${k} in ${sec} table`).toBe(sec);

@@ -7,6 +7,7 @@ import { appendFileSync, copyFileSync, mkdirSync, mkdtempSync, readFileSync, rea
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { feedText } from "../src/feed.js";
 import { readHistory } from "../src/history.js";
 import { RUN_SCHEMA, runLive } from "../src/live-run.js";
 import { EXIT } from "../src/run-command.js";
@@ -16,7 +17,7 @@ import { hashSnapshot, logLine, readDayLog } from "../src/store.js";
 import { TapeTransport } from "../src/tape.js";
 import type { Transport } from "../src/transport.js";
 import type { NetworkStatus, Snapshot } from "../src/types.js";
-import { anchoredAs } from "./helpers/tapes.js";
+import { anchoredAs, upgradeAs } from "./helpers/tapes.js";
 
 const FIXTURES = new URL("../fixtures/", import.meta.url);
 const fixture = (dir: string, name: string) => readFileSync(new URL(`${dir}/${name}`, FIXTURES), "utf8");
@@ -89,20 +90,29 @@ describe("real readings from the data branch", () => {
     expect(fixture(dir, `log/${DAY}`).endsWith(logLine(snap))).toBe(true);
   });
 
-  it.each([FIRST, SECOND])("%s: replayed through LiveSource on the log it was read on (none), gives the same snapshot but for where it came from", async (dir) => {
+  it.each([FIRST, SECOND])("%s: replayed through LiveSource on the log it was read on (none), gives the same snapshot but for where it came from and the upgrade watch, which the code of the day did not read", async (dir) => {
     const recorded = json<Snapshot>(dir, "snapshot.json");
     const sourceSha = json(dir, "run.json").source_sha as string;
-    const { r } = await run(dir, join(box, "no-log"), dir, tapeOf(dir), sourceSha);
+    // The tape holds neither read of the upgrade watch: both are answered as UPGRADE_ANSWERS says (synthetic).
+    const { r } = await run(dir, join(box, "no-log"), dir, upgradeAs(dir, tapeOf(dir)), sourceSha);
     const again = r.snapshot as Snapshot;
     // A replay's trust is "fixture" (saved data, RULES.md section 7) and its source names the tape;
     // pin.node is the Node version that ran it. The hash covers all three, so it differs too.
     expect([again.trust, again.status.trust, again.pin.source]).toEqual(["fixture", "fixture", `live:tape:${dir}`]);
-    const asRecorded = { ...again, trust: recorded.trust, status: { ...again.status, trust: recorded.status.trust }, pin: { ...again.pin, source: recorded.pin.source, node: recorded.pin.node } };
-    expect({ ...asRecorded, hash: hashSnapshot(asRecorded) }).toEqual(recorded);
-    // Replayed as the network would answer, on the same Node version, it is the same byte for byte.
+    // The recorded line is @0, written before the watch: the new one is @1 and holds the watch beside it.
+    expect([recorded.schema, again.schema, again.upgrade?.executing.state, again.upgrade?.authorized.state]).toEqual(["flop-observatory/snapshot@0", "flop-observatory/snapshot@1", "reviewed", "absent"]);
+    const atZero = (s: Snapshot) => {
+      const { upgrade: _u, hash: _h, ...rest } = s;
+      return { ...rest, schema: "flop-observatory/snapshot@0" as const };
+    };
+    const asRecorded = { ...atZero(again), trust: recorded.trust, status: { ...again.status, trust: recorded.status.trust }, pin: { ...again.pin, source: recorded.pin.source, node: recorded.pin.node } };
+    expect({ ...asRecorded, hash: hashSnapshot(asRecorded as Snapshot) }).toEqual(recorded);
+    // Replayed as the network would answer, on the same Node version, it is the same but for the watch.
     if (process.version === recorded.pin.node) {
-      const live = await run(dir, join(box, "no-log"), `${dir}-live`, asLive(tapeOf(dir)), sourceSha);
-      expect(readFileSync(join(live.out, "snapshot.json"), "utf8")).toBe(fixture(dir, "snapshot.json"));
+      const live = await run(dir, join(box, "no-log"), `${dir}-live`, asLive(upgradeAs(dir, tapeOf(dir))), sourceSha);
+      const s = JSON.parse(readFileSync(join(live.out, "snapshot.json"), "utf8")) as Snapshot;
+      const zero = atZero(s);
+      expect(feedText({ ...zero, hash: hashSnapshot(zero as Snapshot) })).toBe(fixture(dir, "snapshot.json"));
     }
   });
 

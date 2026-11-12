@@ -3,7 +3,8 @@
 //
 // It reads once, in a fixed order, one request at a time, so a tape of the reading has one order
 // and replays exactly: the faucet's /health and /chain, the gateway's model list, the clock (the
-// head's observed_at), then the head (src/rpc-head.ts says which calls), then, when the run builds
+// head's observed_at), then the head (src/rpc-head.ts says which calls) with the two reads of the
+// upgrade watch right after state_getRuntimeVersion(F) (src/upgrade-watch.ts), then, when the run builds
 // on a log that holds one, the anchor: the block hash at the latest finalized height logged on the
 // pinned genesis (RULES.md 1.1). Its height comes from the log (src/history.ts); the source only
 // reads it, and src/status.ts judges it. Every Source method answers from that one reading.
@@ -16,6 +17,7 @@ import { type Answer, anchorFrom, finalizedHashOf, headFrom } from "./rpc-head.j
 import type { Source } from "./source.js";
 import { type Transport, TransportError } from "./transport.js";
 import type { AnchorReading, EventPage, FaucetChainBody, FaucetHealthBody, HttpResult, RpcHead, RuntimeConstants, Trust } from "./types.js";
+import { UPGRADE_KEYS, type UpgradeReading } from "./upgrade-watch.js";
 
 /** What a live reading GETs. Each host is on the allow list in src/net.ts. */
 export const LIVE_URLS = {
@@ -31,6 +33,8 @@ export interface LiveReading {
   rpcHead: RpcHead;
   /** The anchor read back, or null when the run was given none to read. */
   anchor: AnchorReading | null;
+  /** The two reads of the upgrade watch at F, or null when F was no hash to read at. */
+  upgrade: UpgradeReading | null;
 }
 
 export class LiveSource implements Source {
@@ -59,11 +63,11 @@ export class LiveSource implements Source {
     const faucetHealth = await this.transport.httpGet(LIVE_URLS.faucetHealth);
     const faucetChain = await this.transport.httpGet(LIVE_URLS.faucetChain);
     const gatewayModels = await this.transport.httpGet(LIVE_URLS.gatewayModels);
-    const rpcHead = await this.readHead();
+    const { rpcHead, upgrade } = await this.readHead();
     // After the head calls, and only when the log gave one: a first run reads no anchor.
     const h = this.anchorHeight;
     const anchor = h === null ? null : anchorFrom(h, await this.call("chain_getBlockHash", [h]));
-    return { faucetHealth, faucetChain, gatewayModels, rpcHead, anchor };
+    return { faucetHealth, faucetChain, gatewayModels, rpcHead, anchor, upgrade };
   }
 
   /** One call. A failure on the way is an answer; anything else (a refusal, a bad tape) stops the run. */
@@ -76,7 +80,7 @@ export class LiveSource implements Source {
     }
   }
 
-  private async readHead(): Promise<RpcHead> {
+  private async readHead(): Promise<{ rpcHead: RpcHead; upgrade: UpgradeReading | null }> {
     // Taken before the first call, so the head is never shown as fresher than it is.
     const observedAt = this.transport.now();
     // Read for the record only: RpcHead has no field for the chain's name, and no rule reads it.
@@ -88,7 +92,15 @@ export class LiveSource implements Source {
     const finalizedHeader = at === null ? null : await this.call("chain_getHeader", [at]);
     const bestHeader = await this.call("chain_getHeader", []);
     const runtimeVersion = at === null ? null : await this.call("state_getRuntimeVersion", [at]);
-    return headFrom({ observedAt, genesis, finalizedHead, finalizedHeader, bestHeader, runtimeVersion });
+    // The upgrade watch, at the same block and under the same condition (RULES.md 7.2).
+    const lastRuntimeUpgrade = at === null ? null : await this.call("state_getStorage", [UPGRADE_KEYS.lastRuntimeUpgrade, at]);
+    const authorizedUpgrade = at === null ? null : await this.call("state_getStorage", [UPGRADE_KEYS.authorizedUpgrade, at]);
+    const rpcHead = headFrom({ observedAt, genesis, finalizedHead, finalizedHeader, bestHeader, runtimeVersion });
+    const upgrade =
+      at === null || lastRuntimeUpgrade === null || authorizedUpgrade === null
+        ? null
+        : { hash: at, number: rpcHead.finalized?.number ?? null, observedAt, trust: this.trust, lastRuntimeUpgrade, authorizedUpgrade };
+    return { rpcHead, upgrade };
   }
 
   async faucetHealth(): Promise<HttpResult<FaucetHealthBody>> {
@@ -109,6 +121,11 @@ export class LiveSource implements Source {
 
   async anchorBlock(): Promise<AnchorReading | null> {
     return (await this.read()).anchor;
+  }
+
+  /** The two reads of the upgrade watch, or null when none were made. */
+  async upgradeReading(): Promise<UpgradeReading | null> {
+    return (await this.read()).upgrade;
   }
 
   async runtimeConstants(): Promise<RuntimeConstants | null> {

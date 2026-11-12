@@ -58,17 +58,23 @@ export function driftFeed(s: Snapshot) {
   return { schema: "flop-observatory/feed-drift@0", snapshot_hash: s.hash, observed_at: s.drift?.observed_at ?? s.observed_at, trust: s.drift?.trust ?? s.trust, drift: s.drift ?? null };
 }
 
+/** upgrade is null when no watch was read, and in an @0 snapshot, which has no upgrade part. */
+export function upgradeFeed(s: Snapshot) {
+  return { schema: "flop-observatory/feed-upgrade@0", snapshot_hash: s.hash, observed_at: s.upgrade?.observed_at ?? s.observed_at, trust: s.upgrade?.trust ?? s.trust, upgrade: s.upgrade ?? null };
+}
+
 export function snapshotMeta(s: Snapshot) {
   return { schema: "flop-observatory/feed-snapshot-meta@0", snapshot_hash: s.hash, seq: s.seq, prev_hash: s.prev_hash, observed_at: s.observed_at, trust: s.trust, pin: s.pin };
 }
 
-/** status.json, escrows.json, census.json, drift.json and snapshot.json, each a name and its text. */
+/** status.json, escrows.json, census.json, drift.json, upgrade.json and snapshot.json, each a name and its text. */
 export function feedFiles(s: Snapshot): [string, string][] {
   const files: [string, unknown][] = [
     ["status.json", statusFeed(s)],
     ["escrows.json", escrowsFeed(s)],
     ["census.json", censusFeed(s)],
     ["drift.json", driftFeed(s)],
+    ["upgrade.json", upgradeFeed(s)],
     ["snapshot.json", s],
   ];
   return files.map(([name, obj]) => [name, feedText(obj)]);

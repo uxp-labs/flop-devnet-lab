@@ -82,8 +82,9 @@ describe("earlierOf", () => {
       ],
       earlierSpec: [],
       anchor: { height: 30, hash: H(30) },
+      earlierUpgrades: [],
     });
-    expect(earlierOf([], G)).toEqual({ previous: [], earlierTimes: [], earlierBest: [], earlierSpec: [], anchor: null });
+    expect(earlierOf([], G)).toEqual({ previous: [], earlierTimes: [], earlierBest: [], earlierSpec: [], anchor: null, earlierUpgrades: [] });
   });
 
   it("passes every runtime version an earlier snapshot read on a genesis, oldest first, as the spec floor's input", () => {
@@ -159,7 +160,7 @@ describe("readHistory", () => {
   });
 
   it("unchecked: a line in the chain that is no snapshot this code can check is refused, never skipped", () => {
-    const later = { ...b, schema: "flop-observatory/snapshot@1" } as unknown as typeof b;
+    const later = { ...b, schema: "flop-observatory/snapshot@2" } as unknown as typeof b;
     const ss = chainOf(a, later);
     const h = readHistory(logDir({ "2026-01-01.jsonl": ss }));
     expect(h.state).toBe("unchecked");

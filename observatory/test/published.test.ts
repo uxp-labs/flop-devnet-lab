@@ -107,7 +107,7 @@ describe("judgeLatest", () => {
 
   it("refuses a snapshot that breaks a snapshot check, naming the check", async () => {
     const f = await latest("live-healthy");
-    const j = judge(withSnapshot(f, (s) => ((s as unknown as Record<string, unknown>).schema = "flop-observatory/snapshot@1")));
+    const j = judge(withSnapshot(f, (s) => ((s as unknown as Record<string, unknown>).schema = "flop-observatory/snapshot@2")));
     expect(j).toEqual({ usable: false, refused: ["snapshot.json breaks snapshot.schema"] });
   });
 

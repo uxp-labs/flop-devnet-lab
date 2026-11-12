@@ -296,9 +296,50 @@ export interface DriftReport {
 
 // ===== END DRIFT TYPES =====
 
+// ===== UPGRADE WATCH TYPES (src/upgrade-watch.ts, RULES.md section 7.2) =====
+
+/** Which runtime executed the block, from System.LastRuntimeUpgrade read at it. */
+export type ExecutingState = "reviewed" | "not reviewed" | "absent" | "unknown";
+/** Whether System.AuthorizedUpgrade held a value at the block. */
+export type AuthorizedState = "absent" | "present" | "unknown";
+
+export interface UpgradeWatch {
+  schema: "flop-observatory/upgrade-watch@0";
+  /** When the head both reads were made at was read. */
+  observed_at: string;
+  trust: Trust;
+  /** The finalized block both reads were made at: its hash, and its height when known. */
+  at: { hash: string; number: number | null };
+  executing: {
+    state: ExecutingState;
+    /** Set only for "reviewed" and "not reviewed": what the record names. */
+    spec_name: string | null;
+    spec_version: number | null;
+    /** Why, for every state but "reviewed". A fixed sentence or the decoder's own refusal, never the answer's text. */
+    detail: string | null;
+  };
+  authorized: {
+    state: AuthorizedState;
+    /** Set only for "present": the bytes as answered, 0x and lower case hex, never decoded. */
+    bytes: string | null;
+    length: number | null;
+    /** Why, for "unknown" only. */
+    detail: string | null;
+  };
+  /** The at.number of the earlier watch compared with, or null when none was. */
+  compared_with: number | null;
+  /** null unless both sides name a runtime; true when the name or the version differs. */
+  executing_changed: boolean | null;
+  /** null unless both sides' authorized state is known; true when present now and absent before, or present with other bytes. */
+  authorization_appeared: boolean | null;
+}
+
+// ===== END UPGRADE WATCH TYPES =====
+
 /** One line of the snapshot log: everything observed in one pass, hash-chained to the line before. */
 export interface Snapshot {
-  schema: "flop-observatory/snapshot@0";
+  /** @0 lines, written before the upgrade watch, hold no upgrade part; every new snapshot is @1. */
+  schema: "flop-observatory/snapshot@0" | "flop-observatory/snapshot@1";
   seq: number;
   prev_hash: string | null;
   /** sha256 over the canonical JSON of this snapshot without the hash field. */
@@ -311,6 +352,8 @@ export interface Snapshot {
   escrows: EscrowState[];
   census: CensusReport | null;
   drift: DriftReport | null;
+  /** The upgrade watch of a live run: null when none was read; left out of an @0 line. */
+  upgrade?: UpgradeWatch | null;
 }
 
 /** Enough to rerun a snapshot exactly: code revision, tools, and the chain point it describes. */
