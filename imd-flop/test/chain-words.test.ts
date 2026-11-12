@@ -4,6 +4,8 @@
  * hold. A changed byte changes the description or is refused.
  */
 import { blake2b } from "@noble/hashes/blake2.js";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import type { InnerCall } from "../src/chain/calls.js";
 import { amountText, describeExtrinsic, FLOP_DECIMALS } from "../src/chain/describe.js";
@@ -12,7 +14,7 @@ import { signSessionCall } from "../src/chain/extrinsic.js";
 import { PAYLOAD_HASH_ABOVE, toSign } from "../src/chain/payload.js";
 import { readExtrinsic } from "../src/chain/reader.js";
 import type { Field } from "../src/chain/table.js";
-import { boundaryInner, hex, OWNER, readJson, RT, RUNTIME_ID, sampleInner, testDevice, U128_MAX, U32_MAX, U64_MAX, unhex } from "./lib/chain-fixtures.js";
+import { boundaryInner, hex, OWNER, PKG, readJson, RT, RUNTIME_ID, sampleInner, testDevice, U128_MAX, U32_MAX, U64_MAX, unhex } from "./lib/chain-fixtures.js";
 
 const BIRTH = { number: 3552594, hash: unhex("0xa85d1dcb67ae73c8c910634c75c043e62f83cf06dd4a90bbb5abe19c8674d08e") };
 const cases: { inner: InnerCall; sessionNonce: bigint; accountNonce: number; birth: { number: number; hash: Uint8Array } }[] = [
@@ -138,6 +140,16 @@ describe("E9: the description names every value the bytes hold", () => {
 describe("amounts in raw units and in FLOP", () => {
   it("FLOP_DECIMALS is contract/rules.json FLOP_DECIMALS", () => {
     expect(FLOP_DECIMALS).toBe(readJson("contract/rules.json").constants.FLOP_DECIMALS.value);
+  });
+
+  it("contract/rules.json names where imd-flop holds FLOP_DECIMALS and the test that holds it, and both are there (H10)", () => {
+    const note = readJson("contract/rules.json").constants.FLOP_DECIMALS["imd-flop"];
+    expect(typeof note).toBe("string");
+    const [file, name] = (note as string).split(" ");
+    expect(`${file} ${name}`).toBe("src/chain/describe.ts FLOP_DECIMALS");
+    expect(readFileSync(join(PKG, file), "utf8")).toContain(`export const ${name} = `);
+    expect(note).toContain("test/chain-words.test.ts");
+    expect(readFileSync(join(PKG, "test", "chain-words.test.ts"), "utf8")).toContain("FLOP_DECIMALS is contract/rules.json FLOP_DECIMALS");
   });
 
   it("amountText is exact, from 0 to 2^128 - 1", () => {
