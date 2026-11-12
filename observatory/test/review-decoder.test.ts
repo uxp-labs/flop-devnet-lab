@@ -4,7 +4,8 @@
 //   GAP n      asserts behaviour that is right today but that a behaviour changing mutant breaks
 //              while every author test still passes (the mutants are in test/helpers/review-mutants.json);
 //   HELD       an attack that failed: the decoder kept its promise.
-// Timing claims are measured ratios between two sizes, the fastest of several runs, with wide margins.
+// Timing claims are measured ratios between two sizes, the fastest of 15 interleaved runs of each
+// (test/helpers/interleaved-fastest.ts), with wide margins.
 // DEFECT 9 (the source scan) is proved outside vitest by test/helpers/review-scan-misses.mjs, since
 // vitest blocks the native parser the scan needs.
 import { createHash } from "node:crypto";
@@ -22,6 +23,7 @@ import { type Metadata, parseMetadata } from "../src/scale/metadata.js";
 import { ScaleError, toHex } from "../src/scale/reader.js";
 import { MAX_NAME_LENGTH, MAX_SHAPE_CHARS, MAX_SHAPE_STEPS, type PinInput, deriveShape, namer, pinShape, shapeText, typeName } from "../src/scale/shape.js";
 import { hashKeyPart, storageKey } from "../src/scale/storage-key.js";
+import { interleavedFastest } from "./helpers/interleaved-fastest.js";
 import { plain } from "./helpers/plain.js";
 import { seeded } from "./helpers/random.js";
 import { recorded } from "./helpers/recorded.js";
@@ -44,17 +46,6 @@ function thrown(f: () => unknown): { cls: string; message: string } {
     return { cls: e instanceof ScaleError ? "ScaleError" : (e as Error).constructor.name, message: (e as Error).message };
   }
   return { cls: "returned", message: "" };
-}
-
-/** The fastest of runs timings of f, in milliseconds. */
-function fastest(f: () => unknown, runs = 3): number {
-  let best = Number.POSITIVE_INFINITY;
-  for (let i = 0; i < runs; i++) {
-    const t = performance.now();
-    f();
-    best = Math.min(best, performance.now() - t);
-  }
-  return best;
 }
 
 /** The recorded metadata through the reference's own codec, changed by edit, written again. */
@@ -165,10 +156,8 @@ describe("work that is not bounded by a constant a step", () => {
   };
 
   it("review defect 2, fixed: decodeValue's time grows with the value, not with the product of a type's path and the value: 4 times each takes well under 16 times", () => {
-    const small = fastest(pathCase(5_000, 400), 5);
-    const large = fastest(pathCase(20_000, 1_600), 3);
     // The product would be about 16; linear in what is read is about 4.
-    expect(large / small).toBeLessThan(8);
+    expect(interleavedFastest(pathCase(5_000, 400), pathCase(20_000, 1_600)).ratio).toBeLessThan(8);
   });
 
   it("review defect 2, fixed: a type's path is not read on a step that succeeds, only for a refusal", () => {
@@ -208,10 +197,8 @@ describe("work that is not bounded by a constant a step", () => {
   };
 
   it("review defect 3, fixed: deriveShape is linear: 4 times an event's fields and a type's parameters takes well under 16 times the time", () => {
-    const small = fastest(paramCase(500, 2_000), 5);
-    const large = fastest(paramCase(2_000, 8_000), 3);
     // The product would be about 16; each name built once, and each parameter one step, is about 4.
-    expect(large / small).toBeLessThan(8);
+    expect(interleavedFastest(paramCase(500, 2_000), paramCase(2_000, 8_000)).ratio).toBeLessThan(8);
   });
 
   it("review defect 3, fixed: and its steps grow by the same factor as its size, each parameter and each field one step", () => {
@@ -233,9 +220,7 @@ describe("work that is not bounded by a constant a step", () => {
     const blob = (n: number) => metadata([{ def: def.primitive("u8") }, { def: def.composite(Array.from({ length: n }, () => ({ type: 0 }))) }], []);
     const a = blob(20_000);
     const b = blob(80_000);
-    const ta = fastest(() => parseMetadata(a), 5);
-    const tb = fastest(() => parseMetadata(b), 3);
-    expect(tb / ta).toBeLessThan(10);
+    expect(interleavedFastest(() => parseMetadata(a), () => parseMetadata(b)).ratio).toBeLessThan(10);
   });
 });
 
