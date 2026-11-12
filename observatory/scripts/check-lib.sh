@@ -14,6 +14,11 @@
 # A step that is itself stopped by a signal, while the script is not, is a failed step in a
 # finished run: its exit is 128 plus the signal, the run goes on and ends with overall_exit 1 and
 # finished: yes.
+# A step that fails, by a nonzero exit or by a signal that cuts it, says why in the check's own
+# output: right after its exit line (or its cut line) come the last 20 lines of its log, each after
+# the prefix "  log| " and cut at 300 characters (300 bytes where the locale is not UTF-8). A step
+# that exits 0 prints only its exit line. So a log that holds only the check's output, such as a
+# GitHub run whose evidence cannot be downloaded, still shows the cause of a failed step.
 # Not covered: SIGKILL cannot be handled. Then no report.txt is written, which is no pass, and the
 # running step may be left running, because each step runs in a process group of its own.
 #
@@ -48,6 +53,20 @@ check_stop_tree() {
   return 0
 }
 
+check_tail_lines=20
+check_tail_width=300
+check_tail_prefix='  log| '
+
+check_print_tail() {
+  # check_print_tail <step name>: the last lines of the step's log, each prefixed and cut.
+  local log="$evidence/$1.log" line
+  [ -f "$log" ] || return 0
+  tail -n "$check_tail_lines" "$log" | while IFS= read -r line || [ -n "$line" ]; do
+    printf '%s%s\n' "$check_tail_prefix" "${line:0:$check_tail_width}"
+  done
+  return 0
+}
+
 step() {
   # step <name> <command...>: run, log, record the exit code, keep going.
   local name="$1"
@@ -67,6 +86,7 @@ step() {
   check_last_step="$name"
   if [ "$code" -ne 0 ]; then overall=1; fi
   printf '%-14s exit %s\n' "$name" "$code"
+  if [ "$code" -ne 0 ]; then check_print_tail "$name"; fi
   return 0
 }
 
@@ -81,6 +101,7 @@ check_cut() {
   if [ -n "$check_step_name" ]; then
     printf '%s\t%s\t%s\n' "$check_step_name" "$check_step_cmd" "cut by SIG$sig" >>"$evidence/steps.tsv"
     printf '%-14s cut by SIG%s\n' "$check_step_name" "$sig"
+    check_print_tail "$check_step_name"
     check_end="stopped during step $check_step_name by SIG$sig"
   else
     check_end="stopped after step $check_last_step by SIG$sig"

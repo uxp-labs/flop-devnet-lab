@@ -17,10 +17,15 @@
 //   early-exit, early-exit-no-step  an exit 0 before the last step: not finished, exit 1, no digest
 //   empty-outputs   a finished run with no output file: finished: yes, digest none
 //   failing-step    a finished run with a failing step: exit 1, finished: yes
+//   failing-step-tail  a step whose log has 25 lines passes, then the same step fails: the passing
+//       step prints only its exit line, and right after the failing step's exit line come exactly
+//       the last 20 lines of its log, each after the fixed prefix, its 400 character line cut at
+//       300 (round 28, N2). The cut cases also show the cut step's log after its cut line
 //   passing         a finished run, every step passing: exit 0, finished: yes, and the digest this
 //       script computes itself from the output files
 // Then tampered copies of the library, each one named find and replace that must occur exactly
-// once, at least one for each of the rules C1 to C4 (REVIEW-LOG round 27). Each must make at least
+// once, at least one for each of the rules C1 to C4 (REVIEW-LOG round 27) and C5, a failed or cut
+// step's log tail (round 28). Each must make at least
 // one case fail. A tampered copy that passes every case fails the canary and is named.
 //
 // Each case has a hard limit of 20 seconds; past it the driver is stopped by its process id and
@@ -67,6 +72,8 @@ for (const [name, num] of Object.entries(SIGNALS)) {
 // ---- The driver and the step that cuts it.
 const DRIVER = join(work, "driver.sh");
 const CUT_STEP = join(work, "cut-step.sh");
+const TAIL_STEP = join(work, "tail-step.sh");
+const TAIL_PREFIX = "  log| ";
 writeFileSync(
   DRIVER,
   `set -u
@@ -121,6 +128,12 @@ case "$kase" in
     step bad false
     step last true
     ;;
+  failing-step-tail)
+    put_output a one
+    step talk bash "${TAIL_STEP}" 0
+    step loud bash "${TAIL_STEP}" 3
+    step last true
+    ;;
   passing)
     put_output a one
     put_output b two
@@ -134,12 +147,24 @@ finish
 // The step: a child that would sleep for minutes, both ids written down, then the driver signalled.
 writeFileSync(
   CUT_STEP,
-  `sleep 300 &
+  `echo "the cut step signals the driver"
+sleep 300 &
 printf '%s %s\\n' "$$" "$!" >"$CANARY_BOX/pids"
 kill -"$1" "$CANARY_DRIVER_PID"
 wait
 `,
 );
+
+// The tail step: 25 lines of log, the last one 400 characters long, then the exit it is given.
+writeFileSync(
+  TAIL_STEP,
+  `for i in $(seq 1 24); do echo "log line $i"; done
+printf '%0400d\\n' 0
+exit "$1"
+`,
+);
+/** The tail the library must print for the tail step: its last 20 lines, prefixed, cut at 300. */
+const TAIL_EXPECTED = [...Array.from({ length: 19 }, (_, i) => `log line ${i + 6}`), "0".repeat(300)].map((l) => `${TAIL_PREFIX}${l}`);
 
 // ---- Reading a run.
 function running(pid) {
@@ -231,6 +256,8 @@ function runCase(kase, lib) {
   if (kase.startsWith("cut-SIG")) {
     const sig = kase.slice("cut-SIG".length);
     notFinished(`stopped during step cut by SIG${sig}`, 128 + SIGNALS[sig], [tsv("first", "true", 0), tsv("cut", `bash ${CUT_STEP} ${sig}`, `cut by SIG${sig}`)]);
+    const cutAt = out.indexOf(`${"cut".padEnd(14)} cut by SIG${sig}`);
+    want("the cut line and the cut step's log after it", cutAt < 0 ? null : out.slice(cutAt + 1, cutAt + 2), [`${TAIL_PREFIX}the cut step signals the driver`]);
     if (pids.length !== 2) problems.push(`the step wrote ${pids.length} process ids, want 2`);
     if (left.length > 0) problems.push(`processes of the step still running after the run: ${left.join(", ")}`);
     if (ms > PROMPT_MS) problems.push(`took ${ms} ms, more than ${PROMPT_MS} ms`);
@@ -247,6 +274,9 @@ function runCase(kase, lib) {
     finished(0, "none", [tsv("first", "true", 0), tsv("last", "true", 0)]);
   } else if (kase === "failing-step") {
     finished(1, ownDigest(join(ev, "outputs")), [tsv("first", "true", 0), tsv("bad", "false", 1), tsv("last", "true", 0)]);
+  } else if (kase === "failing-step-tail") {
+    finished(1, ownDigest(join(ev, "outputs")), [tsv("talk", `bash ${TAIL_STEP} 0`, 0), tsv("loud", `bash ${TAIL_STEP} 3`, 3), tsv("last", "true", 0)]);
+    want("the printed steps and the failing step's tail", out.slice(0, -2), [`${"talk".padEnd(14)} exit 0`, `${"loud".padEnd(14)} exit 3`, ...TAIL_EXPECTED, `${"last".padEnd(14)} exit 0`]);
   } else if (kase === "passing") {
     const digest = ownDigest(join(ev, "outputs"));
     if (!/^[0-9a-f]{64}$/.test(digest)) problems.push(`the canary's own digest is ${digest}, want 64 hex digits`);
@@ -255,7 +285,7 @@ function runCase(kase, lib) {
   return { case: kase, exit: r.status, ms, left: left.length, outcome: problems.length === 0 ? "pass" : "fail", problems };
 }
 
-const CASES = ["cut-SIGTERM", "cut-SIGINT", "cut-SIGHUP", "cut-between-steps", "early-exit", "early-exit-no-step", "empty-outputs", "failing-step", "passing"];
+const CASES = ["cut-SIGTERM", "cut-SIGINT", "cut-SIGHUP", "cut-between-steps", "early-exit", "early-exit-no-step", "empty-outputs", "failing-step", "failing-step-tail", "passing"];
 
 // ---- Tampered copies of the library: one find and replace each, the find occurring exactly once.
 const TAMPERS = [
@@ -271,6 +301,10 @@ const TAMPERS = [
   { id: "cut-exit-not-128-plus", rule: "C2", find: 'overall=$((128 + $(kill -l "$sig")))', replace: "overall=1", why: "a cut run exits 1, not 128 plus the signal" },
   { id: "early-exit-keeps-zero", rule: "C3", find: '    if [ "$status" -eq 0 ]; then status=1; fi\n', replace: "", why: "an early exit 0 reads as exit 0" },
   { id: "empty-folder-hashed", rule: "C4", find: '  if [ -z "$files" ]; then\n    echo none\n    return 0\n  fi\n', replace: "", why: "an empty outputs folder gets the sha256 of empty input" },
+  { id: "failed-step-tail-not-printed", rule: "C5", find: '  if [ "$code" -ne 0 ]; then check_print_tail "$name"; fi\n', replace: "", why: "a failed step's exit line is all the check's output says of it" },
+  { id: "cut-step-tail-not-printed", rule: "C5", find: '    check_print_tail "$check_step_name"\n', replace: "", why: "a cut step's cut line is all the check's output says of it" },
+  { id: "passing-step-tail-printed", rule: "C5", find: '  if [ "$code" -ne 0 ]; then check_print_tail "$name"; fi\n', replace: '  check_print_tail "$name"\n', why: "a passing step prints its log too" },
+  { id: "tail-lines-not-cut", rule: "C5", find: '"${line:0:$check_tail_width}"', replace: '"$line"', why: "a long log line is printed whole" },
   { id: "unfinished-run-digested", rule: "C4", find: '    digest_line="none (the run did not finish)"\n', replace: '    digest_line="$(check_outputs_digest) (node $node_v; it holds for this Node version only)"\n', why: "a run that did not finish gets a digest" },
 ];
 
@@ -296,7 +330,7 @@ try {
       }
       return { tamper: t.id, rule: t.rule, why: t.why, outcome: "missed" };
     });
-    const rules = ["C1", "C2", "C3", "C4"].filter((rule) => !tampers.some((t) => t.rule === rule && t.outcome === "caught"));
+    const rules = ["C1", "C2", "C3", "C4", "C5"].filter((rule) => !tampers.some((t) => t.rule === rule && t.outcome === "caught"));
     ok = cases.every((c) => c.outcome === "pass") && tampers.every((t) => t.outcome === "caught") && rules.length === 0;
     report = {
       library: relative(pkg, LIBRARY),
