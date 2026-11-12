@@ -1,14 +1,20 @@
 /**
  * The strict reader of the chain encoder (rule E9). It reads call bytes and signed extrinsic bytes back
- * into data, by the table, and refuses what it does not know: a call other than execute_via_session around
- * one of the five inner calls, an enum index the table does not have, a declared spend other than what the
- * inner call moves, an immortal era or another period, a tip, the metadata hash check on, bytes that end
- * early and bytes left over. Pure: no network, no clock, no file.
+ * into data, by the frozen table, and refuses what it does not know: a call other than execute_via_session
+ * around one of the five inner calls, an enum index the table does not have, a declared spend other than
+ * what the inner call moves, an immortal era or another period, a phase that is not the birth block's, a
+ * tip, the metadata hash check on, a signature that does not verify over the payload with the birth hash,
+ * bytes that end early and bytes left over. Pure: no network, no clock, no file.
+ *
+ * It takes the four names of a runtime, never a runtime (rule H6), and copies the bytes it is given by
+ * their internal state before it reads them (rule H3).
  */
-import { refuse } from "./errors.js";
+import { ed25519 } from "@noble/curves/ed25519.js";
 import { INNER_PALLET, spendOf, type Bytes32, type InnerCall, type InnerName } from "./calls.js";
-import { readEra } from "./era.js";
+import { refuse } from "./errors.js";
+import { lastValidBlock, readEra } from "./era.js";
 import { bytesOf, readValue } from "./fields.js";
+import { signingPayload, type SignedPath } from "./payload.js";
 import { ByteReader } from "./scale.js";
 import { reviewedRuntime, type Reviewed } from "./shape.js";
 import type { CallEntry, RuntimeId } from "./table.js";
@@ -22,7 +28,7 @@ export interface SessionCallData {
   readonly sessionNonce: bigint;
 }
 
-/** What a signed extrinsic holds, beside its call. */
+/** What a signed extrinsic holds, with the birth block its signature was verified against. */
 export interface ExtrinsicData {
   readonly signer: Bytes32;
   readonly signature: Uint8Array;
@@ -30,6 +36,10 @@ export interface ExtrinsicData {
   readonly era: { readonly period: number; readonly phase: number };
   readonly tip: bigint;
   readonly metadataHashMode: string;
+  readonly birth: { readonly number: number; readonly hash: Bytes32 };
+  readonly lastValidBlock: number;
+  readonly signed: SignedPath;
+  readonly payloadLength: number;
   readonly call: SessionCallData;
   readonly callBytes: Uint8Array;
 }
@@ -71,11 +81,27 @@ export function readCall(runtime: RuntimeId, bytes: Uint8Array): SessionCallData
   return data;
 }
 
-/** Reads a signed extrinsic of this runtime, its extensions in the table's order. */
-export function readExtrinsic(runtime: RuntimeId, input: Uint8Array): ExtrinsicData {
+/** Reads the birth block a caller names: its number once, its hash once and by its internal state. */
+function birthOf(value: unknown): { number: number; hash: Bytes32 } {
+  if (value === null || typeof value !== "object") refuse("BAD_INPUT", "the birth block must be an object with a number and a hash");
+  const v = value as { number?: unknown; hash?: unknown };
+  const number = v.number;
+  const hash = bytesOf(v.hash, 32, "the birth block hash");
+  if (typeof number !== "number") refuse("BAD_INPUT", "the birth block number must be a whole number (u32)");
+  lastValidBlock(number);
+  return { number, hash };
+}
+
+/**
+ * Reads a signed extrinsic of this runtime, its extensions in the table's order, and verifies its
+ * signature over the payload it rebuilds with the birth block's hash. The era's phase must be the birth
+ * block's. So the birth the data names is the one that was signed.
+ */
+export function readExtrinsic(runtime: RuntimeId, input: Uint8Array, birthBlock: { readonly number: number; readonly hash: Bytes32 }): ExtrinsicData {
   const reviewed = reviewedRuntime(runtime);
   const rt = reviewed.rt;
   const bytes = bytesOf(input, null, "the extrinsic bytes");
+  const birth = birthOf(birthBlock);
   const r = new ByteReader(bytes);
   const length = r.compact();
   if (length !== BigInt(bytes.length - r.position)) refuse("BAD_BYTES", `the length prefix says ${length}, the body has ${bytes.length - r.position} bytes`);
@@ -85,6 +111,7 @@ export function readExtrinsic(runtime: RuntimeId, input: Uint8Array): ExtrinsicD
   const signer = r.take(32);
   if (r.byte() !== rt.signature.index) refuse("BAD_BYTES", `the signature is not a MultiSignature ${rt.signature.variant}`);
   const signature = r.take(64);
+  const extraStart = r.position;
   let accountNonce: number | null = null;
   let era: { period: number; phase: number } | null = null;
   let tip: bigint | null = null;
@@ -104,9 +131,20 @@ export function readExtrinsic(runtime: RuntimeId, input: Uint8Array): ExtrinsicD
     }
   }
   if (accountNonce === null || era === null || tip === null || metadataHashMode === null) refuse("RUNTIME_UNKNOWN", "the table lacks an extension the reader needs");
+  if (era.phase !== birth.number % era.period) refuse("BAD_BYTES", `the era phase ${era.phase} is not that of block ${birth.number}`);
+  const extra = bytes.slice(extraStart, r.position);
   const start = r.position;
   const call = readSessionCall(r, reviewed);
   const callBytes = bytes.slice(start, r.position);
   r.done("the extrinsic");
-  return { signer, signature, accountNonce, era, tip, metadataHashMode, call, callBytes };
+
+  const { payload, message, signed } = signingPayload(rt, callBytes, extra, birth.hash);
+  let verifies = false;
+  try {
+    verifies = ed25519.verify(signature, message, signer);
+  } catch {
+    verifies = false;
+  }
+  if (!verifies) refuse("SIGNATURE_INVALID", "the signature does not verify against the signer and the payload with this birth hash");
+  return { signer, signature, accountNonce, era, tip, metadataHashMode, birth, lastValidBlock: lastValidBlock(birth.number), signed, payloadLength: payload.length, call, callBytes };
 }

@@ -223,7 +223,7 @@ describe("the strict reader refuses bytes it does not know", () => {
 
   /** Rebuilds a signed extrinsic from its parts, with one part changed. */
   function rebuild(change: Partial<Record<"version" | "addr" | "sigKind" | "era" | "nonce" | "tip" | "mode" | "tail", Uint8Array>>) {
-    const x = readExtrinsic(RT, signed.extrinsic);
+    const x = readExtrinsic(RT, signed.extrinsic, BIRTH);
     const parts = {
       version: Uint8Array.of(0x84),
       addr: Uint8Array.of(0),
@@ -247,31 +247,40 @@ describe("the strict reader refuses bytes it does not know", () => {
   });
 
   it("extrinsic bytes: unsigned or another version, another address or signature kind", () => {
-    expect(codeOf(() => readExtrinsic(RT, rebuild({ version: Uint8Array.of(0x04) })))).toBe("BAD_BYTES");
-    expect(codeOf(() => readExtrinsic(RT, rebuild({ version: Uint8Array.of(0x85) })))).toBe("BAD_BYTES");
-    expect(codeOf(() => readExtrinsic(RT, rebuild({ addr: Uint8Array.of(3) })))).toBe("BAD_BYTES");
-    expect(codeOf(() => readExtrinsic(RT, rebuild({ sigKind: Uint8Array.of(1) })))).toBe("BAD_BYTES");
+    expect(codeOf(() => readExtrinsic(RT, rebuild({ version: Uint8Array.of(0x04) }), BIRTH))).toBe("BAD_BYTES");
+    expect(codeOf(() => readExtrinsic(RT, rebuild({ version: Uint8Array.of(0x85) }), BIRTH))).toBe("BAD_BYTES");
+    expect(codeOf(() => readExtrinsic(RT, rebuild({ addr: Uint8Array.of(3) }), BIRTH))).toBe("BAD_BYTES");
+    expect(codeOf(() => readExtrinsic(RT, rebuild({ sigKind: Uint8Array.of(1) }), BIRTH))).toBe("BAD_BYTES");
   });
 
   it("extrinsic bytes: an immortal era, a period other than 64, a phase at or above its period", () => {
-    expect(codeOf(() => readExtrinsic(RT, rebuild({ era: Uint8Array.of(0) })))).toBe("BAD_BYTES");
-    expect(codeOf(() => readExtrinsic(RT, rebuild({ era: Uint8Array.of(0x04, 0x00) })))).toBe("BAD_BYTES"); // period 32
-    expect(codeOf(() => readExtrinsic(RT, rebuild({ era: Uint8Array.of(0x06, 0x00) })))).toBe("BAD_BYTES"); // period 128
-    expect(codeOf(() => readExtrinsic(RT, rebuild({ era: Uint8Array.of(0x05, 0x04) })))).toBe("BAD_BYTES"); // phase 64
-    expect(readExtrinsic(RT, rebuild({ era: Uint8Array.of(0xf5, 0x03) })).era).toEqual({ period: 64, phase: 63 });
+    expect(codeOf(() => readExtrinsic(RT, rebuild({ era: Uint8Array.of(0) }), BIRTH))).toBe("BAD_BYTES");
+    expect(codeOf(() => readExtrinsic(RT, rebuild({ era: Uint8Array.of(0x04, 0x00) }), BIRTH))).toBe("BAD_BYTES"); // period 32
+    expect(codeOf(() => readExtrinsic(RT, rebuild({ era: Uint8Array.of(0x06, 0x00) }), BIRTH))).toBe("BAD_BYTES"); // period 128
+    expect(codeOf(() => readExtrinsic(RT, rebuild({ era: Uint8Array.of(0x05, 0x04) }), BIRTH))).toBe("BAD_BYTES"); // phase 64
+    expect(codeOf(() => readExtrinsic(RT, rebuild({ era: Uint8Array.of(0xf5, 0x03) }), BIRTH))).toBe("BAD_BYTES"); // phase 63, not the birth's
+  });
+
+  it("extrinsic bytes: a birth whose phase is not the era's, or whose hash was not signed, is refused", () => {
+    expect(readExtrinsic(RT, signed.extrinsic, BIRTH).birth.number).toBe(BIRTH.number);
+    expect(codeOf(() => readExtrinsic(RT, signed.extrinsic, { number: BIRTH.number + 1, hash: BIRTH.hash }))).toBe("BAD_BYTES");
+    expect(codeOf(() => readExtrinsic(RT, signed.extrinsic, { number: BIRTH.number, hash: new Uint8Array(32) }))).toBe("SIGNATURE_INVALID");
+    const sig = Uint8Array.from(signed.extrinsic);
+    sig[2 + 1 + 1 + 32 + 1] ^= 1;
+    expect(codeOf(() => readExtrinsic(RT, sig, BIRTH))).toBe("SIGNATURE_INVALID");
   });
 
   it("extrinsic bytes: a tip, the metadata hash check on, a nonce above u32, a length prefix that lies, bytes left over", () => {
-    expect(codeOf(() => readExtrinsic(RT, rebuild({ tip: compact(1n) })))).toBe("BAD_BYTES");
-    expect(codeOf(() => readExtrinsic(RT, rebuild({ mode: Uint8Array.of(1) })))).toBe("BAD_BYTES");
-    expect(codeOf(() => readExtrinsic(RT, rebuild({ mode: Uint8Array.of(2) })))).toBe("ENUM_UNKNOWN");
-    expect(codeOf(() => readExtrinsic(RT, rebuild({ nonce: compact(1n << 32n) })))).toBe("BAD_BYTES");
-    expect(codeOf(() => readExtrinsic(RT, rebuild({ nonce: Uint8Array.of(0x11, 0x00) })))).toBe("BAD_BYTES"); // 4 not in canonical form
-    expect(codeOf(() => readExtrinsic(RT, rebuild({ tail: Uint8Array.of(0) })))).toBe("BAD_BYTES");
-    expect(codeOf(() => readExtrinsic(RT, signed.extrinsic.slice(0, -1)))).toBe("BAD_BYTES");
+    expect(codeOf(() => readExtrinsic(RT, rebuild({ tip: compact(1n) }), BIRTH))).toBe("BAD_BYTES");
+    expect(codeOf(() => readExtrinsic(RT, rebuild({ mode: Uint8Array.of(1) }), BIRTH))).toBe("BAD_BYTES");
+    expect(codeOf(() => readExtrinsic(RT, rebuild({ mode: Uint8Array.of(2) }), BIRTH))).toBe("ENUM_UNKNOWN");
+    expect(codeOf(() => readExtrinsic(RT, rebuild({ nonce: compact(1n << 32n) }), BIRTH))).toBe("BAD_BYTES");
+    expect(codeOf(() => readExtrinsic(RT, rebuild({ nonce: Uint8Array.of(0x11, 0x00) }), BIRTH))).toBe("BAD_BYTES"); // 4 not in canonical form
+    expect(codeOf(() => readExtrinsic(RT, rebuild({ tail: Uint8Array.of(0) }), BIRTH))).toBe("BAD_BYTES");
+    expect(codeOf(() => readExtrinsic(RT, signed.extrinsic.slice(0, -1), BIRTH))).toBe("BAD_BYTES");
     const lying = Uint8Array.from(signed.extrinsic);
     lying[0] ^= 4;
-    expect(codeOf(() => readExtrinsic(RT, lying))).toBe("BAD_BYTES");
+    expect(codeOf(() => readExtrinsic(RT, lying, BIRTH))).toBe("BAD_BYTES");
   });
 });
 
@@ -382,6 +391,7 @@ describe("E1 and E13: the encoder is pure and not wired", () => {
       "extrinsic.ts",
       "fields.ts",
       "freeze.ts",
+      "payload.ts",
       "reader.ts",
       "runtimes.ts",
       "scale.ts",

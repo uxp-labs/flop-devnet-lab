@@ -206,10 +206,25 @@ describe("P7: a signer that throws gets a typed refusal", () => {
 });
 
 describe("P2, P8, P9: no exported function describes or reads as allowed what the table does not allow", () => {
-  it("P2/P8 describeCall: data whose declared spend is below what the inner call moves is refused, not put into words", () => {
+  it("P2/P8 describeCall (rewritten for H5): words come from bytes only; data whose spend is below the move is refused as data and as bytes", () => {
     const data = { owner: OWNER, inner: { ...S.force_open, escrow: 10n ** 21n } as InnerCall, spend: 1n, sessionNonce: 1n };
-    const code = codeOf(() => describeCall(RT, data));
-    expect(code).not.toBeNull();
+    // Data is not bytes: no exported function words it.
+    expect(codeOf(() => describeCall(RUNTIME_ID, data as never))).toBe("BAD_INPUT");
+    // The same call as bytes, with the spend lowered to 1 raw, is refused by the strict reader.
+    const bytes = encodeSessionCall({ runtime: RUNTIME_ID, owner: OWNER, inner: data.inner, sessionNonce: 1n });
+    const low = Uint8Array.from(bytes);
+    low.fill(0, low.length - 24, low.length - 8);
+    low[low.length - 24] = 1;
+    expect(refSpend(low).declared).toBe(1n);
+    expect(codeOf(() => describeCall(RUNTIME_ID, low))).toBe("SPEND_MISMATCH");
+    // And the words functions of describe.ts take bytes: each exported function's parameters are a runtime id and bytes.
+    const text = readFileSync(join(import.meta.dirname, "..", "src", "chain", "describe.ts"), "utf8");
+    const sigs = [...text.matchAll(/export function (\w+)\(([^)]*)\)/g)].map((m) => `${m[1]}(${m[2]})`);
+    expect(sigs).toEqual([
+      "amountText(raw: bigint)",
+      "describeCall(runtime: RuntimeId, callBytes: Uint8Array)",
+      "describeExtrinsic(runtime: RuntimeId, extrinsic: Uint8Array, birth: { readonly number: number; readonly hash: Uint8Array })",
+    ]);
   });
 
   it("P2/P9 readCall (rewritten for H6): no exported function takes a Runtime; a forged one with the four names is read by the frozen table", () => {

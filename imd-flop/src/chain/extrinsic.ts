@@ -10,21 +10,18 @@
  *
  * Pure: no network, no clock, no file read. No command uses it yet.
  */
-import { ed25519 } from "@noble/curves/ed25519.js";
 import { blake2b } from "@noble/hashes/blake2.js";
-import { hexToBytes } from "@noble/hashes/utils.js";
-import { INNER_PALLET, isInnerName, INNER_NAMES, spendOf, type Bytes32, type InnerCall } from "./calls.js";
+import { isInnerName, INNER_NAMES, spendOf, type Bytes32, type InnerCall } from "./calls.js";
 import { describeExtrinsic } from "./describe.js";
 import { refuse } from "./errors.js";
 import { lastValidBlock, mortalEra } from "./era.js";
 import { bytesOf, exactKeys, writeValue } from "./fields.js";
+import { signingPayload, type SignedPath } from "./payload.js";
 import { readExtrinsic, type SessionCallData } from "./reader.js";
-import { compact, concat, toHex, uintLE } from "./scale.js";
+import { compact, concat } from "./scale.js";
 import { reviewedRuntime, type Reviewed } from "./shape.js";
 import type { Runtime, RuntimeId } from "./table.js";
 
-/** A payload longer than this is hashed with blake2b 256 before it is signed. */
-export const PAYLOAD_HASH_ABOVE = 256;
 
 export interface SessionCallInput {
   /** The runtime the call is for, by the four names read from the chain. */
@@ -57,7 +54,7 @@ export interface SignedSessionCall {
   readonly hash: Uint8Array;
   readonly call: Uint8Array;
   /** Whether the payload was signed as it is or as its blake2b 256 hash. */
-  readonly signed: "payload" | "payload-blake2b-256";
+  readonly signed: SignedPath;
   readonly payloadLength: number;
   /** The fields, as read back from the extrinsic bytes. */
   readonly fields: SessionCallData & {
@@ -104,31 +101,16 @@ export function encodeSessionCall(input: SessionCallInput): Uint8Array {
   return sessionCallBytes(reviewedRuntime(input.runtime), input);
 }
 
-/** What is signed: the payload itself up to 256 bytes, its blake2b 256 hash above. */
-export function toSign(payload: Uint8Array): { message: Uint8Array; signed: SignedSessionCall["signed"] } {
-  return payload.length > PAYLOAD_HASH_ABOVE ? { message: blake2b(payload, { dkLen: 32 }), signed: "payload-blake2b-256" } : { message: payload, signed: "payload" };
-}
 
 const bytes32 = (value: unknown, what: string): Bytes32 => bytesOf(value, 32, what);
 
 /** The extra and the additional signed data, in the table's order of signed extensions. */
-function extensions(rt: Runtime, accountNonce: number, birth: { number: number; hash: Bytes32 }): { extra: Uint8Array; additional: Uint8Array } {
+function extensions(rt: Runtime, accountNonce: number, birth: { number: number; hash: Bytes32 }): { extra: Uint8Array } {
   const extra: Uint8Array[] = [];
-  const additional: Uint8Array[] = [];
   for (const e of rt.signedExtensions) {
     switch (e.identifier) {
-      case "CheckSpecVersion":
-        additional.push(uintLE(BigInt(rt.specVersion), 4));
-        break;
-      case "CheckTxVersion":
-        additional.push(uintLE(BigInt(rt.transactionVersion), 4));
-        break;
-      case "CheckGenesis":
-        additional.push(hexBytes(rt.genesisHash));
-        break;
       case "CheckMortality":
         extra.push(mortalEra(birth.number));
-        additional.push(Uint8Array.from(birth.hash));
         break;
       case "CheckNonce":
         extra.push(compact(BigInt(accountNonce)));
@@ -138,8 +120,10 @@ function extensions(rt: Runtime, accountNonce: number, birth: { number: number; 
         break;
       case "CheckMetadataHash":
         extra.push(e.extra.kind === "struct" ? writeValue(e.extra.fields[0].type, "Disabled", "CheckMetadataHash.mode") : refuse("RUNTIME_UNKNOWN", "CheckMetadataHash"));
-        additional.push(Uint8Array.of(0)); // None: no metadata hash
         break;
+      case "CheckSpecVersion":
+      case "CheckTxVersion":
+      case "CheckGenesis":
       case "CheckNonZeroSender":
       case "CheckWeight":
         break;
@@ -147,12 +131,7 @@ function extensions(rt: Runtime, accountNonce: number, birth: { number: number; 
         refuse("RUNTIME_UNKNOWN", `signed extension ${e.identifier}`);
     }
   }
-  return { extra: concat(...extra), additional: concat(...additional) };
-}
-
-function hexBytes(h: string): Uint8Array {
-  if (!/^0x([0-9a-f]{2})*$/.test(h)) refuse("RUNTIME_UNKNOWN", `the table holds ${h}, not lower case hex`);
-  return hexToBytes(h.slice(2));
+  return { extra: concat(...extra) };
 }
 
 /** Encodes and signs a session call. Every refusal but SIGNATURE_INVALID comes before the sign function is called. */
@@ -165,36 +144,29 @@ export function signSessionCall(input: ExtrinsicInput): SignedSessionCall {
   const publicKey = bytes32(input.signer?.publicKey, "the device public key");
   const birthHash = bytes32(input.birth?.hash, "the birth block hash");
   const birth = { number: input.birth.number, hash: birthHash };
-  const lastValid = lastValidBlock(birth.number);
+  lastValidBlock(birth.number);
   const nonce = input.accountNonce;
   if (typeof nonce !== "number" || !Number.isInteger(nonce)) refuse("BAD_INPUT", "the account nonce must be a whole number (u32)");
   if (nonce < 0 || nonce > 2 ** 32 - 1) refuse("OUT_OF_RANGE", `the account nonce ${nonce} is not a u32`);
   if (typeof input.signer.sign !== "function") refuse("BAD_INPUT", "the signer has no sign function");
 
-  const { extra, additional } = extensions(rt, nonce, birth);
-  const payload = concat(call, extra, additional);
-  const { message, signed } = toSign(payload);
+  const { extra } = extensions(rt, nonce, birth);
+  const { message } = signingPayload(rt, call, extra, birth.hash);
   const signature = input.signer.sign(Uint8Array.from(message));
   if (!(signature instanceof Uint8Array) || signature.length !== 64) refuse("SIGNATURE_INVALID", "the sign function did not give 64 bytes");
-  let verifies = false;
-  try {
-    verifies = ed25519.verify(signature, message, publicKey);
-  } catch {
-    verifies = false;
-  }
-  if (!verifies) refuse("SIGNATURE_INVALID", `the signature does not verify against ${toHex(publicKey)} and the payload`);
 
   const body = concat(Uint8Array.of(0x80 | rt.extrinsicVersion, rt.address.index), publicKey, Uint8Array.of(rt.signature.index), signature, extra, call);
   const extrinsic = concat(compact(BigInt(body.length)), body);
 
-  const read = readExtrinsic(rt, extrinsic);
+  // The one check of the signature (E8): the strict reader verifies it over the payload it rebuilds.
+  const read = readExtrinsic(rt, extrinsic, birth);
   return {
     extrinsic,
     hash: blake2b(extrinsic, { dkLen: 32 }),
     call: read.callBytes,
-    signed,
-    payloadLength: payload.length,
-    fields: { ...read.call, signer: read.signer, accountNonce: read.accountNonce, birth, lastValidBlock: lastValid },
-    description: describeExtrinsic(rt, read, birth, lastValid),
+    signed: read.signed,
+    payloadLength: read.payloadLength,
+    fields: { ...read.call, signer: read.signer, accountNonce: read.accountNonce, birth: read.birth, lastValidBlock: read.lastValidBlock },
+    description: describeExtrinsic(rt, extrinsic, birth),
   };
 }

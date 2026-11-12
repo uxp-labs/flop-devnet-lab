@@ -8,7 +8,8 @@ import { describe, expect, it } from "vitest";
 import type { InnerCall } from "../src/chain/calls.js";
 import { amountText, describeExtrinsic, FLOP_DECIMALS } from "../src/chain/describe.js";
 import { ChainEncodeError } from "../src/chain/errors.js";
-import { PAYLOAD_HASH_ABOVE, signSessionCall, toSign } from "../src/chain/extrinsic.js";
+import { signSessionCall } from "../src/chain/extrinsic.js";
+import { PAYLOAD_HASH_ABOVE, toSign } from "../src/chain/payload.js";
 import { readExtrinsic } from "../src/chain/reader.js";
 import type { Field } from "../src/chain/table.js";
 import { boundaryInner, hex, OWNER, readJson, RT, RUNTIME_ID, sampleInner, testDevice, U128_MAX, U32_MAX, U64_MAX, unhex } from "./lib/chain-fixtures.js";
@@ -86,7 +87,7 @@ describe("E9: the description names every value the bytes hold", () => {
   for (const c of cases) {
     it(`${c.inner.call}, session nonce ${c.sessionNonce}: every value is named`, () => {
       const { device, out } = sign(c);
-      const x = readExtrinsic(RT, out.extrinsic);
+      const x = readExtrinsic(RT, out.extrinsic, c.birth);
       const words = out.description;
       const want = [
         `signed by device ${hex(device.publicKey)}`,
@@ -110,20 +111,20 @@ describe("E9: the description names every value the bytes hold", () => {
 
   it("the description is the words of the bytes read back: describeExtrinsic of readExtrinsic", () => {
     const { out } = sign(cases[3]);
-    expect(out.description).toBe(describeExtrinsic(RT, readExtrinsic(RT, out.extrinsic), BIRTH, BIRTH.number + 63));
+    expect(out.description).toBe(describeExtrinsic(RT, out.extrinsic, BIRTH));
   });
 
   for (const at of [2, 3]) {
     it(`a changed byte anywhere in a signed ${cases[at].inner.call} changes the description or is refused`, () => {
       const { out } = sign(cases[at]);
-      const base = describeExtrinsic(RT, readExtrinsic(RT, out.extrinsic), BIRTH, BIRTH.number + 63);
+      const base = describeExtrinsic(RT, out.extrinsic, BIRTH);
       const same: number[] = [];
       for (let i = 0; i < out.extrinsic.length; i++) {
         for (const bit of [0x01, 0x80]) {
           const b = Uint8Array.from(out.extrinsic);
           b[i] ^= bit;
           try {
-            if (describeExtrinsic(RT, readExtrinsic(RT, b), BIRTH, BIRTH.number + 63) === base) same.push(i);
+            if (describeExtrinsic(RT, b, BIRTH) === base) same.push(i);
           } catch (e) {
             expect(e).toBeInstanceOf(ChainEncodeError);
           }

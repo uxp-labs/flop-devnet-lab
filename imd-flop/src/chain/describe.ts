@@ -1,16 +1,17 @@
 /**
- * The plain words of a signed session call (rule E9). They are made only from what the strict reader read
- * back from the final bytes, field by field in the table's order, so the words cannot differ from the
- * bytes. Every amount is given in raw units and in FLOP.
+ * The plain words of a session call and of a signed session call (rules E9 and H5). Each exported function
+ * takes bytes and the four names of a runtime, reads the bytes with the strict reader, and words only what
+ * it read, field by field in the table's order. No exported function takes a caller's data to word, so the
+ * words cannot differ from the bytes. Every amount is given in raw units and in FLOP.
  */
 import { INNER_PALLET, OUTER } from "./calls.js";
 import type { FieldValue } from "./fields.js";
-import type { ExtrinsicData, SessionCallData } from "./reader.js";
+import { readCall, readExtrinsic, type ExtrinsicData, type SessionCallData } from "./reader.js";
 import { toHex } from "./scale.js";
-import { reviewedRuntime } from "./shape.js";
+import { reviewedRuntime, type Reviewed } from "./shape.js";
 import type { Field, RuntimeId } from "./table.js";
 
-/** Base units per FLOP are 10^18. contract/rules.json FLOP_DECIMALS (test/chain-describe.test.ts holds it). */
+/** Base units per FLOP are 10^18. contract/rules.json FLOP_DECIMALS (test/chain-words.test.ts holds it). */
 export const FLOP_DECIMALS = 18;
 const UNIT = 10n ** BigInt(FLOP_DECIMALS);
 
@@ -32,9 +33,9 @@ function valueText(field: Field, value: FieldValue): string {
   return String(value);
 }
 
-/** The words of a session call: the outer call, the declared spend, the session nonce and the inner call. */
-export function describeCall(runtime: RuntimeId, data: SessionCallData): string {
-  const entry = reviewedRuntime(runtime).inner[data.inner.call];
+/** Words of what the strict reader read. Not exported: it is reached only from bytes. */
+function callWords({ inner: entries }: Reviewed, data: SessionCallData): string {
+  const entry = entries[data.inner.call];
   const inner = data.inner as unknown as Record<string, FieldValue>;
   const fields = entry.fields.map((f) => `${f.name} ${valueText(f, inner[f.name])}`).join(", ");
   return [
@@ -45,14 +46,28 @@ export function describeCall(runtime: RuntimeId, data: SessionCallData): string 
   ].join("; ");
 }
 
-/** The words of a signed session call. The birth block's number and hash are the caller's: the era bytes hold its phase, the signed payload its hash. */
-export function describeExtrinsic(runtime: RuntimeId, x: ExtrinsicData, birth: { number: number; hash: Uint8Array }, lastValid: number): string {
-  const rt = reviewedRuntime(runtime).rt;
+function extrinsicWords(reviewed: Reviewed, x: ExtrinsicData): string {
+  const rt = reviewed.rt;
   return [
     `signed by device ${toHex(x.signer)} (MultiAddress ${rt.address.variant}), ${rt.signature.variant} signature ${toHex(x.signature)}`,
     `account nonce ${x.accountNonce}, tip ${amountText(x.tip)}, metadata hash check ${x.metadataHashMode}`,
-    `mortal era of ${x.era.period} blocks (phase ${x.era.phase}): born at block ${birth.number}, hash ${toHex(birth.hash)}; valid through block ${lastValid}`,
+    `mortal era of ${x.era.period} blocks (phase ${x.era.phase}): born at block ${x.birth.number}, hash ${toHex(x.birth.hash)}; valid through block ${x.lastValidBlock}`,
     `runtime ${rt.specName} ${rt.specVersion}, transaction version ${rt.transactionVersion}, genesis ${rt.genesisHash}`,
-    describeCall(rt, x.call),
+    callWords(reviewed, x.call),
   ].join("\n");
+}
+
+/** The words of call bytes: the outer call, the declared spend, the session nonce and the inner call. */
+export function describeCall(runtime: RuntimeId, callBytes: Uint8Array): string {
+  const data = readCall(runtime, callBytes);
+  return callWords(reviewedRuntime(runtime), data);
+}
+
+/**
+ * The words of a signed extrinsic. The birth block is checked against the bytes: its phase against the era
+ * and its hash by the signature, which verifies only over the payload that holds it.
+ */
+export function describeExtrinsic(runtime: RuntimeId, extrinsic: Uint8Array, birth: { readonly number: number; readonly hash: Uint8Array }): string {
+  const x = readExtrinsic(runtime, extrinsic, birth);
+  return extrinsicWords(reviewedRuntime(runtime), x);
 }
