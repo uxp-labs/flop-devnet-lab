@@ -294,5 +294,13 @@
     "replace": "  process.exit(0);",
     "test": "scripts/cli-checks.mjs",
     "why": "the writer refuses a call without --out with exit 2"
+  },
+  {
+    "id": "cli-write-requests-old-node-accepted",
+    "file": "scripts/write-requests.mjs",
+    "find": "if (!(major > 22 || (major === 22 && minor >= 18)) || !process.features.typescript) {",
+    "replace": "if (false) {",
+    "test": "scripts/cli-checks.mjs",
+    "why": "the writer says in one line of its own that it needs type stripping, instead of a loader error"
   }
 ]

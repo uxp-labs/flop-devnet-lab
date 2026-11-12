@@ -241,13 +241,21 @@ const cases = [
       const bare = node([join(pkg, "scripts", "write-requests.mjs")]);
       let same = false;
       try {
-        same = readFileSync(out, "utf8") === readFileSync(join(pkg, "recordings", "requests.json"), "utf8");
+        same = readFileSync(out).equals(readFileSync(join(pkg, "recordings", "requests.json")));
       } catch {
         same = false;
       }
       return { exit: w.status, same, bare: bare.status, stderr: `${w.stderr ?? ""}${bare.stderr ?? ""}`.trim() };
     },
     ok: (r) => r.exit === 0 && r.same && r.bare === 2 && r.stderr === "usage: node scripts/write-requests.mjs --out <file>",
+  },
+  {
+    name: "the request list writer refuses, in one line of its own and with exit 1, a Node without type stripping",
+    run: () => {
+      const w = node(["--no-experimental-strip-types", join(pkg, "scripts", "write-requests.mjs"), "--out", join(work, "requests-old.json")]);
+      return { exit: w.status, stderr: (w.stderr ?? "").trim() };
+    },
+    ok: (r) => r.exit === 1 && /^write-requests needs Node 22\.18 or later, with type stripping; this is Node [0-9.]+$/.test(r.stderr),
   },
   {
     name: "census refuses a scenario with an unreadable page file",
