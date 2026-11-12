@@ -46,12 +46,20 @@ function callWords({ inner: entries }: Reviewed, data: SessionCallData): string 
   ].join("; ");
 }
 
+/**
+ * The era line, made here only. The bytes hold the era's phase. The signature binds the birth block's hash.
+ * The birth block's number is what the caller gave: only its remainder by the period is checked.
+ */
+function eraWords(x: ExtrinsicData): string {
+  return `mortal era of ${x.era.period} blocks (phase ${x.era.phase}): the signature binds the birth block hash ${toHex(x.birth.hash)}; the birth block number ${x.birth.number} is as given, the bytes hold only the phase; the last valid block ${x.lastValidBlock} follows from that number`;
+}
+
 function extrinsicWords(reviewed: Reviewed, x: ExtrinsicData): string {
   const rt = reviewed.rt;
   return [
     `signed by device ${toHex(x.signer)} (MultiAddress ${rt.address.variant}), ${rt.signature.variant} signature ${toHex(x.signature)}`,
     `account nonce ${x.accountNonce}, tip ${amountText(x.tip)}, metadata hash check ${x.metadataHashMode}`,
-    `mortal era of ${x.era.period} blocks (phase ${x.era.phase}): born at block ${x.birth.number}, hash ${toHex(x.birth.hash)}; valid through block ${x.lastValidBlock}`,
+    eraWords(x),
     `runtime ${rt.specName} ${rt.specVersion}, transaction version ${rt.transactionVersion}, genesis ${rt.genesisHash}`,
     callWords(reviewed, x.call),
   ].join("\n");
