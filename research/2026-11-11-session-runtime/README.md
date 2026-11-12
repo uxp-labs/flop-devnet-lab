@@ -87,11 +87,12 @@ From our own transactions on devnet (`../2026-11-11-session-probe/`, `../2026-11
 
 ## What is not confirmed
 
-- The deny list itself. Nothing we sent tried a denied pallet. It rests on the report's reading of
-  the code, and we cannot rerun that reading. One devnet call would settle each entry: a session
-  that lists the pallet as allowed, then a call to it through the session, which should fail with
-  `PalletNotAllowed`.
-- That the allow list ignores case.
+- That the seven names are the whole deny list. Later the same day we tried each of the seven on
+  chain (`../2026-11-11-session-deny-list/`): a session whose allow list named them was refused
+  every one with `PalletNotAllowed`, and a `System` call went through. So the seven are denied. A
+  pallet nobody tried could be denied too, and we cannot rerun the report's reading of the code.
+  The same test showed that the allow list ignores case (`computechannel` let a `ComputeChannel`
+  call through).
 - The order of the checks beyond what our failures show.
 - The sha256 of the decompressed runtime. We have the hash of the compressed code from the node
   (`0x6d47bb49…44c1df`), not the code itself in this repo.
@@ -101,5 +102,6 @@ From our own transactions on devnet (`../2026-11-11-session-probe/`, `../2026-11
 - The design keeps `ComputeChannel` as the only allowed pallet. It never uses an empty allow list:
   that would let the device transfer the owner's funds up to the caps.
 - A session provider in `imd-flop` declares exactly what its call moves, and treats the order of
-  checks and the deny list as leads until a test pins them.
+  checks as a lead until a test pins it. The seven denied pallets are pinned by
+  `../2026-11-11-session-deny-list/`.
 - The question to FLOP Labs changes from "which pallets are denied" to "is this the list".
