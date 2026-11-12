@@ -42,8 +42,8 @@
   {
     "id": "cli-previous-last-line-only",
     "file": "src/history.ts",
-    "find": "  for (const { status: st, observed_at: taken } of snapshots) {",
-    "replace": "  for (const { status: st, observed_at: taken } of snapshots.slice(-1)) {",
+    "find": "  for (const { status: st, observed_at: taken, upgrade } of snapshots) {",
+    "replace": "  for (const { status: st, observed_at: taken, upgrade } of snapshots.slice(-1)) {",
     "test": "scripts/cli-checks.mjs",
     "why": "a snapshot with no RPC reading in between must not hide a rollback"
   },

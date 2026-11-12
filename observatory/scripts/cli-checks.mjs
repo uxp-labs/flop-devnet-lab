@@ -352,8 +352,8 @@ const cases = [
       const a = JSON.parse(readFileSync(join(work, "up-o1", "upgrade.json"), "utf8")).upgrade;
       const b = JSON.parse(readFileSync(join(work, "up-o2", "upgrade.json"), "utf8")).upgrade;
       const head = JSON.parse(readFileSync(join(upLater, "rpc-head.json"), "utf8")).finalized;
-      const said = [a.compared_with, a.executing.state, a.authorized.state, b.at.hash, b.at.number, b.compared_with, b.executing_changed, b.authorization_appeared];
-      const want = [null, "reviewed", "present", head.hash, head.number, a.at.number, false, false];
+      const said = [a?.compared_with, a?.executing?.state, a?.authorized?.state, b?.at?.hash, b?.at?.number, b?.compared_with, b?.executing_changed, b?.authorization_appeared];
+      const want = [null, "reviewed", "present", head.hash, head.number, a?.at?.number, false, false];
       return { exit: JSON.stringify(said) === JSON.stringify(want) ? 0 : 1, json: null, stderr: JSON.stringify(said) };
     },
     ok: (r) => r.exit === 0,

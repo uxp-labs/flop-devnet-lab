@@ -290,8 +290,8 @@
   {
     "id": "snapshot-check-service-detail-off",
     "file": "src/snapshot-check.ts",
-    "find": "  [\"detail\", orNone(text)],",
-    "replace": "  [\"detail\", () => true],",
+    "find": "  [\"detail\", orNone(text)],\n  [\"observed_at\", orNone(text)],",
+    "replace": "  [\"detail\", () => true],\n  [\"observed_at\", orNone(text)],",
     "test": "test/snapshot-check.test.ts",
     "why": "status.rpc.detail, status.gateway.detail, status.faucet.detail are checked: with the check off, the table's cases for them are served"
   },
@@ -634,7 +634,7 @@
   {
     "id": "snapshot-check-snapshot-fixture-when-a-part-is-off",
     "file": "src/snapshot-check.ts",
-    "find": "  [\"snapshot.fixture-when-a-part-is\", (s) => s.trust === \"fixture\" || ![s.status, ...s.escrows, s.census, s.drift].some((x) => isObject(x) && x.trust === \"fixture\")],",
+    "find": "  [\"snapshot.fixture-when-a-part-is\", (s) => s.trust === \"fixture\" || ![s.status, ...s.escrows, s.census, s.drift, s.upgrade].some((x) => isObject(x) && x.trust === \"fixture\")],",
     "replace": "  [\"snapshot.fixture-when-a-part-is\", () => true],",
     "test": "test/snapshot-check.test.ts",
     "why": "the agreement snapshot.fixture-when-a-part-is is checked: with it off, the table's cases for it are served"
@@ -818,8 +818,8 @@
   {
     "id": "snapshot-check-snapshot-parts-read-when-broken",
     "file": "src/snapshot-check.ts",
-    "find": "if (!shape(\"snapshot\", s, SNAPSHOT, broken)) return;",
-    "replace": "if (!shape(\"snapshot\", s, SNAPSHOT, broken) && !isObject(s)) return;",
+    "find": "if (!shape(\"snapshot\", s, snapshotFields(s), broken)) return;",
+    "replace": "if (!shape(\"snapshot\", s, snapshotFields(s), broken) && !isObject(s)) return;",
     "test": "test/snapshot-check.test.ts",
     "why": "a snapshot whose fields are wrong is reported once, its parts not read (case: a snapshot with an extra field, whose pin is not read)"
   },
@@ -1114,32 +1114,32 @@
   {
     "id": "snapshot-check-fixture-status-ignored",
     "file": "src/snapshot-check.ts",
-    "find": "[s.status, ...s.escrows, s.census, s.drift]",
-    "replace": "[...s.escrows, s.census, s.drift]",
+    "find": "[s.status, ...s.escrows, s.census, s.drift, s.upgrade]",
+    "replace": "[...s.escrows, s.census, s.drift, s.upgrade]",
     "test": "test/snapshot-check.test.ts",
     "why": "a fixture status makes the snapshot a fixture (case: a trusted snapshot whose only fixture part is the status)"
   },
   {
     "id": "snapshot-check-fixture-escrows-ignored",
     "file": "src/snapshot-check.ts",
-    "find": "[s.status, ...s.escrows, s.census, s.drift]",
-    "replace": "[s.status, s.census, s.drift]",
+    "find": "[s.status, ...s.escrows, s.census, s.drift, s.upgrade]",
+    "replace": "[s.status, s.census, s.drift, s.upgrade]",
     "test": "test/snapshot-check.test.ts",
     "why": "a fixture escrow makes the snapshot a fixture (case: a trusted snapshot whose only fixture part is one escrow)"
   },
   {
     "id": "snapshot-check-fixture-census-ignored",
     "file": "src/snapshot-check.ts",
-    "find": "[s.status, ...s.escrows, s.census, s.drift]",
-    "replace": "[s.status, ...s.escrows, s.drift]",
+    "find": "[s.status, ...s.escrows, s.census, s.drift, s.upgrade]",
+    "replace": "[s.status, ...s.escrows, s.drift, s.upgrade]",
     "test": "test/snapshot-check.test.ts",
     "why": "a fixture census makes the snapshot a fixture (case: a trusted snapshot whose only fixture part is the census)"
   },
   {
     "id": "snapshot-check-fixture-drift-ignored",
     "file": "src/snapshot-check.ts",
-    "find": "[s.status, ...s.escrows, s.census, s.drift]",
-    "replace": "[s.status, ...s.escrows, s.census]",
+    "find": "[s.status, ...s.escrows, s.census, s.drift, s.upgrade]",
+    "replace": "[s.status, ...s.escrows, s.census, s.upgrade]",
     "test": "test/snapshot-check.test.ts",
     "why": "a fixture drift report makes the snapshot a fixture (case: a trusted snapshot whose only fixture part is the drift report)"
   },
@@ -1386,8 +1386,8 @@
   {
     "id": "snapshot-check-required-service-detail",
     "file": "src/snapshot-check.ts",
-    "find": "  [\"detail\", orNone(text)],",
-    "replace": "  [\"detail\", text],",
+    "find": "  [\"detail\", orNone(text)],\n  [\"observed_at\", orNone(text)],",
+    "replace": "  [\"detail\", text],\n  [\"observed_at\", orNone(text)],",
     "test": "test/snapshot-check.test.ts",
     "why": "round 15 sweep, stricter: a service detail of none refused (case: the honest snapshot)"
   },
@@ -1842,7 +1842,7 @@
   {
     "id": "snapshot-check-fixture-always",
     "file": "src/snapshot-check.ts",
-    "find": "(s) => s.trust === \"fixture\" || ![s.status, ...s.escrows, s.census, s.drift].some((x) => isObject(x) && x.trust === \"fixture\")]",
+    "find": "(s) => s.trust === \"fixture\" || ![s.status, ...s.escrows, s.census, s.drift, s.upgrade].some((x) => isObject(x) && x.trust === \"fixture\")]",
     "replace": "(s) => s.trust === \"fixture\"]",
     "test": "test/snapshot-check.test.ts",
     "why": "round 15 sweep, stricter: a trusted snapshot refused (case: a trusted snapshot whose parts are all trusted)"

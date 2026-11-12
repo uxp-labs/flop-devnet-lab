@@ -16,14 +16,15 @@ import { renderPage } from "../src/page.js";
 import { PUBLISHED_FILES, judgeLatest } from "../src/published.js";
 import { EXIT } from "../src/run-command.js";
 import { checkSnapshot } from "../src/snapshot-check.js";
+import { buildSnapshot } from "../src/snapshot.js";
 import { DEVNET_GENESIS } from "../src/status.js";
 import { sumsOf } from "../src/sums.js";
 import { TapeTransport } from "../src/tape.js";
 import type { Transport } from "../src/transport.js";
 import type { Snapshot } from "../src/types.js";
-import { DETAIL, UPGRADE_KEYS } from "../src/upgrade-watch.js";
+import { DETAIL, UPGRADE_KEYS, watchUpgrade } from "../src/upgrade-watch.js";
 import { UPGRADE_ANSWERS } from "./helpers/tapes.js";
-import { AUTHORIZED_BYTES, NOT_REVIEWED, NOT_REVIEWED_HEX, RESULTS } from "./helpers/upgrade.js";
+import { AUTHORIZED_BYTES, NOT_REVIEWED, NOT_REVIEWED_HEX, RESULTS, readingAt } from "./helpers/upgrade.js";
 
 const FIXTURES = new URL("../fixtures/", import.meta.url);
 const fixture = (dir: string, name: string) => readFileSync(new URL(`${dir}/${name}`, FIXTURES), "utf8");
@@ -228,6 +229,27 @@ describe("a live run's watch on a log: compared with the one before", () => {
     appendFileSync(join(log, DAY), fixture("published-2026-11-11-0808", `log/${DAY}`));
     const h = readHistory(log);
     expect([h.state, h.snapshots[0]?.schema, earlierOf(h.snapshots, DEVNET_GENESIS).earlierUpgrades]).toEqual(["read", "flop-observatory/snapshot@0", []]);
+  });
+});
+
+describe("the snapshot builds the watch on the RPC genesis the status read", () => {
+  const OTHER = "0x" + "11".repeat(32);
+  /** live-other-genesis's snapshot with a watch at its F, given one earlier watch on the genesis named, a block below. */
+  const built = async (earlierOn: string, trust: "fixture" | "trusted RPC") => {
+    const source = new LiveSource(asLive(tapeOf("live-other-genesis")));
+    const r = (await source.upgradeReading()) as NonNullable<Awaited<ReturnType<LiveSource["upgradeReading"]>>>;
+    const before = watchUpgrade({ reading: readingAt("0x" + "be".repeat(32), (r.number as number) - 1, RESULTS.boundary[0].last_runtime_upgrade.hex, null), genesis: earlierOn, earlier: [] });
+    return buildSnapshot({ status: source, upgrade: { reading: { ...r, trust } } }, { pinnedGenesis: DEVNET_GENESIS, now: "2026-11-11T06:00:01.000Z", sourceSha: null, earlierUpgrades: [{ genesis: earlierOn, watch: before }] });
+  };
+
+  it("compares with a watch on the genesis the RPC read, never with one on the pinned genesis", async () => {
+    const onPinned = await built(DEVNET_GENESIS, "trusted RPC");
+    const onRead = await built(OTHER, "trusted RPC");
+    expect([onPinned.status.genesis.rpc, onPinned.upgrade?.compared_with, onRead.upgrade?.compared_with]).toEqual([OTHER, null, (onRead.upgrade?.at.number as number) - 1]);
+  });
+
+  it("is a part like any other: a fixture watch makes a trusted snapshot a fixture", async () => {
+    expect([(await built(OTHER, "trusted RPC")).trust, (await built(OTHER, "fixture")).trust]).toEqual(["trusted RPC", "fixture"]);
   });
 });
 

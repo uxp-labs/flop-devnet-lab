@@ -170,8 +170,8 @@
   {
     "id": "live-source-anchor-before-head",
     "file": "src/live-source.ts",
-    "find": "    const rpcHead = await this.readHead();\n    // After the head calls, and only when the log gave one: a first run reads no anchor.\n    const h = this.anchorHeight;\n    const anchor = h === null ? null : anchorFrom(h, await this.call(\"chain_getBlockHash\", [h]));",
-    "replace": "    const h = this.anchorHeight;\n    const anchor = h === null ? null : anchorFrom(h, await this.call(\"chain_getBlockHash\", [h]));\n    const rpcHead = await this.readHead();",
+    "find": "    const { rpcHead, upgrade } = await this.readHead();\n    // After the head calls, and only when the log gave one: a first run reads no anchor.\n    const h = this.anchorHeight;\n    const anchor = h === null ? null : anchorFrom(h, await this.call(\"chain_getBlockHash\", [h]));",
+    "replace": "    const h = this.anchorHeight;\n    const anchor = h === null ? null : anchorFrom(h, await this.call(\"chain_getBlockHash\", [h]));\n    const { rpcHead, upgrade } = await this.readHead();",
     "test": "test/live-source.test.ts",
     "why": "the anchor is read after every head call, in a fixed order"
   },

@@ -155,6 +155,8 @@ const CASES: readonly (readonly [string, (s: Json) => void, readonly string[]])[
   ["an executing runtime with a field left out", watched((u) => delete u.executing.detail), ["upgrade.executing.fields"]],
   ["an executing state of another word", watched((u) => (u.executing.state = "Reviewed")), ["upgrade.executing.state"]],
   ["an executing spec name that is a number", watched((u) => (u.executing.spec_name = 1014014)), ["upgrade.executing.spec_name"]],
+  ["an executing spec version below 0", watched((u) => (u.executing.spec_version = -1)), ["upgrade.executing.spec_version"]],
+  ["a negative authorisation length", watched((u) => (u.authorized.length = -1)), ["upgrade.authorized.length"]],
   ["an executing spec version that is text", watched((u) => (u.executing.spec_version = "1014014")), ["upgrade.executing.spec_version"]],
   ["an executing detail that is a flag", watched((u) => ((u.executing.state = "absent"), Object.assign(u.executing, NONE), (u.executing.detail = false), (u.executing_changed = null))), ["upgrade.executing.detail"]],
   ["an authorisation with a field more", watched((u) => (u.authorized.decoded = {})), ["upgrade.authorized.fields"]],
