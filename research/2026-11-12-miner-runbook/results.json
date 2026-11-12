@@ -1,0 +1,36 @@
+{
+  "schema": "flop-devnet-lab/research-reads@0",
+  "what": "The lab's own reads of FLOP devnet, made to check section G of report.md. Read only.",
+  "read_at_utc": "2026-11-12T00:27:00Z",
+  "read_at_note": "to within about two minutes",
+  "rpc": "wss://rpc.devnet.flop.network",
+  "genesis": "0x99c172c095340ace980631f9123544c6bebd4839f3437e463533422d8be2d631",
+  "block": {
+    "height": 3514668,
+    "hash": "0xa0d28689e28d0ca1726d77eef1897df41d02074792ba380e5780b16c07fd96f0",
+    "finalized": true,
+    "finalized_head_height_at_read": 3515604
+  },
+  "method": "state_getKeysPaged(prefix, 500, start, block hash), counted until a page is short. Each prefix is twox128(pallet) then twox128(entry), computed with @polkadot-api/substrate-bindings.",
+  "counts": [
+    {
+      "entry": "MinerStaking.Miners",
+      "prefix": "0xdf6dc59751a8ca58ebdcde156d51fc383c8312b14d47df66cbccdda7f2601ff7",
+      "keys": 242,
+      "report_says": 242
+    },
+    {
+      "entry": "HwCalibration.BenchmarkBurstCaps",
+      "prefix": "0x539f98b909cfe8e8302962f85ef79ea25bb3ebca2f8052bb57cc401c9814665f",
+      "keys": 222,
+      "report_says": 222
+    },
+    {
+      "entry": "ModelRegistry.AllowedDecodePolicies",
+      "prefix": "0xf44e28338f6c2c13df9858869ef65eaad1d3392c115363088bb00608b8a5f64a",
+      "keys": 3,
+      "report_says": 3
+    }
+  ],
+  "not_read": "No value was decoded. A key count says how many entries exist, not what they hold."
+}
