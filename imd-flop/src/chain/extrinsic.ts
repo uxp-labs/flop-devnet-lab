@@ -4,24 +4,27 @@
  * signed version 4 extrinsic with a mortal era of 64 blocks (era.ts), a tip of 0 and the metadata hash
  * check off. The declared spend is what the inner call moves; the caller does not pass it.
  *
- * The device key signs through the given sign function; the encoder reads no key. It checks the signature
- * against the public key and the payload before it returns. The result's fields and words are read back
- * from the final bytes by the strict reader (reader.ts), so they cannot differ from the bytes.
+ * It first reads the whole input into one snapshot: every field read once, checked, and copied into plain
+ * data the caller cannot reach (rule H1). Everything after comes from the snapshot alone: the call bytes,
+ * the declared spend, the payload and the result.
+ *
+ * The device key signs through the given sign function; the encoder reads no key. The strict reader
+ * verifies the signature before the result is returned, and the result's fields and words are read back
+ * from the final bytes (reader.ts, describe.ts), so they cannot differ from the bytes.
  *
  * Pure: no network, no clock, no file read. No command uses it yet.
  */
 import { blake2b } from "@noble/hashes/blake2.js";
-import { isInnerName, INNER_NAMES, spendOf, type Bytes32, type InnerCall } from "./calls.js";
+import { INNER_CALLS, INNER_NAMES, isInnerName, type Bytes32, type InnerCall, type InnerName } from "./calls.js";
 import { describeExtrinsic } from "./describe.js";
 import { refuse } from "./errors.js";
 import { lastValidBlock, mortalEra } from "./era.js";
-import { bytesOf, exactKeys, writeValue } from "./fields.js";
+import { bytesOf, ownKeys, ownValue, takeFields, takeValue, writeValue, type FieldValue } from "./fields.js";
 import { signingPayload, type SignedPath } from "./payload.js";
 import { readExtrinsic, type SessionCallData } from "./reader.js";
 import { compact, concat } from "./scale.js";
 import { reviewedRuntime, type Reviewed } from "./shape.js";
-import type { Runtime, RuntimeId } from "./table.js";
-
+import type { RuntimeId } from "./table.js";
 
 export interface SessionCallInput {
   /** The runtime the call is for, by the four names read from the chain. */
@@ -66,100 +69,123 @@ export interface SignedSessionCall {
   readonly description: string;
 }
 
-function innerBytes({ inner: entries }: Reviewed, inner: InnerCall): Uint8Array {
-  const name: unknown = (inner as { call?: unknown } | null)?.call;
-  if (!isInnerName(name)) refuse("CALL_NOT_ALLOWED", `${String(name)} is not one of ${INNER_NAMES.join(", ")}`);
-  const entry = entries[name];
-  const obj = exactKeys(inner, entry.fields, name, ["call"]);
-  return concat(Uint8Array.of(entry.palletIndex, entry.callIndex), ...entry.fields.map((f) => writeValue(f.type, obj[f.name], `${name}.${f.name}`)));
+/** The input of a session call, read once and copied. Nothing in it is the caller's. */
+interface CallSnapshot {
+  readonly reviewed: Reviewed;
+  readonly owner: Bytes32;
+  readonly inner: { readonly call: InnerName; readonly fields: Readonly<Record<string, FieldValue>> };
+  /** The snapshot's own amount of the inner call (rule E5), or 0 for a call that moves nothing out. */
+  readonly spend: bigint;
+  readonly sessionNonce: bigint;
 }
 
-function sessionCallBytes(reviewed: Reviewed, input: SessionCallInput): Uint8Array {
-  const { outer } = reviewed;
-  const inner = innerBytes(reviewed, input.inner);
-  const values: Record<string, unknown> = { owner: input.owner, spend_amount: spendOf(input.inner), nonce: input.sessionNonce };
+interface SignSnapshot extends CallSnapshot {
+  readonly accountNonce: number;
+  readonly birth: { readonly number: number; readonly hash: Bytes32 };
+  readonly publicKey: Bytes32;
+  readonly signer: object;
+  readonly sign: (message: Uint8Array) => unknown;
+}
+
+const CALL_KEYS = Object.freeze(["runtime", "owner", "inner", "sessionNonce"] as const);
+const EXTRINSIC_KEYS = Object.freeze([...CALL_KEYS, "accountNonce", "birth", "signer"] as const);
+
+/** The inner call, read once: its name, then each of its table fields. */
+function takeInner(reviewed: Reviewed, value: unknown): CallSnapshot["inner"] {
+  if (value === null || typeof value !== "object") refuse("CALL_NOT_ALLOWED", `${String(value)} is not one of ${INNER_NAMES.join(", ")}`);
+  const keys = ownKeys(value);
+  if (!keys.includes("call")) refuse("CALL_NOT_ALLOWED", `an inner call without a name is not one of ${INNER_NAMES.join(", ")}`);
+  const name: unknown = ownValue(value, "call", "the inner call");
+  if (!isInnerName(name)) refuse("CALL_NOT_ALLOWED", `${String(name)} is not one of ${INNER_NAMES.join(", ")}`);
+  const entry = reviewed.inner[name];
+  const names = entry.fields.map((f) => f.name);
+  for (const k of keys) if (k !== "call" && !names.includes(k)) refuse("BAD_INPUT", `${name} has a field ${k} the table does not have`);
+  for (const n of names) if (!keys.includes(n)) refuse("BAD_INPUT", `${name} lacks the field ${n}`);
+  const fields: Record<string, FieldValue> = {};
+  for (const f of entry.fields) fields[f.name] = takeValue(f.type, ownValue(value, f.name, name), `${name}.${f.name}`);
+  return { call: name, fields };
+}
+
+function takeCall(raw: Record<string, unknown>): CallSnapshot {
+  const reviewed = reviewedRuntime(raw.runtime as RuntimeId);
+  const owner = bytesOf(raw.owner, 32, "the owner");
+  const inner = takeInner(reviewed, raw.inner);
+  const sessionNonce = takeValue({ kind: "u64" }, raw.sessionNonce, "the session nonce") as bigint;
+  const spendField = INNER_CALLS[inner.call];
+  const spend = spendField === null ? 0n : (inner.fields[spendField] as bigint);
+  return { reviewed, owner, inner, spend, sessionNonce };
+}
+
+function takeSign(input: unknown): SignSnapshot {
+  const raw = takeFields(input, EXTRINSIC_KEYS, "the extrinsic input");
+  const call = takeCall(raw);
+  const birthRaw = takeFields(raw.birth, ["number", "hash"], "the birth block");
+  const number = birthRaw.number;
+  if (typeof number !== "number") refuse("BAD_INPUT", "the birth block number must be a whole number (u32)");
+  lastValidBlock(number);
+  const birth = { number, hash: bytesOf(birthRaw.hash, 32, "the birth block hash") };
+  const accountNonce = takeValue({ kind: "u32" }, raw.accountNonce, "the account nonce") as number;
+  const signer = raw.signer;
+  if (signer === null || (typeof signer !== "object" && typeof signer !== "function")) refuse("BAD_INPUT", "the signer must be an object with a public key and a sign function");
+  const publicKey = bytesOf((signer as { publicKey?: unknown }).publicKey, 32, "the device public key");
+  const sign: unknown = (signer as { sign?: unknown }).sign;
+  if (typeof sign !== "function") refuse("BAD_INPUT", "the signer has no sign function");
+  return { ...call, birth, accountNonce, publicKey, signer, sign: sign as SignSnapshot["sign"] };
+}
+
+/** The call bytes, from the snapshot alone. */
+function callBytes(s: CallSnapshot): Uint8Array {
+  const { outer, inner: entries } = s.reviewed;
+  const entry = entries[s.inner.call];
+  const inner = concat(Uint8Array.of(entry.palletIndex, entry.callIndex), ...entry.fields.map((f) => writeValue(f.type, s.inner.fields[f.name], `${s.inner.call}.${f.name}`)));
+  const values: Record<string, FieldValue> = { owner: s.owner, spend_amount: s.spend, nonce: s.sessionNonce };
   return concat(
     Uint8Array.of(outer.palletIndex, outer.callIndex),
     ...outer.fields.map((f) => (f.type.kind === "call" ? inner : writeValue(f.type, values[f.name], `${outer.name}.${f.name}`))),
   );
 }
 
-const CALL_KEYS = ["runtime", "owner", "inner", "sessionNonce"] as const;
-const EXTRINSIC_KEYS = [...CALL_KEYS, "accountNonce", "birth", "signer"] as const;
-
-/**
- * Refuses an input with a key it does not name: there is no spend, era or tip to pass. The declared spend
- * is computed, the era is always mortal and the tip always 0.
- */
-function onlyKeys(input: unknown, keys: readonly string[], what: string): void {
-  exactKeys(input, keys.map((name) => ({ name, type: { kind: "unit" } as const })), what);
-}
-
 /** The call bytes of execute_via_session around one inner call. Nothing is signed. */
 export function encodeSessionCall(input: SessionCallInput): Uint8Array {
-  onlyKeys(input, CALL_KEYS, "the session call input");
-  return sessionCallBytes(reviewedRuntime(input.runtime), input);
+  const s = takeCall(takeFields(input, CALL_KEYS, "the session call input"));
+  return callBytes(s);
 }
 
-
-const bytes32 = (value: unknown, what: string): Bytes32 => bytesOf(value, 32, what);
-
-/** The extra and the additional signed data, in the table's order of signed extensions. */
-function extensions(rt: Runtime, accountNonce: number, birth: { number: number; hash: Bytes32 }): { extra: Uint8Array } {
-  const extra: Uint8Array[] = [];
-  for (const e of rt.signedExtensions) {
-    switch (e.identifier) {
-      case "CheckMortality":
-        extra.push(mortalEra(birth.number));
-        break;
-      case "CheckNonce":
-        extra.push(compact(BigInt(accountNonce)));
-        break;
-      case "ChargeTransactionPayment":
-        extra.push(compact(0n));
-        break;
-      case "CheckMetadataHash":
-        extra.push(e.extra.kind === "struct" ? writeValue(e.extra.fields[0].type, "Disabled", "CheckMetadataHash.mode") : refuse("RUNTIME_UNKNOWN", "CheckMetadataHash"));
-        break;
-      case "CheckSpecVersion":
-      case "CheckTxVersion":
-      case "CheckGenesis":
-      case "CheckNonZeroSender":
-      case "CheckWeight":
-        break;
-      default:
-        refuse("RUNTIME_UNKNOWN", `signed extension ${e.identifier}`);
-    }
+/** The extra of each signed extension, in the table's order. */
+function extensionExtra(s: SignSnapshot): Uint8Array {
+  const parts: Uint8Array[] = [];
+  for (const e of s.reviewed.rt.signedExtensions) {
+    if (e.identifier === "CheckMortality") parts.push(mortalEra(s.birth.number));
+    else if (e.identifier === "CheckNonce") parts.push(compact(BigInt(s.accountNonce)));
+    else if (e.identifier === "ChargeTransactionPayment") parts.push(compact(0n));
+    else if (e.identifier === "CheckMetadataHash" && e.extra.kind === "struct") parts.push(writeValue(e.extra.fields[0].type, "Disabled", "CheckMetadataHash.mode"));
   }
-  return { extra: concat(...extra) };
+  return concat(...parts);
 }
 
-/** Encodes and signs a session call. Every refusal but SIGNATURE_INVALID comes before the sign function is called. */
+/** The signature the signer gave, by its internal state, or SIGNATURE_INVALID. */
+function signatureOf(value: unknown): Uint8Array {
+  try {
+    return bytesOf(value, 64, "the signature");
+  } catch {
+    return refuse("SIGNATURE_INVALID", "the sign function did not give a Uint8Array of 64 bytes");
+  }
+}
+
+/** Encodes and signs a session call. Every refusal but one of the signer comes before the sign function is called. */
 export function signSessionCall(input: ExtrinsicInput): SignedSessionCall {
-  onlyKeys(input, EXTRINSIC_KEYS, "the extrinsic input");
-  onlyKeys(input.birth, ["number", "hash"], "the birth block");
-  const reviewed = reviewedRuntime(input.runtime);
-  const rt = reviewed.rt;
-  const call = sessionCallBytes(reviewed, input);
-  const publicKey = bytes32(input.signer?.publicKey, "the device public key");
-  const birthHash = bytes32(input.birth?.hash, "the birth block hash");
-  const birth = { number: input.birth.number, hash: birthHash };
-  lastValidBlock(birth.number);
-  const nonce = input.accountNonce;
-  if (typeof nonce !== "number" || !Number.isInteger(nonce)) refuse("BAD_INPUT", "the account nonce must be a whole number (u32)");
-  if (nonce < 0 || nonce > 2 ** 32 - 1) refuse("OUT_OF_RANGE", `the account nonce ${nonce} is not a u32`);
-  if (typeof input.signer.sign !== "function") refuse("BAD_INPUT", "the signer has no sign function");
+  const s = takeSign(input);
+  const rt = s.reviewed.rt;
+  const call = callBytes(s);
+  const extra = extensionExtra(s);
+  const { message } = signingPayload(rt, call, extra, s.birth.hash);
+  const signature = signatureOf(Reflect.apply(s.sign, s.signer, [Uint8Array.from(message)]));
 
-  const { extra } = extensions(rt, nonce, birth);
-  const { message } = signingPayload(rt, call, extra, birth.hash);
-  const signature = input.signer.sign(Uint8Array.from(message));
-  if (!(signature instanceof Uint8Array) || signature.length !== 64) refuse("SIGNATURE_INVALID", "the sign function did not give 64 bytes");
-
-  const body = concat(Uint8Array.of(0x80 | rt.extrinsicVersion, rt.address.index), publicKey, Uint8Array.of(rt.signature.index), signature, extra, call);
+  const body = concat(Uint8Array.of(0x80 | rt.extrinsicVersion, rt.address.index), s.publicKey, Uint8Array.of(rt.signature.index), signature, extra, call);
   const extrinsic = concat(compact(BigInt(body.length)), body);
 
   // The one check of the signature (E8): the strict reader verifies it over the payload it rebuilds.
-  const read = readExtrinsic(rt, extrinsic, birth);
+  const read = readExtrinsic(rt, extrinsic, s.birth);
   return {
     extrinsic,
     hash: blake2b(extrinsic, { dkLen: 32 }),
@@ -167,6 +193,6 @@ export function signSessionCall(input: ExtrinsicInput): SignedSessionCall {
     signed: read.signed,
     payloadLength: read.payloadLength,
     fields: { ...read.call, signer: read.signer, accountNonce: read.accountNonce, birth: read.birth, lastValidBlock: read.lastValidBlock },
-    description: describeExtrinsic(rt, extrinsic, birth),
+    description: describeExtrinsic(rt, extrinsic, s.birth),
   };
 }
