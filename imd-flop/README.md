@@ -125,6 +125,19 @@ Each ledger row records two running totals. `spent_before` is the seat's spend t
 
 Not built: when FLOP ships proxies or escrow pools and a call is funded by another account, that call will be bounded by that account's limit and will not count against the seat's cap.
 
+## Chain encoder (not used by any command yet)
+
+`src/chain/extrinsic.ts` encodes and signs one kind of FLOP chain call for the planned session channel provider. No command, provider or network code uses it yet.
+
+- What it writes: a signed version 4 extrinsic of `FlopSessionKeys.execute_via_session` around exactly one inner call of `ComputeChannel`: `open_channel`, `top_up_escrow`, `timeout`, `force_open` or `expire_force_open`. The signer is the device key's account, with an ed25519 signature. The era is always mortal with a period of 64 blocks; the result names the last block at which the transaction is valid. The tip is always 0 and the metadata hash check is off. A payload longer than 256 bytes is signed as its blake2b 256 hash.
+- The declared spend is computed, never passed: the escrow of `open_channel` and `force_open`, the amount of `top_up_escrow`, 0 for `timeout` and `expire_force_open`.
+- Inputs are typed: 32 byte values as `Uint8Array`, amounts and u64 values as `bigint` in range, u32 values as whole numbers in range, enums by name.
+- It reads no key and no file. It takes the public key and a sign function, and checks the signature before it returns.
+- The words of the result are made by reading the final bytes back with a strict reader (`src/chain/reader.ts`), so they cannot differ from the bytes.
+- What it refuses, each with a code and before any signature: a runtime not in its table, a wrong length, a value out of range, an enum name not in the table, an inner call not among the five, a field missing or extra, a spend, era or tip passed in. After signing: a signature that does not verify.
+- Its table, `src/chain/runtimes.ts`, is written by `node scripts/chain-table.mjs` from the 1014020 metadata held by the observatory recording `recording-20261112080132-05842a6db1e9c890`, picked by the sha256 in `research/2026-11-12-session-rerun-1014020/facts-1014020.json`. Nothing in it is typed by hand. `test/chain-table.test.ts` derives it again and compares byte for byte.
+- The reference encoder for the tests and the script is `@polkadot-api/substrate-bindings` and `@polkadot-api/metadata-builders`, dev dependencies only. Nothing under `src` imports them.
+
 ## Known gaps
 
 - **Redacted receipts never settle.** A receipt body with a key shaped field is redacted, and a redacted receipt never proves a settlement. Per the gateway's documented receipt schema (OpenAPI CredentialReceipt, read 2026-11-11), the fields imd-flop stores are `request_id`, `correlation_id`, `state`, `reserved_spend`, `settled_spend`, `settled_spend_raw` (decimal digits), `terminal_event` and `channel_id` (both on the public hex allowlist). Only `settled_spend_raw` can be key shaped within that schema: it is decimal digits with no length limit, so a value of 64 or more digits matches the 64 hex rule. An exact amount below 2^128 has at most 39 significant digits, so that takes 25 or more leading zeros, or a value at or above 2^128, which is not an exact amount anyway. Such a receipt is stored with `settled_raw` redacted, never settles, and its call stays charged at its hold: the safe direction. Any other receipt that follows the schema is stored whole and can settle. This has not been seen on a live settled receipt yet. If a live receipt did carry a key shaped field, its call would stay charged at its reservation: the padded quote, or the reported cost when that is higher.
