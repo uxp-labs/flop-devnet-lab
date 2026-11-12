@@ -172,8 +172,8 @@
     "names": "e2e3afc5e6e637192046cabccf8e12af4ce4c072bd85909f277bfac2ce8ca716"
   },
   "storage-values.test.ts": {
-    "tests": 38,
-    "names": "d31d8d178464752f955d140193bb8559fdcde8fc0a6e9166d7494b94275b86bd"
+    "tests": 39,
+    "names": "73cd85b8b79e34007db160bbb3480cabdd48ece3d42e898ee5a96dd8d63482cb"
   },
   "store.test.ts": {
     "tests": 23,

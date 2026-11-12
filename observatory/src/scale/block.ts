@@ -6,7 +6,7 @@ import { type Decoded, decodeValue } from "./decode.js";
 import { type BlockEvent, decodeEvents } from "./events.js";
 import type { StorageEntry } from "./metadata.js";
 import { ScaleError } from "./reader.js";
-import { MAX_NAME_INPUT, type PinInput, type ReviewedShape, STATED_ENTRIES, copyBytes, copyPinInput, inputObject, pinShape, readField } from "./shape.js";
+import { MAX_NAME_INPUT, type PinInput, type ReviewedShape, STATED_ENTRIES, bytesLength, copyBytes, copyPinInput, inputObject, pinShape, readField } from "./shape.js";
 import { storageEntryOf, storageKey } from "./storage-key.js";
 
 export type BlockEvents = { decoded: true; reviewed: ReviewedShape; events: BlockEvent[] } | { decoded: false; refused: string };
@@ -107,9 +107,11 @@ function door(input: StorageRead): StorageValue {
     if (x instanceof ScaleError) return fail(x.message);
     throw x;
   }
-  // The key asked: its length first, never turned into text, then byte by byte.
-  const asked = copyBytes(readField(() => i.key, "the storage key"), "the storage key");
-  if (asked.length !== built.length) return fail(`the key asked is ${asked.length} bytes, ${asked.length > built.length ? "more" : "fewer"} than the ${built.length} of this entry and these key parts`);
+  // The key asked: its length first, before it is copied and never turned into text, then byte by byte.
+  const rawKey = readField(() => i.key, "the storage key");
+  const askedLength = bytesLength(rawKey, "the storage key");
+  if (askedLength !== built.length) return fail(`the key asked is ${askedLength} bytes, ${askedLength > built.length ? "more" : "fewer"} than the ${built.length} of this entry and these key parts`);
+  const asked = copyBytes(rawKey, "the storage key");
   for (let b = 0; b < built.length; b++) if (asked.at(b) !== built.at(b)) return fail("the key asked is not the key of this entry and these key parts");
   const raw = readField(() => i.answer, "the answer");
   const answer = raw === null ? null : copyBytes(raw, "the answer");

@@ -21,7 +21,7 @@ import { type Decoded, decodeAt, decodeValue, decoding, valueBudget } from "../s
 import { decodeEvents } from "../src/scale/events.js";
 import { parseMetadata } from "../src/scale/metadata.js";
 import { MAX_INPUT_BYTES, ScaleError } from "../src/scale/reader.js";
-import { REVIEWED, pinShape } from "../src/scale/shape.js";
+import { REVIEWED, bytesLength, copyBytes, pinShape } from "../src/scale/shape.js";
 import { type Plain, plain } from "./helpers/plain.js";
 import { hexBytes, recorded } from "./helpers/recorded.js";
 import { STORAGE_RECORDING, type StorageRead, recordedStorage } from "./helpers/recorded-storage.js";
@@ -216,9 +216,46 @@ describe("the storage door, on the second recording", () => {
     const lru = S.calls.find((c) => c.method === "state_getStorage" && c.params[1] === events.hash && c.params[0] !== events.key)?.params[0] as string;
     expect(hexBytes(lru).length).toBe(hexBytes(events.key).length);
     expect(decodeStorageValue(doorInput(events, { key: hexBytes(lru) }))).toEqual({ decoded: false, refused: "System.Events: the key asked is not the key of this entry and these key parts" });
-    // A key past the decoder's size limit is refused by its size, and the refusal stays short.
+    // A key past the decoder's size limit is refused by its length like any other wrong length, before it is copied, and the refusal stays short.
     const huge = decodeStorageValue(doorInput(b, { key: new Uint8Array(MAX_INPUT_BYTES + 1) }));
-    expect(huge).toEqual({ decoded: false, refused: `not decoded: the storage key is ${MAX_INPUT_BYTES + 1} bytes, more than the ${MAX_INPUT_BYTES} this decoder reads` });
+    expect(huge).toEqual({ decoded: false, refused: `FlopSessionKeys.CircuitBreakers: the key asked is ${MAX_INPUT_BYTES + 1} bytes, more than the ${key.length} of this entry and these key parts` });
+  });
+
+  it("measures bytes before copying them: past the size limit they are refused, the copy asks nothing of the caller's object, an own length that lies changes nothing, and a Proxy over bytes is refused unread", () => {
+    expect(() => copyBytes(new Uint8Array(MAX_INPUT_BYTES + 1), "the answer")).toThrow(new ScaleError(`the answer is ${MAX_INPUT_BYTES + 1} bytes, more than the ${MAX_INPUT_BYTES} this decoder reads`));
+    // The caller's constructor, and so its species, is never asked.
+    const asked: string[] = [];
+    const bytes = new Uint8Array([1, 2, 3]);
+    Object.defineProperty(bytes, "constructor", {
+      get() {
+        asked.push("constructor");
+        return Uint8Array;
+      },
+    });
+    const copy = copyBytes(bytes, "the answer");
+    // Read before any matcher is handed the caller's object: a deep comparison would ask for its constructor itself.
+    const askedByTheCopy = [...asked];
+    expect(askedByTheCopy).toEqual([]);
+    expect([...copy]).toEqual([1, 2, 3]);
+    expect(copy === bytes).toBe(false);
+    // An own "length" that lies changes nothing: the length comes from the array's slots.
+    const lying = new Uint8Array([7, 8]);
+    Object.defineProperty(lying, "length", { value: 99 });
+    Object.defineProperty(lying, "byteLength", { value: 99 });
+    expect(bytesLength(lying, "the answer")).toBe(2);
+    expect([...copyBytes(lying, "the answer")]).toEqual([7, 8]);
+    expect(bytesLength(new Uint8Array(0), "the answer")).toBe(0);
+    // A Proxy over real bytes has no typed array slots: its length is refused, and nothing of it is read.
+    const read: string[] = [];
+    const proxy = new Proxy(new Uint8Array([9]), {
+      get(t, k) {
+        read.push(String(k));
+        return Reflect.get(t, k, t);
+      },
+    });
+    expect(() => bytesLength(proxy, "the storage key")).toThrow(new ScaleError("the storage key is not bytes"));
+    expect(() => copyBytes(proxy, "the storage key")).toThrow(new ScaleError("the storage key is not bytes"));
+    expect(read).toEqual([]);
   });
 
   it("refuses an answer that is undefined: only null means absent", () => {

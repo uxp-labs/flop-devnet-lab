@@ -26,7 +26,7 @@ import { createHash } from "node:crypto";
 import { type Decoded, decodeValue } from "./decode.js";
 import type { Field, Metadata, StorageEntry, TypeEntry, Variant } from "./metadata.js";
 import { parseMetadata } from "./metadata.js";
-import { MAX_INPUT_BYTES, ScaleError, toHex, withinSize } from "./reader.js";
+import { MAX_INPUT_BYTES, ScaleError, toHex } from "./reader.js";
 import { storageEntryOf } from "./storage-key.js";
 
 /** @2: each entry states its default bytes, each stated pallet its storage prefix, and the FlopSessionKeys entries are stated. */
@@ -392,21 +392,37 @@ export function readField<T>(read: () => T, what: string): T {
 }
 
 /**
- * A copy of bytes the caller holds, or a refusal: what is hashed is then what is parsed. The bytes
- * are taken only from a real typed array: Uint8Array.prototype.slice refuses anything else, a
- * Proxy over one included, and reads no iterator; the copy it gives is copied once more by the
- * typed array constructor from its internal slots. Past MAX_INPUT_BYTES the copy is refused.
+ * The length of the bytes the caller holds, or a refusal. Nothing is copied. A typed array method
+ * reads its receiver's internal slots and refuses anything else, a Proxy over a typed array
+ * included. findLastIndex with a test that is always true answers the last index after one step,
+ * so the length is that plus one, whatever an own "length" property on the object says.
  */
-export function copyBytes(v: unknown, what: string): Uint8Array {
-  let copy: Uint8Array;
+export function bytesLength(v: unknown, what: string): number {
   try {
     if (!(v instanceof Uint8Array)) throw new ScaleError(what);
-    copy = new Uint8Array(Uint8Array.prototype.slice.call(v));
+    return Uint8Array.prototype.findLastIndex.call(v, () => true) + 1;
   } catch {
     throw new ScaleError(`${what} is not bytes`);
   }
-  withinSize(copy, what);
-  return copy;
+}
+
+/**
+ * A copy of bytes the caller holds, or a refusal: what is hashed is then what is parsed. The bytes
+ * are taken only from a real typed array, whose length is read from its internal slots (a Proxy
+ * over one is refused there, see bytesLength). Past MAX_INPUT_BYTES it is refused before anything is copied. The
+ * copy is made once, into an array of our own, by the typed array's own set: no iterator is read
+ * and the caller's constructor and species are never asked.
+ */
+export function copyBytes(v: unknown, what: string): Uint8Array {
+  const length = bytesLength(v, what);
+  if (length > MAX_INPUT_BYTES) throw new ScaleError(`${what} is ${length} bytes, more than the ${MAX_INPUT_BYTES} this decoder reads`);
+  const own = new Uint8Array(length);
+  try {
+    Uint8Array.prototype.set.call(own, v as Uint8Array);
+  } catch {
+    throw new ScaleError(`${what} is not bytes`);
+  }
+  return own;
 }
 
 /** The input as an object whose fields may be read, or a refusal. */

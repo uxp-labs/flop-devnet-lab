@@ -570,8 +570,8 @@
   {
     "id": "r18-pin-bytes-not-copied",
     "file": "src/scale/shape.ts",
-    "find": "    copy = new Uint8Array(Uint8Array.prototype.slice.call(v));",
-    "replace": "    copy = v as Uint8Array;",
+    "find": "  return own;",
+    "replace": "  return v as Uint8Array;",
     "test": "test/review-decoder.test.ts",
     "why": "the pin copies the bytes it is given"
   },
@@ -890,8 +890,8 @@
   {
     "id": "rs-door-key-prefix-match",
     "file": "src/scale/block.ts",
-    "find": "if (asked.length !== built.length) return fail(",
-    "replace": "if (asked.length < built.length) return fail(",
+    "find": "if (askedLength !== built.length) return fail(",
+    "replace": "if (askedLength < built.length) return fail(",
     "test": "test/storage-values.test.ts",
     "why": "a key asked with bytes after the built key is taken (review round 19, its find moved with round 20)"
   },
@@ -1066,10 +1066,10 @@
   {
     "id": "r20-copy-through-iterator",
     "file": "src/scale/shape.ts",
-    "find": "    copy = new Uint8Array(Uint8Array.prototype.slice.call(v));",
-    "replace": "    copy = new Uint8Array(v as Uint8Array);",
+    "find": "    return Uint8Array.prototype.findLastIndex.call(v, () => true) + 1;",
+    "replace": "    return (v as Uint8Array).byteLength;",
     "test": "test/storage-values.test.ts",
-    "why": "bytes are taken through the prototype's slice, so a Proxy over a Uint8Array is refused and its iterator never read"
+    "why": "the length of the bytes is read from the typed array's internal slots, so a Proxy over a Uint8Array is refused and nothing of it is read"
   },
   {
     "id": "r20-foreign-message-shown",
@@ -1114,7 +1114,7 @@
   {
     "id": "r20-door-key-length-unchecked",
     "file": "src/scale/block.ts",
-    "find": "if (asked.length !== built.length) return fail(",
+    "find": "if (askedLength !== built.length) return fail(",
     "replace": "if (false) return fail(",
     "test": "test/storage-values.test.ts",
     "why": "a key asked of another length is refused by its length"
@@ -1134,5 +1134,21 @@
     "replace": "  if (false) return fail(",
     "test": "test/storage-values.test.ts",
     "why": "the key parts are read only once their count is the entry's"
+  },
+  {
+    "id": "r20-copy-size-unchecked",
+    "file": "src/scale/shape.ts",
+    "find": "  if (length > MAX_INPUT_BYTES) throw new ScaleError(",
+    "replace": "  if (false) throw new ScaleError(",
+    "test": "test/storage-values.test.ts",
+    "why": "bytes past MAX_INPUT_BYTES are refused by their length, before anything is copied"
+  },
+  {
+    "id": "r20-copy-through-species",
+    "file": "src/scale/shape.ts",
+    "find": "    Uint8Array.prototype.set.call(own, v as Uint8Array);",
+    "replace": "    own.set(Uint8Array.prototype.slice.call(v as Uint8Array));",
+    "test": "test/storage-values.test.ts",
+    "why": "the copy asks nothing of the caller's object: not its constructor, not its species"
   }
 ]

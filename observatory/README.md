@@ -330,8 +330,9 @@ not null and not one whole value of the entry's type, a byte after it included, 
 three doors (`decodeStorageValue`, `decodeBlockEvents`, `pinShape`) trust no object they are
 handed: an input that is not an object is a refusal; anything thrown while a field is read (a
 getter, a Proxy trap) is a refusal with a fixed text, never the foreign error's message; bytes are
-taken only from a real Uint8Array, through the prototype's slice, never through an iterator, so a
-Proxy over one is refused; and a byte array past 16 MiB, a spec name past 256 characters or a shape
+taken only from a real Uint8Array, measured from its own slots before anything is copied and
+copied once by the typed array's own set, never through an iterator, its constructor or its
+species, so a Proxy over one is refused; and a byte array past 16 MiB, a spec name past 256 characters or a shape
 file past 16 MiB of text is refused. Absent is an answer, never an error and never a zero the
 chain did not send: a null answer for an Optional entry is the value null, and for a Default entry
 the default bytes the metadata states for it, decoded; either way `stored` is false. Any answer with

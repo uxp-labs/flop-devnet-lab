@@ -981,8 +981,9 @@ below.
 - The doors trust no input object. `decodeStorageValue`, `decodeBlockEvents` and `pinShape` refuse
   an input that is not an object; anything thrown while a field is read (a getter, a Proxy trap)
   is a refusal with a fixed text of ours, never the foreign error's message; bytes are taken only
-  from a real Uint8Array, through the prototype's own slice, never through an iterator, so a Proxy
-  over one is refused; a byte array past `MAX_INPUT_BYTES`, a spec name past 256 characters and a
+  from a real Uint8Array, measured from its own slots before anything is copied and copied once
+  by the typed array's own set, never through an iterator, its constructor or its species, so a
+  Proxy over one is refused; a byte array past `MAX_INPUT_BYTES`, a spec name past 256 characters and a
   shape file past `MAX_INPUT_BYTES` characters are refused. So the promise above holds for the
   doors on any input; the other exported functions take the inputs their types allow.
 - What the metadata parser refuses beyond the encoding: type ids out of order, a type id or a type
