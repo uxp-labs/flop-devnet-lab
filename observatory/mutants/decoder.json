@@ -1198,5 +1198,45 @@
     "replace": "  if (line === undefined && version < 0n) return { found: false, refused: `no reviewed runtime:",
     "test": "test/block-runtime.test.ts",
     "why": "a spec no line names is refused, never answered with no line (review round 22)"
+  },
+  {
+    "id": "r22-diff-field-types-ignored",
+    "file": "scripts/shape-diff.mjs",
+    "find": "const fields = (fs) => fs.map((f) => `${f.name ?? \"\"}:${of(f.type)}`).join(\",\");",
+    "replace": "const fields = (fs) => fs.map((f) => `${f.name ?? \"\"}`).join(\",\");",
+    "test": "test/upgrade-shape.test.ts",
+    "why": "the structure of a type holds the types of its fields, so a changed field type is a difference (review round 22)"
+  },
+  {
+    "id": "r22-diff-by-name",
+    "file": "scripts/shape-diff.mjs",
+    "find": "    if (sa(x) === sb(y)) return;",
+    "replace": "    if (x === y) return;\n    if (sa(x) === sb(y)) return;",
+    "test": "test/upgrade-shape.test.ts",
+    "why": "types are compared by structure; a name equal in both shapes is no proof the type is the same (review round 22)"
+  },
+  {
+    "id": "r22-diff-index-ignored",
+    "file": "scripts/shape-diff.mjs",
+    "find": "    same(`${name} index`, a[k].index, b[k].index);\n",
+    "replace": "",
+    "test": "test/upgrade-shape.test.ts",
+    "why": "a pallet's index is a difference (review round 22)"
+  },
+  {
+    "id": "r22-diff-added-event-dropped",
+    "file": "scripts/shape-diff.mjs",
+    "find": "    for (const [n, v] of mb) if (!ma.has(n)) out.add(",
+    "replace": "    for (const [n, v] of mb) if (false) out.add(",
+    "test": "test/upgrade-shape.test.ts",
+    "why": "an added event is a difference (review round 22)"
+  },
+  {
+    "id": "r22-metadata-by-block-not-sha",
+    "file": "test/helpers/recorded-upgrade.ts",
+    "find": "      const m = metadata.get(sha);",
+    "replace": "      const m = [...metadata.values()].at(-1);",
+    "test": "test/upgrade-decode.test.ts",
+    "why": "a block's metadata is found by the sha256 its runtime's line names, not taken from what the block answered last (review round 22)"
   }
 ]

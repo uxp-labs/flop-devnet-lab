@@ -102,4 +102,19 @@ describe("the shape diff, scripts/shape-diff.mjs", () => {
       "System: no difference in what the shapes state",
     ]);
   });
+  it("reports a changed pallet index, storage prefix, hasher and default bytes, each on its own line", () => {
+    const copy = JSON.parse(SHAPE);
+    copy.flop_session_keys.index += 1;
+    copy.compute_channel.storage_prefix = "ComputeChannels";
+    copy.flop_session_keys.circuit_breakers.hashers = ["Twox64Concat"];
+    copy.flop_session_keys.session_nonces.default = "0x0100000000000000";
+    const s = JSON.parse(SHAPE);
+    expect(shapeDiff(s, copy)).toEqual([
+      `ComputeChannel storage prefix: was "${s.compute_channel.storage_prefix}", now "ComputeChannels"`,
+      `FlopSessionKeys index: was ${s.flop_session_keys.index}, now ${s.flop_session_keys.index + 1}`,
+      `FlopSessionKeys.CircuitBreakers hashers: was ${JSON.stringify(s.flop_session_keys.circuit_breakers.hashers)}, now ["Twox64Concat"]`,
+      `FlopSessionKeys.SessionNonces default bytes: was "${s.flop_session_keys.session_nonces.default}", now "0x0100000000000000"`,
+      "System: no difference in what the shapes state",
+    ]);
+  });
 });
