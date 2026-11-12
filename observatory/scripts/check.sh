@@ -8,8 +8,16 @@
 # Every run writes a new evidence directory and leaves earlier runs in place:
 #   check-runs/<source-sha>/<timestamp>-<runner>-<random>/
 #     report.txt          pin (revision, branch, dirty tree, tool versions), command, steps, exits,
-#                         and the outputs digest, which the last line of the log prints too
-#     steps.tsv           one line per step: name, command, exit code
+#                         whether the run finished, and the outputs digest, which the last line of
+#                         the log prints too. A run is a pass only with `finished: yes`. A run cut
+#                         by a signal says `finished: no (stopped during step <name> by SIGTERM)`,
+#                         one that exited early `finished: no (the script ended before its last
+#                         step, after step <name>)`; either has an overall_exit that is never 0
+#                         (128 plus the signal's number when cut) and `outputs_digest: none (the
+#                         run did not finish)`, and the log's last lines say NOT FINISHED
+#     steps.tsv           one line per step: name, command, exit code; a step cut by a signal is
+#                         written with `cut by <SIGNAL>` as its exit, and the steps after it have
+#                         no line
 #     *.log               full output of each step
 #     vitest.json         machine-readable test results
 #     test-report.json    the results read again: every file ran, nothing skipped or left as a
@@ -22,6 +30,9 @@
 #                         every known bad sample and passed every known good one
 #     canary.json         throwaway tests that each leave one forbidden attempt, all caught, two of
 #                         them from a timer that fires after the file's final check
+#     check-canary.json   scripts/check-lib.sh on a small driver: cut by SIGTERM, SIGINT and SIGHUP,
+#                         ended early, finished with an empty outputs/, a failing step or every step
+#                         passing, each read as it must be, and tampered copies of the library caught
 #     mutants.json        each injected bug, the test that caught it, and both controls
 #     mutants-canary.json the mutation runner classifying a real bug, an equivalent change, a
 #                         syntax error and a missing test correctly, copying exactly the tracked
@@ -69,65 +80,9 @@ evidence="$pkg/check-runs/$source_sha/$run_id"
 mkdir -p "$evidence/outputs"
 printf '%s\n' "${dirty_list:-clean}" >"$evidence/dirty.txt"
 started_utc="$(utc)"
-overall=0
-
-step() {
-  # step <name> <command...>: run, log, record the exit code, keep going.
-  local name="$1"
-  shift
-  local code
-  "$@" >"$evidence/$name.log" 2>&1
-  code=$?
-  printf '%s\t%s\t%s\n' "$name" "$*" "$code" >>"$evidence/steps.tsv"
-  if [ "$code" -ne 0 ]; then overall=1; fi
-  printf '%-14s exit %s\n' "$name" "$code"
-  return 0
-}
-
-finalize() {
-  local ended digest
-  ended="$(utc)"
-  # One digest over every output file, the same command a rerun uses to compare outputs/.
-  digest="$(cd "$evidence/outputs" 2>/dev/null && find . -type f | LC_ALL=C sort | xargs -r sha256sum | sha256sum | cut -d' ' -f1)"
-  {
-    echo "source_sha: $source_sha"
-    echo "git_branch: $git_branch"
-    echo "dirty: $dirty"
-    echo "runner: $runner"
-    echo "invoked: ${npm_lifecycle_event:+npm run }${npm_lifecycle_event:-bash ./scripts/check.sh}"
-    echo "node: $(node -v 2>/dev/null || echo missing)"
-    echo "npm: $(npm -v 2>/dev/null || echo missing)"
-    echo "tsc: $(npx --no-install tsc --version 2>/dev/null || echo missing)"
-    echo "vitest: $(npx --no-install vitest --version 2>/dev/null || echo missing)"
-    echo "python: $(python3 --version 2>/dev/null || echo missing)"
-    echo "os: $(uname -srm)"
-    echo "started_utc: $started_utc"
-    echo "ended_utc: $ended"
-    echo "evidence_dir: check-runs/$source_sha/$run_id"
-    echo "overall_exit: $overall"
-    echo "outputs_digest: ${digest:-none} (node $(node -v 2>/dev/null || echo missing); it holds for this Node version only)"
-    for pin in "$evidence"/outputs/*/pin.json; do
-      [ -f "$pin" ] || continue
-      echo
-      echo "chain point for outputs/$(basename "$(dirname "$pin")") (from fixtures in M0, not from a live chain):"
-      cat "$pin"
-    done
-    echo
-    echo "steps:"
-    cat "$evidence/steps.tsv"
-    echo
-    echo "checksum_note: SHA256SUMS hashes every other file in this directory. A match shows the bytes were not changed after the sums were written. It does not prove the commands ran, that the logs are complete, or that an exit of 0 means the tests passed truthfully. Rerun on the same revision in a fresh clone and compare outputs/."
-  } >"$evidence/report.txt"
-  # The sums are computed before the file exists, so the sums file never lists itself. No temp
-  # file, so a sandbox without mktemp still gets its sums.
-  local sums
-  sums="$(cd "$evidence" && find . -type f ! -name SHA256SUMS -print0 | LC_ALL=C sort -z | xargs -0 -r sha256sum)"
-  printf '%s\n' "$sums" >"$evidence/SHA256SUMS"
-  chmod 644 "$evidence/SHA256SUMS"
-  echo "evidence: check-runs/$source_sha/$run_id (overall exit $overall)"
-  echo "outputs digest: ${digest:-none} (node $(node -v 2>/dev/null || echo missing))"
-}
-trap finalize EXIT
+# The step runner, the signal handling and finalize (report.txt, SHA256SUMS and the last two
+# lines). From here on, a signal or an exit before `finish` is a run that did not finish.
+. "$pkg/scripts/check-lib.sh"
 
 # 1. Clean install from the lockfile, then a clean build.
 step install npm ci --no-audit --no-fund
@@ -154,6 +109,9 @@ step source-scan sh -c "node scripts/source-scan.mjs > '$evidence/source-scan.js
 
 # 3. The harness itself: a test that leaves any forbidden attempt in the log must fail.
 step canary sh -c "node scripts/canary.mjs > '$evidence/canary.json'"
+# The check itself, cut: a signal or an early exit is reported as not finished, never 0 and with
+# no digest, and the cut step's whole process tree is stopped. Run on a small driver, never here.
+step check-canary sh -c "node scripts/check-canary.mjs > '$evidence/check-canary.json'"
 
 # 4. Injected bugs, in a copy of every tracked file in the repo: an unmutated control must pass,
 #    then every mutant must make at least one test in its named file fail. The runner proves its
@@ -198,4 +156,4 @@ step consistency-canary sh -c "node scripts/consistency-canary.mjs '$evidence/ou
   '$evidence/outputs/nothing-read' '$evidence/outputs/degraded-faucet' '$evidence/outputs/conflict' \
   '$evidence/outputs/odd-accounts' > '$evidence/consistency-canary.json'"
 
-exit "$overall"
+finish

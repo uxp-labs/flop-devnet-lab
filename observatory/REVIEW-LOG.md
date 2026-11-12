@@ -2,6 +2,31 @@
 
 What each outside review and independent rerun of FLOP Observatory M0 found, and the fix and proof for each, newest first. Rounds 1 to 10 were first written in the PR #5 description and are kept here word for word, so the log travels with the code it describes: a reviewer reads the rounds at the commit under review. RULES.md holds the rules themselves; where a round and RULES.md differ, RULES.md is binding.
 
+## Round 27: a check that is cut off never reads as a pass
+
+Round 26 is the upgrade watch branch, not merged when this was written; this round leaves its number free. Found by the lead on 2026-11-12: a check stopped by a signal during the `mutants` step wrote `overall_exit: 0` to `report.txt`, printed the sha256 of empty input as its outputs digest, had no `steps.tsv` line for the step that was running, and left that step's processes running with no parent. The brief is `2026-11-12-check-cut-run.md`.
+
+| # | What | Rule | Proof |
+|---|---|---|---|
+| C1 | the verdict | `report.txt` gets `finished: yes` or `finished: no (stopped during step <name> by <SIGNAL>)` or `finished: no (the script ended before its last step, after step <name>)` right after `overall_exit:`; a run is finished only when it reaches `finish`, the last line of `check.sh` | `scripts/check-canary.mjs`, every case; tampers `verdict-starts-finished`, `finished-line-dropped` |
+| C2 | a signal | on SIGINT, SIGTERM and SIGHUP the step's whole process group is stopped (TERM, then KILL after 3 seconds), the step is written to `steps.tsv` as `cut by SIG...`, the run is finalized and exits 128 plus the signal's number. Each step runs in a group of its own and is waited for with `wait`, so the trap runs at once | cases `cut-SIGTERM`, `cut-SIGINT`, `cut-SIGHUP`, each with a child that sleeps for minutes; tampers `term-not-trapped`, `int-not-trapped`, `tree-not-stopped`, `only-direct-child-stopped`, `cut-step-not-written`, `cut-exit-not-128-plus` |
+| C3 | an early exit | any exit before `finish` is not finished, and an exit 0 there becomes 1 | cases `early-exit`, `early-exit-no-step`; tamper `early-exit-keeps-zero` |
+| C4 | the digest | a run that did not finish has `outputs_digest: none (the run did not finish)`, printed the same; an outputs folder with no file gives `none` in a finished run too | case `empty-outputs`, every cut case; tampers `empty-folder-hashed`, `unfinished-run-digested` |
+| C5 | a finished run | the same exit (0, or 1 for any failing step), the same report lines in their order, the same two printed lines; a run that did not finish prints `evidence: ... (NOT FINISHED: <words>, exit <status>)` | cases `failing-step` and `passing`, whose digest the canary computes itself |
+| C6 | the library | the step runner, the signal handling and finalize are `scripts/check-lib.sh`, sourced by `check.sh`; it reads only the evidence folder and the variables `check.sh` sets before it | the canary drives it with a driver of its own |
+| C7 | the proof | a canary, not a vitest file: the test harness lets no test start a process but `test/publish-shell.test.ts`, and that is not widened. Nine cases on the library, thirteen tampered copies, each caught; 20 seconds at most per case; only processes it started are stopped, by id; its temporary folder is removed on every path | on a copy of the library with the logic before this round, all nine cases fail; on the library at 6b91bc5 (before R1), `cut-between-steps` fails |
+| C9 | the step | one step, `check-canary`, right after `canary`; no other step changes | `scripts/check.sh` |
+
+The lead's read of 6b91bc5:
+
+| # | What | Rule | Proof |
+|---|---|---|---|
+| R1 | a signal before the id is recorded | a signal can land between the line that starts a step and the line that records its process id; then the step's tree was left running. On a signal every job of the script still running (`jobs -pr`) is stopped, each as its process group, whether or not a step is recorded as running; `check_step_pid` is only for `wait` | case `cut-between-steps`: after `step first`, the driver starts a job of its own in a group of its own and signals itself; exit 143, `finished: no (stopped after step first by SIGTERM)`, only `first` in steps.tsv, no digest, the job stopped; tamper `stray-job-not-stopped` (the 6b91bc5 logic) caught by it |
+| R2 | SIGHUP | the HUP trap is held like the other two | tamper `hup-not-trapped`, caught by `cut-SIGHUP` |
+| R3 | the words | the header of `scripts/check-lib.sh` and the README give the third finished form, `finished: no (stopped after step <name> by <SIGNAL>)`; a step stopped by a signal while the script is not is a failed step in a finished run (its exit 128 plus the signal, `overall_exit: 1`, `finished: yes`); SIGKILL cannot be handled, so no `report.txt` is written, which is no pass, and the running step may be left running in its own process group | the files |
+
+Not covered: a process of a step that leaves its process group (a `setsid` of its own) is out of reach of the group stop.
+
 ## Round 25: the fourth recording brought in, and the session rerun's results.json filled from it
 
 The fourth list was merged (pull request 42) and its recording published: `recordings/20261112132634-0a472f1b49f7b661/` on observatory-data at 381bf8e, made from main 8193005, 48 of 48 calls answered. This round brings it in and fills the rerun's `results.json` from it (phase B of the brief `2026-11-12-rerun-record-list-4`). The builder stopped once to report that two of the 26 reads are of entries the reviewed shape does not state; the lead decided M1 to M6 and no shape change. No file under `src` or `.github/workflows` changed, nor `recordings/`, `check.mjs` or `steps.json`.
