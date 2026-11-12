@@ -1,45 +1,62 @@
 #!/usr/bin/env node
 // What differs between two reviewed shape files (shapes/*.json, flop-observatory/decoder-shape@2),
-// for what the shapes state: the index and storage prefix of System, ComputeChannel and
+// for everything the shapes state: the index and storage prefix of System, ComputeChannel and
 // FlopSessionKeys, their six stated storage entries (modifier, hashers, key type, value type,
 // default bytes), the ComputeChannel events, the fields of a channel and its states, the fields of
 // an event record and of LastRuntimeUpgrade, and the System.Version type. The types of an entry are
 // followed down to where they differ, so a change in System.Events names the pallet and the event of
-// the outer event enum it is in. The fields of a channel and its states, the event record and the
-// fields of LastRuntimeUpgrade are compared inside the value types of their entries.
+// the outer event enum it is in. The stated lists (the fields of a channel and its states, the event
+// record and the fields of LastRuntimeUpgrade) are compared too, after the entries' value types.
 //
 //   node scripts/shape-diff.mjs <old shape file> <new shape file>
 //
 // Type ids are renumbered between runtimes, so a type is compared by what it is, never by its name:
 // its kind, its path, and the structure of every type it holds, followed to the end. A change of
-// ids alone is not a difference. Pure: it reads the two files it is given and prints one line per
-// difference, sorted, plain text, and for a stated pallet with no difference one line that says so.
+// ids alone is not a difference. Each pair of types is followed once, so a type that refers to
+// itself ends, and a change in it is printed once, where it is first met.
+//
+// Before it compares, it reads each file: one that does not exist, is not JSON, whose schema is not
+// exactly flop-observatory/decoder-shape@2, that lacks a part the diff reads or holds a part it does
+// not read is refused with one line on stderr and exit code 2. Exit code 0 means the comparison
+// ran, whether or not something differs: the diff is a report, and the test that holds the committed
+// diff to a fresh run is the check. The first line names both specs; then one line per difference,
+// sorted, plain text, and for a stated pallet with no difference one line that says so.
 // shapes/diff-tzkv-runtime-1014014-1014020.txt is its output for the two reviewed runtimes, held to
 // a fresh run by test/upgrade-shape.test.ts.
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 
+/** The one shape format this diff reads, as src/scale/shape.ts writes it. */
+export const SHAPE_SCHEMA = "flop-observatory/decoder-shape@2";
+
+/** A shape file the diff will not read, and why: the command prints it on one line and exits 2. */
+export class ShapeRefused extends Error {}
+
 /** A type name without the ids it carries, for a reader: H256#13 is H256. */
 const plainName = (name) => String(name).replace(/#\d+/g, "");
 
-/** The structural form of every type of one shape's table, by name, as a sha256 of its structure. */
-function structure(types) {
+/**
+ * The structural form of every type of one shape's table, by name, as a sha256 of its structure. A
+ * type met again on the way down is written by how many steps up it is. A form is kept for later
+ * asks only when the walk below it met no type again, since only then is it the same from every
+ * place, so the answer for a type never depends on the order types are asked.
+ */
+export function structure(types) {
   const memo = new Map();
+  /** The form of a type at this place, and the highest place on the stack any of its back steps reaches. */
   const visit = (name, stack) => {
-    if (memo.has(name)) return memo.get(name);
+    if (memo.has(name)) return { h: memo.get(name), low: Infinity };
     const t = types[name];
-    if (t === undefined) return `unknown ${plainName(name)}`;
-    if (stack.includes(name)) return { cyclic: `recursive ${t.path.join("::")}` };
+    if (t === undefined) return { h: `unknown ${plainName(name)}`, low: Infinity };
+    const at = stack.indexOf(name);
+    if (at >= 0) return { h: `recursive ${stack.length - at}`, low: at };
     const next = [...stack, name];
-    let cyclic = false;
+    let low = Infinity;
     const of = (n) => {
       const r = visit(n, next);
-      if (typeof r === "object") {
-        cyclic = true;
-        return r.cyclic;
-      }
-      return r;
+      if (r.low < low) low = r.low;
+      return r.h;
     };
     const fields = (fs) => fs.map((f) => `${f.name ?? ""}:${of(f.type)}`).join(",");
     let text;
@@ -52,14 +69,24 @@ function structure(types) {
     else if (t.kind === "compact") text = `compact ${of(t.type)}`;
     else text = `kind ${t.kind}`;
     const h = createHash("sha256").update(text).digest("hex");
+    // Cyclic: a back step was taken somewhere below, so the form depends on where the walk entered
+    // the cycle. Only a form with no back step is the same from every place, and only it is kept.
+    const cyclic = low !== Infinity;
     if (!cyclic) memo.set(name, h);
-    return h;
+    return { h, low };
   };
-  return (name) => {
-    const r = visit(name, []);
-    return typeof r === "object" ? r.cyclic : r;
-  };
+  return (name) => visit(name, []).h;
 }
+
+/** The parts of a shape the diff reads, by place: a part outside these is refused, so none is missed. */
+export const HANDLED = {
+  top: ["compute_channel", "flop_session_keys", "schema", "spec_name", "spec_version", "system", "types"],
+  system: ["events", "index", "last_runtime_upgrade", "storage_prefix", "version"],
+  compute_channel: ["channel_states", "channels", "events", "index", "storage_prefix"],
+  flop_session_keys: ["circuit_breakers", "index", "session_nonces", "sessions", "storage_prefix"],
+  entry: ["default", "hashers", "key", "modifier", "value"],
+};
+const LISTS = { "system.events": "record", "system.last_runtime_upgrade": "fields", "compute_channel.channels": "fields" };
 
 const PALLETS = [
   ["system", "System"],
@@ -75,8 +102,60 @@ const ENTRIES = [
   ["flop_session_keys", "circuit_breakers", "FlopSessionKeys.CircuitBreakers"],
 ];
 
-/** The lines that say what differs from shape a to shape b, sorted. Pure. */
+const isRecord = (v) => v !== null && typeof v === "object" && !Array.isArray(v);
+const isFieldList = (v) => Array.isArray(v) && v.every((f) => isRecord(f) && (f.name === null || typeof f.name === "string") && typeof f.type === "string");
+const isVariantList = (v) => Array.isArray(v) && v.every((x) => isRecord(x) && Number.isInteger(x.index) && typeof x.name === "string" && isFieldList(x.fields));
+
+/** The shape, checked to hold exactly the parts the diff reads, each of the form it reads. Throws ShapeRefused, naming the file. */
+export function checkShape(s, name) {
+  const refuse = (why) => {
+    throw new ShapeRefused(`${name}: ${why}`);
+  };
+  const exactly = (o, keys, where) => {
+    if (!isRecord(o)) refuse(`${where} is not an object`);
+    const have = Object.keys(o).sort();
+    const missing = keys.filter((k) => !have.includes(k));
+    const extra = have.filter((k) => !keys.includes(k));
+    if (missing.length > 0) refuse(`${where} lacks ${missing.join(", ")}`);
+    if (extra.length > 0) refuse(`${where} holds ${extra.join(", ")}, which the diff does not read`);
+  };
+  if (!isRecord(s)) refuse("the shape is not an object");
+  if (s.schema !== SHAPE_SCHEMA) refuse(`the schema is ${JSON.stringify(s.schema)}, not ${SHAPE_SCHEMA}`);
+  exactly(s, HANDLED.top, "the shape");
+  if (typeof s.spec_name !== "string" || !Number.isInteger(s.spec_version)) refuse("spec_name and spec_version are not a string and an integer");
+  if (!isRecord(s.types)) refuse("types is not an object");
+  for (const [k, pallet] of PALLETS) {
+    exactly(s[k], HANDLED[k], pallet);
+    if (!Number.isInteger(s[k].index) || typeof s[k].storage_prefix !== "string") refuse(`${pallet} has no integer index and string storage prefix`);
+  }
+  for (const [p, e, label] of ENTRIES) {
+    const list = LISTS[`${p}.${e}`];
+    exactly(s[p][e], list === undefined ? HANDLED.entry : [...HANDLED.entry, list].sort(), label);
+    const x = s[p][e];
+    if (typeof x.modifier !== "string" || !Array.isArray(x.hashers) || typeof x.default !== "string" || typeof x.value !== "string" || (x.key !== null && typeof x.key !== "string")) refuse(`${label} is not an entry of the form the diff reads`);
+    if (list !== undefined && !isFieldList(x[list])) refuse(`${label} ${list} is not a list of fields`);
+  }
+  if (!isVariantList(s.compute_channel.events)) refuse("ComputeChannel events is not a list of variants");
+  if (!isVariantList(s.compute_channel.channel_states)) refuse("ComputeChannel channel_states is not a list of variants");
+  if (typeof s.system.version !== "string") refuse("System version is not a type name");
+  return s;
+}
+
+/** A shape file's text read and checked. Throws ShapeRefused, naming the file. */
+export function readShape(text, name) {
+  let s;
+  try {
+    s = JSON.parse(text);
+  } catch {
+    throw new ShapeRefused(`${name}: not JSON`);
+  }
+  return checkShape(s, name);
+}
+
+/** The lines that say what differs from shape a to shape b: the specs, then each difference, sorted. Pure. */
 export function shapeDiff(a, b) {
+  checkShape(a, "the old shape");
+  checkShape(b, "the new shape");
   const sa = structure(a.types);
   const sb = structure(b.types);
   const out = new Set();
@@ -106,10 +185,10 @@ export function shapeDiff(a, b) {
       fieldsDiff(x.fields, y.fields, `${label} ${what} ${n}`);
     }
   };
-  /** The differences between two types, by structure, followed to where they are. */
+  /** The differences between two types, by structure, followed to where they are, each pair of types once. */
   const typeDiff = (x, y, label) => {
     if (sa(x) === sb(y)) return;
-    const key = `${x}|${y}|${label}`;
+    const key = JSON.stringify([x, y]);
     if (seen.has(key)) return;
     seen.add(key);
     const ta = a.types[x];
@@ -148,22 +227,42 @@ export function shapeDiff(a, b) {
     typeDiff(x.value, y.value, `${name} value`);
   }
   variantsDiff(a.compute_channel.events, b.compute_channel.events, "ComputeChannel events", "event");
-  // The fields of a channel, its states, the event record and LastRuntimeUpgrade are inside the
-  // value types of their entries, compared above, so they are not compared a second time here.
   typeDiff(a.system.version, b.system.version, "System.Version");
+  // The stated lists, after the value types they are part of: a pair of types already followed
+  // there is not followed again, so a change prints where its entry's value first met it.
+  fieldsDiff(a.compute_channel.channels.fields, b.compute_channel.channels.fields, "ComputeChannel.Channels fields");
+  variantsDiff(a.compute_channel.channel_states, b.compute_channel.channel_states, "ComputeChannel channel states", "state");
+  fieldsDiff(a.system.events.record, b.system.events.record, "System.Events record");
+  fieldsDiff(a.system.last_runtime_upgrade.fields, b.system.last_runtime_upgrade.fields, "System.LastRuntimeUpgrade fields");
   const lines = [...out];
   for (const [, name] of PALLETS) if (!lines.some((l) => l.startsWith(`${name} `) || l.startsWith(`${name}.`))) lines.push(`${name}: no difference in what the shapes state`);
-  return lines.sort();
+  return [`specs: ${a.spec_name} ${a.spec_version} to ${b.spec_name} ${b.spec_version}`, ...lines.sort()];
 }
 
-/** The script's whole output for two shape files' texts. */
-export const shapeDiffText = (oldText, newText) => `${shapeDiff(JSON.parse(oldText), JSON.parse(newText)).join("\n")}\n`;
+/** The script's whole output for two shape files' texts. Throws ShapeRefused for a file it will not read. */
+export const shapeDiffText = (oldText, newText, names = ["the old shape file", "the new shape file"]) => `${shapeDiff(readShape(oldText, names[0]), readShape(newText, names[1])).join("\n")}\n`;
+
+/** The command: the output on stdout and exit 0, or one line on stderr and exit 2. */
+export function main(args, read = (p) => readFileSync(p, "utf8")) {
+  if (args.length !== 2) return { code: 2, stderr: "usage: node scripts/shape-diff.mjs <old shape file> <new shape file>\n", stdout: "" };
+  try {
+    const texts = args.map((p) => {
+      try {
+        return read(p);
+      } catch {
+        throw new ShapeRefused(`${p}: cannot be read`);
+      }
+    });
+    return { code: 0, stdout: shapeDiffText(texts[0], texts[1], args), stderr: "" };
+  } catch (e) {
+    if (e instanceof ShapeRefused) return { code: 2, stdout: "", stderr: `shape-diff refused ${e.message}\n` };
+    throw e;
+  }
+}
 
 if (process.argv[1] !== undefined && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  const args = process.argv.slice(2);
-  if (args.length !== 2) {
-    process.stderr.write("usage: node scripts/shape-diff.mjs <old shape file> <new shape file>\n");
-    process.exit(2);
-  }
-  process.stdout.write(shapeDiffText(readFileSync(args[0], "utf8"), readFileSync(args[1], "utf8")));
+  const r = main(process.argv.slice(2));
+  process.stdout.write(r.stdout);
+  process.stderr.write(r.stderr);
+  process.exit(r.code);
 }
