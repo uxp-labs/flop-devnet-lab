@@ -67,6 +67,10 @@
     "tests": 28,
     "names": "f7c3d8ddb7d9159d878b24283a2664f04738f9ab65598d15fb7ea67b1033e487"
   },
+  "mutate-why.test.ts": {
+    "tests": 7,
+    "names": "cbbb867b34ed70aa64ae23f0ef5590681e8add612143a9fe48935362a2de7046"
+  },
   "net.test.ts": {
     "tests": 36,
     "names": "cf3456300c8dafe090a66ccfd2b8ba5a8d686a6cee78a5ce27a0b358c137de24"

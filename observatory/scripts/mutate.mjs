@@ -22,11 +22,14 @@
 //
 // Usage: node scripts/mutate.mjs [mutants/escrow.json ...]   (default: all mutants/*.json)
 // Prints one JSON object. Exit 1 if a control fails, any mutant is not killed, or there are none.
+// When the result is not a pass, it also writes to stderr why, in at most 20 lines
+// (scripts/mutate-why.mjs), so the check's log shows the cause without the evidence folder.
 import { spawnSync } from "node:child_process";
 import { existsSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { firstFailingOf, whyNotPass } from "./mutate-why.mjs";
 import { copyTracked } from "./tracked.mjs";
 
 const pkg = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -139,19 +142,21 @@ function setup() {
   return copied;
 }
 
+/** Runs a control. Its report goes to stdout as it is; the first failing test, to stderr only. */
 function control(tests, label) {
   const run = runTests(tests, label);
   const missing = tests.filter((t) => !run.files.some((f) => f.file === t));
   const failing = run.files.filter((f) => f.status !== "passed" || f.failed.length > 0 || f.tests === 0);
   // A control that ran no test file shows nothing passing, so it fails.
   const pass = tests.length > 0 && !run.timeout && !run.noReport && run.exit === 0 && missing.length === 0 && failing.length === 0;
-  return {
+  const report = {
     outcome: pass ? "control-pass" : "control-fail",
     exit: run.exit,
     files: run.files.map((f) => ({ file: f.file, status: f.status, tests: f.tests, failed: f.failed.length })),
     missing,
     detail: pass ? undefined : failing.map((f) => `${f.file}: ${f.firstFailure || f.message}`).concat(run.timeout ? ["timeout"] : [], run.noReport ? [run.tail] : []),
   };
+  return { report, firstFailing: pass ? undefined : firstFailingOf(run, failing, missing) };
 }
 
 const mutants = [];
@@ -178,6 +183,7 @@ if (mutants.length === 0) {
 }
 let before = null;
 let after = null;
+const firstFailing = {};
 let copied = null;
 let setupFailure = null;
 try {
@@ -193,7 +199,7 @@ try {
   // A mutant naming a test file that does not exist is reported invalid below; the control
   // runs every named test file that does exist.
   const tests = [...new Set(mutants.map((m) => m.test))].filter((t) => existsSync(join(copyPkg, t))).sort();
-  before = control(tests, "control-before");
+  ({ report: before, firstFailing: firstFailing.before } = control(tests, "control-before"));
   if (before.outcome !== "control-pass") bad++;
   for (const m of mutants) {
     const base = { id: m.id, source: m.source, file: m.file, test: m.test, why: m.why };
@@ -253,7 +259,7 @@ try {
       detail,
     });
   }
-  after = control(tests, "control-after");
+  ({ report: after, firstFailing: firstFailing.after } = control(tests, "control-after"));
   if (after.outcome !== "control-pass") bad++;
 } catch (e) {
   if (setupFailure === null) throw e;
@@ -274,7 +280,9 @@ const summary = {
   control_after: after?.outcome ?? "not-run",
 };
 const copyReport = setupFailure === null ? { outcome: "setup-pass", ...copied } : { outcome: "setup-failed", detail: clean(setupFailure) };
-console.log(JSON.stringify({ copy: copyReport, control_before: before, control_after: after, summary, results }, null, 2));
+const doc = { copy: copyReport, control_before: before, control_after: after, summary, results };
+console.log(JSON.stringify(doc, null, 2));
+if (bad) for (const line of whyNotPass(doc, firstFailing)) console.error(line);
 // exitCode, not exit(): a caller may read this report through a pipe, where a write is
 // asynchronous and exit() could cut it short (round 9 review L7).
 process.exitCode = bad ? 1 : 0;
