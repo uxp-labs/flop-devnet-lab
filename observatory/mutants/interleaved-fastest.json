@@ -1,0 +1,50 @@
+[
+  {
+    "id": "r28-fastest-takes-first-sample",
+    "file": "test/helpers/interleaved-fastest.ts",
+    "find": "    if (s < bestSmall) bestSmall = s;\n    if (l < bestLarge) bestLarge = l;",
+    "replace": "    if (i === 0) bestSmall = s;\n    if (i === 0) bestLarge = l;",
+    "test": "test/interleaved-fastest.test.ts",
+    "why": "one noisy sample, the first, would decide the ratio"
+  },
+  {
+    "id": "r28-fastest-takes-largest",
+    "file": "test/helpers/interleaved-fastest.ts",
+    "find": "    if (s < bestSmall) bestSmall = s;\n    if (l < bestLarge) bestLarge = l;",
+    "replace": "    if (bestSmall === Number.POSITIVE_INFINITY || s > bestSmall) bestSmall = s;\n    if (bestLarge === Number.POSITIVE_INFINITY || l > bestLarge) bestLarge = l;",
+    "test": "test/interleaved-fastest.test.ts",
+    "why": "the slowest sample of each case is the noisiest one, not the case's cost"
+  },
+  {
+    "id": "r28-fastest-not-interleaved",
+    "file": "test/helpers/interleaved-fastest.ts",
+    "find": "    const s = timeOnce(small, clock);\n    const l = timeOnce(large, clock);",
+    "replace": "    const l = timeOnce(large, clock);\n    const s = timeOnce(small, clock);",
+    "test": "test/interleaved-fastest.test.ts",
+    "why": "each attempt times the small case and then the large one, so both see the same weather"
+  },
+  {
+    "id": "r28-fastest-fewer-attempts",
+    "file": "test/helpers/interleaved-fastest.ts",
+    "find": "export const ATTEMPTS = 15;",
+    "replace": "export const ATTEMPTS = 14;",
+    "test": "test/interleaved-fastest.test.ts",
+    "why": "the number of attempts is fixed at 15"
+  },
+  {
+    "id": "r28-fastest-decides-early",
+    "file": "test/helpers/interleaved-fastest.ts",
+    "find": "    if (l < bestLarge) bestLarge = l;\n  }",
+    "replace": "    if (l < bestLarge) bestLarge = l;\n    if (bestLarge / bestSmall < 8) break;\n  }",
+    "test": "test/interleaved-fastest.test.ts",
+    "why": "an early pass would let a slow build through on one sample where the small case was held up"
+  },
+  {
+    "id": "r28-fastest-ratio-inverted",
+    "file": "test/helpers/interleaved-fastest.ts",
+    "find": "ratio: bestLarge / bestSmall",
+    "replace": "ratio: bestSmall / bestLarge",
+    "test": "test/interleaved-fastest.test.ts",
+    "why": "the ratio is the large case's time over the small case's"
+  }
+]

@@ -96,19 +96,19 @@ describe("every network and process path is blocked at runtime (RULES section 4)
     ["a worker thread", () => new Worker("x.js"), "process", "worker_threads.Worker"],
     ["an https binding imported before the block was set", () => earlyBindings.httpsRequest()("https://canary.invalid/"), "network", "https.request"],
     // Third IMD audit J2: the constructor opens the socket's native handle, so it is refused itself.
-    ["a dgram.Socket made directly", () => new dgram.Socket({ type: "udp4" }), "network", "dgram.Socket"],
+    ["a dgram.Socket made directly", () => new (dgram.Socket as unknown as new (o: dgram.SocketOptions) => unknown)({ type: "udp4" }), "network", "dgram.Socket"],
     ["a dgram.Socket made directly from its type", () => new (dgram.Socket as unknown as new (t: string) => unknown)("udp4"), "network", "dgram.Socket"],
     ["a dgram.Socket made from the real prototype's constructor", () => new (dgram.Socket.prototype.constructor as unknown as new (t: string) => unknown)("udp4"), "network", "dgram.Socket"],
     // The real prototype's methods stay blocked too, for a socket the constructor did not make.
-    ["a dgram.Socket send on the real prototype", () => dgram.Socket.prototype.send.call(Object.create(dgram.Socket.prototype), "x", 9, "canary.invalid"), "network", "dgram.Socket.send"],
-    ["a dgram.Socket bind on the real prototype", () => dgram.Socket.prototype.bind.call(Object.create(dgram.Socket.prototype), 0), "network", "dgram.Socket.bind"],
+    ["a dgram.Socket send on the real prototype", () => (dgram.Socket.prototype.send as (this: dgram.Socket, msg: string, port: number, address: string) => void).call(Object.create(dgram.Socket.prototype), "x", 9, "canary.invalid"), "network", "dgram.Socket.send"],
+    ["a dgram.Socket bind on the real prototype", () => (dgram.Socket.prototype.bind as (this: dgram.Socket, port: number) => dgram.Socket).call(Object.create(dgram.Socket.prototype), 0), "network", "dgram.Socket.bind"],
     ["net.Server _listen2, under listen", () => (new net.Server() as unknown as { _listen2: (...a: unknown[]) => unknown })._listen2("canary.invalid", 0, 4, -1, false), "network", "net.Server._listen2"],
     // Third IMD audit J1: a loader thread holds unpatched modules of its own.
     ["module.register", () => register("data:text/javascript,"), "process", "module.register"],
     ["module.registerHooks", () => registerHooks({}), "process", "module.registerHooks"],
     ["a dns.Resolver query", () => new dns.Resolver().resolve4("canary.invalid", () => undefined), "network", "dns.Resolver.resolve4"],
     ["a dns.promises.Resolver query", () => new dns.promises.Resolver().resolve4("canary.invalid"), "network", "dns.promises.Resolver.resolve4"],
-    ["ChildProcess.prototype.spawn", () => new childProcess.ChildProcess().spawn({ file: "true", args: ["true"], stdio: "ignore" } as never), "process", "child_process.ChildProcess.spawn"],
+    ["ChildProcess.prototype.spawn", () => (new childProcess.ChildProcess() as unknown as { spawn: (o: never) => unknown }).spawn({ file: "true", args: ["true"], stdio: "ignore" } as never), "process", "child_process.ChildProcess.spawn"],
     ["process.binding spawn_sync", () => (process as unknown as { binding: (n: string) => unknown }).binding("spawn_sync"), "process", "process.binding"],
     ["process.dlopen", () => process.dlopen({ exports: {} } as never, "/nonexistent/canary.node"), "process", "process.dlopen"],
     ["inspector.open", () => inspector.open(0, "127.0.0.1"), "network", "inspector.open"],

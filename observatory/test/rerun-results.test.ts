@@ -180,7 +180,9 @@ describe("the folder's own checker on results.json (review round 25, M4)", () =>
 
   it("would pass A10 too if that read were known, so nothing else holds it back", () => {
     const known = structuredClone(RESULTS);
-    (known.steps as Rec[]).find((s) => s.step === "A10").reads_after.delegate_sessions_of_device = "empty";
+    const a10 = (known.steps as Rec[]).find((s) => s.step === "A10");
+    if (a10 === undefined) throw new Error("the results hold no step A10");
+    a10.reads_after.delegate_sessions_of_device = "empty";
     const out = judgeRun(context(known));
     expect([out.all, out.top, out.run.every((r: Rec) => r.status === "pass")]).toEqual([true, [], true]);
   });

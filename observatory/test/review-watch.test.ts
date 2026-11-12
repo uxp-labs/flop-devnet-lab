@@ -253,7 +253,7 @@ describe("D. the snapshot reader", () => {
   const realZero = (): Snapshot => JSON.parse(data("latest/snapshot.json"));
   const rehash = (s: Record<string, unknown>) => {
     const { hash: _h, ...rest } = s;
-    return { ...rest, hash: hashSnapshot(rest as Snapshot) } as unknown as Snapshot;
+    return { ...rest, hash: hashSnapshot(rest as unknown as Snapshot) } as unknown as Snapshot;
   };
 
   it("HELD: an @1 snapshot and the real @0 latest read; each variant is refused by the check and by judgeLatest", async () => {

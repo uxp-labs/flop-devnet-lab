@@ -18,6 +18,9 @@
 // runner still maps vitest's real file names back, so its controls pass and the real bug is killed.
 // Last, a mutant file that holds no mutant must fail the run: a run that tests nothing proves
 // nothing (Fable review L9).
+// And the runner's stderr (round 28, N2): the run of the seven, not a pass, writes why in at most
+// 20 lines, naming each mutant not killed with its outcome; the run through a link, a pass, writes
+// none of it.
 // Exit 0 only when every outcome is the expected one.
 import { spawnSync } from "node:child_process";
 import { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, readlinkSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
@@ -212,7 +215,27 @@ const noMutants = {
   outcome: empty.status === 1 && emptyReport?.results?.some((x) => x.outcome === "no-mutants") && emptyReport?.summary?.killed === 0 ? "failed-right" : "passed-wrong",
 };
 
+// The runner's stderr: why, only for a run that is not a pass.
+const WHY = /^(mutants not a pass: |control before: |control after: |not killed: |and \d+ more not killed$)/;
+const whyOf = (text) => String(text ?? "").split("\n").filter((l) => WHY.test(l));
+const whyLines = whyOf(r.stderr);
+const notKilled = mutants.filter((m) => m.expect !== "killed").map((m) => `not killed: ${m.id} ${m.expect}`);
+const stderrWhy = {
+  check: "a run that is not a pass says why on stderr, in at most 20 lines; a pass says nothing of it",
+  lines: whyLines,
+  outcome:
+    whyLines.length <= 20 &&
+    whyLines[0]?.startsWith("mutants not a pass: 7 mutants, 3 killed, 2 survived, 1 load errors, 1 invalid, 0 other, setup-pass") &&
+    whyLines[1] === "control before: control-pass" &&
+    whyLines[2] === "control after: control-pass" &&
+    JSON.stringify(whyLines.slice(3)) === JSON.stringify(notKilled) &&
+    whyOf(viaLink.stderr).length === 0
+      ? "said-right"
+      : "said-wrong",
+};
+
 const ok =
+  stderrWhy.outcome === "said-right" &&
   results.every((x) => x.outcome === "classified-right") &&
   r.status === 1 &&
   controls.control_before === "control-pass" &&
@@ -221,7 +244,7 @@ const ok =
   setupFailure.outcome === "reported-right" &&
   throughLink.outcome === "mapped-right" &&
   noMutants.outcome === "failed-right";
-console.log(JSON.stringify({ results, runner_exit: runnerExit, ...controls, copy, setup_failure: setupFailure, through_link: throughLink, no_mutants: noMutants }, null, 2));
+console.log(JSON.stringify({ results, runner_exit: runnerExit, ...controls, copy, setup_failure: setupFailure, through_link: throughLink, no_mutants: noMutants, stderr_why: stderrWhy }, null, 2));
 // exitCode, not exit(): a caller may read this report through a pipe, where a write is
 // asynchronous and exit() could cut it short (round 9 review L7).
 process.exitCode = ok ? 0 : 1;

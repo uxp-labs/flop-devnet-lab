@@ -1,0 +1,42 @@
+[
+  {
+    "id": "r28-why-lines-not-cut",
+    "file": "scripts/mutate-why.mjs",
+    "find": "  return [...head, ...shown].map(cut);",
+    "replace": "  return [...head, ...shown];",
+    "test": "test/mutate-why.test.ts",
+    "why": "a long line goes to the log whole"
+  },
+  {
+    "id": "r28-why-one-line-too-many",
+    "file": "scripts/mutate-why.mjs",
+    "find": "[...notKilled.slice(0, room - 1), `and ${notKilled.length - (room - 1)} more not killed`]",
+    "replace": "[...notKilled.slice(0, room), `and ${notKilled.length - room} more not killed`]",
+    "test": "test/mutate-why.test.ts",
+    "why": "the lines would pass 20"
+  },
+  {
+    "id": "r28-why-killed-listed",
+    "file": "scripts/mutate-why.mjs",
+    "find": "doc.results.filter((r) => r.outcome !== \"killed\")",
+    "replace": "doc.results",
+    "test": "test/mutate-why.test.ts",
+    "why": "killed mutants would crowd out the ones not killed"
+  },
+  {
+    "id": "r28-why-control-failure-unnamed",
+    "file": "scripts/mutate-why.mjs",
+    "find": "first failing test: ${first ?? \"none named\"}",
+    "replace": "first failing test: none named",
+    "test": "test/mutate-why.test.ts",
+    "why": "a failed control would not say which test failed"
+  },
+  {
+    "id": "r28-why-first-failing-file-only",
+    "file": "scripts/mutate-why.mjs",
+    "find": "  if (f !== undefined) return `${f.file} > ${f.failed[0] ?? \"no test failed in the file\"}: ${f.firstFailure || f.message}`;",
+    "replace": "  if (f !== undefined) return `${f.file}: ${f.firstFailure || f.message}`;",
+    "test": "test/mutate-why.test.ts",
+    "why": "the first failing test's name is what the log must show"
+  }
+]
