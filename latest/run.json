@@ -1,16 +1,16 @@
 {
-  "ended_at": "2026-11-12T21:49:52.073Z",
+  "ended_at": "2026-11-12T22:49:50.058Z",
   "exit_code": 3,
-  "exit_reason": "reset signal: reset_detected is true",
+  "exit_reason": "reset signal: the status holds 1 conflict: finalized height went backwards from 3588643 to 3588630 on the same genesis",
   "history": {
-    "detail": "read 37 snapshots from 2 day files, and the chain verifies",
+    "detail": "read 38 snapshots from 2 day files, and the chain verifies",
     "files": 2,
-    "last_hash": "ef1b84d056c0ab1c7a165b98f1f97fad6ace29c2ca662097bc215e1a4075531d",
-    "snapshots": 37,
+    "last_hash": "a8ce133bb99a241fc662a01d80dd2acf3fbf5f395bfc96bdcefc2e0a6793d253",
+    "snapshots": 38,
     "state": "read"
   },
   "schema": "flop-observatory/live-run@1",
-  "snapshot_hash": "a8ce133bb99a241fc662a01d80dd2acf3fbf5f395bfc96bdcefc2e0a6793d253",
+  "snapshot_hash": "d824c4fda753ee0486f5fd485a222a1fd037fa5daae11620d9c14146c8a3b27a",
   "source_sha": "bdc1dc7c86a766325b73f9ac4b2b4b7beda90544",
-  "started_at": "2026-11-12T21:49:42.443Z"
+  "started_at": "2026-11-12T22:49:41.825Z"
 }

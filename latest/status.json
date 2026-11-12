@@ -1,11 +1,10 @@
 {
-  "observed_at": "2026-11-12T21:49:52.070Z",
+  "observed_at": "2026-11-12T22:49:50.054Z",
   "schema": "flop-observatory/feed-status@0",
-  "snapshot_hash": "a8ce133bb99a241fc662a01d80dd2acf3fbf5f395bfc96bdcefc2e0a6793d253",
+  "snapshot_hash": "d824c4fda753ee0486f5fd485a222a1fd037fa5daae11620d9c14146c8a3b27a",
   "status": {
     "best_height": 3588640,
     "conflicts": [
-      "finalized block 3588643 was 0x4d1f500ae857c234b29ff6a06a7514f6199e27271bc956dabc220ebd5fb349a3 when an earlier snapshot logged it, and the node now has no block at that height: the finalized chain is not the one the log saw",
       "finalized height went backwards from 3588643 to 3588630 on the same genesis"
     ],
     "faucet": {
@@ -21,7 +20,7 @@
         "ipGrantsPerDay": 300,
         "ipPrefixGrantsPerDay": 10000
       },
-      "observed_at": "2026-11-12T21:49:46.012Z",
+      "observed_at": "2026-11-12T22:49:43.561Z",
       "ready": false
     },
     "finality_lag": 10,
@@ -31,21 +30,21 @@
       "detail": null,
       "health": "ok",
       "http": 200,
-      "observed_at": "2026-11-12T21:49:47.273Z"
+      "observed_at": "2026-11-12T22:49:45.306Z"
     },
     "genesis": {
       "faucet": "0x99c172c095340ace980631f9123544c6bebd4839f3437e463533422d8be2d631",
       "pinned": "0x99c172c095340ace980631f9123544c6bebd4839f3437e463533422d8be2d631",
       "rpc": "0x99c172c095340ace980631f9123544c6bebd4839f3437e463533422d8be2d631"
     },
-    "observed_at": "2026-11-12T21:49:52.070Z",
-    "reset_detected": true,
+    "observed_at": "2026-11-12T22:49:50.054Z",
+    "reset_detected": null,
     "rpc": {
-      "detail": "finalized height went backwards; the finalized block an earlier snapshot logged at 3588643 is not on the node's chain",
+      "detail": "finalized height went backwards; finalized height stuck at 3588630 for 3603s",
       "health": "degraded",
       "http": null,
-      "observed_at": "2026-11-12T21:49:47.274Z",
-      "stale": false
+      "observed_at": "2026-11-12T22:49:45.308Z",
+      "stale": true
     },
     "runtime_version": 1014020,
     "schema": "flop-observatory/network-status@0",
