@@ -80,7 +80,7 @@ const H256 = idOf((t) => t.path.at(-1) === "H256");
  * (Sessions, SessionNonces, CircuitBreakers). The event enum has one
  * event E, whose fields are given; extra types follow from id 12.
  */
-function shapeMetadata(o: { eventFields?: { name: string; type: number }[]; record?: { name: string; type: number }[]; extra?: TypeSpec[]; constants?: { name: string; type: number; value: Uint8Array }[] }): Uint8Array {
+function shapeMetadata(o: { eventFields?: { name: string; type: number }[]; record?: { name: string; type: number }[]; extra?: TypeSpec[]; constants?: { name: string; type: number; value: Uint8Array }[]; sessionKeys?: string[] }): Uint8Array {
   const types: TypeSpec[] = [
     { def: def.primitive("u8") }, // 0
     { def: def.primitive("str") }, // 1
@@ -107,7 +107,7 @@ function shapeMetadata(o: { eventFields?: { name: string; type: number }[]; reco
     {
       name: "FlopSessionKeys",
       index: 2,
-      entries: ["Sessions", "SessionNonces", "CircuitBreakers"].map((name) => ({ name, map: { hashers: ["Blake2_128Concat"], key: 0, value: 2 } })),
+      entries: (o.sessionKeys ?? ["Sessions", "SessionNonces", "CircuitBreakers"]).map((name) => ({ name, map: { hashers: ["Blake2_128Concat"], key: 0, value: 2 } })),
     },
   ];
   return metadata(types, pallets);
@@ -258,6 +258,16 @@ describe("values decoded wrong, or valid values refused", () => {
     const b = cat(compact(1), u8(1), u8(0), u32(7));
     expect(decodeValue(md, 6, b)).toEqual([{ event: { variant: "ComputeChannel", fields: { variant: "E", fields: null } }, "phase,topics": 7 }]);
     expect(thrown(() => decodeEvents(md, b))).toEqual({ cls: "ScaleError", message: "an event record of System.Events does not have exactly the fields phase, event and topics" });
+  });
+
+  it("storage round: deriveShape refuses metadata without a FlopSessionKeys pallet or one of its three entries, with a ScaleError naming it", () => {
+    expect(() => deriveShape(parseMetadata(shapeMetadata({})))).not.toThrow();
+    const noPallet = parseMetadata(shapeMetadata({})).pallets.filter((p) => p.name !== "FlopSessionKeys");
+    expect(thrown(() => deriveShape({ ...parseMetadata(shapeMetadata({})), pallets: noPallet }))).toEqual({ cls: "ScaleError", message: "the metadata has no FlopSessionKeys pallet" });
+    for (const missing of ["Sessions", "SessionNonces", "CircuitBreakers"]) {
+      const md = parseMetadata(shapeMetadata({ sessionKeys: ["Sessions", "SessionNonces", "CircuitBreakers"].filter((e) => e !== missing) }));
+      expect(thrown(() => deriveShape(md))).toEqual({ cls: "ScaleError", message: `pallet FlopSessionKeys has no storage entry ${JSON.stringify(missing)}` });
+    }
   });
 
   it("review defect 8, fixed: two constants of one name in a pallet are refused, so deriveShape never reads the spec from one of two", () => {

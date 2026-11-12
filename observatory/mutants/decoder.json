@@ -726,5 +726,141 @@
     "replace": "    return false ?",
     "test": "scripts/source-scan.mjs",
     "why": "outside src/scale only block.ts may be imported from it"
+  },
+  {
+    "id": "r19-entry-default-dropped",
+    "file": "src/scale/shape.ts",
+    "find": "value: nameOf(n, e.value), default: toHex(e.fallback) };",
+    "replace": "value: nameOf(n, e.value) };",
+    "test": "test/shape.test.ts",
+    "why": "each stated entry gives the default bytes the metadata states for it"
+  },
+  {
+    "id": "r19-session-roots-dropped",
+    "file": "src/scale/shape.ts",
+    "find": "version.type, ...[sessions, nonces, breakers].flatMap((e) => [e.value, ...keyOf(e)])];",
+    "replace": "version.type];",
+    "test": "test/shape.test.ts",
+    "why": "the type closure starts from the FlopSessionKeys keys and values too"
+  },
+  {
+    "id": "r19-session-pallet-unchecked",
+    "file": "src/scale/shape.ts",
+    "find": "  if (fsk === undefined) throw new ScaleError(\"the metadata has no FlopSessionKeys pallet\");",
+    "replace": "",
+    "test": "test/review-decoder.test.ts",
+    "why": "metadata without FlopSessionKeys is refused with a ScaleError, not a TypeError"
+  },
+  {
+    "id": "r19-session-index-wrong",
+    "file": "src/scale/shape.ts",
+    "find": "      index: fsk.index,",
+    "replace": "      index: cc.index,",
+    "test": "test/shape.test.ts",
+    "why": "the shape states FlopSessionKeys' own pallet index"
+  },
+  {
+    "id": "r19-nonces-stated-as-sessions",
+    "file": "src/scale/shape.ts",
+    "find": "      session_nonces: entryShape(n, nonces),",
+    "replace": "      session_nonces: entryShape(n, sessions),",
+    "test": "test/shape.test.ts",
+    "why": "each entry is stated by its own modifier, key, value and default"
+  },
+  {
+    "id": "r19-stated-breakers-dropped",
+    "file": "src/scale/shape.ts",
+    "find": "  [\"FlopSessionKeys\", \"CircuitBreakers\"],\n];",
+    "replace": "];",
+    "test": "test/storage-values.test.ts",
+    "why": "the door reads every entry the shape states"
+  },
+  {
+    "id": "r19-stated-extra-entry",
+    "file": "src/scale/shape.ts",
+    "find": "  [\"FlopSessionKeys\", \"CircuitBreakers\"],\n];",
+    "replace": "  [\"FlopSessionKeys\", \"CircuitBreakers\"],\n  [\"FlopSessionKeys\", \"DelegateSessions\"],\n];",
+    "test": "test/shape.test.ts",
+    "why": "the door reads no entry the shape does not state"
+  },
+  {
+    "id": "r19-door-stated-unchecked",
+    "file": "src/scale/block.ts",
+    "find": "  if (!STATED_ENTRIES.some(([p, e]) => p === r.pallet && e === r.entry)) return",
+    "replace": "  if (false) return",
+    "test": "test/storage-values.test.ts",
+    "why": "an entry the reviewed shape does not state is refused before anything else"
+  },
+  {
+    "id": "r19-door-key-unchecked",
+    "file": "src/scale/block.ts",
+    "find": "    if (built !== toHex(r.key)) return",
+    "replace": "    if (false) return",
+    "test": "test/storage-values.test.ts",
+    "why": "a value is never decoded under a key other than the entry's key for its parts"
+  },
+  {
+    "id": "r19-door-unpinned",
+    "file": "src/scale/block.ts",
+    "find": "  if (!pin.pinned) return { decoded: false, refused: `not decoded: ${pin.refused}` };\n  const md = pin.metadata;",
+    "replace": "  if (!pin.pinned && false) return { decoded: false, refused: `not decoded: ${pin.refused}` };\n  const md = pin.metadata;",
+    "test": "test/storage-values.test.ts",
+    "why": "a storage value is decoded only once the block pins to the reviewed shape"
+  },
+  {
+    "id": "r19-door-optional-null-decoded",
+    "file": "src/scale/block.ts",
+    "find": "    if (e.modifier === \"Optional\") return",
+    "replace": "    if (false) return",
+    "test": "test/storage-values.test.ts",
+    "why": "an absent Optional value is null, never the metadata's placeholder bytes decoded"
+  },
+  {
+    "id": "r19-door-default-null-stored",
+    "file": "src/scale/block.ts",
+    "find": "stored: false, value: decodeValue(md, e.value, e.fallback) };",
+    "replace": "stored: true, value: decodeValue(md, e.value, e.fallback) };",
+    "test": "test/storage-values.test.ts",
+    "why": "a default the node did not send is never reported as stored"
+  },
+  {
+    "id": "r19-door-default-null-is-null",
+    "file": "src/scale/block.ts",
+    "find": "stored: false, value: decodeValue(md, e.value, e.fallback) };",
+    "replace": "stored: false, value: null };",
+    "test": "test/storage-values.test.ts",
+    "why": "an absent Default value is the default the metadata states"
+  },
+  {
+    "id": "r19-door-bytes-not-stored",
+    "file": "src/scale/block.ts",
+    "find": "stored: true, value: decodeValue(md, e.value, r.answer) };",
+    "replace": "stored: false, value: decodeValue(md, e.value, r.answer) };",
+    "test": "test/storage-values.test.ts",
+    "why": "an answer with bytes is a stored value"
+  },
+  {
+    "id": "r19-door-answer-read-twice",
+    "file": "src/scale/block.ts",
+    "find": "    answer: answer === null ? null : copyBytes(answer, \"the answer\"),",
+    "replace": "    answer: input.answer === null ? null : copyBytes(input.answer, \"the answer\"),",
+    "test": "test/storage-values.test.ts",
+    "why": "each field of the input is read once, so a getter cannot give the check one value and the decode another"
+  },
+  {
+    "id": "r19-door-key-parts-uncopied",
+    "file": "src/scale/block.ts",
+    "find": "    keys: Array.from(keys, (k, i) => copyBytes(k, `key part ${i}`)),",
+    "replace": "    keys: keys as Uint8Array[],",
+    "test": "test/storage-values.test.ts",
+    "why": "every key part must be bytes, and is copied"
+  },
+  {
+    "id": "r19-door-strings-unchecked",
+    "file": "src/scale/block.ts",
+    "find": "  if (typeof pallet !== \"string\" || typeof entry !== \"string\") throw",
+    "replace": "  if (false) throw",
+    "test": "test/storage-values.test.ts",
+    "why": "the pallet and entry are refused unless they are strings"
   }
 ]
