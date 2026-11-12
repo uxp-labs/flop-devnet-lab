@@ -12,7 +12,33 @@ const WIDTH = Object.freeze({ u32: 4, u64: 8, u128: 16 } as const);
 
 export type FieldValue = number | bigint | string | Uint8Array | { readonly [name: string]: FieldValue };
 
-const isObject = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !(v instanceof Uint8Array) && !Array.isArray(v);
+const isObject = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !ArrayBuffer.isView(v) && !Array.isArray(v);
+
+/**
+ * The getters of %TypedArray%.prototype, taken once at load. They read a typed array's internal slots, so
+ * a subclass or an own property that lies about the length, the offset or the buffer is not believed.
+ */
+const TYPED = Object.getPrototypeOf(Uint8Array.prototype) as object;
+const getter = (name: PropertyKey) => Object.getOwnPropertyDescriptor(TYPED, name)!.get! as (this: unknown) => unknown;
+const KIND = getter(Symbol.toStringTag);
+const BUFFER = getter("buffer");
+const OFFSET = getter("byteOffset");
+const LENGTH = getter("byteLength");
+
+/**
+ * A fresh copy of the bytes of `value`, which must be a Uint8Array (a Node buffer is one) of exactly `n` bytes
+ * by its own internal state (rule H3). Anything else is refused: another width, an array, a string.
+ */
+export function bytesOf(value: unknown, n: number, what: string): Uint8Array {
+  const kind = ArrayBuffer.isView(value) ? KIND.call(value) : undefined;
+  if (kind !== "Uint8Array") refuse("BAD_INPUT", `${what} must be a Uint8Array of ${n} bytes`);
+  const length = LENGTH.call(value) as number;
+  if (length !== n) refuse("WRONG_LENGTH", `${what} has ${length} bytes, not ${n}`);
+  const view = new Uint8Array(BUFFER.call(value) as ArrayBuffer, OFFSET.call(value) as number, length);
+  const copy = new Uint8Array(n);
+  copy.set(view);
+  return copy;
+}
 
 /** Refuses an object whose keys are not exactly `fields` (plus `allow`). */
 export function exactKeys(value: unknown, fields: readonly Field[], what: string, allow: readonly string[] = []): Record<string, unknown> {
@@ -27,9 +53,7 @@ export function exactKeys(value: unknown, fields: readonly Field[], what: string
 export function writeValue(ty: Ty, value: unknown, what: string): Uint8Array {
   switch (ty.kind) {
     case "bytes32":
-      if (!(value instanceof Uint8Array)) refuse("BAD_INPUT", `${what} must be a Uint8Array of 32 bytes`);
-      if (value.length !== 32) refuse("WRONG_LENGTH", `${what} has ${value.length} bytes, not 32`);
-      return Uint8Array.from(value);
+      return bytesOf(value, 32, what);
     case "u32":
       if (typeof value !== "number" || !Number.isInteger(value)) refuse("BAD_INPUT", `${what} must be a whole number (u32)`);
       if (value < 0 || value > 2 ** 32 - 1) refuse("OUT_OF_RANGE", `${what} ${value} is not a u32`);

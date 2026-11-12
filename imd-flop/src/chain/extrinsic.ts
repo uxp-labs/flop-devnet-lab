@@ -17,7 +17,7 @@ import { INNER_PALLET, isInnerName, INNER_NAMES, spendOf, type Bytes32, type Inn
 import { describeExtrinsic } from "./describe.js";
 import { refuse } from "./errors.js";
 import { lastValidBlock, mortalEra } from "./era.js";
-import { exactKeys, writeValue } from "./fields.js";
+import { bytesOf, exactKeys, writeValue } from "./fields.js";
 import { readExtrinsic, type SessionCallData } from "./reader.js";
 import { compact, concat, toHex, uintLE } from "./scale.js";
 import { checkRuntime } from "./shape.js";
@@ -109,11 +109,7 @@ export function toSign(payload: Uint8Array): { message: Uint8Array; signed: Sign
   return payload.length > PAYLOAD_HASH_ABOVE ? { message: blake2b(payload, { dkLen: 32 }), signed: "payload-blake2b-256" } : { message: payload, signed: "payload" };
 }
 
-function bytes32(value: unknown, what: string): Bytes32 {
-  if (!(value instanceof Uint8Array)) refuse("BAD_INPUT", `${what} must be a Uint8Array of 32 bytes`);
-  if (value.length !== 32) refuse("WRONG_LENGTH", `${what} has ${value.length} bytes, not 32`);
-  return value;
-}
+const bytes32 = (value: unknown, what: string): Bytes32 => bytesOf(value, 32, what);
 
 /** The extra and the additional signed data, in the table's order of signed extensions. */
 function extensions(rt: Runtime, accountNonce: number, birth: { number: number; hash: Bytes32 }): { extra: Uint8Array; additional: Uint8Array } {
