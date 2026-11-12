@@ -172,8 +172,12 @@ describe("the folder's own checker on results.json (review round 25, M4)", () =>
     expect([out.all, out.top, out.run.every((r: Rec) => r.status === "pass")]).toEqual([true, [], true]);
   });
 
-  it("holds the file whose sha256 the README of the rerun names", () => {
+  it("is what the README of the rerun is written from: the file's sha256, and the table of steps row by row", () => {
     const readme = repoText("research/2026-11-12-session-rerun-1014020/README.md");
     expect(readme).toContain(createHash("sha256").update(TEXT).digest("hex"));
+    const expect_ = Object.fromEntries((JSON.parse(repoText("research/2026-11-12-session-rerun-1014020/steps.json")) as { steps: Rec[] }).steps.map((s) => [s.id, s.expect]));
+    const rows = readme.split("\n").filter((l) => /^\| [AB]\d+ \|/.test(l));
+    const seen = (r: string) => (r === "success" ? "success" : r.replace(/^failed: /, "").replace(/ \(pallet .*$/, ""));
+    expect(rows).toEqual((RESULTS.steps as Rec[]).map((s) => `| ${s.step} | ${s.finalized_in_block} | ${expect_[s.step]} | ${seen(s.result)} | ${s.fee_raw} |`));
   });
 });
