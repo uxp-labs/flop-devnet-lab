@@ -1,0 +1,148 @@
+{
+  "accounts": {
+    "device_1": {
+      "field": "device.public_key",
+      "file": "research/2026-11-11-session-probe/results.json",
+      "value": "0x1ec8abdfa88707679f8a2fbfc0bcd80184e2f731d91bb9fa152b750210556c7f"
+    },
+    "device_2": {
+      "field": "device.public_key",
+      "file": "research/2026-11-11-session-escrow/results.json",
+      "value": "0xd03f3dc1fa4ff1d0a615285a474e11c0d6f00dbaa5f4d827ad487239502bc3d2"
+    },
+    "device_3": {
+      "field": "device.public_key",
+      "file": "research/2026-11-11-session-deny-list/results.json",
+      "value": "0xa68ab764d2b02c8d8179df350b56c873b832e2b1f63e858bd1a376d2b89bba23"
+    },
+    "owner": {
+      "field": "owner.public_key",
+      "file": "research/2026-11-11-session-escrow/results.json",
+      "value": "0xe462d014cab1239a123233647052f4e3b572322e982441d6b7a5c1694d8419e2"
+    }
+  },
+  "blocks": {
+    "runtime-upgrade/carries-upgrade": {
+      "hash": {
+        "field": "boundary.1.hash",
+        "file": "research/2026-11-12-runtime-upgrade/results.json",
+        "value": "0x187a4c5b16a8d3c20f710ccd4a275d7bb2426311dd89ae14da0728d6504145c2"
+      },
+      "height": {
+        "field": "boundary.1.height",
+        "file": "research/2026-11-12-runtime-upgrade/results.json",
+        "value": 3528528
+      }
+    },
+    "runtime-upgrade/first-of-new-runtime": {
+      "hash": {
+        "field": "boundary.2.hash",
+        "file": "research/2026-11-12-runtime-upgrade/results.json",
+        "value": "0x1507e7343ff4914ea9ad6871731c0307ffbbb1b244def06d9f071557f6cf9d94"
+      },
+      "height": {
+        "field": "boundary.2.height",
+        "file": "research/2026-11-12-runtime-upgrade/results.json",
+        "value": 3528529
+      }
+    },
+    "runtime-upgrade/last-of-old-runtime": {
+      "hash": {
+        "field": "boundary.0.hash",
+        "file": "research/2026-11-12-runtime-upgrade/results.json",
+        "value": "0x57d233b502269f6658673c7059331a9ff926680dcceb2fc9af0d00275fdb4e71"
+      },
+      "height": {
+        "field": "boundary.0.height",
+        "file": "research/2026-11-12-runtime-upgrade/results.json",
+        "value": 3528527
+      }
+    },
+    "runtime-upgrade/later-of-new-runtime": {
+      "hash": {
+        "field": "a_later_block_of_the_new_spec.hash",
+        "file": "research/2026-11-12-runtime-upgrade/results.json",
+        "value": "0x1bfd0be722963f829c4f8c732fbb237e4f5f1c06dd7a399b8d3cd9be1ab8174f"
+      },
+      "height": {
+        "field": "a_later_block_of_the_new_spec.height",
+        "file": "research/2026-11-12-runtime-upgrade/results.json",
+        "value": 3530299
+      }
+    },
+    "session-deny-list/10-lower-case-allow-entry": {
+      "hash": {
+        "field": "steps.9.block_hash",
+        "file": "research/2026-11-11-session-deny-list/results.json",
+        "value": "0xdc706da614fed4edfacc76199c592f90afb0e15779014396559cb2eb38dfb06c"
+      },
+      "height": {
+        "field": "steps.9.finalized_in_block",
+        "file": "research/2026-11-11-session-deny-list/results.json",
+        "value": 3513466
+      }
+    },
+    "session-deny-list/11-allowed-control": {
+      "hash": {
+        "field": "steps.10.block_hash",
+        "file": "research/2026-11-11-session-deny-list/results.json",
+        "value": "0xcdb827d48098fbb49c6e130414edcc16dba0fe5cc7b808d694646564ab4e232f"
+      },
+      "height": {
+        "field": "steps.10.finalized_in_block",
+        "file": "research/2026-11-11-session-deny-list/results.json",
+        "value": 3513488
+      }
+    },
+    "session-deny-list/12-revoke-session": {
+      "hash": {
+        "field": "steps.11.block_hash",
+        "file": "research/2026-11-11-session-deny-list/results.json",
+        "value": "0xa1ad0bf8ae96d1264fb84eeedf5e81487db55c4e1f05c5bc95d6979d9d93983c"
+      },
+      "height": {
+        "field": "steps.11.finalized_in_block",
+        "file": "research/2026-11-11-session-deny-list/results.json",
+        "value": 3513523
+      }
+    },
+    "session-deny-list/2-create-session": {
+      "hash": {
+        "field": "steps.1.block_hash",
+        "file": "research/2026-11-11-session-deny-list/results.json",
+        "value": "0x2069c88edcb7bd41f43aeb5cbaab692994042f1b52417b3db3fbc4cb874286be"
+      },
+      "height": {
+        "field": "steps.1.finalized_in_block",
+        "file": "research/2026-11-11-session-deny-list/results.json",
+        "value": 3513199
+      }
+    },
+    "session-deny-list/3-denied-utility": {
+      "hash": {
+        "field": "steps.2.block_hash",
+        "file": "research/2026-11-11-session-deny-list/results.json",
+        "value": "0xcec70c1e8872fcfca85676567f930ace0f0599628757a4c9185501e51be41466"
+      },
+      "height": {
+        "field": "steps.2.finalized_in_block",
+        "file": "research/2026-11-11-session-deny-list/results.json",
+        "value": 3513325
+      }
+    }
+  },
+  "channels": {
+    "gateway": {
+      "field": "the channel_id of the one ComputeChannel.Settled event in System.Events at seq 20",
+      "file": "observatory/fixtures/recording-20261111160917-3c228907aa129a01/tape.jsonl",
+      "value": "0x9f81f65bc93855d394329e4996bc78d949bb786178f3471c13d3853f9813ddd7"
+    },
+    "ours": {
+      "field": "channel.id",
+      "file": "research/2026-11-11-session-escrow/results.json",
+      "value": "0xe5655fd56d18ac9816623fd975d501322a7427fe5568c7aa02a19cf04dfd12dc"
+    }
+  },
+  "mentioned": {},
+  "schema": "flop-observatory/requests-inputs@0"
+}
