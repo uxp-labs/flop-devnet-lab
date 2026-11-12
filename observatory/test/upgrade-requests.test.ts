@@ -1,13 +1,15 @@
-// The third request list, recordings/requests.json: FLOP devnet's runtime upgrade, the lab's own
-// storage records on both sides of it, and the blocks of the lab's deny list test. It is derived
-// (test/helpers/requests/list-3.ts) from recordings/requests-inputs.json and the recorded metadata,
-// and nothing in it is typed by hand. These tests hold the list to that function byte for byte,
-// read its design a second way, derive every storage key a second way with the reference decoder,
-// hold every input to the record it names (research/2026-11-12-runtime-upgrade/results.json for the
-// upgrade, research/2026-11-11-session-deny-list/results.json for the deny list test, and the
-// sources list 2 had for the rest), and hold the lab's reads of the upgrade to themselves where that
-// can be done offline. Nothing here reads the network or decodes anything of the new runtime but
-// its System.LastRuntimeUpgrade record, the one value the shape pin reads to refuse it.
+// The third request list: FLOP devnet's runtime upgrade, the lab's own storage records on both sides
+// of it, and the blocks of the lab's deny list test. It was recordings/requests.json until the
+// fourth list replaced it, and its recording's fixture
+// (fixtures/recording-20261112080132-05842a6db1e9c890) keeps it and its inputs, frozen. It is
+// derived (test/helpers/requests/list-3.ts) from those inputs and the recorded metadata, and nothing
+// in it is typed by hand. These tests hold the frozen list to that function byte for byte, read its
+// design a second way, derive every storage key a second way with the reference decoder, hold every
+// input to the record it names (research/2026-11-12-runtime-upgrade/results.json for the upgrade,
+// research/2026-11-11-session-deny-list/results.json for the deny list test, and the sources list 2
+// had for the rest), and hold the lab's reads of the upgrade to themselves where that can be done
+// offline. Nothing here reads the network or decodes anything of the new runtime but its
+// System.LastRuntimeUpgrade record, the one value the shape pin reads to refuse it.
 import { getDynamicBuilder, getLookupFn } from "@polkadot-api/metadata-builders";
 import { decAnyMetadata, unifyMetadata } from "@polkadot-api/substrate-bindings";
 import { createHash } from "node:crypto";
@@ -25,12 +27,12 @@ import { INPUTS_TEXT as LIST_2_INPUTS_TEXT, STORAGE_REQUESTS_TEXT } from "./help
 import type { Source } from "./helpers/requests/core.js";
 import { readInputs as readList2Inputs } from "./helpers/requests/list-2.js";
 import { ACROSS, type Block, DENY, DENY_BLOCKS, type Inputs, type Read, UPGRADE_BLOCKS, deriveCalls, deriveRequestsText, readInputs } from "./helpers/requests/list-3.js";
-import { requestsListText } from "./helpers/requests-list.js";
+import { UPGRADE_INPUTS_TEXT, UPGRADE_REQUESTS_TEXT } from "./helpers/recorded-upgrade.js";
 
 const REPO = new URL("../../", import.meta.url);
 const repoText = (path: string) => readFileSync(new URL(path, REPO), "utf8");
-const LIST_TEXT = repoText("observatory/recordings/requests.json");
-const INPUTS_TEXT = repoText("observatory/recordings/requests-inputs.json");
+const LIST_TEXT = UPGRADE_REQUESTS_TEXT;
+const INPUTS_TEXT = UPGRADE_INPUTS_TEXT;
 const INPUTS = readInputs(INPUTS_TEXT);
 const R = recorded();
 const MD = parseMetadata(R.metadata);
@@ -78,7 +80,7 @@ const EVENTS_KEY = UP_KEYS["System.Events"] as string;
 /** The deny list test's steps this list reads at, by their place in the record's steps: steps 2, 3, 10, 11 and 12. */
 const DENY_STEPS = [1, 2, 9, 10, 11];
 
-describe("the third request list, recordings/requests.json", () => {
+describe("the third request list, frozen in its recording's fixture", () => {
   const read = readRequests(new TextEncoder().encode(LIST_TEXT));
   const calls = typeof read === "string" ? [] : read.calls;
 
@@ -98,18 +100,9 @@ describe("the third request list, recordings/requests.json", () => {
     for (const c of calls) expect(earlier.has(c.method), c.method).toBe(true);
   });
 
-  it("is, byte for byte, the list derived from recordings/requests-inputs.json and the recorded metadata", () => {
+  it("is, byte for byte, the list derived from its frozen inputs and the recorded metadata", () => {
     expect(LIST_TEXT).toBe(deriveRequestsText(INPUTS, MD));
     expect(calls).toEqual(DERIVED.map((d) => d.call));
-  });
-
-  it("is what the committed writer writes: scripts/write-requests.mjs writes requestsListText, the same derive function, and nothing of its own", () => {
-    expect(requestsListText()).toBe(LIST_TEXT);
-    const script = repoText("observatory/scripts/write-requests.mjs");
-    expect(script).toContain('const { requestsListText } = await import("../test/helpers/requests-list.ts");');
-    expect(script).toContain("writeFileSync(args[1], requestsListText());");
-    for (const name of ["deriveCalls", "deriveRequestsText", "storageKey", "feedText", "PLAN", "plan("]) expect(script, name).not.toContain(name);
-    expect(repoText("observatory/test/helpers/requests-list.ts")).toContain('from "./requests/list-3.js";');
   });
 
   it("asks part A, the upgrade, as the lead ordered it: the heads, each block's hash, the version at each, the metadata at the two blocks of the old runtime's last answer, then LastRuntimeUpgrade and System.Events at each", () => {
@@ -239,7 +232,7 @@ describe("the third request list, recordings/requests.json", () => {
   });
 });
 
-describe("the inputs, recordings/requests-inputs.json", () => {
+describe("the inputs of the third list, frozen in its recording's fixture", () => {
   it("is in the written form, and refuses a file that is not or that lacks a name the plan uses", () => {
     expect(() => readInputs(INPUTS_TEXT)).not.toThrow();
     expect(() => readInputs(JSON.stringify(JSON.parse(INPUTS_TEXT)))).toThrow("the inputs file is not in the written form");

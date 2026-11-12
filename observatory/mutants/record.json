@@ -426,9 +426,73 @@
   {
     "id": "core-genesis-at-block-1",
     "file": "test/helpers/requests/core.ts",
-    "find": "return { call: { method: \"chain_getBlockHash\", params: [0], why: s.why }, block: null, read: null };",
-    "replace": "return { call: { method: \"chain_getBlockHash\", params: [1], why: s.why }, block: null, read: null };",
+    "find": "return { call: { method: \"chain_getBlockHash\", params: [0], why: s.why }, block: null, read: null, reads: null };",
+    "replace": "return { call: { method: \"chain_getBlockHash\", params: [1], why: s.why }, block: null, read: null, reads: null };",
     "test": "test/storage-requests.test.ts",
     "why": "the core is held by list 2's frozen list too: the genesis is the hash at height 0 (review round 21)"
+  },
+  {
+    "id": "core-batch-empty-allowed",
+    "file": "test/helpers/requests/core.ts",
+    "find": "  if (reads.length === 0) throw new Error(\"a batch must read at least one storage entry\");\n",
+    "replace": "",
+    "test": "test/rerun-requests.test.ts",
+    "why": "a batch that reads nothing is refused (list 4, L1)"
+  },
+  {
+    "id": "core-batch-key-twice-allowed",
+    "file": "test/helpers/requests/core.ts",
+    "find": "  if (new Set(keys).size !== keys.length) throw new Error(\"a batch asks the same storage key twice\");\n",
+    "replace": "",
+    "test": "test/rerun-requests.test.ts",
+    "why": "a batch never asks a key twice, since the reader of its answer refuses a key listed twice (list 4, L1 and L4)"
+  },
+  {
+    "id": "core-batch-keys-reversed",
+    "file": "test/helpers/requests/core.ts",
+    "find": "params: [batchKeys(inputs, s.reads, md), hashOf(s.block)]",
+    "replace": "params: [batchKeys(inputs, s.reads, md).reverse(), hashOf(s.block)]",
+    "test": "test/rerun-requests.test.ts",
+    "why": "a batch asks its keys in the order the plan gives (list 4, L1)"
+  },
+  {
+    "id": "list4-runtime-before-events",
+    "file": "test/helpers/requests/list-4.ts",
+    "find": "[EVENTS, LAST_RUNTIME_UPGRADE, ...readsAfter(step)]",
+    "replace": "[LAST_RUNTIME_UPGRADE, EVENTS, ...readsAfter(step)]",
+    "test": "test/rerun-requests.test.ts",
+    "why": "every batch reads System.Events first, then System.LastRuntimeUpgrade (list 4, L2)"
+  },
+  {
+    "id": "list4-session-b-device-is-dev1",
+    "file": "test/helpers/requests/list-4.ts",
+    "find": "{ A: \"dev1\", B: \"dev2\" }",
+    "replace": "{ A: \"dev1\", B: \"dev1\" }",
+    "test": "test/rerun-requests.test.ts",
+    "why": "session B's reads are of dev2, the device it was made for (list 4, L2)"
+  },
+  {
+    "id": "list4-entry-order-swapped",
+    "file": "test/helpers/requests/list-4.ts",
+    "find": "[\"Sessions\", \"SessionNonces\", \"CircuitBreakers\", \"FailedAcks\", \"DelegateSessions\"] as const",
+    "replace": "[\"SessionNonces\", \"Sessions\", \"CircuitBreakers\", \"FailedAcks\", \"DelegateSessions\"] as const",
+    "test": "test/rerun-requests.test.ts",
+    "why": "the reads of a step are asked in one fixed order (list 4, L1)"
+  },
+  {
+    "id": "list4-spent-from-nonces",
+    "file": "test/helpers/requests/list-4.ts",
+    "find": "  spent_raw: \"Sessions\",",
+    "replace": "  spent_raw: \"SessionNonces\",",
+    "test": "test/rerun-requests.test.ts",
+    "why": "spent_raw is a field of the session record, so a step that names it reads Sessions (list 4, L2)"
+  },
+  {
+    "id": "list4-step-reads-dropped",
+    "file": "test/helpers/requests/list-4.ts",
+    "find": "expect: \"FlopSessionKeys.DailyCapExceeded\", fields: [\"session_nonce\", \"spent_raw\", \"epoch_spent_raw\", \"breaker_tx_count\"] },",
+    "replace": "expect: \"FlopSessionKeys.DailyCapExceeded\", fields: [\"session_nonce\", \"spent_raw\", \"epoch_spent_raw\"] },",
+    "test": "test/rerun-requests.test.ts",
+    "why": "each step reads every field steps.json names for it, here the breaker after A8 (list 4, L2)"
   }
 ]
