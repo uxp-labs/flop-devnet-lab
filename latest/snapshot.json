@@ -2,21 +2,21 @@
   "census": null,
   "drift": null,
   "escrows": [],
-  "hash": "c32b9f4782dcb30952b0297f1969ed8b26e6d68fa23fa45068c09503b414f526",
-  "observed_at": "2026-11-12T14:57:55.219Z",
+  "hash": "0f1119312a02d6449339fc8dc4b7466a37ec846104fcdda82207bf5ef83659c7",
+  "observed_at": "2026-11-12T16:03:27.672Z",
   "pin": {
-    "finalized_hash": "0xff72f0621a287d33cc8ef21177c08cb0cf36b2fbd0b62bb775c4b71332abd2a2",
-    "finalized_height": 3567493,
+    "finalized_hash": "0x57e18c25568fd1f37d8be91def5f74d9c8bc9399bcb167af6c496fb909c80cc2",
+    "finalized_height": 3571379,
     "genesis": "0x99c172c095340ace980631f9123544c6bebd4839f3437e463533422d8be2d631",
     "node": "v22.23.4",
     "source": "live:rpc wss://rpc.devnet.flop.network",
     "source_sha": "7fb426a83174e14be27d1c015d6dbffecc46243c"
   },
-  "prev_hash": "ce22d2fa3220d61f5eeae5b709844cd39e09ceea06ab7aa6bafe667c0005a7db",
+  "prev_hash": "c32b9f4782dcb30952b0297f1969ed8b26e6d68fa23fa45068c09503b414f526",
   "schema": "flop-observatory/snapshot@0",
-  "seq": 25,
+  "seq": 26,
   "status": {
-    "best_height": 3567498,
+    "best_height": 3571384,
     "conflicts": [],
     "faucet": {
       "detail": "status degraded, ready false, http 200",
@@ -31,30 +31,30 @@
         "ipGrantsPerDay": 300,
         "ipPrefixGrantsPerDay": 10000
       },
-      "observed_at": "2026-11-12T14:57:47.360Z",
+      "observed_at": "2026-11-12T16:03:22.839Z",
       "ready": false
     },
     "finality_lag": 5,
-    "finalized_hash": "0xff72f0621a287d33cc8ef21177c08cb0cf36b2fbd0b62bb775c4b71332abd2a2",
-    "finalized_height": 3567493,
+    "finalized_hash": "0x57e18c25568fd1f37d8be91def5f74d9c8bc9399bcb167af6c496fb909c80cc2",
+    "finalized_height": 3571379,
     "gateway": {
       "detail": null,
       "health": "ok",
       "http": 200,
-      "observed_at": "2026-11-12T14:57:48.615Z"
+      "observed_at": "2026-11-12T16:03:24.202Z"
     },
     "genesis": {
       "faucet": "0x99c172c095340ace980631f9123544c6bebd4839f3437e463533422d8be2d631",
       "pinned": "0x99c172c095340ace980631f9123544c6bebd4839f3437e463533422d8be2d631",
       "rpc": "0x99c172c095340ace980631f9123544c6bebd4839f3437e463533422d8be2d631"
     },
-    "observed_at": "2026-11-12T14:57:55.219Z",
+    "observed_at": "2026-11-12T16:03:27.672Z",
     "reset_detected": false,
     "rpc": {
       "detail": null,
       "health": "ok",
       "http": null,
-      "observed_at": "2026-11-12T14:57:48.631Z",
+      "observed_at": "2026-11-12T16:03:24.244Z",
       "stale": false
     },
     "runtime_version": 1014020,
