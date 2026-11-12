@@ -7,7 +7,7 @@ import { loadConfig } from "../config.js";
 import { network } from "../networks.js";
 import { gatewayKeyFile } from "../paths.js";
 import type { Fetch } from "../gateway.js";
-import { PROVIDER_NAMES, isProviderName, type ProviderName } from "./kinds.js";
+import { isProviderName, UNLISTED_PROVIDER_REFUSAL, type ProviderName } from "./kinds.js";
 import type { Provider } from "./interface.js";
 import { FlopProvider, gatewayQuoteProvider } from "./gateway.js";
 import { MOCK_SCENARIOS, MockProvider, type MockScenario } from "./mock.js";
@@ -50,6 +50,6 @@ const MAKERS: Readonly<Record<ProviderName, Readonly<Maker>>> = Object.freeze({
  */
 export function makeProvider(name: string, ctx: MakeContext, use: ProviderUse): Provider {
   if (use.for === "quote") return (isProviderName(name) ? MAKERS[name] : MAKERS.mock).quote(ctx);
-  if (!isProviderName(name)) throw new CliError(`--provider must be ${PROVIDER_NAMES.join(" or ")}`, EXIT.USAGE);
+  if (!isProviderName(name)) throw new CliError(UNLISTED_PROVIDER_REFUSAL, EXIT.USAGE);
   return MAKERS[name].run(ctx, use);
 }

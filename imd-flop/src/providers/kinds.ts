@@ -34,19 +34,21 @@ export const PROVIDER_NAMES_PAID_FIRST: readonly ProviderName[] = Object.freeze(
 export const DEFAULT_PROVIDER: ProviderName = TABLE[0].name;
 
 /**
- * The kind a name not in the table gets: not paid, not a mock, no wallet link. It is what the run path did
- * with such a name before this table (it only ever compared with the two names), so nothing changes for it.
- * No command makes a provider of such a name (make.ts refuses it for run and receipt --refresh); it can only
- * come from a provider object a caller supplies, or from a ledger row or receipt file that names it, and the
- * ledger cannot place such a row (ledger.ts LEDGER_PROVIDERS).
+ * The kind a name not in the table gets: not paid, not a mock, no wallet link. kindOf gives it for a name read
+ * from a stored ledger row or receipt file, where it must answer and not throw; the ledger cannot place such a
+ * row (ledger.ts LEDGER_PROVIDERS). A provider object of such a name never reaches it: make.ts makes none for
+ * run or receipt --refresh, and the run path refuses one a caller hands it (UNLISTED_PROVIDER_REFUSAL).
  */
 export const UNLISTED_KIND: ProviderKind = Object.freeze({ paid: false, mock: false, needsWalletLink: false });
+
+/** The usage error for a provider name not in the table, given by the maker and by the run path. */
+export const UNLISTED_PROVIDER_REFUSAL = `--provider must be ${PROVIDER_NAMES.join(" or ")}`;
 
 export function isProviderName(name: unknown): name is ProviderName {
   return typeof name === "string" && TABLE.some((e) => e.name === name);
 }
 
-/** The kind of a provider name, for a provider object and for a stored row alike. */
+/** The kind of a provider name, for a provider object and for a stored row alike; a name not in the table gets UNLISTED_KIND. */
 export function kindOf(name: string): ProviderKind {
   return TABLE.find((e) => e.name === name)?.kind ?? UNLISTED_KIND;
 }

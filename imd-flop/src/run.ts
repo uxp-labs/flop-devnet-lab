@@ -17,7 +17,7 @@ import { DISAGREE, PAST_ADMITTED, reportedCost, SETTLES } from "./settlement.js"
 import { receiptVerdicts, storeRead } from "./receipt-store.js";
 import { responsePath } from "./response-store.js";
 import type { Provider } from "./providers/interface.js";
-import { kindOf, requestIdPrefix } from "./providers/kinds.js";
+import { isProviderName, kindOf, requestIdPrefix, UNLISTED_PROVIDER_REFUSAL } from "./providers/kinds.js";
 import { assertPaidNetwork, checkImdJob, ethRpcUrlMark, PaidGateError, PreSendError, readVerifiedSeatOwner, type Fetch } from "./gateway.js";
 import { FlopHTTPError } from "@flop-labs/client";
 import { notJsonBecause } from "./outside-json.js";
@@ -105,6 +105,9 @@ export async function runJob(h: string, provider: Provider, o: RunOpts, deps: Ru
   // The provider's name is read once, here: the kind, the request id, every row, the response, the receipt and the
   // result all use this one value, so a name that changed between reads cannot split a run.
   const providerName = provider.name;
+  // A provider object whose name is not in the table is refused before anything else: no link check, no gate,
+  // no estimate, no call, no row. No command makes one; only a caller that hands runJob its own object can.
+  if (!isProviderName(providerName)) throw new CliError(UNLISTED_PROVIDER_REFUSAL, EXIT.USAGE);
   // The facts about the provider come from the table by that name (providers/kinds.ts).
   const kind = kindOf(providerName);
   const cfg = loadConfig(h);
