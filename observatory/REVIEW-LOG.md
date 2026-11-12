@@ -14,10 +14,18 @@ Round 26 is the upgrade watch branch, not merged when this was written; this rou
 | C4 | the digest | a run that did not finish has `outputs_digest: none (the run did not finish)`, printed the same; an outputs folder with no file gives `none` in a finished run too | case `empty-outputs`, every cut case; tampers `empty-folder-hashed`, `unfinished-run-digested` |
 | C5 | a finished run | the same exit (0, or 1 for any failing step), the same report lines in their order, the same two printed lines; a run that did not finish prints `evidence: ... (NOT FINISHED: <words>, exit <status>)` | cases `failing-step` and `passing`, whose digest the canary computes itself |
 | C6 | the library | the step runner, the signal handling and finalize are `scripts/check-lib.sh`, sourced by `check.sh`; it reads only the evidence folder and the variables `check.sh` sets before it | the canary drives it with a driver of its own |
-| C7 | the proof | a canary, not a vitest file: the test harness lets no test start a process but `test/publish-shell.test.ts`, and that is not widened. Eight cases on the library, eleven tampered copies, each caught; 20 seconds at most per case; only processes it started are stopped, by id; its temporary folder is removed on every path | on a copy of the library with the logic before this round, all eight cases fail |
+| C7 | the proof | a canary, not a vitest file: the test harness lets no test start a process but `test/publish-shell.test.ts`, and that is not widened. Nine cases on the library, thirteen tampered copies, each caught; 20 seconds at most per case; only processes it started are stopped, by id; its temporary folder is removed on every path | on a copy of the library with the logic before this round, all nine cases fail; on the library at 6b91bc5 (before R1), `cut-between-steps` fails |
 | C9 | the step | one step, `check-canary`, right after `canary`; no other step changes | `scripts/check.sh` |
 
-What the canary does not show: a process of a step that leaves its process group (a `setsid` of its own) is out of reach of the group stop; and SIGKILL, which no script can handle, still leaves a run with no `report.txt`.
+The lead's read of 6b91bc5:
+
+| # | What | Rule | Proof |
+|---|---|---|---|
+| R1 | a signal before the id is recorded | a signal can land between the line that starts a step and the line that records its process id; then the step's tree was left running. On a signal every job of the script still running (`jobs -pr`) is stopped, each as its process group, whether or not a step is recorded as running; `check_step_pid` is only for `wait` | case `cut-between-steps`: after `step first`, the driver starts a job of its own in a group of its own and signals itself; exit 143, `finished: no (stopped after step first by SIGTERM)`, only `first` in steps.tsv, no digest, the job stopped; tamper `stray-job-not-stopped` (the 6b91bc5 logic) caught by it |
+| R2 | SIGHUP | the HUP trap is held like the other two | tamper `hup-not-trapped`, caught by `cut-SIGHUP` |
+| R3 | the words | the header of `scripts/check-lib.sh` and the README give the third finished form, `finished: no (stopped after step <name> by <SIGNAL>)`; a step stopped by a signal while the script is not is a failed step in a finished run (its exit 128 plus the signal, `overall_exit: 1`, `finished: yes`); SIGKILL cannot be handled, so no `report.txt` is written, which is no pass, and the running step may be left running in its own process group | the files |
+
+Not covered: a process of a step that leaves its process group (a `setsid` of its own) is out of reach of the group stop.
 
 ## Round 25: the fourth recording brought in, and the session rerun's results.json filled from it
 

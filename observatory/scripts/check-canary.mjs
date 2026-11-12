@@ -11,6 +11,9 @@
 //       must say NOT FINISHED, report finished: no (stopped during step cut by SIG...), exit 128
 //       plus the signal's number, list the step as cut in steps.tsv and no step after it, give no
 //       digest, and leave neither the step nor its child running, within seconds
+//   cut-between-steps  after a step, the driver starts a job of its own in a group of its own and
+//       signals itself with SIGTERM before its next step: finished: no (stopped after step first
+//       by SIGTERM), exit 143, only the first step in steps.tsv, no digest, the job not running
 //   early-exit, early-exit-no-step  an exit 0 before the last step: not finished, exit 1, no digest
 //   empty-outputs   a finished run with no output file: finished: yes, digest none
 //   failing-step    a finished run with a failing step: exit 1, finished: yes
@@ -88,6 +91,16 @@ case "$kase" in
     put_output a one
     step first true
     step cut bash "${CUT_STEP}" "\${kase#cut-SIG}"
+    step last true
+    ;;
+  cut-between-steps)
+    put_output a one
+    step first true
+    set -m
+    sleep 300 >/dev/null 2>&1 </dev/null &
+    printf '%s\n' "$!" >"$box/pids"
+    set +m
+    kill -TERM $$
     step last true
     ;;
   early-exit)
@@ -221,6 +234,11 @@ function runCase(kase, lib) {
     if (pids.length !== 2) problems.push(`the step wrote ${pids.length} process ids, want 2`);
     if (left.length > 0) problems.push(`processes of the step still running after the run: ${left.join(", ")}`);
     if (ms > PROMPT_MS) problems.push(`took ${ms} ms, more than ${PROMPT_MS} ms`);
+  } else if (kase === "cut-between-steps") {
+    notFinished("stopped after step first by SIGTERM", 143, [tsv("first", "true", 0)]);
+    if (pids.length !== 1) problems.push(`the driver wrote ${pids.length} process ids, want 1`);
+    if (left.length > 0) problems.push(`the driver's own job still running after the run: ${left.join(", ")}`);
+    if (ms > PROMPT_MS) problems.push(`took ${ms} ms, more than ${PROMPT_MS} ms`);
   } else if (kase === "early-exit") {
     notFinished("the script ended before its last step, after step first", 1, [tsv("first", "true", 0)]);
   } else if (kase === "early-exit-no-step") {
@@ -237,7 +255,7 @@ function runCase(kase, lib) {
   return { case: kase, exit: r.status, ms, left: left.length, outcome: problems.length === 0 ? "pass" : "fail", problems };
 }
 
-const CASES = ["cut-SIGTERM", "cut-SIGINT", "cut-SIGHUP", "early-exit", "early-exit-no-step", "empty-outputs", "failing-step", "passing"];
+const CASES = ["cut-SIGTERM", "cut-SIGINT", "cut-SIGHUP", "cut-between-steps", "early-exit", "early-exit-no-step", "empty-outputs", "failing-step", "passing"];
 
 // ---- Tampered copies of the library: one find and replace each, the find occurring exactly once.
 const TAMPERS = [
@@ -245,6 +263,8 @@ const TAMPERS = [
   { id: "finished-line-dropped", rule: "C1", find: '    echo "$finished_line"\n', replace: "", why: "report.txt never says whether the run finished" },
   { id: "term-not-trapped", rule: "C2", find: "trap 'check_cut TERM' TERM\n", replace: "", why: "SIGTERM ends the script with no cut handling" },
   { id: "int-not-trapped", rule: "C2", find: "trap 'check_cut INT' INT\n", replace: "", why: "SIGINT ends the script with no cut handling" },
+  { id: "hup-not-trapped", rule: "C2", find: "trap 'check_cut HUP' HUP\n", replace: "", why: "SIGHUP ends the script with no cut handling" },
+  { id: "stray-job-not-stopped", rule: "C2", find: '  for job in $(jobs -pr); do check_stop_tree "$job"; done\n', replace: '  if [ -n "$check_step_pid" ]; then check_stop_tree "$check_step_pid"; fi\n', why: "a job started before its id was recorded keeps running" },
   { id: "tree-not-stopped", rule: "C2", find: "check_stop_tree() {\n", replace: "check_stop_tree() {\n  return 0\n", why: "the cut step and its children keep running" },
   { id: "only-direct-child-stopped", rule: "C2", find: 'kill "-$1" -- "-$2" 2>/dev/null', replace: 'kill "-$1" -- "$2" 2>/dev/null', why: "the step's children outlive it" },
   { id: "cut-step-not-written", rule: "C2", find: '    printf \'%s\\t%s\\t%s\\n\' "$check_step_name" "$check_step_cmd" "cut by SIG$sig" >>"$evidence/steps.tsv"\n', replace: "", why: "steps.tsv has no line for the step that was running" },

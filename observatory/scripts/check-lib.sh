@@ -8,8 +8,14 @@
 # A run is a pass only when it reached `finish`. report.txt says so in its `finished:` line:
 #   finished: yes
 #   finished: no (stopped during step <name> by <SIGNAL>)
+#   finished: no (stopped after step <name> by <SIGNAL>)       a signal between two steps
 #   finished: no (the script ended before its last step, after step <name>)
 # A run that did not finish never reports an exit of 0 and never gets an outputs digest.
+# A step that is itself stopped by a signal, while the script is not, is a failed step in a
+# finished run: its exit is 128 plus the signal, the run goes on and ends with overall_exit 1 and
+# finished: yes.
+# Not covered: SIGKILL cannot be handled. Then no report.txt is written, which is no pass, and the
+# running step may be left running, because each step runs in a process group of its own.
 #
 # Each step runs in a process group of its own (job control is on only while it starts), and the
 # script waits for it with `wait`, which a trapped signal interrupts at once. On SIGINT, SIGTERM or
@@ -66,10 +72,13 @@ step() {
 
 check_cut() {
   # check_cut <signal name without SIG>: the trap for SIGINT, SIGTERM and SIGHUP.
-  local sig="$1"
+  local sig="$1" job
   trap '' INT TERM HUP
+  # A signal can land between the line that starts a step and the line that records its process
+  # id, so every job of the script still running is stopped, each as the process group it was
+  # started in, whether or not a step is recorded as running; check_step_pid is only for wait.
+  for job in $(jobs -pr); do check_stop_tree "$job"; done
   if [ -n "$check_step_name" ]; then
-    check_stop_tree "$check_step_pid"
     printf '%s\t%s\t%s\n' "$check_step_name" "$check_step_cmd" "cut by SIG$sig" >>"$evidence/steps.tsv"
     printf '%-14s cut by SIG%s\n' "$check_step_name" "$sig"
     check_end="stopped during step $check_step_name by SIG$sig"
