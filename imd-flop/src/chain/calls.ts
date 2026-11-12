@@ -5,7 +5,7 @@
  */
 import { refuse } from "./errors.js";
 
-export const OUTER = { pallet: "FlopSessionKeys", name: "execute_via_session" } as const;
+export const OUTER = Object.freeze({ pallet: "FlopSessionKeys", name: "execute_via_session" } as const);
 export const INNER_PALLET = "ComputeChannel";
 
 /**
@@ -13,13 +13,13 @@ export const INNER_PALLET = "ComputeChannel";
  * when it moves nothing out (a refund call). The declared spend of the outer call is that amount: it is
  * computed here, never passed in.
  */
-export const INNER_CALLS = {
+export const INNER_CALLS = Object.freeze({
   open_channel: "escrow",
   top_up_escrow: "additional",
   timeout: null,
   force_open: "escrow",
   expire_force_open: null,
-} as const;
+} as const);
 
 export type InnerName = keyof typeof INNER_CALLS;
 export const INNER_NAMES = Object.freeze(Object.keys(INNER_CALLS)) as readonly InnerName[];

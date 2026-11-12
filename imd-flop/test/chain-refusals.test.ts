@@ -350,6 +350,7 @@ describe("E1 and E13: the encoder is pure and not wired", () => {
       "errors.ts",
       "extrinsic.ts",
       "fields.ts",
+      "freeze.ts",
       "reader.ts",
       "runtimes.ts",
       "scale.ts",

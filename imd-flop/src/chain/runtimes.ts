@@ -1,8 +1,10 @@
 // Written by scripts/chain-table.mjs from recorded metadata (its SOURCES). Do not edit by hand:
 // test/chain-table.test.ts derives it again and compares with this file byte for byte.
+import { deepFreeze } from "./freeze.js";
 import type { Runtime } from "./table.js";
 
-export const RUNTIMES: readonly Runtime[] = [
+/** Frozen here, where it is defined, so no module can change it before the encoder reads it. */
+export const RUNTIMES: readonly Runtime[] = deepFreeze([
   {
     "specName": "tzkv-runtime",
     "specVersion": 1014020,
@@ -445,4 +447,4 @@ export const RUNTIMES: readonly Runtime[] = [
       }
     ]
   }
-];
+]);

@@ -8,7 +8,7 @@ import { refuse } from "./errors.js";
 import { ByteReader, uintLE } from "./scale.js";
 import type { Field, Ty } from "./table.js";
 
-const WIDTH = { u32: 4, u64: 8, u128: 16 } as const;
+const WIDTH = Object.freeze({ u32: 4, u64: 8, u128: 16 } as const);
 
 export type FieldValue = number | bigint | string | Uint8Array | { readonly [name: string]: FieldValue };
 

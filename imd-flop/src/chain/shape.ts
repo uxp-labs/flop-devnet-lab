@@ -5,17 +5,18 @@
  * is not an amount, an extrinsic version other than 4.
  */
 import { refuse } from "./errors.js";
+import { deepFreeze } from "./freeze.js";
 import { INNER_CALLS, INNER_NAMES, INNER_PALLET, OUTER } from "./calls.js";
 import { callEntry, type CallEntry, type Runtime, type Ty } from "./table.js";
 
 export const EXTRINSIC_VERSION = 4;
 
-const UNIT: Ty = { kind: "unit" };
-const U32: Ty = { kind: "u32" };
-const B32: Ty = { kind: "bytes32" };
+const UNIT: Ty = deepFreeze({ kind: "unit" });
+const U32: Ty = deepFreeze({ kind: "u32" });
+const B32: Ty = deepFreeze({ kind: "bytes32" });
 
 /** The signed extensions this encoder fills, with the types it fills them as. Their order is the table's. */
-export const KNOWN_EXTENSIONS: Readonly<Record<string, { readonly extra: Ty; readonly additionalSigned: Ty }>> = {
+export const KNOWN_EXTENSIONS: Readonly<Record<string, { readonly extra: Ty; readonly additionalSigned: Ty }>> = deepFreeze({
   CheckNonZeroSender: { extra: UNIT, additionalSigned: UNIT },
   CheckSpecVersion: { extra: UNIT, additionalSigned: U32 },
   CheckTxVersion: { extra: UNIT, additionalSigned: U32 },
@@ -31,16 +32,16 @@ export const KNOWN_EXTENSIONS: Readonly<Record<string, { readonly extra: Ty; rea
     },
     additionalSigned: { kind: "option", of: B32 },
   },
-};
+});
 
 /**
  * The extensions a runtime must have: those that bind the transaction to this chain, this runtime, the
  * birth block and the signer's nonce, and those whose value the encoder states (no tip, no metadata hash).
  */
-export const REQUIRED_EXTENSIONS = ["CheckSpecVersion", "CheckTxVersion", "CheckGenesis", "CheckMortality", "CheckNonce", "ChargeTransactionPayment", "CheckMetadataHash"] as const;
+export const REQUIRED_EXTENSIONS = Object.freeze(["CheckSpecVersion", "CheckTxVersion", "CheckGenesis", "CheckMortality", "CheckNonce", "ChargeTransactionPayment", "CheckMetadataHash"] as const);
 
 /** The fields of execute_via_session, by name, as the encoder fills them. */
-const OUTER_FIELDS: Readonly<Record<string, Ty>> = { owner: B32, call: { kind: "call" }, spend_amount: { kind: "u128" }, nonce: { kind: "u64" } };
+const OUTER_FIELDS: Readonly<Record<string, Ty>> = deepFreeze({ owner: B32, call: { kind: "call" }, spend_amount: { kind: "u128" }, nonce: { kind: "u64" } });
 
 const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
 

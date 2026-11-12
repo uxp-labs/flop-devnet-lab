@@ -64,15 +64,7 @@ export interface RuntimeId {
   readonly genesisHash: string;
 }
 
-function deepFreeze<T>(v: T): T {
-  if (v !== null && typeof v === "object") {
-    for (const x of Object.values(v)) deepFreeze(x);
-    Object.freeze(v);
-  }
-  return v;
-}
-
-const TABLE: readonly Runtime[] = deepFreeze(RUNTIMES);
+const TABLE: readonly Runtime[] = RUNTIMES;
 
 /** The reviewed runtime with exactly these four names, or a RUNTIME_UNKNOWN refusal. */
 export function runtimeFor(id: RuntimeId): Runtime {

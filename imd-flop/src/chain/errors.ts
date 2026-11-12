@@ -4,7 +4,7 @@
  */
 import { CliError, EXIT } from "../errors.js";
 
-export const CHAIN_REFUSAL = {
+export const CHAIN_REFUSAL = Object.freeze({
   /** The runtime named is not in the reviewed table, or its table entry has a shape this encoder does not write. */
   RUNTIME_UNKNOWN: "RUNTIME_UNKNOWN",
   /** A byte value of the wrong length: a 32 byte field, a public key, a block hash, a signature. */
@@ -23,7 +23,7 @@ export const CHAIN_REFUSAL = {
   SPEND_MISMATCH: "SPEND_MISMATCH",
   /** The signature the sign function gave does not verify against the public key and the payload. */
   SIGNATURE_INVALID: "SIGNATURE_INVALID",
-} as const;
+} as const);
 
 export type ChainRefusalCode = (typeof CHAIN_REFUSAL)[keyof typeof CHAIN_REFUSAL];
 
