@@ -10,6 +10,7 @@
 //   once every shape holds, so each one can read the snapshot as its type says.
 // These are all the binary checks. The hash is checked apart, in src/mcp-bin.ts: it shows the file
 // is the one that was hashed, not who wrote it.
+import { createHash } from "node:crypto";
 import { own } from "./own.js";
 import { ANCHOR_LOST } from "./status.js";
 import { parseZoned } from "./strict.js";
@@ -43,6 +44,14 @@ const object: Check = (v) => isObject(v);
 const hash: Check = (v) => typeof v === "string" && /^0x[0-9a-f]{64}$/.test(v);
 /** 0x and lower case hex of whole bytes: storage bytes as answered. */
 const hexBytes: Check = (v) => typeof v === "string" && /^0x(?:[0-9a-f]{2})*$/.test(v);
+/** The most bytes a node's storage answer can hold: the transport's 1 MiB answer limit. */
+const MAX_ANSWER_BYTES = 1048576;
+/** The bytes of an authorisation the watch keeps at most (src/upgrade-watch.ts AUTHORIZED_KEPT, RULES.md 7.2). */
+const KEPT_BYTES = 256;
+/** A count of bytes a storage answer can hold. */
+const byteCount: Check = (v) => typeof v === "number" && Number.isSafeInteger(v) && v >= 0 && v <= MAX_ANSWER_BYTES;
+/** The sha256 of the bytes a 0x hex string holds, lower case hex. */
+const sha256Of = (hex: string): string => createHash("sha256").update(Uint8Array.from(hex.slice(2).match(/[0-9a-f]{2}/g) ?? [], (b) => Number.parseInt(b, 16))).digest("hex");
 /** 64 lower case hex: a snapshot hash. */
 const sha256: Check = (v) => typeof v === "string" && /^[0-9a-f]{64}$/.test(v);
 /** A height, a lag, a version or an index: a safe integer from 0. */
@@ -164,7 +173,8 @@ const UPGRADE_EXECUTING: Fields = [
 const UPGRADE_AUTHORIZED: Fields = [
   ["state", oneOf("absent", "present", "unknown")],
   ["bytes", orNone(hexBytes)],
-  ["length", orNone(count)],
+  ["length", orNone(byteCount)],
+  ["sha256", orNone(sha256)],
   ["detail", orNone(text)],
 ];
 
@@ -284,14 +294,18 @@ const AGREEMENTS: readonly (readonly [string, (s: Snapshot) => boolean])[] = [
   // One fixture part makes the whole snapshot a fixture (snapshot.ts takes the weakest label).
   ["snapshot.fixture-when-a-part-is", (s) => s.trust === "fixture" || ![s.status, ...s.escrows, s.census, s.drift, s.upgrade].some((x) => isObject(x) && x.trust === "fixture")],
   // The upgrade watch (RULES.md 7.2): read at the finalized head the status names.
-  ["upgrade.at-is-the-status-finalized-head", watch((u, s) => s.status.finalized_hash === null || u.at.hash === s.status.finalized_hash)],
+  ["upgrade.at-is-the-status-finalized-head", watch((u, s) => s.status.finalized_hash === null || (u.at.hash === s.status.finalized_hash && u.at.number === s.status.finalized_height))],
   // A runtime is named exactly when the record named one, and every state but reviewed says why.
   ["upgrade.executing-names-a-spec-only-when-read", watch((u) => (u.executing.spec_name !== null) === NAMED.includes(u.executing.state) && (u.executing.spec_version !== null) === NAMED.includes(u.executing.state))],
   ["upgrade.executing-says-why-unless-reviewed", watch((u) => (u.executing.detail !== null) === (u.executing.state !== "reviewed"))],
-  // The bytes are kept exactly when present, with their count, and only unknown says why.
-  ["upgrade.authorized-bytes-only-when-present", watch((u) => (u.authorized.bytes !== null) === (u.authorized.state === "present") && (u.authorized.length !== null) === (u.authorized.state === "present"))],
+  // A present authorisation is measured, its length and sha256, and its bytes kept up to 256 of them
+  // and held to both; unknown says why, and so does present when its bytes are not kept.
+  ["upgrade.authorized-measured-exactly-when-present", watch((u) => (u.authorized.length !== null) === (u.authorized.state === "present") && (u.authorized.sha256 !== null) === (u.authorized.state === "present"))],
+  ["upgrade.authorized-bytes-only-when-present", watch((u) => u.authorized.bytes === null || u.authorized.state === "present")],
+  ["upgrade.authorized-bytes-kept-up-to-256", watch((u) => u.authorized.state !== "present" || u.authorized.length === null || (u.authorized.bytes !== null) === (u.authorized.length <= KEPT_BYTES))],
   ["upgrade.authorized-length-counts-the-bytes", watch((u) => u.authorized.bytes === null || u.authorized.length === (u.authorized.bytes.length - 2) / 2)],
-  ["upgrade.authorized-says-why-only-when-unknown", watch((u) => (u.authorized.detail !== null) === (u.authorized.state === "unknown"))],
+  ["upgrade.authorized-sha256-of-the-bytes", watch((u) => u.authorized.bytes === null || u.authorized.sha256 === sha256Of(u.authorized.bytes))],
+  ["upgrade.authorized-says-why-when-unknown-or-not-kept", watch((u) => (u.authorized.detail !== null) === (u.authorized.state === "unknown" || (u.authorized.state === "present" && u.authorized.bytes === null)))],
   // A change is said only against an earlier watch at a lower block, and only of what both sides know.
   ["upgrade.changes-only-when-compared", watch((u) => u.compared_with !== null || (u.executing_changed === null && u.authorization_appeared === null))],
   ["upgrade.compared-with-a-lower-block", watch((u) => u.compared_with === null || (u.at.number !== null && u.compared_with < u.at.number))],

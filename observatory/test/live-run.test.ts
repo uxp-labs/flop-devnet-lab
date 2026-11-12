@@ -106,7 +106,7 @@ describe("runLive over a tape", () => {
     const s = r.snapshot as Snapshot;
     expect(r.notice).toBe(
       `::notice title=networkStatus::{"trust":"fixture","genesis_pinned":"${DEVNET_GENESIS}","genesis_rpc":"${DEVNET_GENESIS}","genesis_faucet":"${DEVNET_GENESIS}",` +
-        `"reset_detected":false,"finalized_height":3430000,"best_height":3430002,"runtime_version":1014014,"executing_state":"reviewed","executing_spec_name":"tzkv-runtime","executing_spec_version":1014014,"authorized_state":"absent",` +
+        `"reset_detected":false,"finalized_height":3430000,"best_height":3430002,"runtime_version":1014014,"executing_state":"reviewed","executing_spec_name":"tzkv-runtime","executing_spec_version":1014014,"authorized_state":"absent","authorized_length":null,"authorized_sha256":null,` +
         `"rpc":"ok","faucet":"ok","gateway":"ok","seq":0,"prev_hash":null,"snapshot_hash":"${s.hash}"}`,
     );
     expect(noticeLine(s)).toBe(r.notice);

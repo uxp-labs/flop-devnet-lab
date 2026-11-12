@@ -597,8 +597,8 @@ blank on the page and `null` in JSON and MCP.
   `number` a count or none), `executing` (`state` one of reviewed, not reviewed, absent and unknown,
   `spec_name` text or none, `spec_version` a count or none, `detail` text or none), `authorized`
   (`state` one of absent, present and unknown, `bytes` 0x and lower case hex of whole bytes or none,
-  `length` a count or none, `detail` text or none), `compared_with` a count or none and the two
-  changes flags or none. An object whose set of fields is
+  `length` a count from 0 to 1048576 or none, `sha256` 64 lower case hex or none, `detail` text or
+  none), `compared_with` a count or none and the two changes flags or none. An object whose set of fields is
   wrong is named once, as `<object>.fields`, and its values and parts are not read.
   Once every shape holds, the values the settlement rules tie together agree: `reset_detected` false
   only with both genesis readings on the pinned genesis and both heights read, and true only with a
@@ -611,10 +611,11 @@ blank on the page and `null` in JSON and MCP.
   evidence above it; no finalized event evidence twice, for two escrows or for one; the pin's
   genesis, finalized height and hash the status's RPC genesis, finalized height and hash; the
   snapshot a fixture when any part is, the upgrade watch included; and, for a watch: its block the
-  status's finalized hash whenever the status has one; a spec name and version exactly when the state
+  status's finalized head, its hash and its height, whenever the status has a finalized hash; a spec name and version exactly when the state
   is reviewed or not reviewed; a detail for every executing state but reviewed and none for it; bytes
-  and length exactly when the authorisation is present, the length the number of bytes the hex holds;
-  an authorisation detail exactly when it is unknown; both changes none when nothing was compared;
+  a length and a sha256 exactly when the authorisation is present, bytes only then and exactly when
+  the length is at most 256, their byte count the length and their sha256 the sha256; an
+  authorisation detail exactly when it is unknown, or present with its bytes not kept; both changes none when nothing was compared;
   `compared_with` below `at.number`, which is then known; `executing_changed` none unless the runtime
   is named now; `authorization_appeared` none when the authorisation is unknown, and true only when it
   is present. Anything else is refused and nothing is served. A call it
@@ -908,8 +909,16 @@ everything the observatory reads.
   names (its name and version as the record states them), `absent` for null, and `unknown` when the
   read failed, the answer is malformed, or the bytes are no record (its detail is the decoder's
   refusal). The version and metadata read at F are never used: they answer for the next block.
-- `authorized` keeps `System.AuthorizedUpgrade` as answered: `present` with the bytes and their
-  count, whatever the count, `absent` for null, `unknown` otherwise. Nothing of it is decoded.
+- `authorized` reads `System.AuthorizedUpgrade`: `present` for bytes, `absent` for null, `unknown`
+  otherwise. A present authorisation always carries `length` in bytes and `sha256` of the raw bytes,
+  lower case hex. `bytes` is the hex only when `length` is at most 256. Above that it is null, with a
+  fixed detail. Nothing of it is decoded. The snapshot check holds them to each other: with `bytes`
+  not null, its byte count equals `length`, is at most 256, and its sha256 equals `sha256`; with
+  `bytes` null and the state present, `length` is above 256; `length` is never above 1048576.
+  Anything else is refused. Every surface (the feed, the page, the MCP tool, the notice line) shows
+  the length and the sha256, and the bytes when kept.
+- `at` is the block both reads were made at: its hash, and its height when known. When the status
+  has a finalized head, `at` equals it in both fields, hash and number; the check refuses any other.
 - No answer's text is echoed: a detail is a fixed sentence or the decoder's refusal, and a failed
   call is named by its call.
 - The watch is compared with the latest earlier watch in the log on the same RPC genesis the status
@@ -917,10 +926,13 @@ everything the observatory reads.
   RPC genesis is not. `executing_changed` is none unless both sides name a runtime, and true when the
   name or the version differs. `authorization_appeared` is none unless both sides' authorised state is
   known, and true when it is present now and was absent in the watch compared with, or is present
-  with other bytes.
+  with another length or another sha256. The hex is never compared.
 - The watch adds no conflict, never touches `reset_detected` and never changes an exit code. The spec
   floor of section 1.1 and `runtime_version` are unchanged. The notice line names the executing state,
   spec name and version and the authorised state.
+- A log may hold `@0` lines after `@1` lines. Such a line is accepted and read as a line with no
+  watch; it is not refused, since a refused log stops every later run and accepting it costs one line
+  with no watch.
 - It runs twice an hour, and the authorisation of Nov 12 was pending for 50 seconds: the watch mostly
   shows a landed change, and an authorisation only when a run falls inside its window.
 

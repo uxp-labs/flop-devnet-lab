@@ -5,8 +5,9 @@
 // The answers, both read at the finalized head F by its hash, right after state_getRuntimeVersion(F):
 //   state_getStorage(System.LastRuntimeUpgrade, F)  which runtime executed F: the decoder's door
 //                                                   runtimeOfBlock (src/scale/block.ts) reads it
-//   state_getStorage(System.AuthorizedUpgrade, F)   whether an upgrade is authorised at F: kept as
-//                                                   the bytes answered, never decoded
+//   state_getStorage(System.AuthorizedUpgrade, F)   whether an upgrade is authorised at F: its
+//                                                   length and sha256, and the bytes answered when
+//                                                   they are at most 256, never decoded
 // A storage answer is null (the node holds no value) or 0x and lower case hex of whole bytes. Any
 // other answer is malformed, and a call that failed on the way is a read error: both are unknown,
 // never absent. Absent is only the null the node sent. No answer's text is ever echoed: a detail is
@@ -15,6 +16,7 @@
 // The watch is compared with the latest earlier watch on the same RPC genesis at a lower block, and
 // says whether the executing runtime changed and whether an authorisation appeared. It adds no
 // conflict, changes no reset signal and no exit code: the spec floor in src/status.ts stays where it is.
+import { createHash } from "node:crypto";
 import type { Answer } from "./rpc-head.js";
 import { runtimeOfBlock } from "./scale/block.js";
 import type { Trust, UpgradeWatch } from "./types.js";
@@ -26,6 +28,9 @@ export const UPGRADE_KEYS = {
   lastRuntimeUpgrade: "0x26aa394eea5630e07c48ae0c9558cef7f9cce9c888469bb1a0dceaa129672ef8",
   authorizedUpgrade: "0x26aa394eea5630e07c48ae0c9558cef72fa9f1bf25567808771bff091dc89ecd",
 } as const;
+
+/** The most bytes of an authorisation the watch keeps; a longer one keeps its length and sha256 only. */
+export const AUTHORIZED_KEPT = 256;
 
 /** What a live run read for the watch, at the finalized head it read by. */
 export interface UpgradeReading {
@@ -64,6 +69,7 @@ export const DETAIL = {
   notReviewed: "no reviewed line names the runtime this record states",
   auFailed: "state_getStorage(System.AuthorizedUpgrade) failed on the way",
   auMalformed: "the System.AuthorizedUpgrade answer is neither null nor 0x and lower case hex of whole bytes",
+  auNotKept: "the authorised bytes are longer than 256 and are not kept; their length and sha256 are",
 } as const;
 
 /** The bytes of an answer that passed HEX_BYTES. */
@@ -92,9 +98,12 @@ function executingOf(a: Answer): UpgradeWatch["executing"] {
 
 function authorizedOf(a: Answer): UpgradeWatch["authorized"] {
   const v = valueOf(a, DETAIL.auFailed, DETAIL.auMalformed);
-  if ("unknown" in v) return { state: "unknown", bytes: null, length: null, detail: v.unknown };
-  if (v.value === null) return { state: "absent", bytes: null, length: null, detail: null };
-  return { state: "present", bytes: v.value, length: (v.value.length - 2) / 2, detail: null };
+  if ("unknown" in v) return { state: "unknown", bytes: null, length: null, sha256: null, detail: v.unknown };
+  if (v.value === null) return { state: "absent", bytes: null, length: null, sha256: null, detail: null };
+  const raw = bytesOf(v.value);
+  const sha256 = createHash("sha256").update(raw).digest("hex");
+  if (raw.length > AUTHORIZED_KEPT) return { state: "present", bytes: null, length: raw.length, sha256, detail: DETAIL.auNotKept };
+  return { state: "present", bytes: v.value, length: raw.length, sha256, detail: null };
 }
 
 /** The latest earlier watch on the same RPC genesis at a lower block, or null when there is none to compare with. */
@@ -115,7 +124,7 @@ export function watchUpgrade(i: UpgradeInput): UpgradeWatch {
     const b = before.executing;
     if (executing.spec_name !== null && b.spec_name !== null) executingChanged = executing.spec_name !== b.spec_name || executing.spec_version !== b.spec_version;
     const was = before.authorized;
-    if (authorized.state !== "unknown" && was.state !== "unknown") authorizationAppeared = authorized.state === "present" && (was.state === "absent" || was.bytes !== authorized.bytes);
+    if (authorized.state !== "unknown" && was.state !== "unknown") authorizationAppeared = authorized.state === "present" && (was.state === "absent" || was.length !== authorized.length || was.sha256 !== authorized.sha256);
   }
   return {
     schema: UPGRADE_SCHEMA,

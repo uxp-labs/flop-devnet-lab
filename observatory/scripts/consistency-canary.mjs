@@ -172,6 +172,12 @@ const tampers = [
     run: (d) => editCell(d, "upgrade.authorized.bytes", (a, t) => [a.replace(/data-v="0x[0-9a-f]*"/, `data-v="${t.slice(0, 10)}"`), t.slice(0, 10)]),
   },
   {
+    name: "upgrade-sha256-changed-on-page",
+    expect: /page upgrade\.authorized\.sha256/,
+    applies: (d) => hasWatch(d) && snap(d).upgrade.authorized.sha256 !== null,
+    run: (d) => editCell(d, "upgrade.authorized.sha256", (a, t) => [a.replace(/data-v="[0-9a-f]{64}"/, `data-v="${"0".repeat(64)}"`), "0".repeat(64)]),
+  },
+  {
     name: "upgrade-appearance-flipped-in-feed-and-mcp",
     expect: /upgrade\.json upgrade equals snapshot\.upgrade/,
     applies: hasWatch,

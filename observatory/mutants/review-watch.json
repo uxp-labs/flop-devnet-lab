@@ -18,10 +18,10 @@
   {
     "id": "rw-length-capped",
     "file": "src/upgrade-watch.ts",
-    "find": "length: (v.value.length - 2) / 2",
-    "replace": "length: Math.min((v.value.length - 2) / 2, 64)",
-    "test": "test/upgrade-watch.test.ts",
-    "why": "length capped"
+    "find": "const raw = bytesOf(v.value);",
+    "replace": "const raw = bytesOf(v.value).subarray(0, 64);",
+    "test": "test/review-watch.test.ts",
+    "why": "length capped (retargeted by the fix round, rule F1: the length is the raw bytes count)"
   },
   {
     "id": "rw-same-block-compared",
@@ -34,18 +34,18 @@
   {
     "id": "rw-bytes-by-length",
     "file": "src/upgrade-watch.ts",
-    "find": "was.bytes !== authorized.bytes",
+    "find": "was.length !== authorized.length || was.sha256 !== authorized.sha256",
     "replace": "was.length !== authorized.length",
-    "test": "test/upgrade-watch.test.ts",
-    "why": "bytes compared by count only"
+    "test": "test/review-watch.test.ts",
+    "why": "bytes compared by count only (retargeted, rule F1: length and sha256)"
   },
   {
     "id": "rw-other-bytes-ignored",
     "file": "src/upgrade-watch.ts",
-    "find": "(was.state === \"absent\" || was.bytes !== authorized.bytes)",
+    "find": "(was.state === \"absent\" || was.length !== authorized.length || was.sha256 !== authorized.sha256)",
     "replace": "(was.state === \"absent\")",
     "test": "test/upgrade-watch.test.ts",
-    "why": "other bytes never an appearance"
+    "why": "other bytes never an appearance (retargeted, rule F1)"
   },
   {
     "id": "rw-only-upgrade-counts",
@@ -74,10 +74,10 @@
   {
     "id": "rw-absent-as-empty",
     "file": "src/upgrade-watch.ts",
-    "find": "return { state: \"absent\", bytes: null, length: null, detail: null };",
-    "replace": "return { state: \"absent\", bytes: \"0x\", length: 0, detail: null };",
+    "find": "return { state: \"absent\", bytes: null, length: null, sha256: null, detail: null };",
+    "replace": "return { state: \"absent\", bytes: \"0x\", length: 0, sha256: null, detail: null };",
     "test": "test/upgrade-watch.test.ts",
-    "why": "absent given empty bytes"
+    "why": "absent given empty bytes (retargeted, rule F1 added sha256)"
   },
   {
     "id": "rw-compared-with-now",
@@ -124,7 +124,7 @@
     "file": "src/live-run.ts",
     "find": "executing_spec_version: s.upgrade?.executing.spec_version ?? null,",
     "replace": "executing_spec_version: s.status.runtime_version,",
-    "test": "test/upgrade-live.test.ts",
+    "test": "test/review-watch.test.ts",
     "why": "notice version from state_getRuntimeVersion"
   },
   {
@@ -156,7 +156,7 @@
     "file": "src/history.ts",
     "find": "earlierUpgrades.push({ genesis: st.genesis.rpc, watch: upgrade })",
     "replace": "earlierUpgrades.push({ genesis: pinned, watch: upgrade })",
-    "test": "test/upgrade-live.test.ts",
+    "test": "test/review-watch.test.ts",
     "why": "earlier watch filed under the pinned genesis"
   },
   {
@@ -188,7 +188,7 @@
     "file": "src/page.ts",
     "find": "(v === \"unknown\" ?",
     "replace": "(v === \"unknown\" || v === \"absent\" ?",
-    "test": "test/upgrade-live.test.ts",
+    "test": "test/review-watch.test.ts",
     "why": "absent shown as unknown"
   },
   {

@@ -320,17 +320,19 @@ export interface UpgradeWatch {
   };
   authorized: {
     state: AuthorizedState;
-    /** Set only for "present": the bytes as answered, 0x and lower case hex, never decoded. */
+    /** Set only for "present" of at most AUTHORIZED_KEPT bytes: the bytes as answered, 0x and lower case hex, never decoded. */
     bytes: string | null;
+    /** Set exactly for "present": the number of bytes, and the sha256 of the raw bytes, lower case hex. */
     length: number | null;
-    /** Why, for "unknown" only. */
+    sha256: string | null;
+    /** Why: for "unknown", and for "present" when the bytes are too long to keep. */
     detail: string | null;
   };
   /** The at.number of the earlier watch compared with, or null when none was. */
   compared_with: number | null;
   /** null unless both sides name a runtime; true when the name or the version differs. */
   executing_changed: boolean | null;
-  /** null unless both sides' authorized state is known; true when present now and absent before, or present with other bytes. */
+  /** null unless both sides' authorized state is known; true when present now and absent before, or present with another length or sha256. */
   authorization_appeared: boolean | null;
 }
 

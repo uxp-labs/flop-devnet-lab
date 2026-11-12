@@ -117,6 +117,7 @@ export function renderPage(s: Snapshot): string {
     out.push(row("upgrade.authorized.state", state("upgrade.authorized.state", u.authorized.state), "upgrade."));
     out.push(row("upgrade.authorized.bytes", cell("upgrade.authorized.bytes", u.authorized.bytes), "upgrade."));
     out.push(row("upgrade.authorized.length", cell("upgrade.authorized.length", u.authorized.length), "upgrade."));
+    out.push(row("upgrade.authorized.sha256", cell("upgrade.authorized.sha256", u.authorized.sha256), "upgrade."));
     out.push(row("upgrade.authorized.detail", cell("upgrade.authorized.detail", u.authorized.detail), "upgrade."));
     out.push(row("upgrade.compared_with", cell("upgrade.compared_with", u.compared_with), "upgrade."));
     out.push(row("upgrade.executing_changed", cell("upgrade.executing_changed", u.executing_changed), "upgrade."));

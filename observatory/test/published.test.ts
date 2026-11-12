@@ -122,7 +122,7 @@ describe("judgeLatest", () => {
     expect(j).toEqual({ usable: false, refused: ['snapshot.json has trust "fixture", not "trusted RPC"'] });
   });
 
-  it.each(["status.json", "escrows.json", "census.json", "drift.json", "snapshots.jsonl"])("refuses a %s that is not the one the snapshot gives", async (name) => {
+  it.each(["status.json", "escrows.json", "census.json", "drift.json", "upgrade.json", "snapshots.jsonl"])("refuses a %s that is not the one the snapshot gives", async (name) => {
     const f = await latest("live-healthy");
     const changed = (f[name] as string).replace(/\n$/, " \n");
     expect(judge(resummed({ ...f, [name]: changed }))).toEqual({ usable: false, refused: [`${name} is not the one the snapshot gives`] });

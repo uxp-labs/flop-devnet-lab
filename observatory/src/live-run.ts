@@ -93,6 +93,8 @@ export function noticeLine(s: Snapshot): string {
     executing_spec_name: s.upgrade?.executing.spec_name ?? null,
     executing_spec_version: s.upgrade?.executing.spec_version ?? null,
     authorized_state: s.upgrade?.authorized.state ?? null,
+    authorized_length: s.upgrade?.authorized.length ?? null,
+    authorized_sha256: s.upgrade?.authorized.sha256 ?? null,
     rpc: st.rpc.health,
     faucet: st.faucet.health,
     gateway: st.gateway.health,

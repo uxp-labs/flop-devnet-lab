@@ -76,8 +76,8 @@
     "names": "b656456cbc9354684b72dcd5a8ddaef2b6331d564b2b18e99102453bd2635b59"
   },
   "published.test.ts": {
-    "tests": 21,
-    "names": "903d704885ae6f13255754cd80c7df684a1f721cb9c697dc7dd4a3825d546ce8"
+    "tests": 22,
+    "names": "9c86a583a920a26736d870146e8805fc1deadbd4910a0ffdd99dc7f32d02487a"
   },
   "real-recording.test.ts": {
     "tests": 3,
@@ -131,6 +131,10 @@
     "tests": 10,
     "names": "80f0b7fa5897c412a30433ffc79805a9e6e31a8d0729d67f5690cc9eb04b6729"
   },
+  "review-watch.test.ts": {
+    "tests": 63,
+    "names": "c5c97f7a9986792ab10c23b46c1e575db94d9326428f84328d3317b7093891e5"
+  },
   "reviewed-frozen.test.ts": {
     "tests": 7,
     "names": "ae81d706fb49f476ef00ad0e4af847632fd32c8fc41c1034ede03d5888e99f5f"
@@ -164,8 +168,8 @@
     "names": "75c024d150663df401e6c2efbb285fdf2ed1ca38a6be1e2d28f37b75360a1bd6"
   },
   "snapshot-check.test.ts": {
-    "tests": 273,
-    "names": "58ad8de55e49ed4275959d767b36c8a8fe37a5f18f73e33bfef487b5c9535101"
+    "tests": 290,
+    "names": "587cabefcc552cb4d3dc4b7357f21e2977b3e52c734b42079233d743f759d0e7"
   },
   "snapshot.test.ts": {
     "tests": 22,
@@ -216,8 +220,8 @@
     "names": "589180382a40bf137c057cf61ea705ba94721219cac7adda656c40c61db2ad5e"
   },
   "upgrade-live.test.ts": {
-    "tests": 21,
-    "names": "3efe11aa3a0bd8f60c3aab3c4f603827b6fb2589f55b356a3ec1630bb5b5c36e"
+    "tests": 23,
+    "names": "6ac24bb5d5244b532cf59996f6e9b9b1509ace96bba4266b4dcaf67c60984926"
   },
   "upgrade-recording.test.ts": {
     "tests": 9,
@@ -236,7 +240,7 @@
     "names": "c77b4e54c3efd7b7ddc12de1031cc0f9f2289baf2a39b3e32146563c82b81ef2"
   },
   "upgrade-watch.test.ts": {
-    "tests": 20,
-    "names": "366e1393d95ba6f0255a7de6fd6275138b38a3cb75a0ac06249cee2692ea13e0"
+    "tests": 22,
+    "names": "651213586a47a09ae258f9bbf6cbf903591fc6418fd41e3d85ba67dee16f96d0"
   }
 }

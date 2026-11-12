@@ -53,6 +53,7 @@ on:
       - "observatory/src/net-root.ts"
       - "observatory/src/rpc-head.ts"
       - "observatory/src/live-source.ts"
+      - "observatory/src/upgrade-watch.ts"
       - "observatory/src/live-run.ts"
       - "observatory/src/live-bin.ts"
       - "observatory/src/run-command.ts"

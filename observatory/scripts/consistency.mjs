@@ -373,7 +373,7 @@ function pageKeys(s) {
   else {
     k.push("upgrade.observed_at", "upgrade.trust", "upgrade.at.hash", "upgrade.at.number");
     for (const f of ["state", "spec_name", "spec_version", "detail"]) k.push(`upgrade.executing.${f}`);
-    for (const f of ["state", "bytes", "length", "detail"]) k.push(`upgrade.authorized.${f}`);
+    for (const f of ["state", "bytes", "length", "sha256", "detail"]) k.push(`upgrade.authorized.${f}`);
     k.push("upgrade.compared_with", "upgrade.executing_changed", "upgrade.authorization_appeared");
   }
   for (const e of s.escrows) for (const f of ["escrow_id", "state", "observed_at", "trust", "finalized_height", "evidence", "notes", "scope"]) k.push(`escrow.${e.escrow_id}.${f}`);
@@ -644,7 +644,7 @@ for (const e of snapshot.escrows) {
 if (snapshot.upgrade === null) required.push("upgrade");
 else {
   required.push("upgrade.observed_at", "upgrade.trust", "upgrade.at.hash", "upgrade.at.number", "upgrade.executing.state", "upgrade.executing.spec_name", "upgrade.executing.spec_version");
-  required.push("upgrade.authorized.state", "upgrade.authorized.bytes", "upgrade.authorized.length", "upgrade.compared_with", "upgrade.executing_changed", "upgrade.authorization_appeared");
+  required.push("upgrade.authorized.state", "upgrade.authorized.bytes", "upgrade.authorized.length", "upgrade.authorized.sha256", "upgrade.compared_with", "upgrade.executing_changed", "upgrade.authorization_appeared");
 }
 if (snapshot.census === null) required.push("census");
 else {

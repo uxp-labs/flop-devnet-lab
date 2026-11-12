@@ -1,9 +1,10 @@
 // Independent review of the upgrade watch (review round 26, brief 2026-11-12-review-upgrade-watch).
-// Written by the reviewer, who wrote none of the code under review. A test named DEFECT asserts what
-// should hold and fails on the branch as it is; a test named HELD passes and shows a promise held
-// under attack. Values come from research/2026-11-12-runtime-upgrade/results.json through
+// Written by the reviewer, who wrote none of the code under review. A test named HELD passes and shows
+// a promise held under attack. The two DEFECT tests failed on the branch as reviewed; the lead's rules
+// F1 and F2 fixed both, and each is now named "review defect n, fixed". Values come from research/2026-11-12-runtime-upgrade/results.json through
 // test/helpers/upgrade.ts, and from the public data branch observatory-data at 392fa7b, copied
-// unchanged into test/review-watch-data/observatory-data-392fa7b (log/ and latest/, no recordings).
+// unchanged into fixtures/observatory-data-392fa7b (log/ and latest/, no recordings; its meta.json
+// names each file's sha256, held by test/upgrade-live.test.ts).
 import { appendFileSync, copyFileSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -26,11 +27,11 @@ import type { Snapshot, UpgradeWatch } from "../src/types.js";
 import { DETAIL, UPGRADE_KEYS, type UpgradeReading, watchUpgrade } from "../src/upgrade-watch.js";
 import { cat, compact, str } from "./helpers/scale-write.js";
 import { answeringUpgrade } from "./helpers/tapes.js";
-import { AUTHORIZED_BYTES, FIRST_NEW, LAST_OLD, NOT_REVIEWED, RESULTS, readingAt } from "./helpers/upgrade.js";
+import { AUTHORIZED_BYTES, FIRST_NEW, LAST_OLD, NOT_REVIEWED, RESULTS, SHA, readingAt } from "./helpers/upgrade.js";
 
 const FIXTURES = new URL("../fixtures/", import.meta.url);
 const fixture = (dir: string, name: string) => readFileSync(new URL(`${dir}/${name}`, FIXTURES), "utf8");
-const DATA = new URL("./review-watch-data/observatory-data-392fa7b/", import.meta.url);
+const DATA = new URL("../fixtures/observatory-data-392fa7b/", import.meta.url);
 const data = (name: string) => readFileSync(new URL(name, DATA), "utf8");
 const DAY = "2026-11-11.jsonl";
 
@@ -224,13 +225,15 @@ describe("B. unknown is never absent, false or 0 (P2, P6)", () => {
 // ===== C. The raw bytes (P2, P4) =====
 
 describe("C. AuthorizedUpgrade kept as raw bytes", () => {
-  it.each([0, 1, 32, 33, 34, 100000])("HELD: %i bytes are present with their count, never decoded", (n) => {
+  // Rule F1 changed what this test holds: a present authorisation carries its length and sha256, and
+  // keeps the bytes only up to 256 of them.
+  it.each([0, 1, 32, 33, 34, 256, 257, 100000])("HELD: %i bytes are present with their count and sha256, never decoded, and kept only up to 256", (n) => {
     const hex = "0x" + "5a".repeat(n);
     const w = watchUpgrade({ reading: read({ result: LAST_OLD.last_runtime_upgrade.hex }, { result: hex }), genesis: G, earlier: [] });
-    expect(w.authorized).toEqual({ state: "present", bytes: hex, length: n, detail: null });
+    expect(w.authorized).toEqual(n <= 256 ? { state: "present", bytes: hex, length: n, sha256: SHA(hex), detail: null } : { state: "present", bytes: null, length: n, sha256: SHA(hex), detail: DETAIL.auNotKept });
   });
 
-  it("DEFECT 1 (medium): an AuthorizedUpgrade answer of 100000 bytes puts 200000 hex digits into the snapshot line the log keeps for ever, and into every feed", async () => {
+  it("review defect 1, fixed: an AuthorizedUpgrade answer of 100000 bytes keeps only its length and sha256, so the snapshot line the log keeps for ever and every feed stay small", async () => {
     const big = "0x" + "5a".repeat(100000);
     const { out, s } = await run(asLive(tapeWith("upgrade-before", { au: { result: big } })), join(box, "no-log"));
     expect(s.upgrade?.authorized.length).toBe(100000);
@@ -300,7 +303,7 @@ describe("D. the snapshot reader", () => {
     expect(earlierOf(h.snapshots, DEVNET_GENESIS).earlierUpgrades).toEqual([]);
   });
 
-  it("DEFECT 2 (low): the check lets a watch read at the status's finalized hash name another height, and so a comparison at a height the block does not have", async () => {
+  it("review defect 2, fixed: the check refuses a watch read at the status's finalized hash that names another height, so no comparison rests on a height the block does not have", async () => {
     const s = await honest();
     const x = structuredClone(s) as unknown as { upgrade: UpgradeWatch; status: { finalized_height: number } };
     expect(x.upgrade.at.hash).toBe(s.status.finalized_hash);
@@ -378,7 +381,7 @@ describe("F. upgrade.json and get_upgrade", () => {
   });
 });
 
-// ===== J. Tests for the survivors of the reviewer's mutants (test/helpers/review-watch-mutants.json) =====
+// ===== J. Tests for the survivors of the reviewer's mutants (mutants/review-watch.json) =====
 
 describe("J. what the builder's tests let through", () => {
   it("HELD: the notice names the version the record states, not state_getRuntimeVersion's (rw-notice-version-from-rv)", async () => {

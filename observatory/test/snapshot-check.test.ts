@@ -6,6 +6,7 @@
 // the command may write as none, or write at an edge, have served cases (tenth rerun U1, and a
 // sweep of weaker and stricter forms in round 15). The forms tried are mutants in
 // mutants/snapshot-check.json; the table is no proof that every other form fails.
+import { createHash } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { CHECKS, checkSnapshot } from "../src/snapshot-check.js";
@@ -13,7 +14,8 @@ import { buildSnapshot } from "../src/snapshot.js";
 import { FixtureSource } from "../src/source.js";
 import { DEVNET_GENESIS } from "../src/status.js";
 import { hashSnapshot } from "../src/store.js";
-import { watchOf } from "./helpers/upgrade.js";
+import { DETAIL } from "../src/upgrade-watch.js";
+import { AUTHORIZED_BYTES as AU, SHA, watchOf } from "./helpers/upgrade.js";
 
 const fx = (name: string) => FixtureSource.fromDir(fileURLToPath(new URL(`../fixtures/${name}`, import.meta.url)));
 // The snapshot the command line checks serve: the healthy status with the two real escrows (claimed
@@ -40,6 +42,8 @@ const watched =
     edit(s.upgrade, s);
   };
 const NONE = { spec_name: null, spec_version: null };
+const K256 = "0x" + "5a".repeat(256);
+const K257 = "0x" + "5a".repeat(257);
 
 /** [name, edit, every check the edit breaks]. An empty list is a snapshot the binary must serve. */
 const CASES: readonly (readonly [string, (s: Json) => void, readonly string[]])[] = [
@@ -126,17 +130,17 @@ const CASES: readonly (readonly [string, (s: Json) => void, readonly string[]])[
   ["an upgrade part that is text", (s) => (s.upgrade = "reviewed"), ["snapshot.upgrade"]],
   // The upgrade watch (RULES.md 7.2): values the live run writes, which the binary must serve.
   ["an upgrade watch at the finalized head, every field set", watched(), []],
-  ["an upgrade watch at a head whose height is not known, compared with none", watched((u) => Object.assign(u, { at: { ...u.at, number: null }, compared_with: null, executing_changed: null, authorization_appeared: null })), []],
+  ["an upgrade watch at a head whose height is not known, compared with none, the status having read no finalized hash", watched((u, s) => (Object.assign(u, { at: { ...u.at, number: null }, compared_with: null, executing_changed: null, authorization_appeared: null }), (s.status.finalized_hash = null), (s.pin.finalized_hash = null))), []],
   ["an upgrade watch at another hash, the status having read no finalized hash", watched((u, s) => ((u.at.hash = OTHER), (s.status.finalized_hash = null), (s.pin.finalized_hash = null))), []],
-  ["an upgrade watch at block 0, compared with none", watched((u) => Object.assign(u, { at: { ...u.at, number: 0 }, compared_with: null, executing_changed: null, authorization_appeared: null })), []],
+  ["an upgrade watch at block 0, compared with none, the status having read no finalized hash", watched((u, s) => (Object.assign(u, { at: { ...u.at, number: 0 }, compared_with: null, executing_changed: null, authorization_appeared: null }), (s.status.finalized_hash = null), (s.pin.finalized_hash = null))), []],
   ["a runtime no reviewed line names", watched((u) => (u.executing = { state: "not reviewed", spec_name: "tzkv-runtime", spec_version: 1014021, detail: "no reviewed line names the runtime this record states" })), []],
   ["a runtime whose name is empty", watched((u) => (u.executing = { state: "not reviewed", spec_name: "", spec_version: 0, detail: "" })), []],
   ["no LastRuntimeUpgrade at the block", watched((u) => Object.assign(u, { executing: { state: "absent", ...NONE, detail: "none" }, executing_changed: null })), []],
   ["an executing runtime not known", watched((u) => Object.assign(u, { executing: { state: "unknown", ...NONE, detail: "failed" }, executing_changed: null })), []],
-  ["no authorisation at the block", watched((u) => Object.assign(u, { authorized: { state: "absent", bytes: null, length: null, detail: null }, authorization_appeared: false })), []],
-  ["an authorisation of no bytes", watched((u) => Object.assign(u, { authorized: { state: "present", bytes: "0x", length: 0, detail: null } })), []],
-  ["an authorisation not known", watched((u) => Object.assign(u, { authorized: { state: "unknown", bytes: null, length: null, detail: "failed" }, authorization_appeared: null })), []],
-  ["a change of runtime and an authorisation gone, said as true and false", watched((u) => Object.assign(u, { executing_changed: true, authorized: { state: "absent", bytes: null, length: null, detail: null }, authorization_appeared: false })), []],
+  ["no authorisation at the block", watched((u) => Object.assign(u, { authorized: { state: "absent", bytes: null, length: null, sha256: null, detail: null }, authorization_appeared: false })), []],
+  ["an authorisation of no bytes", watched((u) => Object.assign(u, { authorized: { state: "present", bytes: "0x", length: 0, sha256: SHA("0x"), detail: null } })), []],
+  ["an authorisation not known", watched((u) => Object.assign(u, { authorized: { state: "unknown", bytes: null, length: null, sha256: null, detail: "failed" }, authorization_appeared: null })), []],
+  ["a change of runtime and an authorisation gone, said as true and false", watched((u) => Object.assign(u, { executing_changed: true, authorized: { state: "absent", bytes: null, length: null, sha256: null, detail: null }, authorization_appeared: false })), []],
   // Its shapes.
   ["an upgrade watch with a field more", watched((u) => (u.approved = true)), ["upgrade.fields"]],
   ["an upgrade watch with a field left out, whose parts are not read", watched((u) => (delete u.compared_with, (u.at = 1))), ["upgrade.fields"]],
@@ -165,34 +169,51 @@ const CASES: readonly (readonly [string, (s: Json) => void, readonly string[]])[
   ["authorised bytes of half a byte", watched((u) => ((u.authorized.bytes = "0xabc"), (u.authorized.length = 1))), ["upgrade.authorized.bytes"]],
   ["authorised bytes with no 0x", watched((u) => ((u.authorized.bytes = u.authorized.bytes.slice(2)), (u.authorized.length = u.authorized.length))), ["upgrade.authorized.bytes"]],
   ["an authorisation length that is text", watched((u) => (u.authorized.length = "33")), ["upgrade.authorized.length"]],
-  ["an authorisation detail that is a number", watched((u) => ((u.authorized = { state: "unknown", bytes: null, length: null, detail: 0 }), (u.authorization_appeared = null))), ["upgrade.authorized.detail"]],
+  ["an authorisation detail that is a number", watched((u) => ((u.authorized = { state: "unknown", bytes: null, length: null, sha256: null, detail: 0 }), (u.authorization_appeared = null))), ["upgrade.authorized.detail"]],
   // Its agreements.
   ["an upgrade watch at another block than the status's finalized head", watched((u) => (u.at.hash = OTHER)), ["upgrade.at-is-the-status-finalized-head"]],
+  ["an upgrade watch at the status's finalized hash, 1000 blocks higher (review defect 2)", watched((u, s) => (u.at.number = s.status.finalized_height + 1000)), ["upgrade.at-is-the-status-finalized-head"]],
+  ["an upgrade watch at the status's finalized hash, one block lower", watched((u, s) => ((u.at.number = s.status.finalized_height - 1), (u.compared_with = null), (u.executing_changed = null), (u.authorization_appeared = null))), ["upgrade.at-is-the-status-finalized-head"]],
+  ["an upgrade watch at the status's finalized hash, its height not known", watched((u) => Object.assign(u, { at: { ...u.at, number: null }, compared_with: null, executing_changed: null, authorization_appeared: null })), ["upgrade.at-is-the-status-finalized-head"]],
   ["a reviewed runtime with no name", watched((u) => (u.executing.spec_name = null)), ["upgrade.executing-names-a-spec-only-when-read"]],
   ["a reviewed runtime with no version", watched((u) => (u.executing.spec_version = null)), ["upgrade.executing-names-a-spec-only-when-read"]],
   ["no LastRuntimeUpgrade, yet a runtime named", watched((u) => ((u.executing.state = "absent"), (u.executing.detail = "none"), (u.executing_changed = null))), ["upgrade.executing-names-a-spec-only-when-read"]],
   ["an executing runtime not known, yet a version named", watched((u) => ((u.executing = { state: "unknown", spec_name: null, spec_version: 1014014, detail: "x" }), (u.executing_changed = null))), ["upgrade.executing-names-a-spec-only-when-read"]],
   ["a reviewed runtime that says why", watched((u) => (u.executing.detail = "reviewed")), ["upgrade.executing-says-why-unless-reviewed"]],
   ["a runtime not reviewed that says nothing of why", watched((u) => ((u.executing.state = "not reviewed"), (u.executing.detail = null))), ["upgrade.executing-says-why-unless-reviewed"]],
-  ["an authorisation present with no bytes", watched((u) => Object.assign(u.authorized, { bytes: null, length: null })), ["upgrade.authorized-bytes-only-when-present"]],
-  ["an authorisation present with bytes and no length", watched((u) => (u.authorized.length = null)), ["upgrade.authorized-bytes-only-when-present", "upgrade.authorized-length-counts-the-bytes"]],
-  ["no authorisation, yet bytes kept", watched((u) => ((u.authorized.state = "absent"), (u.authorization_appeared = false))), ["upgrade.authorized-bytes-only-when-present"]],
+  ["an authorisation present with no length", watched((u) => (u.authorized.length = null)), ["upgrade.authorized-measured-exactly-when-present", "upgrade.authorized-length-counts-the-bytes"]],
+  ["an authorisation present with no sha256", watched((u) => (u.authorized.sha256 = null)), ["upgrade.authorized-measured-exactly-when-present", "upgrade.authorized-sha256-of-the-bytes"]],
+  ["no authorisation, yet measured", watched((u) => ((u.authorized = { state: "absent", bytes: null, length: 33, sha256: SHA(AU), detail: null }), (u.authorization_appeared = false))), ["upgrade.authorized-measured-exactly-when-present"]],
+  ["an authorisation not known, yet a sha256 named", watched((u) => ((u.authorized = { state: "unknown", bytes: null, length: null, sha256: SHA(AU), detail: "x" }), (u.authorization_appeared = null))), ["upgrade.authorized-measured-exactly-when-present"]],
+  ["no authorisation, yet bytes kept", watched((u) => ((u.authorized = { state: "absent", bytes: AU, length: null, sha256: null, detail: null }), (u.authorization_appeared = false))), ["upgrade.authorized-bytes-only-when-present", "upgrade.authorized-length-counts-the-bytes", "upgrade.authorized-sha256-of-the-bytes"]],
+  ["an authorisation of 256 bytes, kept", watched((u) => (u.authorized = { state: "present", bytes: K256, length: 256, sha256: SHA(K256), detail: null })), []],
+  ["an authorisation of 257 bytes, not kept, with its length, sha256 and reason", watched((u) => (u.authorized = { state: "present", bytes: null, length: 257, sha256: SHA(K257), detail: DETAIL.auNotKept })), []],
+  ["an authorisation of 1048576 bytes, not kept", watched((u) => (u.authorized = { state: "present", bytes: null, length: 1048576, sha256: SHA(K257), detail: DETAIL.auNotKept })), []],
+  ["an authorisation of more bytes than an answer holds", watched((u) => (u.authorized = { state: "present", bytes: null, length: 1048577, sha256: SHA(K257), detail: DETAIL.auNotKept })), ["upgrade.authorized.length"]],
+  ["an authorisation of 257 bytes, kept", watched((u) => (u.authorized = { state: "present", bytes: K257, length: 257, sha256: SHA(K257), detail: null })), ["upgrade.authorized-bytes-kept-up-to-256"]],
+  ["an authorisation of 256 bytes, not kept", watched((u) => (u.authorized = { state: "present", bytes: null, length: 256, sha256: SHA(K256), detail: DETAIL.auNotKept })), ["upgrade.authorized-bytes-kept-up-to-256"]],
+  ["an authorisation of 33 bytes, not kept", watched((u) => Object.assign(u.authorized, { bytes: null, detail: DETAIL.auNotKept })), ["upgrade.authorized-bytes-kept-up-to-256"]],
   ["an authorisation length one more than its bytes", watched((u) => (u.authorized.length += 1)), ["upgrade.authorized-length-counts-the-bytes"]],
   ["an authorisation length one less than its bytes", watched((u) => (u.authorized.length -= 1)), ["upgrade.authorized-length-counts-the-bytes"]],
   ["an authorisation length counting the 0x", watched((u) => (u.authorized.length = u.authorized.bytes.length / 2)), ["upgrade.authorized-length-counts-the-bytes"]],
   ["an authorisation length counting hex digits", watched((u) => (u.authorized.length = u.authorized.bytes.length - 2)), ["upgrade.authorized-length-counts-the-bytes"]],
-  ["an authorisation present that says why", watched((u) => (u.authorized.detail = "present")), ["upgrade.authorized-says-why-only-when-unknown"]],
-  ["no authorisation, saying why", watched((u) => ((u.authorized = { state: "absent", bytes: null, length: null, detail: "absent" }), (u.authorization_appeared = false))), ["upgrade.authorized-says-why-only-when-unknown"]],
-  ["an authorisation not known, saying nothing of why", watched((u) => ((u.authorized = { state: "unknown", bytes: null, length: null, detail: null }), (u.authorization_appeared = null))), ["upgrade.authorized-says-why-only-when-unknown"]],
+  ["an authorisation whose sha256 is of other bytes", watched((u) => (u.authorized.sha256 = SHA("0x"))), ["upgrade.authorized-sha256-of-the-bytes"]],
+  ["an authorisation whose sha256 is of its hex text", watched((u) => (u.authorized.sha256 = createHash("sha256").update(u.authorized.bytes).digest("hex"))), ["upgrade.authorized-sha256-of-the-bytes"]],
+  ["an authorisation whose sha256 is in upper case", watched((u) => (u.authorized.sha256 = u.authorized.sha256.toUpperCase())), ["upgrade.authorized.sha256"]],
+  ["an authorisation whose sha256 has 0x", watched((u) => (u.authorized.sha256 = "0x" + u.authorized.sha256.slice(2))), ["upgrade.authorized.sha256"]],
+  ["an authorisation present that says why", watched((u) => (u.authorized.detail = "present")), ["upgrade.authorized-says-why-when-unknown-or-not-kept"]],
+  ["an authorisation not kept that says nothing of why", watched((u) => (u.authorized = { state: "present", bytes: null, length: 257, sha256: SHA(K257), detail: null })), ["upgrade.authorized-says-why-when-unknown-or-not-kept"]],
+  ["no authorisation, saying why", watched((u) => ((u.authorized = { state: "absent", bytes: null, length: null, sha256: null, detail: "absent" }), (u.authorization_appeared = false))), ["upgrade.authorized-says-why-when-unknown-or-not-kept"]],
+  ["an authorisation not known, saying nothing of why", watched((u) => ((u.authorized = { state: "unknown", bytes: null, length: null, sha256: null, detail: null }), (u.authorization_appeared = null))), ["upgrade.authorized-says-why-when-unknown-or-not-kept"]],
   ["a runtime change said with nothing compared", watched((u) => Object.assign(u, { compared_with: null, authorization_appeared: null })), ["upgrade.changes-only-when-compared"]],
   ["an authorisation's appearance said with nothing compared", watched((u) => Object.assign(u, { compared_with: null, executing_changed: null })), ["upgrade.changes-only-when-compared"]],
   ["compared with the same block", watched((u) => (u.compared_with = u.at.number)), ["upgrade.compared-with-a-lower-block"]],
   ["compared with a later block", watched((u) => (u.compared_with = u.at.number + 1)), ["upgrade.compared-with-a-lower-block"]],
-  ["compared with a block, at a height not known", watched((u) => (u.at.number = null)), ["upgrade.compared-with-a-lower-block"]],
+  ["compared with a block, at a height not known", watched((u, s) => ((u.at.number = null), (s.status.finalized_hash = null), (s.pin.finalized_hash = null))), ["upgrade.compared-with-a-lower-block"]],
   ["a runtime change said of a runtime not known", watched((u) => (u.executing = { state: "unknown", ...NONE, detail: "x" })), ["upgrade.executing-changed-only-when-named"]],
   ["a runtime change said of no LastRuntimeUpgrade", watched((u) => (u.executing = { state: "absent", ...NONE, detail: "x" })), ["upgrade.executing-changed-only-when-named"]],
-  ["an authorisation's appearance said of one not known", watched((u) => ((u.authorized = { state: "unknown", bytes: null, length: null, detail: "x" }), (u.authorization_appeared = false))), ["upgrade.appeared-only-when-known"]],
-  ["an authorisation said to appear though none is there", watched((u) => (u.authorized = { state: "absent", bytes: null, length: null, detail: null })), ["upgrade.appeared-only-when-present"]],
+  ["an authorisation's appearance said of one not known", watched((u) => ((u.authorized = { state: "unknown", bytes: null, length: null, sha256: null, detail: "x" }), (u.authorization_appeared = false))), ["upgrade.appeared-only-when-known"]],
+  ["an authorisation said to appear though none is there", watched((u) => (u.authorized = { state: "absent", bytes: null, length: null, sha256: null, detail: null })), ["upgrade.appeared-only-when-present"]],
   ["a seq of 1 as text", (s) => (s.seq = "1"), ["snapshot.seq"]],
   ["a seq of -1", (s) => (s.seq = -1), ["snapshot.seq"]],
   ["a seq of 1.5", (s) => (s.seq = 1.5), ["snapshot.seq"]],

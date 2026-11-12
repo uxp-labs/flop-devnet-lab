@@ -1,6 +1,7 @@
 // What the upgrade watch tests read (src/upgrade-watch.ts, RULES.md 7.2): the lab's own reads of the
 // runtime upgrade in research/2026-11-12-runtime-upgrade/results.json, each value named by its field,
 // and one honest watch at a snapshot's finalized head for the snapshot check tables.
+import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { REVIEWED } from "../../src/scale/shape.js";
 import type { Snapshot, UpgradeWatch } from "../../src/types.js";
@@ -19,6 +20,11 @@ export const BEFORE_AUTH: number = RESULTS.authorization.authorizing_block.block
 export const AUTH: number = RESULTS.authorization.authorizing_block.height;
 /** The bytes authorised (results.json authorization.authorized_upgrade_at at the authorising block), never decoded. */
 export const AUTHORIZED_BYTES = AUTHORIZED_AT.get(AUTH)?.value as string;
+
+/** The sha256 of the bytes a 0x hex string holds, lower case hex, computed here and never typed. */
+export const SHA = (hex: string): string => createHash("sha256").update(Buffer.from(hex.slice(2), "hex")).digest("hex");
+/** The authorised bytes' sha256. */
+export const AUTHORIZED_SHA = SHA(AUTHORIZED_BYTES);
 
 /** results.json boundary: 3528527 the last block of the old runtime, 3528529 the first of the new. */
 export const LAST_OLD = RESULTS.boundary[0] as { height: number; hash: string; last_runtime_upgrade: { hex: string; spec_version: number; spec_name: string } };

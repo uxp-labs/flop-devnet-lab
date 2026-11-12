@@ -2,7 +2,8 @@
 // state_getRuntimeVersion(F), over the synthetic tapes in fixtures/upgrade-* and the 18 tapes that
 // gained them; a run on a log compared with the watch before it; what every output holds; and that
 // the watch adds no conflict and changes no exit code.
-import { appendFileSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { appendFileSync, writeFileSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -19,12 +20,13 @@ import { checkSnapshot } from "../src/snapshot-check.js";
 import { buildSnapshot } from "../src/snapshot.js";
 import { DEVNET_GENESIS } from "../src/status.js";
 import { sumsOf } from "../src/sums.js";
+import { logLine, sealSnapshot } from "../src/store.js";
 import { TapeTransport } from "../src/tape.js";
 import type { Transport } from "../src/transport.js";
 import type { Snapshot } from "../src/types.js";
 import { DETAIL, UPGRADE_KEYS, watchUpgrade } from "../src/upgrade-watch.js";
 import { UPGRADE_ANSWERS } from "./helpers/tapes.js";
-import { AUTHORIZED_BYTES, NOT_REVIEWED, NOT_REVIEWED_HEX, RESULTS, readingAt } from "./helpers/upgrade.js";
+import { AUTHORIZED_BYTES, AUTHORIZED_SHA, NOT_REVIEWED, NOT_REVIEWED_HEX, RESULTS, readingAt } from "./helpers/upgrade.js";
 
 const FIXTURES = new URL("../fixtures/", import.meta.url);
 const fixture = (dir: string, name: string) => readFileSync(new URL(`${dir}/${name}`, FIXTURES), "utf8");
@@ -168,12 +170,12 @@ describe("a live run's watch, first runs", () => {
       trust: "fixture",
       at: { hash: RESULTS.authorization.authorizing_block.block_before.hash, number: RESULTS.authorization.authorizing_block.block_before.height },
       executing: { state: "reviewed", spec_name: "tzkv-runtime", spec_version: 1014014, detail: null },
-      authorized: { state: "absent", bytes: null, length: null, detail: null },
+      authorized: { state: "absent", bytes: null, length: null, sha256: null, detail: null },
       compared_with: null,
       executing_changed: null,
       authorization_appeared: null,
     });
-    expect(s.upgrade?.at.hash).toBe(s.status.finalized_hash);
+    expect([s.upgrade?.at.hash, s.upgrade?.at.number]).toEqual([s.status.finalized_hash, s.status.finalized_height]);
   });
 
   it("a runtime no reviewed line names: named, not reviewed, and the run goes on as before", async () => {
@@ -185,7 +187,7 @@ describe("a live run's watch, first runs", () => {
   it("both reads failed: unknown, never absent, each named by its call", async () => {
     const { r, s } = await run(tapeOf("upgrade-read-failed"), join(box, "no-log"));
     expect(s.upgrade?.executing).toEqual({ state: "unknown", spec_name: null, spec_version: null, detail: DETAIL.lruFailed });
-    expect(s.upgrade?.authorized).toEqual({ state: "unknown", bytes: null, length: null, detail: DETAIL.auFailed });
+    expect(s.upgrade?.authorized).toEqual({ state: "unknown", bytes: null, length: null, sha256: null, detail: DETAIL.auFailed });
     // The status and its RPC health are what they were: the watch adds no error and no conflict.
     expect([r.code, s.status.conflicts, s.status.rpc.health, s.status.rpc.detail]).toEqual([EXIT.ok, [], "ok", null]);
   });
@@ -207,7 +209,7 @@ describe("a live run's watch on a log: compared with the one before", () => {
     publish(a.out, log);
     const b = await run(tapeOf("upgrade-authorized"), log);
     expect(b.r.code).toBe(EXIT.ok);
-    expect(b.s.upgrade?.authorized).toEqual({ state: "present", bytes: AUTHORIZED_BYTES, length: 33, detail: null });
+    expect(b.s.upgrade?.authorized).toEqual({ state: "present", bytes: AUTHORIZED_BYTES, length: 33, sha256: AUTHORIZED_SHA, detail: null });
     expect([b.s.upgrade?.compared_with, b.s.upgrade?.executing_changed, b.s.upgrade?.authorization_appeared]).toEqual([a.s.upgrade?.at.number, false, true]);
     publish(b.out, log);
     expect(earlierOf(readHistory(log).snapshots, DEVNET_GENESIS).earlierUpgrades.map((e) => [e.genesis, e.watch.at.number])).toEqual([
@@ -223,12 +225,46 @@ describe("a live run's watch on a log: compared with the one before", () => {
     for (const x of [a, b, c]) expect(checkSnapshot(x.s), x.out).toEqual([]);
   });
 
+  it("an @0 line after @1 lines is accepted and read as a line with no watch (rule F7): a log of @0, @1, @0, @1", async () => {
+    const strip = (x: Snapshot) => {
+      const { hash: _h, seq: _s, prev_hash: _p, ...rest } = x;
+      return rest;
+    };
+    const zero = strip(JSON.parse(fixture("published-2026-11-11-0808", "snapshot.json")) as Snapshot);
+    const one = strip((await run(tapeOf("upgrade-before"), join(box, "no-log"))).s);
+    const lines: Snapshot[] = [];
+    for (const x of [zero, one, zero, one]) lines.push(sealSnapshot(x, lines.at(-1)));
+    expect(lines.map((x) => x.schema)).toEqual(["flop-observatory/snapshot@0", "flop-observatory/snapshot@1", "flop-observatory/snapshot@0", "flop-observatory/snapshot@1"]);
+    const log = join(box, "mixed");
+    mkdirSync(log);
+    writeFileSync(join(log, DAY), lines.map(logLine).join(""));
+    const h = readHistory(log);
+    expect([h.state, h.snapshots.length]).toEqual(["read", 4]);
+    expect(h.snapshots.map((x) => x.upgrade ?? null)).toEqual([null, one.upgrade, null, one.upgrade]);
+    // Only the two @1 lines give a watch; the @0 line between them adds none and breaks nothing.
+    expect(earlierOf(h.snapshots, DEVNET_GENESIS).earlierUpgrades.map((e) => e.watch)).toEqual([one.upgrade, one.upgrade]);
+  });
+
   it("an @0 line in the log holds no watch to compare with, and reads", async () => {
     const log = join(box, "log");
     mkdirSync(log);
     appendFileSync(join(log, DAY), fixture("published-2026-11-11-0808", `log/${DAY}`));
     const h = readHistory(log);
     expect([h.state, h.snapshots[0]?.schema, earlierOf(h.snapshots, DEVNET_GENESIS).earlierUpgrades]).toEqual(["read", "flop-observatory/snapshot@0", []]);
+  });
+});
+
+describe("the data branch copied by the reviewer (fixtures/observatory-data-392fa7b)", () => {
+  it("is its log/ and latest/ unchanged, each file the sha256 its meta.json names, from the commit it names", () => {
+    const dir = new URL("observatory-data-392fa7b/", FIXTURES);
+    const meta = JSON.parse(fixture("observatory-data-392fa7b", "meta.json"));
+    expect([meta.branch, meta.synthetic, meta.commit]).toEqual(["observatory-data", false, expect.stringMatching(/^392fa7b[0-9a-f]{33}$/)]);
+    const held = [...readdirSync(new URL("latest/", dir)).map((f) => `latest/${f}`), ...readdirSync(new URL("log/", dir)).map((f) => `log/${f}`)].sort();
+    expect(readdirSync(dir).sort()).toEqual(["latest", "log", "meta.json"]);
+    expect(Object.keys(meta.files)).toEqual(held);
+    for (const f of held) expect(createHash("sha256").update(readFileSync(new URL(f, dir))).digest("hex"), f).toBe(meta.files[f]);
+    // latest/ is the reading the publish job wrote: its SHA256SUMS lists every other file of it.
+    for (const f of held.filter((x) => x.startsWith("latest/") && x !== "latest/SHA256SUMS")) expect(fixture("observatory-data-392fa7b", "latest/SHA256SUMS")).toContain(`${meta.files[f]}  ${f.slice("latest/".length)}`);
   });
 });
 
@@ -268,7 +304,7 @@ describe("the watch in every output", () => {
     const answer = handleMcp({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: "get_upgrade", arguments: {} } }, { snapshot: s });
     expect(answer?.result).toEqual({ content: [{ type: "text", text: f["upgrade.json"] }] });
     expect(r.notice).toBe(noticeLine(s));
-    expect(r.notice).toContain('"runtime_version":1014014,"executing_state":"reviewed","executing_spec_name":"tzkv-runtime","executing_spec_version":1014014,"authorized_state":"present"');
+    expect(r.notice).toContain(`"runtime_version":1014014,"executing_state":"reviewed","executing_spec_name":"tzkv-runtime","executing_spec_version":1014014,"authorized_state":"present","authorized_length":33,"authorized_sha256":"${AUTHORIZED_SHA}"`);
     // The reader serves it: ten files with SHA256SUMS.
     expect(Object.keys(f).sort()).toEqual([...PUBLISHED_FILES, "SHA256SUMS"].sort());
     expect(judgeLatest(f, { now: "2026-11-11T06:40:00.000Z", maxAgeSeconds: 3600 })).toEqual({ usable: true, snapshot: s, reset: null });
@@ -285,7 +321,7 @@ describe("the watch in every output", () => {
     const { out, s, r } = await run(tapeOf("live-rpc-down"), join(box, "no-log"));
     expect(s.upgrade).toBeNull();
     expect(JSON.parse(readFileSync(join(out, "upgrade.json"), "utf8")).upgrade).toBeNull();
-    expect(r.notice).toContain('"executing_state":null,"executing_spec_name":null,"executing_spec_version":null,"authorized_state":null');
+    expect(r.notice).toContain('"executing_state":null,"executing_spec_name":null,"executing_spec_version":null,"authorized_state":null,"authorized_length":null,"authorized_sha256":null');
     expect(renderPage(s)).toContain('<h2>Runtime upgrade</h2>\n<div class="card"><table data-section="upgrade"><tr><th scope="row" data-for="upgrade">upgrade</th><td data-k="upgrade" class="unk"></td></tr></table></div>');
   });
 
@@ -295,7 +331,7 @@ describe("the watch in every output", () => {
     expect(h).toContain('<td data-k="upgrade.executing.state" data-v="unknown" class="unk" aria-label="unknown"></td>');
     expect(h).toContain(`<td data-k="upgrade.authorized.detail" data-v="${DETAIL.auFailed}">${DETAIL.auFailed}</td>`);
     const keys = [...h.matchAll(/data-k="(upgrade[^"]*)"/g)].map((m) => m[1]);
-    expect(keys).toEqual(["upgrade.observed_at", "upgrade.trust", "upgrade.at.hash", "upgrade.at.number", "upgrade.executing.state", "upgrade.executing.spec_name", "upgrade.executing.spec_version", "upgrade.executing.detail", "upgrade.authorized.state", "upgrade.authorized.bytes", "upgrade.authorized.length", "upgrade.authorized.detail", "upgrade.compared_with", "upgrade.executing_changed", "upgrade.authorization_appeared"]);
+    expect(keys).toEqual(["upgrade.observed_at", "upgrade.trust", "upgrade.at.hash", "upgrade.at.number", "upgrade.executing.state", "upgrade.executing.spec_name", "upgrade.executing.spec_version", "upgrade.executing.detail", "upgrade.authorized.state", "upgrade.authorized.bytes", "upgrade.authorized.length", "upgrade.authorized.sha256", "upgrade.authorized.detail", "upgrade.compared_with", "upgrade.executing_changed", "upgrade.authorization_appeared"]);
     expect(h.indexOf("<h2>Network status</h2>")).toBeLessThan(h.indexOf("<h2>Runtime upgrade</h2>"));
     expect(h.indexOf("<h2>Runtime upgrade</h2>")).toBeLessThan(h.indexOf("<h2>Escrows</h2>"));
   });

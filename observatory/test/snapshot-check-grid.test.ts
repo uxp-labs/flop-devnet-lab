@@ -11,6 +11,7 @@
 // point's. Where a rule reads many escrows or items, the others are left so that they keep it, and
 // the last escrow and a second item are read as well as the first. The pools and grids are finite:
 // they show the checks and section 5 agree on these values, not on every value.
+import { createHash } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { CHECKS, checkSnapshot } from "../src/snapshot-check.js";
@@ -224,6 +225,10 @@ const H2 = "0x" + "ef".repeat(32);
 const A = "0x" + "a1".repeat(32);
 const B = "0x" + "b2".repeat(32);
 const C = "0x" + "c3".repeat(32);
+/** Authorised bytes at the bound the watch keeps (256) and one past it, and the sha256 of a hex string's bytes. */
+const K256 = "0x" + "5a".repeat(256);
+const K257 = "0x" + "5a".repeat(257);
+const SHA = (hex: string) => createHash("sha256").update(Buffer.from(hex.slice(2), "hex")).digest("hex");
 const census = "flop-observatory/census@0";
 const drift = "flop-observatory/drift@0";
 
@@ -335,9 +340,9 @@ const GRIDS: readonly (readonly [string, Record<string, readonly Json[]>, (s: Js
   ],
   [
     "the upgrade watch's authorisation",
-    { state: ["absent", "present", "unknown"], bytes: [null, "0x", "0xab"], length: [null, 0, 1, 2], detail: [null, "x"], appeared: [null, false, true] },
+    { state: ["absent", "present", "unknown"], bytes: [null, "0x", "0xab", K256, K257], length: [null, 0, 1, 256, 257], sha256: [null, SHA("0x"), SHA("0xab"), SHA(K256)], detail: [null, "x"], appeared: [null, true] },
     (s, v) => {
-      s.upgrade.authorized = { state: v.state, bytes: v.bytes, length: v.length, detail: v.detail };
+      s.upgrade.authorized = { state: v.state, bytes: v.bytes, length: v.length, sha256: v.sha256, detail: v.detail };
       s.upgrade.authorization_appeared = v.appeared;
     },
   ],

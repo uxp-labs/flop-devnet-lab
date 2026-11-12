@@ -2,14 +2,15 @@
 // executed the block and of the authorisation, hostile answers, and the comparison with an earlier
 // watch. Values come from research/2026-11-12-runtime-upgrade/results.json, each named in
 // test/helpers/upgrade.ts.
+import { createHash } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import { runtimeOfBlock } from "../src/scale/block.js";
 import { fromHex } from "../src/scale/reader.js";
 import { REVIEWED } from "../src/scale/shape.js";
 import { twox128 } from "../src/scale/storage-key.js";
 import type { UpgradeWatch } from "../src/types.js";
-import { DETAIL, type EarlierUpgrade, UPGRADE_KEYS, UPGRADE_SCHEMA, type UpgradeReading, watchUpgrade } from "../src/upgrade-watch.js";
-import { AUTH, AUTHORIZED_AT, AUTHORIZED_BYTES, BEFORE_AUTH, FIRST_NEW, LAST_OLD, NOT_REVIEWED, NOT_REVIEWED_HEX, RESULTS } from "./helpers/upgrade.js";
+import { AUTHORIZED_KEPT, DETAIL, type EarlierUpgrade, UPGRADE_KEYS, UPGRADE_SCHEMA, type UpgradeReading, watchUpgrade } from "../src/upgrade-watch.js";
+import { AUTH, AUTHORIZED_AT, AUTHORIZED_BYTES, BEFORE_AUTH, FIRST_NEW, LAST_OLD, NOT_REVIEWED, NOT_REVIEWED_HEX, RESULTS, SHA } from "./helpers/upgrade.js";
 import { bytes, cat, compact, str } from "./helpers/scale-write.js";
 import { toHex } from "../src/scale/reader.js";
 
@@ -94,25 +95,32 @@ describe("which runtime executed the block: System.LastRuntimeUpgrade through ru
 
 describe("whether an upgrade is authorised: System.AuthorizedUpgrade kept as the bytes answered, never decoded", () => {
   it("present: the 33 bytes the lab read at the authorising block, as answered, with their count", () => {
-    expect(authorized(AUTHORIZED_BYTES)).toEqual({ state: "present", bytes: AUTHORIZED_BYTES, length: 33, detail: null });
+    expect(authorized(AUTHORIZED_BYTES)).toEqual({ state: "present", bytes: AUTHORIZED_BYTES, length: 33, sha256: SHA(AUTHORIZED_BYTES), detail: null });
     expect(AUTHORIZED_BYTES.length).toBe(2 + 2 * 33);
   });
 
   it("present: bytes of any other length, none and one more included, are never judged by their length", () => {
-    expect(authorized("0x")).toEqual({ state: "present", bytes: "0x", length: 0, detail: null });
-    expect(authorized(AUTHORIZED_BYTES + "00")).toEqual({ state: "present", bytes: AUTHORIZED_BYTES + "00", length: 34, detail: null });
-    expect(authorized(AUTHORIZED_BYTES.slice(0, -2))).toEqual({ state: "present", bytes: AUTHORIZED_BYTES.slice(0, -2), length: 32, detail: null });
+    for (const hex of ["0x", AUTHORIZED_BYTES + "00", AUTHORIZED_BYTES.slice(0, -2)]) expect(authorized(hex)).toEqual({ state: "present", bytes: hex, length: (hex.length - 2) / 2, sha256: SHA(hex), detail: null });
+    expect(authorized("0x").sha256).toBe(createHash("sha256").update(new Uint8Array()).digest("hex"));
+  });
+
+  it("present: up to 256 bytes kept, as answered; above that only their length and sha256, with a fixed reason (review defect 1, rule F1)", () => {
+    const of = (n: number) => "0x" + "5a".repeat(n);
+    expect(authorized(of(256))).toEqual({ state: "present", bytes: of(256), length: 256, sha256: SHA(of(256)), detail: null });
+    for (const n of [257, 100000, 1048576]) expect(authorized(of(n)), String(n)).toEqual({ state: "present", bytes: null, length: n, sha256: SHA(of(n)), detail: DETAIL.auNotKept });
+    expect(AUTHORIZED_KEPT).toBe(256);
+    expect(JSON.stringify(watch(reading({ result: OLD_HEX }, { result: of(100000) }))).length).toBeLessThan(2048);
   });
 
   it("absent: only the null the node sent, as results.json read at 3528477 and 3528528", () => {
     expect([AUTHORIZED_AT.get(BEFORE_AUTH)?.value, AUTHORIZED_AT.get(RESULTS.boundary[1].height)?.value]).toEqual([null, null]);
-    expect(authorized(null)).toEqual({ state: "absent", bytes: null, length: null, detail: null });
+    expect(authorized(null)).toEqual({ state: "absent", bytes: null, length: null, sha256: null, detail: null });
   });
 
   it("unknown, never absent: a failed call, named by its call, and any answer that is no storage answer, none echoed", () => {
-    expect(watch(reading({ result: OLD_HEX }, { error: "evil words" })).authorized).toEqual({ state: "unknown", bytes: null, length: null, detail: DETAIL.auFailed });
+    expect(watch(reading({ result: OLD_HEX }, { error: "evil words" })).authorized).toEqual({ state: "unknown", bytes: null, length: null, sha256: null, detail: DETAIL.auFailed });
     for (const v of [0, 33, false, {}, [], AUTHORIZED_BYTES.toUpperCase().replace("0X", "0x"), AUTHORIZED_BYTES.slice(0, -1), AUTHORIZED_BYTES.slice(2), "0x" + "zz".repeat(8), "", undefined]) {
-      expect(authorized(v), JSON.stringify(v)).toEqual({ state: "unknown", bytes: null, length: null, detail: DETAIL.auMalformed });
+      expect(authorized(v), JSON.stringify(v)).toEqual({ state: "unknown", bytes: null, length: null, sha256: null, detail: DETAIL.auMalformed });
     }
   });
 });
@@ -126,7 +134,7 @@ describe("the watch itself", () => {
       trust: "trusted RPC",
       at: { hash: AT, number: AUTH },
       executing: { state: "reviewed", spec_name: OLD?.specName, spec_version: OLD?.specVersion, detail: null },
-      authorized: { state: "present", bytes: AUTHORIZED_BYTES, length: 33, detail: null },
+      authorized: { state: "present", bytes: AUTHORIZED_BYTES, length: 33, sha256: SHA(AUTHORIZED_BYTES), detail: null },
       compared_with: null,
       executing_changed: null,
       authorization_appeared: null,
@@ -159,6 +167,16 @@ describe("the comparison with the latest earlier watch on the same RPC genesis a
   it("an authorisation appears when present now and absent before, or present before with other bytes; else it did not", () => {
     const now = (au: unknown, was: unknown) => watch(reading({ result: OLD_HEX }, { result: au }), [on(G, at(AUTH - 1, OLD_HEX, was))]).authorization_appeared;
     expect([now(AUTHORIZED_BYTES, null), now(AUTHORIZED_BYTES, AUTHORIZED_BYTES), now(AUTHORIZED_BYTES, AUTHORIZED_BYTES + "00"), now(AUTHORIZED_BYTES, "0x"), now(null, AUTHORIZED_BYTES), now(null, null)]).toEqual([true, false, true, true, false, false]);
+  });
+
+  it("an appearance compares the length and the sha256, never the hex: the same bytes kept or not are the same, other bytes of the same length are not (rule F1)", () => {
+    const of = (n: number, b = "5a") => "0x" + b.repeat(n);
+    const now = (au: unknown, was: unknown) => watch(reading({ result: OLD_HEX }, { result: au }), [on(G, at(AUTH - 1, OLD_HEX, was))]).authorization_appeared;
+    expect([now(of(300), of(300)), now(of(300), of(300, "5b")), now(of(300), of(301)), now(of(256), of(256, "5b")), now(of(256), of(257))]).toEqual([false, true, true, true, true]);
+    // An earlier watch whose kept hex was changed but whose length and sha256 were not: the same authorisation.
+    const was = at(AUTH - 1, OLD_HEX, AUTHORIZED_BYTES);
+    const edited = { ...was, authorized: { ...was.authorized, bytes: AUTHORIZED_BYTES.slice(0, -2) + "00" } };
+    expect(watch(reading({ result: OLD_HEX }, { result: AUTHORIZED_BYTES }), [on(G, edited)]).authorization_appeared).toBe(false);
   });
 
   it("a runtime changed when its name or its version differs", () => {

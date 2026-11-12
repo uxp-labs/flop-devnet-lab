@@ -9,6 +9,8 @@
 //   snapshot whose fields all hold their types.
 // The check names are the binary's own, so its refusals and this reference can be compared.
 
+import { createHash } from "node:crypto";
+
 // Snapshots here are plain JSON, as the binary reads them.
 export type Json = any;
 
@@ -123,6 +125,8 @@ const HEX_BYTES = kind(
   ["0x", "0x00", "0xab", "0x" + hex64, "0x" + hex64 + "01"],
   ["0xAB", "0X00", "0xabc", "0x0", "ab", "", " 0xab", "0xab ", "0xab\n", "x\n0xab", "0xgg", "null", 0, 1, false, null, [], {}],
 );
+/** A count of bytes a node's storage answer can hold: the 1 MiB answer limit at most. */
+const BYTE_COUNT = kind([0, 1, 256, 257, 1048576], [1048577, 2 ** 32, -1, 1.5, NaN, Infinity, "33", "", null, true, [], {}]);
 /** A list whose items are checked apart: here only an empty list, and what is no list. */
 const LIST = kind([[]], [null, {}, "x", "", 1, true]);
 
@@ -262,7 +266,8 @@ export const TYPES: readonly (readonly [string, readonly (readonly [string, Kind
     [
       ["state", oneOf("absent", "present", "unknown")],
       ["bytes", orNone(HEX_BYTES)],
-      ["length", orNone(COUNT)],
+      ["length", orNone(BYTE_COUNT)],
+      ["sha256", orNone(SHA256)],
       ["detail", orNone(TEXT)],
     ],
   ],
@@ -307,9 +312,12 @@ export const AGREEMENT_NAMES: readonly string[] = [
   "upgrade.at-is-the-status-finalized-head",
   "upgrade.executing-names-a-spec-only-when-read",
   "upgrade.executing-says-why-unless-reviewed",
+  "upgrade.authorized-measured-exactly-when-present",
   "upgrade.authorized-bytes-only-when-present",
+  "upgrade.authorized-bytes-kept-up-to-256",
   "upgrade.authorized-length-counts-the-bytes",
-  "upgrade.authorized-says-why-only-when-unknown",
+  "upgrade.authorized-sha256-of-the-bytes",
+  "upgrade.authorized-says-why-when-unknown-or-not-kept",
   "upgrade.changes-only-when-compared",
   "upgrade.compared-with-a-lower-block",
   "upgrade.executing-changed-only-when-named",
@@ -390,18 +398,24 @@ export function expectedAgreements(s: Json): string[] {
     const x = u.executing;
     const a = u.authorized;
     const names = x.state === "reviewed" || x.state === "not reviewed";
-    // "upgrade.at.hash is the status's finalized hash whenever the status has one"
-    rule("upgrade.at-is-the-status-finalized-head", st.finalized_hash === null || u.at.hash === st.finalized_hash);
+    // "upgrade.at is the status's finalized head, its hash and its height, whenever the status has one"
+    rule("upgrade.at-is-the-status-finalized-head", st.finalized_hash === null || (u.at.hash === st.finalized_hash && u.at.number === st.finalized_height));
     // "spec_name and spec_version are set exactly when the state is reviewed or not reviewed"
     rule("upgrade.executing-names-a-spec-only-when-read", (x.spec_name !== null) === names && (x.spec_version !== null) === names);
     // "executing.detail says why for every state but reviewed, and is none for reviewed"
     rule("upgrade.executing-says-why-unless-reviewed", x.state === "reviewed" ? x.detail === null : x.detail !== null);
-    // "bytes and length are set exactly when the state is present"
-    rule("upgrade.authorized-bytes-only-when-present", a.state === "present" ? a.bytes !== null && a.length !== null : a.bytes === null && a.length === null);
-    // "length is the number of bytes the hex holds"
+    // "a present authorisation always carries its length in bytes and the sha256 of the raw bytes", and nothing else does
+    rule("upgrade.authorized-measured-exactly-when-present", a.state === "present" ? a.length !== null && a.sha256 !== null : a.length === null && a.sha256 === null);
+    // "bytes is the hex only of a present authorisation"
+    rule("upgrade.authorized-bytes-only-when-present", a.bytes === null || a.state === "present");
+    // "bytes is the hex only when length is at most 256; above that it is null"
+    if (a.state === "present" && a.length !== null) rule("upgrade.authorized-bytes-kept-up-to-256", a.length > 256 ? a.bytes === null : a.bytes !== null);
+    // "with bytes not null, its byte count equals length"
     rule("upgrade.authorized-length-counts-the-bytes", a.bytes === null || (typeof a.length === "number" && a.length * 2 + 2 === a.bytes.length));
-    // "authorized.detail says why for unknown, and is none otherwise"
-    rule("upgrade.authorized-says-why-only-when-unknown", a.state === "unknown" ? a.detail !== null : a.detail === null);
+    // "and its sha256 equals sha256"
+    rule("upgrade.authorized-sha256-of-the-bytes", a.bytes === null || createHash("sha256").update(Buffer.from(a.bytes.slice(2), "hex")).digest("hex") === a.sha256);
+    // "unknown says why, and so does present with its bytes not kept, with a fixed detail"; nothing else does
+    rule("upgrade.authorized-says-why-when-unknown-or-not-kept", a.state === "unknown" || (a.state === "present" && a.bytes === null) ? a.detail !== null : a.detail === null);
     // "with nothing compared, both changes are none"
     rule("upgrade.changes-only-when-compared", u.compared_with !== null || [u.executing_changed, u.authorization_appeared].every((v) => v === null));
     // "compared_with is a block below at.number, which is then known"

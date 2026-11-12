@@ -2,7 +2,7 @@
 
 What each outside review and independent rerun of FLOP Observatory M0 found, and the fix and proof for each, newest first. Rounds 1 to 10 were first written in the PR #5 description and are kept here word for word, so the log travels with the code it describes: a reviewer reads the rounds at the commit under review. RULES.md holds the rules themselves; where a round and RULES.md differ, RULES.md is binding.
 
-## Round 26: the upgrade watch in the live run, the first command that uses the decoder's door
+## Round 26: the upgrade watch in the live run and the snapshot command's --upgrade, the first use of the decoder's door, its review and the fix round
 
 Built from the plan `reviews/2026-11-12-plan-upgrade-watch.md` with the lead's decisions D1 to D10, on branch `claude/observatory-upgrade-watch` from main cf572e8, then main 7fb426a (rounds 24 and 25) merged in with both sides kept; the vitest suite, every test count and every mutant's find text were unchanged by the merge. An independent reviewer reads it next. The only workflow change is the list of published files in `.github/workflows/observatory-live.yml`, in its two places. `recordings/` is untouched. In `src/scale` only `block.ts` changed, by D3 alone, in its own first commit.
 
@@ -24,9 +24,25 @@ Where the work left the plan, each a choice the plan did not settle:
 - A `not reviewed` detail is a fixed sentence, not `runtimeOfBlock`'s refusal, which quotes the name; the name itself is the value of `spec_name`.
 - `snapshot.fixture-when-a-part-is` counts the watch as a part.
 - Six upgrade tapes, not five: the authorised one needs one before it to compare with.
-- Mutants not written, with the reason: the version taken from `state_getRuntimeVersion` and a conflict pushed by the watch (the watch reads neither, so no single replacement expresses them); the height check in `earlierWatch` dropped, and the genesis check in `earlierOf` dropped (equivalent: the comparison's own filter refuses both).
+- Mutants not written, with the reason: the version taken from `state_getRuntimeVersion` and a conflict pushed by the watch. The reason given, that no single replacement expresses them, was false: the reviewer wrote both (`rw-version-from-rv` and `rw-watch-pushes-conflict` in `src/snapshot.ts`), and both are killed. Then: the height check in `earlierWatch` dropped, and the genesis check in `earlierOf` dropped (equivalent: the comparison's own filter refuses both).
 
 Facts found: the memory test that held a real replay to its recorded snapshot byte for byte now holds it with the watch taken out and the schema set back to @0, since the code of the day read no watch. A latest/ published before this is refused by the new reader (D9).
+### The independent review of round 26, and the fix round
+
+A reviewer who wrote none of it read `git diff 7fb426a a54cbe2` (branch `claude/review-upgrade-watch`, head 2e58d02). Verdict: do not merge as it is, one medium and one low defect, the rest held (`reviews/2026-11-12-review-upgrade-watch.md`). The lead decided F1 to F7.
+
+| # | Finding | Rule | Fix and proof |
+|---|---|---|---|
+| 1 medium | `authorized.bytes` kept the whole answer, bounded only by the 1 MiB answer limit, so a large answer went into every log line for ever and every feed | F1 | a present authorisation always carries `length` and `sha256` of the raw bytes; `bytes` only when `length` is at most 256 (`AUTHORIZED_KEPT`), else null with the fixed detail `DETAIL.auNotKept`; the appearance compares length and sha256, never the hex; the check holds them to each other (`upgrade.authorized-measured-exactly-when-present`, `-bytes-only-when-present`, `-bytes-kept-up-to-256`, `-length-counts-the-bytes`, `-sha256-of-the-bytes`, `-says-why-when-unknown-or-not-kept`, and `length` at most 1048576); the page, feed, tool and notice show length and sha256. No schema bump. `review defect 1, fixed: ...`; rows at 256, 257, 100000 and 1048576 bytes; table cases on each side of each rule; mutants for the bound, its edge, the sha256 of the text and the comparison by the hex |
+| 2 low | `upgrade.at` was tied to the status by its hash only | F2 | `upgrade.at-is-the-status-finalized-head` holds the hash and the number. `review defect 2, fixed: ...`; table cases 1000 above, one below and not known; `sc-at-number-ignored` |
+| mutants | 5 of the reviewer's 27 lived under the builder's tests; the claim about two rules was false | F3 | `test/review-watch.test.ts` joins the suite (its 100000 byte HELD row, now 0 to 100000 bytes, holds rule F1); its data is `fixtures/observatory-data-392fa7b/` with a `meta.json` (branch, commit 392fa7b3a217a125ca2344f139af3ed7fef9798e, each file's sha256, compared with the commit before it was written), held by `test/upgrade-live.test.ts`; its mutants are `mutants/review-watch.json`, four retargeted to the F1 lines and five pointed at the reviewer's tests that kill them; all 27 killed |
+| source only | README and this round's title named only the live run | F4 | both say the snapshot command's `--upgrade` reaches `runtimeOfBlock` too |
+| source only | two lists did not name `upgrade.json` | F5 | `test/mcp.test.ts` feed and tool pairs and `test/published.test.ts` changed file list |
+| info | no smoke run for a change to the module alone | F6 | `observatory/src/upgrade-watch.ts` in the push paths of `observatory-live.yml`, held by `test/live-workflow.test.ts`; nothing else in any workflow |
+| unresolved | an @0 line after @1 lines | F7 | accepted and read as a line with no watch; RULES 7.2 says why; a log of @0, @1, @0, @1 pinned in `test/upgrade-live.test.ts`; `sc-v0-refused` is killed by it |
+
+Kept on purpose, as the lead ruled: no judgement of `detail` text or of `reviewed` against today's list, `upgrade.observed_at` and `upgrade.trust` held like every other part's, and a not reviewed spec name kept raw and escaped. Mutants left out as equivalent: `uw-absent-before-ignored` (an absent watch has no length, so another length already says the authorisation appeared). A new canary tamper changes the sha256 on the page; 117 tampers in all.
+
 ## Round 25: the fourth recording brought in, and the session rerun's results.json filled from it
 
 The fourth list was merged (pull request 42) and its recording published: `recordings/20261112132634-0a472f1b49f7b661/` on observatory-data at 381bf8e, made from main 8193005, 48 of 48 calls answered. This round brings it in and fills the rerun's `results.json` from it (phase B of the brief `2026-11-12-rerun-record-list-4`). The builder stopped once to report that two of the 26 reads are of entries the reviewed shape does not state; the lead decided M1 to M6 and no shape change. No file under `src` or `.github/workflows` changed, nor `recordings/`, `check.mjs` or `steps.json`.

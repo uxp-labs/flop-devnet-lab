@@ -177,7 +177,7 @@ describe("mcp tools", () => {
     const d = mkdtempSync(join(tmpdir(), "obs-mcp-"));
     made.push(d);
     writeFeeds(d, ctx.snapshot);
-    const pairs: [string, string][] = [["get_status", "status.json"], ["list_escrows", "escrows.json"], ["get_census", "census.json"], ["get_drift", "drift.json"]];
+    const pairs: [string, string][] = [["get_status", "status.json"], ["list_escrows", "escrows.json"], ["get_census", "census.json"], ["get_drift", "drift.json"], ["get_upgrade", "upgrade.json"]];
     for (const [tool, file] of pairs) {
       const t = text(call(tool));
       expect(t).toBe(readFileSync(join(d, file), "utf8"));
