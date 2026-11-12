@@ -15,6 +15,7 @@ import { MAX_CALLS, readRequests } from "../src/requests.js";
 import { decodeEvents } from "../src/scale/events.js";
 import { parseMetadata } from "../src/scale/metadata.js";
 import { RECORDING, recorded } from "./helpers/recorded.js";
+import { requestsListText } from "./helpers/requests-list.js";
 import { type Block, type DerivedCall, type Inputs, LAST, type Mentioned, PLAN, type Read, type Source, deriveCalls, deriveRequestsText, readInputs } from "./helpers/requests-derive.js";
 
 const REPO = new URL("../../", import.meta.url);
@@ -70,6 +71,14 @@ describe("the second request list, recordings/requests.json", () => {
   it("is, byte for byte, the list derived from recordings/requests-inputs.json and the recorded metadata", () => {
     expect(LIST_TEXT).toBe(deriveRequestsText(INPUTS, MD));
     expect(calls).toEqual(DERIVED.map((d) => d.call));
+  });
+
+  it("is what the committed writer writes: scripts/write-requests.mjs writes requestsListText, the same derive function, and nothing of its own", () => {
+    expect(requestsListText()).toBe(LIST_TEXT);
+    const script = repoText("observatory/scripts/write-requests.mjs");
+    expect(script).toContain('const { requestsListText } = await import("../test/helpers/requests-list.ts");');
+    expect(script).toContain("writeFileSync(args[1], requestsListText());");
+    for (const name of ["deriveCalls", "deriveRequestsText", "storageKey", "feedText", "PLAN"]) expect(script, name).not.toContain(name);
   });
 
   it("asks the heads, then for each block of the lead's design its hash by height, its LastRuntimeUpgrade and the reads named, then the runtime and metadata at the last block", () => {

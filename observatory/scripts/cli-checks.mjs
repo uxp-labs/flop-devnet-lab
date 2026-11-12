@@ -234,6 +234,22 @@ const pipe = fifo(join(work, "a-pipe"));
 
 const cases = [
   {
+    name: "the request list writer writes recordings/requests.json byte for byte, and refuses a call without --out",
+    run: () => {
+      const out = join(work, "requests.json");
+      const w = node([join(pkg, "scripts", "write-requests.mjs"), "--out", out]);
+      const bare = node([join(pkg, "scripts", "write-requests.mjs")]);
+      let same = false;
+      try {
+        same = readFileSync(out, "utf8") === readFileSync(join(pkg, "recordings", "requests.json"), "utf8");
+      } catch {
+        same = false;
+      }
+      return { exit: w.status, same, bare: bare.status, stderr: `${w.stderr ?? ""}${bare.stderr ?? ""}`.trim() };
+    },
+    ok: (r) => r.exit === 0 && r.same && r.bare === 2 && r.stderr === "usage: node scripts/write-requests.mjs --out <file>",
+  },
+  {
     name: "census refuses a scenario with an unreadable page file",
     run: () => cli("census", "--fixtures", fx("census-unreadable-page")),
     ok: (r) => r.exit === 2 && /(unreadable|unusable) event page/.test(r.stderr) && /01-unreadable\.json/.test(r.stderr),
