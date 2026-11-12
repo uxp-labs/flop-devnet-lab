@@ -25,7 +25,7 @@ import { REVIEWED, bytesLength, copyBytes, pinShape } from "../src/scale/shape.j
 import { type Plain, plain } from "./helpers/plain.js";
 import { hexBytes, recorded } from "./helpers/recorded.js";
 import { STORAGE_RECORDING, type StorageRead, recordedStorage } from "./helpers/recorded-storage.js";
-import type { Block, Read } from "./helpers/requests-derive.js";
+import type { Block, Read } from "./helpers/requests/list-2.js";
 
 const S = recordedStorage();
 const FIRST = recorded();

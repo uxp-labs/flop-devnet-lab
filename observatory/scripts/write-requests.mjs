@@ -1,11 +1,12 @@
 #!/usr/bin/env node
-// Writes the request list: recordings/requests.json derived from recordings/requests-inputs.json and
-// the first recording's metadata, through the same function the tests hold the committed file to
-// (requestsListText in test/helpers/requests-list.ts). It reads no network and writes one file.
+// Writes the request list: recordings/requests.json, the current list, derived from
+// recordings/requests-inputs.json and the first recording's metadata, through the same function the
+// tests hold the committed file to (requestsListText in test/helpers/requests-list.ts, which names
+// the current list's plan). It reads no network and writes one file.
 //
 //   node scripts/write-requests.mjs --out recordings/requests.json
 //
-// test/storage-requests.test.ts holds the committed file to that function, and scripts/cli-checks.mjs
+// test/upgrade-requests.test.ts holds the committed file to that function, and scripts/cli-checks.mjs
 // runs this script into a temporary folder and compares the bytes.
 import { writeFileSync } from "node:fs";
 import { register } from "node:module";

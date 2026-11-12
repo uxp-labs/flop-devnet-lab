@@ -210,22 +210,56 @@ building and testing decoders against real data. It is evidence, never proof of 
   form (sorted keys, two space indent, a newline at the end), with no other key and no key twice,
   and 1 to 64 calls, each `method`, `params` (a list) and `why` (one plain line). It is reviewed
   like code, and it is the list to be recorded next.
-- The list it holds now is the second: the storage the lab's own two devnet session tests left
-  behind (`research/2026-11-11-session-probe` and `research/2026-11-11-session-escrow`), 56 calls.
-  It asks the finalized head and the genesis hash, then for each of twelve blocks (ten of those
-  tests, and two for one gateway channel to compare with ours) its hash by height,
-  `System.LastRuntimeUpgrade` at the hash the test record gives, and the reads named there:
-  `FlopSessionKeys` `Sessions`, `SessionNonces` and `CircuitBreakers`, `ComputeChannel`
-  `Channels`, and `System.Events` where a call was sent, then the runtime version and the metadata
-  at block 3498313, the last block of the second test. Nothing in it is typed by hand:
-  `test/helpers/requests-derive.ts` derives it from `recordings/requests-inputs.json`, where each
-  account, channel id, height and block hash names the file and field it was taken from, and from
-  the recorded metadata. `test/storage-requests.test.ts` holds the file to that function byte for
-  byte, builds every storage key again with the reference decoder, and holds every input to the
-  test record or the recording it names. `node scripts/write-requests.mjs --out recordings/requests.json`
-  writes the file through that same function, and the check runs it and compares the bytes. A
-  storage value a node does not hold is answered as null, and that is an answer too. Its recording
-  is `fixtures/recording-20261112004113-0b2b505d2d4b703b`, with that list beside it.
+- The list it holds now is the third: FLOP devnet's runtime upgrade from spec 1014014 to spec
+  1014020 (`research/2026-11-12-runtime-upgrade`), the lab's own storage records on both sides of
+  it, and the blocks of the deny list test (`research/2026-11-11-session-deny-list`), 63 calls. Part
+  A asks the finalized head and the genesis hash, then for the four blocks around the upgrade
+  (3528527, the last before it; 3528528, which carries it; 3528529, the first the new runtime
+  executed; 3530299, a later finalized block of the new runtime) each hash by height, the runtime
+  version at each, the metadata at 3528527 and at 3528528, and `System.LastRuntimeUpgrade` and
+  `System.Events` at each. Part B reads our own records at 3528527 and again at 3530299 with the same
+  key: `FlopSessionKeys` `Sessions`, `SessionNonces` and `CircuitBreakers` of owner S with devices
+  D1, D2 and D3, `ComputeChannel` `Channels` of our channel and of the gateway channel, and
+  `SessionNonces` of a pair that never had a session (device D1 as owner, owner S as device). Part C
+  reads, at the blocks of steps 2, 3, 10, 11 and 12 of the deny list test, each hash by height,
+  `System.LastRuntimeUpgrade` and `System.Events`, then the session of D3 at the create and revoke
+  blocks and its nonce and breaker at the step that succeeded. By method: chain_getFinalizedHead 1,
+  chain_getBlockHash 10, state_getRuntimeVersion 4, state_getMetadata 2, state_getStorage 46.
+- Why it reads what it does: a block is in the encoding of the runtime that executed it. That is
+  what `System.LastRuntimeUpgrade` at the block names, and it is the version and metadata read at
+  the block's parent. `state_getRuntimeVersion` and `state_getMetadata` at a block describe the
+  runtime of the next block: at 3528528, which the old runtime executed, they already answer for the
+  new one. So the metadata the new runtime's blocks are decoded with is the one read at 3528528.
+  Every storage key of the list is built from the old runtime's metadata, the only one in a committed
+  file, the keys read at 3530299 too: a null there is not read as absent until the next phase builds
+  the same key again from the recorded new metadata, and the read at 3528527 is its control.
+- Nothing in it is typed by hand: `test/helpers/requests/list-3.ts`, its plan, derives it from
+  `recordings/requests-inputs.json`, where each account, channel id, height and block hash names the
+  file and field it was taken from, and from the recorded metadata. `test/upgrade-requests.test.ts`
+  holds the file to that plan byte for byte, reads its design a second way, builds every storage key
+  again with the reference decoder, holds every input to the record it names, and holds the lab's
+  reads of the upgrade to themselves where that can be done offline (each boundary block the child
+  of the one before, each `LastRuntimeUpgrade` hex the spec it states).
+  `node scripts/write-requests.mjs --out recordings/requests.json` writes the file through that same
+  plan, and the check runs it and compares the bytes. A storage value a node does not hold is
+  answered as null, and that is an answer too.
+- Which list is where: `recordings/requests.json` and `recordings/requests-inputs.json` are the
+  current list. When a list is replaced, its request list and its inputs are already frozen in its
+  recording's fixture folder. Each list has one plan module in `test/helpers/requests/`
+  (`list-2.ts`, `list-3.ts`) over one core (`core.ts`) that knows no list, and
+  `test/helpers/requests-list.ts` names the current one. The first list was not derived (it
+  predates this) and stays as its fixture keeps it.
+- The second list read the storage the lab's two devnet session tests left behind
+  (`research/2026-11-11-session-probe` and `research/2026-11-11-session-escrow`), 56 calls: the
+  finalized head and the genesis hash, then for each of twelve blocks (ten of those tests, and two
+  for one gateway channel to compare with ours) its hash by height, `System.LastRuntimeUpgrade` at
+  the hash the test record gives, and the reads named there: `FlopSessionKeys` `Sessions`,
+  `SessionNonces` and `CircuitBreakers`, `ComputeChannel` `Channels`, and `System.Events` where a
+  call was sent, then the runtime version and the metadata at block 3498313, the last block of the
+  second test. Its recording is `fixtures/recording-20261112004113-0b2b505d2d4b703b`, which keeps
+  that list (`requests.json`) and the inputs it was derived from (`requests-inputs.json`) byte for
+  byte. `test/helpers/requests/list-2.ts` is its plan, and `test/storage-requests.test.ts` holds the
+  frozen list to it byte for byte, with every key built again and every input held to its record.
 - The first list asked the finalized head and the genesis hash, then for each of twelve blocks
   with compute channel events its hash by height, its header, `System.Events` and
   `System.LastRuntimeUpgrade` at its hash, then the runtime version and the metadata at the last.
@@ -234,12 +268,15 @@ building and testing decoders against real data. It is evidence, never proof of 
   recording read that copy.
 - A list that is not in that form, or that holds a method the read only guard refuses, is refused
   before anything is sent: nothing is read from the network, and the run says why.
-- Each call is made once, in order, on one socket, through the same transport and guard as the
-  live run (`src/net-root.ts`, `src/net.ts`), and recorded on a tape by the same code. A call that
+- Each call is made once, in order, one at a time, on one socket, through the same transport and
+  guard as the live run (`src/net-root.ts`, `src/net.ts`), and recorded on a tape by the same code. The next call is
+  asked only once the one before has its answer, which `test/record-run.test.ts` holds with a fake
+  transport that counts the calls in flight: four `state_getMetadata` calls sent at once over one
+  socket failed with a socket error where one at a time answered. A call that
   failed on the way (an RPC error, the 15 s limit, an answer over its limit, a socket that failed)
   is recorded as its error, and the run goes on.
 - Each answer has the 1 MiB limit, but `state_getMetadata`'s, which has 8 MiB (about 964 KB as hex
-  today). The live run states no larger limit, so its limit is unchanged.
+  for spec 1014014 and 974 KB for spec 1014020). The live run states no larger limit, so its limit is unchanged.
 - It writes `tape.jsonl`, `run.json` (start, end, the revision if given, the endpoint, the sha256 of
   the request list as read, how many calls were asked, answered and failed, how it ended) and
   `SHA256SUMS` into a new folder, prints one notice line with the counts and the byte length and
@@ -458,8 +495,8 @@ The two interfaces other teams import are in [../interfaces](../interfaces).
 | `src/sums.ts` | the one form of `SHA256SUMS`, and the check of a folder against it, for the runs that write it and the readers that check it |
 | `src/run-command.ts` | what the live run and the recorder share: exit codes, flags, `SHA256SUMS` over the folder, how the command ends |
 | `src/requests.ts`, `recordings/requests.json` | the request list's form, and the list to be recorded next |
-| `recordings/requests-inputs.json`, `test/helpers/requests-derive.ts` | the inputs of the list, each with the file and field it comes from, and the function that derives the list from them and the recorded metadata |
-| `scripts/write-requests.mjs`, `scripts/ts-resolve.mjs`, `test/helpers/requests-list.ts` | the writer of `recordings/requests.json` (`--out <file>`), through the same derive function the tests use, run under Node's own type stripping with a hook that resolves a relative .js import from a .ts module to the .ts file |
+| `recordings/requests-inputs.json`, `test/helpers/requests/` | the inputs of the current list, each with the file and field it comes from; the core that turns a plan into calls (`core.ts`), and one plan module per list (`list-2.ts`, `list-3.ts`) |
+| `scripts/write-requests.mjs`, `scripts/ts-resolve.mjs`, `test/helpers/requests-list.ts` | the writer of `recordings/requests.json` (`--out <file>`), through the current list's plan, the same the tests use, run under Node's own type stripping with a hook that resolves a relative .js import from a .ts module to the .ts file |
 | `src/record-run.ts`, `src/record-bin.ts` | one record run and its files, and the command |
 | `src/recording.ts` | the reader contract for a recording |
 | `src/scale/`, `src/hash/` | the decoder, pure: reader, hashes, metadata, decode by type, storage keys, events, the shape pin and the one entry point for a block's events ([Decoder](#decoder)) |
@@ -470,7 +507,7 @@ The two interfaces other teams import are in [../interfaces](../interfaces).
 | `src/own.ts` | the one way src reads a data record by a key only known at run time |
 | `src/files.ts` | the one way src reads a file it is handed: a regular file only, opened without waiting, so a named pipe is refused instead of blocking |
 | `tools/recount.py` | independent census recount, written from RULES.md alone |
-| `fixtures/` | saved scenarios; `meta.json` says which values are real and which are made up; `live-*` and `memory-*` are synthetic tapes; `published-*` are real readings from the data branch, with their provenance; `recording-*` are real recordings, byte for byte, each with the request list it was made from: the first of compute channel events, the second of the storage the lab's two devnet session tests left behind |
+| `fixtures/` | saved scenarios; `meta.json` says which values are real and which are made up; `live-*` and `memory-*` are synthetic tapes; `published-*` are real readings from the data branch, with their provenance; `recording-*` are real recordings, byte for byte, each with the request list it was made from (and, from the second on, its inputs): the first of compute channel events, the second of the storage the lab's two devnet session tests left behind |
 | `mutants/` | the injected bugs and the tests that must catch them |
 | `REVIEW-LOG.md` | what each outside review and independent rerun found, and the fix and proof for each, newest first |
 | `test/setup.ts` | the runtime block on every network and process path, its one exemption (`runShell`, for `test/publish-shell.test.ts` only, which runs both publish jobs' shells), the leftover attempt check, and the attempts journal |

@@ -382,5 +382,53 @@
     "replace": "            rm -rf latest recordings\n            git rm -rq --cached --ignore-unmatch -- recordings\n",
     "test": "test/publish-shell.test.ts",
     "why": "the live publish job leaves recordings/ alone"
+  },
+  {
+    "id": "record-calls-sent-at-once",
+    "file": "src/record-run.ts",
+    "find": "      if (guarded) {\n        for (const [seq, c] of list.calls.entries()) {\n          try {\n            const result = await recorder.rpc(c.method, c.params);",
+    "replace": "      if (guarded) {\n        const sent = list.calls.map((c) => recorder.rpc(c.method, c.params));\n        for (const p of sent) p.catch(() => undefined);\n        for (const [seq, c] of list.calls.entries()) {\n          try {\n            const result = await sent[seq];",
+    "test": "test/record-run.test.ts",
+    "why": "the recorder sends one call at a time, the next only once the one before has its answer: four metadata calls sent at once over one socket failed (review round 21)"
+  },
+  {
+    "id": "list3-control-at-upgrade-block",
+    "file": "test/helpers/requests/list-3.ts",
+    "find": "export const ACROSS: [UpgradeBlock, UpgradeBlock] = [\"runtime-upgrade/last-of-old-runtime\", \"runtime-upgrade/later-of-new-runtime\"];",
+    "replace": "export const ACROSS: [UpgradeBlock, UpgradeBlock] = [\"runtime-upgrade/carries-upgrade\", \"runtime-upgrade/later-of-new-runtime\"];",
+    "test": "test/upgrade-requests.test.ts",
+    "why": "part B's control is read at the last block before the upgrade, not at the block that carries it (review round 21)"
+  },
+  {
+    "id": "list3-never-a-session-is-ours",
+    "file": "test/helpers/requests/list-3.ts",
+    "find": "keys: [{ account: \"device_1\" }, { account: \"owner\" }] };",
+    "replace": "keys: [{ account: \"owner\" }, { account: \"device_1\" }] };",
+    "test": "test/upgrade-requests.test.ts",
+    "why": "the pair that never had a session is device D1 as owner and owner S as device, not a pair of ours read twice (review round 21)"
+  },
+  {
+    "id": "list3-new-metadata-at-first-block",
+    "file": "test/helpers/requests/list-3.ts",
+    "find": "      kind: \"metadata\",\n      block: carries,",
+    "replace": "      kind: \"metadata\",\n      block: first,",
+    "test": "test/upgrade-requests.test.ts",
+    "why": "the new metadata is read at the block that carries the upgrade, where the node already answers for the next block (review round 21)"
+  },
+  {
+    "id": "list3-deny-refusal-read-as-success",
+    "file": "test/helpers/requests/list-3.ts",
+    "find": "the first call refused with PalletNotAllowed though the allow list names Utility\", error: \"PalletNotAllowed\" },",
+    "replace": "the first call refused with PalletNotAllowed though the allow list names Utility\", error: null },",
+    "test": "test/upgrade-requests.test.ts",
+    "why": "each deny list step's outcome is the one its record gives (review round 21)"
+  },
+  {
+    "id": "core-genesis-at-block-1",
+    "file": "test/helpers/requests/core.ts",
+    "find": "return { call: { method: \"chain_getBlockHash\", params: [0], why: s.why }, block: null, read: null };",
+    "replace": "return { call: { method: \"chain_getBlockHash\", params: [1], why: s.why }, block: null, read: null };",
+    "test": "test/storage-requests.test.ts",
+    "why": "the core is held by list 2's frozen list too: the genesis is the hash at height 0 (review round 21)"
   }
 ]

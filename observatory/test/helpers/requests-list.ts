@@ -1,11 +1,12 @@
-// The request list as recordings/requests.json must hold it: the derived list
-// (test/helpers/requests-derive.ts) over the committed inputs and the first recording's metadata.
-// The one place both the tests and the writer (scripts/write-requests.mjs) get it from, so there is
-// no second copy of the derive logic.
+// The request list as recordings/requests.json must hold it: the current list, the third
+// (test/helpers/requests/list-3.ts), derived over recordings/requests-inputs.json and the first
+// recording's metadata. The one place both the tests and the writer (scripts/write-requests.mjs) get
+// it from, so there is no second copy of the derive logic. When a list is replaced, its list and its
+// inputs are already frozen in its recording's fixture folder, and this points at the next plan.
 import { readFileSync } from "node:fs";
 import { parseMetadata } from "../../src/scale/metadata.js";
 import { recorded } from "./recorded.js";
-import { deriveRequestsText, readInputs } from "./requests-derive.js";
+import { deriveRequestsText, readInputs } from "./requests/list-3.js";
 
 /** The text of recordings/requests.json, derived again from recordings/requests-inputs.json. */
 export function requestsListText(): string {

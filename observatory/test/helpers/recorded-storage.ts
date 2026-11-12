@@ -1,21 +1,23 @@
 // The second real recording (fixtures/recording-20261112004113-0b2b505d2d4b703b): the storage the
 // lab's two devnet session tests left behind, read through judgeRecording with the request list it
-// was made from (the fixture's own copy), and laid out by read with the derived list
-// (test/helpers/requests-derive.ts), which says for each call the block and the storage it reads.
+// was made from (the fixture's own copy), and laid out by read with the list derived again from
+// the inputs it was made from (also the fixture's own copy)
+// (test/helpers/requests/list-2.ts), which says for each call the block and the storage it reads.
 // Real data from one RPC endpoint: evidence for building the decoder, never proof of chain state
 // (RULES.md section 8).
 import { readFileSync } from "node:fs";
 import { type RecordedCall, judgeRecording } from "../../src/recording.js";
 import { parseMetadata } from "../../src/scale/metadata.js";
 import { hexBytes } from "./recorded.js";
-import { type Block, type DerivedCall, type Inputs, type Read, deriveCalls, readInputs } from "./requests-derive.js";
+import { type Block, type DerivedCall, type Inputs, type Read, deriveCalls, readInputs } from "./requests/list-2.js";
 
 export const STORAGE_RECORDING = "recording-20261112004113-0b2b505d2d4b703b";
 const FIXTURE = new URL(`../../fixtures/${STORAGE_RECORDING}/`, import.meta.url);
 export const storageFixtureText = (name: string) => readFileSync(new URL(name, FIXTURE), "utf8");
 /** The request list the recording was made from: the fixture's own copy. */
 export const STORAGE_REQUESTS_TEXT = storageFixtureText("requests.json");
-export const INPUTS_TEXT = readFileSync(new URL("../../recordings/requests-inputs.json", import.meta.url), "utf8");
+/** The inputs that list was derived from: the fixture's own copy, frozen with it. */
+export const INPUTS_TEXT = storageFixtureText("requests-inputs.json");
 
 /** The three files of the recording as published, by name. */
 export const storageRecordingFiles = (): Record<string, string> => ({

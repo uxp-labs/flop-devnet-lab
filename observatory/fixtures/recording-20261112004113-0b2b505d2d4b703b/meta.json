@@ -1,11 +1,14 @@
 {
-  "description": "Real data, nothing made up: the second recording the record workflow published, recordings/20261112004113-0b2b505d2d4b703b/ on observatory-data at commit a94073b. tape.jsonl, run.json and SHA256SUMS are those three files, byte for byte. It holds what one RPC endpoint answered to the 56 calls of the second request list, the storage the lab's two devnet session tests left behind: evidence for building the storage decoder, never proof of chain state (RULES.md section 8). requests.json in this folder is that list, byte for byte as recordings/requests.json held it when it was recorded; its sha256 is the one run.json names.",
+  "description": "Real data, nothing made up: the second recording the record workflow published, recordings/20261112004113-0b2b505d2d4b703b/ on observatory-data at commit a94073b. tape.jsonl, run.json and SHA256SUMS are those three files, byte for byte. It holds what one RPC endpoint answered to the 56 calls of the second request list, the storage the lab's two devnet session tests left behind: evidence for building the storage decoder, never proof of chain state (RULES.md section 8). requests.json in this folder is that list, byte for byte as recordings/requests.json held it when it was recorded; its sha256 is the one run.json names. requests-inputs.json in this folder is the inputs that list was derived from, byte for byte as recordings/requests-inputs.json held them then, so the list's tests keep reading them after the next list replaces both.",
   "provenance": {
     "data_branch": "observatory-data",
     "data_branch_commit": "a94073b6cf36e45b15fed216fd64f4bf60cf7cb0",
     "ended_at": "2026-11-12T00:41:51.697Z",
     "metadata_sha256": "f4fd2addba7fff1129483d0e66b8e6bc69141292f56443e201d3f073aab03444",
     "recording_id": "20261112004113-0b2b505d2d4b703b",
+    "request_inputs": "recordings/requests-inputs.json",
+    "request_inputs_copy": "requests-inputs.json",
+    "request_inputs_sha256": "d239542a4f9fab5f6645a01f3f5851b50a177471d2a7999e7bbafc1dad211042",
     "request_list": "recordings/requests.json",
     "request_list_copy": "requests.json",
     "request_list_sha256": "0b2b505d2d4b703b84d017f670e2c3bd10938af75ee3373dfae5fea23d6a1f58",

@@ -1,9 +1,11 @@
-// The second request list, recordings/requests.json: the storage the lab's own two devnet tests
-// left behind, read block by block. It is derived (test/helpers/requests-derive.ts) from
-// recordings/requests-inputs.json and the recorded metadata, and nothing in it is typed by hand.
-// These tests hold the list to that function byte for byte, derive every storage key a second way
-// with the reference decoder, and hold every input to the record it names: research/*/results.json
-// for the two tests, and the first recording for the gateway channel.
+// The second request list: the storage the lab's own two devnet tests left behind, read block by
+// block. It was recordings/requests.json until the third list replaced it, and its recording's
+// fixture (fixtures/recording-20261112004113-0b2b505d2d4b703b) keeps it and its inputs, frozen. It
+// is derived (test/helpers/requests/list-2.ts) from those inputs and the recorded metadata, and
+// nothing in it is typed by hand. These tests hold the frozen list to that function byte for byte,
+// derive every storage key a second way with the reference decoder, and hold every input to the
+// record it names: research/*/results.json for the two tests, and the first recording for the
+// gateway channel.
 import { getDynamicBuilder, getLookupFn } from "@polkadot-api/metadata-builders";
 import { decAnyMetadata, unifyMetadata } from "@polkadot-api/substrate-bindings";
 import { createHash } from "node:crypto";
@@ -15,13 +17,12 @@ import { MAX_CALLS, readRequests } from "../src/requests.js";
 import { decodeEvents } from "../src/scale/events.js";
 import { parseMetadata } from "../src/scale/metadata.js";
 import { RECORDING, recorded } from "./helpers/recorded.js";
-import { requestsListText } from "./helpers/requests-list.js";
-import { type Block, type DerivedCall, type Inputs, LAST, type Mentioned, PLAN, type Read, type Source, deriveCalls, deriveRequestsText, readInputs } from "./helpers/requests-derive.js";
+import { INPUTS_TEXT, STORAGE_REQUESTS_TEXT } from "./helpers/recorded-storage.js";
+import { type Block, type DerivedCall, type Inputs, LAST, type Mentioned, PLAN, type Read, type Source, deriveCalls, deriveRequestsText, readInputs } from "./helpers/requests/list-2.js";
 
 const REPO = new URL("../../", import.meta.url);
 const repoText = (path: string) => readFileSync(new URL(path, REPO), "utf8");
-const LIST_TEXT = repoText("observatory/recordings/requests.json");
-const INPUTS_TEXT = repoText("observatory/recordings/requests-inputs.json");
+const LIST_TEXT = STORAGE_REQUESTS_TEXT;
 const INPUTS = readInputs(INPUTS_TEXT);
 const R = recorded();
 const MD = parseMetadata(R.metadata);
@@ -57,7 +58,7 @@ function sources(inputs: Inputs): [string, Source<unknown>][] {
 
 const label = (r: Read) => `${r.entry}(${r.keys.map((k) => ("account" in k ? k.account : k.channel)).join(",")})`;
 
-describe("the second request list, recordings/requests.json", () => {
+describe("the second request list, as its recording's fixture keeps it", () => {
   const read = readRequests(new TextEncoder().encode(LIST_TEXT));
   const calls = typeof read === "string" ? [] : read.calls;
 
@@ -68,17 +69,9 @@ describe("the second request list, recordings/requests.json", () => {
     for (const c of calls) expect(READ_ONLY_RPC_METHODS.has(c.method), c.method).toBe(true);
   });
 
-  it("is, byte for byte, the list derived from recordings/requests-inputs.json and the recorded metadata", () => {
+  it("is, byte for byte, the list derived from its inputs and the recorded metadata", () => {
     expect(LIST_TEXT).toBe(deriveRequestsText(INPUTS, MD));
     expect(calls).toEqual(DERIVED.map((d) => d.call));
-  });
-
-  it("is what the committed writer writes: scripts/write-requests.mjs writes requestsListText, the same derive function, and nothing of its own", () => {
-    expect(requestsListText()).toBe(LIST_TEXT);
-    const script = repoText("observatory/scripts/write-requests.mjs");
-    expect(script).toContain('const { requestsListText } = await import("../test/helpers/requests-list.ts");');
-    expect(script).toContain("writeFileSync(args[1], requestsListText());");
-    for (const name of ["deriveCalls", "deriveRequestsText", "storageKey", "feedText", "PLAN"]) expect(script, name).not.toContain(name);
   });
 
   it("asks the heads, then for each block of the lead's design its hash by height, its LastRuntimeUpgrade and the reads named, then the runtime and metadata at the last block", () => {
@@ -169,7 +162,7 @@ describe("the second request list, recordings/requests.json", () => {
   });
 });
 
-describe("the inputs, recordings/requests-inputs.json", () => {
+describe("the inputs of the second list, as its recording's fixture keeps them", () => {
   it("is in the written form, and refuses a file that is not or that lacks a name the plan uses", () => {
     expect(() => readInputs(INPUTS_TEXT)).not.toThrow();
     expect(() => readInputs(JSON.stringify(JSON.parse(INPUTS_TEXT)))).toThrow("the inputs file is not in the written form");

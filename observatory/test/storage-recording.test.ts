@@ -1,21 +1,21 @@
 // The second real recording as a fixture (fixtures/recording-20261112004113-0b2b505d2d4b703b): the
-// three files as the record workflow published them, the request list it was made from, and its
-// meta.json held to what run.json and the files say.
+// three files as the record workflow published them, the request list it was made from, the
+// inputs that list was derived from, and its meta.json held to what run.json and the files say.
 import { createHash } from "node:crypto";
 import { readdirSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { writtenValue } from "../src/feed.js";
 import { judgeRecording } from "../src/recording.js";
 import { toHex } from "../src/scale/reader.js";
-import { STORAGE_RECORDING, STORAGE_REQUESTS_TEXT, recordedStorage, storageFixtureText, storageRecordingFiles } from "./helpers/recorded-storage.js";
-import { deriveRequestsText } from "./helpers/requests-derive.js";
+import { INPUTS_TEXT, STORAGE_RECORDING, STORAGE_REQUESTS_TEXT, recordedStorage, storageFixtureText, storageRecordingFiles } from "./helpers/recorded-storage.js";
+import { deriveRequestsText } from "./helpers/requests/list-2.js";
 
 const sha256 = (text: string | Uint8Array) => createHash("sha256").update(text).digest("hex");
 const R = recordedStorage();
 
 describe("the second real recording, as a fixture", () => {
-  it("holds exactly the published files, the request list and a meta.json, and each published file matches SHA256SUMS", () => {
-    expect(readdirSync(new URL(`../fixtures/${STORAGE_RECORDING}/`, import.meta.url)).sort()).toEqual(["SHA256SUMS", "meta.json", "requests.json", "run.json", "tape.jsonl"]);
+  it("holds exactly the published files, the request list, its inputs and a meta.json, and each published file matches SHA256SUMS", () => {
+    expect(readdirSync(new URL(`../fixtures/${STORAGE_RECORDING}/`, import.meta.url)).sort()).toEqual(["SHA256SUMS", "meta.json", "requests-inputs.json", "requests.json", "run.json", "tape.jsonl"]);
     const sums = storageFixtureText("SHA256SUMS");
     expect(sums).toBe(`${sha256(storageFixtureText("run.json"))}  run.json\n${sha256(storageFixtureText("tape.jsonl"))}  tape.jsonl\n`);
   });
@@ -32,6 +32,13 @@ describe("the second real recording, as a fixture", () => {
 
   it("was made from the list derived from the inputs and the first recording's metadata, byte for byte", () => {
     expect(STORAGE_REQUESTS_TEXT).toBe(deriveRequestsText(R.inputs, R.md));
+  });
+
+  it("keeps the inputs that list was derived from, frozen beside it, by the sha256 meta.json names", () => {
+    const meta = JSON.parse(storageFixtureText("meta.json")) as { provenance: Record<string, unknown> };
+    expect(sha256(INPUTS_TEXT)).toBe("d239542a4f9fab5f6645a01f3f5851b50a177471d2a7999e7bbafc1dad211042");
+    expect(meta.provenance).toMatchObject({ request_inputs: "recordings/requests-inputs.json", request_inputs_copy: "requests-inputs.json", request_inputs_sha256: sha256(INPUTS_TEXT) });
+    expect(INPUTS_TEXT).toBe(storageFixtureText("requests-inputs.json"));
   });
 
   it("has a meta.json in the written form that says where the files came from", () => {
