@@ -63,6 +63,10 @@ lead's own read and rerun, the GitHub checks, merge. The definitions are in `.cl
 - Do not change a file under `.github/workflows` unless the brief says so.
 - After your last push, read the GitHub checks of your last commit and report them.
 - Use `gh api` REST calls for GitHub.
+- Stop only processes you started, by their process id. Never stop a process by name (pkill,
+  killall): another agent's check may run on the same machine.
+- A check run is a pass only when its report.txt says finished: yes. Quote its number of steps and
+  its outputs digest in your report.
 
 ## Writing
 

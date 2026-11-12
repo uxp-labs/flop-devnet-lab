@@ -20,6 +20,10 @@ These rules are the spec. Code and tests follow them, and the independent recoun
 - In M0 the pinned genesis is the devnet genesis in `src/status.ts`, unless a scenario's
   `meta.json` names another (the census and escrow fixtures that test other chains do); the
   snapshot command takes it from the status scenario. M1 takes it from the code alone.
+- The check (`npm run check`) is a pass only when its `report.txt` says `finished: yes`. A run cut
+  by a signal or ended before its last step says `finished: no (...)`, has an `overall_exit` that is
+  never 0 and has no outputs digest (`none (the run did not finish)`); an outputs folder with no
+  file has the digest `none`. A run that did not finish is unknown, never a pass.
 
 ### 1.1 Health
 
