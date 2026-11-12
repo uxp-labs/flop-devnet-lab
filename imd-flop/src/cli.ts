@@ -10,7 +10,9 @@ import { buildLink, verifyLink, type LinkFile } from "./link.js";
 import { readJson, writeJsonSafe, writeSecretFile } from "./store.js";
 import { network, SEAT_COLLECTION } from "./networks.js";
 import { checkGenesis, readVerifiedSeatOwner, enrollChallengeUrl, getEnrollChallenge, postEnroll, type Fetch } from "./gateway.js";
-import { FlopProvider, MOCK_SCENARIOS, MockProvider, type MockScenario, type Provider } from "./providers.js";
+import type { Provider } from "./providers/interface.js";
+import { DEFAULT_PROVIDER, kindOf, PROVIDER_NAMES, PROVIDER_NAMES_PAID_FIRST, type ProviderName } from "./providers/kinds.js";
+import { makeProvider } from "./providers/make.js";
 import { checkLinkForRun, runJob } from "./run.js";
 import { overDailyCap, padQuote, parseAmount } from "./policy.js";
 import { appendLedger, latestAttempts, latestLineOf, LedgerLockError, reportedSpendToday, spentToday, UnusableLedgerRow, type LedgerEntry } from "./ledger.js";
@@ -92,18 +94,14 @@ function activeSeat(h: string, explicit?: string): string {
   return validateSeat(s, explicit === undefined ? "config.json" : "the command line");
 }
 
-function makeProvider(io: IO, name: string, h: string, seat: string, opts: { live?: boolean; scenario?: string }): Provider {
-  if (io.provider) return io.provider;
-  if (name === "mock") {
-    const sc = (opts.scenario ?? "ok") as MockScenario;
-    if (!MOCK_SCENARIOS.includes(sc)) throw new CliError(`--mock-scenario must be one of ${MOCK_SCENARIOS.join(", ")}`, EXIT.USAGE);
-    return new MockProvider(sc);
-  }
-  if (name === "flop") {
-    if (!opts.live) throw new CliError("--provider flop spends real devnet FLOP: it needs --live, a cap, a fully signed link and an enrolled gateway key", EXIT.REFUSED_RULE);
-    return new FlopProvider(network(loadConfig(h).network), gatewayKeyFile(h, seat), io.fetch, io.env.ETH_RPC_URL);
-  }
-  throw new CliError("--provider must be mock or flop", EXIT.USAGE);
+/** The provider a run or a refresh uses: the caller's own (a test hook), else the one maker's (providers/make.ts). */
+function runProvider(io: IO, name: string, h: string, seat: string, opts: { live?: boolean; scenario?: string }): Provider {
+  return io.provider ?? makeProvider(name, { home: h, fetch: io.fetch, env: io.env }, { for: "run", seat, ...opts });
+}
+
+/** One amount per provider name, in the order of the names given, as an object keyed by name. */
+function perProvider<T>(names: readonly ProviderName[], value: (p: ProviderName) => T): Record<ProviderName, T> {
+  return Object.fromEntries(names.map((p) => [p, value(p)])) as Record<ProviderName, T>;
 }
 
 export async function main(argv: string[], io: IO): Promise<number> {
@@ -274,9 +272,10 @@ export async function main(argv: string[], io: IO): Promise<number> {
           saveConfig(h, cfg);
         } else if (sub !== "show") throw new CliError("usage: cap set <FLOP/day> | cap show", EXIT.USAGE);
         const c = cfg.caps[seat];
-        const o = { seat, cap: c ?? null, spent_today_mock: spentToday(h, seat, "mock"), spent_today_flop: spentToday(h, seat, "flop"), day_utc: new Date().toISOString().slice(0, 10) };
+        const spent = perProvider(PROVIDER_NAMES, (p) => spentToday(h, seat, p));
+        const o = { seat, cap: c ?? null, ...Object.fromEntries(PROVIDER_NAMES.map((p) => [`spent_today_${p}`, spent[p]])), day_utc: new Date().toISOString().slice(0, 10) };
         if (values.json) print(o);
-        else io.out(c ? `seat ${seat}: cap ${c.daily} FLOP/day (UTC), ${c.perCall} per call. Today: flop ${o.spent_today_flop}, mock ${o.spent_today_mock}` : `seat ${seat}: no cap. FLOP is off until \`cap set\`.`);
+        else io.out(c ? `seat ${seat}: cap ${c.daily} FLOP/day (UTC), ${c.perCall} per call. Today: ${PROVIDER_NAMES_PAID_FIRST.map((p) => `${p} ${spent[p]}`).join(", ")}` : `seat ${seat}: no cap. FLOP is off until \`cap set\`.`);
         return EXIT.OK;
       }
 
@@ -301,9 +300,9 @@ export async function main(argv: string[], io: IO): Promise<number> {
         const { values } = parse(rest, { prompt: { type: "string" }, "max-tokens": { type: "string" }, provider: { type: "string" }, live: { type: "boolean" } });
         if (!values.prompt) throw new CliError("usage: quote --prompt <text>", EXIT.USAGE);
         const max = Number(values["max-tokens"] ?? 16);
-        const pname = values.provider ?? "mock";
+        const pname = values.provider ?? DEFAULT_PROVIDER;
         // The estimate is free, so `quote --provider flop` needs no key and no --live.
-        const p: Provider = pname === "flop" ? { name: "flop", calls: 0, estimate: (b) => import("./gateway.js").then((g) => g.postEstimate(network(loadConfig(h).network), b, io.fetch ?? globalThis.fetch)), complete: () => Promise.reject(new Error("quote only")), readReceipt: () => Promise.reject(new Error("quote only")) } : new MockProvider();
+        const p = makeProvider(pname, { home: h, fetch: io.fetch, env: io.env }, { for: "quote" });
         const est = await p.estimate({ model: "qwen/qwen2.5-0.5b-instruct", prompt: values.prompt, max_tokens: max });
         print({ provider: pname, estimate: est, padded: padQuote(est), note: "padded = raw + 20 tokens for the Qwen chat template" });
         return EXIT.OK;
@@ -327,8 +326,8 @@ export async function main(argv: string[], io: IO): Promise<number> {
         });
         if (values.cap !== undefined) throw new CliError("set the cap with `imd-flop cap set <FLOP/day>`; run reads it from config", EXIT.USAGE);
         const seat = activeSeat(h, values.seat);
-        const pname = values.provider ?? "mock";
-        const provider = makeProvider(io, pname, h, seat, { live: values.live, scenario: values["mock-scenario"] });
+        const pname = values.provider ?? DEFAULT_PROVIDER;
+        const provider = runProvider(io, pname, h, seat, { live: values.live, scenario: values["mock-scenario"] });
         if (values["no-link"]) io.err("WARNING: --no-link: link check bypassed (mock demo only). This run is not a valid FLOP route.");
         const r = await runJob(
           h,
@@ -349,7 +348,7 @@ export async function main(argv: string[], io: IO): Promise<number> {
         );
         if (values.json) print(r);
         else {
-          io.out(`${r.provider === "mock" ? "[MOCK] " : ""}job ${r.job}  request_id ${r.request_id}  payer ${r.payer}${r.link_bypassed ? "  LINK BYPASSED (--no-link)" : ""}`);
+          io.out(`${kindOf(r.provider).mock ? "[MOCK] " : ""}job ${r.job}  request_id ${r.request_id}  payer ${r.payer}${r.link_bypassed ? "  LINK BYPASSED (--no-link)" : ""}`);
           io.out(`  quote (padded) ${r.quote_padded} FLOP, charged to cap ${r.cap_charge}`);
           io.out(`  receipt: ${receiptLine(r.receipt)}`);
           io.out(`  response saved: ${r.response_file} (not submitted to IMD)`);
@@ -380,9 +379,9 @@ export async function main(argv: string[], io: IO): Promise<number> {
         const cap = cfg.caps[seat] ?? null;
         // today_utc counts against the cap: what each call was allowed to spend (the hold floor). Beside it,
         // what the gateway reported as spent, and whether the day is above its cap.
-        const today = { flop: spentToday(h, seat, "flop"), mock: spentToday(h, seat, "mock") };
+        const today = perProvider(PROVIDER_NAMES_PAID_FIRST, (p) => spentToday(h, seat, p));
         // What the gateway reported, and how many sent calls it reported no amount for (never shown as 0).
-        const reported = { flop: reportedSpendToday(h, seat, "flop"), mock: reportedSpendToday(h, seat, "mock") };
+        const reported = perProvider(PROVIDER_NAMES_PAID_FIRST, (p) => reportedSpendToday(h, seat, p));
         const o = {
           network: cfg.network,
           seat,
@@ -394,9 +393,9 @@ export async function main(argv: string[], io: IO): Promise<number> {
           payer: cfg.payer,
           cap,
           today_utc: today,
-          gateway_spent_today_utc: { flop: reported.flop.spent, mock: reported.mock.spent },
-          gateway_spend_unknown_rows: { flop: reported.flop.unknownRows, mock: reported.mock.unknownRows },
-          over_cap_today_utc: { flop: overDailyCap(today.flop, cap), mock: overDailyCap(today.mock, cap) },
+          gateway_spent_today_utc: perProvider(PROVIDER_NAMES_PAID_FIRST, (p) => reported[p].spent),
+          gateway_spend_unknown_rows: perProvider(PROVIDER_NAMES_PAID_FIRST, (p) => reported[p].unknownRows),
+          over_cap_today_utc: perProvider(PROVIDER_NAMES_PAID_FIRST, (p) => overDailyCap(today[p], cap)),
           attempts: latestAttempts(h).filter((e) => e.seat === seat).length,
           recent_receipts: recent,
           pending_receipts: pending,
@@ -410,13 +409,13 @@ export async function main(argv: string[], io: IO): Promise<number> {
           io.out(`  ss58  ${o.ss58 ?? ""}`);
           io.out(`  link  ${lc.ok ? "verifies" : "BROKEN: " + lc.why.join("; ")}${lfw ? " (wallet-signed)" : " (wallet signature pending)"}`);
           io.out(`  cap   ${cap ? `${cap.daily} FLOP/day, ${cap.perCall}/call` : "none (FLOP off)"}`);
-          const charged = (p: "flop" | "mock") => `${p} ${o.today_utc[p]}${cap ? ` / ${cap.daily}` : ""}${o.over_cap_today_utc[p] ? " OVER CAP" : ""}`;
-          io.out(`  today, charged to the cap      ${charged("flop")}   ${charged("mock")}`);
-          const reportedText = (p: "flop" | "mock") => {
+          const charged = (p: ProviderName) => `${p} ${o.today_utc[p]}${cap ? ` / ${cap.daily}` : ""}${o.over_cap_today_utc[p] ? " OVER CAP" : ""}`;
+          io.out(`  today, charged to the cap      ${PROVIDER_NAMES_PAID_FIRST.map(charged).join("   ")}`);
+          const reportedText = (p: ProviderName) => {
             const n = o.gateway_spend_unknown_rows[p];
             return `${p} ${blank(o.gateway_spent_today_utc[p])}${n > 0 ? ` (${n} ${n === 1 ? "call" : "calls"} with no reported spend)` : ""}`;
           };
-          io.out(`  today, gateway reported spent  ${reportedText("flop")}   ${reportedText("mock")}`);
+          io.out(`  today, gateway reported spent  ${PROVIDER_NAMES_PAID_FIRST.map(reportedText).join("   ")}`);
           io.out(`  recent receipts:`);
           for (const r of recent) io.out(`    ${receiptLine(r)}`);
           if (recent.length === 0) io.out(`    (none)`);
@@ -443,7 +442,7 @@ export async function main(argv: string[], io: IO): Promise<number> {
         }
         if (!saved && !ledgerRow) throw new CliError(`no receipt or ledger entry for ${rid}`, EXIT.USAGE);
         if (values.refresh) {
-          const p = makeProvider(io, saved?.provider ?? ledgerRow!.provider, h, refreshSeat(h, rid, saved, ledgerRow), { live: values.live, scenario: saved?.mock_scenario });
+          const p = runProvider(io, saved?.provider ?? ledgerRow!.provider, h, refreshSeat(h, rid, saved, ledgerRow), { live: values.live, scenario: saved?.mock_scenario });
           ({ saved, ledgerRow } = await refreshReceipt(h, rid, p, { saved, ledgerRow }, io.err));
         }
         const verdicts = await receiptVerdicts(h, saved ?? null, ledgerRow ?? null);
