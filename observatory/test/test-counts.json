@@ -80,8 +80,8 @@
     "names": "fbb55db87c6aa5772251733c776a9ab07d30c43e3fb49956c14772490373a33c"
   },
   "record-run.test.ts": {
-    "tests": 22,
-    "names": "cff429df7715470029ca532f56d1411e057beec2f7b90e731217031ef9909c0b"
+    "tests": 23,
+    "names": "d7836ff0249d8ed3b82f084684a6afef8827fff52e5dfdcb471866de5a1d72fc"
   },
   "record-workflow.test.ts": {
     "tests": 19,
@@ -168,8 +168,8 @@
     "names": "8a644735be078f8b2afe9caf9b9125e6ab7ed37d051b2a0dbc7d6c0f11f6f70c"
   },
   "storage-requests.test.ts": {
-    "tests": 13,
-    "names": "e2e3afc5e6e637192046cabccf8e12af4ce4c072bd85909f277bfac2ce8ca716"
+    "tests": 12,
+    "names": "83473ca94a3be7ed71abb4d07c2c183a3447f27264389e8fe86753e971c5beec"
   },
   "storage-values.test.ts": {
     "tests": 39,
@@ -186,5 +186,9 @@
   "tape.test.ts": {
     "tests": 26,
     "names": "8930de395c29d17c77813be51e2c5ec36cd04b7d46a1e906592736ab8ac5da72"
+  },
+  "upgrade-requests.test.ts": {
+    "tests": 25,
+    "names": "4d202cc7802b0f534823065fde04a88599f6370c65b1886936c7fa708d131aed"
   }
 }

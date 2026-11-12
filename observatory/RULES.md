@@ -887,11 +887,29 @@ for everything it reads.
   strict UTF-8, no key twice, nested at most 64 levels, exactly `calls` and `schema`, 1 to 64
   calls, each exactly `method` (an RPC method name), `params` (a list) and `why` (one plain line).
   Its sha256 is taken of its bytes as read.
+- Which list is where: `recordings/requests.json` and `recordings/requests-inputs.json` are the
+  current list. When a list is replaced, its request list and its inputs are already frozen in its
+  recording's fixture folder, byte for byte, and the tests of that recording read those copies.
+  Each list has one plan module (`test/helpers/requests/list-<n>.ts`) over one core that knows no
+  list; nothing in a list is typed by hand. The first list was not derived (it predates this) and
+  stays as its fixture keeps it.
+- A block is in the encoding of the runtime that executed it. That is what
+  `System.LastRuntimeUpgrade` at the block names, and it is the version and metadata read at the
+  block's parent. `state_getRuntimeVersion` and `state_getMetadata` at a block describe the runtime
+  of the next block, so at a block that carries a runtime upgrade they already answer for the new
+  runtime. The third list reads the upgrade from spec 1014014 to spec 1014020 by this rule: the
+  version, `LastRuntimeUpgrade` and events at the four blocks around it, the metadata at the last
+  block before it (the old runtime's) and at the block that carries it (the new runtime's, the one
+  every later block is decoded with), our own storage records before and after it with the same
+  key, and the deny list test's blocks. A storage key read at a block of the new runtime is built
+  from the old runtime's metadata until the new one is in a committed file: a null there is not
+  read as absent until the same key is built again from the new metadata.
 - Nothing is sent before the whole list is judged: a list not in that form is refused, and the run
   exits 1; a list that holds a method the read only guard refuses is refused, each refusal recorded
   as section 4 says, and the run exits 4. Either way nothing is read from the network. A method is
   allowed or refused by `guardRpc` alone; the list's form never decides it.
-- Each call is made once, in order, one at a time, through the one real transport
+- Each call is made once, in order, one at a time (the next is asked only once the one before has
+  its answer), through the one real transport
   (`src/net-root.ts`, `src/net.ts`): the guard and the allow list before every send, the 15 s
   limit, one socket. The tape is written by the same `Recorder` as the live run's (`src/tape.ts`).
   A call that failed on the way (an RPC error, the time limit, an answer over its limit, a socket
