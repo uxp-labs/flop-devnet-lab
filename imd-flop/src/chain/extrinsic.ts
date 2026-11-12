@@ -17,7 +17,7 @@
 import { blake2b } from "@noble/hashes/blake2.js";
 import { INNER_CALLS, INNER_NAMES, isInnerName, type Bytes32, type InnerCall, type InnerName } from "./calls.js";
 import { describeExtrinsic } from "./describe.js";
-import { refuse } from "./errors.js";
+import { ChainEncodeError, refuse } from "./errors.js";
 import { lastValidBlock, mortalEra } from "./era.js";
 import { bytesOf, ownKeys, ownValue, takeFields, takeValue, writeValue, type FieldValue } from "./fields.js";
 import { signingPayload, type SignedPath } from "./payload.js";
@@ -193,6 +193,34 @@ function extensionExtra(s: SignSnapshot): Uint8Array {
   return concat(...parts);
 }
 
+/**
+ * The name of a thrown value's class, read without running any of its code a caller could define: no
+ * getter, no toString. Only a plain identifier is given; anything else is "object".
+ */
+function className(e: unknown): string {
+  if (e === null) return "null";
+  if (typeof e !== "object" && typeof e !== "function") return typeof e;
+  try {
+    const proto: unknown = Object.getPrototypeOf(e);
+    const ctor = proto === null || typeof proto !== "object" ? undefined : Object.getOwnPropertyDescriptor(proto, "constructor");
+    const fn: unknown = ctor && "value" in ctor ? ctor.value : undefined;
+    const nameD = typeof fn === "function" ? Object.getOwnPropertyDescriptor(fn, "name") : undefined;
+    const name: unknown = nameD && "value" in nameD ? nameD.value : undefined;
+    return typeof name === "string" && /^[A-Za-z_$][A-Za-z0-9_$]{0,63}$/.test(name) ? name : "object";
+  } catch {
+    return "object";
+  }
+}
+
+/** Calls the signer. If it throws, the refusal says so and names the class only; the thrown value is its cause (rule H4). */
+function callSigner(s: SignSnapshot, message: Uint8Array): unknown {
+  try {
+    return Reflect.apply(s.sign, s.signer, [Uint8Array.from(message)]);
+  } catch (e) {
+    throw new ChainEncodeError("SIGNER_THREW", `the signer threw (${className(e)})`, e);
+  }
+}
+
 /** The signature the signer gave, by its internal state, or SIGNATURE_INVALID. */
 function signatureOf(value: unknown): Uint8Array {
   try {
@@ -209,7 +237,7 @@ export function signSessionCall(input: ExtrinsicInput): SignedSessionCall {
   const call = checkedCallBytes(s);
   const extra = extensionExtra(s);
   const { message } = signingPayload(rt, call, extra, s.birth.hash);
-  const signature = signatureOf(Reflect.apply(s.sign, s.signer, [Uint8Array.from(message)]));
+  const signature = signatureOf(callSigner(s, message));
 
   const body = concat(Uint8Array.of(0x80 | rt.extrinsicVersion, rt.address.index), s.publicKey, Uint8Array.of(rt.signature.index), signature, extra, call);
   const extrinsic = concat(compact(BigInt(body.length)), body);
