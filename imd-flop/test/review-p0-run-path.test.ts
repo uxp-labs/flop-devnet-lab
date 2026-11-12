@@ -59,6 +59,8 @@ async function runWith(p: Provider, walletSigned: boolean, args: string[] = RUN)
     calls: p.calls,
     rows: rows.map((x) => ({ provider: x.provider, mock: x.mock, state: x.state, prefix: x.request_id?.split("-")[0] ?? null })),
     receipt,
+    response: rows[0]?.request_id && existsSync(join(h, "responses", `${rows[0].request_id}.json`)) ? (JSON.parse(readFileSync(join(h, "responses", `${rows[0].request_id}.json`), "utf8")) as Record<string, unknown>) : null,
+    out: r.out,
     err: r.err,
   };
 }
@@ -75,6 +77,8 @@ describe("review P0, C: the run path by name case, as 132bb6a did it", () => {
   it("C3 note: a stub whose name is not in the table makes the call and writes a row with no paid gate and no wallet link, on both builds", async () => {
     const o = await runWith(stub(["nope"]), false);
     expect({ code: o.code, gate: o.gate, ownerOf: o.ownerOf, calls: o.calls, first: o.rows[0] }).toEqual({ code: 0, gate: false, ownerOf: false, calls: 1, first: { provider: "nope", mock: false, state: "sent", prefix: "imdflop" } });
+    // The response file and the receipt file say not mock, and the receipt line has no [MOCK] mark.
+    expect({ response: o.response?.mock, receipt: o.receipt?.mock ?? null, marked: o.out.includes("[MOCK]") }).toEqual({ response: false, receipt: false, marked: false });
   });
   it("C4 a name that reads mock first and flop after, on a seat with no wallet signature: 132bb6a refuses on the link (exit 4) and writes nothing", async () => {
     const o = await runWith(stub(["mock", "flop"]), false);
@@ -118,5 +122,57 @@ describe("review P0, E: the mock scenario written to the receipt file, as 132bb6
     const o = await runWith(stub(["flop"], { scenario: "settled" }), true);
     expect(o.code).toBe(0);
     expect(o.receipt && "mock_scenario" in o.receipt).toBe(false);
+  });
+});
+
+describe("review P0, C and A: a name not in the table, and the order of names in --json output, as 132bb6a did it", () => {
+  it("C9 a stub whose name is not in the table with --no-link: refused with exit 4, nothing written (holds)", async () => {
+    const o = await runWith(stub(["nope"]), false, [...RUN, "--no-link"]);
+    expect({ code: o.code, calls: o.calls, rows: o.rows.length }).toEqual({ code: 4, calls: 0, rows: 0 });
+  });
+  it("C10 a stub whose name is not in the table: the run text has no [MOCK] mark (holds)", async () => {
+    const h = tmpHome();
+    await readySeat(h, SEAT);
+    const r = await cli(h, RUN, { provider: stub(["nope"]) });
+    expect(r.code).toBe(0);
+    expect(r.out.startsWith("job job-abc")).toBe(true);
+  });
+  it("C11 receipt --refresh of a row whose provider is not in the table, with a stub of that name: the read is not marked mock (holds)", async () => {
+    const h = tmpHome();
+    await readySeat(h, SEAT);
+    const p = stub(["nope"]);
+    const first = await cli(h, [...RUN, "--json"], { provider: p });
+    const rid = (JSON.parse(first.out) as { request_id: string }).request_id;
+    const r = await cli(h, ["receipt", rid, "--refresh", "--json"], { provider: p });
+    const text = r.out;
+    expect(text).not.toContain('"mock": true');
+    expect(text).not.toContain("[MOCK]");
+  });
+  it("A cap show --json prints spent_today_mock before spent_today_flop, byte for byte (holds)", async () => {
+    const h = tmpHome();
+    await readySeat(h, SEAT);
+    const r = await cli(h, ["cap", "show", "--json"]);
+    expect(r.out.indexOf('"spent_today_mock"')).toBeGreaterThan(0);
+    expect(r.out.indexOf('"spent_today_mock"')).toBeLessThan(r.out.indexOf('"spent_today_flop"'));
+  });
+  it("A status --json prints flop before mock in each per provider object, byte for byte (holds)", async () => {
+    const h = tmpHome();
+    await readySeat(h, SEAT);
+    const r = await cli(h, ["status", "--json"]);
+    expect(r.code).toBe(0);
+    for (const key of ["today_utc", "gateway_spent_today_utc", "gateway_spend_unknown_rows", "over_cap_today_utc"]) {
+      const at = r.out.indexOf(`"${key}"`);
+      const tail = r.out.slice(at);
+      expect({ key, flopFirst: tail.indexOf('"flop"') < tail.indexOf('"mock"') }).toEqual({ key, flopFirst: true });
+    }
+  });
+});
+
+describe("review P0, A: a mock scenario not in the list", () => {
+  it("run --mock-scenario bad is a usage error (exit 2) with the list, and writes nothing (holds)", async () => {
+    const h = tmpHome();
+    await readySeat(h, SEAT);
+    const r = await cli(h, [...RUN, "--mock-scenario", "bad"]);
+    expect({ code: r.code, err: r.err, rows: ledger(h).length }).toEqual({ code: 2, err: "imd-flop: --mock-scenario must be one of ok, timeout, settled, key_expired, estimate_error", rows: 0 });
   });
 });
