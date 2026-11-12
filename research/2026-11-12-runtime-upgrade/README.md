@@ -27,6 +27,36 @@ Read only. No transaction was sent. Every value is in `results.json` with how it
   runtime 1014020 at finalized block 3530299, with no reset and no conflict. The reading of
   03:28 UTC still said 1014014.
 
+## Who authorised it, and how it landed
+
+Read later the same day, from the same endpoint. It is under `authorization` in `results.json`.
+
+| Block | Time (UTC) | `System.AuthorizedUpgrade` at it |
+|---|---|---|
+| 3528477 | 04:04:18 | absent |
+| 3528478 | 04:04:19 | `0xfd5ac06d…1e5b` and `check_version` true |
+| 3528527 | 04:05:08 | the same |
+| 3528528 | 04:05:09 | absent |
+
+- Block 3528478 holds a 145 byte extrinsic signed by `0x8e98…ce27`. That account is the value of
+  `Sudo.Key` at that block. Its call is `Sudo.sudo(System.authorize_upgrade(code_hash))`.
+- Our decoder, pinned to spec 1014014, reads that extrinsic's events as `System.UpgradeAuthorized`
+  with the code hash `0xfd5ac06d…1e5b` and `check_version` true, then `Sudo.Sudid` with `Ok`. The
+  fee was withdrawn and paid back: the fee paid is 0.
+- The same account sent the upgrade extrinsic in block 3528528, with its next account nonce
+  (49507 after 49506). Its call is `System.apply_authorized_upgrade(code)`, with 2553782 bytes of
+  code. That is the size of the `:code` key from that block on.
+- The hash that was authorised is the hash in `System.CodeUpdated` and the storage hash of `:code`.
+- So the chain's own state named the coming code for 50 blocks, 50 seconds, before it landed.
+
+What follows for a reader of this chain: `System.AuthorizedUpgrade` at the finalized head shows an
+upgrade that is authorised and not yet applied, with the hash of its code. This one could have
+been seen 50 blocks ahead. The metadata also has `System.set_code`, which the Sudo key could call
+with no such warning. Whether FLOP Labs will always authorise first is not known.
+
+The two extrinsics were read by position: the lab has no decoder for extrinsics. Each layout sums
+to the extrinsic's length to the byte, and the argument of the first equals the hash in its event.
+
 ## The rule: a block is in the encoding of the runtime that executed it
 
 Block 3528528 was executed by the old runtime. Its events, and everything else in its state, are
@@ -62,9 +92,9 @@ the two refusals word for word.
 - Our three session tests (`../2026-11-11-session-probe/`, `../2026-11-11-session-escrow/`,
   `../2026-11-11-session-deny-list/`) and the miner counts (`../2026-11-12-miner-runbook/`) were
   measured at spec 1014014. They are not shown for spec 1014020 until they are run again.
-- The new metadata still names `FlopSessionKeys`, `ComputeChannel` and `SessionToken`. It adds the
-  calls `set_capacity_reservation_rate` and `set_model_mirrors`. That is a read of names, not of
-  behaviour.
+- The new metadata still names `FlopSessionKeys`, `ComputeChannel` and `SessionToken`. It adds two
+  calls, both in `ComputeChannel`: `set_capacity_reservation_rate` and `drop_capacity_reservation`.
+  That is a read of names, not of behaviour. The full list is in the section after this one.
 - The observatory's decoder refuses every block from 3528529 on until a shape for spec 1014020 is
   derived, read and added to its reviewed list. That is what the pin is for.
   Later shown on the observatory's third recording (review round 22): `observatory/test/upgrade-decode.test.ts`
@@ -73,10 +103,47 @@ the two refusals word for word.
   so the devnet as it is now rejects what it signs. Before it is used again it needs the new spec
   and its call indexes checked against the new metadata.
 
+## What the upgrade changed, and what it means for what we sign
+
+We compared the two metadata answers of the observatory's third recording in two ways that share
+no code: our own strict parser, by names, indexes and values, and the reference decoder, by the
+structure of every type. Both give the same 39 differences. They are listed under
+`what_changed_in_the_metadata` in `results.json`.
+
+- Nothing was removed. No pallet was added, removed or moved. The extrinsic version is 4 and the
+  nine signed extensions are the same, in the same order. The transaction version is 2.
+- `ComputeChannel` gains two calls (50 and 51), two events (60 and 61), five errors (132 to 136),
+  three storage entries and three constants. By their names they are about per miner capacity
+  reservations and sessions a miner has not consented to.
+- `Aleph` gains one event, one storage entry and two constants. By their names they are about a
+  committee seed.
+- `FlopSessionKeys` gains two errors, `SessionNonceExhausted` (16) and
+  `RetiredSessionRecordMissing` (17). Three errors moved: `PalletNameTooLong` 16 to 18,
+  `TooManyAllowedPallets` 17 to 19, `SpendExceedsDeclared` 18 to 20. Its calls, events and storage
+  are the same.
+- `HwCalibration` gains one error at index 6, so ten errors moved up by one, and one constant.
+  `ModelRegistry` gains one error. `MinerStaking.CapacityStakePerGflop` changed its value. The
+  `System.Version` constant changed with the spec version.
+
+For our three signers (`flop-sign.mjs` in the session test folders): every call they encode has
+the same pallet index, call index and fields in both runtimes, and the storage keys they read are
+the same. They sign valid bytes for spec 1014020 with only the spec version changed, a flag they
+already take. Read, not run.
+
+A failed call names its error by two indexes, the pallet's and the error's. Our escrow test
+recorded `SpendExceedsDeclared` as error 18. The same refusal at spec 1014020 would carry 20. Any
+table of error names has to come from the metadata of the runtime that executed the block. Our
+decoder gives the two indexes and never a name, and its reviewed shape states no errors.
+
+A correction: this file first said the new metadata adds the call `set_model_mirrors`. That was
+wrong. The call is in both runtimes.
+
 ## Not read, not shown
 
-- The call inside the upgrade extrinsic was not decoded. We do not state which call carried the
-  code or who authorised it. The events show the sender paid no fee for it.
+- The signatures on the two upgrade extrinsics were not checked, and how the upgrade was decided
+  off chain is not on chain.
+- Whether the chain accepts our signers' calls at spec 1014020, or does the same thing with them,
+  is not shown. Only a rerun shows behaviour.
 - No event of spec 1014020 was decoded.
 - Whether any stored value was migrated at block 3528529 was not read.
 - These reads came from one public RPC endpoint.

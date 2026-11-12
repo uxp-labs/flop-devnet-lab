@@ -321,9 +321,341 @@
       }
     ]
   },
+  "authorization": {
+    "read_at_utc": "2026-11-12T09:45:00Z",
+    "read_at_note": "to within about five minutes; same endpoint and method as the reads above",
+    "keys": {
+      "System.AuthorizedUpgrade": "0x26aa394eea5630e07c48ae0c9558cef72fa9f1bf25567808771bff091dc89ecd",
+      "Sudo.Key": "0x5c0d1176a568c1f92944340dbfed9e9c530ebca703c85910e7164cb7d1c9e47b"
+    },
+    "authorized_upgrade_at": [
+      {
+        "height": 3513543,
+        "value": null
+      },
+      {
+        "height": 3528477,
+        "hash": "0xca57413ae20545de2772187013c4b79528c81e168b99d5421e0106795ebbf9dd",
+        "value": null
+      },
+      {
+        "height": 3528478,
+        "hash": "0xd9166c68232fd05210d30993776c2729aa50892ea6deec7bb917f99b8c8db0bf",
+        "value": "0xfd5ac06d81e461da832c8f83402e155e8eb84cd31a2f08fc3f281cb5fb711e5b01"
+      },
+      {
+        "height": 3528527,
+        "hash": "0x57d233b502269f6658673c7059331a9ff926680dcceb2fc9af0d00275fdb4e71",
+        "value": "0xfd5ac06d81e461da832c8f83402e155e8eb84cd31a2f08fc3f281cb5fb711e5b01"
+      },
+      {
+        "height": 3528528,
+        "hash": "0x187a4c5b16a8d3c20f710ccd4a275d7bb2426311dd89ae14da0728d6504145c2",
+        "value": null
+      }
+    ],
+    "value_read_as": "33 bytes: the code hash, then one byte 0x01 for check_version true. Read by position, and it equals the fields of System.UpgradeAuthorized below.",
+    "how_the_first_height_was_found": "bisection between 3513543 (absent) and 3528527 (present), 14 reads. It finds one change. A value set and cleared earlier in that range would not be seen.",
+    "authorizing_block": {
+      "height": 3528478,
+      "hash": "0xd9166c68232fd05210d30993776c2729aa50892ea6deec7bb917f99b8c8db0bf",
+      "parent": "0xca57413ae20545de2772187013c4b79528c81e168b99d5421e0106795ebbf9dd",
+      "state_root": "0x699cf62147d6d1d06a004ed87ef15735a63224b969acc1d6cd88dbbbb53a8ca1",
+      "timestamp_now_ms": 1794456259000,
+      "timestamp_utc": "2026-11-12T04:04:19.000Z",
+      "last_runtime_upgrade": "0xfae33d0030747a6b762d72756e74696d65",
+      "extrinsics_bytes": [
+        11,
+        40,
+        145,
+        150,
+        340
+      ],
+      "sudo_key_at_block": "0x8e9849eb9b490c12dfa79c20953ae7858aa0705dffb1918036f3d7d885fdce27",
+      "block_before": {
+        "height": 3528477,
+        "hash": "0xca57413ae20545de2772187013c4b79528c81e168b99d5421e0106795ebbf9dd",
+        "parent": "0xc0ad1f181a35306b4abc3eb05ecc7415b1dffa9eec9b0d9fe31c4c2cfaf2afc8",
+        "state_root": "0x29306dc19873f8dbd8aa6c45a175b9c86301c2fada23810e671e5a4c543a518b",
+        "timestamp_now_ms": 1794456258001,
+        "timestamp_utc": "2026-11-12T04:04:18.001Z",
+        "last_runtime_upgrade": "0xfae33d0030747a6b762d72756e74696d65"
+      }
+    },
+    "authorizing_extrinsic": {
+      "index": 2,
+      "bytes": 145,
+      "sha256": "59aad89c024d3c0bcb7969f48a0aa69179355c223a6a143ce634e97308899bf4",
+      "read_by_position": {
+        "length_prefix_bytes": 2,
+        "length_after_prefix": 143,
+        "signer": "0x8e9849eb9b490c12dfa79c20953ae7858aa0705dffb1918036f3d7d885fdce27",
+        "signature_type_byte": 1,
+        "era_bytes": "0x8811",
+        "account_nonce": 49506,
+        "tip_byte": 0,
+        "metadata_hash_mode_byte": 0,
+        "call_index_bytes": "0x32000009",
+        "offset_after_call_index": 113
+      },
+      "argument_bytes": "0xfd5ac06d81e461da832c8f83402e155e8eb84cd31a2f08fc3f281cb5fb711e5b",
+      "era_read_as": {
+        "period_blocks": 512,
+        "birth_height": 3528472
+      },
+      "call": "Sudo.sudo(System.authorize_upgrade(code_hash))",
+      "names_from": "the 1014014 metadata: pallet 50 is Sudo and its call 0 is sudo(call); pallet 0 is System and its call 9 is authorize_upgrade(code_hash)",
+      "layout_bytes": "2 length, 1 version, 33 address, 65 signature, 2 era, 4 nonce, 1 tip, 1 metadata hash mode, 2 Sudo.sudo, 2 System.authorize_upgrade, 32 code hash: 145"
+    },
+    "events_decoded_with": {
+      "tool": "the lab's own decoder (observatory/src/scale, decodeBlockEvents) at commit 2887ae81c9b3b60c4daecbe3d3d77072cbea7b33 (main)",
+      "spec_version": 1014014,
+      "metadata_found_in": "observatory/fixtures/recording-20261112004113-0b2b505d2d4b703b/tape.jsonl",
+      "metadata_sha256": "f4fd2addba7fff1129483d0e66b8e6bc69141292f56443e201d3f073aab03444",
+      "shape_sha256": "679f98aa06abf1d9b376fe4243e4d13c1b5ae80e9b6cdf1fd1e0190c1e7660e7",
+      "last_runtime_upgrade_given": "0xfae33d0030747a6b762d72756e74696d65",
+      "result": "decoded to the last byte, 24 events"
+    },
+    "events": {
+      "bytes": 1287,
+      "sha256": "65ae870757492c1372692cebfdf653a4c5f2273ea305635ef3d33ed5e5bc7743"
+    },
+    "event_counts": {
+      "Balances.Minted": 2,
+      "FlopSubsidy.SubsidyPaid": 1,
+      "System.ExtrinsicSuccess": 5,
+      "Balances.Withdraw": 3,
+      "System.UpgradeAuthorized": 1,
+      "Sudo.Sudid": 1,
+      "Balances.Deposit": 3,
+      "TransactionPayment.TransactionFeePaid": 3,
+      "Balances.Transfer": 2,
+      "ComputeChannel.AssuranceClassPinned": 1,
+      "ComputeChannel.ChannelOpened": 1,
+      "ComputeChannel.CalibrationSnapshotted": 1
+    },
+    "events_of_extrinsic_2": [
+      {
+        "index": 5,
+        "event": "Balances.Withdraw",
+        "pallet_index": 4,
+        "event_index": 8,
+        "fields": {
+          "who": "0x8e9849eb9b490c12dfa79c20953ae7858aa0705dffb1918036f3d7d885fdce27",
+          "amount": "2637385725000000"
+        }
+      },
+      {
+        "index": 6,
+        "event": "System.UpgradeAuthorized",
+        "pallet_index": 0,
+        "event_index": 6,
+        "fields": {
+          "code_hash": "0xfd5ac06d81e461da832c8f83402e155e8eb84cd31a2f08fc3f281cb5fb711e5b",
+          "check_version": true
+        }
+      },
+      {
+        "index": 7,
+        "event": "Sudo.Sudid",
+        "pallet_index": 50,
+        "event_index": 0,
+        "fields": {
+          "sudo_result": {
+            "variant": "Ok",
+            "fields": null
+          }
+        }
+      },
+      {
+        "index": 8,
+        "event": "Balances.Deposit",
+        "pallet_index": 4,
+        "event_index": 7,
+        "fields": {
+          "who": "0x8e9849eb9b490c12dfa79c20953ae7858aa0705dffb1918036f3d7d885fdce27",
+          "amount": "2637385725000000"
+        }
+      },
+      {
+        "index": 9,
+        "event": "TransactionPayment.TransactionFeePaid",
+        "pallet_index": 5,
+        "event_index": 0,
+        "fields": {
+          "who": "0x8e9849eb9b490c12dfa79c20953ae7858aa0705dffb1918036f3d7d885fdce27",
+          "actual_fee": "0",
+          "tip": "0"
+        }
+      },
+      {
+        "index": 10,
+        "event": "System.ExtrinsicSuccess",
+        "pallet_index": 0,
+        "event_index": 0,
+        "fields": {
+          "dispatch_info": {
+            "weight": {
+              "ref_time": "527477000",
+              "proof_size": "11306"
+            },
+            "class": {
+              "variant": "Operational",
+              "fields": null
+            },
+            "pays_fee": {
+              "variant": "No",
+              "fields": null
+            }
+          }
+        }
+      }
+    ],
+    "refused_with_the_new_runtimes_last_runtime_upgrade": "not decoded: the block's LastRuntimeUpgrade names spec tzkv-runtime 1014020, not tzkv-runtime 1014014",
+    "upgrade_extrinsic_call": {
+      "height": 3528528,
+      "index": 2,
+      "bytes": 2553899,
+      "first_150_bytes": "0x9ee09b0084008e9849eb9b490c12dfa79c20953ae7858aa0705dffb1918036f3d7d885fdce2701809ef89e3a14e3a2da24d980eef517071902d449d7dadb29afbab5886640447c0be63361193c2d41cd797bbf22047a3e7ff0efd3edc6ed509f91863f1623da8268148e0503000000000bdade9b0052bc537646db8e0528b52ffd0088044e00aa48040e3ae0b2380730cc30c30c2318",
+      "read_by_position": {
+        "length_prefix_bytes": 4,
+        "length_after_prefix": 2553895,
+        "signer": "0x8e9849eb9b490c12dfa79c20953ae7858aa0705dffb1918036f3d7d885fdce27",
+        "signature_type_byte": 1,
+        "era_bytes": "0x6814",
+        "account_nonce": 49507,
+        "tip_byte": 0,
+        "metadata_hash_mode_byte": 0,
+        "call_index_bytes": "0x000b",
+        "offset_after_call_index": 113
+      },
+      "code_length_prefix_bytes": "0xdade9b00",
+      "code_bytes": 2553782,
+      "code_starts": "0x52bc537646db8e0528b52ffd",
+      "era_read_as": {
+        "period_blocks": 512,
+        "birth_height": 3528518
+      },
+      "call": "System.apply_authorized_upgrade(code)",
+      "names_from": "the 1014014 metadata: pallet 0 is System and its call 11 is apply_authorized_upgrade(code)",
+      "layout_bytes": "4 length, 1 version, 33 address, 65 signature, 2 era, 4 nonce, 1 tip, 1 metadata hash mode, 2 call index, 4 code length, 2553782 code: 2553899",
+      "code_bytes_equal": "the size of the :code key at 3528528 and after, 2553782"
+    },
+    "lead": {
+      "blocks": 50,
+      "seconds": 50,
+      "from_utc": "2026-11-12T04:04:19.000Z",
+      "to_utc": "the upgrade block's Timestamp.Now above"
+    },
+    "canonical_check": {
+      "what": "the hashes, values, extrinsic sizes and first bytes above were copied from the reading page into this file by hand; one text of them was built on both sides and its sha256 compared",
+      "sha256": "140277944734a05b2de68d3f939f0e2d54e26fb6d144bc82fbe6f40645bf0b5c"
+    }
+  },
+  "what_changed_in_the_metadata": {
+    "read_at_utc": "2026-11-12T10:00:00Z",
+    "from": "the two metadata answers of the observatory's third recording (branch observatory-data, recordings/20261112080132-05842a6db1e9c890/), found by their sha256: 482132 bytes f4fd2addba7fff1129483d0e66b8e6bc69141292f56443e201d3f073aab03444 and 487100 bytes 91294eb61225c4de7459e6a8fed3c37169a2c8a1b1906b46a5890d5e0d328238",
+    "method": "Two readings that share no code. First, the lab's own strict metadata parser (observatory/src/scale/metadata.ts): for every pallet its index, every call, event and error with its index (calls and events with their field names and type names), every storage entry with its modifier and hashers, every constant with its value, and the extrinsic version and signed extensions; then a comparison of the two lists. Second, an agent's comparison with the reference decoder (@polkadot-api/substrate-bindings 0.21.2), types compared by structure, never by id. Both give the same 39 differences.",
+    "extrinsic": {
+      "version": 4,
+      "signed_extensions": [
+        "CheckNonZeroSender",
+        "CheckSpecVersion",
+        "CheckTxVersion",
+        "CheckGenesis",
+        "CheckMortality",
+        "CheckNonce",
+        "CheckWeight",
+        "ChargeTransactionPayment",
+        "CheckMetadataHash"
+      ],
+      "changed": false
+    },
+    "pallets": {
+      "before": 62,
+      "after": 62,
+      "added": [],
+      "removed": [],
+      "index_changed": []
+    },
+    "differences": [
+      "ADDED   Aleph constant CommitteeSeedLookaheadBlocks: 0x3c000000",
+      "ADDED   Aleph constant CommitteeSeedWindowBlocks: 0x0a000000",
+      "ADDED   Aleph event CommitteeSeedFallback: index 2 (at: BlockNumberFor<T>)",
+      "ADDED   Aleph storage PendingCommitteeSeed: Default [] default 0x",
+      "ADDED   ComputeChannel call drop_capacity_reservation: index 51 (channel_id: H256)",
+      "ADDED   ComputeChannel call set_capacity_reservation_rate: index 50 (rate_gn_per_sec: Option<u64>)",
+      "ADDED   ComputeChannel constant MaxCapacityReservationsPerMiner: 0x40000000",
+      "ADDED   ComputeChannel constant MaxUnconsentedSessionBlocks: 0x40380000",
+      "ADDED   ComputeChannel constant UnconsentedReservationTariff: 0x53fbd09f090000000000000000000000",
+      "ADDED   ComputeChannel error EscrowBelowCapacityFloor: index 136",
+      "ADDED   ComputeChannel error MinerCapacityFullyReserved: index 132",
+      "ADDED   ComputeChannel error TooManyCapacityReservations: index 133",
+      "ADDED   ComputeChannel error UnconsentedSessionTooLong: index 135",
+      "ADDED   ComputeChannel error ZeroCapacityReservationRate: index 134",
+      "ADDED   ComputeChannel event CapacityReservationDropped: index 61 (channel_id: H256, miner: T::AccountId)",
+      "ADDED   ComputeChannel event CapacityReservationRateSet: index 60 (miner: T::AccountId, rate_gn_per_sec: Option<u64>)",
+      "ADDED   ComputeChannel storage AggregatedCapacityReservations: Optional [\"Blake2_128Concat\"] default 0x",
+      "ADDED   ComputeChannel storage MinerCapacityReservationRate: Optional [\"Blake2_128Concat\"] default 0x",
+      "ADDED   ComputeChannel storage MinerCapacityReservations: Default [\"Blake2_128Concat\"] default 0x",
+      "CHANGED FlopSessionKeys error PalletNameTooLong: index 16  ->  index 18",
+      "ADDED   FlopSessionKeys error RetiredSessionRecordMissing: index 17",
+      "ADDED   FlopSessionKeys error SessionNonceExhausted: index 16",
+      "CHANGED FlopSessionKeys error SpendExceedsDeclared: index 18  ->  index 20",
+      "CHANGED FlopSessionKeys error TooManyAllowedPallets: index 17  ->  index 19",
+      "ADDED   HwCalibration constant MaxSoftCapGnPerSec: 0x3f420f0000000000",
+      "CHANGED HwCalibration error CalibrationRecordRetained: index 15  ->  index 16",
+      "CHANGED HwCalibration error CalibrationRecordStale: index 14  ->  index 15",
+      "ADDED   HwCalibration error CapBelowReservedCapacity: index 6",
+      "CHANGED HwCalibration error InsufficientRenewalWork: index 11  ->  index 12",
+      "CHANGED HwCalibration error InvalidGpuInventory: index 7  ->  index 8",
+      "CHANGED HwCalibration error InvalidHardwareFingerprint: index 13  ->  index 14",
+      "CHANGED HwCalibration error InvalidRenewalWindow: index 10  ->  index 11",
+      "CHANGED HwCalibration error InvalidSkuCeiling: index 9  ->  index 10",
+      "CHANGED HwCalibration error MissingSkuCeiling: index 8  ->  index 9",
+      "CHANGED HwCalibration error NoAcceptedCap: index 12  ->  index 13",
+      "CHANGED HwCalibration error RecalibrationTooSoon: index 6  ->  index 7",
+      "CHANGED MinerStaking constant CapacityStakePerGflop: 0x0000c16ff28623000000000000000000  ->  0xdc950db3070000000000000000000000",
+      "ADDED   ModelRegistry error ModelWeightsRefLocked: index 49",
+      "CHANGED System constant Version: 0x30747a6b762d72756e74696d65207a6b762d6e6f646501000000fe780f000100000044df6acb689907609b05000000e931714703de2c0c0100000037e397fc7c91f5e40200000040fe3ad401f8959a06000000d2bc9897eed08f1503000000f78b278be53f454c02000000cbca25e39f14238702000000687ad44ad37f03c201000000ab3c0572291feb8b02000000bc9d89904f5b923f0100000037c8bb1350a9a2a804000000f3ff14d5ab527059030000004353432ceab01d100100000020d45a29f45d3f0902000000fbc577b9d747efd6010000007dc23ff6bf0f15ca0100000057a94343705e3410010000000200000001  ->  0x30747a6b762d72756e74696d65207a6b762d6e6f64650100000004790f000100000044df6acb689907609b05000000e931714703de2c0c0100000037e397fc7c91f5e40200000040fe3ad401f8959a06000000d2bc9897eed08f1503000000f78b278be53f454c02000000cbca25e39f14238702000000687ad44ad37f03c201000000ab3c0572291feb8b02000000bc9d89904f5b923f0100000037c8bb1350a9a2a804000000f3ff14d5ab527059030000004353432ceab01d100100000020d45a29f45d3f0902000000fbc577b9d747efd6010000007dc23ff6bf0f15ca0100000057a94343705e3410020000000200000001"
+    ],
+    "differences_note": "ADDED, CHANGED and REMOVED are from spec 1014014 to spec 1014020. Field types are the names the metadata gives. The outer call and event types of the runtime grow with these entries, so every type that holds a call or an event (Utility.batch, Sudo.sudo, FlopSessionKeys.execute_via_session, System.Events) changes with them and in no other way: that is the second reading's result.",
+    "the_lab_signers": {
+      "files": [
+        "research/2026-11-11-session-probe/flop-sign.mjs",
+        "research/2026-11-11-session-escrow/flop-sign.mjs",
+        "research/2026-11-11-session-deny-list/flop-sign.mjs"
+      ],
+      "result": "Every call they encode has the same pallet index, call index and fields at both specs. The signed extensions, the extrinsic version, the transaction version (2) and the storage keys they read are the same. So they sign valid bytes for spec 1014020 with only the spec version changed (a flag they already take).",
+      "source": "the second reading, which matched each of the 16 call shapes and 9 storage keys field by field against both metadata blobs. The first reading agrees for every name, index and field type name. Read, not run: no transaction was sent at spec 1014020.",
+      "what_this_does_not_show": "Whether the chain accepts these calls at spec 1014020, or does the same thing with them. Metadata holds no logic."
+    },
+    "error_indexes_moved": {
+      "FlopSessionKeys": {
+        "PalletNameTooLong": [
+          16,
+          18
+        ],
+        "TooManyAllowedPallets": [
+          17,
+          19
+        ],
+        "SpendExceedsDeclared": [
+          18,
+          20
+        ],
+        "added": {
+          "SessionNonceExhausted": 16,
+          "RetiredSessionRecordMissing": 17
+        }
+      },
+      "consequence": "A failed call names its error by pallet index and error index. A table of error names made from the 1014014 metadata misnames FlopSessionKeys errors 16 to 18 and HwCalibration errors 6 to 15 at spec 1014020. The session escrow test recorded SpendExceedsDeclared as error 18; the same refusal at spec 1014020 would carry 20. The observatory's decoder gives an error's indexes and never its name, and its reviewed shape states no errors, so the shape diff says nothing about this by design."
+    },
+    "correction": "An earlier version of the README in this folder said the new metadata adds the call set_model_mirrors. That was wrong. ModelRegistry.set_model_mirrors is call 21 in both runtimes. The calls this upgrade adds are ComputeChannel.set_capacity_reservation_rate (50) and ComputeChannel.drop_capacity_reservation (51)."
+  },
   "sum_check": {
     "events_3528528_bytes": 3042,
     "events_3528528_sha256": "dce969a1749379e00b0ff64c50c3e6409440a1ff4ad5c79330e8d3adf5ce0ad5"
   },
-  "not_read": "The upgrade extrinsic's call was not decoded, so which call carried the code is not stated. No event of spec 1014020 was decoded: the lab has no reviewed shape for it yet. Whether any storage was migrated at block 3528529 was not read. Nothing here shows that the lab's session tests of 2026-11-11 give the same results at spec 1014020."
+  "not_read": "No event of spec 1014020 was decoded in this folder: the observatory's tests on its third recording do that. Whether any storage was migrated at block 3528529 was not read. Nothing here shows that the lab's session tests of 2026-11-11 give the same results at spec 1014020: only a rerun shows behaviour. The two extrinsics were read by position, not by a decoder: the lab has none for extrinsics. The signatures on them were not checked. How the authorization was decided off chain is not on chain."
 }
