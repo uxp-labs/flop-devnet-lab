@@ -2,10 +2,10 @@
   {
     "id": "snapshot-check-snapshot-schema-off",
     "file": "src/snapshot-check.ts",
-    "find": "  [\"schema\", exactlyThis(\"flop-observatory/snapshot@0\")],",
-    "replace": "  [\"schema\", () => true],",
+    "find": "[[\"schema\", exactlyThis(\"flop-observatory/snapshot@1\")],",
+    "replace": "[[\"schema\", () => true],",
     "test": "test/snapshot-check.test.ts",
-    "why": "snapshot.schema is checked: with the check off, the table's case for it is served"
+    "why": "snapshot.schema is checked: with the check off, the table's case for it is served (the @1 check: the @0 list is chosen only for an @0 schema, so its own schema check cannot fail; upgrade watch round)"
   },
   {
     "id": "snapshot-check-snapshot-seq-off",
