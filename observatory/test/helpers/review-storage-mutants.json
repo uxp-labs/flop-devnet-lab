@@ -1,0 +1,202 @@
+[
+  {
+    "id": "rs-door-default-stored-true",
+    "file": "src/scale/block.ts",
+    "find": "stored: false, value: decodeValue(md, e.value, e.fallback) };",
+    "replace": "stored: true, value: decodeValue(md, e.value, e.fallback) };",
+    "test": "test/storage-values.test.ts",
+    "why": "a default the chain did not send is marked stored"
+  },
+  {
+    "id": "rs-door-optional-as-default",
+    "file": "src/scale/block.ts",
+    "find": "if (e.modifier === \"Optional\") return",
+    "replace": "if (e.modifier === \"Optional\" && r.entry === \"Channels\") return",
+    "test": "test/storage-values.test.ts",
+    "why": "an absent Optional session or breaker decodes the 0x00 default instead of null"
+  },
+  {
+    "id": "rs-door-stored-when-differs",
+    "file": "src/scale/block.ts",
+    "find": "stored: true, value: decodeValue(md, e.value, r.answer) };",
+    "replace": "stored: toHex(r.answer) !== toHex(e.fallback), value: decodeValue(md, e.value, r.answer) };",
+    "test": "test/storage-values.test.ts",
+    "why": "bytes equal to the default are marked not stored"
+  },
+  {
+    "id": "rs-door-key-prefix-match",
+    "file": "src/scale/block.ts",
+    "find": "if (built !== toHex(r.key)) return",
+    "replace": "if (!toHex(r.key).startsWith(built)) return",
+    "test": "test/storage-values.test.ts",
+    "why": "a key asked with bytes after the built key is taken"
+  },
+  {
+    "id": "rs-door-key-last-byte-ignored",
+    "file": "src/scale/block.ts",
+    "find": "if (built !== toHex(r.key)) return",
+    "replace": "if (built.slice(0, -2) !== toHex(r.key).slice(0, -2)) return",
+    "test": "test/storage-values.test.ts",
+    "why": "the last byte of the key asked is not compared"
+  },
+  {
+    "id": "rs-door-key-entry-only",
+    "file": "src/scale/block.ts",
+    "find": "if (built !== toHex(r.key)) return",
+    "replace": "if (built.slice(0, 66) !== toHex(r.key).slice(0, 66)) return",
+    "test": "test/storage-values.test.ts",
+    "why": "only the pallet and entry hashes of the key are compared"
+  },
+  {
+    "id": "rs-door-key-unchecked-plain",
+    "file": "src/scale/block.ts",
+    "find": "if (built !== toHex(r.key)) return",
+    "replace": "if (r.keys.length > 0 && built !== toHex(r.key)) return",
+    "test": "test/storage-values.test.ts",
+    "why": "the key of a plain entry is not compared"
+  },
+  {
+    "id": "rs-door-stated-or",
+    "file": "src/scale/block.ts",
+    "find": "p === r.pallet && e === r.entry",
+    "replace": "p === r.pallet || e === r.entry",
+    "test": "test/storage-values.test.ts",
+    "why": "an entry is stated when only its pallet or only its name matches"
+  },
+  {
+    "id": "rs-door-stated-case",
+    "file": "src/scale/block.ts",
+    "find": "p === r.pallet && e === r.entry",
+    "replace": "p.toLowerCase() === r.pallet.toLowerCase() && e === r.entry",
+    "test": "test/storage-values.test.ts",
+    "why": "a pallet name in another case reaches the door"
+  },
+  {
+    "id": "rs-door-stated-trim",
+    "file": "src/scale/block.ts",
+    "find": "p === r.pallet && e === r.entry",
+    "replace": "p === r.pallet && e === r.entry.trim()",
+    "test": "test/storage-values.test.ts",
+    "why": "an entry name with a trailing space reaches the door"
+  },
+  {
+    "id": "rs-door-answer-uncopied",
+    "file": "src/scale/block.ts",
+    "find": "answer: answer === null ? null : copyBytes(answer, \"the answer\"),",
+    "replace": "answer: answer === null ? null : (answer as Uint8Array),",
+    "test": "test/storage-values.test.ts",
+    "why": "the answer is not checked to be bytes"
+  },
+  {
+    "id": "rs-door-keys-uncopied",
+    "file": "src/scale/block.ts",
+    "find": "keys: Array.from(keys, (k, i) => copyBytes(k, `key part ${i}`)),",
+    "replace": "keys: keys as Uint8Array[],",
+    "test": "test/storage-values.test.ts",
+    "why": "the key parts are not checked to be bytes"
+  },
+  {
+    "id": "rs-door-undefined-answer-absent",
+    "file": "src/scale/block.ts",
+    "find": "answer: answer === null ? null : copyBytes(answer, \"the answer\"),",
+    "replace": "answer: answer === null || answer === undefined ? null : copyBytes(answer, \"the answer\"),",
+    "test": "test/storage-values.test.ts",
+    "why": "a missing answer is taken as absent"
+  },
+  {
+    "id": "rs-shape-one-hasher",
+    "file": "src/scale/shape.ts",
+    "find": "hashers: [...e.hashers], key:",
+    "replace": "hashers: e.hashers.slice(0, 1), key:",
+    "test": "test/shape.test.ts",
+    "why": "a double map is stated with one hasher"
+  },
+  {
+    "id": "rs-shape-keyOf-empty",
+    "file": "src/scale/shape.ts",
+    "find": "const keyOf = (e: StorageEntry): number[] => (e.key === null ? [] : [e.key]);",
+    "replace": "const keyOf = (e: StorageEntry): number[] => (e.key === null || e.hashers.length > 1 ? [] : [e.key]);",
+    "test": "test/shape.test.ts",
+    "why": "the key type of a double map is not in the closure"
+  },
+  {
+    "id": "rs-shape-breakers-as-sessions",
+    "file": "src/scale/shape.ts",
+    "find": "circuit_breakers: entryShape(n, breakers),",
+    "replace": "circuit_breakers: entryShape(n, sessions),",
+    "test": "test/shape.test.ts",
+    "why": "the breakers entry is stated as the sessions entry"
+  },
+  {
+    "id": "rs-shape-sessions-modifier",
+    "file": "src/scale/shape.ts",
+    "find": "return { modifier: e.modifier, hashers:",
+    "replace": "return { modifier: e.hashers.length > 1 ? \"Optional\" : e.modifier, hashers:",
+    "test": "test/shape.test.ts",
+    "why": "a Default double map is stated Optional"
+  },
+  {
+    "id": "rs-shape-default-optional-hidden",
+    "file": "src/scale/shape.ts",
+    "find": "default: toHex(e.fallback) };",
+    "replace": "default: e.modifier === \"Default\" ? toHex(e.fallback) : \"0x00\" };",
+    "test": "test/shape.test.ts",
+    "why": "an Optional entry's default bytes are not stated as the metadata gives them (equivalent on the reviewed metadata)"
+  },
+  {
+    "id": "rs-data-events-swapped",
+    "file": "test/helpers/recorded-storage.ts",
+    "find": "answer: answer === null ? null : hexBytes(answer) });",
+    "replace": "answer: answer === null ? null : hexBytes(seq === 8 ? (result(calls.at(15)) as string) : seq === 15 ? (result(calls.at(8)) as string) : answer) });",
+    "test": "test/storage-values.test.ts",
+    "why": "the System.Events values of steps 3 and 4 swapped: the tests must see another block's events"
+  },
+  {
+    "id": "rs-data-probe-events-swapped",
+    "file": "test/helpers/recorded-storage.ts",
+    "find": "answer: answer === null ? null : hexBytes(answer) });",
+    "replace": "answer: answer === null ? null : hexBytes(seq === 41 ? (result(calls.at(44)) as string).slice(0, 2 + 2 * 397) : answer) });",
+    "test": "test/storage-values.test.ts",
+    "why": "the probe's step 3 events replaced by the first 397 bytes of step 4's: the tests must notice"
+  },
+  {
+    "id": "rs-data-gateway-miner",
+    "file": "test/helpers/recorded-storage.ts",
+    "find": "answer: answer === null ? null : hexBytes(answer) });",
+    "replace": "answer: answer === null ? null : ((b) => { if (seq === 50 || seq === 53) b.set([(b.at(40) ?? 0) ^ 1], 40); return b; })(hexBytes(answer)) });",
+    "test": "test/storage-values.test.ts",
+    "why": "the gateway channel's miner decoded wrong at both blocks"
+  },
+  {
+    "id": "rs-data-gateway-agent-key",
+    "file": "test/helpers/recorded-storage.ts",
+    "find": "answer: answer === null ? null : hexBytes(answer) });",
+    "replace": "answer: answer === null ? null : ((b) => { if (seq === 50 || seq === 53) b.set([(b.at(170) ?? 0) ^ 1], 170); return b; })(hexBytes(answer)) });",
+    "test": "test/storage-values.test.ts",
+    "why": "the gateway channel's agent_key decoded wrong at both blocks"
+  },
+  {
+    "id": "rs-data-ours-last-attested",
+    "file": "test/helpers/recorded-storage.ts",
+    "find": "answer: answer === null ? null : hexBytes(answer) });",
+    "replace": "answer: answer === null ? null : ((b) => { if (seq === 19 || seq === 31) b.set([(b.at(233) ?? 0) ^ 1], 233); return b; })(hexBytes(answer)) });",
+    "test": "test/storage-values.test.ts",
+    "why": "our channel's last_attested_at decoded wrong at both blocks"
+  },
+  {
+    "id": "rs-data-ours-locked-consumed",
+    "file": "test/helpers/recorded-storage.ts",
+    "find": "answer: answer === null ? null : hexBytes(answer) });",
+    "replace": "answer: answer === null ? null : ((b) => { if (seq === 19 || seq === 31) b.set([(b.at(b.length - 1) ?? 0) ^ 1], b.length - 1); return b; })(hexBytes(answer)) });",
+    "test": "test/storage-values.test.ts",
+    "why": "our channel's last field, locked_compute_consumed, decoded wrong at both blocks"
+  },
+  {
+    "id": "rs-data-nonce-step3",
+    "file": "test/helpers/recorded-storage.ts",
+    "find": "answer: answer === null ? null : hexBytes(answer) });",
+    "replace": "answer: answer === null ? null : ((b) => { if (seq === 10) b.set([1], 0); return b; })(hexBytes(answer)) });",
+    "test": "test/storage-values.test.ts",
+    "why": "the nonce at step 3 read as 1"
+  }
+]
