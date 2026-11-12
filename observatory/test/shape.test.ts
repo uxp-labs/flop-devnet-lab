@@ -82,6 +82,7 @@ describe("the reviewed shapes", () => {
     const pair = ["Blake2_128Concat", "Blake2_128Concat"];
     expect(s.flop_session_keys).toEqual({
       index: 94,
+      storage_prefix: "FlopSessionKeys",
       sessions: { modifier: "Optional", hashers: pair, key: "(AccountId32#0, AccountId32#0)", value: "SessionToken#697", default: "0x00" },
       session_nonces: { modifier: "Default", hashers: pair, key: "(AccountId32#0, AccountId32#0)", value: "u64", default: "0x0000000000000000" },
       circuit_breakers: { modifier: "Optional", hashers: ["Blake2_128Concat"], key: "AccountId32#0", value: "CircuitBreakerState#701", default: "0x00" },
@@ -89,6 +90,12 @@ describe("the reviewed shapes", () => {
     const fields = (t: string) => (s.types[t].fields as { name: string }[]).map((f) => f.name);
     expect(fields("SessionToken#697")).toEqual(["owner", "delegate", "spending_cap", "per_tx_limit", "daily_cap", "epoch_spent", "epoch_start", "spent", "expires_at", "allowed_pallets", "active"]);
     expect(fields("CircuitBreakerState#701")).toEqual(["period_start", "tx_count", "total_spend", "tripped"]);
+  });
+
+  it("state the storage prefix of each stated pallet as the metadata gives it, so a changed prefix changes the shape", () => {
+    const s = JSON.parse(SHAPE);
+    const prefix = (name: string) => MD.pallets.find((p) => p.name === name)?.storage?.prefix;
+    expect([s.system.storage_prefix, s.compute_channel.storage_prefix, s.flop_session_keys.storage_prefix]).toEqual([prefix("System"), prefix("ComputeChannel"), prefix("FlopSessionKeys")]);
   });
 
   it("state exactly the storage entries STATED_ENTRIES lists, each one the metadata's entry of that name", () => {

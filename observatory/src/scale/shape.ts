@@ -9,7 +9,8 @@
 //   read. The System.Version constant, the ComputeChannel pallet index, its event table, its
 //   Channels entry with the fields and states of a channel, the System entries the events and the
 //   spec are read from, the FlopSessionKeys pallet index and its Sessions, SessionNonces and
-//   CircuitBreakers entries, and a table of every type reachable from those, each with its kind,
+//   CircuitBreakers entries, the storage prefix of each of the three pallets, and a table of every
+//   type reachable from those, each with its kind,
 //   its path and what the kind holds. Each storage entry is stated with its modifier, hashers, key
 //   type, value type and the default bytes the metadata gives it.
 // - pinShape, the one function that says whether a block may be decoded, and why not.
@@ -25,10 +26,10 @@ import { createHash } from "node:crypto";
 import { type Decoded, decodeValue } from "./decode.js";
 import type { Field, Metadata, StorageEntry, TypeEntry, Variant } from "./metadata.js";
 import { parseMetadata } from "./metadata.js";
-import { ScaleError, toHex } from "./reader.js";
+import { MAX_INPUT_BYTES, ScaleError, toHex, withinSize } from "./reader.js";
 import { storageEntryOf } from "./storage-key.js";
 
-/** @2: each entry states its default bytes, and the FlopSessionKeys entries are stated. */
+/** @2: each entry states its default bytes, each stated pallet its storage prefix, and the FlopSessionKeys entries are stated. */
 export const SHAPE_SCHEMA = "flop-observatory/decoder-shape@2";
 
 /**
@@ -75,7 +76,7 @@ export const REVIEWED: readonly ReviewedShape[] = [
     metadataSha256: "f4fd2addba7fff1129483d0e66b8e6bc69141292f56443e201d3f073aab03444",
     metadataBytes: 482132,
     shapeFile: "shapes/tzkv-runtime-1014014.json",
-    shapeSha256: "6c0f448801c913c069239af039119e569f5951c1e7738607832873f79385b7e5",
+    shapeSha256: "679f98aa06abf1d9b376fe4243e4d13c1b5ae80e9b6cdf1fd1e0190c1e7660e7",
   },
 ];
 
@@ -299,6 +300,12 @@ export function deriveShape(md: Metadata, n: Namer = namer(md)): ShapeValue {
   const nonces = storageEntryOf(md, "FlopSessionKeys", "SessionNonces").entry;
   const breakers = storageEntryOf(md, "FlopSessionKeys", "CircuitBreakers").entry;
   const keyOf = (e: StorageEntry): number[] => (e.key === null ? [] : [e.key]);
+  /** The storage prefix every key of the pallet starts from, written into the shape and paid for. */
+  const prefixOf = (p: { storage: { prefix: string } | null }): string => {
+    const prefix = p.storage?.prefix ?? "";
+    write(n, prefix.length);
+    return prefix;
+  };
   const recordType = md.types.at(events.value)?.def;
   if (recordType?.kind !== "sequence") throw new ScaleError("System.Events is not a list");
   const channel = compositeFields(md, channels.value, "the value of ComputeChannel.Channels");
@@ -310,18 +317,21 @@ export function deriveShape(md: Metadata, n: Namer = namer(md)): ShapeValue {
     spec_version: v.spec_version ?? null,
     system: {
       index: system.index,
+      storage_prefix: prefixOf(system),
       events: { ...entryShape(n, events), record: fieldsOf(n, compositeFields(md, recordType.type, "an event record")) },
       last_runtime_upgrade: { ...entryShape(n, upgrade), fields: fieldsOf(n, compositeFields(md, upgrade.value, "the value of System.LastRuntimeUpgrade")) },
       version: nameOf(n, version.type),
     },
     compute_channel: {
       index: cc.index,
+      storage_prefix: prefixOf(cc),
       events: variantsOf(n, variants(md, cc.event, "the ComputeChannel event type")),
       channels: { ...entryShape(n, channels), fields: fieldsOf(n, channel) },
       channel_states: variantsOf(n, variants(md, state?.type ?? null, "the state of a channel")),
     },
     flop_session_keys: {
       index: fsk.index,
+      storage_prefix: prefixOf(fsk),
       sessions: entryShape(n, sessions),
       session_nonces: entryShape(n, nonces),
       circuit_breakers: entryShape(n, breakers),
@@ -365,24 +375,60 @@ export interface PinInput {
 
 const refuse = (refused: string): Pin => ({ pinned: false, refused });
 
-/** A copy of bytes the caller holds, or a refusal: what is hashed is then what is parsed. */
+/** The longest spec name, pallet name or entry name a door reads; a longer one is refused unread. */
+export const MAX_NAME_INPUT = 256;
+
+/**
+ * One field of a caller's input, read once. Anything thrown while it is read (a getter, a Proxy
+ * trap) is a refusal with this text of ours: the foreign error is never looked at, so its message,
+ * its class and its own getters never reach the caller.
+ */
+export function readField<T>(read: () => T, what: string): T {
+  try {
+    return read();
+  } catch {
+    throw new ScaleError(`${what} could not be read`);
+  }
+}
+
+/**
+ * A copy of bytes the caller holds, or a refusal: what is hashed is then what is parsed. The bytes
+ * are taken only from a real typed array: Uint8Array.prototype.slice refuses anything else, a
+ * Proxy over one included, and reads no iterator; the copy it gives is copied once more by the
+ * typed array constructor from its internal slots. Past MAX_INPUT_BYTES the copy is refused.
+ */
 export function copyBytes(v: unknown, what: string): Uint8Array {
-  if (!(v instanceof Uint8Array)) throw new ScaleError(`${what} is not bytes`);
-  // The typed array constructor copies from the source's own buffer, through no getter.
-  return new Uint8Array(v);
+  let copy: Uint8Array;
+  try {
+    if (!(v instanceof Uint8Array)) throw new ScaleError(what);
+    copy = new Uint8Array(Uint8Array.prototype.slice.call(v));
+  } catch {
+    throw new ScaleError(`${what} is not bytes`);
+  }
+  withinSize(copy, what);
+  return copy;
+}
+
+/** The input as an object whose fields may be read, or a refusal. */
+export function inputObject(input: unknown): object {
+  if (typeof input !== "object" || input === null) throw new ScaleError("the input is not an object");
+  return input;
 }
 
 /**
  * Each field of the input read exactly once, the byte arrays copied. A getter, or a buffer the
  * caller changes later, can then never hand the hash one value and the parser another.
  */
-export function copyPinInput(input: PinInput): PinInput {
-  const specName = input.specName;
-  const specVersion = input.specVersion;
-  const metadata = input.metadata;
-  const lastRuntimeUpgrade = input.lastRuntimeUpgrade;
-  const shape = input.shapeText;
+export function copyPinInput(input: unknown): PinInput {
+  const i = inputObject(input) as PinInput;
+  const specName = readField(() => i.specName, "the spec name");
+  const specVersion = readField(() => i.specVersion, "the spec version");
+  const metadata = readField(() => i.metadata, "the metadata");
+  const lastRuntimeUpgrade = readField(() => i.lastRuntimeUpgrade, "the LastRuntimeUpgrade");
+  const shape = readField(() => i.shapeText, "the shape file");
   if (typeof specName !== "string" || typeof specVersion !== "number" || typeof shape !== "string") throw new ScaleError("the spec name, spec version and shape file must be a string, a number and a string");
+  if (specName.length > MAX_NAME_INPUT) throw new ScaleError(`the spec name is longer than ${MAX_NAME_INPUT} characters`);
+  if (shape.length > MAX_INPUT_BYTES) throw new ScaleError(`the shape file is longer than ${MAX_INPUT_BYTES} characters`);
   return { specName, specVersion, metadata: copyBytes(metadata, "the metadata"), lastRuntimeUpgrade: copyBytes(lastRuntimeUpgrade, "the LastRuntimeUpgrade"), shapeText: shape };
 }
 

@@ -80,7 +80,7 @@ const H256 = idOf((t) => t.path.at(-1) === "H256");
  * (Sessions, SessionNonces, CircuitBreakers). The event enum has one
  * event E, whose fields are given; extra types follow from id 12.
  */
-function shapeMetadata(o: { eventFields?: { name: string; type: number }[]; record?: { name: string; type: number }[]; extra?: TypeSpec[]; constants?: { name: string; type: number; value: Uint8Array }[]; sessionKeys?: string[] }): Uint8Array {
+function shapeMetadata(o: { eventFields?: { name: string; type: number }[]; record?: { name: string; type: number }[]; extra?: TypeSpec[]; constants?: { name: string; type: number; value: Uint8Array }[]; sessionKeys?: string[]; sessionFallback?: Uint8Array }): Uint8Array {
   const types: TypeSpec[] = [
     { def: def.primitive("u8") }, // 0
     { def: def.primitive("str") }, // 1
@@ -107,7 +107,7 @@ function shapeMetadata(o: { eventFields?: { name: string; type: number }[]; reco
     {
       name: "FlopSessionKeys",
       index: 2,
-      entries: (o.sessionKeys ?? ["Sessions", "SessionNonces", "CircuitBreakers"]).map((name) => ({ name, map: { hashers: ["Blake2_128Concat"], key: 0, value: 2 } })),
+      entries: (o.sessionKeys ?? ["Sessions", "SessionNonces", "CircuitBreakers"]).map((name) => ({ name, map: { hashers: ["Blake2_128Concat"], key: 0, value: 2 }, ...(name === "Sessions" && o.sessionFallback ? { fallback: o.sessionFallback } : {}) })),
     },
   ];
   return metadata(types, pallets);
@@ -136,7 +136,7 @@ describe("crashes that are not a ScaleError", () => {
     deriveShape(MD, n);
     const steps = MAX_SHAPE_STEPS - n.steps.left;
     const chars = MAX_SHAPE_CHARS - n.chars.left;
-    expect({ steps, chars }).toEqual({ steps: 9733, chars: 18414 });
+    expect({ steps, chars }).toEqual({ steps: 9733, chars: 18449 });
     // Past either budget, a ScaleError.
     const tight = namer(MD);
     tight.steps.left = 100;
@@ -268,6 +268,15 @@ describe("values decoded wrong, or valid values refused", () => {
       const md = parseMetadata(shapeMetadata({ sessionKeys: ["Sessions", "SessionNonces", "CircuitBreakers"].filter((e) => e !== missing) }));
       expect(thrown(() => deriveShape(md))).toEqual({ cls: "ScaleError", message: `pallet FlopSessionKeys has no storage entry ${JSON.stringify(missing)}` });
     }
+  });
+
+  it("review round 20: the shape states an Optional entry's default as the metadata gives it, also when it is not 0x00", () => {
+    const md = parseMetadata(shapeMetadata({ sessionFallback: new Uint8Array([1, 2, 3, 4]) }));
+    const sessions = md.pallets.find((p) => p.name === "FlopSessionKeys")?.storage?.entries.find((e) => e.name === "Sessions");
+    expect(sessions?.modifier).toBe("Optional");
+    const shape = JSON.parse(shapeText(deriveShape(md)));
+    expect(shape.flop_session_keys.sessions.default).toBe("0x01020304");
+    expect(shape.flop_session_keys.session_nonces.default).toBe("0x");
   });
 
   it("review defect 8, fixed: two constants of one name in a pallet are refused, so deriveShape never reads the spec from one of two", () => {
@@ -578,10 +587,12 @@ describe("the shape pin", () => {
         channels: { ...strip(channels), fields: fields(channel) },
         events: variants(cc?.events ?? -1),
         index: cc?.index,
+        storage_prefix: cc?.storage?.prefix,
       },
       flop_session_keys: {
         circuit_breakers: strip(breakers),
         index: fsk?.index,
+        storage_prefix: fsk?.storage?.prefix,
         session_nonces: strip(nonces),
         sessions: strip(sessions),
       },
@@ -591,6 +602,7 @@ describe("the shape pin", () => {
       system: {
         events: { ...strip(events), record: fields(composite(seq.value)) },
         index: sys?.index,
+        storage_prefix: sys?.storage?.prefix,
         last_runtime_upgrade: { ...strip(upgrade), fields: fields(composite(upgrade.valueId)) },
         version: name(versionConstant?.type ?? -1),
       },

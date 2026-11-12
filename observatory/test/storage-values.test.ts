@@ -1,19 +1,28 @@
 // Storage values (src/scale/block.ts decodeStorageValue): the 28 storage reads of the second real
-// recording decoded through the one door, and each value held to what the lab's own devnet tests
-// recorded (research/2026-11-11-session-escrow/results.json and
-// research/2026-11-11-session-probe/results.json). Every expected value is taken from those files
-// or from the first recording in this test, never typed in. Where no file holds a value, the test
-// asserts what a chain rule says must hold, and each such assert is marked RULE; a value that no
-// file and no rule fixes is marked READ: it is held to what the recording holds, so a change shows,
-// and the report names it. Real data from one RPC endpoint: evidence, never proof (RULES.md 8).
+// recording decoded through the one door, and every field of every stored value held to something
+// that is not this decoder (review round 20, rule R2):
+//   (a) a results file of the lab's own devnet tests (research/2026-11-11-session-escrow and
+//       research/2026-11-11-session-probe, results.json),
+//   (b) an event of a recording (the first recording names the gateway channel's miner), or
+//   (c) the reference decoder's decode of the same bytes (polkadot-api, tests only), marked READ.
+// FIELDS below names the source of each field of each read, and a test fails when a field of a
+// decoded value has none. The six System.Events reads are held to the results files: the sha256
+// each file gives of the value, and the outcome event of each step at its extrinsic index. Where
+// an assert rests on a chain rule and not on a file, it is marked RULE. Every expected value is
+// taken from those files or from a recording in this test, never typed in. Real data from one RPC
+// endpoint: evidence, never proof (RULES.md section 8).
+import { getDynamicBuilder, getLookupFn } from "@polkadot-api/metadata-builders";
+import { decAnyMetadata, unifyMetadata } from "@polkadot-api/substrate-bindings";
+import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { type StorageRead as DoorRead, type StorageValue, decodeBlockEvents, decodeStorageValue } from "../src/scale/block.js";
 import { type Decoded, decodeAt, decodeValue, decoding, valueBudget } from "../src/scale/decode.js";
 import { decodeEvents } from "../src/scale/events.js";
 import { parseMetadata } from "../src/scale/metadata.js";
-import { ScaleError } from "../src/scale/reader.js";
-import { REVIEWED } from "../src/scale/shape.js";
+import { MAX_INPUT_BYTES, ScaleError } from "../src/scale/reader.js";
+import { REVIEWED, pinShape } from "../src/scale/shape.js";
+import { type Plain, plain } from "./helpers/plain.js";
 import { hexBytes, recorded } from "./helpers/recorded.js";
 import { type StorageRead, recordedStorage } from "./helpers/recorded-storage.js";
 import type { Block, Read } from "./helpers/requests-derive.js";
@@ -62,14 +71,24 @@ const stepOf = (rec: { steps: { step: string; finalized_in_block: number }[] }, 
 };
 const utf8 = (hex: Decoded) => Buffer.from(hexBytes(String(hex))).toString("utf8");
 
-/** The create_session call a test record holds, decoded with the recorded metadata: the session's terms as sent. */
-function createSession(rec: { steps: { step: string; call: string }[] }) {
-  const call = hexBytes(String(stepOf(rec as never, "2-create-session").call));
-  const fsk = MD.pallets.find((p) => p.name === "FlopSessionKeys");
-  expect(call.at(0)).toBe(fsk?.index);
-  const v = decodeValue(MD, fsk?.calls ?? -1, call.subarray(1)) as { variant: string; fields: Record<string, Decoded> };
-  expect(v.variant).toBe("create_session");
-  return v.fields;
+/**
+ * The terms of the session a test record's create_session step states, in its own words:
+ * "lifetime cap N raw ..., per call N raw ..., per day N raw ..., for N blocks, allowed pallets X".
+ */
+function sessionTerms(rec: { steps: { step: string; what: string }[] }) {
+  const what = String(stepOf(rec as never, "2-create-session").what);
+  const m = /lifetime cap (\d+) raw .*, per call (\d+) raw .*, per day (\d+) raw .*, for (\d+) blocks, allowed pallets (\w+(?:, \w+)*)$/.exec(what);
+  if (m === null) throw new Error(`the create_session step does not state its terms: ${what}`);
+  return { spending_cap: m[1], per_tx_limit: m[2], daily_cap: m[3], duration_blocks: Number(m[4]), allowed_pallets: String(m[5]).split(", ") };
+}
+const hexText = (s: string) => `0x${Buffer.from(s, "utf8").toString("hex")}`;
+const BUILDER = getDynamicBuilder(getLookupFn(unifyMetadata(decAnyMetadata(S.metadata))));
+const typeOf = (r: StorageRead) => MD.pallets.find((p) => p.name === r.read.pallet)?.storage?.entries.find((e) => e.name === r.read.entry)?.value ?? -1;
+/** A stored value in the plain form, on our side and on the reference's, from the same bytes. */
+function bothSides(r: StorageRead): { ours: Plain; reference: Plain } {
+  const v = DECODED.get(r.seq);
+  if (v === undefined || !v.decoded || r.answer === null) throw new Error(`${r.read.entry} at ${r.height} is no stored value`);
+  return { ours: plain(MD, "ours", typeOf(r), v.value), reference: plain(MD, "reference", typeOf(r), BUILDER.buildStorage(r.read.pallet, r.read.entry).value.dec(r.answer.slice())) };
 }
 
 describe("the storage door, on the second recording", () => {
@@ -155,7 +174,7 @@ describe("the storage door, on the second recording", () => {
     expect(decodeStorageValue(doorInput(r, { key: "0x00" as never }))).toEqual({ decoded: false, refused: "not decoded: the storage key is not bytes" });
     expect(decodeStorageValue(doorInput(r, { keys: "0x00" as never }))).toEqual({ decoded: false, refused: "not decoded: the key parts are not a list" });
     expect(decodeStorageValue(doorInput(r, { keys: ["0x00" as never] }))).toEqual({ decoded: false, refused: "not decoded: key part 0 is not bytes" });
-    expect(decodeStorageValue(doorInput(r, { entry: 7 as never }))).toEqual({ decoded: false, refused: "not decoded: the pallet and the entry must be strings" });
+    expect(decodeStorageValue(doorInput(r, { entry: 7 as never }))).toEqual({ decoded: false, refused: "not decoded: the pallet and the entry must be strings of at most 256 characters" });
   });
 
   it("reads each field of its input once and copies its bytes: an answer changed after the call or behind a getter changes nothing", () => {
@@ -173,6 +192,121 @@ describe("the storage door, on the second recording", () => {
     expect(reads).toBe(1);
     expect(v).toEqual(DECODED.get(r.seq));
   });
+
+  it("checks the key byte for byte: one byte more, one byte fewer, the last byte changed, and another plain entry's key are refused, and no refusal prints the key", () => {
+    const b = readAt(3497611, "CircuitBreakers", "device_2");
+    const key = hexBytes(b.key);
+    const last = new Uint8Array(key);
+    last.set([(last.at(-1) ?? 0) ^ 1], last.length - 1);
+    expect(decodeStorageValue(doorInput(b, { key: new Uint8Array([...key, 0]) }))).toEqual({ decoded: false, refused: `FlopSessionKeys.CircuitBreakers: the key asked is ${key.length + 1} bytes, more than the ${key.length} of this entry and these key parts` });
+    expect(decodeStorageValue(doorInput(b, { key: key.subarray(0, -1) }))).toEqual({ decoded: false, refused: `FlopSessionKeys.CircuitBreakers: the key asked is ${key.length - 1} bytes, fewer than the ${key.length} of this entry and these key parts` });
+    expect(decodeStorageValue(doorInput(b, { key: last }))).toEqual({ decoded: false, refused: "FlopSessionKeys.CircuitBreakers: the key asked is not the key of this entry and these key parts" });
+    // A plain entry: System.Events asked under the key of System.LastRuntimeUpgrade, of the same length.
+    const events = S.reads.find((r) => r.read.entry === "Events") as StorageRead;
+    const lru = S.calls.find((c) => c.method === "state_getStorage" && c.params[1] === events.hash && c.params[0] !== events.key)?.params[0] as string;
+    expect(hexBytes(lru).length).toBe(hexBytes(events.key).length);
+    expect(decodeStorageValue(doorInput(events, { key: hexBytes(lru) }))).toEqual({ decoded: false, refused: "System.Events: the key asked is not the key of this entry and these key parts" });
+    // A key past the decoder's size limit is refused by its size, and the refusal stays short.
+    const huge = decodeStorageValue(doorInput(b, { key: new Uint8Array(MAX_INPUT_BYTES + 1) }));
+    expect(huge).toEqual({ decoded: false, refused: `not decoded: the storage key is ${MAX_INPUT_BYTES + 1} bytes, more than the ${MAX_INPUT_BYTES} this decoder reads` });
+  });
+
+  it("refuses an answer that is undefined: only null means absent", () => {
+    for (const r of [readAt(3497611, "CircuitBreakers", "device_2"), readAt(3497567, "Channels", "ours"), readAt(3497611, "SessionNonces", "device_2")]) {
+      expect(decodeStorageValue(doorInput(r, { answer: undefined as never }))).toEqual({ decoded: false, refused: "not decoded: the answer is not bytes" });
+    }
+  });
+
+  it("reads the pallet and the entry first, and refuses an unstated entry before any other field is read, its malformed key parts included", () => {
+    const r = readAt(3497611, "CircuitBreakers", "device_2");
+    const seen: string[] = [];
+    const input = new Proxy(doorInput(r, { entry: "DelegateSessions", keys: "not a list" as never }), {
+      get(t, k, recv) {
+        seen.push(String(k));
+        return Reflect.get(t, k, recv);
+      },
+    });
+    expect(decodeStorageValue(input)).toEqual({ decoded: false, refused: 'not decoded: "FlopSessionKeys"."DelegateSessions" is not a storage entry the reviewed shape states' });
+    expect(seen).toEqual(["pallet", "entry"]);
+    // A stated entry: the pin's fields, then the key parts, the key and the answer, each once.
+    seen.length = 0;
+    const stated = new Proxy(doorInput(r), {
+      get(t, k, recv) {
+        seen.push(String(k));
+        return Reflect.get(t, k, recv);
+      },
+    });
+    expect(decodeStorageValue(stated)).toEqual(DECODED.get(r.seq));
+    expect(seen).toEqual(["pallet", "entry", "specName", "specVersion", "metadata", "lastRuntimeUpgrade", "shapeText", "keys", "key", "answer"]);
+    expect(decodeStorageValue(doorInput(r, { pallet: "F".repeat(257) }))).toEqual({ decoded: false, refused: "not decoded: the pallet and the entry must be strings of at most 256 characters" });
+  });
+
+  it("refuses an input that is not plain data, with a text of its own: not an object, a getter that throws, a revoked Proxy, a Proxy over bytes", () => {
+    const r = readAt(3497611, "CircuitBreakers", "device_2");
+    for (const bad of [null, undefined, 7, "x", true]) expect(decodeStorageValue(bad as never)).toEqual({ decoded: false, refused: "not decoded: the input is not an object" });
+    for (const field of ["pallet", "entry", "specName", "metadata", "keys", "key", "answer"] as const) {
+      const input = doorInput(r);
+      Object.defineProperty(input, field, {
+        get() {
+          throw new Error("SECRET from the caller");
+        },
+      });
+      const v = decodeStorageValue(input);
+      expect(v.decoded, field).toBe(false);
+      expect(JSON.stringify(v), field).not.toContain("SECRET");
+      expect(v.decoded ? "" : v.refused, field).toMatch(/^not decoded: .* could not be read$/);
+    }
+    const { proxy, revoke } = Proxy.revocable(doorInput(r), {});
+    revoke();
+    expect(decodeStorageValue(proxy)).toEqual({ decoded: false, refused: "not decoded: the pallet could not be read" });
+    // A Proxy over a Uint8Array passes instanceof, and is refused all the same, its iterator never read.
+    let pulls = 0;
+    const fake = new Proxy(new Uint8Array(r.answer ?? []), {
+      get(t, k) {
+        if (k === Symbol.iterator) pulls++;
+        return Reflect.get(t, k);
+      },
+    });
+    expect(decodeStorageValue(doorInput(r, { answer: fake }))).toEqual({ decoded: false, refused: "not decoded: the answer is not bytes" });
+    expect(decodeStorageValue(doorInput(r, { key: fake }))).toEqual({ decoded: false, refused: "not decoded: the storage key is not bytes" });
+    expect(pulls).toBe(0);
+    // Key parts are read by index once their count is checked, never through the list's iterator.
+    const keys = new Proxy(keyBytes(r.read), {
+      get(t, k) {
+        if (k === Symbol.iterator) throw new TypeError("no iterator");
+        return Reflect.get(t, k);
+      },
+    });
+    expect(decodeStorageValue(doorInput(r, { keys }))).toEqual(DECODED.get(r.seq));
+    const long = new Proxy(keyBytes(r.read), { get: (t, k) => (k === "length" ? 2 ** 40 : Reflect.get(t, k)) });
+    expect(decodeStorageValue(doorInput(r, { keys: long }))).toEqual({ decoded: false, refused: "FlopSessionKeys.CircuitBreakers: storage FlopSessionKeys.CircuitBreakers takes 1 map keys, not 1099511627776" });
+  });
+
+  it("the other two doors refuse such input too: decodeBlockEvents and pinShape", () => {
+    const b = FIRST.blocks.at(0);
+    const base = { specName: "tzkv-runtime", specVersion: 1014014, metadata: FIRST.metadata, lastRuntimeUpgrade: b?.lastRuntimeUpgrade ?? new Uint8Array(), shapeText: SHAPE };
+    for (const bad of [null, 7]) {
+      expect(decodeBlockEvents(bad as never)).toEqual({ decoded: false, refused: "not decoded: the input is not an object" });
+      expect(pinShape(bad as never)).toEqual({ pinned: false, refused: "the input is not an object" });
+    }
+    const thrower = { ...base, events: b?.events ?? new Uint8Array() };
+    Object.defineProperty(thrower, "events", {
+      get() {
+        throw new Error("SECRET");
+      },
+    });
+    expect(decodeBlockEvents(thrower)).toEqual({ decoded: false, refused: "not decoded: the events could not be read" });
+    const pinThrower = { ...base };
+    Object.defineProperty(pinThrower, "shapeText", {
+      get() {
+        throw new Error("SECRET");
+      },
+    });
+    expect(pinShape(pinThrower)).toEqual({ pinned: false, refused: "the shape file could not be read" });
+    expect(pinShape({ ...base, metadata: new Proxy(FIRST.metadata, {}) })).toEqual({ pinned: false, refused: "the metadata is not bytes" });
+    expect(pinShape({ ...base, specName: "t".repeat(257) })).toEqual({ pinned: false, refused: "the spec name is longer than 256 characters" });
+    expect(pinShape(base).pinned).toBe(true);
+  });
 });
 
 describe("the first recording still pins and decodes exactly as before", () => {
@@ -186,7 +320,7 @@ describe("the first recording still pins and decodes exactly as before", () => {
 });
 
 describe("values against the second session test (research/2026-11-11-session-escrow)", () => {
-  const terms = createSession(ESC);
+  const terms = sessionTerms(ESC);
   const created = heightOf("session-escrow/2-create-session");
   const AFTER: [Block, string][] = [
     ["session-escrow/2-create-session", "after_step_2"],
@@ -208,7 +342,7 @@ describe("values against the second session test (research/2026-11-11-session-es
         daily_cap: ESC.session.daily_cap_raw,
         expires_at: ESC.session.expires_at,
       });
-      expect([v.spending_cap, v.per_tx_limit, v.daily_cap, v.delegate]).toEqual([terms.spending_cap, terms.per_tx_limit, terms.daily_cap, terms.delegate]);
+      expect([v.spending_cap, v.per_tx_limit, v.daily_cap]).toEqual([terms.spending_cap, terms.per_tx_limit, terms.daily_cap]);
       expect((v.allowed_pallets as Decoded[]).map(utf8)).toEqual(ESC.session.allowed_pallets);
       // RULE: a session expires its duration after the block that created it.
       expect(v.expires_at).toBe(created + Number(terms.duration_blocks));
@@ -308,7 +442,7 @@ describe("values against the second session test (research/2026-11-11-session-es
 });
 
 describe("values against the first session test (research/2026-11-11-session-probe)", () => {
-  const terms = createSession(PRB);
+  const terms = sessionTerms(PRB);
   const created = heightOf("session-probe/2-create-session");
   const revoke = heightOf("session-probe/5-revoke-session");
 
@@ -318,8 +452,7 @@ describe("values against the first session test (research/2026-11-11-session-pro
       const v = valueAt(h, "Sessions", "device_1");
       expect(v.stored).toBe(true);
       expect(v.value).toMatchObject({ owner: PRB.owner.public_key, delegate: PRB.device.public_key, spending_cap: terms.spending_cap, per_tx_limit: terms.per_tx_limit, daily_cap: terms.daily_cap });
-      expect(v.value.delegate).toBe(terms.delegate);
-      expect((v.value.allowed_pallets as Decoded[]).map(utf8)).toEqual((terms.allowed_pallets as Decoded[]).map(utf8));
+      expect((v.value.allowed_pallets as Decoded[]).map(utf8)).toEqual(terms.allowed_pallets);
       // RULE: it expires its duration after creation; the record's note and left_on_chain give the same block.
       expect(v.value.expires_at).toBe(created + Number(terms.duration_blocks));
       expect(String(stepOf(PRB, "2-create-session").note)).toContain(`expires at block ${v.value.expires_at}`);

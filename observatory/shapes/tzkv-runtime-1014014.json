@@ -1365,7 +1365,8 @@
         "name": "FcuServiceProfileStatusSet"
       }
     ],
-    "index": 103
+    "index": 103,
+    "storage_prefix": "ComputeChannel"
   },
   "flop_session_keys": {
     "circuit_breakers": {
@@ -1397,7 +1398,8 @@
       "key": "(AccountId32#0, AccountId32#0)",
       "modifier": "Optional",
       "value": "SessionToken#697"
-    }
+    },
+    "storage_prefix": "FlopSessionKeys"
   },
   "schema": "flop-observatory/decoder-shape@2",
   "spec_name": "tzkv-runtime",
@@ -1442,6 +1444,7 @@
       "modifier": "Optional",
       "value": "LastRuntimeUpgradeInfo#462"
     },
+    "storage_prefix": "System",
     "version": "RuntimeVersion#473"
   },
   "types": {

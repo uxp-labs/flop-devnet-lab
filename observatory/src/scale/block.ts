@@ -4,8 +4,9 @@
 // access.
 import { type Decoded, decodeValue } from "./decode.js";
 import { type BlockEvent, decodeEvents } from "./events.js";
-import { ScaleError, toHex } from "./reader.js";
-import { type PinInput, type ReviewedShape, STATED_ENTRIES, copyBytes, copyPinInput, pinShape } from "./shape.js";
+import type { StorageEntry } from "./metadata.js";
+import { ScaleError } from "./reader.js";
+import { MAX_NAME_INPUT, type PinInput, type ReviewedShape, STATED_ENTRIES, copyBytes, copyPinInput, inputObject, pinShape, readField } from "./shape.js";
 import { storageEntryOf, storageKey } from "./storage-key.js";
 
 export type BlockEvents = { decoded: true; reviewed: ReviewedShape; events: BlockEvent[] } | { decoded: false; refused: string };
@@ -16,8 +17,9 @@ export function decodeBlockEvents(input: PinInput & { events: Uint8Array }): Blo
   let pinInput: PinInput;
   let events: Uint8Array;
   try {
-    pinInput = copyPinInput(input);
-    events = copyBytes(input.events, "the events");
+    const i = inputObject(input) as PinInput & { events: Uint8Array };
+    pinInput = copyPinInput(i);
+    events = copyBytes(readField(() => i.events, "the events"), "the events");
   } catch (e) {
     if (e instanceof ScaleError) return { decoded: false, refused: `not decoded: ${e.message}` };
     throw e;
@@ -52,54 +54,71 @@ export interface StorageRead extends PinInput {
  */
 export type StorageValue = { decoded: true; reviewed: ReviewedShape; stored: boolean; value: Decoded } | { decoded: false; refused: string };
 
-/** Each field of the read taken once, the byte arrays copied, or a refusal. */
-function copyRead(input: StorageRead): { pin: PinInput; pallet: string; entry: string; keys: Uint8Array[]; key: Uint8Array; answer: Uint8Array | null } {
-  const pin = copyPinInput(input);
-  const pallet = input.pallet;
-  const entry = input.entry;
-  const keys = input.keys;
-  const key = input.key;
-  const answer = input.answer;
-  if (typeof pallet !== "string" || typeof entry !== "string") throw new ScaleError("the pallet and the entry must be strings");
-  if (!Array.isArray(keys)) throw new ScaleError("the key parts are not a list");
-  return {
-    pin,
-    pallet,
-    entry,
-    keys: Array.from(keys, (k, i) => copyBytes(k, `key part ${i}`)),
-    key: copyBytes(key, "the storage key"),
-    answer: answer === null ? null : copyBytes(answer, "the answer"),
-  };
-}
+/** A refusal of the input, before or beside the decode. */
+class InputRefusal extends ScaleError {}
+
+/** The number of map key parts an entry takes: none for a plain entry, one a hasher for a map. */
+const partsOf = (e: StorageEntry): number => (e.key === null ? 0 : e.hashers.length);
 
 /**
- * The value of a storage entry the reviewed shape states, at a pinned block. Refused when the
- * entry is not one the shape states, when the block is not pinned, when the key asked is not the
- * key the entry and key parts give (so a value is never read under another entry or account), or
- * when the answer is not one whole value of the entry's type.
+ * The value of a storage entry the reviewed shape states, at a pinned block. In this order, each
+ * field of the input read once and only when its step comes: the pallet and entry names, and an
+ * entry the shape does not state is refused before any other field is read; then the pin; then the
+ * key parts, as many as the entry takes, and the key asked, refused when it is not, byte for byte,
+ * the key that entry and those parts give (so a value is never read under another entry or
+ * account); then the answer, which must be bytes, one whole value of the entry's type, or null.
  */
 export function decodeStorageValue(input: StorageRead): StorageValue {
-  let r: ReturnType<typeof copyRead>;
   try {
-    r = copyRead(input);
+    return door(input);
   } catch (e) {
     if (e instanceof ScaleError) return { decoded: false, refused: `not decoded: ${e.message}` };
     throw e;
   }
-  const name = `${JSON.stringify(r.pallet)}.${JSON.stringify(r.entry)}`;
-  if (!STATED_ENTRIES.some(([p, e]) => p === r.pallet && e === r.entry)) return { decoded: false, refused: `not decoded: ${name} is not a storage entry the reviewed shape states` };
-  const pin = pinShape(r.pin);
-  if (!pin.pinned) return { decoded: false, refused: `not decoded: ${pin.refused}` };
+}
+
+function door(input: StorageRead): StorageValue {
+  const i = inputObject(input) as StorageRead;
+  const pallet = readField(() => i.pallet, "the pallet");
+  const entry = readField(() => i.entry, "the entry");
+  if (typeof pallet !== "string" || typeof entry !== "string" || pallet.length > MAX_NAME_INPUT || entry.length > MAX_NAME_INPUT) {
+    throw new InputRefusal(`the pallet and the entry must be strings of at most ${MAX_NAME_INPUT} characters`);
+  }
+  if (!STATED_ENTRIES.some(([p, e]) => p === pallet && e === entry)) throw new InputRefusal(`${JSON.stringify(pallet)}.${JSON.stringify(entry)} is not a storage entry the reviewed shape states`);
+  const pin = pinShape(copyPinInput(i));
+  if (!pin.pinned) throw new InputRefusal(pin.refused);
   const md = pin.metadata;
+  const name = `${pallet}.${entry}`;
+  const decoded = (stored: boolean, value: Decoded): StorageValue => ({ decoded: true, reviewed: pin.reviewed, stored, value });
+  const fail = (why: string): StorageValue => ({ decoded: false, refused: `${name}: ${why}` });
+  const e = storageEntryOf(md, pallet, entry).entry;
+  // The key parts, by index, once the list says it holds exactly as many as the entry takes.
+  const parts = partsOf(e);
+  const list = readField(() => i.keys, "the key parts");
+  if (!readField(() => Array.isArray(list), "the key parts")) throw new InputRefusal("the key parts are not a list");
+  const count = readField(() => (list as readonly unknown[]).length, "the number of key parts");
+  if (count !== parts) return fail(`storage ${name} takes ${parts} map keys, not ${Number.isSafeInteger(count) ? count : "a count"}`);
+  const keys: Uint8Array[] = [];
+  for (let k = 0; k < parts; k++) keys.push(copyBytes(readField(() => Array.prototype.at.call(list, k), `key part ${k}`), `key part ${k}`));
+  let built: Uint8Array;
   try {
-    const built = toHex(storageKey(md, r.pallet, r.entry, r.keys));
-    if (built !== toHex(r.key)) return { decoded: false, refused: `${r.pallet}.${r.entry}: the key asked is not the key of this entry and these key parts` };
-    const e = storageEntryOf(md, r.pallet, r.entry).entry;
-    if (r.answer !== null) return { decoded: true, reviewed: pin.reviewed, stored: true, value: decodeValue(md, e.value, r.answer) };
-    if (e.modifier === "Optional") return { decoded: true, reviewed: pin.reviewed, stored: false, value: null };
-    return { decoded: true, reviewed: pin.reviewed, stored: false, value: decodeValue(md, e.value, e.fallback) };
-  } catch (e) {
-    if (e instanceof ScaleError) return { decoded: false, refused: `${r.pallet}.${r.entry}: ${e.message}` };
-    throw e;
+    built = storageKey(md, pallet, entry, keys);
+  } catch (x) {
+    if (x instanceof ScaleError) return fail(x.message);
+    throw x;
+  }
+  // The key asked: its length first, never turned into text, then byte by byte.
+  const asked = copyBytes(readField(() => i.key, "the storage key"), "the storage key");
+  if (asked.length !== built.length) return fail(`the key asked is ${asked.length} bytes, ${asked.length > built.length ? "more" : "fewer"} than the ${built.length} of this entry and these key parts`);
+  for (let b = 0; b < built.length; b++) if (asked.at(b) !== built.at(b)) return fail("the key asked is not the key of this entry and these key parts");
+  const raw = readField(() => i.answer, "the answer");
+  const answer = raw === null ? null : copyBytes(raw, "the answer");
+  try {
+    if (answer !== null) return decoded(true, decodeValue(md, e.value, answer));
+    if (e.modifier === "Optional") return decoded(false, null);
+    return decoded(false, decodeValue(md, e.value, e.fallback));
+  } catch (x) {
+    if (x instanceof ScaleError) return fail(x.message);
+    throw x;
   }
 }
