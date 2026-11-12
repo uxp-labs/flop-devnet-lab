@@ -14,6 +14,7 @@ import { REQUESTS_SCHEMA, type RequestCall } from "../src/requests.js";
 import { TAPE_SCHEMA, TapeTransport, parseTape } from "../src/tape.js";
 import type { Transport } from "../src/transport.js";
 import { type Reply, network } from "./helpers/answering.js";
+import { requestsListText } from "./helpers/requests-list.js";
 
 const CLOCK = () => "2026-11-11T12:00:00.000Z";
 const SHA = "0123456789abcdef0123456789abcdef01234567";
@@ -103,6 +104,37 @@ describe("runRecord", () => {
     );
     expect(read(out, "SHA256SUMS")).toBe(`${sha(read(out, "run.json"))}  run.json\n${sha(read(out, "tape.jsonl"))}  tape.jsonl\n`);
     expect(sumsText(out)).toBe(read(out, "SHA256SUMS"));
+  });
+
+  it("sends one call at a time: the next is asked only once the one before has its answer, the current list's two state_getMetadata calls among them", async () => {
+    // A fake transport that counts the calls in flight. Four state_getMetadata calls sent at once over
+    // one socket failed with a socket error in the lead's browser pane, one at a time they answered.
+    const text = requestsListText();
+    const list = (JSON.parse(text) as { calls: RequestCall[] }).calls;
+    let inFlight = 0;
+    let most = 0;
+    const asked: [string, unknown[]][] = [];
+    const t: Transport = {
+      trust: "trusted RPC",
+      label: "rpc a fake that counts the calls in flight",
+      async rpc(method, params) {
+        asked.push([method, [...params]]);
+        inFlight++;
+        most = Math.max(most, inFlight);
+        await new Promise((resolve) => setTimeout(resolve, 1));
+        inFlight--;
+        return (answers(method, [...params]) as { result: unknown }).result;
+      },
+      httpGet: () => Promise.reject(new Error("a record run makes no GET")),
+      now: CLOCK,
+      close: () => {},
+    };
+    const { r } = await record(t, text);
+    expect([r.code, r.reason]).toEqual([EXIT.ok, `every call was made and recorded: ${list.length} answered, 0 failed on the way`]);
+    expect(list.filter((c) => c.method === "state_getMetadata").length).toBe(2);
+    expect(asked).toEqual(list.map((c) => [c.method, c.params]));
+    expect(most).toBe(1);
+    expect(inFlight).toBe(0);
   });
 
   it("gives one notice line with the counts, the list's hash, and the byte length and sha256 of each metadata answer's decoded bytes", async () => {
