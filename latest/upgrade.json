@@ -1,0 +1,31 @@
+{
+  "observed_at": "2026-11-12T17:42:19.793Z",
+  "schema": "flop-observatory/feed-upgrade@0",
+  "snapshot_hash": "4fe394913031adb1ccbb168f2a02551abda49c5bd682e08c4bd276eb5f80501e",
+  "trust": "trusted RPC",
+  "upgrade": {
+    "at": {
+      "hash": "0x2a1ca5c4e5058ea3fd59cea39b693514e1def54a270854925147b0f79183259e",
+      "number": 3577286
+    },
+    "authorization_appeared": null,
+    "authorized": {
+      "bytes": null,
+      "detail": null,
+      "length": null,
+      "sha256": null,
+      "state": "absent"
+    },
+    "compared_with": null,
+    "executing": {
+      "detail": null,
+      "spec_name": "tzkv-runtime",
+      "spec_version": 1014020,
+      "state": "reviewed"
+    },
+    "executing_changed": null,
+    "observed_at": "2026-11-12T17:42:19.793Z",
+    "schema": "flop-observatory/upgrade-watch@0",
+    "trust": "trusted RPC"
+  }
+}
