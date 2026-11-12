@@ -494,5 +494,61 @@
     "replace": "expect: \"FlopSessionKeys.DailyCapExceeded\", fields: [\"session_nonce\", \"spent_raw\", \"epoch_spent_raw\"] },",
     "test": "test/rerun-requests.test.ts",
     "why": "each step reads every field steps.json names for it, here the breaker after A8 (list 4, L2)"
+  },
+  {
+    "id": "batch-answer-two-sets-read",
+    "file": "test/helpers/batch-answer.ts",
+    "find": "  if (result.length !== 1) return refuse(`the answer holds ${result.length} sets, not exactly one`);\n",
+    "replace": "",
+    "test": "test/rerun-recording.test.ts",
+    "why": "an answer of more or fewer than one set is refused (review round 24, L4)"
+  },
+  {
+    "id": "batch-answer-other-block-read",
+    "file": "test/helpers/batch-answer.ts",
+    "find": "  if (set.block !== blockHash) return refuse(`the set is for block ${JSON.stringify(set.block)}, not the block asked`);\n",
+    "replace": "",
+    "test": "test/rerun-recording.test.ts",
+    "why": "a set for another block is refused (L4)"
+  },
+  {
+    "id": "batch-answer-key-not-asked-read",
+    "file": "test/helpers/batch-answer.ts",
+    "find": "typeof key !== \"string\" || !wanted.has(key)",
+    "replace": "typeof key !== \"string\"",
+    "test": "test/rerun-recording.test.ts",
+    "why": "a key not asked is refused (L4)"
+  },
+  {
+    "id": "batch-answer-key-twice-read",
+    "file": "test/helpers/batch-answer.ts",
+    "find": "    if (values.has(key)) return refuse(`change ${i} lists the key ${key} twice`);\n",
+    "replace": "",
+    "test": "test/rerun-recording.test.ts",
+    "why": "a key listed twice is refused, never the last one taken (L4)"
+  },
+  {
+    "id": "batch-answer-missing-key-read",
+    "file": "test/helpers/batch-answer.ts",
+    "find": "  for (const k of asked) if (!values.has(k)) return refuse(`the answer lacks the key asked ${k}`);\n",
+    "replace": "",
+    "test": "test/rerun-recording.test.ts",
+    "why": "an answer that lacks a key asked is refused, never read as null (L4)"
+  },
+  {
+    "id": "batch-answer-extra-field-read",
+    "file": "test/helpers/batch-answer.ts",
+    "find": "Object.keys(set).sort().join(\",\") !== \"block,changes\"",
+    "replace": "!(\"block\" in set && \"changes\" in set)",
+    "test": "test/rerun-recording.test.ts",
+    "why": "a set holds exactly block and changes (L4)"
+  },
+  {
+    "id": "batch-answer-bad-value-read",
+    "file": "test/helpers/batch-answer.ts",
+    "find": "    if (value !== null && (typeof value !== \"string\" || !HEX.test(value))) return refuse(`change ${i} has a value that is neither 0x hex nor null`);\n",
+    "replace": "",
+    "test": "test/rerun-recording.test.ts",
+    "why": "a value is 0x hex or null, nothing else (L4)"
   }
 ]
