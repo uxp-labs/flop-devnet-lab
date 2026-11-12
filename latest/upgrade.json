@@ -1,7 +1,7 @@
 {
-  "observed_at": "2026-11-12T22:49:45.308Z",
+  "observed_at": "2026-11-12T23:45:31.684Z",
   "schema": "flop-observatory/feed-upgrade@0",
-  "snapshot_hash": "d824c4fda753ee0486f5fd485a222a1fd037fa5daae11620d9c14146c8a3b27a",
+  "snapshot_hash": "e1cbe68c2c14b9fe6c4dbc4e72a86c052b48eaa9adccbbd3af2416f569aecf16",
   "trust": "trusted RPC",
   "upgrade": {
     "at": {
@@ -24,7 +24,7 @@
       "state": "reviewed"
     },
     "executing_changed": false,
-    "observed_at": "2026-11-12T22:49:45.308Z",
+    "observed_at": "2026-11-12T23:45:31.684Z",
     "schema": "flop-observatory/upgrade-watch@0",
     "trust": "trusted RPC"
   }
