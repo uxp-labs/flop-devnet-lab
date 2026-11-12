@@ -4,6 +4,12 @@
  * file loads that check's own two functions from the test file's text (not a copy), so it tests what the author
  * wrote, and hands it source shapes that break B2. Each "realistic" case is a shape this repo has written before
  * or that a builder adding the third provider could plausibly write. A failing test here is a miss of the check.
+ *
+ * The lead ruled the hostile shapes (brief 2026-11-12-fix-p0-provider-table, rule F2): a prefix test, a name built
+ * by concatenation and a name with a unicode escape are out of scope by rule, since the check guards against a
+ * careless change and every diff is read by the lead and an independent reviewer. Those tests assert that the
+ * check does not flag the shape, so a later change of the check shows up. The angle bracket cast is caught, since
+ * the check flags any name a concrete provider module exports, and stays a test that it is found.
  */
 import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -53,15 +59,17 @@ describe("review P0, D: the source check against shapes that break B2", () => {
       expect(findings(src)).not.toEqual([]);
     });
   }
-  const hostile: [string, string][] = [
+  const outOfScope: [string, string][] = [
     ["a prefix test", `if (provider.name.startsWith("mo")) x();`],
     ["a name built by concatenation", `if (provider.name === "mo" + "ck") x();`],
     ["a name with a unicode escape", `if (provider.name === "mo\\u0063k") x();`],
-    ["an angle bracket cast to a concrete class", `const s = (<MockProvider>provider).scenario;`],
   ];
-  for (const [label, src] of hostile) {
-    it(`hostile miss: ${label}`, () => {
-      expect(findings(src)).not.toEqual([]);
+  for (const [label, src] of outOfScope) {
+    it(`hostile, out of scope by rule (F2), not flagged: ${label}`, () => {
+      expect(findings(src)).toEqual([]);
     });
   }
+  it("hostile, caught: an angle bracket cast to a concrete class", () => {
+    expect(findings(`const s = (<MockProvider>provider).scenario;`)).not.toEqual([]);
+  });
 });

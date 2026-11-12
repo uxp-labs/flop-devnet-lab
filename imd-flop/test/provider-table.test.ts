@@ -1,7 +1,11 @@
 /**
- * P0 of the provider plan (brief 2026-11-12-p0-provider-interface, rules B1, B2 and B7): the facts about a
- * provider come from one table by its name (src/providers/kinds.ts), and the five files that use providers
- * never name one with a literal or reach for a concrete provider.
+ * P0 of the provider plan (brief 2026-11-12-p0-provider-interface, rules B1, B2 and B7, and the fix round,
+ * rules F1 to F7): the facts about a provider come from one table by its name (src/providers/kinds.ts), and the
+ * five files that use providers never name one with a literal or reach for a concrete provider.
+ *
+ * The source check guards against a careless change, not a hostile one: every diff is read by the lead and by an
+ * independent reviewer. A name built at run time (a prefix test, two strings joined, an escape) is out of scope by
+ * rule (F2); test/review-p0-source-scan.test.ts pins that the check does not flag those shapes.
  */
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -29,21 +33,25 @@ function rulesLedgerProviders(): unknown {
 
 /** B2: the files that use providers and must ask the table instead of naming one. */
 const FIVE = ["src/run.ts", "src/cli.ts", "src/receipt-store.ts", "src/booking.ts", "src/settlement.ts"];
-/** What the concrete provider modules export: none of it may be imported by the five files. */
+/** What the concrete provider modules export: none of it may be named in the five files. */
 const CONCRETE = new Set([...Object.keys(mockModule), ...Object.keys(gatewayModule)]);
 
 /**
- * The string literals of a TypeScript source text, in order: quoted strings, and template literals with no
- * substitution. Comments, regular expression literals and the code inside ${} are skipped as code, so a quote
- * inside any of them does not start a string. It is a small lexer, enough for this package's own sources
- * (the test below runs it on fixtures and on the five files).
+ * A TypeScript source text in three parts: its string literals (quoted strings, and template literals with no
+ * substitution), its regular expression literal bodies, and its code. In the code, comments are gone and every
+ * literal is a placeholder \u0000<n>\u0000 (n: the index of a string, or -1 for a template with substitutions or a
+ * regular expression); the code inside ${} stays code. A small lexer, enough for this package's own sources; its
+ * own fixtures are below.
  */
-function stringLiterals(text: string): { raw: string; value: string }[] {
-  const out: { raw: string; value: string }[] = [];
+function lex(text: string): { strings: { raw: string; value: string }[]; regexes: string[]; code: string } {
+  const strings: { raw: string; value: string }[] = [];
+  const regexes: string[] = [];
+  let code = "";
   const braces: number[] = []; // for each open ${, the brace depth at which it closes
   let depth = 0;
-  let prev = ""; // the last significant token character, to tell a regex from a division
+  let prev = ""; // the last significant code character, to tell a regex from a division
   let i = 0;
+  const hold = (n: number) => (code += `\u0000${n}\u0000`);
   const readString = (q: string): void => {
     const start = i++;
     let value = "";
@@ -52,29 +60,34 @@ function stringLiterals(text: string): { raw: string; value: string }[] {
       value += text[i++];
     }
     i++;
-    out.push({ raw: text.slice(start, i), value });
+    strings.push({ raw: text.slice(start, i), value });
+    hold(strings.length - 1);
   };
   const readTemplate = (fresh: boolean): void => {
     // fresh: i is at an opening backtick. Otherwise i is just after the } that closes a ${. Reads to the closing
-    // backtick or the next ${. Only a template with no ${} at all is a literal.
+    // backtick or the next ${. Only a template with no ${} at all is a string literal.
     const start = i;
     let value = "";
     if (fresh) i++;
     while (i < text.length) {
       if (text[i] === "\\") { value += text[i++] + text[i++]; continue; }
-      if (text[i] === "`") { i++; if (fresh) out.push({ raw: text.slice(start, i), value }); return; }
-      if (text[i] === "$" && text[i + 1] === "{") { i += 2; braces.push(depth); depth++; return; }
+      if (text[i] === "`") {
+        i++;
+        if (fresh) { strings.push({ raw: text.slice(start, i), value }); hold(strings.length - 1); } else hold(-1);
+        return;
+      }
+      if (text[i] === "$" && text[i + 1] === "{") { i += 2; hold(-1); braces.push(depth); depth++; return; }
       value += text[i++];
     }
   };
   while (i < text.length) {
     const c = text[i]!;
     if (c === "/" && text[i + 1] === "/") { while (i < text.length && text[i] !== "\n") i++; continue; }
-    if (c === "/" && text[i + 1] === "*") { const end = text.indexOf("*/", i + 2); i = end < 0 ? text.length : end + 2; continue; }
+    if (c === "/" && text[i + 1] === "*") { const end = text.indexOf("*/", i + 2); i = end < 0 ? text.length : end + 2; code += " "; continue; }
     if (c === '"' || c === "'") { readString(c); prev = "a"; continue; }
     if (c === "`") { readTemplate(true); prev = "a"; continue; }
-    if (c === "/" && (prev === "" || "(,=:[!&|?{};+-*%<>~^".includes(prev) || /\b(return|typeof|case|of|in)$/.test(text.slice(Math.max(0, i - 8), i).trimEnd()))) {
-      i++;
+    if (c === "/" && (prev === "" || "(,=:[!&|?{};+-*%<>~^".includes(prev) || /\b(return|typeof|case|of|in)$/.test(code.trimEnd()))) {
+      const start = ++i;
       let cls = false;
       while (i < text.length && (cls || text[i] !== "/")) {
         if (text[i] === "\\") i++;
@@ -82,8 +95,10 @@ function stringLiterals(text: string): { raw: string; value: string }[] {
         else if (text[i] === "]") cls = false;
         i++;
       }
+      regexes.push(text.slice(start, i));
       i++;
       while (/[a-z]/.test(text[i] ?? "")) i++;
+      hold(-1);
       prev = "a";
       continue;
     }
@@ -93,56 +108,101 @@ function stringLiterals(text: string): { raw: string; value: string }[] {
       if (braces.length > 0 && braces[braces.length - 1] === depth) { braces.pop(); i++; readTemplate(false); prev = "a"; continue; }
     }
     if (!/\s/.test(c)) prev = /[\w$)\].]/.test(c) ? "a" : c;
+    code += c;
     i++;
   }
-  return out;
+  return { strings, regexes, code };
 }
 
+/** The string literals of a source text, in order (lex). */
+function stringLiterals(text: string): { raw: string; value: string }[] {
+  return lex(text).strings;
+}
+
+/** A module specifier that is a concrete provider module or the module that re-exports them (rule a). */
+const CONCRETE_MODULE = /(^|\/)providers(\/(gateway|mock))?(\.[cm]?[jt]s)?$/;
+
 /**
- * What a source text does that B2 forbids: a string literal (any quote) whose whole text is a provider name, an
- * import from a concrete provider module, an import of anything those modules export, or a cast or instanceof
- * with a concrete provider class.
+ * What a source text does that B2 forbids. The check guards against a careless change, not a hostile one: every
+ * diff is read by the lead and by an independent reviewer. So a name built at run time (a prefix test, two strings
+ * joined, an escape in a string) is out of scope by rule, and the tests below pin that the check does not flag it.
+ * - literal: a string literal whose whole text is a provider name.
+ * - (a) reaches: any string that is the specifier of a concrete provider module or of ./providers.js, whatever form
+ *   uses it (static, dynamic, export from, namespace import). The concrete modules' exports are not named either,
+ *   so a cast or an instanceof cannot be written.
+ * - (b) DEFAULT_PROVIDER on one side of a comparison or a case; PROVIDER_NAMES or PROVIDER_NAMES_PAID_FIRST taken
+ *   by index, by at() or by destructuring.
+ * - (c) an object key that is a provider name, other than the field name mock.
+ * - (d) a regular expression literal that holds a provider name as a whole word.
  */
 function providerNameFindings(text: string): string[] {
   const found: string[] = [];
-  for (const lit of stringLiterals(text)) if (isProviderName(lit.value)) found.push(`literal ${lit.raw}`);
-  for (const m of text.matchAll(/import\s+(?:type\s+)?\{([^}]*)\}\s*from\s*["']([^"']+)["']/g)) {
-    if (/(^|\/)providers\/(mock|gateway)(\.js)?$/.test(m[2]!)) found.push(`import from ${m[2]}`);
-    for (const raw of m[1]!.split(",")) {
-      const name = raw.trim().replace(/^type\s+/, "").split(/\s+as\s+/)[0]!;
-      if (CONCRETE.has(name)) found.push(`import ${name}`);
-    }
+  const { strings, regexes, code } = lex(text);
+  for (const lit of strings) {
+    if (isProviderName(lit.value)) found.push(`literal ${lit.raw}`);
+    if (CONCRETE_MODULE.test(lit.value)) found.push(`reaches ${lit.value}`);
   }
-  for (const m of text.matchAll(/import\s+(?:type\s+)?\*\s+as\s+\w+\s+from\s*["']([^"']*providers\/(?:mock|gateway)(?:\.js)?)["']/g)) found.push(`import from ${m[1]}`);
-  for (const m of text.matchAll(/\b(as|instanceof)\s+(\w+)/g)) if (CONCRETE.has(m[2]!)) found.push(`${m[1]} ${m[2]}`);
+  for (const m of code.matchAll(/[A-Za-z_$][\w$]*/g)) if (CONCRETE.has(m[0])) found.push(`names ${m[0]}`);
+  if (/(?:===?|!==?)\s*DEFAULT_PROVIDER\b|\bDEFAULT_PROVIDER\s*(?:===?|!==?)|\bcase\s+DEFAULT_PROVIDER\b/.test(code)) found.push("compares DEFAULT_PROVIDER");
+  if (/\bPROVIDER_NAMES(?:_PAID_FIRST)?\s*(?:\[|\.\s*at\s*\()|\[[^\]]*\]\s*=\s*PROVIDER_NAMES(?:_PAID_FIRST)?\b/.test(code)) found.push("indexes PROVIDER_NAMES");
+  for (const m of code.matchAll(/[{,]\s*(?:([A-Za-z_$][\w$-]*)|\u0000(\d+)\u0000)\s*:/g)) {
+    const key = m[1] ?? strings[Number(m[2])]?.value;
+    if (key !== undefined && key !== "mock" && isProviderName(key)) found.push(`key ${key}`);
+  }
+  for (const body of regexes) for (const w of body.replace(/\\./g, " ").match(/[A-Za-z][\w-]*/g) ?? []) if (isProviderName(w)) found.push(`regex /${body}/`);
   return found;
 }
 
-describe("B2: the five files ask the table, never a name or a concrete provider", () => {
-  it("the check finds each thing it looks for (the shapes the files had before P0)", () => {
+describe("B2 and F2: the five files ask the table, never a name or a concrete provider", () => {
+  it("literal: a provider name as a whole string, in any quote", () => {
     expect(providerNameFindings(`if (provider.name !== "mock") throw x;`)).toEqual(['literal "mock"']);
     expect(providerNameFindings(`if (provider.name === 'flop') {`)).toEqual(["literal 'flop'"]);
     expect(providerNameFindings("spentToday(h, seat, `flop`)")).toEqual(["literal `flop`"]);
-    expect(providerNameFindings(`import { FlopProvider, MOCK_SCENARIOS, MockProvider, type MockScenario, type Provider } from "./providers.js";`)).toEqual(["import FlopProvider", "import MOCK_SCENARIOS", "import MockProvider"]);
-    expect(providerNameFindings(`import { x } from "./providers/gateway.js";`)).toEqual(["import from ./providers/gateway.js"]);
-    expect(providerNameFindings(`import * as m from "./providers/mock.js";`)).toEqual(["import from ./providers/mock.js"]);
-    expect(providerNameFindings(`const s = (provider as MockProvider).scenario; if (p instanceof FlopProvider) {}`)).toEqual(["as MockProvider", "instanceof FlopProvider"]);
   });
-  it("reads strings past comments, regular expressions and template literals with substitutions", () => {
+  it("(a) a concrete provider module or ./providers.js reached in any form, and their exports named", () => {
+    expect(providerNameFindings(`import { MockProvider, type Provider } from "./providers.js";`)).toEqual(["reaches ./providers.js", "names MockProvider"]);
+    expect(providerNameFindings(`import type { Provider } from "./providers.js";`)).toEqual(["reaches ./providers.js"]);
+    expect(providerNameFindings(`import { x } from "./providers/gateway.js";`)).toEqual(["reaches ./providers/gateway.js"]);
+    expect(providerNameFindings(`import * as m from "./providers/mock.js";`)).toEqual(["reaches ./providers/mock.js"]);
+    expect(providerNameFindings(`const g = await import("./providers/gateway.js");`)).toEqual(["reaches ./providers/gateway.js"]);
+    expect(providerNameFindings(`export * from "./providers/mock.js";`)).toEqual(["reaches ./providers/mock.js"]);
+    expect(providerNameFindings(`const s = (provider as MockProvider).scenario; if (p instanceof FlopProvider) {}`)).toEqual(["names MockProvider", "names FlopProvider"]);
+    // The HTTP client and the table modules are not concrete providers.
+    expect(providerNameFindings(`import { postEstimate } from "./gateway.js"; import { kindOf } from "./providers/kinds.js"; import type { Provider } from "./providers/interface.js";`)).toEqual([]);
+  });
+  it("(b) DEFAULT_PROVIDER compared, and a name taken from the lists by position", () => {
+    expect(providerNameFindings(`if (r.provider === DEFAULT_PROVIDER) x();`)).toEqual(["compares DEFAULT_PROVIDER"]);
+    expect(providerNameFindings(`if (DEFAULT_PROVIDER != p) x(); switch (p) { case DEFAULT_PROVIDER: }`)).toEqual(["compares DEFAULT_PROVIDER"]);
+    expect(providerNameFindings(`const n = PROVIDER_NAMES_PAID_FIRST[0];`)).toEqual(["indexes PROVIDER_NAMES"]);
+    expect(providerNameFindings(`const n = PROVIDER_NAMES.at(-1);`)).toEqual(["indexes PROVIDER_NAMES"]);
+    expect(providerNameFindings(`const [first] = PROVIDER_NAMES;`)).toEqual(["indexes PROVIDER_NAMES"]);
+    expect(providerNameFindings(`const pname = values.provider ?? DEFAULT_PROVIDER; for (const p of PROVIDER_NAMES) f(p);`)).toEqual([]);
+  });
+  it("(c) an object key that is a provider name, bare or quoted; the field mock stays allowed", () => {
+    expect(providerNameFindings(`const m = { mock: true, flop: false };`)).toEqual(["key flop"]);
+    expect(providerNameFindings(`const m = { "flop": 1 };`)).toEqual(['literal "flop"', "key flop"]);
+    expect(providerNameFindings(`const row = { ...base, mock: kind.mock }; const t = a ? flop : b;`)).toEqual([]);
+  });
+  it("(d) a regular expression literal that holds a provider name as a whole word", () => {
+    expect(providerNameFindings(`if (!/^mock$/.test(name)) x();`)).toEqual(["regex /^mock$/"]);
+    expect(providerNameFindings(`const re = /\\bflop\\b/i;`)).toEqual(["regex /\\bflop\\b/"]);
+    expect(providerNameFindings(`const re = /flopper|mocked/; const d = a / b / c;`)).toEqual([]);
+  });
+  it("the lexer reads strings past comments, regular expressions and template literals with substitutions", () => {
     const src = [
       "const a = `${x ? \"q\" : `in ${y}`} and ${'z'}`; // a \"mock\" in a comment",
       "/* \"flop\" in a block */ const re = /^[\"'`]{1,2}$/g; const d = n / 2 / 3;",
       "if (rid.includes(\"/\") || p === \"mock\") f(`flop`);",
     ].join("\n");
     expect(stringLiterals(src).map((l) => l.value)).toEqual(["q", "z", "/", "mock", "flop"]);
+    expect(lex(src).regexes).toEqual(["^[\"'`]{1,2}$"]);
     expect(providerNameFindings(src)).toEqual(['literal "mock"', "literal `flop`"]);
   });
-  it("finds nothing in text that only mentions a name inside a longer string or a comment without quotes", () => {
-    expect(providerNameFindings('throw new Error("--provider must be mock or flop"); // the mock provider')).toEqual([]);
-    expect(providerNameFindings(`import { kindOf } from "./providers/kinds.js";`)).toEqual([]);
+  it("finds nothing in text that only mentions a name inside a longer string or a comment", () => {
+    expect(providerNameFindings('throw new Error("--provider must be mock or flop"); // the "mock" provider')).toEqual([]);
   });
   for (const f of FIVE) {
-    it(`${f} names no provider and imports no concrete provider`, () => {
+    it(`${f} names no provider and reaches no concrete provider`, () => {
       expect(providerNameFindings(readFileSync(join(PKG, f), "utf8"))).toEqual([]);
     });
   }
