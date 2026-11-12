@@ -4,7 +4,7 @@
  * Test keys are made in memory by testDevice() and never written.
  */
 import { ed25519 } from "@noble/curves/ed25519.js";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { InnerCall } from "../src/chain/calls.js";
 import { describeCall } from "../src/chain/describe.js";
 import { ChainEncodeError } from "../src/chain/errors.js";
@@ -213,5 +213,26 @@ describe("P2, P8, P9: no exported function describes or reads as allowed what th
     const forged = Uint8Array.from(real);
     forged[2 + 32] = 4; // the inner pallet byte: Balances
     expect(codeOf(() => readCall(fake, forged))).toBe("RUNTIME_UNKNOWN");
+  });
+});
+
+describe("P9: the table cannot be changed at run time", () => {
+  it("P9: a module that imports runtimes.ts before table.ts is evaluated can move ComputeChannel to Balances' index; the encoder must not follow", async () => {
+    vi.resetModules();
+    const fresh = await import("../src/chain/runtimes.js");
+    const entry = fresh.RUNTIMES[0].calls.find((c) => c.pallet === "ComputeChannel" && c.name === "timeout") as { palletIndex: number };
+    let changed = true;
+    try {
+      entry.palletIndex = 4;
+    } catch {
+      changed = false;
+    }
+    const x = await import("../src/chain/extrinsic.js");
+    let bytes: Uint8Array | null = null;
+    const code = codeOf(() => (bytes = x.encodeSessionCall({ runtime: RUNTIME_ID, owner: OWNER, inner: S.timeout, sessionNonce: 1n })));
+    vi.resetModules();
+    // The table must be frozen when it is first loaded, or the encoder must refuse; it must never write pallet 4.
+    if (code === null) expect(bytes![2 + 32]).toBe(103);
+    expect(changed && code === null && bytes![2 + 32] === 4).toBe(false);
   });
 });
