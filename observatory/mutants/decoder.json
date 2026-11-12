@@ -162,8 +162,8 @@
   {
     "id": "metadata-hasher-table-order",
     "file": "src/scale/metadata.ts",
-    "find": "\"Twox128\", \"Twox256\", \"Twox64Concat\", \"Identity\"] as const;",
-    "replace": "\"Twox128\", \"Twox64Concat\", \"Twox256\", \"Identity\"] as const;",
+    "find": "\"Twox128\", \"Twox256\", \"Twox64Concat\", \"Identity\"] as const);",
+    "replace": "\"Twox128\", \"Twox64Concat\", \"Twox256\", \"Identity\"] as const);",
     "test": "test/scale-metadata.test.ts",
     "why": "hasher 5 is Twox64Concat"
   },
@@ -402,8 +402,8 @@
   {
     "id": "block-pin-ignored",
     "file": "src/scale/block.ts",
-    "find": "  const pin = pinShape(pinInput);",
-    "replace": "  const pin = pinShape({ ...pinInput, specVersion: 1014014 });",
+    "find": "  const pin = pinLine(pinInput);",
+    "replace": "  const pin = pinLine({ ...pinInput, specVersion: 1014014 });",
     "test": "test/shape.test.ts",
     "why": "a block's events are decoded only once its own spec is pinned"
   },
@@ -770,16 +770,16 @@
   {
     "id": "r19-stated-breakers-dropped",
     "file": "src/scale/shape.ts",
-    "find": "  [\"FlopSessionKeys\", \"CircuitBreakers\"],\n];",
-    "replace": "];",
+    "find": "  Object.freeze([\"FlopSessionKeys\", \"CircuitBreakers\"] as const),\n]);",
+    "replace": "]);",
     "test": "test/storage-values.test.ts",
     "why": "the door reads every entry the shape states"
   },
   {
     "id": "r19-stated-extra-entry",
     "file": "src/scale/shape.ts",
-    "find": "  [\"FlopSessionKeys\", \"CircuitBreakers\"],\n];",
-    "replace": "  [\"FlopSessionKeys\", \"CircuitBreakers\"],\n  [\"FlopSessionKeys\", \"DelegateSessions\"],\n];",
+    "find": "  Object.freeze([\"FlopSessionKeys\", \"CircuitBreakers\"] as const),\n]);",
+    "replace": "  Object.freeze([\"FlopSessionKeys\", \"CircuitBreakers\"] as const),\n  Object.freeze([\"FlopSessionKeys\", \"DelegateSessions\"] as const),\n]);",
     "test": "test/shape.test.ts",
     "why": "the door reads no entry the shape does not state"
   },
@@ -1176,14 +1176,6 @@
     "why": "a spec version past u32 is no Compact<u32> (review round 22)"
   },
   {
-    "id": "r22-runtime-line-not-copied",
-    "file": "src/scale/block.ts",
-    "find": "return { found: true, reviewed: { ...line } };",
-    "replace": "return { found: true, reviewed: line as ReviewedShape };",
-    "test": "test/block-runtime.test.ts",
-    "why": "the answer is a copy, so a caller cannot change a REVIEWED line (review round 22)"
-  },
-  {
     "id": "r22-runtime-name-unbounded",
     "file": "src/scale/block.ts",
     "find": "    if (name.length > MAX_NAME_INPUT) throw new ScaleError(`the spec name is longer than ${MAX_NAME_INPUT} characters`);\n",
@@ -1326,5 +1318,165 @@
     "replace": "export const HASHERS = ([",
     "test": "test/reviewed-frozen.test.ts",
     "why": "HASHERS is frozen (review round 23, R1)"
+  },
+  {
+    "id": "rv-rt-u32-off-by-one",
+    "file": "src/scale/block.ts",
+    "find": "if (version > U32_MAX)",
+    "replace": "if (version >= U32_MAX)",
+    "test": "test/block-runtime.test.ts",
+    "why": "the largest u32, 4294967295, is a spec version, not a refusal (review round 23, R5)"
+  },
+  {
+    "id": "rv-diff-cyclic-memo",
+    "file": "scripts/shape-diff.mjs",
+    "find": "    if (!cyclic) memo.set(name, h);",
+    "replace": "    memo.set(name, h);",
+    "test": "test/upgrade-shape.test.ts",
+    "why": "a type's structure is the same whatever was asked before it, a recursive type included (review round 23, R5)"
+  },
+  {
+    "id": "rv-diff-variant-index-not-in-structure",
+    "file": "scripts/shape-diff.mjs",
+    "find": "`${v.index} ${v.name}(${fields(v.fields)})`",
+    "replace": "`${v.name}(${fields(v.fields)})`",
+    "test": "test/upgrade-shape.test.ts",
+    "why": "a variant's index is part of a type's structure (review round 23, R5)"
+  },
+  {
+    "id": "rv-diff-array-len-not-in-structure",
+    "file": "scripts/shape-diff.mjs",
+    "find": "text = `array ${t.len} ${of(t.element)}`",
+    "replace": "text = `array ${of(t.element)}`",
+    "test": "test/upgrade-shape.test.ts",
+    "why": "an array's length is part of a type's structure (review round 23, R5)"
+  },
+  {
+    "id": "rv-diff-path-not-in-structure",
+    "file": "scripts/shape-diff.mjs",
+    "find": "text = `composite ${t.path.join(\"::\")} {${fields(t.fields)}}`",
+    "replace": "text = `composite {${fields(t.fields)}}`",
+    "test": "test/upgrade-shape.test.ts",
+    "why": "a composite's path is part of a type's structure, so H256 is not AccountId32 (review round 23, R5)"
+  },
+  {
+    "id": "rv-diff-names-unchecked",
+    "file": "scripts/shape-diff.mjs",
+    "find": "    if (na !== nb) {",
+    "replace": "    if (false) {",
+    "test": "test/upgrade-shape.test.ts",
+    "why": "a renamed or moved field is a difference (review round 23, R5)"
+  },
+  {
+    "id": "rv-diff-removed-dropped",
+    "file": "scripts/shape-diff.mjs",
+    "find": "for (const [n, v] of ma) if (!mb.has(n)) out.add(",
+    "replace": "for (const [n, v] of ma) if (false) out.add(",
+    "test": "test/upgrade-shape.test.ts",
+    "why": "a removed variant or event is a difference (review round 23, R5)"
+  },
+  {
+    "id": "rv-diff-moved-dropped",
+    "file": "scripts/shape-diff.mjs",
+    "find": "if (x.index !== y.index) out.add(",
+    "replace": "if (false) out.add(",
+    "test": "test/upgrade-shape.test.ts",
+    "why": "a variant moved to another index is a difference (review round 23, R5)"
+  },
+  {
+    "id": "rv-diff-modifier-dropped",
+    "file": "scripts/shape-diff.mjs",
+    "find": "    same(`${name} modifier`, x.modifier, y.modifier);\n",
+    "replace": "",
+    "test": "test/upgrade-shape.test.ts",
+    "why": "an entry's modifier is a difference (review round 23, R5)"
+  },
+  {
+    "id": "rv-diff-key-dropped",
+    "file": "scripts/shape-diff.mjs",
+    "find": "    else if (x.key !== null) typeDiff(x.key, y.key, `${name} key`);\n",
+    "replace": "\n",
+    "test": "test/upgrade-shape.test.ts",
+    "why": "an entry's key type is a difference (review round 23, R5)"
+  },
+  {
+    "id": "rv-diff-version-dropped",
+    "file": "scripts/shape-diff.mjs",
+    "find": "  typeDiff(a.system.version, b.system.version, \"System.Version\");\n",
+    "replace": "",
+    "test": "test/upgrade-shape.test.ts",
+    "why": "the System.Version type is a difference (review round 23, R5)"
+  },
+  {
+    "id": "rv-diff-tuple-not-in-structure",
+    "file": "scripts/shape-diff.mjs",
+    "find": "text = `tuple (${t.types.map(of).join(\",\")})`",
+    "replace": "text = `tuple ${t.types.length}`",
+    "test": "test/upgrade-shape.test.ts",
+    "why": "a tuple's types are part of its structure (review round 23, R5)"
+  },
+  {
+    "id": "rv-diff-compact-not-in-structure",
+    "file": "scripts/shape-diff.mjs",
+    "find": "text = `compact ${of(t.type)}`",
+    "replace": "text = `compact`",
+    "test": "test/upgrade-shape.test.ts",
+    "why": "a compact's inner type is part of its structure (review round 23, R5)"
+  },
+  {
+    "id": "rv-diff-tuple-length",
+    "file": "scripts/shape-diff.mjs",
+    "find": "if (ta.types.length !== tb.types.length) out.add",
+    "replace": "if (false) out.add",
+    "test": "test/upgrade-shape.test.ts",
+    "why": "a tuple that lost a part is a difference (review round 23, R5)"
+  },
+  {
+    "id": "r23-diff-schema-unchecked",
+    "file": "scripts/shape-diff.mjs",
+    "find": "  if (s.schema !== SHAPE_SCHEMA) refuse(",
+    "replace": "  if (false) refuse(",
+    "test": "test/upgrade-shape.test.ts",
+    "why": "a shape of another format version is refused (R3) (review round 23)"
+  },
+  {
+    "id": "r23-diff-extra-part-allowed",
+    "file": "scripts/shape-diff.mjs",
+    "find": "    if (extra.length > 0) refuse(",
+    "replace": "    if (false) refuse(",
+    "test": "test/upgrade-shape.test.ts",
+    "why": "a part the diff does not read is refused, so none is missed (R3) (review round 23)"
+  },
+  {
+    "id": "r23-diff-refusal-exit-0",
+    "file": "scripts/shape-diff.mjs",
+    "find": "    if (e instanceof ShapeRefused) return { code: 2,",
+    "replace": "    if (e instanceof ShapeRefused) return { code: 0,",
+    "test": "test/upgrade-shape.test.ts",
+    "why": "a refused input exits 2, never 0 (R3) (review round 23)"
+  },
+  {
+    "id": "r23-diff-specs-line-dropped",
+    "file": "scripts/shape-diff.mjs",
+    "find": "  return [`specs: ${a.spec_name} ${a.spec_version} to ${b.spec_name} ${b.spec_version}`, ...lines.sort()];",
+    "replace": "  return lines.sort();",
+    "test": "test/upgrade-shape.test.ts",
+    "why": "the first line names both specs (R3) (review round 23)"
+  },
+  {
+    "id": "r23-diff-stated-lists-dropped",
+    "file": "scripts/shape-diff.mjs",
+    "find": "  fieldsDiff(a.compute_channel.channels.fields, b.compute_channel.channels.fields, \"ComputeChannel.Channels fields\");\n",
+    "replace": "",
+    "test": "test/upgrade-shape.test.ts",
+    "why": "the stated lists are compared (R3) (review round 23)"
+  },
+  {
+    "id": "r23-diff-seen-by-label",
+    "file": "scripts/shape-diff.mjs",
+    "find": "    const key = JSON.stringify([x, y]);",
+    "replace": "    const key = JSON.stringify([x, y, label]);",
+    "test": "test/upgrade-shape.test.ts",
+    "why": "each pair of types is followed once, so a changed recursive type ends (R2) (review round 23)"
   }
 ]

@@ -7,7 +7,7 @@ import { describe, expect, it } from "vitest";
 import { runtimeOfBlock } from "../src/scale/block.js";
 import { decodeValue } from "../src/scale/decode.js";
 import { parseMetadata } from "../src/scale/metadata.js";
-import { toHex } from "../src/scale/reader.js";
+import { MAX_INPUT_BYTES, toHex } from "../src/scale/reader.js";
 import { REVIEWED } from "../src/scale/shape.js";
 import { recordedStorage } from "./helpers/recorded-storage.js";
 import { recordedUpgrade } from "./helpers/recorded-upgrade.js";
@@ -95,5 +95,43 @@ describe("runtimeOfBlock: which reviewed runtime reads a block", () => {
 
   it("reads one argument, the bytes, and nothing else of the block", () => {
     expect(runtimeOfBlock.length).toBe(1);
+  });
+  it("takes the largest u32, 4294967295, as a spec version no line names, and refuses 4294967296 as no u32", () => {
+    expect(found(cat(compact(0xffffffff), str(NAME)))).toBe(`no reviewed runtime: the block's LastRuntimeUpgrade names spec "${NAME}" 4294967295, which no reviewed line names`);
+    expect(found(cat(compact(0x100000000), str(NAME)))).toBe("no reviewed runtime: the spec version 4294967296 does not fit a u32");
+  });
+
+  // The reviewer's odd inputs (review round 23, R5).
+  it("ends every odd input in a refusal with a text of ours, never another exception; a subclass of bytes reads as its bytes", () => {
+    const good = U.upgradeOf(UPGRADE_BLOCKS[0]);
+    class Sub extends Uint8Array {
+      findLastIndex(): number {
+        throw new Error("theirs");
+      }
+      set(): void {
+        throw new Error("theirs");
+      }
+    }
+    const sub = new Sub(good.length);
+    Uint8Array.prototype.set.call(sub, good);
+    const detached = new Uint8Array(good);
+    structuredClone(detached.buffer, { transfer: [detached.buffer] });
+    const trap = new Proxy(good, { getPrototypeOf: () => { throw new Error("theirs"); } });
+    const getter = new Proxy(good, { get: () => { throw new Error("theirs"); } });
+    for (const x of [trap, getter, detached, new Uint8Array(MAX_INPUT_BYTES + 1), new Uint16Array(4), new DataView(new ArrayBuffer(4)), good.buffer, Symbol("x"), 1n, () => good]) {
+      expect(() => runtimeOfBlock(x as never)).not.toThrow();
+      expect(found(x as never)).toMatch(/^no reviewed runtime: /);
+    }
+    expect(found(sub)).toEqual(OLD);
+    expect(found(detached)).toBe("no reviewed runtime: the LastRuntimeUpgrade is not bytes");
+    expect(found(new Uint8Array(MAX_INPUT_BYTES + 1))).toBe(`no reviewed runtime: the LastRuntimeUpgrade is ${MAX_INPUT_BYTES + 1} bytes, more than the ${MAX_INPUT_BYTES} this decoder reads`);
+  });
+
+  it("names no line for a name that differs from the reviewed one by case, a NUL, a combining mark, a look alike letter, a space or a BOM, and counts a name's length in characters as JavaScript holds them", () => {
+    const v = Number(OLD?.specVersion);
+    for (const n of [NAME.slice(0, 1).toUpperCase() + NAME.slice(1), NAME.toUpperCase(), `${NAME}\u0000`, `\u0000${NAME}`, `${NAME}\u0301`, NAME.replace("-", "\u2010"), NAME.replace("e", "\u0435"), `${NAME} `, `\ufeff${NAME}`]) {
+      expect(found(cat(compact(v), str(n))), JSON.stringify(n)).toBe(`no reviewed runtime: the block's LastRuntimeUpgrade names spec ${JSON.stringify(n)} ${v}, which no reviewed line names`);
+    }
+    expect(found(cat(compact(v), str("\u{1f600}".repeat(129))))).toBe("no reviewed runtime: the spec name is longer than 256 characters");
   });
 });
