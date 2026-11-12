@@ -29,949 +29,1107 @@
    "pallet": "FlopSessionKeys",
    "pallet_index": 94,
    "error_index": 0,
-   "name": "SessionAlreadyExists"
+   "name": "SessionAlreadyExists",
+   "docs": "Session already exists for this owner-delegate pair."
   },
   {
    "pallet": "FlopSessionKeys",
    "pallet_index": 94,
    "error_index": 1,
-   "name": "SessionNotFound"
+   "name": "SessionNotFound",
+   "docs": "Session not found."
   },
   {
    "pallet": "FlopSessionKeys",
    "pallet_index": 94,
    "error_index": 2,
-   "name": "SessionExpired"
+   "name": "SessionExpired",
+   "docs": "Session has expired."
   },
   {
    "pallet": "FlopSessionKeys",
    "pallet_index": 94,
    "error_index": 3,
-   "name": "SessionRevoked"
+   "name": "SessionRevoked",
+   "docs": "Session has been revoked."
   },
   {
    "pallet": "FlopSessionKeys",
    "pallet_index": 94,
    "error_index": 4,
-   "name": "SpendingCapExceeded"
+   "name": "SpendingCapExceeded",
+   "docs": "Total spending cap exceeded."
   },
   {
    "pallet": "FlopSessionKeys",
    "pallet_index": 94,
    "error_index": 5,
-   "name": "PerTxLimitExceeded"
+   "name": "PerTxLimitExceeded",
+   "docs": "R7-P0-08: Per-transaction limit exceeded."
   },
   {
    "pallet": "FlopSessionKeys",
    "pallet_index": 94,
    "error_index": 6,
-   "name": "DailyCapExceeded"
+   "name": "DailyCapExceeded",
+   "docs": "R7-P0-08: Daily spending cap exceeded."
   },
   {
    "pallet": "FlopSessionKeys",
    "pallet_index": 94,
    "error_index": 7,
-   "name": "PalletNotAllowed"
+   "name": "PalletNotAllowed",
+   "docs": "Pallet not in allowlist."
   },
   {
    "pallet": "FlopSessionKeys",
    "pallet_index": 94,
    "error_index": 8,
-   "name": "TooManySessions"
+   "name": "TooManySessions",
+   "docs": "Too many active sessions for this owner."
   },
   {
    "pallet": "FlopSessionKeys",
    "pallet_index": 94,
    "error_index": 9,
-   "name": "DurationTooLong"
+   "name": "DurationTooLong",
+   "docs": "Session duration exceeds maximum."
   },
   {
    "pallet": "FlopSessionKeys",
    "pallet_index": 94,
    "error_index": 10,
-   "name": "NotOwner"
+   "name": "NotOwner",
+   "docs": "Only the owner can manage this session."
   },
   {
    "pallet": "FlopSessionKeys",
    "pallet_index": 94,
    "error_index": 11,
-   "name": "NotDelegate"
+   "name": "NotDelegate",
+   "docs": "Only the delegate can execute via this session."
   },
   {
    "pallet": "FlopSessionKeys",
    "pallet_index": 94,
    "error_index": 12,
-   "name": "SelfDelegation"
+   "name": "SelfDelegation",
+   "docs": "Cannot create session for self."
   },
   {
    "pallet": "FlopSessionKeys",
    "pallet_index": 94,
    "error_index": 13,
-   "name": "CircuitBreakerTripped"
+   "name": "CircuitBreakerTripped",
+   "docs": "R7-P0-08: Circuit breaker tripped — delegate must wait for period reset."
   },
   {
    "pallet": "FlopSessionKeys",
    "pallet_index": 94,
    "error_index": 14,
-   "name": "SessionRotationLimited"
+   "name": "SessionRotationLimited",
+   "docs": "R7-P0-08: Session rotation rate limit exceeded."
   },
   {
    "pallet": "FlopSessionKeys",
    "pallet_index": 94,
    "error_index": 15,
-   "name": "InvalidSessionNonce"
+   "name": "InvalidSessionNonce",
+   "docs": "INV-S01: supplied session nonce does not match the expected value\n(stale/replayed authorization)."
   },
   {
    "pallet": "FlopSessionKeys",
    "pallet_index": 94,
    "error_index": 16,
-   "name": "SessionNonceExhausted"
+   "name": "SessionNonceExhausted",
+   "docs": "INV-S01: the pair's replay nonce cannot be advanced any further. Fails closed —\nwrapping it would make the authorization at the final nonce replayable."
   },
   {
    "pallet": "FlopSessionKeys",
    "pallet_index": 94,
    "error_index": 17,
-   "name": "RetiredSessionRecordMissing"
+   "name": "RetiredSessionRecordMissing",
+   "docs": "The pair held a session whose record is gone while its replay nonce survives —\ninherited state from a pre-#3787 expiry cleanup. Re-granting is refused because\nthe removed record's consumed spend is not recoverable from this state and a\nfresh grant would reset it to zero."
   },
   {
    "pallet": "FlopSessionKeys",
    "pallet_index": 94,
    "error_index": 18,
-   "name": "PalletNameTooLong"
+   "name": "PalletNameTooLong",
+   "docs": "An `allowed_pallets` entry is longer than 64 bytes."
   },
   {
    "pallet": "FlopSessionKeys",
    "pallet_index": 94,
    "error_index": 19,
-   "name": "TooManyAllowedPallets"
+   "name": "TooManyAllowedPallets",
+   "docs": "`allowed_pallets` has more entries than `MaxAllowedPallets`."
   },
   {
    "pallet": "FlopSessionKeys",
    "pallet_index": 94,
    "error_index": 20,
-   "name": "SpendExceedsDeclared"
+   "name": "SpendExceedsDeclared",
+   "docs": "The dispatched call moved more of the owner's balance than `spend_amount`."
   },
   {
    "pallet": "ComputeChannel",
    "pallet_index": 103,
    "error_index": 0,
-   "name": "RequiredToplocEvidenceMissing"
+   "name": "RequiredToplocEvidenceMissing",
+   "docs": "#753 / D-0431: settlement requires a TOPLOC activation commitment for this\nchannel's assurance class, but none was submitted (fail closed)."
   },
   {
    "pallet": "ComputeChannel",
    "pallet_index": 103,
    "error_index": 1,
-   "name": "ToplocEvidenceChannelNotOpen"
+   "name": "ToplocEvidenceChannelNotOpen",
+   "docs": "#753: `submit_toploc_evidence` requires the channel to be `Open`."
   },
   {
    "pallet": "ComputeChannel",
    "pallet_index": 103,
    "error_index": 2,
-   "name": "ZeroToplocCommitment"
+   "name": "ZeroToplocCommitment",
+   "docs": "#753: a TOPLOC commitment reference must be non-zero."
   },
   {
    "pallet": "ComputeChannel",
    "pallet_index": 103,
    "error_index": 3,
-   "name": "ToplocEscalationOpen"
+   "name": "ToplocEscalationOpen",
+   "docs": "#754: settlement is frozen — a TOPLOC escalation case is open for this channel\nand must reach a terminal verdict (slash / clear / timeout) first."
   },
   {
    "pallet": "ComputeChannel",
    "pallet_index": 103,
    "error_index": 4,
-   "name": "NoToplocEscalation"
+   "name": "NoToplocEscalation",
+   "docs": "#754: no open TOPLOC escalation case exists for this channel."
   },
   {
    "pallet": "ComputeChannel",
    "pallet_index": 103,
    "error_index": 5,
-   "name": "ToplocEscalationNotExpired"
+   "name": "ToplocEscalationNotExpired",
+   "docs": "#754: the escalation window has not elapsed yet; cannot time it out."
   },
   {
    "pallet": "ComputeChannel",
    "pallet_index": 103,
    "error_index": 6,
-   "name": "ChannelExists"
+   "name": "ChannelExists",
+   "docs": "A channel with this id already exists."
   },
   {
    "pallet": "ComputeChannel",
    "pallet_index": 103,
    "error_index": 7,
-   "name": "ChannelNotFound"
+   "name": "ChannelNotFound",
+   "docs": "No such channel."
   },
   {
    "pallet": "ComputeChannel",
    "pallet_index": 103,
    "error_index": 8,
-   "name": "ZeroEscrow"
+   "name": "ZeroEscrow",
+   "docs": "Escrow must be non-zero."
   },
   {
    "pallet": "ComputeChannel",
    "pallet_index": 103,
    "error_index": 9,
-   "name": "TooManyActiveReservations"
+   "name": "TooManyActiveReservations",
+   "docs": "Per-identity active reservation cap exceeded (A1 anti-spam; cap scales with escrow not flat)."
   },
   {
    "pallet": "ComputeChannel",
    "pallet_index": 103,
    "error_index": 10,
-   "name": "NotAParty"
+   "name": "NotAParty",
+   "docs": "Caller is not a party to this channel."
   },
   {
    "pallet": "ComputeChannel",
    "pallet_index": 103,
    "error_index": 11,
-   "name": "BadState"
+   "name": "BadState",
+   "docs": "The channel is not in the required state for this action."
   },
   {
    "pallet": "ComputeChannel",
    "pallet_index": 103,
    "error_index": 12,
-   "name": "MeasuredRootMismatch"
+   "name": "MeasuredRootMismatch",
+   "docs": "The submitted measured root does not match the channel commitment."
   },
   {
    "pallet": "ComputeChannel",
    "pallet_index": 103,
    "error_index": 13,
-   "name": "MeasuredRootRejected"
+   "name": "MeasuredRootRejected",
+   "docs": "The measured root failed the registry gate (§3.3)."
   },
   {
    "pallet": "ComputeChannel",
    "pallet_index": 103,
    "error_index": 14,
-   "name": "BadReceiptSignature"
+   "name": "BadReceiptSignature",
+   "docs": "The agent receipt signature did not verify (cooperative settle)."
   },
   {
    "pallet": "ComputeChannel",
    "pallet_index": 103,
    "error_index": 15,
-   "name": "AggregateGnMismatch"
+   "name": "AggregateGnMismatch",
+   "docs": "Agent-signed aggregate `G_n` did not equal the transcript-verified turn sum."
   },
   {
    "pallet": "ComputeChannel",
    "pallet_index": 103,
    "error_index": 16,
-   "name": "DuplicateVerifiedTurn"
+   "name": "DuplicateVerifiedTurn",
+   "docs": "The same turn was supplied twice in a settlement proof bundle."
   },
   {
    "pallet": "ComputeChannel",
    "pallet_index": 103,
    "error_index": 17,
-   "name": "VerifiedTurnOutOfBounds"
+   "name": "VerifiedTurnOutOfBounds",
+   "docs": "A verified turn index exceeds the channel's SLA turn bound."
   },
   {
    "pallet": "ComputeChannel",
    "pallet_index": 103,
    "error_index": 18,
-   "name": "TooManySettlementTurns"
+   "name": "TooManySettlementTurns",
+   "docs": "A settlement proof bundle carried more turns than `MaxSettlementTurns`."
   },
   {
    "pallet": "ComputeChannel",
    "pallet_index": 103,
    "error_index": 19,
-   "name": "MerklePathTooLong"
+   "name": "MerklePathTooLong",
+   "docs": "A verified turn's Merkle authentication path exceeded `MaxMerklePathLen`."
   },
   {
    "pallet": "ComputeChannel",
    "pallet_index": 103,
    "error_index": 20,
-   "name": "SlaMaxTurnsTooLarge"
+   "name": "SlaMaxTurnsTooLarge",
+   "docs": "An SLA `max_turns` exceeds `MaxSettlementTurns` (would strand settlement)."
   },
   {
    "pallet": "ComputeChannel",
    "pallet_index": 103,
    "error_index": 21,
-   "name": "VerifiedWorkOverflow"
+   "name": "VerifiedWorkOverflow",
+   "docs": "The transcript-verified `G_n` sum overflowed `u128`."
   },
   {
    "pallet": "ComputeChannel",
    "pallet_index": 103,
    "error_index": 22,
-   "name": "VerifiedWorkExceedsEscrow"
+   "name": "VerifiedWorkExceedsEscrow",
+   "docs": "Transcript-verified work exceeds the escrow reservation."
   },
   {
    "pallet": "ComputeChannel",
    "pallet_index": 103,
    "error_index": 23,
-   "name": "TariffExceedsEscrow"
+   "name": "TariffExceedsEscrow",
+   "docs": "Two-part tariff (`BasePerTurn · turns + Σ G_n`) exceeds the escrow reservation."
   },
   {
    "pallet": "ComputeChannel",
    "pallet_index": 103,
    "error_index": 24,
-   "name": "TariffRegression"
+   "name": "TariffRegression",
+   "docs": "A settling repost lowered the two-part tariff pay (would underpay the miner)."
   },
   {
    "pallet": "ComputeChannel",
    "pallet_index": 103,
    "error_index": 25,
-   "name": "RefundPenaltyOverflow"
+   "name": "RefundPenaltyOverflow",
+   "docs": "Refund penalty multiplication overflowed u128."
   },
   {
    "pallet": "ComputeChannel",
    "pallet_index": 103,
    "error_index": 26,
-   "name": "BadEnclaveSignature"
+   "name": "BadEnclaveSignature",
+   "docs": "The enclave signature over the contested leaf did not verify."
   },
   {
    "pallet": "ComputeChannel",
    "pallet_index": 103,
    "error_index": 27,
-   "name": "UnsupportedLeafVersion"
+   "name": "UnsupportedLeafVersion",
+   "docs": "The selected leaf version is not accepted for this channel profile."
   },
   {
    "pallet": "ComputeChannel",
    "pallet_index": 103,
    "error_index": 28,
-   "name": "LeafFieldsInconsistent"
+   "name": "LeafFieldsInconsistent",
+   "docs": "Fields unused by the selected version were non-zero, or V3 lacked `h_ids`."
   },
   {
    "pallet": "ComputeChannel",
    "pallet_index": 103,
    "error_index": 29,
-   "name": "LeafNotInRoot"
+   "name": "LeafNotInRoot",
+   "docs": "The contested leaf is not a member of the committed transcript root."
   },
   {
    "pallet": "ComputeChannel",
    "pallet_index": 103,
    "error_index": 30,
-   "name": "WindowNotElapsed"
+   "name": "WindowNotElapsed",
+   "docs": "The challenge window / response window has not yet elapsed."
   },
   {
    "pallet": "ComputeChannel",
    "pallet_index": 103,
    "error_index": 31,
-   "name": "WindowElapsed"
+   "name": "WindowElapsed",
+   "docs": "The challenge window, or the open dispute's response window, has already elapsed."
   },
   {
    "pallet": "ComputeChannel",
    "pallet_index": 103,
    "error_index": 32,
-   "name": "DisputeExists"
+   "name": "DisputeExists",
+   "docs": "A dispute is already open on this channel."
   },
   {
    "pallet": "ComputeChannel",
    "pallet_index": 103,
    "error_index": 33,
-   "name": "DisputeNotFound"
+   "name": "DisputeNotFound",
+   "docs": "No dispute is open on this channel."
   },
   {
    "pallet": "ComputeChannel",
    "pallet_index": 103,
    "error_index": 34,
-   "name": "WrongTurnResponded"
+   "name": "WrongTurnResponded",
+   "docs": "`respond_dispute` proved a different turn than the one the challenger contested."
   },
   {
    "pallet": "ComputeChannel",
    "pallet_index": 103,
    "error_index": 35,
-   "name": "BisectionNotAtLeaf"
+   "name": "BisectionNotAtLeaf",
+   "docs": "Multi-round bisection is still narrowing; leaf response not yet legal."
   },
   {
    "pallet": "ComputeChannel",
    "pallet_index": 103,
    "error_index": 36,
-   "name": "BisectionNotAwaitingResponse"
+   "name": "BisectionNotAwaitingResponse",
+   "docs": "Miner already posted child roots (or leaf is isolated); wrong phase."
   },
   {
    "pallet": "ComputeChannel",
    "pallet_index": 103,
    "error_index": 37,
-   "name": "BisectionNotAwaitingChallenge"
+   "name": "BisectionNotAwaitingChallenge",
+   "docs": "Challenger already chose (or miner has not opened); wrong phase."
   },
   {
    "pallet": "ComputeChannel",
    "pallet_index": 103,
    "error_index": 38,
-   "name": "BisectionBadChildRoots"
+   "name": "BisectionBadChildRoots",
+   "docs": "Child roots do not hash to the active interval parent root."
   },
   {
    "pallet": "ComputeChannel",
    "pallet_index": 103,
    "error_index": 39,
-   "name": "BisectionBadTurnCount"
+   "name": "BisectionBadTurnCount",
+   "docs": "Bisection turn count must be a power of two in `[2, MaxSettlementTurns]`."
   },
   {
    "pallet": "ComputeChannel",
    "pallet_index": 103,
    "error_index": 40,
-   "name": "BisectionRoundCap"
+   "name": "BisectionRoundCap",
+   "docs": "Midpoint rounds exceeded `⌈log₂ MaxSettlementTurns⌉`."
   },
   {
    "pallet": "ComputeChannel",
    "pallet_index": 103,
    "error_index": 41,
-   "name": "SessionNotExpired"
+   "name": "SessionNotExpired",
+   "docs": "The session has not exceeded its max duration (timeout precondition)."
   },
   {
    "pallet": "ComputeChannel",
    "pallet_index": 103,
    "error_index": 42,
-   "name": "GnRegression"
+   "name": "GnRegression",
+   "docs": "Aggregate `G_n` regressed below the already-posted claim (replay)."
   },
   {
    "pallet": "ComputeChannel",
    "pallet_index": 103,
    "error_index": 43,
-   "name": "TranscriptUnavailable"
+   "name": "TranscriptUnavailable",
+   "docs": "The disputed transcript is no longer retrievable from DA."
   },
   {
    "pallet": "ComputeChannel",
    "pallet_index": 103,
    "error_index": 44,
-   "name": "TranscriptNotUnrecoverable"
+   "name": "TranscriptNotUnrecoverable",
+   "docs": "Transcript DA is still recoverable; unrecoverable void does not apply."
   },
   {
    "pallet": "ComputeChannel",
    "pallet_index": 103,
    "error_index": 45,
-   "name": "ModelWeightsLeaseExpired"
+   "name": "ModelWeightsLeaseExpired",
+   "docs": "The model's weights lease has expired (or is inside grace) — top it up\nin `da-registry` before opening a session against it (D-0407)."
   },
   {
    "pallet": "ComputeChannel",
    "pallet_index": 103,
    "error_index": 46,
-   "name": "NotPendingAck"
+   "name": "NotPendingAck",
+   "docs": "The channel is not awaiting a `force_ack` (wrong state for this action)."
   },
   {
    "pallet": "ComputeChannel",
    "pallet_index": 103,
    "error_index": 47,
-   "name": "AckWindowElapsed"
+   "name": "AckWindowElapsed",
+   "docs": "The `force_open` ack window has already elapsed — the open can now only be\nexpired ([`Pallet::expire_force_open`]), not acked."
   },
   {
    "pallet": "ComputeChannel",
    "pallet_index": 103,
    "error_index": 48,
-   "name": "AckWindowNotElapsed"
+   "name": "AckWindowNotElapsed",
+   "docs": "The `force_open` ack window has not yet elapsed; the open cannot be expired."
   },
   {
    "pallet": "ComputeChannel",
    "pallet_index": 103,
    "error_index": 49,
-   "name": "NotNamedMiner"
+   "name": "NotNamedMiner",
+   "docs": "Caller is not the named miner for this `force_open`."
   },
   {
    "pallet": "ComputeChannel",
    "pallet_index": 103,
    "error_index": 50,
-   "name": "OfferExpired"
+   "name": "OfferExpired",
+   "docs": "The standing offer expired against the finalized head."
   },
   {
    "pallet": "ComputeChannel",
    "pallet_index": 103,
    "error_index": 51,
-   "name": "OfferNotExpired"
+   "name": "OfferNotExpired",
+   "docs": "A funded offer cannot be cancelled until its signed expiry passes."
   },
   {
    "pallet": "ComputeChannel",
    "pallet_index": 103,
    "error_index": 52,
-   "name": "OfferNonceUsed"
+   "name": "OfferNonceUsed",
+   "docs": "This miner-scoped offer nonce was already accepted."
   },
   {
    "pallet": "ComputeChannel",
    "pallet_index": 103,
    "error_index": 53,
-   "name": "BadOfferSignature"
+   "name": "BadOfferSignature",
+   "docs": "The standing offer signature did not verify against its miner account."
   },
   {
    "pallet": "ComputeChannel",
    "pallet_index": 103,
    "error_index": 54,
-   "name": "BadOfferAcceptanceSignature"
+   "name": "BadOfferAcceptanceSignature",
+   "docs": "The agent receipt key did not countersign the exact offer acceptance."
   },
   {
    "pallet": "ComputeChannel",
    "pallet_index": 103,
    "error_index": 55,
-   "name": "OfferEscrowBelowMinimum"
+   "name": "OfferEscrowBelowMinimum",
+   "docs": "Submitted escrow is below the offer's signed minimum."
   },
   {
    "pallet": "ComputeChannel",
    "pallet_index": 103,
    "error_index": 56,
-   "name": "FcuNotActivated"
+   "name": "FcuNotActivated",
+   "docs": "FCU parameters are intentionally unset in the runtime."
   },
   {
    "pallet": "ComputeChannel",
    "pallet_index": 103,
    "error_index": 57,
-   "name": "InvalidForwardTerms"
+   "name": "InvalidForwardTerms",
+   "docs": "Forward window/rate/quota/price/bond terms are malformed."
   },
   {
    "pallet": "ComputeChannel",
    "pallet_index": 103,
    "error_index": 58,
-   "name": "ForwardOfferNotFunded"
+   "name": "ForwardOfferNotFunded",
+   "docs": "Forward offer must be funded before countersigned pickup."
   },
   {
    "pallet": "ComputeChannel",
    "pallet_index": 103,
    "error_index": 59,
-   "name": "ForwardOfferFundingMismatch"
+   "name": "ForwardOfferFundingMismatch",
+   "docs": "The signed offer does not match its funded bond commitment."
   },
   {
    "pallet": "ComputeChannel",
    "pallet_index": 103,
    "error_index": 60,
-   "name": "ForwardNotStarted"
+   "name": "ForwardNotStarted",
+   "docs": "Forward service evidence cannot be posted before `start_block`."
   },
   {
    "pallet": "ComputeChannel",
    "pallet_index": 103,
    "error_index": 61,
-   "name": "ForwardWindowNotElapsed"
+   "name": "ForwardWindowNotElapsed",
+   "docs": "Forward position has not reached its terminal window."
   },
   {
    "pallet": "ComputeChannel",
    "pallet_index": 103,
    "error_index": 62,
-   "name": "ForwardDeliveryOutOfBounds"
+   "name": "ForwardDeliveryOutOfBounds",
+   "docs": "The requested delivery regresses or exceeds the contracted quota."
   },
   {
    "pallet": "ComputeChannel",
    "pallet_index": 103,
    "error_index": 63,
-   "name": "NoForwardAvailabilityAccrued"
+   "name": "NoForwardAvailabilityAccrued",
+   "docs": "No new availability earnout has accrued."
   },
   {
    "pallet": "ComputeChannel",
    "pallet_index": 103,
    "error_index": 64,
-   "name": "FcuSlashPaused"
+   "name": "FcuSlashPaused",
+   "docs": "No successful/missed Ghost evidence exists for the elapsed window.\nD-0430 degraded state or F2 mass-slash breaker pauses default."
   },
   {
    "pallet": "ComputeChannel",
    "pallet_index": 103,
    "error_index": 65,
-   "name": "TooManyForwardChannels"
+   "name": "TooManyForwardChannels",
+   "docs": "Bounded miner reverse index is full."
   },
   {
    "pallet": "ComputeChannel",
    "pallet_index": 103,
    "error_index": 66,
-   "name": "ForwardArithmeticOverflow"
+   "name": "ForwardArithmeticOverflow",
+   "docs": "Checked FCU payment/bond/earnout arithmetic overflowed."
   },
   {
    "pallet": "ComputeChannel",
    "pallet_index": 103,
    "error_index": 67,
-   "name": "ForwardAssignmentLockedPrincipal"
+   "name": "ForwardAssignmentLockedPrincipal",
+   "docs": "A forward position cannot be funded from vesting-locked principal, and so\ncannot change refund owner."
   },
   {
    "pallet": "ComputeChannel",
    "pallet_index": 103,
    "error_index": 68,
-   "name": "ForwardLotTooSmall"
+   "name": "ForwardLotTooSmall",
+   "docs": "Unit transfer would create a non-zero balance below the governed lot."
   },
   {
    "pallet": "ComputeChannel",
    "pallet_index": 103,
    "error_index": 69,
-   "name": "TooManyForwardHolders"
+   "name": "TooManyForwardHolders",
+   "docs": "Holder cap would be exceeded."
   },
   {
    "pallet": "ComputeChannel",
    "pallet_index": 103,
    "error_index": 70,
-   "name": "ForwardHolderHasActiveDraw"
+   "name": "ForwardHolderHasActiveDraw",
+   "docs": "Transfers cannot preempt a holder's live draw."
   },
   {
    "pallet": "ComputeChannel",
    "pallet_index": 103,
    "error_index": 71,
-   "name": "ForwardHolderNotFound"
+   "name": "ForwardHolderNotFound",
+   "docs": "No holder units or terminal pull distribution exist."
   },
   {
    "pallet": "ComputeChannel",
    "pallet_index": 103,
    "error_index": 72,
-   "name": "ForwardDrawUnavailable"
+   "name": "ForwardDrawUnavailable",
+   "docs": "Draw rate is zero, exceeds remaining capacity, or draw id is reused."
   },
   {
    "pallet": "ComputeChannel",
    "pallet_index": 103,
    "error_index": 73,
-   "name": "TooManyForwardDraws"
+   "name": "TooManyForwardDraws",
+   "docs": "Concurrent draw-record cap reached."
   },
   {
    "pallet": "ComputeChannel",
    "pallet_index": 103,
    "error_index": 74,
-   "name": "ForwardBidExists"
+   "name": "ForwardBidExists",
+   "docs": "Bid nonce/object already exists."
   },
   {
    "pallet": "ComputeChannel",
    "pallet_index": 103,
    "error_index": 75,
-   "name": "ForwardBidBadPhase"
+   "name": "ForwardBidBadPhase",
+   "docs": "Bid phase/deadline does not permit this transition."
   },
   {
    "pallet": "ComputeChannel",
    "pallet_index": 103,
    "error_index": 76,
-   "name": "ForwardBidClaimInvalid"
+   "name": "ForwardBidClaimInvalid",
+   "docs": "Claim commitment missing, duplicated, or incorrectly revealed."
   },
   {
    "pallet": "ComputeChannel",
    "pallet_index": 103,
    "error_index": 77,
-   "name": "ForwardBidClaimantSetInvalid"
+   "name": "ForwardBidClaimantSetInvalid",
+   "docs": "Claim set is empty or full."
   },
   {
    "pallet": "ComputeChannel",
    "pallet_index": 103,
    "error_index": 78,
-   "name": "ForwardBidEntropyUnavailable"
+   "name": "ForwardBidEntropyUnavailable",
+   "docs": "Post-registration entropy was unavailable."
   },
   {
    "pallet": "ComputeChannel",
    "pallet_index": 103,
    "error_index": 79,
-   "name": "FinalitySafeMode"
+   "name": "FinalitySafeMode",
+   "docs": "Finality is stalled; new finality-dependent channel opens are disabled."
   },
   {
    "pallet": "ComputeChannel",
    "pallet_index": 103,
    "error_index": 80,
-   "name": "ToplocToleranceNotCalibrated"
+   "name": "ToplocToleranceNotCalibrated",
+   "docs": "The model has no governance-calibrated TOPLOC tolerance band (fail closed)."
   },
   {
    "pallet": "ComputeChannel",
    "pallet_index": 103,
    "error_index": 81,
-   "name": "ToplocBandUnavailable"
+   "name": "ToplocBandUnavailable",
+   "docs": "Derived TOPLOC band constants are missing or misordered (fail closed)."
   },
   {
    "pallet": "ComputeChannel",
    "pallet_index": 103,
    "error_index": 82,
-   "name": "ToplocEvidenceMismatch"
+   "name": "ToplocEvidenceMismatch",
+   "docs": "The TOPLOC attestation bundle does not all vouch for identical evidence."
   },
   {
    "pallet": "ComputeChannel",
    "pallet_index": 103,
    "error_index": 83,
-   "name": "ToplocEvidenceChannelMismatch"
+   "name": "ToplocEvidenceChannelMismatch",
+   "docs": "The TOPLOC evidence references a different channel than the one disputed."
   },
   {
    "pallet": "ComputeChannel",
    "pallet_index": 103,
    "error_index": 84,
-   "name": "ToplocVerifierAccepted"
+   "name": "ToplocVerifierAccepted",
+   "docs": "The attested activation is inside the calibrated band (no fraud), or the\ncommitted and recomputed hashes are identical (the verifier accepted)."
   },
   {
    "pallet": "ComputeChannel",
    "pallet_index": 103,
    "error_index": 85,
-   "name": "ValidatorNotActive"
+   "name": "ValidatorNotActive",
+   "docs": "A TOPLOC attestation signer is not an active validator."
   },
   {
    "pallet": "ComputeChannel",
    "pallet_index": 103,
    "error_index": 86,
-   "name": "InvalidValidatorSignature"
+   "name": "InvalidValidatorSignature",
+   "docs": "A TOPLOC attestation signature did not verify, or its id is malformed."
   },
   {
    "pallet": "ComputeChannel",
    "pallet_index": 103,
    "error_index": 87,
-   "name": "ToplocQuorumNotMet"
+   "name": "ToplocQuorumNotMet",
+   "docs": "The distinct active-validator signers did not meet the BFT quorum."
   },
   {
    "pallet": "ComputeChannel",
    "pallet_index": 103,
    "error_index": 88,
-   "name": "NotPremiumChannel"
+   "name": "NotPremiumChannel",
+   "docs": "#535: the channel was not opened as `CertificatePremium`."
   },
   {
    "pallet": "ComputeChannel",
    "pallet_index": 103,
    "error_index": 89,
-   "name": "PremiumRequiresInt8Exact"
+   "name": "PremiumRequiresInt8Exact",
+   "docs": "#534: premium class requires INT8-exact serving (W8A8/int32 accumulate)."
   },
   {
    "pallet": "ComputeChannel",
    "pallet_index": 103,
    "error_index": 90,
-   "name": "PremiumRequiresWeightCommitment"
+   "name": "PremiumRequiresWeightCommitment",
+   "docs": "#533: the model has no registered weight MLE commitment at this precision."
   },
   {
    "pallet": "ComputeChannel",
    "pallet_index": 103,
    "error_index": 91,
-   "name": "PremiumPriceFloorNotMet"
+   "name": "PremiumPriceFloorNotMet",
+   "docs": "#535: escrow does not meet `price_per_gflop · gn · MinCertificatePremiumPpm`."
   },
   {
    "pallet": "ComputeChannel",
    "pallet_index": 103,
    "error_index": 92,
-   "name": "CertificateRejected"
+   "name": "CertificateRejected",
+   "docs": "#535: the work certificate did not verify (or no verifier backend is wired)."
   },
   {
    "pallet": "ComputeChannel",
    "pallet_index": 103,
    "error_index": 93,
-   "name": "BookkeepingRejected"
+   "name": "BookkeepingRejected",
+   "docs": "#794: the supplied bookkeeping cert did not verify — the settled\n`aggregate_gn` was not proven to equal `Σ per-leaf g_n` (or no verifier\nbackend is wired)."
   },
   {
    "pallet": "ComputeChannel",
    "pallet_index": 103,
    "error_index": 94,
-   "name": "BookkeepingRequired"
+   "name": "BookkeepingRequired",
+   "docs": "#794: the runtime's `BookkeepingVerifier` requires a bookkeeping cert but\nthe caller omitted it (`bookkeeping_cert == None`). Fail closed — a miner\ncannot skip the aggregation-integrity gate on the certified money path."
   },
   {
    "pallet": "ComputeChannel",
    "pallet_index": 103,
    "error_index": 95,
-   "name": "MeteringRejected"
+   "name": "MeteringRejected",
+   "docs": "#871: the supplied metering cert did not verify — a per-leaf `g_n` was\nnot proven to equal `measured_gn(committed counts)` under the band cap\n(or no verifier backend is wired)."
   },
   {
    "pallet": "ComputeChannel",
    "pallet_index": 103,
    "error_index": 96,
-   "name": "MeteringRequired"
+   "name": "MeteringRequired",
+   "docs": "#871: the runtime's `MeteringCertVerifier` requires a metering cert but\nthe caller omitted it (`metering_cert == None`). Fail closed — a miner\ncannot skip the per-leaf `g_n`-honesty gate on the certified money path."
   },
   {
    "pallet": "ComputeChannel",
    "pallet_index": 103,
    "error_index": 97,
-   "name": "CalibrationUnavailable"
+   "name": "CalibrationUnavailable",
+   "docs": "No calibration cap was available for a nonzero settlement."
   },
   {
    "pallet": "ComputeChannel",
    "pallet_index": 103,
    "error_index": 98,
-   "name": "SettlementExceedsCalibrationCap"
+   "name": "SettlementExceedsCalibrationCap",
+   "docs": "Session settlement exceeded `min(snapshot_cap, current_cap) * elapsed_blocks`."
   },
   {
    "pallet": "ComputeChannel",
    "pallet_index": 103,
    "error_index": 99,
-   "name": "ToplocProfileNotPinned"
+   "name": "ToplocProfileNotPinned",
+   "docs": "The channel has no pinned TOPLOC attestation profile for the new claim path."
   },
   {
    "pallet": "ComputeChannel",
    "pallet_index": 103,
    "error_index": 100,
-   "name": "InvalidToplocAttestClaim"
+   "name": "InvalidToplocAttestClaim",
+   "docs": "The shared attestation claim failed registry/profile/quorum verification."
   },
   {
    "pallet": "ComputeChannel",
    "pallet_index": 103,
    "error_index": 101,
-   "name": "ToplocClaimSubjectMismatch"
+   "name": "ToplocClaimSubjectMismatch",
+   "docs": "The shared TOPLOC claim subject did not bind the disputed evidence tuple."
   },
   {
    "pallet": "ComputeChannel",
    "pallet_index": 103,
    "error_index": 102,
-   "name": "InvalidToplocVerdict"
+   "name": "InvalidToplocVerdict",
+   "docs": "TOPLOC mismatch claims only uphold fraud-tagged failed verdicts."
   },
   {
    "pallet": "ComputeChannel",
    "pallet_index": 103,
    "error_index": 103,
-   "name": "AttestationStale"
+   "name": "AttestationStale",
+   "docs": "The channel's attestation freshness window elapsed before settlement."
   },
   {
    "pallet": "ComputeChannel",
    "pallet_index": 103,
    "error_index": 104,
-   "name": "DegradedWindowExtensionCapped"
+   "name": "DegradedWindowExtensionCapped",
+   "docs": "The objective degraded-state extension cap is exhausted."
   },
   {
    "pallet": "ComputeChannel",
    "pallet_index": 103,
    "error_index": 105,
-   "name": "DecodePolicyRejected"
+   "name": "DecodePolicyRejected",
+   "docs": "The decode policy was not allowed for the model at channel open."
   },
   {
    "pallet": "ComputeChannel",
    "pallet_index": 103,
    "error_index": 106,
-   "name": "DecodePolicyHashMismatch"
+   "name": "DecodePolicyHashMismatch",
+   "docs": "A transcript proof did not match the channel-pinned decode policy."
   },
   {
    "pallet": "ComputeChannel",
    "pallet_index": 103,
    "error_index": 107,
-   "name": "NoDisputeStanding"
+   "name": "NoDisputeStanding",
+   "docs": "Origin lacks dispute standing (D-0424): must be the channel agent or an\nactive validator. Rejected before the challenger bond is locked."
   },
   {
    "pallet": "ComputeChannel",
    "pallet_index": 103,
    "error_index": 108,
-   "name": "MissingAuditEvidence"
+   "name": "MissingAuditEvidence",
+   "docs": "#846: an audit-fee claim requires submitted evidence (a non-zero attestation\ncommitment). Fail closed — no evidence, no pay (no unpaid-duty path)."
   },
   {
    "pallet": "ComputeChannel",
    "pallet_index": 103,
    "error_index": 109,
-   "name": "AuditAlreadyClaimed"
+   "name": "AuditAlreadyClaimed",
+   "docs": "#846: this validator has already claimed the audit fee for this channel."
   },
   {
    "pallet": "ComputeChannel",
    "pallet_index": 103,
    "error_index": 110,
-   "name": "AuditPoolInsufficient"
+   "name": "AuditPoolInsufficient",
+   "docs": "#846: the audit pool has insufficient earmarked funds to pay this claim.\nFail closed — a duty is never assigned that the pool cannot fund."
   },
   {
    "pallet": "ComputeChannel",
    "pallet_index": 103,
    "error_index": 111,
-   "name": "DisputeTurnNotSettled"
+   "name": "DisputeTurnNotSettled",
+   "docs": "The disputed turn was not verified at the current settlement post (or the\nchannel was settled before posted turns were recorded), so the miner could\nnot answer it. Rejected before the challenger bond is locked."
   },
   {
    "pallet": "ComputeChannel",
    "pallet_index": 103,
    "error_index": 112,
-   "name": "SettlementTariffMissing"
+   "name": "SettlementTariffMissing",
+   "docs": "Terminal unrecoverable-DA settlement requires a posted tariff or an\nexplicitly eligible legacy tariff materialized after v1 → v2 activation."
   },
   {
    "pallet": "ComputeChannel",
    "pallet_index": 103,
    "error_index": 113,
-   "name": "MinerRetired"
+   "name": "MinerRetired",
+   "docs": "New exposure cannot target a permanently retired miner."
   },
   {
    "pallet": "ComputeChannel",
    "pallet_index": 103,
    "error_index": 114,
-   "name": "SessionEvidenceTooLarge"
+   "name": "SessionEvidenceTooLarge",
+   "docs": "Session DA size is zero, exceeds its typed slot cap, or overflows."
   },
   {
    "pallet": "ComputeChannel",
    "pallet_index": 103,
    "error_index": 115,
-   "name": "SessionEvidenceConflict"
+   "name": "SessionEvidenceConflict",
+   "docs": "An immutable evidence slot was already assigned different bytes."
   },
   {
    "pallet": "ComputeChannel",
    "pallet_index": 103,
    "error_index": 116,
-   "name": "ForwardStateUpgradeRequired"
+   "name": "ForwardStateUpgradeRequired",
+   "docs": "Predecessor forward state must be explicitly handled before exact-rate execution."
   },
   {
    "pallet": "ComputeChannel",
    "pallet_index": 103,
    "error_index": 117,
-   "name": "ForwardListingLocked"
+   "name": "ForwardListingLocked",
+   "docs": "Seller has locked outgoing rights behind an outstanding listing."
   },
   {
    "pallet": "ComputeChannel",
    "pallet_index": 103,
    "error_index": 118,
-   "name": "ForwardListingUnavailable"
+   "name": "ForwardListingUnavailable",
+   "docs": "Listing is absent, stale, expired, exhausted, or bound to different rights."
   },
   {
    "pallet": "ComputeChannel",
    "pallet_index": 103,
    "error_index": 119,
-   "name": "ForwardSalePriceExceeded"
+   "name": "ForwardSalePriceExceeded",
+   "docs": "Exact whole-listing payment exceeds the buyer's signed budget."
   },
   {
    "pallet": "ComputeChannel",
    "pallet_index": 103,
    "error_index": 120,
-   "name": "FcuEconomicSnapshotMissing"
+   "name": "FcuEconomicSnapshotMissing",
+   "docs": "Funded obligations require their original economic snapshot."
   },
   {
    "pallet": "ComputeChannel",
    "pallet_index": 103,
    "error_index": 121,
-   "name": "FcuObligationsOutstanding"
+   "name": "FcuObligationsOutstanding",
+   "docs": "Clearing configuration would disable outstanding financial claims."
   },
   {
    "pallet": "ComputeChannel",
    "pallet_index": 103,
    "error_index": 122,
-   "name": "FcuPrimaryAdmissionsPaused"
+   "name": "FcuPrimaryAdmissionsPaused",
+   "docs": "New primary funding or position creation is paused by governance."
   },
   {
    "pallet": "ComputeChannel",
    "pallet_index": 103,
    "error_index": 123,
-   "name": "FcuInvalidServiceProfile"
+   "name": "FcuInvalidServiceProfile",
+   "docs": ""
   },
   {
    "pallet": "ComputeChannel",
    "pallet_index": 103,
    "error_index": 124,
-   "name": "FcuInvalidQualification"
+   "name": "FcuInvalidQualification",
+   "docs": ""
   },
   {
    "pallet": "ComputeChannel",
    "pallet_index": 103,
    "error_index": 125,
-   "name": "FcuServiceProfileUnknown"
+   "name": "FcuServiceProfileUnknown",
+   "docs": ""
   },
   {
    "pallet": "ComputeChannel",
    "pallet_index": 103,
    "error_index": 126,
-   "name": "FcuQualificationUnknown"
+   "name": "FcuQualificationUnknown",
+   "docs": ""
   },
   {
    "pallet": "ComputeChannel",
    "pallet_index": 103,
    "error_index": 127,
-   "name": "FcuQualificationConflict"
+   "name": "FcuQualificationConflict",
+   "docs": ""
   },
   {
    "pallet": "ComputeChannel",
    "pallet_index": 103,
    "error_index": 128,
-   "name": "FcuServiceProfileUnavailable"
+   "name": "FcuServiceProfileUnavailable",
+   "docs": ""
   },
   {
    "pallet": "ComputeChannel",
    "pallet_index": 103,
    "error_index": 129,
-   "name": "FcuInvalidServiceWindow"
+   "name": "FcuInvalidServiceWindow",
+   "docs": ""
   },
   {
    "pallet": "ComputeChannel",
    "pallet_index": 103,
    "error_index": 130,
-   "name": "FcuTimestampUnavailable"
+   "name": "FcuTimestampUnavailable",
+   "docs": ""
   },
   {
    "pallet": "ComputeChannel",
    "pallet_index": 103,
    "error_index": 131,
-   "name": "FcuNativeIntegrationRequired"
+   "name": "FcuNativeIntegrationRequired",
+   "docs": "Native service binding and custody must be implemented before new exposure."
   },
   {
    "pallet": "ComputeChannel",
    "pallet_index": 103,
    "error_index": 132,
-   "name": "MinerCapacityFullyReserved"
+   "name": "MinerCapacityFullyReserved",
+   "docs": "D-0542: the miner's live capacity reservations leave no room for this channel's rate."
   },
   {
    "pallet": "ComputeChannel",
    "pallet_index": 103,
    "error_index": 133,
-   "name": "TooManyCapacityReservations"
+   "name": "TooManyCapacityReservations",
+   "docs": "D-0542: the miner already holds the maximum number of live capacity reservations."
   },
   {
    "pallet": "ComputeChannel",
    "pallet_index": 103,
    "error_index": 134,
-   "name": "ZeroCapacityReservationRate"
+   "name": "ZeroCapacityReservationRate",
+   "docs": "D-0542: a capacity reservation rate must be positive."
   },
   {
    "pallet": "ComputeChannel",
    "pallet_index": 103,
    "error_index": 135,
-   "name": "UnconsentedSessionTooLong"
+   "name": "UnconsentedSessionTooLong",
+   "docs": "D-0542: an open the miner did not sign asked for a window above\n`MaxUnconsentedSessionBlocks`."
   },
   {
    "pallet": "ComputeChannel",
    "pallet_index": 103,
    "error_index": 136,
-   "name": "EscrowBelowCapacityFloor"
+   "name": "EscrowBelowCapacityFloor",
+   "docs": "D-0542: an open the miner did not sign escrowed less than its capacity floor\n(reserved rate x window x `UnconsentedReservationTariff`)."
   }
  ]
 }

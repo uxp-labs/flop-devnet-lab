@@ -42,7 +42,7 @@ export function blobsOfTape(text) {
 export function errorTable(md) {
   return PALLETS.flatMap((p) => {
     const index = md.pallets.find((x) => x.name === p).index;
-    return variantsOf(md, p, "error").map((v) => ({ pallet: p, pallet_index: index, error_index: v.index, name: v.name }));
+    return variantsOf(md, p, "error").map((v) => ({ pallet: p, pallet_index: index, error_index: v.index, name: v.name, docs: v.docs }));
   });
 }
 
@@ -50,7 +50,7 @@ const leUint = (buf) => { let n = 0n; for (let i = buf.length - 1; i >= 0; i--) 
 /** Events (index, name, field names) of the pallets the rerun reads, and the constants of the two pallets. */
 export function factTable(md) {
   const events = {};
-  for (const p of EVENT_PALLETS) events[p] = { pallet_index: md.pallets.find((x) => x.name === p).index, events: variantsOf(md, p, "event") };
+  for (const p of EVENT_PALLETS) events[p] = { pallet_index: md.pallets.find((x) => x.name === p).index, events: variantsOf(md, p, "event").map(({ docs, ...v }) => v) };
   const constants = {};
   for (const p of PALLETS) {
     constants[p] = {};
@@ -60,6 +60,16 @@ export function factTable(md) {
     }
   }
   return { events, constants };
+}
+
+/** The sha256 of the doc comment of each call the rerun sends, to see whether its documented behaviour changed. */
+export const DOCUMENTED_CALLS = [["FlopSessionKeys", "create_session"], ["FlopSessionKeys", "revoke_session"], ["FlopSessionKeys", "execute_via_session"], ["ComputeChannel", "force_open"], ["ComputeChannel", "expire_force_open"], ["ComputeChannel", "timeout"]];
+export function callDocs(md) {
+  return Object.fromEntries(DOCUMENTED_CALLS.map(([p, c]) => {
+    const v = variantsOf(md, p, "calls").find((x) => x.name === c);
+    if (!v) throw new Error(`no call ${p}.${c}`);
+    return [`${p}.${c}`, createHash("sha256").update(v.docs).digest("hex")];
+  }));
 }
 
 /** Every "(pallet P, error E)" or "pallet P error E = Pallet.Name" an earlier results.json recorded, with the name it gave. */
@@ -92,6 +102,8 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
   const source = { recording: RECORDING, metadata_sha256: SPECS[1014020], metadata_bytes: blobs[SPECS[1014020]].length, built_by: "build-tables.mjs", reader: "metadata-v14.mjs" };
   const errors = { spec_version: 1014020, ...source, cross_check_of_the_reader: { against: "the 1014014 blob of the same recording", sha256: SPECS[1014014], errors_recorded_by_the_earlier_tests_found_by_index_and_name: cross }, errors: errorTable(md[1014020]) };
   writeFileSync(join(out, "errors-1014020.json"), JSON.stringify(errors, null, 1) + "\n");
-  writeFileSync(join(out, "facts-1014020.json"), JSON.stringify({ spec_version: 1014020, ...source, ...factTable(md[1014020]) }, null, 1) + "\n");
+  const d14 = callDocs(md[1014014]), d20 = callDocs(md[1014020]);
+  const docs = Object.fromEntries(Object.keys(d20).map((k) => [k, { sha256_at_1014014: d14[k], sha256_at_1014020: d20[k], same: d14[k] === d20[k] }]));
+  writeFileSync(join(out, "facts-1014020.json"), JSON.stringify({ spec_version: 1014020, ...source, ...factTable(md[1014020]), call_docs: docs }, null, 1) + "\n");
   console.log(`wrote errors-1014020.json (${errors.errors.length} errors) and facts-1014020.json; ${cross.length} recorded errors of the earlier tests read back from 1014014`);
 }

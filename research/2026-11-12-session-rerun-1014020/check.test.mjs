@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { HERE, REPO, readJson, loadPlan, loadErrors, loadFacts, context, judgeRun, substitute, fromSource, atPath, earlierFee } from "./rerun-lib.mjs";
-import { template, forceOpenFile, totals } from "./plan.mjs";
+import { template, forceOpenFile, totals, table, commandsText, totalsText } from "./plan.mjs";
 import { recordedErrors } from "./build-tables.mjs";
 
 const plan = loadPlan(), errors = loadErrors(), facts = loadFacts();
@@ -57,6 +57,13 @@ test("the error table agrees with the moves the upgrade report lists, and with w
 
 test("results.template.json is what plan.mjs template prints", () => {
   assert.deepEqual(readJson(join(HERE, "results.template.json")), template(plan));
+});
+
+test("plan.md holds the table, the command lines and the totals exactly as plan.mjs prints them", () => {
+  const md = readFileSync(join(HERE, "plan.md"), "utf8");
+  assert.ok(md.includes(table(plan, errors)), "the table");
+  assert.ok(md.includes(commandsText(plan, null).trimEnd()), "the command lines");
+  assert.ok(md.includes(totalsText(plan)), "the totals");
 });
 
 test("the plan keeps the signer's and the lab's limits", () => {

@@ -5,6 +5,7 @@
 //        results file whose accounts are filled, DEV1, DEV2 and the owner's nonce are put in, and
 //        with --fo-out the three force_open files are written there. Without, they stay $NAMES.
 //   node plan.mjs totals      the number of transactions, the fee estimate and what moves
+//   node plan.mjs table       the transactions as the markdown table of plan.md
 //   node plan.mjs template    the empty results form (results.template.json is its output)
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -38,6 +39,12 @@ export function commandsOf(plan, step, results) {
   ].join("\n");
 }
 
+/** Every step's command lines, with the header that says how to run them. */
+export function commandsText(plan, results) {
+  const head = `# run in a working folder outside the repo that holds the force_open files (--fo-out), after: mkdir calls signed\n# LAB is the repo checkout; KEY_OWNER, KEY_DEV1, KEY_DEV2 name the key files; FLOP_SIGN_LIBS names the libraries\n# a $NAME in single quotes is not known yet: the signer refuses it. Rerun with --results once it is recorded.\n\n`;
+  return head + plan.steps.map((st) => commandsOf(plan, st, results) + "\n\n").join("");
+}
+
 /** Counts, fees and amounts of the plan, all as raw strings. */
 export function totals(plan) {
   const by = {};
@@ -49,7 +56,33 @@ export function totals(plan) {
   const v = (n) => BigInt(plan.values[n].value);
   return { transactions: plan.steps.length, by_signer: by, fee_estimate_raw: fee.toString(),
     sent_to_devices_raw: v("FUND").toString(), escrow_locked_raw: v("ESCROW_1").toString(), escrow_locked_for_blocks_at_least: plan.values.ACK_WINDOW.value,
-    owner_net_cost_estimate_raw: fee.toString() };
+    owner_net_cost_estimate_raw: fee.toString(),
+    owner_before_raw: fromSource(plan, { file: "deny", path: "owner_balance.after_raw" }),
+    owner_after_estimate_raw: (BigInt(fromSource(plan, { file: "deny", path: "owner_balance.after_raw" })) - fee).toString() };
+}
+
+/** The plan's transactions as a markdown table, with each expected refusal's indexes read from the error table. */
+export function table(plan, errors) {
+  const amt = (t) => { const v = substitute(t, plan, null); return /^(0|[1-9][0-9]*)$/.test(v) ? `${v} (${flopText(BigInt(v))} FLOP)` : v; };
+  const rows = plan.steps.map((st) => {
+    let expect = "success";
+    if (st.expect !== "success") {
+      const [p, n] = st.expect.split(".");
+      const e = errors.errors.find((x) => x.pallet === p && x.name === n);
+      expect = `refused: ${st.expect} (pallet ${e.pallet_index}, error ${e.error_index})`;
+    }
+    const inner = st.call[0] === "via-session" ? ` ${st.call[st.call.indexOf("--inner") + 1].replace(/:.*$/, (m) => (m.length > 24 ? m.slice(0, 1) + "…" : m))}` : "";
+    const moves = st.moves.length ? st.moves.map((m) => `${amt(m.amount)} ${m.from} to ${m.to}; ${m.comes_back}`).join("<br>") : "nothing";
+    return `| ${st.id} | ${st.signer} | ${st.call[0]}${inner} | ${moves} | ${st.declared === null ? "none" : amt(st.declared)} | ${expect} | ${st.on_unexpected} |`;
+  });
+  return ["| # | Signs | Call | Moves | Declared | Expected | If not |", "|---|---|---|---|---|---|---|", ...rows].join("\n");
+}
+
+/** The totals as printed, raw and in FLOP. */
+export function totalsText(plan) {
+  const t = totals(plan);
+  const f = (k) => flopText(BigInt(t[k + "_raw"]));
+  return JSON.stringify({ ...t, fee_estimate_flop: f("fee_estimate"), sent_to_devices_flop: f("sent_to_devices"), escrow_locked_flop: f("escrow_locked"), owner_before_flop: f("owner_before"), owner_after_estimate_flop: f("owner_after_estimate") }, null, 1);
 }
 
 /** The empty results form. */
@@ -90,14 +123,14 @@ if (import.meta.url === `file://${process.argv[1]}`) {
         writeFileSync(p, JSON.stringify(forceOpenFile(plan, name, results), null, 1) + "\n", { flag: "wx" });
       }
     }
-    console.log(`# run in a working folder outside the repo that holds the force_open files (--fo-out), after: mkdir calls signed\n# LAB is the repo checkout; KEY_OWNER, KEY_DEV1, KEY_DEV2 name the key files; FLOP_SIGN_LIBS names the libraries\n# a $NAME in single quotes is not known yet: the signer refuses it. Rerun with --results once it is recorded.\n`);
-    for (const st of plan.steps) console.log(commandsOf(plan, st, results) + "\n");
+    process.stdout.write(commandsText(plan, results));
   } else if (cmd === "totals") {
-    const t = totals(plan);
-    console.log(JSON.stringify({ ...t, fee_estimate_flop: flopText(BigInt(t.fee_estimate_raw)), sent_to_devices_flop: flopText(BigInt(t.sent_to_devices_raw)), escrow_locked_flop: flopText(BigInt(t.escrow_locked_raw)) }, null, 1));
+    console.log(totalsText(plan));
+  } else if (cmd === "table") {
+    console.log(table(plan, readJson(new URL("./errors-1014020.json", import.meta.url))));
   } else if (cmd === "template") {
     console.log(JSON.stringify(template(plan), null, 1));
-  } else { process.stderr.write("commands: commands, totals, template\n"); process.exit(2); }
+  } else { process.stderr.write("commands: commands, totals, table, template\n"); process.exit(2); }
 }
 // fromSource is used by the test that every value matches its source.
 export { fromSource };

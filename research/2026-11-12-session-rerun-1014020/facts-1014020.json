@@ -1207,5 +1207,37 @@
     "value": "1"
    }
   }
+ },
+ "call_docs": {
+  "FlopSessionKeys.create_session": {
+   "sha256_at_1014014": "826c45dcec7f4bbcd94fe11b923a282d606d6cdf33254606a506ac9e2323d2ec",
+   "sha256_at_1014020": "826c45dcec7f4bbcd94fe11b923a282d606d6cdf33254606a506ac9e2323d2ec",
+   "same": true
+  },
+  "FlopSessionKeys.revoke_session": {
+   "sha256_at_1014014": "6d24d86b69b2a1d040f1c82e5f61f5756d45210c2b710b6d9fd3264d1152c371",
+   "sha256_at_1014020": "6d24d86b69b2a1d040f1c82e5f61f5756d45210c2b710b6d9fd3264d1152c371",
+   "same": true
+  },
+  "FlopSessionKeys.execute_via_session": {
+   "sha256_at_1014014": "263a36f674b741d8673d571a8372b81c1058c6453fea0cf8e27f9f0a63019545",
+   "sha256_at_1014020": "263a36f674b741d8673d571a8372b81c1058c6453fea0cf8e27f9f0a63019545",
+   "same": true
+  },
+  "ComputeChannel.force_open": {
+   "sha256_at_1014014": "3702945712c2d7797df782ba897f7e522d8e332fe6937f1d213c33b6dba9863f",
+   "sha256_at_1014020": "3702945712c2d7797df782ba897f7e522d8e332fe6937f1d213c33b6dba9863f",
+   "same": true
+  },
+  "ComputeChannel.expire_force_open": {
+   "sha256_at_1014014": "b36d1c2b23b4cd68fb3a6361682baa0a908d39ac03d6015c9b765bea762584a9",
+   "sha256_at_1014020": "b36d1c2b23b4cd68fb3a6361682baa0a908d39ac03d6015c9b765bea762584a9",
+   "same": true
+  },
+  "ComputeChannel.timeout": {
+   "sha256_at_1014014": "8f25759c180542c4c6a64e8fcf6861cfb725efeba9a9cf3979200dbe0af63f91",
+   "sha256_at_1014020": "8f25759c180542c4c6a64e8fcf6861cfb725efeba9a9cf3979200dbe0af63f91",
+   "same": true
+  }
  }
 }

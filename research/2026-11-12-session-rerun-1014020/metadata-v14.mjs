@@ -101,7 +101,7 @@ export function variantsOf(md, palletName, which) {
   if (id === null) return [];
   const t = md.types[id];
   if (!t || t.def.kind !== "variant") throw new Error(`${palletName} ${which} type is not a variant`);
-  return t.def.variants.map((v) => ({ index: v.index, name: v.name, fields: v.fields.map((f) => f.name) })).sort((a, b) => a.index - b.index);
+  return t.def.variants.map((v) => ({ index: v.index, name: v.name, fields: v.fields.map((f) => f.name), docs: v.docs.join("\n") })).sort((a, b) => a.index - b.index);
 }
 
 /** The primitive name of a type id when it is one, else null. */
