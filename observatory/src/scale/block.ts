@@ -6,7 +6,7 @@ import { type Decoded, decodeValue } from "./decode.js";
 import { type BlockEvent, decodeEvents } from "./events.js";
 import type { StorageEntry } from "./metadata.js";
 import { Reader, ScaleError } from "./reader.js";
-import { MAX_NAME_INPUT, type PinInput, REVIEWED, type ReviewedShape, STATED_ENTRIES, bytesLength, copyBytes, copyPinInput, inputObject, pinShape, readField } from "./shape.js";
+import { MAX_NAME_INPUT, type PinInput, REVIEWED, type ReviewedShape, STATED_ENTRIES, bytesLength, copyBytes, copyPinInput, inputObject, pinLine, readField, reviewedCopy } from "./shape.js";
 import { storageEntryOf, storageKey } from "./storage-key.js";
 
 export type BlockRuntime = { found: true; reviewed: ReviewedShape } | { found: false; refused: string };
@@ -40,7 +40,7 @@ export function runtimeOfBlock(lastRuntimeUpgrade: Uint8Array): BlockRuntime {
   }
   const line = REVIEWED.find((x) => x.specName === name && BigInt(x.specVersion) === version);
   if (line === undefined) return { found: false, refused: `no reviewed runtime: the block's LastRuntimeUpgrade names spec ${JSON.stringify(name)} ${version}, which no reviewed line names` };
-  return { found: true, reviewed: { ...line } };
+  return { found: true, reviewed: reviewedCopy(line) };
 }
 
 export type BlockEvents = { decoded: true; reviewed: ReviewedShape; events: BlockEvent[] } | { decoded: false; refused: string };
@@ -58,10 +58,10 @@ export function decodeBlockEvents(input: PinInput & { events: Uint8Array }): Blo
     if (e instanceof ScaleError) return { decoded: false, refused: `not decoded: ${e.message}` };
     throw e;
   }
-  const pin = pinShape(pinInput);
+  const pin = pinLine(pinInput);
   if (!pin.pinned) return { decoded: false, refused: `not decoded: ${pin.refused}` };
   try {
-    return { decoded: true, reviewed: pin.reviewed, events: decodeEvents(pin.metadata, events) };
+    return { decoded: true, reviewed: reviewedCopy(pin.reviewed), events: decodeEvents(pin.metadata, events) };
   } catch (e) {
     if (e instanceof ScaleError) return { decoded: false, refused: `System.Events: ${e.message}` };
     throw e;
@@ -119,11 +119,11 @@ function door(input: StorageRead): StorageValue {
     throw new InputRefusal(`the pallet and the entry must be strings of at most ${MAX_NAME_INPUT} characters`);
   }
   if (!STATED_ENTRIES.some(([p, e]) => p === pallet && e === entry)) throw new InputRefusal(`${JSON.stringify(pallet)}.${JSON.stringify(entry)} is not a storage entry the reviewed shape states`);
-  const pin = pinShape(copyPinInput(i));
+  const pin = pinLine(copyPinInput(i));
   if (!pin.pinned) throw new InputRefusal(pin.refused);
   const md = pin.metadata;
   const name = `${pallet}.${entry}`;
-  const decoded = (stored: boolean, value: Decoded): StorageValue => ({ decoded: true, reviewed: pin.reviewed, stored, value });
+  const decoded = (stored: boolean, value: Decoded): StorageValue => ({ decoded: true, reviewed: reviewedCopy(pin.reviewed), stored, value });
   const fail = (why: string): StorageValue => ({ decoded: false, refused: `${name}: ${why}` });
   const e = storageEntryOf(md, pallet, entry).entry;
   // The key parts, by index, once the list says it holds exactly as many as the entry takes.

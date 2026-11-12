@@ -1238,5 +1238,93 @@
     "replace": "      const m = [...metadata.values()].at(-1);",
     "test": "test/upgrade-decode.test.ts",
     "why": "a block's metadata is found by the sha256 its runtime's line names, not taken from what the block answered last (review round 22)"
+  },
+  {
+    "id": "r23-pin-line-not-copied",
+    "file": "src/scale/shape.ts",
+    "find": "{ pinned: true, metadata: p.metadata, reviewed: reviewedCopy(p.reviewed) }",
+    "replace": "{ pinned: true, metadata: p.metadata, reviewed: p.reviewed }",
+    "test": "test/reviewed-frozen.test.ts",
+    "why": "pinShape answers a fresh copy of the line (review round 23, R1)"
+  },
+  {
+    "id": "r23-events-line-not-copied",
+    "file": "src/scale/block.ts",
+    "find": "reviewed: reviewedCopy(pin.reviewed), events:",
+    "replace": "reviewed: pin.reviewed, events:",
+    "test": "test/reviewed-frozen.test.ts",
+    "why": "decodeBlockEvents answers a fresh copy of the line (review round 23, R1)"
+  },
+  {
+    "id": "r23-storage-line-not-copied",
+    "file": "src/scale/block.ts",
+    "find": "reviewed: reviewedCopy(pin.reviewed), stored,",
+    "replace": "reviewed: pin.reviewed, stored,",
+    "test": "test/reviewed-frozen.test.ts",
+    "why": "decodeStorageValue answers a fresh copy of the line (review round 23, R1)"
+  },
+  {
+    "id": "r23-runtime-line-not-copied",
+    "file": "src/scale/block.ts",
+    "find": "return { found: true, reviewed: reviewedCopy(line) };",
+    "replace": "return { found: true, reviewed: line };",
+    "test": "test/reviewed-frozen.test.ts",
+    "why": "runtimeOfBlock answers a fresh copy of the line (review round 23, R1)"
+  },
+  {
+    "id": "r23-reviewed-not-frozen",
+    "file": "src/scale/shape.ts",
+    "find": "export const REVIEWED: readonly ReviewedShape[] = Object.freeze([",
+    "replace": "export const REVIEWED: readonly ReviewedShape[] = ([",
+    "test": "test/reviewed-frozen.test.ts",
+    "why": "REVIEWED is frozen: no line is added or removed (review round 23, R1)"
+  },
+  {
+    "id": "r23-reviewed-old-line-not-frozen",
+    "file": "src/scale/shape.ts",
+    "find": "  Object.freeze({\n    specName: \"tzkv-runtime\",\n    specVersion: 1014014,",
+    "replace": "  ({\n    specName: \"tzkv-runtime\",\n    specVersion: 1014014,",
+    "test": "test/reviewed-frozen.test.ts",
+    "why": "the line of 1014014 is frozen (review round 23, R1)"
+  },
+  {
+    "id": "r23-reviewed-new-line-not-frozen",
+    "file": "src/scale/shape.ts",
+    "find": "  Object.freeze({\n    specName: \"tzkv-runtime\",\n    specVersion: 1014020,",
+    "replace": "  ({\n    specName: \"tzkv-runtime\",\n    specVersion: 1014020,",
+    "test": "test/reviewed-frozen.test.ts",
+    "why": "the line of 1014020 is frozen (review round 23, R1)"
+  },
+  {
+    "id": "r23-stated-not-frozen",
+    "file": "src/scale/shape.ts",
+    "find": "= Object.freeze([\n  Object.freeze([\"System\", \"Events\"] as const),",
+    "replace": "= ([\n  Object.freeze([\"System\", \"Events\"] as const),",
+    "test": "test/reviewed-frozen.test.ts",
+    "why": "STATED_ENTRIES is frozen: no entry is added (review round 23, R1)"
+  },
+  {
+    "id": "r23-stated-pair-not-frozen",
+    "file": "src/scale/shape.ts",
+    "find": "  Object.freeze([\"System\", \"Events\"] as const),",
+    "replace": "  [\"System\", \"Events\"] as const,",
+    "test": "test/reviewed-frozen.test.ts",
+    "why": "a stated pair is frozen (review round 23, R1)"
+  },
+  {
+    "id": "r23-primitives-not-frozen",
+    "file": "src/scale/metadata.ts",
+    "find": "export const PRIMITIVES = Object.freeze([",
+    "replace": "export const PRIMITIVES = ([",
+    "test": "test/reviewed-frozen.test.ts",
+    "why": "PRIMITIVES is frozen (review round 23, R1)"
+  },
+  {
+    "id": "r23-hashers-not-frozen",
+    "file": "src/scale/metadata.ts",
+    "find": "export const HASHERS = Object.freeze([",
+    "replace": "export const HASHERS = ([",
+    "test": "test/reviewed-frozen.test.ts",
+    "why": "HASHERS is frozen (review round 23, R1)"
   }
 ]

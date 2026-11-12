@@ -12,9 +12,9 @@
 // name: what the observatory relies on is the shape pin's to say (src/scale/shape.ts).
 import { Reader, ScaleError, toHex, withinSize } from "./reader.js";
 
-export const PRIMITIVES = ["bool", "char", "str", "u8", "u16", "u32", "u64", "u128", "u256", "i8", "i16", "i32", "i64", "i128", "i256"] as const;
+export const PRIMITIVES = Object.freeze(["bool", "char", "str", "u8", "u16", "u32", "u64", "u128", "u256", "i8", "i16", "i32", "i64", "i128", "i256"] as const);
 export type Primitive = (typeof PRIMITIVES)[number];
-export const HASHERS = ["Blake2_128", "Blake2_256", "Blake2_128Concat", "Twox128", "Twox256", "Twox64Concat", "Identity"] as const;
+export const HASHERS = Object.freeze(["Blake2_128", "Blake2_256", "Blake2_128Concat", "Twox128", "Twox256", "Twox64Concat", "Identity"] as const);
 export type Hasher = (typeof HASHERS)[number];
 
 export interface Field {
