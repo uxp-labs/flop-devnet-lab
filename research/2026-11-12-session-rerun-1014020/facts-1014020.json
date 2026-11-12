@@ -1,0 +1,1243 @@
+{
+ "spec_version": 1014020,
+ "recording": "branch observatory-data, recordings/20261112080132-05842a6db1e9c890/tape.jsonl",
+ "metadata_sha256": "91294eb61225c4de7459e6a8fed3c37169a2c8a1b1906b46a5890d5e0d328238",
+ "metadata_bytes": 487100,
+ "built_by": "build-tables.mjs",
+ "reader": "metadata-v14.mjs",
+ "events": {
+  "System": {
+   "pallet_index": 0,
+   "events": [
+    {
+     "index": 0,
+     "name": "ExtrinsicSuccess",
+     "fields": [
+      "dispatch_info"
+     ]
+    },
+    {
+     "index": 1,
+     "name": "ExtrinsicFailed",
+     "fields": [
+      "dispatch_error",
+      "dispatch_info"
+     ]
+    },
+    {
+     "index": 2,
+     "name": "CodeUpdated",
+     "fields": [
+      "hash"
+     ]
+    },
+    {
+     "index": 3,
+     "name": "NewAccount",
+     "fields": [
+      "account"
+     ]
+    },
+    {
+     "index": 4,
+     "name": "KilledAccount",
+     "fields": [
+      "account"
+     ]
+    },
+    {
+     "index": 5,
+     "name": "Remarked",
+     "fields": [
+      "sender",
+      "hash"
+     ]
+    },
+    {
+     "index": 6,
+     "name": "UpgradeAuthorized",
+     "fields": [
+      "code_hash",
+      "check_version"
+     ]
+    },
+    {
+     "index": 7,
+     "name": "RejectedInvalidAuthorizedUpgrade",
+     "fields": [
+      "code_hash",
+      "error"
+     ]
+    }
+   ]
+  },
+  "Balances": {
+   "pallet_index": 4,
+   "events": [
+    {
+     "index": 0,
+     "name": "Endowed",
+     "fields": [
+      "account",
+      "free_balance"
+     ]
+    },
+    {
+     "index": 1,
+     "name": "DustLost",
+     "fields": [
+      "account",
+      "amount"
+     ]
+    },
+    {
+     "index": 2,
+     "name": "Transfer",
+     "fields": [
+      "from",
+      "to",
+      "amount"
+     ]
+    },
+    {
+     "index": 3,
+     "name": "BalanceSet",
+     "fields": [
+      "who",
+      "free"
+     ]
+    },
+    {
+     "index": 4,
+     "name": "Reserved",
+     "fields": [
+      "who",
+      "amount"
+     ]
+    },
+    {
+     "index": 5,
+     "name": "Unreserved",
+     "fields": [
+      "who",
+      "amount"
+     ]
+    },
+    {
+     "index": 6,
+     "name": "ReserveRepatriated",
+     "fields": [
+      "from",
+      "to",
+      "amount",
+      "destination_status"
+     ]
+    },
+    {
+     "index": 7,
+     "name": "Deposit",
+     "fields": [
+      "who",
+      "amount"
+     ]
+    },
+    {
+     "index": 8,
+     "name": "Withdraw",
+     "fields": [
+      "who",
+      "amount"
+     ]
+    },
+    {
+     "index": 9,
+     "name": "Slashed",
+     "fields": [
+      "who",
+      "amount"
+     ]
+    },
+    {
+     "index": 10,
+     "name": "Minted",
+     "fields": [
+      "who",
+      "amount"
+     ]
+    },
+    {
+     "index": 11,
+     "name": "MintedCredit",
+     "fields": [
+      "amount"
+     ]
+    },
+    {
+     "index": 12,
+     "name": "Burned",
+     "fields": [
+      "who",
+      "amount"
+     ]
+    },
+    {
+     "index": 13,
+     "name": "BurnedDebt",
+     "fields": [
+      "amount"
+     ]
+    },
+    {
+     "index": 14,
+     "name": "Suspended",
+     "fields": [
+      "who",
+      "amount"
+     ]
+    },
+    {
+     "index": 15,
+     "name": "Restored",
+     "fields": [
+      "who",
+      "amount"
+     ]
+    },
+    {
+     "index": 16,
+     "name": "Upgraded",
+     "fields": [
+      "who"
+     ]
+    },
+    {
+     "index": 17,
+     "name": "Issued",
+     "fields": [
+      "amount"
+     ]
+    },
+    {
+     "index": 18,
+     "name": "Rescinded",
+     "fields": [
+      "amount"
+     ]
+    },
+    {
+     "index": 19,
+     "name": "Locked",
+     "fields": [
+      "who",
+      "amount"
+     ]
+    },
+    {
+     "index": 20,
+     "name": "Unlocked",
+     "fields": [
+      "who",
+      "amount"
+     ]
+    },
+    {
+     "index": 21,
+     "name": "Frozen",
+     "fields": [
+      "who",
+      "amount"
+     ]
+    },
+    {
+     "index": 22,
+     "name": "Thawed",
+     "fields": [
+      "who",
+      "amount"
+     ]
+    },
+    {
+     "index": 23,
+     "name": "TotalIssuanceForced",
+     "fields": [
+      "old",
+      "new"
+     ]
+    },
+    {
+     "index": 24,
+     "name": "Held",
+     "fields": [
+      "reason",
+      "who",
+      "amount"
+     ]
+    },
+    {
+     "index": 25,
+     "name": "BurnedHeld",
+     "fields": [
+      "reason",
+      "who",
+      "amount"
+     ]
+    },
+    {
+     "index": 26,
+     "name": "TransferOnHold",
+     "fields": [
+      "reason",
+      "source",
+      "dest",
+      "amount"
+     ]
+    },
+    {
+     "index": 27,
+     "name": "TransferAndHold",
+     "fields": [
+      "reason",
+      "source",
+      "dest",
+      "transferred"
+     ]
+    },
+    {
+     "index": 28,
+     "name": "Released",
+     "fields": [
+      "reason",
+      "who",
+      "amount"
+     ]
+    },
+    {
+     "index": 29,
+     "name": "Unexpected",
+     "fields": [
+      null
+     ]
+    }
+   ]
+  },
+  "TransactionPayment": {
+   "pallet_index": 5,
+   "events": [
+    {
+     "index": 0,
+     "name": "TransactionFeePaid",
+     "fields": [
+      "who",
+      "actual_fee",
+      "tip"
+     ]
+    }
+   ]
+  },
+  "FlopSessionKeys": {
+   "pallet_index": 94,
+   "events": [
+    {
+     "index": 0,
+     "name": "SessionCreated",
+     "fields": [
+      "owner",
+      "delegate",
+      "spending_cap",
+      "per_tx_limit",
+      "daily_cap",
+      "expires_at"
+     ]
+    },
+    {
+     "index": 1,
+     "name": "SessionRevoked",
+     "fields": [
+      "owner",
+      "delegate"
+     ]
+    },
+    {
+     "index": 2,
+     "name": "SessionCallExecuted",
+     "fields": [
+      "owner",
+      "delegate",
+      "spent",
+      "epoch_spent"
+     ]
+    },
+    {
+     "index": 3,
+     "name": "SessionExpired",
+     "fields": [
+      "owner",
+      "delegate"
+     ]
+    },
+    {
+     "index": 4,
+     "name": "DailyCapReset",
+     "fields": [
+      "owner",
+      "delegate"
+     ]
+    },
+    {
+     "index": 5,
+     "name": "CircuitBreakerTripped",
+     "fields": [
+      "delegate",
+      "tx_count",
+      "total_spend",
+      "period_start"
+     ]
+    },
+    {
+     "index": 6,
+     "name": "CircuitBreakerReset",
+     "fields": [
+      "delegate"
+     ]
+    },
+    {
+     "index": 7,
+     "name": "SessionRotationLimited",
+     "fields": [
+      "owner",
+      "count_in_window"
+     ]
+    }
+   ]
+  },
+  "ComputeChannel": {
+   "pallet_index": 103,
+   "events": [
+    {
+     "index": 0,
+     "name": "ChannelOpened",
+     "fields": [
+      "channel_id",
+      "agent",
+      "miner",
+      "escrow",
+      "measured_root"
+     ]
+    },
+    {
+     "index": 1,
+     "name": "OfferAccepted",
+     "fields": [
+      "channel_id",
+      "miner",
+      "offer_nonce",
+      "expiry"
+     ]
+    },
+    {
+     "index": 2,
+     "name": "OfferOpenFailed",
+     "fields": [
+      "channel_id",
+      "miner",
+      "failed_offer_opens"
+     ]
+    },
+    {
+     "index": 3,
+     "name": "ForwardOfferFunded",
+     "fields": [
+      "miner",
+      "offer_nonce",
+      "bond",
+      "start_block",
+      "end_block"
+     ]
+    },
+    {
+     "index": 4,
+     "name": "ForwardOfferCancelled",
+     "fields": [
+      "miner",
+      "offer_nonce",
+      "bond_released"
+     ]
+    },
+    {
+     "index": 5,
+     "name": "ForwardChannelOpened",
+     "fields": [
+      "channel_id",
+      "agent",
+      "miner",
+      "start_block",
+      "end_block",
+      "duration_seconds",
+      "quota_total",
+      "price_per_gn",
+      "payment",
+      "bond"
+     ]
+    },
+    {
+     "index": 6,
+     "name": "ForwardAvailabilityClaimed",
+     "fields": [
+      "channel_id",
+      "amount",
+      "cumulative"
+     ]
+    },
+    {
+     "index": 7,
+     "name": "ForwardBondReleased",
+     "fields": [
+      "channel_id",
+      "delivered_gn",
+      "amount",
+      "cumulative"
+     ]
+    },
+    {
+     "index": 8,
+     "name": "ForwardAssigned",
+     "fields": [
+      "channel_id",
+      "previous_agent",
+      "new_agent"
+     ]
+    },
+    {
+     "index": 9,
+     "name": "ForwardUnitsTransferred",
+     "fields": [
+      "channel_id",
+      "from",
+      "to",
+      "units",
+      "from_remaining",
+      "to_total"
+     ]
+    },
+    {
+     "index": 10,
+     "name": "ForwardDistributionClaimed",
+     "fields": [
+      "channel_id",
+      "holder",
+      "units",
+      "amount"
+     ]
+    },
+    {
+     "index": 11,
+     "name": "ForwardDrawOpened",
+     "fields": [
+      "channel_id",
+      "draw_id",
+      "holder",
+      "units",
+      "aggregate_units"
+     ]
+    },
+    {
+     "index": 12,
+     "name": "ForwardDrawClosed",
+     "fields": [
+      "channel_id",
+      "draw_id",
+      "units",
+      "aggregate_units"
+     ]
+    },
+    {
+     "index": 13,
+     "name": "ForwardBidPosted",
+     "fields": [
+      "bid_id",
+      "buyer",
+      "payment",
+      "commit_deadline"
+     ]
+    },
+    {
+     "index": 14,
+     "name": "ForwardBidClaimCommitted",
+     "fields": [
+      "bid_id",
+      "miner",
+      "bond"
+     ]
+    },
+    {
+     "index": 15,
+     "name": "ForwardBidClaimsSealed",
+     "fields": [
+      "bid_id",
+      "claimant_count",
+      "reveal_deadline"
+     ]
+    },
+    {
+     "index": 16,
+     "name": "ForwardBidClaimRevealed",
+     "fields": [
+      "bid_id",
+      "miner"
+     ]
+    },
+    {
+     "index": 17,
+     "name": "ForwardBidCleared",
+     "fields": [
+      "bid_id",
+      "channel_id",
+      "winner"
+     ]
+    },
+    {
+     "index": 18,
+     "name": "ForwardBidCancelled",
+     "fields": [
+      "bid_id",
+      "buyer",
+      "payment_released"
+     ]
+    },
+    {
+     "index": 19,
+     "name": "ForwardSettled",
+     "fields": [
+      "channel_id",
+      "outcome",
+      "delivered_gn",
+      "miner_paid",
+      "buyer_refunded",
+      "buyer_damages",
+      "backup_bounty",
+      "bond_released",
+      "bond_slashed"
+     ]
+    },
+    {
+     "index": 20,
+     "name": "ForceOpenRequested",
+     "fields": [
+      "channel_id",
+      "agent",
+      "miner",
+      "escrow",
+      "ack_deadline"
+     ]
+    },
+    {
+     "index": 21,
+     "name": "ForceOpenExpired",
+     "fields": [
+      "channel_id",
+      "miner",
+      "refunded",
+      "failed_acks"
+     ]
+    },
+    {
+     "index": 22,
+     "name": "EscrowToppedUp",
+     "fields": [
+      "channel_id",
+      "added",
+      "total"
+     ]
+    },
+    {
+     "index": 23,
+     "name": "Settled",
+     "fields": [
+      "channel_id",
+      "miner_paid",
+      "burned",
+      "aggregate_gn",
+      "cooperative"
+     ]
+    },
+    {
+     "index": 24,
+     "name": "SettlementPosted",
+     "fields": [
+      "channel_id",
+      "final_root",
+      "aggregate_gn",
+      "challenge_end"
+     ]
+    },
+    {
+     "index": 25,
+     "name": "TimedOutRefunded",
+     "fields": [
+      "channel_id",
+      "refunded"
+     ]
+    },
+    {
+     "index": 26,
+     "name": "DisputeOpened",
+     "fields": [
+      "channel_id",
+      "challenger",
+      "contested_turn"
+     ]
+    },
+    {
+     "index": 27,
+     "name": "BisectionOpened",
+     "fields": [
+      "channel_id",
+      "challenger",
+      "lo",
+      "hi"
+     ]
+    },
+    {
+     "index": 28,
+     "name": "BisectionResponded",
+     "fields": [
+      "channel_id",
+      "lo",
+      "hi",
+      "left_root",
+      "right_root"
+     ]
+    },
+    {
+     "index": 29,
+     "name": "BisectionChallenged",
+     "fields": [
+      "channel_id",
+      "lo",
+      "hi",
+      "rounds"
+     ]
+    },
+    {
+     "index": 30,
+     "name": "DisputeDismissed",
+     "fields": [
+      "channel_id"
+     ]
+    },
+    {
+     "index": 31,
+     "name": "FraudUpheld",
+     "fields": [
+      "channel_id",
+      "miner",
+      "slashed"
+     ]
+    },
+    {
+     "index": 32,
+     "name": "ToplocModelToleranceSet",
+     "fields": [
+      "model_hash",
+      "tolerance"
+     ]
+    },
+    {
+     "index": 33,
+     "name": "ToplocModelBandConstantsSet",
+     "fields": [
+      "model_hash",
+      "precision",
+      "constants"
+     ]
+    },
+    {
+     "index": 34,
+     "name": "ToplocFraudUpheld",
+     "fields": [
+      "channel_id",
+      "turn_index",
+      "miner",
+      "slashed",
+      "validators"
+     ]
+    },
+    {
+     "index": 35,
+     "name": "ToplocEscalationRequested",
+     "fields": [
+      "channel_id",
+      "turn_index",
+      "miner",
+      "milli_exponent_error",
+      "validators"
+     ]
+    },
+    {
+     "index": 36,
+     "name": "ToplocEscalationOpened",
+     "fields": [
+      "channel_id",
+      "turn_index",
+      "deadline"
+     ]
+    },
+    {
+     "index": 37,
+     "name": "ToplocEscalationCleared",
+     "fields": [
+      "channel_id",
+      "turn_index",
+      "validators"
+     ]
+    },
+    {
+     "index": 38,
+     "name": "ToplocEscalationTimedOut",
+     "fields": [
+      "channel_id",
+      "turn_index",
+      "refunded"
+     ]
+    },
+    {
+     "index": 39,
+     "name": "CertificateSettled",
+     "fields": [
+      "channel_id",
+      "aggregate_gn",
+      "cert_commitment"
+     ]
+    },
+    {
+     "index": 40,
+     "name": "CalibrationSnapshotted",
+     "fields": [
+      "channel_id",
+      "miner",
+      "cap_gflops_per_sec",
+      "assurance_tier",
+      "calibration_version",
+      "soft_tier_spot_check_rate_ppm"
+     ]
+    },
+    {
+     "index": 41,
+     "name": "ToplocAttestClaimAccepted",
+     "fields": [
+      "channel_id",
+      "profile",
+      "verdict"
+     ]
+    },
+    {
+     "index": 42,
+     "name": "ChallengeWindowExtended",
+     "fields": [
+      "channel_id",
+      "reason",
+      "new_deadline",
+      "extensions"
+     ]
+    },
+    {
+     "index": 43,
+     "name": "DegradedRefunded",
+     "fields": [
+      "channel_id",
+      "reason",
+      "refunded"
+     ]
+    },
+    {
+     "index": 44,
+     "name": "UnrecoverableTranscriptVoided",
+     "fields": [
+      "channel_id",
+      "miner_paid",
+      "agent_refunded",
+      "aggregate_gn"
+     ]
+    },
+    {
+     "index": 45,
+     "name": "AssuranceClassPinned",
+     "fields": [
+      "channel_id",
+      "class"
+     ]
+    },
+    {
+     "index": 46,
+     "name": "ToplocEvidenceSubmitted",
+     "fields": [
+      "channel_id",
+      "miner",
+      "commitment_ref",
+      "turns_committed"
+     ]
+    },
+    {
+     "index": 47,
+     "name": "AuditDataForfeited",
+     "fields": [
+      "channel_id",
+      "miner",
+      "agent_refunded",
+      "slashed",
+      "window_value"
+     ]
+    },
+    {
+     "index": 48,
+     "name": "AuditFeeEarmarked",
+     "fields": [
+      "channel_id",
+      "amount"
+     ]
+    },
+    {
+     "index": 49,
+     "name": "AuditFeeClaimed",
+     "fields": [
+      "channel_id",
+      "validator",
+      "amount",
+      "evidence"
+     ]
+    },
+    {
+     "index": 50,
+     "name": "SessionEvidenceRegistered",
+     "fields": [
+      "channel_id",
+      "slot",
+      "commitment",
+      "size_bytes"
+     ]
+    },
+    {
+     "index": 51,
+     "name": "FcuEmpiricalParamsSet",
+     "fields": [
+      "params"
+     ]
+    },
+    {
+     "index": 52,
+     "name": "FcuMassSlashPauseSet",
+     "fields": [
+      "paused"
+     ]
+    },
+    {
+     "index": 53,
+     "name": "ForwardBidRegistrationSealed",
+     "fields": [
+      "bid_id",
+      "authored_block"
+     ]
+    },
+    {
+     "index": 54,
+     "name": "ForwardUnitsListed",
+     "fields": [
+      "channel_id",
+      "seller",
+      "listing_id",
+      "units",
+      "total_price",
+      "expires_at",
+      "delivered_gn"
+     ]
+    },
+    {
+     "index": 55,
+     "name": "ForwardUnitsSold",
+     "fields": [
+      "channel_id",
+      "seller",
+      "buyer",
+      "listing_id",
+      "units",
+      "total_price"
+     ]
+    },
+    {
+     "index": 56,
+     "name": "ForwardListingCancelled",
+     "fields": [
+      "channel_id",
+      "seller",
+      "listing_id"
+     ]
+    },
+    {
+     "index": 57,
+     "name": "FcuPrimaryAdmissionsPauseSet",
+     "fields": [
+      "paused"
+     ]
+    },
+    {
+     "index": 58,
+     "name": "FcuServiceProfileRegistered",
+     "fields": [
+      "profile_hash",
+      "qualification_hash"
+     ]
+    },
+    {
+     "index": 59,
+     "name": "FcuServiceProfileStatusSet",
+     "fields": [
+      "profile_hash",
+      "status"
+     ]
+    },
+    {
+     "index": 60,
+     "name": "CapacityReservationRateSet",
+     "fields": [
+      "miner",
+      "rate_gn_per_sec"
+     ]
+    },
+    {
+     "index": 61,
+     "name": "CapacityReservationDropped",
+     "fields": [
+      "channel_id",
+      "miner"
+     ]
+    }
+   ]
+  }
+ },
+ "constants": {
+  "FlopSessionKeys": {
+   "MaxSessionsPerOwner": {
+    "type": "u32",
+    "value": "10"
+   },
+   "MaxSessionsPerDelegate": {
+    "type": "u32",
+    "value": "10"
+   },
+   "MaxAllowedPallets": {
+    "type": "u32",
+    "value": "16"
+   },
+   "MaxSessionDuration": {
+    "type": "u32",
+    "value": "864000"
+   },
+   "SessionEpochLength": {
+    "type": "u32",
+    "value": "86400"
+   },
+   "CircuitBreakerPeriod": {
+    "type": "u32",
+    "value": "60"
+   },
+   "CircuitBreakerMaxTxs": {
+    "type": "u32",
+    "value": "100"
+   },
+   "CircuitBreakerMaxSpend": {
+    "type": "u128",
+    "value": "250000000000000000000"
+   },
+   "MaxSessionRotationsPerHour": {
+    "type": "u32",
+    "value": "3"
+   },
+   "BlocksPerHour": {
+    "type": "u32",
+    "value": "3600"
+   }
+  },
+  "ComputeChannel": {
+   "PalletId": {
+    "type": null,
+    "raw": "0x666c6f702f63686e"
+   },
+   "MaxForwardChannelsPerMiner": {
+    "type": "u32",
+    "value": "16"
+   },
+   "MaxCapacityReservationsPerMiner": {
+    "type": "u32",
+    "value": "64"
+   },
+   "MaxUnconsentedSessionBlocks": {
+    "type": "u32",
+    "value": "14400"
+   },
+   "UnconsentedReservationTariff": {
+    "type": "u128",
+    "value": "41335978835"
+   },
+   "MaxForwardHolders": {
+    "type": "u32",
+    "value": "10"
+   },
+   "MaxForwardDraws": {
+    "type": "u32",
+    "value": "32"
+   },
+   "ForwardBidCommitWindow": {
+    "type": "u32",
+    "value": "600"
+   },
+   "ForwardBidRevealWindow": {
+    "type": "u32",
+    "value": "600"
+   },
+   "MaxForwardBidClaimants": {
+    "type": "u32",
+    "value": "32"
+   },
+   "MinCertificatePremiumPpm": {
+    "type": "u32",
+    "value": "1500000"
+   },
+   "SampledAuditAlphaPpm": {
+    "type": "u32",
+    "value": "50000"
+   },
+   "SampledAuditCheckpointTurns": {
+    "type": "u32",
+    "value": "16"
+   },
+   "MaxSessionActivationBytes": {
+    "type": "u32",
+    "value": "65536"
+   },
+   "FinalityLagWarn": {
+    "type": "u32",
+    "value": "30"
+   },
+   "FinalityFreezeThreshold": {
+    "type": "u32",
+    "value": "120"
+   },
+   "MaxFinalityStall": {
+    "type": "u32",
+    "value": "3600"
+   },
+   "DaRetention": {
+    "type": "u32",
+    "value": "1209600"
+   },
+   "DisputeWindow": {
+    "type": "u32",
+    "value": "604800"
+   },
+   "ChallengerBond": {
+    "type": "u128",
+    "value": "100000000000000000000"
+   },
+   "DisputeResponseWindow": {
+    "type": "u32",
+    "value": "7200"
+   },
+   "RefundPenalty": {
+    "type": null,
+    "raw": "0x00c2eb0b"
+   },
+   "AuditForfeitSlashPpm": {
+    "type": "u32",
+    "value": "1000000"
+   },
+   "AuditFeeSplitPpm": {
+    "type": "u32",
+    "value": "10000"
+   },
+   "AuditFeePerTurn": {
+    "type": "u128",
+    "value": "1000000000000000000"
+   },
+   "AckWindow": {
+    "type": "u32",
+    "value": "600"
+   },
+   "MaxActiveReservationsBase": {
+    "type": "u32",
+    "value": "400"
+   },
+   "EscrowPerReservationSlot": {
+    "type": "u128",
+    "value": "50000000000000000000"
+   },
+   "MinForceOpenEscrowForFailedAck": {
+    "type": "u128",
+    "value": "50000000000000000"
+   },
+   "SoftTierSpotCheckRatePpm": {
+    "type": "u32",
+    "value": "25000"
+   },
+   "ValidatorAttestationThreshold": {
+    "type": null,
+    "raw": "0xaa86bc27"
+   },
+   "ToplocMismatchProfile": {
+    "type": null,
+    "raw": "0x020202020202020202020202020202020202020202020202020202020202020201000000"
+   },
+   "ToplocEscalationWindow": {
+    "type": "u32",
+    "value": "7200"
+   },
+   "MaxSettlementTurns": {
+    "type": "u32",
+    "value": "1024"
+   },
+   "MaxMerklePathLen": {
+    "type": "u32",
+    "value": "64"
+   },
+   "BasePerTurn": {
+    "type": "u128",
+    "value": "1"
+   },
+   "CTurnFixed": {
+    "type": "u128",
+    "value": "1"
+   }
+  }
+ },
+ "call_docs": {
+  "FlopSessionKeys.create_session": {
+   "sha256_at_1014014": "826c45dcec7f4bbcd94fe11b923a282d606d6cdf33254606a506ac9e2323d2ec",
+   "sha256_at_1014020": "826c45dcec7f4bbcd94fe11b923a282d606d6cdf33254606a506ac9e2323d2ec",
+   "same": true
+  },
+  "FlopSessionKeys.revoke_session": {
+   "sha256_at_1014014": "6d24d86b69b2a1d040f1c82e5f61f5756d45210c2b710b6d9fd3264d1152c371",
+   "sha256_at_1014020": "6d24d86b69b2a1d040f1c82e5f61f5756d45210c2b710b6d9fd3264d1152c371",
+   "same": true
+  },
+  "FlopSessionKeys.execute_via_session": {
+   "sha256_at_1014014": "263a36f674b741d8673d571a8372b81c1058c6453fea0cf8e27f9f0a63019545",
+   "sha256_at_1014020": "263a36f674b741d8673d571a8372b81c1058c6453fea0cf8e27f9f0a63019545",
+   "same": true
+  },
+  "ComputeChannel.force_open": {
+   "sha256_at_1014014": "3702945712c2d7797df782ba897f7e522d8e332fe6937f1d213c33b6dba9863f",
+   "sha256_at_1014020": "3702945712c2d7797df782ba897f7e522d8e332fe6937f1d213c33b6dba9863f",
+   "same": true
+  },
+  "ComputeChannel.expire_force_open": {
+   "sha256_at_1014014": "b36d1c2b23b4cd68fb3a6361682baa0a908d39ac03d6015c9b765bea762584a9",
+   "sha256_at_1014020": "b36d1c2b23b4cd68fb3a6361682baa0a908d39ac03d6015c9b765bea762584a9",
+   "same": true
+  },
+  "ComputeChannel.timeout": {
+   "sha256_at_1014014": "8f25759c180542c4c6a64e8fcf6861cfb725efeba9a9cf3979200dbe0af63f91",
+   "sha256_at_1014020": "8f25759c180542c4c6a64e8fcf6861cfb725efeba9a9cf3979200dbe0af63f91",
+   "same": true
+  }
+ }
+}
