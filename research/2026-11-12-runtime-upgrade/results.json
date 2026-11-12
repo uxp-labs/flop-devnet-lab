@@ -1,0 +1,329 @@
+{
+  "schema": "flop-devnet-lab/research-reads@0",
+  "what": "The lab's own reads of FLOP devnet around its runtime upgrade from spec 1014014 to spec 1014020. Read only: no transaction was sent.",
+  "read_at_utc": "2026-11-12T04:50:00Z",
+  "read_at_note": "to within about ten minutes",
+  "rpc": "wss://rpc.devnet.flop.network",
+  "genesis": "0x99c172c095340ace980631f9123544c6bebd4839f3437e463533422d8be2d631",
+  "spec_name": "tzkv-runtime",
+  "transaction_version": {
+    "before": 2,
+    "after": 2
+  },
+  "method": "chain_getBlockHash, chain_getBlock, state_getRuntimeVersion, state_getMetadata, state_getStorage (System.LastRuntimeUpgrade, System.Events, Timestamp.Now), state_getStorageHash and state_getStorageSize of the :code key, each at the block's hash. Sizes and sha256 are of the answer's bytes. How the boundary was found: a binary search over System.LastRuntimeUpgrade, then these reads at the four blocks around it.",
+  "keys": {
+    "System.LastRuntimeUpgrade": "0x26aa394eea5630e07c48ae0c9558cef7f9cce9c888469bb1a0dceaa129672ef8",
+    "System.Events": "0x26aa394eea5630e07c48ae0c9558cef780d41e5e16056765bc8461851072c9d7",
+    "Timestamp.Now": "0xf0c365c3cf59d671eb72da0e7a4113c49f1f0515f462cdcf84e0f1d6045dfcbb",
+    ":code": "0x3a636f6465"
+  },
+  "boundary": [
+    {
+      "height": 3528527,
+      "hash": "0x57d233b502269f6658673c7059331a9ff926680dcceb2fc9af0d00275fdb4e71",
+      "parent": "0x2cc2a3f18f15dcb96087e708408743619948e04e8a90d030098afe6eb2bfca08",
+      "state_root": "0x720946e58fa4605fdca8b9f697e86ef8503205022b4586541c4c9ad7458ef090",
+      "timestamp_now_ms": "1794456308000",
+      "timestamp_utc": "2026-11-12T04:05:08.000Z",
+      "state_getRuntimeVersion_spec": 1014014,
+      "last_runtime_upgrade": {
+        "hex": "0xfae33d0030747a6b762d72756e74696d65",
+        "spec_version": 1014014,
+        "spec_name": "tzkv-runtime"
+      },
+      "metadata": {
+        "bytes": 482132,
+        "sha256": "f4fd2addba7fff1129483d0e66b8e6bc69141292f56443e201d3f073aab03444"
+      },
+      "code": {
+        "storage_hash": "0x6d47bb492fb404e33d7ea8feedf4ddf5a04ffbc9d5d3a64235641cd06144c1df",
+        "bytes": 2538890
+      },
+      "events": {
+        "bytes": 188,
+        "sha256": "710349a7a8ba048882c198013ed87aa6353ac5f421b42755ccbcfaf91ac8dcbb"
+      },
+      "digest_logs": 2,
+      "extrinsics": [
+        {
+          "bytes": 11,
+          "sha256": "dec2ebcf3477000dab9dda7619c97dac6906713739142252af725dcb372d4e30"
+        },
+        {
+          "bytes": 40,
+          "sha256": "c75751f1dca2f12f288d673cedad1904be11d11859050c77c0481385228d3d29"
+        }
+      ]
+    },
+    {
+      "height": 3528528,
+      "hash": "0x187a4c5b16a8d3c20f710ccd4a275d7bb2426311dd89ae14da0728d6504145c2",
+      "parent": "0x57d233b502269f6658673c7059331a9ff926680dcceb2fc9af0d00275fdb4e71",
+      "state_root": "0x3f561c070550a19d5e08cb5ef60b0de3b3d479fd9e57917380cb9aa7f1066819",
+      "timestamp_now_ms": "1794456309000",
+      "timestamp_utc": "2026-11-12T04:05:09.000Z",
+      "state_getRuntimeVersion_spec": 1014020,
+      "last_runtime_upgrade": {
+        "hex": "0xfae33d0030747a6b762d72756e74696d65",
+        "spec_version": 1014014,
+        "spec_name": "tzkv-runtime"
+      },
+      "metadata": {
+        "bytes": 487100,
+        "sha256": "91294eb61225c4de7459e6a8fed3c37169a2c8a1b1906b46a5890d5e0d328238"
+      },
+      "code": {
+        "storage_hash": "0xfd5ac06d81e461da832c8f83402e155e8eb84cd31a2f08fc3f281cb5fb711e5b",
+        "bytes": 2553782
+      },
+      "events": {
+        "bytes": 3042,
+        "sha256": "dce969a1749379e00b0ff64c50c3e6409440a1ff4ad5c79330e8d3adf5ce0ad5"
+      },
+      "digest_logs": 3,
+      "digest_log_note": "the second of the three logs is the one byte 0x08, the header's mark that the runtime environment was updated in this block",
+      "extrinsics": [
+        {
+          "bytes": 11,
+          "sha256": "267bdc06703466941993b7e7006e5b50f754c1022d772b32c72e4d0db7ef429e"
+        },
+        {
+          "bytes": 40,
+          "sha256": "d1d8c006c602114d665d8bef2b918983e311f29b3317273b7a1703466151406e"
+        },
+        {
+          "bytes": 2553899,
+          "sha256": "2ea8869655c4599824915db59252b3c0d175b3f26b0c9e2c07584121bb1e28fd"
+        },
+        {
+          "bytes": 150,
+          "sha256": "6bdfd775723e23eb75e12c8423ea4053b507672a8c58d7861b3fd6ca8c97c464"
+        },
+        {
+          "bytes": 150,
+          "sha256": "4beb48067d550760fc95685af3a70555897e741ad7169f2c2acdb347f4e7f4c2"
+        },
+        {
+          "bytes": 787,
+          "sha256": "7b1445e831b98435cea5faf55e1f185019ec60e62ac1e87a5ff9cbb3a2895c8d"
+        }
+      ]
+    },
+    {
+      "height": 3528529,
+      "hash": "0x1507e7343ff4914ea9ad6871731c0307ffbbb1b244def06d9f071557f6cf9d94",
+      "parent": "0x187a4c5b16a8d3c20f710ccd4a275d7bb2426311dd89ae14da0728d6504145c2",
+      "state_root": "0x6db9016d5de5500f332be9ef86cbdce2bf83de5ac8a3b628f95dfb3db3fa65d7",
+      "timestamp_now_ms": "1794456312334",
+      "timestamp_utc": "2026-11-12T04:05:12.334Z",
+      "state_getRuntimeVersion_spec": 1014020,
+      "last_runtime_upgrade": {
+        "hex": "0x12e43d0030747a6b762d72756e74696d65",
+        "spec_version": 1014020,
+        "spec_name": "tzkv-runtime"
+      },
+      "metadata": {
+        "bytes": 487100,
+        "sha256": "91294eb61225c4de7459e6a8fed3c37169a2c8a1b1906b46a5890d5e0d328238"
+      },
+      "code": {
+        "storage_hash": "0xfd5ac06d81e461da832c8f83402e155e8eb84cd31a2f08fc3f281cb5fb711e5b",
+        "bytes": 2553782
+      },
+      "events": {
+        "bytes": 188,
+        "sha256": "124744431117e9548d7d2a9fcf0e56b92a8dc1831e909476e8ac931930cc3d80"
+      },
+      "digest_logs": 2,
+      "extrinsics": [
+        {
+          "bytes": 11,
+          "sha256": "841a82cf59b46319512e9c33ba4e4595a53cfd57928be956e96e84e1467ddc50"
+        },
+        {
+          "bytes": 40,
+          "sha256": "7c9ae76ae4dcf28477bea08512f0ecc72a04a4174987eb7d4d7044e34325154e"
+        }
+      ]
+    },
+    {
+      "height": 3528530,
+      "hash": "0xa59d76d4b8f1eddd3c4fbcfa973b72dbc6b1669c13a752fcbe6a073bb4aa90c4",
+      "parent": "0x1507e7343ff4914ea9ad6871731c0307ffbbb1b244def06d9f071557f6cf9d94",
+      "state_root": "0x40f2a48b8d0f4b8b13caef9f43696a4d47ea2fabf6f896cf74c5cff13d83d7cc",
+      "timestamp_now_ms": "1794456317000",
+      "timestamp_utc": "2026-11-12T04:05:17.000Z",
+      "state_getRuntimeVersion_spec": 1014020,
+      "last_runtime_upgrade": {
+        "hex": "0x12e43d0030747a6b762d72756e74696d65",
+        "spec_version": 1014020,
+        "spec_name": "tzkv-runtime"
+      },
+      "metadata": null,
+      "code": {
+        "storage_hash": "0xfd5ac06d81e461da832c8f83402e155e8eb84cd31a2f08fc3f281cb5fb711e5b",
+        "bytes": 2553782
+      },
+      "events": {
+        "bytes": 188,
+        "sha256": "cc90124c0faec561344649c2430ed6b3bf0162a719a619842c4842528d3dbed5"
+      },
+      "digest_logs": 2,
+      "extrinsics": [
+        {
+          "bytes": 11,
+          "sha256": "de477fb5a81c1600465319b875ed52dfd0be3a80bac2fc78b717449eef67cab4"
+        },
+        {
+          "bytes": 40,
+          "sha256": "3a791e4598f1ce9773494ec940e4d1b1a0c0bd7bff3c638b04267f12f0dc73e3"
+        }
+      ]
+    }
+  ],
+  "a_later_block_of_the_new_spec": {
+    "height": 3530299,
+    "hash": "0x1bfd0be722963f829c4f8c732fbb237e4f5f1c06dd7a399b8d3cd9be1ab8174f",
+    "parent": "0x69f8800338d8f89560a48552f942acbbbed60ff9b1e203f6b9e894d2c1429276",
+    "state_root": "0x733385d88c6bbffc6aafd5c32728192d9e77fc72b1eb2670ba6aeec028a15b5e",
+    "timestamp_now_ms": "1794458094001",
+    "timestamp_utc": "2026-11-12T04:34:54.001Z",
+    "state_getRuntimeVersion_spec": 1014020,
+    "last_runtime_upgrade": {
+      "hex": "0x12e43d0030747a6b762d72756e74696d65",
+      "spec_version": 1014020,
+      "spec_name": "tzkv-runtime"
+    },
+    "metadata": {
+      "bytes": 487100,
+      "sha256": "91294eb61225c4de7459e6a8fed3c37169a2c8a1b1906b46a5890d5e0d328238"
+    },
+    "code": {
+      "storage_hash": "0xfd5ac06d81e461da832c8f83402e155e8eb84cd31a2f08fc3f281cb5fb711e5b",
+      "bytes": 2553782
+    },
+    "events": {
+      "bytes": 2987,
+      "sha256": "6fd90c2ee134ce78d4b7496ac8fa35de8999d0a347fcb2bffd66a1ba6622a1f4"
+    },
+    "digest_logs": 2,
+    "extrinsics": [
+      {
+        "bytes": 11,
+        "sha256": "2f288062805313fda8066c7518f92f6c0aad591f68bf71cef62b3d1a5d086443"
+      },
+      {
+        "bytes": 40,
+        "sha256": "2191e29686f82ab7a38e91da1b84cb131aac53bd0f52937a75c487b0a18ea092"
+      },
+      {
+        "bytes": 165,
+        "sha256": "1bbbeea7aae52563224a784b5b3b0a79eb9208bc3ae31141801092a969d0dc72"
+      },
+      {
+        "bytes": 151,
+        "sha256": "0c87404cd878eabd12f4f4316d09d5c39fd7924ca51221479bfc4f1bf11bdf63"
+      },
+      {
+        "bytes": 787,
+        "sha256": "d176d35a1b58b1225a3753e320d0decfd4b544287ebea05aa5404f7b7314bf0e"
+      }
+    ],
+    "also_published_as": "the finalized block of the lab's own reading at 2026-11-12T04:35:03.621Z: branch observatory-data, log/2026-11-12.jsonl and latest/status.json at commit 3a326e4 (finalized_height 3530299, the same hash, runtime_version 1014020)"
+  },
+  "upgrade_block": {
+    "height": 3528528,
+    "extrinsic_index": 2,
+    "extrinsic": {
+      "bytes": 2553899,
+      "sha256": "2ea8869655c4599824915db59252b3c0d175b3f26b0c9e2c07584121bb1e28fd"
+    },
+    "events_decoded_with": {
+      "tool": "the lab's own decoder (observatory/src/scale, decodeBlockEvents) at commit ceb4741196242021771ac4b6ea960a51f87e6ad7 (pull request 35)",
+      "spec_version": 1014014,
+      "metadata_sha256": "f4fd2addba7fff1129483d0e66b8e6bc69141292f56443e201d3f073aab03444",
+      "shape_sha256": "679f98aa06abf1d9b376fe4243e4d13c1b5ae80e9b6cdf1fd1e0190c1e7660e7",
+      "last_runtime_upgrade_given": "0xfae33d0030747a6b762d72756e74696d65",
+      "result": "decoded to the last byte, 64 events"
+    },
+    "event_counts": {
+      "Balances.Minted": 2,
+      "FlopSubsidy.SubsidyPaid": 1,
+      "System.ExtrinsicSuccess": 6,
+      "Aleph.FinalizedReported": 1,
+      "Balances.Withdraw": 4,
+      "System.CodeUpdated": 1,
+      "Balances.Deposit": 4,
+      "TransactionPayment.TransactionFeePaid": 4,
+      "Balances.Transfer": 17,
+      "System.NewAccount": 4,
+      "Balances.Endowed": 4,
+      "Utility.ItemCompleted": 15,
+      "Utility.BatchCompleted": 1
+    },
+    "events_of_extrinsic_2": [
+      {
+        "index": 6,
+        "event": "Balances.Withdraw",
+        "fields": {
+          "who": "0x8e9849eb9b490c12dfa79c20953ae7858aa0705dffb1918036f3d7d885fdce27",
+          "amount": "463996839495000000"
+        }
+      },
+      {
+        "index": 7,
+        "event": "System.CodeUpdated",
+        "fields": {
+          "hash": "0xfd5ac06d81e461da832c8f83402e155e8eb84cd31a2f08fc3f281cb5fb711e5b"
+        }
+      },
+      {
+        "index": 8,
+        "event": "Balances.Deposit",
+        "fields": {
+          "who": "0x8e9849eb9b490c12dfa79c20953ae7858aa0705dffb1918036f3d7d885fdce27",
+          "amount": "463996839495000000"
+        }
+      },
+      {
+        "index": 9,
+        "event": "TransactionPayment.TransactionFeePaid",
+        "fields": {
+          "who": "0x8e9849eb9b490c12dfa79c20953ae7858aa0705dffb1918036f3d7d885fdce27",
+          "actual_fee": "0",
+          "tip": "0"
+        }
+      },
+      {
+        "index": 10,
+        "event": "System.ExtrinsicSuccess",
+        "fields": {
+          "dispatch_info": {
+            "weight": {
+              "ref_time": "92796814000",
+              "proof_size": "11307"
+            },
+            "class": "Operational",
+            "pays_fee": "No"
+          }
+        }
+      }
+    ],
+    "code_hash_agrees": "the hash System.CodeUpdated carries equals state_getStorageHash of the :code key at this block and at every later block read",
+    "pairings_the_decoder_refuses": [
+      {
+        "given": "spec 1014020 (what state_getRuntimeVersion answers at this block) with this block's LastRuntimeUpgrade",
+        "answer": "not decoded: spec tzkv-runtime 1014020 is not a reviewed shape"
+      },
+      {
+        "given": "spec 1014014 with the next block's LastRuntimeUpgrade",
+        "answer": "not decoded: the block's LastRuntimeUpgrade names spec tzkv-runtime 1014020, not tzkv-runtime 1014014"
+      }
+    ]
+  },
+  "sum_check": {
+    "events_3528528_bytes": 3042,
+    "events_3528528_sha256": "dce969a1749379e00b0ff64c50c3e6409440a1ff4ad5c79330e8d3adf5ce0ad5"
+  },
+  "not_read": "The upgrade extrinsic's call was not decoded, so which call carried the code is not stated. No event of spec 1014020 was decoded: the lab has no reviewed shape for it yet. Whether any storage was migrated at block 3528529 was not read. Nothing here shows that the lab's session tests of 2026-11-11 give the same results at spec 1014020."
+}
