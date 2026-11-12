@@ -1,14 +1,14 @@
 {
-  "observed_at": "2026-11-12T02:29:48.622Z",
+  "observed_at": "2026-11-12T03:28:18.623Z",
   "schema": "flop-observatory/feed-status@0",
-  "snapshot_hash": "216f5c7d39cc4f168e20bd5d7f00fd517acf8a1af03edc1381bff564f4c716c7",
+  "snapshot_hash": "813b1faf69a02d481ff25888bb912b47badf939e8927e600cf826d1f482da068",
   "status": {
-    "best_height": 3522870,
+    "best_height": 3526358,
     "conflicts": [],
     "faucet": {
-      "detail": "status degraded, ready false, http 200",
+      "detail": "status degraded, ready false, http 503",
       "health": "degraded",
-      "http": 200,
+      "http": 503,
       "limits": {
         "addressCooldownMs": 86400000,
         "dailyCapExemptionConfigured": true,
@@ -18,30 +18,30 @@
         "ipGrantsPerDay": 300,
         "ipPrefixGrantsPerDay": 10000
       },
-      "observed_at": "2026-11-12T02:29:40.926Z",
+      "observed_at": "2026-11-12T03:28:09.794Z",
       "ready": false
     },
-    "finality_lag": 5,
-    "finalized_hash": "0xdc72ecc558298de209c9640b214bf5799d82fee366087b789e9a3c9b3018f9a2",
-    "finalized_height": 3522865,
+    "finality_lag": 6,
+    "finalized_hash": "0x79d67ff5dec5f1fb55d75bca0994b47776299eca6764907cf14c8eeee46f7ff9",
+    "finalized_height": 3526352,
     "gateway": {
       "detail": null,
       "health": "ok",
       "http": 200,
-      "observed_at": "2026-11-12T02:29:44.652Z"
+      "observed_at": "2026-11-12T03:28:14.209Z"
     },
     "genesis": {
       "faucet": "0x99c172c095340ace980631f9123544c6bebd4839f3437e463533422d8be2d631",
       "pinned": "0x99c172c095340ace980631f9123544c6bebd4839f3437e463533422d8be2d631",
       "rpc": "0x99c172c095340ace980631f9123544c6bebd4839f3437e463533422d8be2d631"
     },
-    "observed_at": "2026-11-12T02:29:48.622Z",
+    "observed_at": "2026-11-12T03:28:18.623Z",
     "reset_detected": false,
     "rpc": {
       "detail": null,
       "health": "ok",
       "http": null,
-      "observed_at": "2026-11-12T02:29:44.664Z",
+      "observed_at": "2026-11-12T03:28:14.333Z",
       "stale": false
     },
     "runtime_version": 1014014,
