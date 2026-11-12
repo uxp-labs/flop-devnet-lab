@@ -3,8 +3,7 @@
 // every key asked once and no other, each value bytes as 0x hex or null. A key listed with null
 // holds nothing. Anything else is a refused read, and every value of that block stays unknown.
 // Pure: it reads no file and decodes nothing; what the bytes mean is the decoder's
-// (src/scale/block.ts).
-import { fromHex } from "../../src/scale/reader.js";
+// (src/scale/block.ts), and it imports nothing of src.
 
 export type BatchAnswer = { read: true; values: Map<string, Uint8Array | null> } | { read: false; refused: string };
 
@@ -29,7 +28,7 @@ export function readBatchAnswer(result: unknown, asked: readonly string[], block
     if (typeof key !== "string" || !wanted.has(key)) return refuse(`change ${i} lists a key not asked`);
     if (values.has(key)) return refuse(`change ${i} lists the key ${key} twice`);
     if (value !== null && (typeof value !== "string" || !HEX.test(value))) return refuse(`change ${i} has a value that is neither 0x hex nor null`);
-    values.set(key, value === null ? null : fromHex(value));
+    values.set(key, value === null ? null : new Uint8Array(Buffer.from(value.slice(2), "hex")));
   }
   for (const k of asked) if (!values.has(k)) return refuse(`the answer lacks the key asked ${k}`);
   return { read: true, values };
