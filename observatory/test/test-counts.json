@@ -164,8 +164,8 @@
     "names": "ab64b240e88749709fd11d06c91eab4cc365ce23e6e12c745ec5c75a051e6dc6"
   },
   "storage-recording.test.ts": {
-    "tests": 5,
-    "names": "33c24c05bd1f20d8099b9eb2e73a958f4f5340f42826998bae5814946dd28451"
+    "tests": 6,
+    "names": "8a644735be078f8b2afe9caf9b9125e6ab7ed37d051b2a0dbc7d6c0f11f6f70c"
   },
   "storage-requests.test.ts": {
     "tests": 13,

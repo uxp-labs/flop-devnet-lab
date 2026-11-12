@@ -15,13 +15,13 @@ import { MAX_CALLS, readRequests } from "../src/requests.js";
 import { decodeEvents } from "../src/scale/events.js";
 import { parseMetadata } from "../src/scale/metadata.js";
 import { RECORDING, recorded } from "./helpers/recorded.js";
+import { INPUTS_TEXT } from "./helpers/recorded-storage.js";
 import { requestsListText } from "./helpers/requests-list.js";
 import { type Block, type DerivedCall, type Inputs, LAST, type Mentioned, PLAN, type Read, type Source, deriveCalls, deriveRequestsText, readInputs } from "./helpers/requests-derive.js";
 
 const REPO = new URL("../../", import.meta.url);
 const repoText = (path: string) => readFileSync(new URL(path, REPO), "utf8");
 const LIST_TEXT = repoText("observatory/recordings/requests.json");
-const INPUTS_TEXT = repoText("observatory/recordings/requests-inputs.json");
 const INPUTS = readInputs(INPUTS_TEXT);
 const R = recorded();
 const MD = parseMetadata(R.metadata);
