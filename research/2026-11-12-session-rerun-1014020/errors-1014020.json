@@ -1,0 +1,977 @@
+{
+ "spec_version": 1014020,
+ "recording": "branch observatory-data, recordings/20261112080132-05842a6db1e9c890/tape.jsonl",
+ "metadata_sha256": "91294eb61225c4de7459e6a8fed3c37169a2c8a1b1906b46a5890d5e0d328238",
+ "metadata_bytes": 487100,
+ "built_by": "build-tables.mjs",
+ "reader": "metadata-v14.mjs",
+ "cross_check_of_the_reader": {
+  "against": "the 1014014 blob of the same recording",
+  "sha256": "f4fd2addba7fff1129483d0e66b8e6bc69141292f56443e201d3f073aab03444",
+  "errors_recorded_by_the_earlier_tests_found_by_index_and_name": [
+   "2026-11-11-session-probe 3-timeout-via-session: 103/7 ChannelNotFound",
+   "2026-11-11-session-probe 4-remark-via-session: 94/7 PalletNotAllowed",
+   "2026-11-11-session-escrow 3-force-open-declared-0: 94/18 SpendExceedsDeclared",
+   "2026-11-11-session-escrow 5-force-open-over-per-call: 94/5 PerTxLimitExceeded",
+   "2026-11-11-session-escrow 6-force-open-over-daily: 94/6 DailyCapExceeded",
+   "2026-11-11-session-deny-list 3-denied-utility: 94/7 PalletNotAllowed",
+   "2026-11-11-session-deny-list 4-denied-proxy: 94/7 PalletNotAllowed",
+   "2026-11-11-session-deny-list 5-denied-multisig: 94/7 PalletNotAllowed",
+   "2026-11-11-session-deny-list 6-denied-sudo: 94/7 PalletNotAllowed",
+   "2026-11-11-session-deny-list 7-denied-scheduler: 94/7 PalletNotAllowed",
+   "2026-11-11-session-deny-list 8-denied-emergency-override: 94/7 PalletNotAllowed",
+   "2026-11-11-session-deny-list 9-denied-flop-session-keys: 94/7 PalletNotAllowed",
+   "2026-11-11-session-deny-list 10-lower-case-allow-entry: 103/7 ChannelNotFound"
+  ]
+ },
+ "errors": [
+  {
+   "pallet": "FlopSessionKeys",
+   "pallet_index": 94,
+   "error_index": 0,
+   "name": "SessionAlreadyExists"
+  },
+  {
+   "pallet": "FlopSessionKeys",
+   "pallet_index": 94,
+   "error_index": 1,
+   "name": "SessionNotFound"
+  },
+  {
+   "pallet": "FlopSessionKeys",
+   "pallet_index": 94,
+   "error_index": 2,
+   "name": "SessionExpired"
+  },
+  {
+   "pallet": "FlopSessionKeys",
+   "pallet_index": 94,
+   "error_index": 3,
+   "name": "SessionRevoked"
+  },
+  {
+   "pallet": "FlopSessionKeys",
+   "pallet_index": 94,
+   "error_index": 4,
+   "name": "SpendingCapExceeded"
+  },
+  {
+   "pallet": "FlopSessionKeys",
+   "pallet_index": 94,
+   "error_index": 5,
+   "name": "PerTxLimitExceeded"
+  },
+  {
+   "pallet": "FlopSessionKeys",
+   "pallet_index": 94,
+   "error_index": 6,
+   "name": "DailyCapExceeded"
+  },
+  {
+   "pallet": "FlopSessionKeys",
+   "pallet_index": 94,
+   "error_index": 7,
+   "name": "PalletNotAllowed"
+  },
+  {
+   "pallet": "FlopSessionKeys",
+   "pallet_index": 94,
+   "error_index": 8,
+   "name": "TooManySessions"
+  },
+  {
+   "pallet": "FlopSessionKeys",
+   "pallet_index": 94,
+   "error_index": 9,
+   "name": "DurationTooLong"
+  },
+  {
+   "pallet": "FlopSessionKeys",
+   "pallet_index": 94,
+   "error_index": 10,
+   "name": "NotOwner"
+  },
+  {
+   "pallet": "FlopSessionKeys",
+   "pallet_index": 94,
+   "error_index": 11,
+   "name": "NotDelegate"
+  },
+  {
+   "pallet": "FlopSessionKeys",
+   "pallet_index": 94,
+   "error_index": 12,
+   "name": "SelfDelegation"
+  },
+  {
+   "pallet": "FlopSessionKeys",
+   "pallet_index": 94,
+   "error_index": 13,
+   "name": "CircuitBreakerTripped"
+  },
+  {
+   "pallet": "FlopSessionKeys",
+   "pallet_index": 94,
+   "error_index": 14,
+   "name": "SessionRotationLimited"
+  },
+  {
+   "pallet": "FlopSessionKeys",
+   "pallet_index": 94,
+   "error_index": 15,
+   "name": "InvalidSessionNonce"
+  },
+  {
+   "pallet": "FlopSessionKeys",
+   "pallet_index": 94,
+   "error_index": 16,
+   "name": "SessionNonceExhausted"
+  },
+  {
+   "pallet": "FlopSessionKeys",
+   "pallet_index": 94,
+   "error_index": 17,
+   "name": "RetiredSessionRecordMissing"
+  },
+  {
+   "pallet": "FlopSessionKeys",
+   "pallet_index": 94,
+   "error_index": 18,
+   "name": "PalletNameTooLong"
+  },
+  {
+   "pallet": "FlopSessionKeys",
+   "pallet_index": 94,
+   "error_index": 19,
+   "name": "TooManyAllowedPallets"
+  },
+  {
+   "pallet": "FlopSessionKeys",
+   "pallet_index": 94,
+   "error_index": 20,
+   "name": "SpendExceedsDeclared"
+  },
+  {
+   "pallet": "ComputeChannel",
+   "pallet_index": 103,
+   "error_index": 0,
+   "name": "RequiredToplocEvidenceMissing"
+  },
+  {
+   "pallet": "ComputeChannel",
+   "pallet_index": 103,
+   "error_index": 1,
+   "name": "ToplocEvidenceChannelNotOpen"
+  },
+  {
+   "pallet": "ComputeChannel",
+   "pallet_index": 103,
+   "error_index": 2,
+   "name": "ZeroToplocCommitment"
+  },
+  {
+   "pallet": "ComputeChannel",
+   "pallet_index": 103,
+   "error_index": 3,
+   "name": "ToplocEscalationOpen"
+  },
+  {
+   "pallet": "ComputeChannel",
+   "pallet_index": 103,
+   "error_index": 4,
+   "name": "NoToplocEscalation"
+  },
+  {
+   "pallet": "ComputeChannel",
+   "pallet_index": 103,
+   "error_index": 5,
+   "name": "ToplocEscalationNotExpired"
+  },
+  {
+   "pallet": "ComputeChannel",
+   "pallet_index": 103,
+   "error_index": 6,
+   "name": "ChannelExists"
+  },
+  {
+   "pallet": "ComputeChannel",
+   "pallet_index": 103,
+   "error_index": 7,
+   "name": "ChannelNotFound"
+  },
+  {
+   "pallet": "ComputeChannel",
+   "pallet_index": 103,
+   "error_index": 8,
+   "name": "ZeroEscrow"
+  },
+  {
+   "pallet": "ComputeChannel",
+   "pallet_index": 103,
+   "error_index": 9,
+   "name": "TooManyActiveReservations"
+  },
+  {
+   "pallet": "ComputeChannel",
+   "pallet_index": 103,
+   "error_index": 10,
+   "name": "NotAParty"
+  },
+  {
+   "pallet": "ComputeChannel",
+   "pallet_index": 103,
+   "error_index": 11,
+   "name": "BadState"
+  },
+  {
+   "pallet": "ComputeChannel",
+   "pallet_index": 103,
+   "error_index": 12,
+   "name": "MeasuredRootMismatch"
+  },
+  {
+   "pallet": "ComputeChannel",
+   "pallet_index": 103,
+   "error_index": 13,
+   "name": "MeasuredRootRejected"
+  },
+  {
+   "pallet": "ComputeChannel",
+   "pallet_index": 103,
+   "error_index": 14,
+   "name": "BadReceiptSignature"
+  },
+  {
+   "pallet": "ComputeChannel",
+   "pallet_index": 103,
+   "error_index": 15,
+   "name": "AggregateGnMismatch"
+  },
+  {
+   "pallet": "ComputeChannel",
+   "pallet_index": 103,
+   "error_index": 16,
+   "name": "DuplicateVerifiedTurn"
+  },
+  {
+   "pallet": "ComputeChannel",
+   "pallet_index": 103,
+   "error_index": 17,
+   "name": "VerifiedTurnOutOfBounds"
+  },
+  {
+   "pallet": "ComputeChannel",
+   "pallet_index": 103,
+   "error_index": 18,
+   "name": "TooManySettlementTurns"
+  },
+  {
+   "pallet": "ComputeChannel",
+   "pallet_index": 103,
+   "error_index": 19,
+   "name": "MerklePathTooLong"
+  },
+  {
+   "pallet": "ComputeChannel",
+   "pallet_index": 103,
+   "error_index": 20,
+   "name": "SlaMaxTurnsTooLarge"
+  },
+  {
+   "pallet": "ComputeChannel",
+   "pallet_index": 103,
+   "error_index": 21,
+   "name": "VerifiedWorkOverflow"
+  },
+  {
+   "pallet": "ComputeChannel",
+   "pallet_index": 103,
+   "error_index": 22,
+   "name": "VerifiedWorkExceedsEscrow"
+  },
+  {
+   "pallet": "ComputeChannel",
+   "pallet_index": 103,
+   "error_index": 23,
+   "name": "TariffExceedsEscrow"
+  },
+  {
+   "pallet": "ComputeChannel",
+   "pallet_index": 103,
+   "error_index": 24,
+   "name": "TariffRegression"
+  },
+  {
+   "pallet": "ComputeChannel",
+   "pallet_index": 103,
+   "error_index": 25,
+   "name": "RefundPenaltyOverflow"
+  },
+  {
+   "pallet": "ComputeChannel",
+   "pallet_index": 103,
+   "error_index": 26,
+   "name": "BadEnclaveSignature"
+  },
+  {
+   "pallet": "ComputeChannel",
+   "pallet_index": 103,
+   "error_index": 27,
+   "name": "UnsupportedLeafVersion"
+  },
+  {
+   "pallet": "ComputeChannel",
+   "pallet_index": 103,
+   "error_index": 28,
+   "name": "LeafFieldsInconsistent"
+  },
+  {
+   "pallet": "ComputeChannel",
+   "pallet_index": 103,
+   "error_index": 29,
+   "name": "LeafNotInRoot"
+  },
+  {
+   "pallet": "ComputeChannel",
+   "pallet_index": 103,
+   "error_index": 30,
+   "name": "WindowNotElapsed"
+  },
+  {
+   "pallet": "ComputeChannel",
+   "pallet_index": 103,
+   "error_index": 31,
+   "name": "WindowElapsed"
+  },
+  {
+   "pallet": "ComputeChannel",
+   "pallet_index": 103,
+   "error_index": 32,
+   "name": "DisputeExists"
+  },
+  {
+   "pallet": "ComputeChannel",
+   "pallet_index": 103,
+   "error_index": 33,
+   "name": "DisputeNotFound"
+  },
+  {
+   "pallet": "ComputeChannel",
+   "pallet_index": 103,
+   "error_index": 34,
+   "name": "WrongTurnResponded"
+  },
+  {
+   "pallet": "ComputeChannel",
+   "pallet_index": 103,
+   "error_index": 35,
+   "name": "BisectionNotAtLeaf"
+  },
+  {
+   "pallet": "ComputeChannel",
+   "pallet_index": 103,
+   "error_index": 36,
+   "name": "BisectionNotAwaitingResponse"
+  },
+  {
+   "pallet": "ComputeChannel",
+   "pallet_index": 103,
+   "error_index": 37,
+   "name": "BisectionNotAwaitingChallenge"
+  },
+  {
+   "pallet": "ComputeChannel",
+   "pallet_index": 103,
+   "error_index": 38,
+   "name": "BisectionBadChildRoots"
+  },
+  {
+   "pallet": "ComputeChannel",
+   "pallet_index": 103,
+   "error_index": 39,
+   "name": "BisectionBadTurnCount"
+  },
+  {
+   "pallet": "ComputeChannel",
+   "pallet_index": 103,
+   "error_index": 40,
+   "name": "BisectionRoundCap"
+  },
+  {
+   "pallet": "ComputeChannel",
+   "pallet_index": 103,
+   "error_index": 41,
+   "name": "SessionNotExpired"
+  },
+  {
+   "pallet": "ComputeChannel",
+   "pallet_index": 103,
+   "error_index": 42,
+   "name": "GnRegression"
+  },
+  {
+   "pallet": "ComputeChannel",
+   "pallet_index": 103,
+   "error_index": 43,
+   "name": "TranscriptUnavailable"
+  },
+  {
+   "pallet": "ComputeChannel",
+   "pallet_index": 103,
+   "error_index": 44,
+   "name": "TranscriptNotUnrecoverable"
+  },
+  {
+   "pallet": "ComputeChannel",
+   "pallet_index": 103,
+   "error_index": 45,
+   "name": "ModelWeightsLeaseExpired"
+  },
+  {
+   "pallet": "ComputeChannel",
+   "pallet_index": 103,
+   "error_index": 46,
+   "name": "NotPendingAck"
+  },
+  {
+   "pallet": "ComputeChannel",
+   "pallet_index": 103,
+   "error_index": 47,
+   "name": "AckWindowElapsed"
+  },
+  {
+   "pallet": "ComputeChannel",
+   "pallet_index": 103,
+   "error_index": 48,
+   "name": "AckWindowNotElapsed"
+  },
+  {
+   "pallet": "ComputeChannel",
+   "pallet_index": 103,
+   "error_index": 49,
+   "name": "NotNamedMiner"
+  },
+  {
+   "pallet": "ComputeChannel",
+   "pallet_index": 103,
+   "error_index": 50,
+   "name": "OfferExpired"
+  },
+  {
+   "pallet": "ComputeChannel",
+   "pallet_index": 103,
+   "error_index": 51,
+   "name": "OfferNotExpired"
+  },
+  {
+   "pallet": "ComputeChannel",
+   "pallet_index": 103,
+   "error_index": 52,
+   "name": "OfferNonceUsed"
+  },
+  {
+   "pallet": "ComputeChannel",
+   "pallet_index": 103,
+   "error_index": 53,
+   "name": "BadOfferSignature"
+  },
+  {
+   "pallet": "ComputeChannel",
+   "pallet_index": 103,
+   "error_index": 54,
+   "name": "BadOfferAcceptanceSignature"
+  },
+  {
+   "pallet": "ComputeChannel",
+   "pallet_index": 103,
+   "error_index": 55,
+   "name": "OfferEscrowBelowMinimum"
+  },
+  {
+   "pallet": "ComputeChannel",
+   "pallet_index": 103,
+   "error_index": 56,
+   "name": "FcuNotActivated"
+  },
+  {
+   "pallet": "ComputeChannel",
+   "pallet_index": 103,
+   "error_index": 57,
+   "name": "InvalidForwardTerms"
+  },
+  {
+   "pallet": "ComputeChannel",
+   "pallet_index": 103,
+   "error_index": 58,
+   "name": "ForwardOfferNotFunded"
+  },
+  {
+   "pallet": "ComputeChannel",
+   "pallet_index": 103,
+   "error_index": 59,
+   "name": "ForwardOfferFundingMismatch"
+  },
+  {
+   "pallet": "ComputeChannel",
+   "pallet_index": 103,
+   "error_index": 60,
+   "name": "ForwardNotStarted"
+  },
+  {
+   "pallet": "ComputeChannel",
+   "pallet_index": 103,
+   "error_index": 61,
+   "name": "ForwardWindowNotElapsed"
+  },
+  {
+   "pallet": "ComputeChannel",
+   "pallet_index": 103,
+   "error_index": 62,
+   "name": "ForwardDeliveryOutOfBounds"
+  },
+  {
+   "pallet": "ComputeChannel",
+   "pallet_index": 103,
+   "error_index": 63,
+   "name": "NoForwardAvailabilityAccrued"
+  },
+  {
+   "pallet": "ComputeChannel",
+   "pallet_index": 103,
+   "error_index": 64,
+   "name": "FcuSlashPaused"
+  },
+  {
+   "pallet": "ComputeChannel",
+   "pallet_index": 103,
+   "error_index": 65,
+   "name": "TooManyForwardChannels"
+  },
+  {
+   "pallet": "ComputeChannel",
+   "pallet_index": 103,
+   "error_index": 66,
+   "name": "ForwardArithmeticOverflow"
+  },
+  {
+   "pallet": "ComputeChannel",
+   "pallet_index": 103,
+   "error_index": 67,
+   "name": "ForwardAssignmentLockedPrincipal"
+  },
+  {
+   "pallet": "ComputeChannel",
+   "pallet_index": 103,
+   "error_index": 68,
+   "name": "ForwardLotTooSmall"
+  },
+  {
+   "pallet": "ComputeChannel",
+   "pallet_index": 103,
+   "error_index": 69,
+   "name": "TooManyForwardHolders"
+  },
+  {
+   "pallet": "ComputeChannel",
+   "pallet_index": 103,
+   "error_index": 70,
+   "name": "ForwardHolderHasActiveDraw"
+  },
+  {
+   "pallet": "ComputeChannel",
+   "pallet_index": 103,
+   "error_index": 71,
+   "name": "ForwardHolderNotFound"
+  },
+  {
+   "pallet": "ComputeChannel",
+   "pallet_index": 103,
+   "error_index": 72,
+   "name": "ForwardDrawUnavailable"
+  },
+  {
+   "pallet": "ComputeChannel",
+   "pallet_index": 103,
+   "error_index": 73,
+   "name": "TooManyForwardDraws"
+  },
+  {
+   "pallet": "ComputeChannel",
+   "pallet_index": 103,
+   "error_index": 74,
+   "name": "ForwardBidExists"
+  },
+  {
+   "pallet": "ComputeChannel",
+   "pallet_index": 103,
+   "error_index": 75,
+   "name": "ForwardBidBadPhase"
+  },
+  {
+   "pallet": "ComputeChannel",
+   "pallet_index": 103,
+   "error_index": 76,
+   "name": "ForwardBidClaimInvalid"
+  },
+  {
+   "pallet": "ComputeChannel",
+   "pallet_index": 103,
+   "error_index": 77,
+   "name": "ForwardBidClaimantSetInvalid"
+  },
+  {
+   "pallet": "ComputeChannel",
+   "pallet_index": 103,
+   "error_index": 78,
+   "name": "ForwardBidEntropyUnavailable"
+  },
+  {
+   "pallet": "ComputeChannel",
+   "pallet_index": 103,
+   "error_index": 79,
+   "name": "FinalitySafeMode"
+  },
+  {
+   "pallet": "ComputeChannel",
+   "pallet_index": 103,
+   "error_index": 80,
+   "name": "ToplocToleranceNotCalibrated"
+  },
+  {
+   "pallet": "ComputeChannel",
+   "pallet_index": 103,
+   "error_index": 81,
+   "name": "ToplocBandUnavailable"
+  },
+  {
+   "pallet": "ComputeChannel",
+   "pallet_index": 103,
+   "error_index": 82,
+   "name": "ToplocEvidenceMismatch"
+  },
+  {
+   "pallet": "ComputeChannel",
+   "pallet_index": 103,
+   "error_index": 83,
+   "name": "ToplocEvidenceChannelMismatch"
+  },
+  {
+   "pallet": "ComputeChannel",
+   "pallet_index": 103,
+   "error_index": 84,
+   "name": "ToplocVerifierAccepted"
+  },
+  {
+   "pallet": "ComputeChannel",
+   "pallet_index": 103,
+   "error_index": 85,
+   "name": "ValidatorNotActive"
+  },
+  {
+   "pallet": "ComputeChannel",
+   "pallet_index": 103,
+   "error_index": 86,
+   "name": "InvalidValidatorSignature"
+  },
+  {
+   "pallet": "ComputeChannel",
+   "pallet_index": 103,
+   "error_index": 87,
+   "name": "ToplocQuorumNotMet"
+  },
+  {
+   "pallet": "ComputeChannel",
+   "pallet_index": 103,
+   "error_index": 88,
+   "name": "NotPremiumChannel"
+  },
+  {
+   "pallet": "ComputeChannel",
+   "pallet_index": 103,
+   "error_index": 89,
+   "name": "PremiumRequiresInt8Exact"
+  },
+  {
+   "pallet": "ComputeChannel",
+   "pallet_index": 103,
+   "error_index": 90,
+   "name": "PremiumRequiresWeightCommitment"
+  },
+  {
+   "pallet": "ComputeChannel",
+   "pallet_index": 103,
+   "error_index": 91,
+   "name": "PremiumPriceFloorNotMet"
+  },
+  {
+   "pallet": "ComputeChannel",
+   "pallet_index": 103,
+   "error_index": 92,
+   "name": "CertificateRejected"
+  },
+  {
+   "pallet": "ComputeChannel",
+   "pallet_index": 103,
+   "error_index": 93,
+   "name": "BookkeepingRejected"
+  },
+  {
+   "pallet": "ComputeChannel",
+   "pallet_index": 103,
+   "error_index": 94,
+   "name": "BookkeepingRequired"
+  },
+  {
+   "pallet": "ComputeChannel",
+   "pallet_index": 103,
+   "error_index": 95,
+   "name": "MeteringRejected"
+  },
+  {
+   "pallet": "ComputeChannel",
+   "pallet_index": 103,
+   "error_index": 96,
+   "name": "MeteringRequired"
+  },
+  {
+   "pallet": "ComputeChannel",
+   "pallet_index": 103,
+   "error_index": 97,
+   "name": "CalibrationUnavailable"
+  },
+  {
+   "pallet": "ComputeChannel",
+   "pallet_index": 103,
+   "error_index": 98,
+   "name": "SettlementExceedsCalibrationCap"
+  },
+  {
+   "pallet": "ComputeChannel",
+   "pallet_index": 103,
+   "error_index": 99,
+   "name": "ToplocProfileNotPinned"
+  },
+  {
+   "pallet": "ComputeChannel",
+   "pallet_index": 103,
+   "error_index": 100,
+   "name": "InvalidToplocAttestClaim"
+  },
+  {
+   "pallet": "ComputeChannel",
+   "pallet_index": 103,
+   "error_index": 101,
+   "name": "ToplocClaimSubjectMismatch"
+  },
+  {
+   "pallet": "ComputeChannel",
+   "pallet_index": 103,
+   "error_index": 102,
+   "name": "InvalidToplocVerdict"
+  },
+  {
+   "pallet": "ComputeChannel",
+   "pallet_index": 103,
+   "error_index": 103,
+   "name": "AttestationStale"
+  },
+  {
+   "pallet": "ComputeChannel",
+   "pallet_index": 103,
+   "error_index": 104,
+   "name": "DegradedWindowExtensionCapped"
+  },
+  {
+   "pallet": "ComputeChannel",
+   "pallet_index": 103,
+   "error_index": 105,
+   "name": "DecodePolicyRejected"
+  },
+  {
+   "pallet": "ComputeChannel",
+   "pallet_index": 103,
+   "error_index": 106,
+   "name": "DecodePolicyHashMismatch"
+  },
+  {
+   "pallet": "ComputeChannel",
+   "pallet_index": 103,
+   "error_index": 107,
+   "name": "NoDisputeStanding"
+  },
+  {
+   "pallet": "ComputeChannel",
+   "pallet_index": 103,
+   "error_index": 108,
+   "name": "MissingAuditEvidence"
+  },
+  {
+   "pallet": "ComputeChannel",
+   "pallet_index": 103,
+   "error_index": 109,
+   "name": "AuditAlreadyClaimed"
+  },
+  {
+   "pallet": "ComputeChannel",
+   "pallet_index": 103,
+   "error_index": 110,
+   "name": "AuditPoolInsufficient"
+  },
+  {
+   "pallet": "ComputeChannel",
+   "pallet_index": 103,
+   "error_index": 111,
+   "name": "DisputeTurnNotSettled"
+  },
+  {
+   "pallet": "ComputeChannel",
+   "pallet_index": 103,
+   "error_index": 112,
+   "name": "SettlementTariffMissing"
+  },
+  {
+   "pallet": "ComputeChannel",
+   "pallet_index": 103,
+   "error_index": 113,
+   "name": "MinerRetired"
+  },
+  {
+   "pallet": "ComputeChannel",
+   "pallet_index": 103,
+   "error_index": 114,
+   "name": "SessionEvidenceTooLarge"
+  },
+  {
+   "pallet": "ComputeChannel",
+   "pallet_index": 103,
+   "error_index": 115,
+   "name": "SessionEvidenceConflict"
+  },
+  {
+   "pallet": "ComputeChannel",
+   "pallet_index": 103,
+   "error_index": 116,
+   "name": "ForwardStateUpgradeRequired"
+  },
+  {
+   "pallet": "ComputeChannel",
+   "pallet_index": 103,
+   "error_index": 117,
+   "name": "ForwardListingLocked"
+  },
+  {
+   "pallet": "ComputeChannel",
+   "pallet_index": 103,
+   "error_index": 118,
+   "name": "ForwardListingUnavailable"
+  },
+  {
+   "pallet": "ComputeChannel",
+   "pallet_index": 103,
+   "error_index": 119,
+   "name": "ForwardSalePriceExceeded"
+  },
+  {
+   "pallet": "ComputeChannel",
+   "pallet_index": 103,
+   "error_index": 120,
+   "name": "FcuEconomicSnapshotMissing"
+  },
+  {
+   "pallet": "ComputeChannel",
+   "pallet_index": 103,
+   "error_index": 121,
+   "name": "FcuObligationsOutstanding"
+  },
+  {
+   "pallet": "ComputeChannel",
+   "pallet_index": 103,
+   "error_index": 122,
+   "name": "FcuPrimaryAdmissionsPaused"
+  },
+  {
+   "pallet": "ComputeChannel",
+   "pallet_index": 103,
+   "error_index": 123,
+   "name": "FcuInvalidServiceProfile"
+  },
+  {
+   "pallet": "ComputeChannel",
+   "pallet_index": 103,
+   "error_index": 124,
+   "name": "FcuInvalidQualification"
+  },
+  {
+   "pallet": "ComputeChannel",
+   "pallet_index": 103,
+   "error_index": 125,
+   "name": "FcuServiceProfileUnknown"
+  },
+  {
+   "pallet": "ComputeChannel",
+   "pallet_index": 103,
+   "error_index": 126,
+   "name": "FcuQualificationUnknown"
+  },
+  {
+   "pallet": "ComputeChannel",
+   "pallet_index": 103,
+   "error_index": 127,
+   "name": "FcuQualificationConflict"
+  },
+  {
+   "pallet": "ComputeChannel",
+   "pallet_index": 103,
+   "error_index": 128,
+   "name": "FcuServiceProfileUnavailable"
+  },
+  {
+   "pallet": "ComputeChannel",
+   "pallet_index": 103,
+   "error_index": 129,
+   "name": "FcuInvalidServiceWindow"
+  },
+  {
+   "pallet": "ComputeChannel",
+   "pallet_index": 103,
+   "error_index": 130,
+   "name": "FcuTimestampUnavailable"
+  },
+  {
+   "pallet": "ComputeChannel",
+   "pallet_index": 103,
+   "error_index": 131,
+   "name": "FcuNativeIntegrationRequired"
+  },
+  {
+   "pallet": "ComputeChannel",
+   "pallet_index": 103,
+   "error_index": 132,
+   "name": "MinerCapacityFullyReserved"
+  },
+  {
+   "pallet": "ComputeChannel",
+   "pallet_index": 103,
+   "error_index": 133,
+   "name": "TooManyCapacityReservations"
+  },
+  {
+   "pallet": "ComputeChannel",
+   "pallet_index": 103,
+   "error_index": 134,
+   "name": "ZeroCapacityReservationRate"
+  },
+  {
+   "pallet": "ComputeChannel",
+   "pallet_index": 103,
+   "error_index": 135,
+   "name": "UnconsentedSessionTooLong"
+  },
+  {
+   "pallet": "ComputeChannel",
+   "pallet_index": 103,
+   "error_index": 136,
+   "name": "EscrowBelowCapacityFloor"
+  }
+ ]
+}
