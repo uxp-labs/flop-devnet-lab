@@ -21,6 +21,8 @@ export const CHAIN_REFUSAL = Object.freeze({
   BAD_BYTES: "BAD_BYTES",
   /** Call bytes whose declared spend is not what the inner call moves. */
   SPEND_MISMATCH: "SPEND_MISMATCH",
+  /** The call bytes the encoder wrote do not read back to its snapshot of the input, field by field. */
+  READ_BACK: "READ_BACK",
   /** The signature the sign function gave does not verify against the public key and the payload. */
   SIGNATURE_INVALID: "SIGNATURE_INVALID",
 } as const);

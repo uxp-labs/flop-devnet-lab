@@ -21,7 +21,7 @@ import { refuse } from "./errors.js";
 import { lastValidBlock, mortalEra } from "./era.js";
 import { bytesOf, ownKeys, ownValue, takeFields, takeValue, writeValue, type FieldValue } from "./fields.js";
 import { signingPayload, type SignedPath } from "./payload.js";
-import { readExtrinsic, type SessionCallData } from "./reader.js";
+import { readCall, readExtrinsic, type SessionCallData } from "./reader.js";
 import { compact, concat } from "./scale.js";
 import { reviewedRuntime, type Reviewed } from "./shape.js";
 import type { RuntimeId } from "./table.js";
@@ -145,10 +145,40 @@ function callBytes(s: CallSnapshot): Uint8Array {
   );
 }
 
-/** The call bytes of execute_via_session around one inner call. Nothing is signed. */
+/** Equal plain data: bytes by value, objects field by field. Both sides are the encoder's own data. */
+function same(a: unknown, b: unknown): boolean {
+  if (a instanceof Uint8Array && b instanceof Uint8Array) return a.length === b.length && a.every((x, i) => x === b[i]);
+  if (a !== null && b !== null && typeof a === "object" && typeof b === "object") {
+    const ka = Object.keys(a).sort().join(",");
+    const kb = Object.keys(b).sort().join(",");
+    return ka === kb && Object.keys(a).every((k) => same((a as Record<string, unknown>)[k], (b as Record<string, unknown>)[k]));
+  }
+  return a === b;
+}
+
+/**
+ * The call bytes, read back with the strict reader and compared with the snapshot field by field (rule
+ * H2). A difference is a refusal. So nothing is returned or signed that does not read back as the input.
+ */
+function checkedCallBytes(s: CallSnapshot): Uint8Array {
+  const bytes = callBytes(s);
+  const back = readCall(s.reviewed.rt, bytes);
+  const { call: name, ...fields } = back.inner as unknown as Record<string, unknown> & { call: string };
+  const checks: [string, unknown, unknown][] = [
+    ["the owner", back.owner, s.owner],
+    ["the inner call", name, s.inner.call],
+    ["the declared spend", back.spend, s.spend],
+    ["the session nonce", back.sessionNonce, s.sessionNonce],
+    ...Object.keys({ ...fields, ...s.inner.fields }).map((k): [string, unknown, unknown] => [`${s.inner.call}.${k}`, fields[k], s.inner.fields[k]]),
+  ];
+  for (const [what, read, want] of checks) if (!same(read, want)) refuse("READ_BACK", `${what} does not read back as it was given`);
+  return bytes;
+}
+
+/** The call bytes of execute_via_session around one inner call, read back before they are returned. Nothing is signed. */
 export function encodeSessionCall(input: SessionCallInput): Uint8Array {
   const s = takeCall(takeFields(input, CALL_KEYS, "the session call input"));
-  return callBytes(s);
+  return checkedCallBytes(s);
 }
 
 /** The extra of each signed extension, in the table's order. */
@@ -176,7 +206,7 @@ function signatureOf(value: unknown): Uint8Array {
 export function signSessionCall(input: ExtrinsicInput): SignedSessionCall {
   const s = takeSign(input);
   const rt = s.reviewed.rt;
-  const call = callBytes(s);
+  const call = checkedCallBytes(s);
   const extra = extensionExtra(s);
   const { message } = signingPayload(rt, call, extra, s.birth.hash);
   const signature = signatureOf(Reflect.apply(s.sign, s.signer, [Uint8Array.from(message)]));
