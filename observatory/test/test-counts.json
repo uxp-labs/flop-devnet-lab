@@ -7,6 +7,10 @@
     "tests": 12,
     "names": "5271db22d00de405d8b47cd068f20f211490fce67f0f95b7279fbb39431afdb2"
   },
+  "block-runtime.test.ts": {
+    "tests": 8,
+    "names": "c2e6a23bcba8b51311cbf1d840194c0b2071d5807525d7220216426b4ac6d845"
+  },
   "census.test.ts": {
     "tests": 176,
     "names": "fe07fc6d1f4e8a1b6941158b401912a68179b9ca6729111087ed24359db7eae3"
@@ -187,8 +191,24 @@
     "tests": 26,
     "names": "8930de395c29d17c77813be51e2c5ec36cd04b7d46a1e906592736ab8ac5da72"
   },
+  "upgrade-decode.test.ts": {
+    "tests": 9,
+    "names": "589180382a40bf137c057cf61ea705ba94721219cac7adda656c40c61db2ad5e"
+  },
+  "upgrade-recording.test.ts": {
+    "tests": 9,
+    "names": "16aec6aa9ace2425763bcafa97c1c8fab4f87f01b2e6573a79bf7d19f0e37982"
+  },
   "upgrade-requests.test.ts": {
     "tests": 25,
     "names": "4d202cc7802b0f534823065fde04a88599f6370c65b1886936c7fa708d131aed"
+  },
+  "upgrade-shape.test.ts": {
+    "tests": 9,
+    "names": "b85aeea7c8d09c3d7c9981023e885d50da25cef05a77981ddbe690e326bfd86f"
+  },
+  "upgrade-storage.test.ts": {
+    "tests": 14,
+    "names": "c77b4e54c3efd7b7ddc12de1031cc0f9f2289baf2a39b3e32146563c82b81ef2"
   }
 }

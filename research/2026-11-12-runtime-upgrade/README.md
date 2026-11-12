@@ -67,6 +67,8 @@ the two refusals word for word.
   behaviour.
 - The observatory's decoder refuses every block from 3528529 on until a shape for spec 1014020 is
   derived, read and added to its reviewed list. That is what the pin is for.
+  Later shown on the observatory's third recording (review round 22): `observatory/test/upgrade-decode.test.ts`
+  decodes 3528529 and 3530299 under spec 1014020, and `observatory/test/upgrade-storage.test.ts` shows our twelve records hold the same bytes at 3528527 and 3530299.
 - `flop-sign.mjs` in the session test folders signs for spec 1014014. A signature names the spec,
   so the devnet as it is now rejects what it signs. Before it is used again it needs the new spec
   and its call indexes checked against the new metadata.

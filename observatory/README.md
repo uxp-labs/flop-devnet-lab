@@ -324,7 +324,7 @@ are pure: no file, network, clock or random access, which the source scan holds 
 | `src/scale/storage-key.ts` | a storage key from a pallet, an entry and its map keys, with the hashers the metadata states |
 | `src/scale/events.ts` | System.Events by the type the metadata gives it: each event with its pallet name and index, its name and variant index, its fields and its phase |
 | `src/scale/shape.ts`, `shapes/` | the shape pin: the reviewed shapes, the shape with its table of types, and the one function that refuses any other |
-| `src/scale/block.ts` | the one way real chain data is decoded, only once the block's shape is pinned: a block's events (`decodeBlockEvents`), and the value of a storage entry the shape states (`decodeStorageValue`) |
+| `src/scale/block.ts` | the one way real chain data is decoded, only once the block's shape is pinned: which reviewed runtime reads a block (`runtimeOfBlock`), a block's events (`decodeBlockEvents`), and the value of a storage entry the shape states (`decodeStorageValue`) |
 
 What a decoded value proves: nothing about the chain on its own. A recording is what one RPC
 endpoint answered (RULES.md section 8), and a decoded value is that answer read. It is evidence,
@@ -352,6 +352,28 @@ decodes exactly as it did under `decoder-shape@1`. The shape file's own sha256 i
 holds the deriving code to the review: a changed `deriveShape` with a file written again from it
 passes every other check. A new runtime spec is decoded only after its shape file and its line are
 added to `REVIEWED`. Outside `src/scale/`, only `block.ts` may be imported from it.
+
+Two reviewed runtimes. The second line of `REVIEWED` is `tzkv-runtime` 1014020, metadata
+`91294eb6...8238` of 487100 bytes, and `shapes/tzkv-runtime-1014020.json` (sha256 `650b3491...dc81`,
+469 types), derived by the same `deriveShape` from the metadata the third recording holds at block
+3528528 and a second way from the reference's parse (`test/upgrade-shape.test.ts`). What differs
+from 1014014 is `shapes/diff-tzkv-runtime-1014014-1014020.txt`, written by `scripts/shape-diff.mjs`,
+which compares types by structure and never by id: ComputeChannel adds the events
+CapacityReservationRateSet and CapacityReservationDropped, Aleph adds CommitteeSeedFallback to the
+outer event enum, and FlopSessionKeys and every stated entry's prefix, hashers, key and value are
+unchanged. A test holds the committed diff to a fresh run.
+
+Which runtime reads a block. A block is in the encoding of the runtime that executed it, and
+`System.LastRuntimeUpgrade` at the block names that runtime. `runtimeOfBlock` in
+`src/scale/block.ts` reads those bytes and nothing else, whole (a Compact<u32> spec version then a
+string spec name, as each reviewed shape states the record), and answers a copy of the `REVIEWED`
+line of that spec, or a refusal. The caller then takes that line's metadata by its sha256 and its
+shape file, and the pin checks all of it again. Never the version or the metadata read at the
+block itself: those answer for the next block, so at a block that carries an upgrade they name the
+new runtime though the old one executed it. On the third recording
+(`fixtures/recording-20261112080132-05842a6db1e9c890`) block 3528528 decodes under 1014014 with the
+metadata recorded at its parent, to its 64 events, and 3528529 and 3530299 under 1014020, event by
+event as the reference reads them (`test/upgrade-decode.test.ts`).
 
 Storage values. `decodeStorageValue` in `src/scale/block.ts` takes the pin input, the pallet and
 entry names, the SCALE bytes of each key part, the storage key that was asked (as the tape holds
@@ -399,7 +421,10 @@ Offline, `npm test` covers: the reader, the hashes against published values, `@n
 the reference, the metadata parser on every kind and every refusal, the decoder's forms and limits,
 the three storage keys read by hand, all twelve recorded blocks of events with the numbers read by
 hand at block 3479299, the shape pin and its refusals, the type closure, the reference, hostile
-bytes, and the review's defects, gaps and held attacks. On the second recording
+bytes, and the review's defects, gaps and held attacks. On the third recording,
+`test/upgrade-storage.test.ts` decodes our twelve records at 3528527 and at 3530299 under each
+block's own runtime (the same bytes and values both sides, each the reference's), and the deny list
+test's reads at 1014014 held to its results file. On the second recording
 (`fixtures/recording-20261112004113-0b2b505d2d4b703b`), `test/storage-values.test.ts` decodes all 28
 storage reads through `decodeStorageValue` (22 of the session, nonce, breaker and channel entries,
 6 of System.Events) and holds each of the 22 to what the lab's two devnet session tests recorded in
@@ -500,14 +525,15 @@ The two interfaces other teams import are in [../interfaces](../interfaces).
 | `src/record-run.ts`, `src/record-bin.ts` | one record run and its files, and the command |
 | `src/recording.ts` | the reader contract for a recording |
 | `src/scale/`, `src/hash/` | the decoder, pure: reader, hashes, metadata, decode by type, storage keys, events, the shape pin and the one entry point for a block's events ([Decoder](#decoder)) |
-| `shapes/` | the reviewed shape files, one for each runtime spec the decoder may read |
+| `shapes/` | the reviewed shape files, one for each runtime spec the decoder may read, and the diff of each against the one before |
+| `scripts/shape-diff.mjs` | what differs between two shape files for what they state, types compared by structure |
 | `src/published.ts` | the reader contract for `latest/` on the branch `observatory-data` |
 | `src/snapshot.ts`, `src/cli.ts` | one pass and the command line |
 | `src/snapshot-check.ts`, `src/mcp-bin.ts` | every check a snapshot must pass before the MCP binary serves it, each by name, and the binary that reads, checks and serves it |
 | `src/own.ts` | the one way src reads a data record by a key only known at run time |
 | `src/files.ts` | the one way src reads a file it is handed: a regular file only, opened without waiting, so a named pipe is refused instead of blocking |
 | `tools/recount.py` | independent census recount, written from RULES.md alone |
-| `fixtures/` | saved scenarios; `meta.json` says which values are real and which are made up; `live-*` and `memory-*` are synthetic tapes; `published-*` are real readings from the data branch, with their provenance; `recording-*` are real recordings, byte for byte, each with the request list it was made from (and, from the second on, its inputs): the first of compute channel events, the second of the storage the lab's two devnet session tests left behind |
+| `fixtures/` | saved scenarios; `meta.json` says which values are real and which are made up; `live-*` and `memory-*` are synthetic tapes; `published-*` are real readings from the data branch, with their provenance; `recording-*` are real recordings, byte for byte, each with the request list it was made from (and, from the second on, its inputs): the first of compute channel events, the second of the storage the lab's two devnet session tests left behind, the third of the runtime upgrade to spec 1014020 |
 | `mutants/` | the injected bugs and the tests that must catch them |
 | `REVIEW-LOG.md` | what each outside review and independent rerun found, and the fix and proof for each, newest first |
 | `test/setup.ts` | the runtime block on every network and process path, its one exemption (`runShell`, for `test/publish-shell.test.ts` only, which runs both publish jobs' shells), the leftover attempt check, and the attempts journal |
