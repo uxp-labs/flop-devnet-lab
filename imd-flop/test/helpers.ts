@@ -60,3 +60,14 @@ export async function readySeat(home: string, seat = "42", cap = "1") {
   await cli(home, ["link", "--token", seat, "--agent", "7"]);
   await cli(home, ["cap", "set", cap]);
 }
+
+/**
+ * A text with its random parts taken out by their known values (lead's rule T2): each value given (a request id,
+ * a temporary home path) is removed wherever it occurs, so an assertion about the rest of the text cannot pass or
+ * fail by the chance digits those parts hold. Values are matched as plain text, never as a pattern. Empty and
+ * missing values change nothing. Longer values go first, so a value that holds a shorter one is removed whole.
+ */
+export function withoutKnown(text: string, known: readonly (string | null | undefined)[]): string {
+  const values = known.filter((v): v is string => typeof v === "string" && v.length > 0).sort((a, b) => b.length - a.length);
+  return values.reduce((t, v) => t.split(v).join(""), text);
+}
