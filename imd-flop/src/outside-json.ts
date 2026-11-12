@@ -62,9 +62,16 @@ export async function responseJson(res: Response): Promise<unknown> {
   return readOutsideJson(await res.text());
 }
 
-/** True when the error is NonFiniteNumber, or carries it as its cause (withNonFiniteCause). */
+/**
+ * The client's errors for a body nonFiniteSeam replaced (markNonFinite). Kept by identity, so the error itself is
+ * never changed and the note does not depend on any field the client may set on its errors. A WeakSet holds no
+ * error alive.
+ */
+const replacedBody = new WeakSet<object>();
+
+/** True when the error is NonFiniteNumber, or is a client error for a body the seam replaced (markNonFinite). */
 export function isNonFinite(e: unknown): boolean {
-  return e instanceof NonFiniteNumber || (e instanceof Error && e.cause instanceof NonFiniteNumber);
+  return e instanceof NonFiniteNumber || (typeof e === "object" && e !== null && replacedBody.has(e));
 }
 
 /** What a place that refuses a body that is not JSON says: its own words, with the fixed reason when the body held a number that is not finite. */
@@ -116,11 +123,11 @@ export function nonFiniteSeam(base: typeof fetch): { fetch: typeof fetch; met: (
 }
 
 /**
- * The client's error for a body nonFiniteSeam replaced, with NonFiniteNumber as its standard cause, so the place
- * that books the call names the reason (notJsonBecause). The error keeps its class, name and message, so it takes
- * the same path. An error that already has a cause is left as it is.
+ * Notes that this error is the client's error for a body nonFiniteSeam replaced, so the place that books the call
+ * names the reason (notJsonBecause). The error is handed back as it came: same object, class, name, message and
+ * fields, so it takes the same path. What is not an object (a thrown string) cannot be noted and is handed back.
  */
-export function withNonFiniteCause(e: unknown): unknown {
-  if (e instanceof Error && e.cause === undefined) Object.defineProperty(e, "cause", { value: new NonFiniteNumber(), configurable: true, writable: true });
+export function markNonFinite(e: unknown): unknown {
+  if (typeof e === "object" && e !== null) replacedBody.add(e);
   return e;
 }

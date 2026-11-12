@@ -19,7 +19,7 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { holdsNonFiniteNumber, NonFiniteNumber, nonFiniteSeam, readOutsideJson } from "../src/outside-json.js";
+import { holdsNonFiniteNumber, isNonFinite, markNonFinite, NonFiniteNumber, nonFiniteSeam, notJsonBecause, readOutsideJson } from "../src/outside-json.js";
 import { gatewayKeyFile } from "../src/paths.js";
 import { NETWORKS } from "../src/networks.js";
 import { FlopProvider } from "../src/providers.js";
@@ -299,6 +299,25 @@ describe("non-finite reads: the KD-17 seam itself (outside-json.ts nonFiniteSeam
     const [bad, good] = await Promise.all([p.readReceipt("req-bad"), p.readReceipt("req-good")]);
     expect(bad).toMatchObject({ http: 0, receipt: null, error: "Gateway response is not valid JSON (non_finite_number)" });
     expect(good).toMatchObject({ http: 200, error: null, receipt: { request_id: "req-good", state: "settled" } });
+  });
+  it("the reason travels with the client's error by identity: the error is not changed, and one that already has a cause still names the reason", () => {
+    const withCause = new Error("the client's own words", { cause: new SyntaxError("the client's own cause") });
+    const frozen = Object.freeze(new Error("an error that cannot be written to"));
+    for (const e of [withCause, frozen]) {
+      const before = { name: e.name, message: e.message, cause: e.cause, keys: Object.getOwnPropertyNames(e).sort() };
+      expect(isNonFinite(e)).toBe(false);
+      expect(notJsonBecause("HTTP 500", e)).toBe("HTTP 500");
+      expect(markNonFinite(e)).toBe(e);
+      expect({ name: e.name, message: e.message, cause: e.cause, keys: Object.getOwnPropertyNames(e).sort() }).toEqual(before);
+      expect(isNonFinite(e)).toBe(true);
+      expect(notJsonBecause("HTTP 500", e)).toBe("HTTP 500 (non_finite_number)");
+    }
+    // Another error with the same words is not noted, and what is not an object is handed back as it came.
+    expect(isNonFinite(new Error("the client's own words", { cause: new SyntaxError("the client's own cause") }))).toBe(false);
+    expect(markNonFinite("a thrown string")).toBe("a thrown string");
+    expect(isNonFinite("a thrown string")).toBe(false);
+    expect(isNonFinite(null)).toBe(false);
+    expect(isNonFinite(new NonFiniteNumber())).toBe(true);
   });
 });
 

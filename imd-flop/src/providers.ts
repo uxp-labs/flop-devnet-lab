@@ -11,7 +11,7 @@ import { bytesToHex, utf8ToBytes } from "@noble/hashes/utils.js";
 import { FlopClient, FlopHTTPError } from "@flop-labs/client";
 import { CliError, EXIT } from "./errors.js";
 import { assertPaidNetwork, mintChildKey, postEstimate, PreSendError, uaFetch, type Estimate, type Fetch } from "./gateway.js";
-import { NON_FINITE_NUMBER, NonFiniteNumber, nonFiniteSeam, notJsonBecause, withNonFiniteCause } from "./outside-json.js";
+import { NON_FINITE_NUMBER, NonFiniteNumber, markNonFinite, nonFiniteSeam, notJsonBecause } from "./outside-json.js";
 import type { NetworkInfo } from "./networks.js";
 import type { GatewayReceipt } from "./receipts.js";
 import { registerSecret } from "./secrets.js";
@@ -163,7 +163,7 @@ export class FlopProvider implements Provider {
       );
     } catch (e) {
       // The same error, so the same path; run.ts names the reason when the seam replaced the body.
-      throw seam.met() ? withNonFiniteCause(e) : e;
+      throw seam.met() ? markNonFinite(e) : e;
     }
     const u = res.usage as CompleteRes["usage"];
     return { request_id: req.requestId, text: res.choices[0]?.message?.content ?? "", usage: u };
