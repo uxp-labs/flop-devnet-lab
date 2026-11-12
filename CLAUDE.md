@@ -87,7 +87,11 @@ run), **unresolved**, **not done**.
 - Do not widen the lists in `scripts/source-scan.mjs` to make something pass.
 - Outside `src/scale` only `src/scale/block.ts` may be imported. The decoder reads only a runtime
   whose shape is on the reviewed list in `src/scale/shape.ts`.
-- A push to `main` that changes `recordings/requests.json` starts a new public recording. Change
-  that file only in the last commit of a branch, and only when the brief says so.
+- A push to `main` that changes `recordings/requests.json` or a source file listed in the push
+  paths of `.github/workflows/observatory-record.yml` starts a new public recording. A push to
+  `main` that changes a file listed in the push paths of `.github/workflows/observatory-live.yml`
+  publishes a reading. Read both lists before you change a file under `observatory/src`, and say
+  in your report whether your branch touches one. Change `recordings/requests.json` only in the
+  last commit of a branch, and only when the brief says so.
 - A block is in the encoding of the runtime that executed it. `System.LastRuntimeUpgrade` at the
   block names that runtime. See `research/2026-11-12-runtime-upgrade/`.

@@ -24,7 +24,7 @@
 //   passing         a finished run, every step passing: exit 0, finished: yes, and the digest this
 //       script computes itself from the output files
 // Then tampered copies of the library, each one named find and replace that must occur exactly
-// once, at least one for each of the rules C1 to C4 (REVIEW-LOG round 27) and C5, a failed or cut
+// once, at least one for each of the rules C1 to C4 (REVIEW-LOG round 27) and N2, a failed or cut
 // step's log tail (round 28). Each must make at least
 // one case fail. A tampered copy that passes every case fails the canary and is named.
 //
@@ -301,10 +301,10 @@ const TAMPERS = [
   { id: "cut-exit-not-128-plus", rule: "C2", find: 'overall=$((128 + $(kill -l "$sig")))', replace: "overall=1", why: "a cut run exits 1, not 128 plus the signal" },
   { id: "early-exit-keeps-zero", rule: "C3", find: '    if [ "$status" -eq 0 ]; then status=1; fi\n', replace: "", why: "an early exit 0 reads as exit 0" },
   { id: "empty-folder-hashed", rule: "C4", find: '  if [ -z "$files" ]; then\n    echo none\n    return 0\n  fi\n', replace: "", why: "an empty outputs folder gets the sha256 of empty input" },
-  { id: "failed-step-tail-not-printed", rule: "C5", find: '  if [ "$code" -ne 0 ]; then check_print_tail "$name"; fi\n', replace: "", why: "a failed step's exit line is all the check's output says of it" },
-  { id: "cut-step-tail-not-printed", rule: "C5", find: '    check_print_tail "$check_step_name"\n', replace: "", why: "a cut step's cut line is all the check's output says of it" },
-  { id: "passing-step-tail-printed", rule: "C5", find: '  if [ "$code" -ne 0 ]; then check_print_tail "$name"; fi\n', replace: '  check_print_tail "$name"\n', why: "a passing step prints its log too" },
-  { id: "tail-lines-not-cut", rule: "C5", find: '"${line:0:$check_tail_width}"', replace: '"$line"', why: "a long log line is printed whole" },
+  { id: "failed-step-tail-not-printed", rule: "N2", find: '  if [ "$code" -ne 0 ]; then check_print_tail "$name"; fi\n', replace: "", why: "a failed step's exit line is all the check's output says of it" },
+  { id: "cut-step-tail-not-printed", rule: "N2", find: '    check_print_tail "$check_step_name"\n', replace: "", why: "a cut step's cut line is all the check's output says of it" },
+  { id: "passing-step-tail-printed", rule: "N2", find: '  if [ "$code" -ne 0 ]; then check_print_tail "$name"; fi\n', replace: '  check_print_tail "$name"\n', why: "a passing step prints its log too" },
+  { id: "tail-lines-not-cut", rule: "N2", find: '"${line:0:$check_tail_width}"', replace: '"$line"', why: "a long log line is printed whole" },
   { id: "unfinished-run-digested", rule: "C4", find: '    digest_line="none (the run did not finish)"\n', replace: '    digest_line="$(check_outputs_digest) (node $node_v; it holds for this Node version only)"\n', why: "a run that did not finish gets a digest" },
 ];
 
@@ -330,7 +330,7 @@ try {
       }
       return { tamper: t.id, rule: t.rule, why: t.why, outcome: "missed" };
     });
-    const rules = ["C1", "C2", "C3", "C4", "C5"].filter((rule) => !tampers.some((t) => t.rule === rule && t.outcome === "caught"));
+    const rules = ["C1", "C2", "C3", "C4", "N2"].filter((rule) => !tampers.some((t) => t.rule === rule && t.outcome === "caught"));
     ok = cases.every((c) => c.outcome === "pass") && tampers.every((t) => t.outcome === "caught") && rules.length === 0;
     report = {
       library: relative(pkg, LIBRARY),
