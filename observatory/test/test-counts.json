@@ -100,12 +100,16 @@
     "names": "a4e5b94af87687f1dcea07ad1bf36f4a7120c6badbae2518ce9da8fcc75ef94c"
   },
   "review-decoder.test.ts": {
-    "tests": 36,
-    "names": "35adfa5ca24955de85bf9feade0ab8f4538fc21a7972d689766bc1726eaa67a6"
+    "tests": 37,
+    "names": "94005eb0563b4214f24e9537858a82b5be7ef2b6b6214c733b412ec1a9aaa1ae"
   },
   "review-memory.test.ts": {
     "tests": 2,
     "names": "db7cc5f5fc51f2f7ad3eacabb6a786a7a9e066f7f5623690d16d9bf798068a14"
+  },
+  "review-storage.test.ts": {
+    "tests": 5,
+    "names": "eacd61bf5d2142e597151c0a5dffcbeaa5ebfd04e5188b1ce818afac0d48250f"
   },
   "rpc-head.test.ts": {
     "tests": 19,
@@ -128,8 +132,8 @@
     "names": "4b98619494eda10d49445cfa214bb48e907573f165e7b8135f0449ab7c6e8aef"
   },
   "shape.test.ts": {
-    "tests": 16,
-    "names": "35986a62fe3742ad27c56aa22f7b0ad7ce7c1aa90ffd8fcaa72d40b5caa22118"
+    "tests": 17,
+    "names": "6b1c23e7d622d51fc80028a7dacb8212d1c2087a46bdaa85037cce7397bab326"
   },
   "snapshot-check-grid.test.ts": {
     "tests": 43,
@@ -168,8 +172,8 @@
     "names": "e2e3afc5e6e637192046cabccf8e12af4ce4c072bd85909f277bfac2ce8ca716"
   },
   "storage-values.test.ts": {
-    "tests": 26,
-    "names": "f9454c4bd7b89df28d5e6ad74ce645ca4378cf225b0820320faa6aea5e809666"
+    "tests": 38,
+    "names": "d31d8d178464752f955d140193bb8559fdcde8fc0a6e9166d7494b94275b86bd"
   },
   "store.test.ts": {
     "tests": 23,

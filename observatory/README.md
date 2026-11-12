@@ -297,7 +297,7 @@ metadata, never by the form of the value.
 The shape pin. `REVIEWED` in `src/scale/shape.ts` lists each reviewed shape: a spec name and
 version, the sha256 and length of the metadata bytes at that spec, and the sha256 of the shape
 file. The first is `tzkv-runtime` 1014014, metadata `f4fd2add...3444` of 482132 bytes, and
-`shapes/tzkv-runtime-1014014.json` (sha256 `6c0f4488...b7e5`, `decoder-shape@2`). A reviewer read
+`shapes/tzkv-runtime-1014014.json` (sha256 `679f98aa...60e7`, `decoder-shape@2`). A reviewer read
 the shape file and the metadata it came from, and a test derives the file a second way, from the
 reference decoder's own parse. The shape file is derived from that metadata: the spec, the
 ComputeChannel pallet index, its 60 events with each field's name and type, the Channels entry, the
@@ -305,7 +305,9 @@ fields and states of a channel, the System.Events and System.LastRuntimeUpgrade 
 FlopSessionKeys pallet index (94) and its Sessions, SessionNonces and CircuitBreakers entries, the
 System.Version type, and a table of the 469 types reachable from those, each with its kind, path
 and what the kind holds. Each entry is stated with its modifier, hashers, key type, value type and
-the default bytes the metadata gives it. `STATED_ENTRIES` lists those six entries. `pinShape` refuses, and says why, when the spec is not reviewed, the
+the default bytes the metadata gives it, and each of the three pallets with the storage prefix
+every key of it starts from, so a changed prefix changes the file. `STATED_ENTRIES` lists those six
+entries. `pinShape` refuses, and says why, when the spec is not reviewed, the
 metadata bytes or the shape file are not the reviewed ones, the shape derived again differs from
 the file, or the block's LastRuntimeUpgrade names another spec. It reads each part of its input
 once and copies the bytes, so what is hashed is what is parsed. The first recording pins and
@@ -316,11 +318,21 @@ added to `REVIEWED`. Outside `src/scale/`, only `block.ts` may be imported from 
 
 Storage values. `decodeStorageValue` in `src/scale/block.ts` takes the pin input, the pallet and
 entry names, the SCALE bytes of each key part, the storage key that was asked (as the tape holds
-it) and the answer: bytes, or null when the node held no value. It refuses an entry the reviewed
-shape does not state, before anything else; a block that does not pin, with the pin's reason; a key
-asked that is not the key `src/scale/storage-key.ts` builds from that entry and those key parts, so
-a value is never read under another entry or account; and an answer that is not one whole value of
-the entry's type, a byte after it included. Absent is an answer, never an error and never a zero the
+it) and the answer: bytes, or null when the node held no value. It reads its input in this order,
+each field once and only when its step comes: the pallet and the entry, strings of at most 256
+characters, and an entry the reviewed shape does not state is refused before any other field is
+read; then the pin input, and a block that does not pin is refused with the pin's reason; then the
+key parts, read by index once the list holds exactly as many as the entry takes; then the key
+asked, refused when its length is not the length of the key `src/scale/storage-key.ts` builds from
+that entry and those parts (never turned into text) or when a byte differs, so a value is never
+read under another entry or account, and no refusal prints it; then the answer, refused when it is
+not null and not one whole value of the entry's type, a byte after it included, or undefined. The
+three doors (`decodeStorageValue`, `decodeBlockEvents`, `pinShape`) trust no object they are
+handed: an input that is not an object is a refusal; anything thrown while a field is read (a
+getter, a Proxy trap) is a refusal with a fixed text, never the foreign error's message; bytes are
+taken only from a real Uint8Array, through the prototype's slice, never through an iterator, so a
+Proxy over one is refused; and a byte array past 16 MiB, a spec name past 256 characters or a shape
+file past 16 MiB of text is refused. Absent is an answer, never an error and never a zero the
 chain did not send: a null answer for an Optional entry is the value null, and for a Default entry
 the default bytes the metadata states for it, decoded; either way `stored` is false. Any answer with
 bytes is `stored` true, even bytes equal to the default, so a caller can always tell a stored value
@@ -328,7 +340,8 @@ from a default. Numbers and accounts come in the decoder's forms: every integer 
 string, an account 0x and 32 bytes of hex.
 
 Bounds on hostile input, the metadata included. Every exported function of `src/scale/` ends in a
-value or a `ScaleError`. Metadata or a value of more than 16 MiB is refused unread. A count is
+value or a `ScaleError` (the three doors in a value that may be a refusal), for the inputs its
+types allow, and the three doors for any input at all. Metadata or a value of more than 16 MiB is refused unread. A count is
 refused when it claims more than the bytes left, before anything is read or built for it, so
 nothing is sized from an untrusted length. A type nests at most 32 levels (`MAX_DEPTH`). One decode
 takes at most `1024 + 8 * bytes` steps (`valueBudget`), one step for each type it visits, and a
@@ -352,13 +365,20 @@ bytes, and the review's defects, gaps and held attacks. On the second recording
 (`fixtures/recording-20261112004113-0b2b505d2d4b703b`), `test/storage-values.test.ts` decodes all 28
 storage reads through `decodeStorageValue` (22 of the session, nonce, breaker and channel entries,
 6 of System.Events) and holds each of the 22 to what the lab's two devnet session tests recorded in
-`research/*/results.json`: the session's terms (from the create_session calls those
-files hold, decoded), spent and epoch_spent after each step, expires_at, allowed_pallets, active
-before and after the revoke, the session nonce, the circuit breaker, our channel after force_open
-and after expire_force_open, and the gateway channel at both blocks. An assert that rests on a chain
-rule and not on a results file is marked RULE there (a refused call leaves the record as it was,
-compared block with block), and a value no file and no rule fixes is marked READ. Every prefix and
-every bit flip of every stored value ends in a value or a `ScaleError` within its budget.
+`research/*/results.json`. Every field of every one of the 21 stored entry values has a source,
+named in `FIELDS` there: 99 fields a results file gives (the session's terms in the steps' own
+words, spent and epoch_spent after each step, expires_at, allowed_pallets, active after the revoke,
+the nonce, the breaker after steps 4, 6 and 7, our channel after force_open, its state after
+expire_force_open), 2 the first recording's ToplocEvidenceSubmitted event gives (the gateway's
+miner), and 72 marked READ, held to the reference decoder's decode of the same bytes; each whole
+value is compared with the reference too, and the bytes decoded with the fixture tape's own text.
+The six System.Events reads are held to the test records: four to the sha256 the escrow file gives
+of the value, and all six to their step's outcome event at its extrinsic index, success or the
+module error the file names. An assert that rests on a chain rule and not on a results file is
+marked RULE there (a refused call leaves the record as it was, compared block with block). Every
+prefix of every stored value is refused, and every bit flip of each value of at most 512 bytes, and
+of each larger one the bit at its byte index mod 8 in every byte, ends in a value or a `ScaleError`
+within its budget.
 
 ## Published readings
 

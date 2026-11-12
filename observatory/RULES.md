@@ -969,8 +969,22 @@ below.
   caller can always tell a value the chain holds from a default.
 - The key is checked. A storage value is decoded only with the key that was asked: the decoder
   builds the storage key from the entry and its key parts, and refuses when it is not the key the
-  caller passes, so a value is never decoded under the wrong entry or account. An entry the
-  reviewed shape does not state is refused before anything else.
+  caller passes, so a value is never decoded under the wrong entry or account. The key asked is
+  compared by its length first, never turned into text, then byte for byte, and no refusal prints
+  it.
+- The order of the storage door, in code and here: (1) the pallet and entry names, strings of at
+  most 256 characters; (2) an entry the reviewed shape does not state is refused, before any other
+  field of the input is read, so an unstated entry with malformed key parts is refused as not
+  stated; (3) the pin; (4) the key parts, read by index once the list holds exactly as many as the
+  entry takes, then the key asked; (5) the answer, bytes or null, and undefined is refused. Each
+  field is read once, when its step comes.
+- The doors trust no input object. `decodeStorageValue`, `decodeBlockEvents` and `pinShape` refuse
+  an input that is not an object; anything thrown while a field is read (a getter, a Proxy trap)
+  is a refusal with a fixed text of ours, never the foreign error's message; bytes are taken only
+  from a real Uint8Array, through the prototype's own slice, never through an iterator, so a Proxy
+  over one is refused; a byte array past `MAX_INPUT_BYTES`, a spec name past 256 characters and a
+  shape file past `MAX_INPUT_BYTES` characters are refused. So the promise above holds for the
+  doors on any input; the other exported functions take the inputs their types allow.
 - What the metadata parser refuses beyond the encoding: type ids out of order, a type id or a type
   parameter or a signed extension type that names no type, mixed or repeated field names, a field
   or variant name of only digits (no Rust name is one), a variant index or name used twice, two
@@ -1011,11 +1025,12 @@ below.
   events, the Channels entry, the fields and states of a channel, System.Events,
   System.LastRuntimeUpgrade, the Sessions, SessionNonces and CircuitBreakers entries and the
   System.Version type; each entry with its modifier, hashers, key type, value type and default
-  bytes), and a table of types: every type reachable from System.Events (the record, the phase,
+  bytes; each of the three pallets with its storage prefix, so a changed prefix changes the file),
+  and a table of types: every type reachable from System.Events (the record, the phase,
   the outer event enum and every pallet's events), from LastRuntimeUpgrade, from the Channels key
   and value, from the keys and values of the three FlopSessionKeys entries and from the
   System.Version constant's type, keyed by its name, each with its kind, its path and what the kind
-  holds. Version 2 added the default bytes and the FlopSessionKeys entries. A type with a path is named by the last part of its
+  holds. Version 2 added the default bytes, the storage prefixes and the FlopSessionKeys entries. A type with a path is named by the last part of its
   path, its parameters and its id; the table says what it is.
 - `REVIEWED` starts with `tzkv-runtime` 1014014, metadata sha256
   `f4fd2addba7fff1129483d0e66b8e6bc69141292f56443e201d3f073aab03444` of 482132 bytes, and
@@ -1045,7 +1060,7 @@ below.
     built once per type id and kept, so the work is linear in the size of what it derives. A name
     is at most 2048 characters (`MAX_NAME_LENGTH`), nests at most 16 levels and visits at most 256
     types; `typeName` alone has a budget of its own. The reviewed shape takes 9,733 steps and
-    18,414 characters;
+    18,449 characters;
   - finding the events layout looks up each variant of the outer enum among the pallets, at most
     256 times 256, since a pallet index is one byte used once.
 - The hashes take their parameters from code, not bytes: a BLAKE2b length outside 1 to 64 or an
