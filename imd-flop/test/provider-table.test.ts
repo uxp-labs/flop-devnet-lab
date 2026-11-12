@@ -12,7 +12,7 @@ import * as mockModule from "../src/providers/mock.js";
 import * as gatewayModule from "../src/providers/gateway.js";
 import { LEDGER_PROVIDERS } from "../src/ledger.js";
 import { CliError, EXIT } from "../src/errors.js";
-import { tmpHome } from "./helpers.js";
+import { cli, readySeat, tmpHome } from "./helpers.js";
 
 const PKG = join(import.meta.dirname, "..");
 const RULES = JSON.parse(readFileSync(join(PKG, "..", "contract", "rules.json"), "utf8")) as { constants: Record<string, { value: unknown }> } & Record<string, unknown>;
@@ -146,6 +146,34 @@ describe("B2: the five files ask the table, never a name or a concrete provider"
       expect(providerNameFindings(readFileSync(join(PKG, f), "utf8"))).toEqual([]);
     });
   }
+});
+
+describe("F7: the quote provider reads fetch when the estimate is asked", () => {
+  it("a globalThis.fetch replaced after the provider is made is the one the estimate uses", async () => {
+    const p = makeProvider("flop", { home: tmpHome(), env: {} }, { for: "quote" });
+    const before = globalThis.fetch;
+    const seen: string[] = [];
+    globalThis.fetch = (async (input: string | URL | Request) => {
+      seen.push(String(input instanceof Request ? input.url : input));
+      return new Response(JSON.stringify({ model: "m", estimated_input_tokens: 1, estimated_output_tokens: 8, estimated_cost_flop: 0.054 }), { status: 200 });
+    }) as typeof fetch;
+    try {
+      const est = await p.estimate({ model: "m", prompt: "hi", max_tokens: 8 });
+      expect({ est, seen: seen.map((u) => u.endsWith("/models/estimate")) }).toEqual({ est: { model: "m", estimated_input_tokens: 1, estimated_output_tokens: 8, estimated_cost_flop: 0.054 }, seen: [true] });
+    } finally {
+      globalThis.fetch = before;
+    }
+  });
+});
+
+describe("F6: a mock scenario not in the list", () => {
+  it("run --provider mock --mock-scenario <a bad value> is refused with exit 2 and the list of scenarios", async () => {
+    const h = tmpHome();
+    await readySeat(h, "42");
+    const r = await cli(h, ["run", "--seat", "42", "--job", "j1", "--prompt", "hi", "--provider", "mock", "--mock-scenario", "nope"]);
+    expect({ code: r.code, err: r.err, out: r.out }).toEqual({ code: EXIT.USAGE, err: `imd-flop: --mock-scenario must be one of ${mockModule.MOCK_SCENARIOS.join(", ")}`, out: "" });
+    expect(mockModule.MOCK_SCENARIOS).toEqual(["ok", "timeout", "settled", "key_expired", "estimate_error"]);
+  });
 });
 
 describe("B1: one table of provider names and kinds", () => {

@@ -92,14 +92,15 @@ export class FlopProvider implements Provider {
 }
 
 /**
- * The gateway for `quote` only: the estimate is free, so it needs no key and no --live. The network is read when
- * the estimate is asked for, as before. It completes nothing and reads no receipt.
+ * The gateway for `quote` only: the estimate is free, so it needs no key and no --live. The network, and the
+ * fetch when the caller gave none (globalThis.fetch), are read when the estimate is asked for, as before. It
+ * completes nothing and reads no receipt.
  */
-export function gatewayQuoteProvider(net: () => NetworkInfo, f: Fetch): Provider {
+export function gatewayQuoteProvider(net: () => NetworkInfo, f: Fetch | undefined): Provider {
   return {
     name: "flop",
     calls: 0,
-    estimate: (b) => postEstimate(net(), b, f),
+    estimate: (b) => postEstimate(net(), b, f ?? globalThis.fetch),
     complete: () => Promise.reject(new Error("quote only")),
     readReceipt: () => Promise.reject(new Error("quote only")),
   };
