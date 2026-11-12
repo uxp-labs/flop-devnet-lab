@@ -135,3 +135,5 @@ each events value as we read it.
   what he sends the device.
 - What is left before a worker can pay for inference this way: a miner to open a real channel with
   (the direct session path in FLOP's docs), or a gateway mode that takes a session as payer.
+
+Rerun at spec 1014020 on 2026-11-12: `../2026-11-12-session-rerun-1014020/README.md` says which of these claims hold there.

@@ -949,13 +949,25 @@ for everything it reads.
   `System.LastRuntimeUpgrade` at the block names, and it is the version and metadata read at the
   block's parent. `state_getRuntimeVersion` and `state_getMetadata` at a block describe the runtime
   of the next block, so at a block that carries a runtime upgrade they already answer for the new
-  runtime. The third list reads the upgrade from spec 1014014 to spec 1014020 by this rule: the
+  runtime. The third list read the upgrade from spec 1014014 to spec 1014020 by this rule: the
   version, `LastRuntimeUpgrade` and events at the four blocks around it, the metadata at the last
   block before it (the old runtime's) and at the block that carries it (the new runtime's, the one
   every later block is decoded with), our own storage records before and after it with the same
-  key, and the deny list test's blocks. A storage key read at a block of the new runtime is built
-  from the old runtime's metadata until the new one is in a committed file: a null there is not
+  key, and the deny list test's blocks. A storage key read at a block of the new runtime was built
+  from the old runtime's metadata until the new one was in a committed file: a null there is not
   read as absent until the same key is built again from the new metadata.
+- The fourth list reads the session rerun at spec 1014020, every key built from the 1014020
+  metadata, which the third recording holds. It is the first list to ask `state_queryStorageAt`:
+  asked one key a call, the events, the runtime record and the reads of its 23 blocks are 72 calls,
+  over `MAX_CALLS`, and one `state_queryStorageAt` asks every key of one block and is answered as
+  one set for that block. Each such call is exactly `[[key, ...], block hash]`, `System.Events` and
+  `System.LastRuntimeUpgrade` first, then the step's reads in the plan's fixed order, no key twice;
+  each block's hash is asked by its height too. A batch's answer is read only when it is exactly one
+  set, for the block asked, listing every key asked once and no other; anything else is a refused
+  read, and that block's values stay unknown. A key listed with null holds nothing. The reader is
+  `test/helpers/batch-answer.ts`; it decodes nothing. What its values mean is the decoder's
+  (section 9), and a value of an entry the reviewed shape does not state is not decoded: its bytes
+  are kept apart and the value it answers stays unknown.
 - Nothing is sent before the whole list is judged: a list not in that form is refused, and the run
   exits 1; a list that holds a method the read only guard refuses is refused, each refusal recorded
   as section 4 says, and the run exits 4. Either way nothing is read from the network. A method is

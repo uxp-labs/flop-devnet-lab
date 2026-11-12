@@ -1,0 +1,26 @@
+{
+  "description": "Real data, nothing made up: the fourth recording the record workflow published, recordings/20261112132634-0a472f1b49f7b661/ on observatory-data at commit 381bf8e. tape.jsonl, run.json and SHA256SUMS are those three files, byte for byte. It holds what one RPC endpoint answered to the 48 calls of the fourth request list: the blocks of the lab's session rerun at spec 1014020, each hash by height and one state_queryStorageAt at each block for its events, its LastRuntimeUpgrade and the reads its step names. Evidence for filling the rerun's results.json, never proof of chain state (RULES.md section 8). requests.json and requests-inputs.json in this folder are that list and the inputs it was derived from, byte for byte as recordings/requests.json and recordings/requests-inputs.json held them when it was recorded; the list's sha256 is the one run.json names.",
+  "provenance": {
+    "data_branch": "observatory-data",
+    "data_branch_commit": "381bf8ef91aa99569fb8cc98f8f7c3bd0ba2558b",
+    "data_branch_commit_from": "the commit of the branch observatory-data that added recordings/20261112132634-0a472f1b49f7b661/, read with git log; no file in this repository gives it",
+    "ended_at": "2026-11-12T13:26:55.158Z",
+    "metadata": [],
+    "recording_id": "20261112132634-0a472f1b49f7b661",
+    "request_inputs": "recordings/requests-inputs.json",
+    "request_inputs_copy": "requests-inputs.json",
+    "request_inputs_sha256": "9f86e1c37f61c4be68bc831548d69c0fe2240e99336a04667eb51c915ee21db7",
+    "request_inputs_sha256_from": "the sha256 of requests-inputs.json in this folder, which equals recordings/requests-inputs.json at the revision run.json names; run.json names only the request list's sha256",
+    "request_list": "recordings/requests.json",
+    "request_list_copy": "requests.json",
+    "request_list_sha256": "0a472f1b49f7b661e9cae29a4e2c8db4e3f534d6ec10a810e8bebc013b3dbad0",
+    "revision": "8193005d26eb6145d7e1b51edb57ce6a91e01fa4",
+    "revision_from": "run.json source_sha",
+    "started_at": "2026-11-12T13:26:34.412Z",
+    "tape_sha256": "75f0559604b7110382ba5aa74a73b2d859877b04c80e3da2d7b4fdfae571f0c5",
+    "workflow_run": 43227301640,
+    "workflow_run_from": "the data branch commit message, which names the run; no file in this repository gives it"
+  },
+  "scenario": "recording-20261112132634-0a472f1b49f7b661",
+  "synthetic": false
+}

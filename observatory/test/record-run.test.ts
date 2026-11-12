@@ -14,6 +14,7 @@ import { REQUESTS_SCHEMA, type RequestCall } from "../src/requests.js";
 import { TAPE_SCHEMA, TapeTransport, parseTape } from "../src/tape.js";
 import type { Transport } from "../src/transport.js";
 import { type Reply, network } from "./helpers/answering.js";
+import { UPGRADE_REQUESTS_TEXT } from "./helpers/recorded-upgrade.js";
 import { requestsListText } from "./helpers/requests-list.js";
 
 const CLOCK = () => "2026-11-11T12:00:00.000Z";
@@ -42,6 +43,8 @@ const answers = (method: string, params: unknown[]): Reply => {
   if (method === "chain_getBlockHash") return { result: H };
   if (method === "state_getStorage") return { result: `0x${"01".repeat(484)}` };
   if (method === "state_getMetadata") return { result: META };
+  // One set for the block asked, every key asked listed in order, each holding nothing.
+  if (method === "state_queryStorageAt") return { result: [{ block: params[1], changes: (params[0] as string[]).map((k) => [k, null]) }] };
   return { error: { code: -32601, message: `no ${method} ${JSON.stringify(params)}` } };
 };
 
@@ -106,10 +109,10 @@ describe("runRecord", () => {
     expect(sumsText(out)).toBe(read(out, "SHA256SUMS"));
   });
 
-  it("sends one call at a time: the next is asked only once the one before has its answer, the current list's two state_getMetadata calls among them", async () => {
-    // A fake transport that counts the calls in flight. Four state_getMetadata calls sent at once over
-    // one socket failed with a socket error in the lead's browser pane, one at a time they answered.
-    const text = requestsListText();
+  /** A run of a list over a fake transport that counts the calls in flight. */
+  async function oneAtATime(text: string) {
+    // Four state_getMetadata calls sent at once over one socket failed with a socket error in the
+    // lead's browser pane, one at a time they answered.
     const list = (JSON.parse(text) as { calls: RequestCall[] }).calls;
     let inFlight = 0;
     let most = 0;
@@ -131,10 +134,20 @@ describe("runRecord", () => {
     };
     const { r } = await record(t, text);
     expect([r.code, r.reason]).toEqual([EXIT.ok, `every call was made and recorded: ${list.length} answered, 0 failed on the way`]);
-    expect(list.filter((c) => c.method === "state_getMetadata").length).toBe(2);
     expect(asked).toEqual(list.map((c) => [c.method, c.params]));
     expect(most).toBe(1);
     expect(inFlight).toBe(0);
+    return list;
+  }
+
+  it("sends one call at a time: the next is asked only once the one before has its answer, the third list's two state_getMetadata calls among them", async () => {
+    const list = await oneAtATime(UPGRADE_REQUESTS_TEXT);
+    expect(list.filter((c) => c.method === "state_getMetadata").length).toBe(2);
+  });
+
+  it("sends the current list one call at a time too, its 23 state_queryStorageAt calls among them", async () => {
+    const list = await oneAtATime(requestsListText());
+    expect(list.filter((c) => c.method === "state_queryStorageAt").length).toBe(23);
   });
 
   it("gives one notice line with the counts, the list's hash, and the byte length and sha256 of each metadata answer's decoded bytes", async () => {

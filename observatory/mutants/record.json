@@ -426,9 +426,185 @@
   {
     "id": "core-genesis-at-block-1",
     "file": "test/helpers/requests/core.ts",
-    "find": "return { call: { method: \"chain_getBlockHash\", params: [0], why: s.why }, block: null, read: null };",
-    "replace": "return { call: { method: \"chain_getBlockHash\", params: [1], why: s.why }, block: null, read: null };",
+    "find": "return { call: { method: \"chain_getBlockHash\", params: [0], why: s.why }, block: null, read: null, reads: null };",
+    "replace": "return { call: { method: \"chain_getBlockHash\", params: [1], why: s.why }, block: null, read: null, reads: null };",
     "test": "test/storage-requests.test.ts",
     "why": "the core is held by list 2's frozen list too: the genesis is the hash at height 0 (review round 21)"
+  },
+  {
+    "id": "core-batch-empty-allowed",
+    "file": "test/helpers/requests/core.ts",
+    "find": "  if (reads.length === 0) throw new Error(\"a batch must read at least one storage entry\");\n",
+    "replace": "",
+    "test": "test/rerun-requests.test.ts",
+    "why": "a batch that reads nothing is refused (list 4, L1)"
+  },
+  {
+    "id": "core-batch-key-twice-allowed",
+    "file": "test/helpers/requests/core.ts",
+    "find": "  if (new Set(keys).size !== keys.length) throw new Error(\"a batch asks the same storage key twice\");\n",
+    "replace": "",
+    "test": "test/rerun-requests.test.ts",
+    "why": "a batch never asks a key twice, since the reader of its answer refuses a key listed twice (list 4, L1 and L4)"
+  },
+  {
+    "id": "core-batch-keys-reversed",
+    "file": "test/helpers/requests/core.ts",
+    "find": "params: [batchKeys(inputs, s.reads, md), hashOf(s.block)]",
+    "replace": "params: [batchKeys(inputs, s.reads, md).reverse(), hashOf(s.block)]",
+    "test": "test/rerun-requests.test.ts",
+    "why": "a batch asks its keys in the order the plan gives (list 4, L1)"
+  },
+  {
+    "id": "list4-runtime-before-events",
+    "file": "test/helpers/requests/list-4.ts",
+    "find": "[EVENTS, LAST_RUNTIME_UPGRADE, ...readsAfter(step)]",
+    "replace": "[LAST_RUNTIME_UPGRADE, EVENTS, ...readsAfter(step)]",
+    "test": "test/rerun-requests.test.ts",
+    "why": "every batch reads System.Events first, then System.LastRuntimeUpgrade (list 4, L2)"
+  },
+  {
+    "id": "list4-session-b-device-is-dev1",
+    "file": "test/helpers/requests/list-4.ts",
+    "find": "{ A: \"dev1\", B: \"dev2\" }",
+    "replace": "{ A: \"dev1\", B: \"dev1\" }",
+    "test": "test/rerun-requests.test.ts",
+    "why": "session B's reads are of dev2, the device it was made for (list 4, L2)"
+  },
+  {
+    "id": "list4-entry-order-swapped",
+    "file": "test/helpers/requests/list-4.ts",
+    "find": "[\"Sessions\", \"SessionNonces\", \"CircuitBreakers\", \"FailedAcks\", \"DelegateSessions\"] as const",
+    "replace": "[\"SessionNonces\", \"Sessions\", \"CircuitBreakers\", \"FailedAcks\", \"DelegateSessions\"] as const",
+    "test": "test/rerun-requests.test.ts",
+    "why": "the reads of a step are asked in one fixed order (list 4, L1)"
+  },
+  {
+    "id": "list4-spent-from-nonces",
+    "file": "test/helpers/requests/list-4.ts",
+    "find": "  spent_raw: \"Sessions\",",
+    "replace": "  spent_raw: \"SessionNonces\",",
+    "test": "test/rerun-requests.test.ts",
+    "why": "spent_raw is a field of the session record, so a step that names it reads Sessions (list 4, L2)"
+  },
+  {
+    "id": "list4-step-reads-dropped",
+    "file": "test/helpers/requests/list-4.ts",
+    "find": "expect: \"FlopSessionKeys.DailyCapExceeded\", fields: [\"session_nonce\", \"spent_raw\", \"epoch_spent_raw\", \"breaker_tx_count\"] },",
+    "replace": "expect: \"FlopSessionKeys.DailyCapExceeded\", fields: [\"session_nonce\", \"spent_raw\", \"epoch_spent_raw\"] },",
+    "test": "test/rerun-requests.test.ts",
+    "why": "each step reads every field steps.json names for it, here the breaker after A8 (list 4, L2)"
+  },
+  {
+    "id": "batch-answer-two-sets-read",
+    "file": "test/helpers/batch-answer.ts",
+    "find": "  if (result.length !== 1) return refuse(`the answer holds ${result.length} sets, not exactly one`);\n",
+    "replace": "",
+    "test": "test/rerun-recording.test.ts",
+    "why": "an answer of more or fewer than one set is refused (review round 24, L4)"
+  },
+  {
+    "id": "batch-answer-other-block-read",
+    "file": "test/helpers/batch-answer.ts",
+    "find": "  if (set.block !== blockHash) return refuse(`the set is for block ${JSON.stringify(set.block)}, not the block asked`);\n",
+    "replace": "",
+    "test": "test/rerun-recording.test.ts",
+    "why": "a set for another block is refused (L4)"
+  },
+  {
+    "id": "batch-answer-key-not-asked-read",
+    "file": "test/helpers/batch-answer.ts",
+    "find": "typeof key !== \"string\" || !wanted.has(key)",
+    "replace": "typeof key !== \"string\"",
+    "test": "test/rerun-recording.test.ts",
+    "why": "a key not asked is refused (L4)"
+  },
+  {
+    "id": "batch-answer-key-twice-read",
+    "file": "test/helpers/batch-answer.ts",
+    "find": "    if (values.has(key)) return refuse(`change ${i} lists the key ${key} twice`);\n",
+    "replace": "",
+    "test": "test/rerun-recording.test.ts",
+    "why": "a key listed twice is refused, never the last one taken (L4)"
+  },
+  {
+    "id": "batch-answer-missing-key-read",
+    "file": "test/helpers/batch-answer.ts",
+    "find": "  for (const k of asked) if (!values.has(k)) return refuse(`the answer lacks the key asked ${k}`);\n",
+    "replace": "",
+    "test": "test/rerun-recording.test.ts",
+    "why": "an answer that lacks a key asked is refused, never read as null (L4)"
+  },
+  {
+    "id": "batch-answer-extra-field-read",
+    "file": "test/helpers/batch-answer.ts",
+    "find": "Object.keys(set).sort().join(\",\") !== \"block,changes\"",
+    "replace": "!(\"block\" in set && \"changes\" in set)",
+    "test": "test/rerun-recording.test.ts",
+    "why": "a set holds exactly block and changes (L4)"
+  },
+  {
+    "id": "batch-answer-bad-value-read",
+    "file": "test/helpers/batch-answer.ts",
+    "find": "    if (value !== null && (typeof value !== \"string\" || !HEX.test(value))) return refuse(`change ${i} has a value that is neither 0x hex nor null`);\n",
+    "replace": "",
+    "test": "test/rerun-recording.test.ts",
+    "why": "a value is 0x hex or null, nothing else (L4)"
+  },
+  {
+    "id": "fill-events-of-whole-block",
+    "file": "test/helpers/rerun-fill.ts",
+    "find": " && e.phase.fields === extrinsicIndex)",
+    "replace": ")",
+    "test": "test/rerun-results.test.ts",
+    "why": "only the events of the step's own extrinsic are its events (B3)"
+  },
+  {
+    "id": "fill-unknown-as-zero",
+    "file": "test/helpers/rerun-fill.ts",
+    "find": "reads_after: Object.fromEntries(fields.map((f) => [f, null])), reads_not_decoded: {} };",
+    "replace": "reads_after: Object.fromEntries(fields.map((f) => [f, \"0\"])), reads_not_decoded: {} };",
+    "test": "test/rerun-results.test.ts",
+    "why": "unknown stays null, never 0 (B3)"
+  },
+  {
+    "id": "fill-undecoded-guessed-empty",
+    "file": "test/helpers/rerun-fill.ts",
+    "find": "      if (answer !== null && v.refused.includes(\"is not a storage entry the reviewed shape states\")) out.reads_not_decoded[f]",
+    "replace": "      if (answer !== null && v.refused.includes(\"is not a storage entry the reviewed shape states\")) out.reads_after[f] = \"empty\", out.reads_not_decoded[f]",
+    "test": "test/rerun-results.test.ts",
+    "why": "a value the decoder does not state stays null in reads_after, its bytes kept apart (M2)"
+  },
+  {
+    "id": "fill-error-index-from-wrong-byte",
+    "file": "test/helpers/rerun-fill.ts",
+    "find": "Number.parseInt(v.error.slice(2, 4), 16)",
+    "replace": "Number.parseInt(v.error.slice(4, 6), 16)",
+    "test": "test/rerun-results.test.ts",
+    "why": "the error index is the first byte of the module error (B3)"
+  },
+  {
+    "id": "fill-variant-form-kept",
+    "file": "test/helpers/rerun-fill.ts",
+    "find": "return { type: v.variant, value: resultsForm(v.fields as Value) };",
+    "replace": "return v;",
+    "test": "test/rerun-results.test.ts",
+    "why": "every enum value is written type and value, as events_form gives dispatch_error (B3)"
+  },
+  {
+    "id": "fill-absent-without-null",
+    "file": "test/helpers/rerun-fill.ts",
+    "find": "      if (answer === null) out.reads_after[f] = \"absent\";",
+    "replace": "      if (answer === null || answer !== null) out.reads_after[f] = \"absent\";",
+    "test": "test/rerun-results.test.ts",
+    "why": "absent only when the batch answer lists the key with null (M1)"
+  },
+  {
+    "id": "fill-refused-batch-read",
+    "file": "test/helpers/rerun-fill.ts",
+    "find": "  if (!b.answer.read) return empty;\n",
+    "replace": "",
+    "test": "test/rerun-results.test.ts",
+    "why": "a refused batch answer fills nothing (L4)"
   }
 ]
