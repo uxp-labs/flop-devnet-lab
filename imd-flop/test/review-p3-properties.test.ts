@@ -19,6 +19,7 @@ import { lastValidBlock, mortalEra } from "../src/chain/era.js";
 import { ChainEncodeError } from "../src/chain/errors.js";
 import { encodeSessionCall, signSessionCall } from "../src/chain/extrinsic.js";
 import { hex, OWNER, plain, plainInput, REPO, refCall, RUNTIME_ID, sampleInner, testDevice, unhex } from "./lib/chain-fixtures.js";
+import { withoutKnown } from "./helpers.js";
 
 const RERUN = join(REPO, "research/2026-11-12-session-rerun-1014020");
 const { parseMetadataV14 } = await import(join(RERUN, "metadata-v14.mjs"));
@@ -232,7 +233,12 @@ describe("G (P7): the signer", () => {
     const inner = { ...S.force_open, miner: view, model_hash: view, measured_root: view, decode_policy_hash: view, agent_key: view };
     const d = testDevice();
     const out = signSessionCall({ ...(base(d) as object), inner, owner: view, signer: { publicKey: d.publicKey, sign: (m: Uint8Array) => (view.fill(0x99), d.sign(m)) } } as never);
-    expect(out.description).not.toContain("9999");
+    // The words also hold the device key and the signature, which are random here and can hold 9999 by chance
+    // (it failed that way once in the lead's run). They are removed by their known values first (rule T2).
+    const sig = out.extrinsic.slice(2 + 1 + 1 + 32 + 1, 2 + 1 + 1 + 32 + 1 + 64);
+    const words = withoutKnown(out.description, [hex(d.publicKey), hex(sig)]);
+    expect(words).not.toContain("9999");
+    expect(words).toContain(`as owner 0x${"42".repeat(32)}`);
     expect(ed25519.verify(out.extrinsic.slice(2 + 1 + 1 + 32 + 1, 2 + 1 + 1 + 32 + 1 + 64), Blake2256(rebuild(out)), d.publicKey)).toBe(true);
   });
 });
