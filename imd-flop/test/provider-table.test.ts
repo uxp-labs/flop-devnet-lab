@@ -148,6 +148,30 @@ describe("B2: the five files ask the table, never a name or a concrete provider"
   }
 });
 
+describe("F3: the run path reads the provider's name once", () => {
+  it("a whole run, through the CLI to the printed result, reads name once", async () => {
+    const h = tmpHome();
+    await readySeat(h, "42");
+    const inner = new mockModule.MockProvider("settled");
+    let reads = 0;
+    const p = {
+      get name() {
+        reads++;
+        return "mock" as const;
+      },
+      get calls() {
+        return inner.calls;
+      },
+      scenario: inner.scenario,
+      estimate: (b: Parameters<typeof inner.estimate>[0]) => inner.estimate(b),
+      complete: (r: Parameters<typeof inner.complete>[0]) => inner.complete(r),
+      readReceipt: (id: string) => inner.readReceipt(id),
+    };
+    const r = await cli(h, ["run", "--seat", "42", "--job", "j1", "--prompt", "hi", "--max-tokens", "8"], { provider: p });
+    expect({ code: r.code, reads, marked: r.out.startsWith("[MOCK] ") }).toEqual({ code: 0, reads: 1, marked: true });
+  });
+});
+
 describe("F7: the quote provider reads fetch when the estimate is asked", () => {
   it("a globalThis.fetch replaced after the provider is made is the one the estimate uses", async () => {
     const p = makeProvider("flop", { home: tmpHome(), env: {} }, { for: "quote" });

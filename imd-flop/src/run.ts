@@ -102,6 +102,11 @@ export interface RunDeps {
 }
 
 export async function runJob(h: string, provider: Provider, o: RunOpts, deps: RunDeps): Promise<RunResult> {
+  // The provider's name is read once, here: the kind, the request id, every row, the response, the receipt and the
+  // result all use this one value, so a name that changed between reads cannot split a run.
+  const providerName = provider.name;
+  // The facts about the provider come from the table by that name (providers/kinds.ts).
+  const kind = kindOf(providerName);
   const cfg = loadConfig(h);
   const net = network(cfg.network);
   const seat = o.seat ?? cfg.seat;
@@ -112,9 +117,6 @@ export async function runJob(h: string, provider: Provider, o: RunOpts, deps: Ru
   const prompt = o.promptFile ? readFileSync(o.promptFile, "utf8") : o.prompt;
   if (!prompt || prompt.trim().length === 0) throw new CliError("--prompt or --prompt-file is required", EXIT.USAGE);
   validateRunMaxTokens(o.maxTokens);
-
-  // The facts about the provider come from the table by its name (providers/kinds.ts).
-  const kind = kindOf(provider.name);
 
   // Rule 5: link must verify. Only the mock may bypass it, and the output says so.
   let linkBypassed = false;
@@ -158,7 +160,7 @@ export async function runJob(h: string, provider: Provider, o: RunOpts, deps: Ru
     seat,
     did: signer.identity.did,
     job,
-    provider: provider.name,
+    provider: providerName,
     network: net.name,
     payer,
     model,
@@ -193,8 +195,8 @@ export async function runJob(h: string, provider: Provider, o: RunOpts, deps: Ru
   // A ledger row a total cannot use (an unusable charge, or a row that cannot be placed) refuses the run.
   const spentSoFar = (day: string, quote: { raw: number | null; padded: number | null }): Spent => {
     try {
-      const spentBefore = spentToday(h, seat, provider.name, day);
-      return payer === "requester" ? { spentBefore, jobSpentBefore: jobSpent(h, job, provider.name) } : { spentBefore };
+      const spentBefore = spentToday(h, seat, providerName, day);
+      return payer === "requester" ? { spentBefore, jobSpentBefore: jobSpent(h, job, providerName) } : { spentBefore };
     } catch (e) {
       if (e instanceof UnusableLedgerRow) refuse(e.message, EXIT.REFUSED_CAP, quote, null, day);
       // A busy ledger (a line in flight that could not be read again under the lock): nothing was sent.
@@ -291,7 +293,7 @@ export async function runJob(h: string, provider: Provider, o: RunOpts, deps: Ru
   }
 
   const responseFile = responsePath(h, requestId);
-  const responseRecord = { request_id: requestId, job, seat, provider: provider.name, model, usage: res.usage ?? null, output_sha256: bytesToHex(sha256(utf8ToBytes(res.text))), text: res.text, mock: kind.mock, note: "not submitted to IMD; the holder decides what to use" };
+  const responseRecord = { request_id: requestId, job, seat, provider: providerName, model, usage: res.usage ?? null, output_sha256: bytesToHex(sha256(utf8ToBytes(res.text))), text: res.text, mock: kind.mock, note: "not submitted to IMD; the holder decides what to use" };
   // `run --json` prints this return value, so it has to be the text that was stored.
   let text: string | null = res.text;
   let withheld: string | undefined;
@@ -318,7 +320,7 @@ export async function runJob(h: string, provider: Provider, o: RunOpts, deps: Ru
   }
 
   const rr = await provider.readReceipt(requestId);
-  const classified = classifyReceipt(rr.receipt, { job, provider: provider.name, http: rr.http, error: rr.error, requestId, mock: kind.mock });
+  const classified = classifyReceipt(rr.receipt, { job, provider: providerName, http: rr.http, error: rr.error, requestId, mock: kind.mock });
   // The receipt file goes through the same owner as receipt --refresh (receipt-store.ts storeRead): another
   // process may have refreshed this request and stored its read while the call ran, and a failed read here
   // keeps every gateway field that file holds.
@@ -337,5 +339,5 @@ export async function runJob(h: string, provider: Provider, o: RunOpts, deps: Ru
   if (pastAdmitted) deps.warn(PAST_ADMITTED);
 
   const receipt = { ...receipt0, ...(await receiptVerdicts(h, receipt0, row)) };
-  return { request_id: requestId, job, provider: provider.name, payer, quote_padded: q.padded, cap_charge: row.cap_charge, receipt, response_file: responseFile, text, ...(withheld !== undefined ? { withheld } : {}), link_bypassed: linkBypassed };
+  return { request_id: requestId, job, provider: providerName, payer, quote_padded: q.padded, cap_charge: row.cap_charge, receipt, response_file: responseFile, text, ...(withheld !== undefined ? { withheld } : {}), link_bypassed: linkBypassed };
 }

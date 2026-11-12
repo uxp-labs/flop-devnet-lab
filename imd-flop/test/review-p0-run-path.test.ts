@@ -2,6 +2,10 @@
  * Review of P0 (132bb6a..576d4d7), attack C and E: the run path with provider objects of every name and kind
  * case. This file imports only modules that exist at 132bb6a too, so it runs on both builds. The expected
  * values are what 132bb6a does. A test here that fails on 576d4d7 is a change in behaviour (promise P1 or P4).
+ *
+ * The lead ruled C4 to C8 in brief 2026-11-12-fix-p0-provider-table, rule F5 (under F3: the run path reads the
+ * provider's name once, at its top, and uses that value throughout). Their expectations are that ruling, not what
+ * 132bb6a did.
  */
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -80,25 +84,27 @@ describe("review P0, C: the run path by name case, as 132bb6a did it", () => {
     // The response file and the receipt file say not mock, and the receipt line has no [MOCK] mark.
     expect({ response: o.response?.mock, receipt: o.receipt?.mock ?? null, marked: o.out.includes("[MOCK]") }).toEqual({ response: false, receipt: false, marked: false });
   });
-  it("C4 a name that reads mock first and flop after, on a seat with no wallet signature: 132bb6a refuses on the link (exit 4) and writes nothing", async () => {
+  it("C4 (ruled, F5) a name that reads mock first and flop after, on a seat with no wallet signature: treated as mock throughout", async () => {
     const o = await runWith(stub(["mock", "flop"]), false);
-    expect({ code: o.code, gate: o.gate, calls: o.calls, rows: o.rows.length }).toEqual({ code: 4, gate: false, calls: 0, rows: 0 });
+    expect({ code: o.code, gate: o.gate, ownerOf: o.ownerOf, first: o.rows[0] }).toEqual({ code: 0, gate: false, ownerOf: false, first: { provider: "mock", mock: true, state: "sent", prefix: "mock" } });
+    expect(o.rows.every((x) => x.provider === "mock" && x.mock === true && x.prefix === "mock")).toBe(true);
   });
-  it("C5 a name that reads mock first and flop after, on a wallet signed seat: 132bb6a reads the owner and writes the row as flop, not mock", async () => {
+  it("C5 (ruled, F5) a name that reads mock first and flop after, on a wallet signed seat: treated as mock throughout", async () => {
     const o = await runWith(stub(["mock", "flop"]), true);
-    expect({ code: o.code, gate: o.gate, ownerOf: o.ownerOf, first: o.rows[0] }).toEqual({ code: 0, gate: false, ownerOf: true, first: { provider: "flop", mock: false, state: "sent", prefix: "imdflop" } });
+    expect({ code: o.code, gate: o.gate, ownerOf: o.ownerOf, first: o.rows[0] }).toEqual({ code: 0, gate: false, ownerOf: false, first: { provider: "mock", mock: true, state: "sent", prefix: "mock" } });
+    expect(o.rows.every((x) => x.provider === "mock" && x.mock === true && x.prefix === "mock")).toBe(true);
   });
-  it("C6 a name that reads flop first and mock after, on a seat with no wallet signature: 132bb6a gates, needs no wallet, writes a mock row", async () => {
+  it("C6 (ruled, F5) a name that reads flop first and mock after, on a seat with no wallet signature: treated as flop, exit 4, nothing written", async () => {
     const o = await runWith(stub(["flop", "mock"]), false);
-    expect({ code: o.code, gate: o.gate, ownerOf: o.ownerOf, first: o.rows[0] }).toEqual({ code: 0, gate: true, ownerOf: false, first: { provider: "mock", mock: true, state: "sent", prefix: "mock" } });
+    expect({ code: o.code, calls: o.calls, rows: o.rows.length }).toEqual({ code: 4, calls: 0, rows: 0 });
   });
-  it("C7 a name that reads flop at the gate and nope from the ledger write on: 132bb6a gates, needs no wallet, writes a nope row", async () => {
+  it("C7 (ruled, F5) a name that reads flop first and nope after: treated as flop, exit 4", async () => {
     const o = await runWith(stub(["flop", "nope"]), false);
-    expect({ code: o.code, gate: o.gate, ownerOf: o.ownerOf, first: o.rows[0] }).toEqual({ code: 0, gate: true, ownerOf: false, first: { provider: "nope", mock: false, state: "sent", prefix: "imdflop" } });
+    expect({ code: o.code, calls: o.calls, rows: o.rows.length }).toEqual({ code: 4, calls: 0, rows: 0 });
   });
-  it("C8 --no-link with a name that reads mock first and flop after: 132bb6a bypasses on the first read and gates on the second", async () => {
+  it("C8 (ruled, F5) --no-link with a name that reads mock first and flop after: treated as mock, link bypassed, no gate, a mock row", async () => {
     const o = await runWith(stub(["mock", "flop"]), true, [...RUN, "--no-link"]);
-    expect({ code: o.code, gate: o.gate, ownerOf: o.ownerOf, first: o.rows[0] }).toEqual({ code: 0, gate: true, ownerOf: false, first: { provider: "flop", mock: false, state: "sent", prefix: "imdflop" } });
+    expect({ code: o.code, gate: o.gate, ownerOf: o.ownerOf, first: o.rows[0], bypassed: o.err.includes("--no-link: link check bypassed") }).toEqual({ code: 0, gate: false, ownerOf: false, first: { provider: "mock", mock: true, state: "sent", prefix: "mock" }, bypassed: true });
   });
 });
 
