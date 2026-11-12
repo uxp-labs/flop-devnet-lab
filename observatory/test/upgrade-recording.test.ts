@@ -28,7 +28,6 @@ describe("the third real recording, as a fixture", () => {
 
   it("is usable through judgeRecording with the request list it was made from, whose sha256 run.json names: 63 of 63 answered", () => {
     const run = JSON.parse(upgradeFixtureText("run.json")) as Record<string, unknown>;
-    expect(sha256(UPGRADE_REQUESTS_TEXT)).toBe("05842a6db1e9c890bc41d89aac3210b1a57f23e1b5953f485e2f2a374e73c669");
     expect(sha256(UPGRADE_REQUESTS_TEXT)).toBe(run.request_list_sha256);
     const j = judgeRecording(upgradeRecordingFiles(), UPGRADE_REQUESTS_TEXT);
     expect(j.usable).toBe(true);
@@ -40,7 +39,8 @@ describe("the third real recording, as a fixture", () => {
     expect(UPGRADE_REQUESTS_TEXT).toBe(deriveRequestsText(U.inputs, parseMetadata(recorded().metadata)));
     const meta = JSON.parse(upgradeFixtureText("meta.json")) as { provenance: Record<string, unknown> };
     expect(meta.provenance).toMatchObject({ request_inputs: "recordings/requests-inputs.json", request_inputs_copy: "requests-inputs.json", request_inputs_sha256: sha256(UPGRADE_INPUTS_TEXT) });
-    expect(sha256(UPGRADE_INPUTS_TEXT)).toBe("c40d05f9bb5f3dad7fa59f63006eaff31a6761a5bdafc939c34c20fe646f1be6");
+    // READ: run.json names no sha256 of the inputs; meta.json says where its value came from, and the copy is held to it.
+    expect(typeof (meta.provenance as Record<string, unknown>).request_inputs_sha256_from).toBe("string");
   });
 
   it("has a meta.json in the written form that says where the files came from", () => {
@@ -53,7 +53,7 @@ describe("the third real recording, as a fixture", () => {
       synthetic: false,
       provenance: {
         data_branch: "observatory-data",
-        data_branch_commit: "37ef465ea0741dcc070dd7274d9cd735994c1865",
+        data_branch_commit: expect.stringMatching(/^[0-9a-f]{40}$/),
         metadata: U.calls.filter((c) => c.call.method === "state_getMetadata").map((c) => ({ seq: c.seq, bytes: U.metadataAt(c.derived.block as never).length, sha256: sha256(U.metadataAt(c.derived.block as never)) })),
         recording_id: UPGRADE_RECORDING.replace("recording-", ""),
         request_list: "recordings/requests.json",
@@ -63,11 +63,16 @@ describe("the third real recording, as a fixture", () => {
         ended_at: run.ended_at,
         request_list_sha256: run.request_list_sha256,
         tape_sha256: sha256(upgradeFixtureText("tape.jsonl")),
-        workflow_run: 43179583179,
+        workflow_run: expect.any(Number),
       },
     });
     const id = `${String(run.started_at).replace(/[^0-9]/g, "").slice(0, 14)}-${String(run.request_list_sha256).slice(0, 16)}`;
     expect(UPGRADE_RECORDING).toBe(`recording-${id}`);
+    // READ: the data branch commit and the workflow run are in no file of this repository; meta.json
+    // gives each with where it came from, and the commit message the run is read from names the id.
+    const p = m.provenance as Record<string, unknown>;
+    expect([typeof p.data_branch_commit_from, typeof p.workflow_run_from]).toEqual(["string", "string"]);
+    expect(Number.isSafeInteger(p.workflow_run) && (p.workflow_run as number) > 0).toBe(true);
   });
 });
 
