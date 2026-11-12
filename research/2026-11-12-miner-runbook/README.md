@@ -84,10 +84,34 @@ validated on an A40, inbound 80 and 443, the slash after the 600 block deadline,
 not open yet. That read went through a fetch that summarizes the page, so it is a second reading,
 not a copy of the page.
 
+## What we read ourselves in FLOP's miner guide (2026-11-12)
+
+The first check we named, the image pins, is done. We read
+`https://docs.flop.network/docs/run-miner` ourselves on 2026-11-12, through a fetch that summarizes
+the page. It agrees with the report on every point below.
+
+- Paid sessions are not open yet.
+- Gateway admission of public miners is still being finished.
+- The data availability endpoints are not public yet. The compose file asks for a `DA_URL`, and the
+  template holds a placeholder.
+- Real pinned images exist for one path only, the Qwen hybrid path: a worker
+  `miner-worker-hybrid:v0.1.211` and a backend `miner-vllm-toploc`, each by digest. The guide says
+  anonymous access to the hybrid worker image is not yet established.
+- The general template holds placeholders (`vX.Y.Z@sha256:REPLACE`). The real values come in a
+  reviewed release bundle from the devnet operator or FLOP Labs.
+- The validated card is the A40 with `Qwen2.5-0.5B-Instruct` in BF16, on Ubuntu 24.04. The guide
+  page gives no minimum GPU memory; the 16 GB figure is the report's, from the pack's README.
+- Calibration is 64 verified jobs over at least 600 finalized blocks in the source, and the guide
+  warns a deployed devnet may ask for 512 jobs over 21,600 blocks.
+- A job not answered by its 600 block deadline expires and the miner is slashed.
+- Sponsored stake is about 1 million FLOP, owned by the sponsor, with top ups to 2 million. The
+  unbond period is not on that page.
+
+So an outsider cannot count on starting a worker from the public pack alone today. The advice
+below stands.
+
 ## What we have not checked
 
-- The image pins: whether the public pack can start a worker at all without a value from FLOP
-  Labs. This decides everything else, and it is the first thing to check before any money is spent.
 - Every price in section E. Prices move, and marketplace prices move by the hour.
 - The pack's checksum, the sponsor message format, the model and policy hashes.
 - The calibration counts and the stake amounts.
