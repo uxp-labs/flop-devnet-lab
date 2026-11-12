@@ -1478,5 +1478,45 @@
     "replace": "    const key = JSON.stringify([x, y, label]);",
     "test": "test/upgrade-shape.test.ts",
     "why": "each pair of types is followed once, so a changed recursive type ends (R2) (review round 23)"
+  },
+  {
+    "id": "uw-runtime-named-dropped",
+    "file": "src/scale/block.ts",
+    "find": "named: { specName: name, specVersion: Number(version) } };",
+    "replace": "named: null };",
+    "test": "test/block-runtime.test.ts",
+    "why": "a refusal of a whole record names the spec it states (upgrade watch, D3)"
+  },
+  {
+    "id": "uw-runtime-named-on-no-record",
+    "file": "src/scale/block.ts",
+    "find": "refused: `no reviewed runtime: ${e.message}`, named: null };",
+    "replace": "refused: `no reviewed runtime: ${e.message}`, named: { specName: \"\", specVersion: 0 } };",
+    "test": "test/block-runtime.test.ts",
+    "why": "bytes that are no whole record name no spec (upgrade watch, D3)"
+  },
+  {
+    "id": "uw-runtime-named-version-as-text",
+    "file": "src/scale/block.ts",
+    "find": "specVersion: Number(version) } };",
+    "replace": "specVersion: version } };",
+    "test": "test/block-runtime.test.ts",
+    "why": "the named version is a number, as a REVIEWED line holds it (upgrade watch, D3)"
+  },
+  {
+    "id": "uw-runtime-named-name-trimmed",
+    "file": "src/scale/block.ts",
+    "find": "named: { specName: name,",
+    "replace": "named: { specName: name.trim(),",
+    "test": "test/block-runtime.test.ts",
+    "why": "the named spec name is the record's own, never cleaned (upgrade watch, D3)"
+  },
+  {
+    "id": "uw-runtime-named-on-found",
+    "file": "src/scale/block.ts",
+    "find": "return { found: true, reviewed: reviewedCopy(line) };",
+    "replace": "return { found: true, reviewed: reviewedCopy(line), named: null };",
+    "test": "test/block-runtime.test.ts",
+    "why": "a found answer is the line alone (upgrade watch, D3)"
   }
 ]

@@ -101,6 +101,47 @@ describe("runtimeOfBlock: which reviewed runtime reads a block", () => {
     expect(found(cat(compact(0x100000000), str(NAME)))).toBe("no reviewed runtime: the spec version 4294967296 does not fit a u32");
   });
 
+  // The refusal carries what the record names (the lead's decision D3 of the upgrade watch).
+  const refusalOf = (b: unknown) => {
+    const r = runtimeOfBlock(b as Uint8Array);
+    if (r.found) throw new Error("found");
+    return r;
+  };
+  it("names, in a refusal of a whole record no line names, the spec name and version the record states, as a number", () => {
+    const v = Number(OLD?.specVersion);
+    const NEWV = Number(REVIEWED.at(-1)?.specVersion);
+    const cases: [string, number][] = [[NAME, v + 1], ["other-runtime", v], [`\u{feff}${NAME}`, v], [`${NAME} `, v], [NAME, NEWV + 1], [NAME, 0], [NAME, 0xffffffff], ["", v], ["a".repeat(256), v]];
+    for (const [n, ver] of cases) {
+      const r = refusalOf(cat(compact(ver), str(n)));
+      expect(r, JSON.stringify([n, ver])).toEqual({ found: false, refused: `no reviewed runtime: the block's LastRuntimeUpgrade names spec ${JSON.stringify(n)} ${ver}, which no reviewed line names`, named: { specName: n, specVersion: ver } });
+      expect(Object.keys(r.named ?? {}), JSON.stringify(n)).toEqual(["specName", "specVersion"]);
+      expect(typeof r.named?.specVersion).toBe("number");
+    }
+  });
+
+  it("names null in a refusal of bytes that are no whole record, and of an input that is not bytes", () => {
+    const good = U.upgradeOf(UPGRADE_BLOCKS[0]);
+    const notRecords = [cat(good, bytes(0)), good.subarray(0, good.length - 1), new Uint8Array(), cat(bytes(0x01, 0x00), str(NAME)), cat(compact(2n ** 32n), str(NAME)), cat(compact(Number(OLD?.specVersion)), compact(2), bytes(0xc3, 0x28)), cat(compact(Number(OLD?.specVersion)), str("a".repeat(257))), new Uint8Array(MAX_INPUT_BYTES + 1)];
+    for (const x of [...notRecords, null, undefined, "0xfae33d00", [250, 227, 61, 0], new Proxy(good, {})]) {
+      const r = refusalOf(x);
+      expect(r.named, r.refused).toBeNull();
+      expect(Object.keys(r)).toEqual(["found", "refused", "named"]);
+    }
+  });
+
+  it("answers a found line with no named field, and a fresh named object on each refusal, so a write to one changes no later answer", () => {
+    expect(Object.keys(runtimeOfBlock(U.upgradeOf(UPGRADE_BLOCKS[0])))).toEqual(["found", "reviewed"]);
+    const other = cat(compact(Number(OLD?.specVersion) + 1), str(NAME));
+    const a = refusalOf(other);
+    const b = refusalOf(other);
+    expect(a.named).not.toBe(b.named);
+    if (a.named === null) throw new Error("no name");
+    a.named.specName = String(REVIEWED.at(-1)?.specName);
+    a.named.specVersion = Number(REVIEWED.at(-1)?.specVersion);
+    expect(refusalOf(other).named).toEqual({ specName: NAME, specVersion: Number(OLD?.specVersion) + 1 });
+    expect(found(U.upgradeOf(UPGRADE_BLOCKS[0]))).toEqual(OLD);
+  });
+
   // The reviewer's odd inputs (review round 23, R5).
   it("ends every odd input in a refusal with a text of ours, never another exception; a subclass of bytes reads as its bytes", () => {
     const good = U.upgradeOf(UPGRADE_BLOCKS[0]);

@@ -8,8 +8,8 @@
     "names": "5271db22d00de405d8b47cd068f20f211490fce67f0f95b7279fbb39431afdb2"
   },
   "block-runtime.test.ts": {
-    "tests": 11,
-    "names": "d21316fb49111632f8e347a665e4b520f4e2a96c8349afcaa45769791a0dc458"
+    "tests": 14,
+    "names": "3076b819a808aeae774c1c12a0cb2b6c6326e83c0ae42342cc6f860b0b844c10"
   },
   "census.test.ts": {
     "tests": 176,
@@ -120,8 +120,8 @@
     "names": "80f0b7fa5897c412a30433ffc79805a9e6e31a8d0729d67f5690cc9eb04b6729"
   },
   "reviewed-frozen.test.ts": {
-    "tests": 6,
-    "names": "5cf3b113aa49fe41f3f4ad18b91256753ce6a05ce248576dde104224ce96b816"
+    "tests": 7,
+    "names": "ae81d706fb49f476ef00ad0e4af847632fd32c8fc41c1034ede03d5888e99f5f"
   },
   "rpc-head.test.ts": {
     "tests": 19,
