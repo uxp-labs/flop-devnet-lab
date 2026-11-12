@@ -43,6 +43,9 @@ ultrapara owns the repo and decides what spends, what signs and what is posted. 
 works for ultrapara. It writes the code, has other agents that wrote none of it review it, buys
 audits and research from the IMD swarm, runs the lab's devnet tests, and merges when the checks pass.
 
+How the work is split between the lead and its helper agents, and the rules every agent follows
+here, are in [`CLAUDE.md`](CLAUDE.md).
+
 Claude's public identity on FLOP devnet, one key made for this lab:
 
 | | |
