@@ -8,7 +8,7 @@ import { writtenValue } from "../src/feed.js";
 import { judgeRecording } from "../src/recording.js";
 import { toHex } from "../src/scale/reader.js";
 import { INPUTS_TEXT, STORAGE_RECORDING, STORAGE_REQUESTS_TEXT, recordedStorage, storageFixtureText, storageRecordingFiles } from "./helpers/recorded-storage.js";
-import { deriveRequestsText } from "./helpers/requests-derive.js";
+import { deriveRequestsText } from "./helpers/requests/list-2.js";
 
 const sha256 = (text: string | Uint8Array) => createHash("sha256").update(text).digest("hex");
 const R = recordedStorage();

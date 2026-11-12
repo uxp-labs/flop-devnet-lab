@@ -1,5 +1,5 @@
 // The second request list, recordings/requests.json: the storage the lab's own two devnet tests
-// left behind, read block by block. It is derived (test/helpers/requests-derive.ts) from
+// left behind, read block by block. It is derived (test/helpers/requests/list-2.ts) from
 // recordings/requests-inputs.json and the recorded metadata, and nothing in it is typed by hand.
 // These tests hold the list to that function byte for byte, derive every storage key a second way
 // with the reference decoder, and hold every input to the record it names: research/*/results.json
@@ -17,7 +17,7 @@ import { parseMetadata } from "../src/scale/metadata.js";
 import { RECORDING, recorded } from "./helpers/recorded.js";
 import { INPUTS_TEXT } from "./helpers/recorded-storage.js";
 import { requestsListText } from "./helpers/requests-list.js";
-import { type Block, type DerivedCall, type Inputs, LAST, type Mentioned, PLAN, type Read, type Source, deriveCalls, deriveRequestsText, readInputs } from "./helpers/requests-derive.js";
+import { type Block, type DerivedCall, type Inputs, LAST, type Mentioned, PLAN, type Read, type Source, deriveCalls, deriveRequestsText, readInputs } from "./helpers/requests/list-2.js";
 
 const REPO = new URL("../../", import.meta.url);
 const repoText = (path: string) => readFileSync(new URL(path, REPO), "utf8");
