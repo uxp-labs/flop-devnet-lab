@@ -1150,5 +1150,53 @@
     "replace": "    own.set(Uint8Array.prototype.slice.call(v as Uint8Array));",
     "test": "test/storage-values.test.ts",
     "why": "the copy asks nothing of the caller's object: not its constructor, not its species"
+  },
+  {
+    "id": "r22-runtime-trailing-byte",
+    "file": "src/scale/block.ts",
+    "find": "    r.end(\"the LastRuntimeUpgrade\");\n",
+    "replace": "",
+    "test": "test/block-runtime.test.ts",
+    "why": "a record with a byte after it names no runtime (review round 22)"
+  },
+  {
+    "id": "r22-runtime-name-ignored",
+    "file": "src/scale/block.ts",
+    "find": "REVIEWED.find((x) => x.specName === name && BigInt(x.specVersion) === version)",
+    "replace": "REVIEWED.find((x) => BigInt(x.specVersion) === version)",
+    "test": "test/block-runtime.test.ts",
+    "why": "the spec name must match as well as the version (review round 22)"
+  },
+  {
+    "id": "r22-runtime-u32-unchecked",
+    "file": "src/scale/block.ts",
+    "find": "    if (version > U32_MAX) throw",
+    "replace": "    if (false) throw",
+    "test": "test/block-runtime.test.ts",
+    "why": "a spec version past u32 is no Compact<u32> (review round 22)"
+  },
+  {
+    "id": "r22-runtime-line-not-copied",
+    "file": "src/scale/block.ts",
+    "find": "return { found: true, reviewed: { ...line } };",
+    "replace": "return { found: true, reviewed: line as ReviewedShape };",
+    "test": "test/block-runtime.test.ts",
+    "why": "the answer is a copy, so a caller cannot change a REVIEWED line (review round 22)"
+  },
+  {
+    "id": "r22-runtime-name-unbounded",
+    "file": "src/scale/block.ts",
+    "find": "    if (name.length > MAX_NAME_INPUT) throw new ScaleError(`the spec name is longer than ${MAX_NAME_INPUT} characters`);\n",
+    "replace": "",
+    "test": "test/block-runtime.test.ts",
+    "why": "a spec name past 256 characters is refused before it is printed (review round 22)"
+  },
+  {
+    "id": "r22-runtime-version-first-line",
+    "file": "src/scale/block.ts",
+    "find": "  if (line === undefined) return { found: false, refused: `no reviewed runtime:",
+    "replace": "  if (line === undefined && version < 0n) return { found: false, refused: `no reviewed runtime:",
+    "test": "test/block-runtime.test.ts",
+    "why": "a spec no line names is refused, never answered with no line (review round 22)"
   }
 ]

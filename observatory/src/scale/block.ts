@@ -5,9 +5,43 @@
 import { type Decoded, decodeValue } from "./decode.js";
 import { type BlockEvent, decodeEvents } from "./events.js";
 import type { StorageEntry } from "./metadata.js";
-import { ScaleError } from "./reader.js";
-import { MAX_NAME_INPUT, type PinInput, type ReviewedShape, STATED_ENTRIES, bytesLength, copyBytes, copyPinInput, inputObject, pinShape, readField } from "./shape.js";
+import { Reader, ScaleError } from "./reader.js";
+import { MAX_NAME_INPUT, type PinInput, REVIEWED, type ReviewedShape, STATED_ENTRIES, bytesLength, copyBytes, copyPinInput, inputObject, pinShape, readField } from "./shape.js";
 import { storageEntryOf, storageKey } from "./storage-key.js";
+
+export type BlockRuntime = { found: true; reviewed: ReviewedShape } | { found: false; refused: string };
+
+/** The largest spec version a Compact<u32> holds. */
+const U32_MAX = 0xffffffffn;
+
+/**
+ * Which reviewed runtime reads a block, from the bytes of System.LastRuntimeUpgrade read at that
+ * block and nothing else: a block is in the encoding of the runtime that executed it, and that is
+ * the runtime this record names. Never the version or the metadata read at the block itself, which
+ * answer for the next block. The record is frame_system's LastRuntimeUpgradeInfo, which every
+ * reviewed shape states as a Compact<u32> spec version then a string spec name, read here whole to
+ * its last byte. The answer is a copy of the REVIEWED line of that spec name and version, or a
+ * refusal when the bytes are no such record or no line names that spec. The pin reads the same
+ * record again with the reviewed metadata's own type and must agree.
+ */
+export function runtimeOfBlock(lastRuntimeUpgrade: Uint8Array): BlockRuntime {
+  let name: string;
+  let version: bigint;
+  try {
+    const r = new Reader(copyBytes(lastRuntimeUpgrade, "the LastRuntimeUpgrade"));
+    version = r.compact("the spec version");
+    if (version > U32_MAX) throw new ScaleError(`the spec version ${version} does not fit a u32`);
+    name = r.text("the spec name");
+    if (name.length > MAX_NAME_INPUT) throw new ScaleError(`the spec name is longer than ${MAX_NAME_INPUT} characters`);
+    r.end("the LastRuntimeUpgrade");
+  } catch (e) {
+    if (e instanceof ScaleError) return { found: false, refused: `no reviewed runtime: ${e.message}` };
+    throw e;
+  }
+  const line = REVIEWED.find((x) => x.specName === name && BigInt(x.specVersion) === version);
+  if (line === undefined) return { found: false, refused: `no reviewed runtime: the block's LastRuntimeUpgrade names spec ${JSON.stringify(name)} ${version}, which no reviewed line names` };
+  return { found: true, reviewed: { ...line } };
+}
 
 export type BlockEvents = { decoded: true; reviewed: ReviewedShape; events: BlockEvent[] } | { decoded: false; refused: string };
 

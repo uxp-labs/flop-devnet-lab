@@ -1,0 +1,99 @@
+// Which reviewed runtime reads a block (runtimeOfBlock in src/scale/block.ts): the decoder's
+// decision, from the System.LastRuntimeUpgrade bytes read at the block and nothing else. Held on the
+// three recordings' real records, on the reviewed shape files' own statement of that record, and on
+// every refusal.
+import { readFileSync } from "node:fs";
+import { describe, expect, it } from "vitest";
+import { runtimeOfBlock } from "../src/scale/block.js";
+import { decodeValue } from "../src/scale/decode.js";
+import { parseMetadata } from "../src/scale/metadata.js";
+import { toHex } from "../src/scale/reader.js";
+import { REVIEWED } from "../src/scale/shape.js";
+import { recordedStorage } from "./helpers/recorded-storage.js";
+import { recordedUpgrade } from "./helpers/recorded-upgrade.js";
+import { recorded } from "./helpers/recorded.js";
+import { DENY_BLOCKS, UPGRADE_BLOCKS } from "./helpers/requests/list-3.js";
+import { bytes, cat, compact, str } from "./helpers/scale-write.js";
+
+const U = recordedUpgrade();
+const RESULTS = JSON.parse(readFileSync(new URL("../../research/2026-11-12-runtime-upgrade/results.json", import.meta.url), "utf8"));
+const LAB = [...RESULTS.boundary.slice(0, 3), RESULTS.a_later_block_of_the_new_spec] as { last_runtime_upgrade: { spec_version: number; spec_name: string } }[];
+const lineOf = (name: string, version: number) => REVIEWED.find((r) => r.specName === name && r.specVersion === version);
+const found = (b: Uint8Array) => {
+  const r = runtimeOfBlock(b);
+  return r.found ? r.reviewed : r.refused;
+};
+const OLD = REVIEWED.at(0);
+const NAME = String(OLD?.specName);
+
+describe("runtimeOfBlock: which reviewed runtime reads a block", () => {
+  it("names, at the four upgrade blocks, the runtime the lab's reads say executed each: the old one at 3528527 and 3528528, the new one at 3528529 and 3530299", () => {
+    expect(UPGRADE_BLOCKS.map((b) => found(U.upgradeOf(b)))).toEqual(LAB.map((b) => lineOf(b.last_runtime_upgrade.spec_name, b.last_runtime_upgrade.spec_version)));
+    expect(UPGRADE_BLOCKS.map((b) => (found(U.upgradeOf(b)) as { specVersion: number }).specVersion)).toEqual([OLD?.specVersion, OLD?.specVersion, REVIEWED.at(1)?.specVersion, REVIEWED.at(1)?.specVersion]);
+  });
+
+  it("names the old runtime at the deny list test's blocks and at every block of the first two recordings", () => {
+    for (const b of DENY_BLOCKS) expect(found(U.upgradeOf(b)), b).toEqual(OLD);
+    for (const b of recorded().blocks) expect(found(b.lastRuntimeUpgrade), String(b.number)).toEqual(OLD);
+    const S = recordedStorage();
+    expect(S.lastRuntimeUpgrade.size).toBe(12);
+    for (const [b, lru] of S.lastRuntimeUpgrade) expect(found(lru), b).toEqual(OLD);
+  });
+
+  it("reads the record as each reviewed shape states it, a Compact<u32> spec version then a string spec name, so it reads what the reviewed metadata's own type reads", () => {
+    for (const r of REVIEWED) {
+      const shape = JSON.parse(readFileSync(new URL(`../${r.shapeFile}`, import.meta.url), "utf8"));
+      const fields = shape.system.last_runtime_upgrade.fields as { name: string; type: string }[];
+      expect(fields.map((f) => f.name), r.shapeFile).toEqual(["spec_version", "spec_name"]);
+      expect(shape.types[fields[0]?.type ?? ""], r.shapeFile).toEqual({ kind: "compact", path: [], type: "u32" });
+      const name = shape.types[fields[1]?.type ?? ""];
+      expect(name.kind, r.shapeFile).toBe("composite");
+      expect(name.fields.map((f: { type: string }) => shape.types[f.type]), r.shapeFile).toEqual([{ kind: "primitive", path: [], primitive: "str" }]);
+    }
+    for (const [i, b] of UPGRADE_BLOCKS.entries()) {
+      const r = runtimeOfBlock(U.upgradeOf(b));
+      if (!r.found) throw new Error(r.refused);
+      const md = parseMetadata(U.metadataBySha(r.reviewed.metadataSha256));
+      const type = md.pallets.find((p) => p.name === "System")?.storage?.entries.find((e) => e.name === "LastRuntimeUpgrade")?.value ?? -1;
+      expect(decodeValue(md, type, U.upgradeOf(b)), b).toEqual({ spec_version: r.reviewed.specVersion, spec_name: r.reviewed.specName });
+      expect(toHex(U.upgradeOf(b)), b).toBe((LAB[i] as unknown as { last_runtime_upgrade: { hex: string } }).last_runtime_upgrade.hex);
+    }
+  });
+
+  it("answers a copy of the line: changing the answer changes nothing the decoder pins", () => {
+    const r = runtimeOfBlock(U.upgradeOf(UPGRADE_BLOCKS[0]));
+    if (!r.found) throw new Error(r.refused);
+    const before = JSON.stringify(REVIEWED);
+    r.reviewed.metadataSha256 = "0".repeat(64);
+    expect(JSON.stringify(REVIEWED)).toBe(before);
+    expect(runtimeOfBlock(U.upgradeOf(UPGRADE_BLOCKS[0]))).toEqual({ found: true, reviewed: OLD });
+  });
+
+  it("refuses a spec no reviewed line names: another version, another name, a version a line names under another name", () => {
+    const v = Number(OLD?.specVersion);
+    expect(found(cat(compact(v + 1), str(NAME)))).toBe(`no reviewed runtime: the block's LastRuntimeUpgrade names spec "${NAME}" ${v + 1}, which no reviewed line names`);
+    expect(found(cat(compact(v), str("other-runtime")))).toBe(`no reviewed runtime: the block's LastRuntimeUpgrade names spec "other-runtime" ${v}, which no reviewed line names`);
+    expect(found(cat(compact(v), str(`\u{feff}${NAME}`)))).toBe(`no reviewed runtime: the block's LastRuntimeUpgrade names spec "\u{feff}${NAME}" ${v}, which no reviewed line names`);
+  });
+
+  it("refuses bytes that are no whole record: a byte after it, cut short, empty, a compact not in its shortest form, a version past u32, a name not UTF-8 or past 256 characters", () => {
+    const good = U.upgradeOf(UPGRADE_BLOCKS[0]);
+    expect(found(cat(good, bytes(0)))).toBe(`no reviewed runtime: the LastRuntimeUpgrade ends at byte ${good.length}, 1 bytes before the end`);
+    expect(found(good.subarray(0, good.length - 1))).toBe("no reviewed runtime: the spec name at byte 4: 12 cannot fit in the 11 bytes left");
+    expect(found(new Uint8Array())).toBe("no reviewed runtime: the spec version at byte 0: needs 1 byte, 0 left");
+    expect(found(cat(bytes(0x01, 0x00), str(NAME)))).toBe("no reviewed runtime: the spec version at byte 0: 0 in two bytes is not its shortest form");
+    expect(found(cat(compact(2n ** 32n), str(NAME)))).toBe(`no reviewed runtime: the spec version ${2n ** 32n} does not fit a u32`);
+    expect(found(cat(compact(Number(OLD?.specVersion)), compact(2), bytes(0xc3, 0x28)))).toBe("no reviewed runtime: the spec name at byte 4: not strict UTF-8");
+    expect(found(cat(compact(Number(OLD?.specVersion)), str("a".repeat(257))))).toBe("no reviewed runtime: the spec name is longer than 256 characters");
+    expect(found(cat(compact(Number(OLD?.specVersion)), str("a".repeat(256))))).toMatch(/which no reviewed line names$/);
+  });
+
+  it("refuses an input that is not bytes, a Proxy over bytes included, with a refusal and never another exception", () => {
+    const good = U.upgradeOf(UPGRADE_BLOCKS[0]);
+    for (const x of [null, undefined, "0xfae33d00", [250, 227, 61, 0], new Proxy(good, {}), { length: 3 }]) expect(found(x as never)).toBe("no reviewed runtime: the LastRuntimeUpgrade is not bytes");
+  });
+
+  it("reads one argument, the bytes, and nothing else of the block", () => {
+    expect(runtimeOfBlock.length).toBe(1);
+  });
+});
