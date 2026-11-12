@@ -10,6 +10,7 @@ import { REVIEWED, STATED_ENTRIES, deriveShape, pinShape, shapeText } from "../s
 import { recordedUpgrade } from "./helpers/recorded-upgrade.js";
 import { referenceShape } from "./helpers/reference-shape.js";
 import { UPGRADE_BLOCKS } from "./helpers/requests/list-3.js";
+import { shapeDiff, shapeDiffText } from "../scripts/shape-diff.mjs";
 
 const sha256 = (b: Uint8Array | string) => createHash("sha256").update(b).digest("hex");
 const U = recordedUpgrade();
@@ -65,5 +66,40 @@ describe("the reviewed shape of spec 1014020", () => {
     expect(q.pinned ? "pinned" : q.refused).toBe(`the metadata for spec ${OLD?.specVersion} is ${META.length} bytes with sha256 ${sha256(META)}, not the reviewed ${OLD?.metadataBytes} bytes with sha256 ${OLD?.metadataSha256}`);
     const r = pinShape({ ...base, lastRuntimeUpgrade: U.upgradeOf(BEFORE) });
     expect(r.pinned ? "pinned" : r.refused).toBe(`the block's LastRuntimeUpgrade names spec ${OLD?.specName} ${OLD?.specVersion}, not ${NEW?.specName} ${NEW?.specVersion}`);
+  });
+});
+
+/** A copy of a shape whose every type id is moved by an offset: the same types, renumbered. */
+const renumbered = (text: string, by: number) => JSON.parse(text.replace(/#(\d+)/g, (_m, n) => `#${Number(n) + by}`));
+
+describe("the shape diff, scripts/shape-diff.mjs", () => {
+  const DIFF = readFileSync(new URL("../shapes/diff-tzkv-runtime-1014014-1014020.txt", import.meta.url), "utf8");
+
+  it("gives, run again, the committed diff of 1014014 against 1014020 byte for byte: plain lines, sorted, no dashes", () => {
+    expect(shapeDiffText(OLD_SHAPE, SHAPE)).toBe(DIFF);
+    const lines = DIFF.split("\n").slice(0, -1);
+    expect(lines).toEqual([...lines].sort());
+    for (const l of lines) expect(l, l).toMatch(/^[^\u0000-\u001f\u007f]+$/);
+    for (const l of lines) expect(l, l).not.toMatch(/[\u2010-\u2015]| - /);
+    expect(lines).toContain("FlopSessionKeys: no difference in what the shapes state");
+  });
+
+  it("says a shape has no difference from itself, and from itself with every type id renumbered: ids alone are no difference", () => {
+    const none = ["ComputeChannel: no difference in what the shapes state", "FlopSessionKeys: no difference in what the shapes state", "System: no difference in what the shapes state"];
+    expect(shapeDiff(JSON.parse(SHAPE), JSON.parse(SHAPE))).toEqual(none);
+    expect(shapeDiff(JSON.parse(SHAPE), renumbered(SHAPE, 1000))).toEqual(none);
+    expect(shapeDiff(JSON.parse(OLD_SHAPE), renumbered(SHAPE, 7))).toEqual(shapeDiff(JSON.parse(OLD_SHAPE), JSON.parse(SHAPE)));
+  });
+
+  it("reports a difference when one field's type is changed in a copy, where the field is", () => {
+    const copy = JSON.parse(SHAPE);
+    const spent = copy.types[copy.flop_session_keys.sessions.value].fields.find((f: { name: string }) => f.name === "spent");
+    expect(spent.type).toBe("u128");
+    spent.type = "u64";
+    expect(shapeDiff(JSON.parse(SHAPE), copy)).toEqual([
+      "ComputeChannel: no difference in what the shapes state",
+      "FlopSessionKeys.Sessions value.spent: type was u128, now u64",
+      "System: no difference in what the shapes state",
+    ]);
   });
 });
