@@ -1,13 +1,13 @@
 {
-  "observed_at": "2026-11-12T05:38:53.782Z",
+  "observed_at": "2026-11-12T07:20:34.459Z",
   "schema": "flop-observatory/feed-status@0",
-  "snapshot_hash": "25bd9ff9b5edbe836fb19e367966129e4cba9e210df7e07b5e78b0c4a8238a0e",
+  "snapshot_hash": "a2d30d8dc49130834f99aee5e7d67b06db4dc3b69e8238d4d4920a502af5ba31",
   "status": {
-    "best_height": null,
+    "best_height": 3540151,
     "conflicts": [],
     "faucet": {
-      "detail": null,
-      "health": "ok",
+      "detail": "status degraded, ready false, http 200",
+      "health": "degraded",
       "http": 200,
       "limits": {
         "addressCooldownMs": 86400000,
@@ -18,33 +18,33 @@
         "ipGrantsPerDay": 300,
         "ipPrefixGrantsPerDay": 10000
       },
-      "observed_at": "2026-11-12T05:38:46.876Z",
-      "ready": true
+      "observed_at": "2026-11-12T07:20:28.903Z",
+      "ready": false
     },
-    "finality_lag": null,
-    "finalized_hash": null,
-    "finalized_height": null,
+    "finality_lag": 6,
+    "finalized_hash": "0x0dd1828b4d3fa982e6d0e3567f51c4f63820ff861bc2d3e018d05fa8baa9bfa2",
+    "finalized_height": 3540145,
     "gateway": {
       "detail": null,
       "health": "ok",
       "http": 200,
-      "observed_at": "2026-11-12T05:38:48.042Z"
+      "observed_at": "2026-11-12T07:20:30.282Z"
     },
     "genesis": {
       "faucet": "0x99c172c095340ace980631f9123544c6bebd4839f3437e463533422d8be2d631",
       "pinned": "0x99c172c095340ace980631f9123544c6bebd4839f3437e463533422d8be2d631",
-      "rpc": null
+      "rpc": "0x99c172c095340ace980631f9123544c6bebd4839f3437e463533422d8be2d631"
     },
-    "observed_at": "2026-11-12T05:38:53.782Z",
-    "reset_detected": null,
+    "observed_at": "2026-11-12T07:20:34.459Z",
+    "reset_detected": false,
     "rpc": {
-      "detail": "chain_getBlockHash(0): rpc socket error: Received network error or non-101 status code.; chain_getFinalizedHead(): rpc socket error: Received network error or non-101 status code.; chain_getHeader(): rpc socket error: Received network error or non-101 status code.; the anchor, finalized block 3530299 an earlier snapshot logged, could not be read back (chain_getBlockHash(3530299): rpc socket error: Received network error or non-101 status code.), so whether the finalized chain is the one the log saw is unknown",
-      "health": "down",
+      "detail": null,
+      "health": "ok",
       "http": null,
-      "observed_at": "2026-11-12T05:38:48.044Z",
-      "stale": null
+      "observed_at": "2026-11-12T07:20:30.376Z",
+      "stale": false
     },
-    "runtime_version": null,
+    "runtime_version": 1014020,
     "schema": "flop-observatory/network-status@0",
     "trust": "trusted RPC"
   },
