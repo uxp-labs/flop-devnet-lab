@@ -132,3 +132,5 @@ archive node and decode them with the metadata of spec 1014014.
   permission. The chain stores it and ignores it.
 - Open, and asked of FLOP Labs in `flop-labs/network` issue 231: whether the list is published
   anywhere, and whether these seven are all of it.
+
+Rerun at spec 1014020 on 2026-11-12: `../2026-11-12-session-rerun-1014020/README.md` says which of these claims hold there.

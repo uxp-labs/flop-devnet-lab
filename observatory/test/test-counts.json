@@ -103,9 +103,17 @@
     "tests": 22,
     "names": "a4e5b94af87687f1dcea07ad1bf36f4a7120c6badbae2518ce9da8fcc75ef94c"
   },
+  "rerun-recording.test.ts": {
+    "tests": 22,
+    "names": "577fcf0a016da0cdfd7ebc9e040a53e0be4cf8f18b4869dd08daa091f058996e"
+  },
   "rerun-requests.test.ts": {
     "tests": 21,
     "names": "03de132138f11a5e9f603bb103271491b9fc44be20654193329de041cce6df98"
+  },
+  "rerun-results.test.ts": {
+    "tests": 18,
+    "names": "802ecf5121af33c4655306b42ba281943aa39f898dddba5ee14486f1a4866e1e"
   },
   "review-decoder.test.ts": {
     "tests": 37,

@@ -86,3 +86,5 @@ node and decode them with the metadata of spec 1014014.
   spend meter count it. That needs a miner to open a channel with, so it waits on direct channel use.
 - `flop-sign.mjs` is a probe tool, not a product. If `imd-flop` gets a session provider, its signer
   is built there with tests, a mortal era and the shape pin of the observatory.
+
+Rerun at spec 1014020 on 2026-11-12: `../2026-11-12-session-rerun-1014020/README.md` says which of these claims hold there.

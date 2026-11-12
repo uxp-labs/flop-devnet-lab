@@ -234,6 +234,32 @@ const pipe = fifo(join(work, "a-pipe"));
 
 const cases = [
   {
+    name: "the rerun's fill writes research/2026-11-12-session-rerun-1014020/results.json byte for byte, and refuses a call without --out",
+    run: () => {
+      const out = join(work, "rerun-results.json");
+      const w = node([join(pkg, "scripts", "fill-rerun-results.mjs"), "--out", out]);
+      const bare = node([join(pkg, "scripts", "fill-rerun-results.mjs")]);
+      let same = false;
+      try {
+        same = readFileSync(out).equals(readFileSync(join(pkg, "..", "research", "2026-11-12-session-rerun-1014020", "results.json")));
+      } catch {
+        same = false;
+      }
+      return { exit: w.status, same, bare: bare.status, stderr: `${w.stderr ?? ""}${bare.stderr ?? ""}`.trim() };
+    },
+    ok: (r) => r.exit === 0 && r.same && r.bare === 2 && r.stderr === "usage: node scripts/fill-rerun-results.mjs --out <file>",
+  },
+  {
+    name: "the rerun's check.mjs on results.json: 22 pass and A10 incomplete for its one read, exit 1",
+    run: () => {
+      const dir = join(pkg, "..", "research", "2026-11-12-session-rerun-1014020");
+      const c = node([join(dir, "check.mjs"), join(dir, "results.json")]);
+      const lines = (c.stdout ?? "").split("\n");
+      return { exit: c.status, last: lines.filter(Boolean).at(-1), incomplete: lines.filter((l) => /^(DIFFERS|INCOMPLETE|NOT RUN)/.test(l)), a10: lines[lines.findIndex((l) => l.startsWith("INCOMPLETE A10")) + 1], stderr: (c.stderr ?? "").trim() };
+    },
+    ok: (r) => r.exit === 1 && r.last === "22 pass, 0 differ, 1 incomplete, 0 not run" && r.incomplete.length === 1 && r.incomplete[0].trim() === "INCOMPLETE A10" && r.a10?.trim() === "read delegate_sessions_of_device is missing" && r.stderr === "",
+  },
+  {
     name: "the request list writer writes recordings/requests.json byte for byte, and refuses a call without --out",
     run: () => {
       const out = join(work, "requests.json");
