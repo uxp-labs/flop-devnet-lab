@@ -191,6 +191,7 @@ describe("B. unknown is never absent, false or 0 (P2, P6)", () => {
     ["a higher block", [at(11, old, { result: null })], read(old, { result: AUTHORIZED_BYTES }), null, null, null],
     ["another genesis", [at(9, old, { result: null }, OTHER)], read(old, { result: AUTHORIZED_BYTES }), null, null, null],
     ["the same bytes", [at(9, old, { result: AUTHORIZED_BYTES })], read(old, { result: AUTHORIZED_BYTES }), 9, false, false],
+    ["other bytes of the same count", [at(9, old, { result: "0x" + "00".repeat(33) })], read(old, { result: AUTHORIZED_BYTES }), 9, false, true],
     ["other bytes", [at(9, old, { result: "0x00" })], read(old, { result: AUTHORIZED_BYTES }), 9, false, true],
     ["present then absent", [at(9, old, { result: AUTHORIZED_BYTES })], read(neu, { result: null }), 9, true, false],
     ["absent then absent", [at(9, old, { result: null })], read(old, { result: null }), 9, false, false],
@@ -374,6 +375,43 @@ describe("F. upgrade.json and get_upgrade", () => {
     expect(JSON.parse(feed).upgrade).toBeNull();
     expect(feedFiles(s).map(([n]) => n)).toContain("upgrade.json");
     expect(noticeLine({ ...s, seq: 0, prev_hash: null }).includes('"executing_state":null')).toBe(true);
+  });
+});
+
+// ===== J. Tests for the survivors of the reviewer's mutants (test/helpers/review-watch-mutants.json) =====
+
+describe("J. what the builder's tests let through", () => {
+  it("HELD: the notice names the version the record states, not state_getRuntimeVersion's (rw-notice-version-from-rv)", async () => {
+    const { r, s } = await run(asLive(tapeWith("upgrade-not-reviewed", {})), join(box, "no-log"));
+    expect(s.status.runtime_version).not.toBe(NOT_REVIEWED.specVersion);
+    expect(JSON.parse((r.notice as string).slice("::notice title=networkStatus::".length)).executing_spec_version).toBe(NOT_REVIEWED.specVersion);
+  });
+
+  it("HELD: an earlier watch is filed under the RPC genesis its snapshot read, not the pinned one (rw-history-pinned)", async () => {
+    const { s } = await run(asLive(tapeWith("upgrade-before", {})), join(box, "no-log"));
+    const other = "0x" + "77".repeat(32);
+    const moved = { ...s, status: { ...s.status, genesis: { ...s.status.genesis, rpc: other } } } as Snapshot;
+    expect(earlierOf([moved], DEVNET_GENESIS).earlierUpgrades.map((e) => e.genesis)).toEqual([other]);
+  });
+
+  it("HELD: absent is a word on the page, never the blank unknown cell (rw-page-absent-blank)", async () => {
+    const { s } = await run(asLive(tapeWith("upgrade-before", {})), join(box, "no-log"));
+    expect(s.upgrade?.authorized.state).toBe("absent");
+    expect(renderPage(s).includes('<td data-k="upgrade.authorized.state" data-v="absent">absent</td>')).toBe(true);
+  });
+});
+
+describe("K. the published files", () => {
+  it("HELD: judgeLatest refuses an upgrade.json changed by one byte of its hex, resummed (no list in published.test.ts or mcp.test.ts names upgrade.json)", async () => {
+    const { out, s } = await run(asLive(tapeWith("upgrade-before", { au: { result: AUTHORIZED_BYTES } })), join(box, "no-log"));
+    const f = outFiles(out);
+    const changed = (f["upgrade.json"] as string).replace(AUTHORIZED_BYTES, AUTHORIZED_BYTES.slice(0, -2) + "00");
+    expect(changed).not.toBe(f["upgrade.json"]);
+    const { sumsOf } = await import("../src/sums.js");
+    const next: Record<string, string> = { ...f, "upgrade.json": changed };
+    delete next.SHA256SUMS;
+    next.SHA256SUMS = sumsOf(Object.keys(next).sort().map((n) => [n, next[n] as string] as const));
+    expect(judgeLatest(next, { now: s.observed_at, maxAgeSeconds: 3600 })).toEqual({ usable: false, refused: ["upgrade.json is not the one the snapshot gives"] });
   });
 });
 
