@@ -72,6 +72,14 @@
     "why": "a storage answer is 0x and hex from its first character to its last"
   },
   {
+    "id": "uw-bytes-misread",
+    "file": "src/upgrade-watch.ts",
+    "find": "Number.parseInt(b, 16)",
+    "replace": "Number.parseInt(b, 10)",
+    "test": "test/upgrade-watch.test.ts",
+    "why": "the record is read as the bytes the hex holds"
+  },
+  {
     "id": "uw-length-counts-0x",
     "file": "src/upgrade-watch.ts",
     "find": "length: (v.value.length - 2) / 2",

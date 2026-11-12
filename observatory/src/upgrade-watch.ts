@@ -68,9 +68,7 @@ export const DETAIL = {
 
 /** The bytes of an answer that passed HEX_BYTES. */
 function bytesOf(hex: string): Uint8Array {
-  const out = new Uint8Array((hex.length - 2) / 2);
-  for (let i = 0; i < out.length; i++) out[i] = Number.parseInt(hex.slice(2 + 2 * i, 4 + 2 * i), 16);
-  return out;
+  return Uint8Array.from(hex.slice(2).match(/[0-9a-f]{2}/g) ?? [], (b) => Number.parseInt(b, 16));
 }
 
 /** The answer's value: null, a hex string, or why it is unknown. */
