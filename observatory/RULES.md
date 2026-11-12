@@ -912,8 +912,10 @@ for everything it reads.
   `System.LastRuntimeUpgrade` first, then the step's reads in the plan's fixed order, no key twice;
   each block's hash is asked by its height too. A batch's answer is read only when it is exactly one
   set, for the block asked, listing every key asked once and no other; anything else is a refused
-  read, and that block's values stay unknown. A key listed with null holds nothing. That reader is
-  the next phase's work.
+  read, and that block's values stay unknown. A key listed with null holds nothing. The reader is
+  `test/helpers/batch-answer.ts`; it decodes nothing. What its values mean is the decoder's
+  (section 9), and a value of an entry the reviewed shape does not state is not decoded: its bytes
+  are kept apart and the value it answers stays unknown.
 - Nothing is sent before the whole list is judged: a list not in that form is refused, and the run
   exits 1; a list that holds a method the read only guard refuses is refused, each refusal recorded
   as section 4 says, and the run exits 4. Either way nothing is read from the network. A method is

@@ -227,7 +227,17 @@ building and testing decoders against real data. It is evidence, never proof of 
   (`MAX_CALLS`). One `state_queryStorageAt` asks all keys of one block in one call and is answered as
   one set for that block, a key that holds nothing listed with null. The guard already allowed it;
   nothing in src changed. How such an answer is read (exactly one set, the block asked, every key
-  asked once and nothing else, or the read is refused) is the next phase's.
+  asked once and nothing else, or the read is refused) is `test/helpers/batch-answer.ts`.
+- Its recording is `fixtures/recording-20261112132634-0a472f1b49f7b661`, 48 of 48 answered, which
+  keeps that list and its inputs byte for byte. `test/rerun-recording.test.ts` holds it to the
+  rerun's `results.json`: every hash by height, the genesis, the sha256 of every `System.Events`
+  value against the one the lead computed at run time, and every block's `LastRuntimeUpgrade`
+  naming spec 1014020 through `runtimeOfBlock`. `scripts/fill-rerun-results.mjs --out <file>`
+  fills `results.json` from it through `src/scale/block.ts` (`test/helpers/rerun-fill.ts`), and
+  `test/rerun-results.test.ts` holds the committed file to that fill byte for byte and pins the
+  verdict of the rerun's `check.mjs`: 22 steps pass, A10 is incomplete for its one read of
+  `FlopSessionKeys.DelegateSessions`, an entry the reviewed shape does not state, whose bytes
+  `results.json` keeps apart in `reads_not_decoded`.
 - Which read covers which claim of the rerun's `plan.md`: every claim that rests on a stored value
   has the read of the step it names. probe:23 the session record and nonce at A3 (`steps.json` names no breaker read there, so the breaker part rests on the breaker read at A6 and A8); probe:28 the
   session record and `DelegateSessions` at A10; escrow:19 and escrow:28 the session record at A6;
@@ -553,6 +563,7 @@ The two interfaces other teams import are in [../interfaces](../interfaces).
 | `src/run-command.ts` | what the live run and the recorder share: exit codes, flags, `SHA256SUMS` over the folder, how the command ends |
 | `src/requests.ts`, `recordings/requests.json` | the request list's form, and the list to be recorded next |
 | `recordings/requests-inputs.json`, `test/helpers/requests/` | the inputs of the current list, each with the file and field it comes from; the core that turns a plan into calls (`core.ts`), and one plan module per list (`list-2.ts`, `list-3.ts`, `list-4.ts`) |
+| `scripts/fill-rerun-results.mjs`, `test/helpers/rerun-fill.ts`, `test/helpers/batch-answer.ts` | the fill of the session rerun's `results.json` from the fourth recording (`--out <file>`), through `src/scale/block.ts` and the reader of a batch answer, which refuses and never guesses |
 | `scripts/write-requests.mjs`, `scripts/ts-resolve.mjs`, `test/helpers/requests-list.ts` | the writer of `recordings/requests.json` (`--out <file>`), through the current list's plan, the same the tests use, run under Node's own type stripping with a hook that resolves a relative .js import from a .ts module to the .ts file |
 | `src/record-run.ts`, `src/record-bin.ts` | one record run and its files, and the command |
 | `src/recording.ts` | the reader contract for a recording |
