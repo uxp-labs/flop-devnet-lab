@@ -1,10 +1,10 @@
 // The request list: its one written form, and the first list, as it was reviewed.
 import { createHash } from "node:crypto";
-import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { feedText } from "../src/feed.js";
 import { READ_ONLY_RPC_METHODS } from "../src/guard.js";
 import { MAX_CALLS, REQUESTS_SCHEMA, type RequestCall, readRequests } from "../src/requests.js";
+import { REQUESTS_TEXT } from "./helpers/recorded.js";
 
 const bytes = (s: string) => new TextEncoder().encode(s);
 const CALL: RequestCall = { method: "chain_getFinalizedHead", params: [], why: "the finalized head when the run read it" };
@@ -68,8 +68,10 @@ const BLOCKS: [number, string, string][] = [
   [3479329, "0xef5960e6418bbe91c09e368b2a2a817f5a12dcf6cc75d05b6435673af18255ed", "AssuranceClassPinned, CalibrationSnapshotted, ChannelOpened"],
 ];
 
-describe("the first request list, recordings/requests.json", () => {
-  const text = readFileSync(new URL("../recordings/requests.json", import.meta.url), "utf8");
+// The first list is kept in its recording's fixture folder, byte for byte as it was recorded:
+// recordings/requests.json has moved on to the next list (test/storage-requests.test.ts).
+describe("the first request list, as its recording's fixture keeps it", () => {
+  const text = REQUESTS_TEXT;
   const read = readRequests(bytes(text));
   const calls = typeof read === "string" ? [] : read.calls;
 
