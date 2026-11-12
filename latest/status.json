@@ -1,14 +1,14 @@
 {
-  "observed_at": "2026-11-12T07:20:34.459Z",
+  "observed_at": "2026-11-12T08:40:29.353Z",
   "schema": "flop-observatory/feed-status@0",
-  "snapshot_hash": "a2d30d8dc49130834f99aee5e7d67b06db4dc3b69e8238d4d4920a502af5ba31",
+  "snapshot_hash": "2519c4ad07bb29cb61ab2219428c1776c90e2e7bdc73680659a7d9bab6ed0a63",
   "status": {
-    "best_height": 3540151,
+    "best_height": 3544917,
     "conflicts": [],
     "faucet": {
-      "detail": "status degraded, ready false, http 200",
+      "detail": "status degraded, ready false, http 503",
       "health": "degraded",
-      "http": 200,
+      "http": 503,
       "limits": {
         "addressCooldownMs": 86400000,
         "dailyCapExemptionConfigured": true,
@@ -18,30 +18,30 @@
         "ipGrantsPerDay": 300,
         "ipPrefixGrantsPerDay": 10000
       },
-      "observed_at": "2026-11-12T07:20:28.903Z",
+      "observed_at": "2026-11-12T08:40:08.857Z",
       "ready": false
     },
-    "finality_lag": 6,
-    "finalized_hash": "0x0dd1828b4d3fa982e6d0e3567f51c4f63820ff861bc2d3e018d05fa8baa9bfa2",
-    "finalized_height": 3540145,
+    "finality_lag": 5,
+    "finalized_hash": "0x8f92d6e8451d9100f4af942e0de3d74469230082ae3b9277c24f6693305fd5fd",
+    "finalized_height": 3544912,
     "gateway": {
-      "detail": null,
-      "health": "ok",
-      "http": 200,
-      "observed_at": "2026-11-12T07:20:30.282Z"
+      "detail": "GET timed out after 15000 ms",
+      "health": "unknown",
+      "http": null,
+      "observed_at": null
     },
     "genesis": {
       "faucet": "0x99c172c095340ace980631f9123544c6bebd4839f3437e463533422d8be2d631",
       "pinned": "0x99c172c095340ace980631f9123544c6bebd4839f3437e463533422d8be2d631",
       "rpc": "0x99c172c095340ace980631f9123544c6bebd4839f3437e463533422d8be2d631"
     },
-    "observed_at": "2026-11-12T07:20:34.459Z",
+    "observed_at": "2026-11-12T08:40:29.353Z",
     "reset_detected": false,
     "rpc": {
       "detail": null,
       "health": "ok",
       "http": null,
-      "observed_at": "2026-11-12T07:20:30.376Z",
+      "observed_at": "2026-11-12T08:40:25.489Z",
       "stale": false
     },
     "runtime_version": 1014020,
