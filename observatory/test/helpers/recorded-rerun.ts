@@ -8,10 +8,20 @@ import { readFileSync } from "node:fs";
 import { type RecordedCall, judgeRecording } from "../../src/recording.js";
 import { parseMetadata } from "../../src/scale/metadata.js";
 import { type BatchAnswer, readBatchAnswer } from "./batch-answer.js";
+import { reviewedMetadata } from "./recorded-upgrade.js";
 import { type DerivedCall, type Inputs, type Read, STEPS, type Step, type StepId, blockOf, deriveCalls, readInputs } from "./requests/list-4.js";
-import { rerunMetadata } from "./requests-list.js";
 
 export const RERUN_RECORDING = "recording-20261112132634-0a472f1b49f7b661";
+const REPO = new URL("../../../", import.meta.url);
+/** The record of the run the fourth list reads, and the field that names the spec it ran at. */
+export const RERUN_RESULTS = "research/2026-11-12-session-rerun-1014020/results.json";
+export const RERUN_SPEC_FIELD = "spec_version";
+
+/**
+ * The metadata every key of the fourth list is built from: the reviewed metadata of the spec the
+ * rerun's results.json names (reviewedMetadata). Throws when no reviewed line names that spec.
+ */
+export const rerunMetadata = (): Uint8Array => reviewedMetadata((JSON.parse(readFileSync(new URL(RERUN_RESULTS, REPO), "utf8")) as Record<string, unknown>)[RERUN_SPEC_FIELD]);
 const FIXTURE = new URL(`../../fixtures/${RERUN_RECORDING}/`, import.meta.url);
 export const rerunFixtureText = (name: string) => readFileSync(new URL(name, FIXTURE), "utf8");
 /** The request list the recording was made from: the fixture's own copy. */

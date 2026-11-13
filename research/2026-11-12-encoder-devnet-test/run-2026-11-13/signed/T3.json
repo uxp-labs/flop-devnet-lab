@@ -1,0 +1,56 @@
+{
+ "step": "T3",
+ "of_step": "T3",
+ "tool": "chain encoder, imd-flop/dist/chain signSessionCall",
+ "signer": "0x3be70673710f6e0b4ac2f6e332ad017dd74cf218f7e401052c0ee25ed1662910",
+ "account_nonce": "0",
+ "session_nonce": "0",
+ "declared_spend_raw": "10000000000000000",
+ "era": {
+  "period": 64,
+  "birth_number": 3654995,
+  "birth_hash": "0x3467bbce5dc0eb5267fdf1c3abc12fd30f87e82a13bdaea77ec78ed4a106226f",
+  "last_valid_block": 3655058
+ },
+ "runtime": {
+  "specName": "tzkv-runtime",
+  "specVersion": 1014020,
+  "transactionVersion": 2,
+  "genesisHash": "0x99c172c095340ace980631f9123544c6bebd4839f3437e463533422d8be2d631"
+ },
+ "signed_path": "payload-blake2b-256",
+ "payload_length": 335,
+ "call": "0x5e02e462d014cab1239a123233647052f4e3b572322e982441d6b7a5c1694d8419e267091ec8abdfa88707679f8a2fbfc0bcd80184e2f731d91bb9fa152b750210556c7f1a52c1abe781db051e70ae357f72bb70161ca0c092df0b618f22a9292ba633061a52c1abe781db051e70ae357f72bb70161ca0c092df0b618f22a9292ba63306eca6a3f9c5a9fa1556892182ffef15b1273c075146a2d1a87814ae83ecea3053023be70673710f6e0b4ac2f6e332ad017dd74cf218f7e401052c0ee25ed166291000040000b0040000010000000000c16ff2862300000000000000000041b04d1bbd011a000000c16ff286230000000000000000000000000000000000",
+ "extrinsic": "0xa50584003be70673710f6e0b4ac2f6e332ad017dd74cf218f7e401052c0ee25ed166291000a60cb5f922e8f0eb1e779b379be54ed8651eb59e328f3eec8fa95da78c28c06192b510a844b7129ff076265ed01a16ea75999fb4410fb116a665cf1721e39e0535010000005e02e462d014cab1239a123233647052f4e3b572322e982441d6b7a5c1694d8419e267091ec8abdfa88707679f8a2fbfc0bcd80184e2f731d91bb9fa152b750210556c7f1a52c1abe781db051e70ae357f72bb70161ca0c092df0b618f22a9292ba633061a52c1abe781db051e70ae357f72bb70161ca0c092df0b618f22a9292ba63306eca6a3f9c5a9fa1556892182ffef15b1273c075146a2d1a87814ae83ecea3053023be70673710f6e0b4ac2f6e332ad017dd74cf218f7e401052c0ee25ed166291000040000b0040000010000000000c16ff2862300000000000000000041b04d1bbd011a000000c16ff286230000000000000000000000000000000000",
+ "extrinsic_hash": "0x903b7a87f9f6110f4c0917348826cd46663913971f2074db7e68644cabdb75ff",
+ "fields": {
+  "owner": "0xe462d014cab1239a123233647052f4e3b572322e982441d6b7a5c1694d8419e2",
+  "inner": {
+   "call": "force_open",
+   "miner": "0x1ec8abdfa88707679f8a2fbfc0bcd80184e2f731d91bb9fa152b750210556c7f",
+   "model_hash": "0x1a52c1abe781db051e70ae357f72bb70161ca0c092df0b618f22a9292ba63306",
+   "measured_root": "0x1a52c1abe781db051e70ae357f72bb70161ca0c092df0b618f22a9292ba63306",
+   "decode_policy_hash": "0xeca6a3f9c5a9fa1556892182ffef15b1273c075146a2d1a87814ae83ecea3053",
+   "precision": "BF16",
+   "agent_key": "0x3be70673710f6e0b4ac2f6e332ad017dd74cf218f7e401052c0ee25ed1662910",
+   "sla": {
+    "max_turns": 1024,
+    "max_duration": 1200,
+    "reattest_every": 1
+   },
+   "escrow": "10000000000000000",
+   "nonce": "7320261113000001"
+  },
+  "spend": "10000000000000000",
+  "sessionNonce": "0",
+  "signer": "0x3be70673710f6e0b4ac2f6e332ad017dd74cf218f7e401052c0ee25ed1662910",
+  "accountNonce": 0,
+  "birth": {
+   "number": 3654995,
+   "hash": "0x3467bbce5dc0eb5267fdf1c3abc12fd30f87e82a13bdaea77ec78ed4a106226f"
+  },
+  "lastValidBlock": 3655058
+ },
+ "description": "signed by device 0x3be70673710f6e0b4ac2f6e332ad017dd74cf218f7e401052c0ee25ed1662910 (MultiAddress Id), Ed25519 signature 0xa60cb5f922e8f0eb1e779b379be54ed8651eb59e328f3eec8fa95da78c28c06192b510a844b7129ff076265ed01a16ea75999fb4410fb116a665cf1721e39e05\naccount nonce 0, tip 0 raw (0 FLOP), metadata hash check Disabled\nmortal era of 64 blocks (phase 19): the signature binds the birth block hash 0x3467bbce5dc0eb5267fdf1c3abc12fd30f87e82a13bdaea77ec78ed4a106226f; the birth block number 3654995 is as given, the bytes hold only the phase; the last valid block 3655058 follows from that number\nruntime tzkv-runtime 1014020, transaction version 2, genesis 0x99c172c095340ace980631f9123544c6bebd4839f3437e463533422d8be2d631\nFlopSessionKeys.execute_via_session as owner 0xe462d014cab1239a123233647052f4e3b572322e982441d6b7a5c1694d8419e2; session nonce 0; declared spend 10000000000000000 raw (0.01 FLOP); inner call ComputeChannel.force_open: miner 0x1ec8abdfa88707679f8a2fbfc0bcd80184e2f731d91bb9fa152b750210556c7f, model_hash 0x1a52c1abe781db051e70ae357f72bb70161ca0c092df0b618f22a9292ba63306, measured_root 0x1a52c1abe781db051e70ae357f72bb70161ca0c092df0b618f22a9292ba63306, decode_policy_hash 0xeca6a3f9c5a9fa1556892182ffef15b1273c075146a2d1a87814ae83ecea3053, precision BF16, agent_key 0x3be70673710f6e0b4ac2f6e332ad017dd74cf218f7e401052c0ee25ed1662910, sla (max_turns 1024, max_duration 1200, reattest_every 1), escrow 10000000000000000 raw (0.01 FLOP), nonce 7320261113000001",
+ "earlier_copies": []
+}

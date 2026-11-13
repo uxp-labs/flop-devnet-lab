@@ -1,0 +1,8 @@
+[
+  { "id": "RV4-M1", "file": "README.md", "find": "- T4 was refused by the chain with `ComputeChannel.BadState`", "replace": "- T4 succeeded with `ComputeChannel.BadState`", "why": "the section gives T4 the outcome the record gives (explorer.success false)" },
+  { "id": "RV4-M2", "file": "README.md", "find": "- T7 was not needed: T5 opened no channel. It has no run time reading (`steps.6.run_time` is null).", "replace": "- T7 was sent. It has no run time reading (`steps.6.run_time` is null).", "why": "the section says T7 was not sent, as the record says (steps.6.run_time null)" },
+  { "id": "RV4-M3", "file": "README.md", "find": "These three numbers are the lead's reading by position.", "replace": "These three numbers are decoded.", "why": "the balances are said plainly to be the lead's reading by position (brief, attack 6)" },
+  { "id": "RV4-M4", "file": "README.md", "find": "It is not\nyet decoded with the lab's decoder.", "replace": "It is\ndecoded with the lab's decoder.", "why": "the section claims no decode the record does not show (record is run-time, balances_source null)" },
+  { "id": "RV4-M5", "file": "README.md", "find": "is what the session spent,", "replace": "is more than the session spent,", "why": "the escrow equals the spent field; the words must not say otherwise" },
+  { "id": "RV4-M6", "file": "README.md", "find": "- T1, T2, T3, T6, T8 and T9 succeeded (`steps.N.run_time.explorer.success` is `true`).", "replace": "- T1, T2, T3, T6, T8 and T9 succeeded and were verified (`steps.N.run_time.explorer.success` is `true`).", "why": "CLAUDE.md rule 7: nothing is called verified without the evidence beside it" }
+]

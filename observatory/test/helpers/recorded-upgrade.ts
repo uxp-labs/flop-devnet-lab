@@ -7,6 +7,7 @@ import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { type RecordedCall, judgeRecording } from "../../src/recording.js";
 import { parseMetadata } from "../../src/scale/metadata.js";
+import { REVIEWED, type ReviewedShape } from "../../src/scale/shape.js";
 import { hexBytes, recorded } from "./recorded.js";
 import { type Block, type DerivedCall, type Inputs, type Read, deriveCalls, readInputs } from "./requests/list-3.js";
 
@@ -104,4 +105,16 @@ export function recordedUpgrade() {
       return m;
     },
   };
+}
+
+/**
+ * The metadata of a reviewed spec: the reviewed line that names the spec, its metadata found on this
+ * recording's tape by the sha256 that line gives, never by the block it was read at. Throws when no
+ * reviewed line names the spec, and when the tape holds no metadata of that line's sha256. The lines
+ * are the reviewed list of src/scale/shape.ts unless a test plants others.
+ */
+export function reviewedMetadata(spec: unknown, lines: readonly ReviewedShape[] = REVIEWED): Uint8Array {
+  const line = lines.find((r) => r.specVersion === spec);
+  if (line === undefined) throw new Error(`no reviewed runtime of spec ${String(spec)}`);
+  return recordedUpgrade().metadataBySha(line.metadataSha256);
 }

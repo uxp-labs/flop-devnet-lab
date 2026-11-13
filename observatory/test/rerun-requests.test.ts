@@ -1,10 +1,12 @@
-// The fourth request list, recordings/requests.json: the lab's session rerun at spec 1014020
-// (research/2026-11-12-session-rerun-1014020), block by block. It is derived
-// (test/helpers/requests/list-4.ts) from recordings/requests-inputs.json and the recorded 1014020
-// metadata, and nothing in it is typed by hand. These tests hold the list to that function byte for
-// byte, read its design a second way from the rerun's steps.json and results.json, derive every
-// storage key a second way with the reference decoder, hold every input to the record it names, and
-// hold the core's batch kind to its two refusals. Nothing here reads the network.
+// The fourth request list: the lab's session rerun at spec 1014020
+// (research/2026-11-12-session-rerun-1014020), block by block. It was recordings/requests.json until
+// the fifth list replaced it, and its recording's fixture
+// (fixtures/recording-20261112132634-0a472f1b49f7b661) keeps it and its inputs, frozen. It is derived
+// (test/helpers/requests/list-4.ts) from those inputs and the recorded 1014020 metadata, and nothing
+// in it is typed by hand. These tests hold the frozen list to that function byte for byte, read its
+// design a second way from the rerun's steps.json and results.json, derive every storage key a second
+// way with the reference decoder, hold every input to the record it names, and hold the core's batch
+// kind to its two refusals. Nothing here reads the network.
 import { getDynamicBuilder, getLookupFn } from "@polkadot-api/metadata-builders";
 import { decAnyMetadata, unifyMetadata } from "@polkadot-api/substrate-bindings";
 import { createHash } from "node:crypto";
@@ -21,12 +23,12 @@ import { UPGRADE_INPUTS_TEXT as LIST_3_INPUTS_TEXT, UPGRADE_REQUESTS_TEXT as LIS
 import { type Source, batchKeys, deriveCalls as coreDerive } from "./helpers/requests/core.js";
 import { readInputs as readList3Inputs } from "./helpers/requests/list-3.js";
 import { type Block, type Inputs, type Read, STEPS, type StepId, blockOf, deriveCalls, deriveRequestsText, readInputs } from "./helpers/requests/list-4.js";
-import { RERUN_RESULTS, RERUN_SPEC_FIELD, requestsListText, rerunMetadata } from "./helpers/requests-list.js";
+import { RERUN_INPUTS_TEXT, RERUN_REQUESTS_TEXT, RERUN_RESULTS, RERUN_SPEC_FIELD, rerunMetadata } from "./helpers/recorded-rerun.js";
 
 const REPO = new URL("../../", import.meta.url);
 const repoText = (path: string) => readFileSync(new URL(path, REPO), "utf8");
-const LIST_TEXT = repoText("observatory/recordings/requests.json");
-const INPUTS_TEXT = repoText("observatory/recordings/requests-inputs.json");
+const LIST_TEXT = RERUN_REQUESTS_TEXT;
+const INPUTS_TEXT = RERUN_INPUTS_TEXT;
 const INPUTS = readInputs(INPUTS_TEXT);
 const META = rerunMetadata();
 const MD = parseMetadata(META);
@@ -67,7 +69,7 @@ const batches = DERIVED.filter((d) => d.call.method === "state_queryStorageAt");
 /** The keys of the System entries, as the lab's reads of the upgrade asked them (a name with a dot, so read whole). */
 const UP_KEYS = at(record(UP_FILE), "keys") as Record<string, string>;
 
-describe("the fourth request list, recordings/requests.json", () => {
+describe("the fourth request list, frozen in its recording's fixture", () => {
   const read = readRequests(new TextEncoder().encode(LIST_TEXT));
   const calls = typeof read === "string" ? [] : read.calls;
 
@@ -91,18 +93,9 @@ describe("the fourth request list, recordings/requests.json", () => {
     expect([...new Set(DERIVED.map((d) => d.call.method).filter((m) => !earlier.has(m)))]).toEqual(["state_queryStorageAt"]);
   });
 
-  it("is, byte for byte, the list derived from recordings/requests-inputs.json and the recorded 1014020 metadata", () => {
+  it("is, byte for byte, the list derived from its frozen inputs and the recorded 1014020 metadata", () => {
     expect(LIST_TEXT).toBe(deriveRequestsText(INPUTS, MD));
     expect(calls).toEqual(DERIVED.map((d) => d.call));
-  });
-
-  it("is what the committed writer writes: scripts/write-requests.mjs writes requestsListText, the same derive function, and nothing of its own", () => {
-    expect(requestsListText()).toBe(LIST_TEXT);
-    const script = repoText("observatory/scripts/write-requests.mjs");
-    expect(script).toContain('const { requestsListText } = await import("../test/helpers/requests-list.ts");');
-    expect(script).toContain("writeFileSync(args[1], requestsListText());");
-    for (const name of ["deriveCalls", "deriveRequestsText", "storageKey", "feedText", "PLAN", "plan("]) expect(script, name).not.toContain(name);
-    expect(repoText("observatory/test/helpers/requests-list.ts")).toContain('from "./requests/list-4.js";');
   });
 
   it("builds its keys from the reviewed metadata of the spec results.json names, found on the third recording's tape by its sha256", () => {
@@ -239,7 +232,7 @@ describe("the batch kind of the request core", () => {
   });
 });
 
-describe("the inputs of the fourth list, recordings/requests-inputs.json", () => {
+describe("the inputs of the fourth list, frozen in its recording's fixture", () => {
   it("is in the written form, and refuses a file that is not or that lacks a name the plan uses; the third list's inputs are not the fourth's", () => {
     expect(() => readInputs(INPUTS_TEXT)).not.toThrow();
     expect(() => readInputs(JSON.stringify(JSON.parse(INPUTS_TEXT)))).toThrow("the inputs file is not in the written form");
