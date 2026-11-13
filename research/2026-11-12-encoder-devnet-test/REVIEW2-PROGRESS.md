@@ -25,7 +25,7 @@ No builder file is changed. My tests are `review2-*.test.mjs` in this folder.
 12. Q9: the top up left after T6 gives "passed as planned, left: ...", none of C3's verdicts,
     exit 1 like a wrong record. `review2-next.test.mjs` (1).
 
-## Next (older list)
+## Leads at the start (all taken up above)
 
 - Attack A: the bad minutes through sign-device with a test key (held tests), retire crash states.
 - refused-at-submission of an immortal step: nextOf waits forever, T9 never reached (Q2, Q8).
@@ -39,4 +39,11 @@ No builder file is changed. My tests are `review2-*.test.mjs` in this folder.
   again; a stop after the first rename of retire. No second copy with another nonce in any.
 - nextOf over the 45 cells of table F; a cleanup step refused three times.
 - No form of the seed on the key paths. `node plan.mjs md` changes nothing. The sha256s match.
-- Mutants: review2-mutants.json, running against the builder's tests and mine.
+- Mutants (review2-mutants.json, 23): the builder's tests kill 19. Alive: RV2-N3 and RV2-X4 (now
+  killed by review2-kills.test.mjs, which passes on e18e725), RV2-N4 and RV2-R4 (equivalent: an
+  earlier check of the same path always refuses first).
+
+## State
+
+Done. Folder: 187 tests, 164 pass, 23 fail, all 23 mine and each a defect. The builder's and the
+first reviewer's 149 pass. The rerun folder: 41 of 41. The report went to the lead.
