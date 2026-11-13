@@ -207,6 +207,51 @@ stop (a stop by outcome at an earlier step, or a `lead_stop` carried over from t
 record). A test step that is missing with no stop recorded makes the record wrong: failed, exit 1. No verdict begins with "passed" when something is left: a top up left after T6 says
 `as planned, left: ...`.
 
+## The run of 2026-11-13
+
+The lead ran the batch on 2026-11-13. Its record is `results.json` in this folder, committed byte
+for byte as the run left it. `results.test.mjs` holds it. Each value below is read from that file,
+with its field named. A field `steps.N` is the step at position N of `steps`, counted from 0.
+
+- Eight transactions of nine planned were sent. Each is in a block the node reported finalized
+  (`steps.N.run_time.sent.status` is `finalized`, with `steps.N.run_time.sent.block_hash` beside it).
+- The blocks run from 3654835 (`steps.0.run_time.sent.block_number`, T1) to 3655782
+  (`steps.8.run_time.sent.block_number`, T9).
+- The runtime was spec 1014020 (`spec_version`).
+- T1, T2, T3, T6, T8 and T9 succeeded (`steps.N.run_time.explorer.success` is `true`).
+- T4 was refused by the chain with `ComputeChannel.BadState` (`steps.3.run_time.explorer.error.name`).
+- T5 was refused with `ComputeChannel.CalibrationUnavailable` (`steps.4.run_time.explorer.error.name`).
+- T7 was not needed: T5 opened no channel. It has no run time reading (`steps.6.run_time` is null).
+
+T3 is the result the test was made for. The chain accepted a session call that the device signed
+through the lab's encoder:
+- with a mortal era (the form of `steps.2.era`, birth number, birth hash and last valid block, as
+  the plan's T3 says in `shows` of `steps.json`; the values are left for the final record);
+- with a declared spend equal to the escrow: the escrow of `ComputeChannel.ForceOpenRequested`,
+  10000000000000000 (`steps.2.run_time.explorer.events.1.fields.escrow`), is what the session spent,
+  10000000000000000 (`steps.2.run_time.explorer.events.2.fields.spent`);
+- with the channel id the plan derived:
+  0xd8ae28f57ec645b73a4ea6deaa2d0b1f9228b93b08eb77779481898d371b8480
+  (`steps.2.run_time.explorer.events.1.fields.channel_id`), the value of `CH_T3` in `steps.json`,
+  and `steps.2.run_time.explorer.channel_mismatch` is empty.
+
+What the run does not show:
+- a top up on an open channel;
+- an `open_channel` that succeeds (it needs a miner with a calibration);
+- whether an expiry refunds a top up;
+- the fee of each step.
+
+How it was read: the node's finalized status and FLOP's explorer API, through the pane. It is not
+yet decoded with the lab's decoder. The record is a run time record (`record` is `run-time`).
+
+The owner's free balance, read by the lead through the pane, by position, at the start block 3654783
+(`start.finalized.number`) and at the block of T9 3655782 (`steps.8.run_time.sent.block_number`):
+- before: 24708267321505000000 raw;
+- after: 24658876452470000000 raw;
+- down 49390869035000000 raw (0.049390869035 FLOP).
+
+These three numbers are the lead's reading by position. They are in no committed file but this README.
+
 ## Not done here: the final record
 
 The final record is not made in this folder and nothing here promises it. It needs a new
@@ -216,6 +261,9 @@ new reviewed shape (the reviewed shape in `observatory/src/scale/shape.ts` does 
 `System.Account`). That is a later piece of work with its own brief. `check.mjs` judges a final
 record when one exists: it requires `record: "final"` and `balances_source` (`decoder` or
 `by position`) and prints the verdict with it.
+
+The fifth request list of the observatory records the run's blocks
+(`observatory/test/helpers/requests/list-5.ts`, branch `claude/observatory-list-5`).
 
 ## What is not known
 
