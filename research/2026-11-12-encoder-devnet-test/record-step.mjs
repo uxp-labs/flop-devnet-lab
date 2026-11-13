@@ -28,7 +28,7 @@
 // reported it so, with the block hash beside it; no balance is written.
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
-import { HASH, RAW, RERUN, loadPlan, readJson, sha256Text, ss58, fromSs58, substitute } from "./lib.mjs";
+import { HASH, RAW, RERUN, loadPlan, readJson, sha256Text, ss58, fromSs58, substitute, planRuntime } from "./lib.mjs";
 import { DeviceKeyError, loadDeviceSigner } from "./device-key.mjs";
 import { planStepOf, loadRecord, entryOf, viewOf, signedFile, sendFile, runFiles, sendText } from "./record.mjs";
 import { nextOf } from "./judge.mjs";
@@ -50,16 +50,20 @@ export function takeRelay(text, sha256, what) {
   return v;
 }
 
-const runtimeOfPlan = (plan) => ({ specName: plan.values.SPEC_NAME.value, specVersion: Number(plan.values.SPEC.value), transactionVersion: Number(plan.values.TXV.value), genesisHash: plan.values.GENESIS.value });
+/** The checks of the owner's start reads that need no key (F6): the owner, the plan's runtime, the head and the nonce. */
+export function checkStartReads(plan, reads) {
+  const owner = plan.values.OWNER.value;
+  if (reads.account !== owner && reads.account !== ss58(owner)) no(`the reads are of the account ${reads.account}, not the owner of steps.json`);
+  const want = planRuntime(plan);
+  for (const k of Object.keys(want)) if (reads.runtime?.[k] !== want[k]) no(`the runtime's ${k} is ${reads.runtime?.[k]}, steps.json has ${want[k]}`);
+  if (!Number.isSafeInteger(reads.finalized?.number) || !HASH.test(reads.finalized?.hash ?? "")) no("the reads need the finalized head's number and hash");
+  if (!Number.isSafeInteger(reads.account_nonce) || reads.account_nonce < 0) no("the reads need the owner's next nonce");
+}
 
 /** The run time record at the start (R1), from the owner's reads and the device's public key. */
 export function startRecord(plan, reads, readsSha256, devicePublicKey, nowIso = new Date().toISOString()) {
   const owner = plan.values.OWNER.value;
-  if (reads.account !== owner && reads.account !== ss58(owner)) no(`the reads are of the account ${reads.account}, not the owner of steps.json`);
-  const want = runtimeOfPlan(plan);
-  for (const k of Object.keys(want)) if (reads.runtime?.[k] !== want[k]) no(`the runtime's ${k} is ${reads.runtime?.[k]}, steps.json has ${want[k]}`);
-  if (!Number.isSafeInteger(reads.finalized?.number) || !HASH.test(reads.finalized?.hash ?? "")) no("the reads need the finalized head's number and hash");
-  if (!Number.isSafeInteger(reads.account_nonce) || reads.account_nonce < 0) no("the reads need the owner's next nonce");
+  checkStartReads(plan, reads);
   if (devicePublicKey === owner) no("the device key is the owner's key");
   const r = template(plan);
   r.accounts = { owner: { public_key: owner, ss58: ss58(owner) }, device: { public_key: devicePublicKey, ss58: ss58(devicePublicKey) } };
@@ -195,6 +199,7 @@ function main(argv) {
     const run = resolve(f.run ?? no("--run <run folder> is required"));
     if (existsSync(runFiles(run).results)) no(`${runFiles(run).results} exists: start never writes over a record`);
     const reads = takeRelay(f.reads, f["reads-sha256"], "reads");
+    checkStartReads(plan, reads); // F6: before the key file is opened
     const signer = loadDeviceSigner(f.key ?? no("--key is required"));
     const pub = hex(signer.publicKey);
     signer.wipe();

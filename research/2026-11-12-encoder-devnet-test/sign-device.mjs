@@ -36,13 +36,14 @@
 import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
-import { REPO, HASH, RAW, loadPlan, readJson, substitute, sha256Text, ss58 } from "./lib.mjs";
+import { REPO, HASH, RAW, loadPlan, readJson, substitute, sha256Text, ss58, planRuntime } from "./lib.mjs";
 import { DeviceKeyError, loadDeviceSigner } from "./device-key.mjs";
 import { sendText as sendTextOf, planStepOf, loadRecord, viewOf, deviceIncluded, sessionSucceeded, afterBlockOf, signedFile, sendFile, runFiles } from "./record.mjs";
 import { nextOf } from "./judge.mjs";
 
 const chain = (f) => import(pathToFileURL(join(REPO, "imd-flop", "dist", "chain", f)).href);
-const { signSessionCall } = await chain("extrinsic.js");
+const { signSessionCall, encodeSessionCall } = await chain("extrinsic.js");
+const { readCall } = await chain("reader.js");
 const { runtimeFor } = await chain("table.js");
 
 /** A refusal of this script: its message is its own words, never input bytes of the key. */
@@ -135,7 +136,17 @@ export function preflight({ plan, run, id, readsText, readsSha256, again = false
     if (!Number.isSafeInteger(last)) no(`signed/${id}.json has no last valid block`);
     if (!(reads.birth.number > last)) no(`--again: the earlier copy is valid to block ${last}, and the birth block of the reads is ${reads.birth.number}: its era is not over`);
   }
-  return { step, reads, results, earlier };
+  // F6: what can refuse without the key comes before it. The runtime of the reads must be one the
+  // encoder's table holds (RUNTIME_UNKNOWN otherwise) and the plan's; the call is built unsigned and
+  // its declared spend compared with steps.json. After the key only the signature and the writes remain.
+  runtimeFor(reads.runtime);
+  const want = planRuntime(plan);
+  for (const k of Object.keys(want)) if (reads.runtime[k] !== want[k]) no(`the runtime of the reads has ${k} ${reads.runtime[k]}, steps.json has ${want[k]}`);
+  const call = encodeSessionCall({ runtime: reads.runtime, owner: bytes32(plan.values.OWNER.value, "OWNER"), inner: innerOf(plan, step, reads.runtime, results), sessionNonce: reads.sessionNonce ?? 0n });
+  const declared = substitute(step.declared, plan, results, true);
+  const spend = readCall(reads.runtime, call).spend;
+  if (spend.toString() !== declared) no(`the encoder declares ${spend}, steps.json says ${declared}: not signed`);
+  return { step, reads, results, earlier, call: hex(call) };
 }
 
 /** Plain data of the encoder's fields: bytes as hex, bigints as decimal strings. */

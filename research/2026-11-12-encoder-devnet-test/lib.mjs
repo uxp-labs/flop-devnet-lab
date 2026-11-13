@@ -146,6 +146,9 @@ export function rerunFee(id, rerunResults = readJson(join(RERUN, "results.json")
   return s.fee_raw;
 }
 
+/** The runtime of the plan: steps.json SPEC_NAME, SPEC, TXV and GENESIS, in the encoder's names. */
+export const planRuntime = (plan) => ({ specName: plan.values.SPEC_NAME.value, specVersion: Number(plan.values.SPEC.value), transactionVersion: Number(plan.values.TXV.value), genesisHash: plan.values.GENESIS.value });
+
 export const stepOf = (plan, id) => {
   const s = plan.steps.find((x) => x.id === id);
   if (!s) throw new Error(`no step ${id}`);

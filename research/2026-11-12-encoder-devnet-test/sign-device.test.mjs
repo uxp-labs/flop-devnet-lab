@@ -347,8 +347,21 @@ test("R2: the script builds no call bytes of its own: it imports only the encode
   const src = readFileSync(SCRIPT, "utf8");
   const statics = [...src.matchAll(/^import .* from "([^"]+)";$/gm)].map((m) => m[1]);
   assert.deepEqual(statics, ["node:fs", "node:path", "node:url", "./lib.mjs", "./device-key.mjs", "./record.mjs", "./judge.mjs"]);
-  assert.deepEqual([...src.matchAll(/chain\("([^"]+)"\)/g)].map((m) => m[1]), ["extrinsic.js", "table.js"]);
+  assert.deepEqual([...src.matchAll(/chain\("([^"]+)"\)/g)].map((m) => m[1]), ["extrinsic.js", "reader.js", "table.js"]);
   assert.match(readFileSync(join(HERE, "device-key.mjs"), "utf8"), /resolve\("@noble\/curves\/ed25519\.js"\)/);
   assert.doesNotMatch(src, /Uint8Array\.of\(/, "no hand built bytes");
   assert.equal([...src.matchAll(/signSessionCall\(/g)].length, 1);
+});
+
+test("F6: a declared spend that is not steps.json's, a runtime the encoder's table does not hold and one that is not the plan's are refused in preflight, which takes no key", async () => {
+  const { preflight, SignDeviceError } = await import("./sign-device.mjs");
+  const { run } = at("T2");
+  const r = t3Reads();
+  const wrong = structuredClone(plan); wrong.steps.find((s) => s.id === "T3").declared = "1";
+  assert.throws(() => preflight({ plan: wrong, run, id: "T3", readsText: r.text, readsSha256: r.sha }), (e) => e instanceof SignDeviceError && /the encoder declares 10000000000000000, steps.json says 1: not signed/.test(e.message));
+  const unknown = deviceReads(DEVICE, { number: BIRTH }); const u = JSON.parse(unknown.text); u.runtime.specVersion += 1;
+  assert.throws(() => preflight({ plan, run, id: "T3", readsText: JSON.stringify(u), readsSha256: createHash("sha256").update(JSON.stringify(u)).digest("hex") }), (e) => e.refusal === "RUNTIME_UNKNOWN");
+  const other = structuredClone(plan); other.values.SPEC_NAME.value = "another-runtime";
+  assert.throws(() => preflight({ plan: other, run, id: "T3", readsText: r.text, readsSha256: r.sha }), (e) => e instanceof SignDeviceError && /specName tzkv-runtime, steps.json has another-runtime/.test(e.message));
+  assert.match(preflight({ plan, run, id: "T3", readsText: r.text, readsSha256: r.sha }).call, /^0x5e02/);
 });

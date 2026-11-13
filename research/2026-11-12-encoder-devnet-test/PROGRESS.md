@@ -9,14 +9,24 @@ Start: head `e18e725`; the second reviewer's branch (`8ff23d6`) merged by fast f
 ### Done, by rule id
 
 - merge of the second reviewer's branch.
+- F1: research-signed.mjs (expectedOf, nonceOf, envelope, checkResearchSigned); send-file checks
+  before it writes, recordReading checks every reading of a research signer id; plan.mjs next uses
+  nonceOf. research-signed.test.mjs (13). fixtures.mjs planSigned: a stand in with the plan's bytes
+  and a made up signature (record-step.test.mjs ownerSigned and plan-next send-file test adapted).
+- F6: sign-device preflight ends with runtimeFor, the plan's runtime, encodeSessionCall and the
+  declared spend by readCall; record-step start runs checkStartReads before the key. Own test in
+  sign-device.test.mjs; its import list test now names reader.js.
 
 ### Next
 
-- F1: research-signed.mjs (the plan's bytes of a research signer step), send-file and step use it.
+- F10, then F2, F11, the runner, F9, F3 with G1 and G4, F12 and G2, the words, G3.
 
 ### Decisions (fix round 2) and why
 
-(none yet)
+- F1: the id itself is never counted in its own nonce, so the check gives the same answer when an
+  explorer reading is added after the step is final. An attempt (T8.2) counts the refused T8.
+- F1: the F1 unit tests set OWNER to a test key in a copy of the plan held in memory, so the file
+  flop-sign.mjs sign makes with that key passes as an owner step. CLI tests use planSigned.
 
 ## Fix round 1
 
