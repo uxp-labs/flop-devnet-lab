@@ -18,9 +18,17 @@ Order of work (the brief's): H1 with H2, H3, H4; H5; H6 to H11; the words; the m
   stop test; record-step R2 (already-sent left the list of nothing submitted); plan P4 (the count
   holds the nonce rows).
 
+- H5: judge.mjs judgeFinal: a lead_stop carried over at an id not in a finalized block; a missing
+  test step with it is "stopped by the lead (case x)" and the batch stops there; a missing test
+  step with no stop at or before it is differs ("missing from the final record"), so failed, exit 1;
+  a lead_stop at a cleanup step goes into left (as nextOf does) and the steps after it are judged;
+  after c or d the copy is left in words (unsentLeft). Tests in check.test.mjs (H5, 3). The fault
+  is older than the last round: the branch "not run" with no problem for a missing test step came
+  in with the first build, 59f8bd5 (R7, R8), before the first review.
+
 ### Next
 
-H5, then H6 to H11, then the words and the mutants.
+H6 to H11, then the words and the mutants.
 
 ### Decisions (fix round 3) and why
 
@@ -34,6 +42,8 @@ H5, then H6 to H11, then the words and the mutants.
 - H1: when the record holds such a cover, the reads are checked for every research signer stop,
   not only c and d, so the words are right after a find.
 - H2: an already-sent anywhere in the readings (current or earlier) refuses c and d.
+- H5: a missing needed CLEANUP step with no stop stays as before (left, exit 4): the brief's
+  consequence names test steps only. Reported for the lead to confirm.
 
 
 ## Fix round 2 (brief 2026-11-13-fix2-d1-encoder-devnet-test-prep.md)

@@ -400,11 +400,26 @@ function judgeFinal(ctx) {
   for (const step of plan.steps) {
     const ids = idsOf(step).filter((id) => viewOf(results, id)?.final);
     const needed = step.only_if ? holdsBy(step.only_if, plan, results, stoppedAt !== null) === true : true;
+    // F3, H5: a stop by the lead the final record carries over from the run time record, at an id of
+    // this step that is not in a finalized block
+    const stopIds = idsOf(step).filter((id) => leadStopOf(results, id) && !viewOf(results, id)?.final);
+    for (const id of stopIds) {
+      const ls = leadStopOf(results, id);
+      left.push(...unsentLeft(id, ls));
+      if (step.cleanup) left.push(`${id} was stopped by the lead (case ${ls.case}): ${step.left_if_it_fails}`);
+    }
     if (!ids.length) {
+      // H5: every step is run, left out by its only_if, or after a recorded stop. A test step that is
+      // missing with no stop recorded at it or before it makes the record wrong.
       let j;
-      if (step.cleanup && needed) { j = { status: "not run", problems: [], info: [] }; left.push(`${step.id} is needed and not run: ${step.left_if_it_fails}`); }
+      const ls = stopIds.length ? leadStopOf(results, stopIds[0]) : null;
+      if (ls) {
+        j = { status: `stopped by the lead (case ${ls.case})`, problems: [], info: [ls.why] };
+        if (!step.cleanup && !stoppedAt) stoppedAt = step.id;
+      } else if (step.cleanup && needed) { j = { status: "not run", problems: [], info: [] }; left.push(`${step.id} is needed and not run: ${step.left_if_it_fails}`); }
       else if (!needed) j = { status: "not needed", problems: [], info: [`only if ${step.only_if.step} ${step.only_if.event ? "recorded " + step.only_if.event : "succeeded"}`] };
-      else j = { status: stoppedAt ? "not sent: stopped" : "not run", problems: [], info: [] };
+      else if (stoppedAt) j = { status: "not sent: stopped", problems: [], info: [] };
+      else j = { status: "differs", problems: [`${step.id} is missing from the final record, and no stop is recorded at it or before it`], info: [] };
       run.push({ id: step.id, ...j });
       continue;
     }

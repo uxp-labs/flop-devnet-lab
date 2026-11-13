@@ -461,3 +461,33 @@ test("G2: the run time judge reads T6's refund from the explorer's events: escro
   assert.equal(none.step, "T7");
   assert.ok(none.said.some((l) => /the refund is not known/.test(l)));
 });
+
+// ---- H5: the final judge counts every step ---------------------------------------------------
+const withStop = (r, id, stop) => { let e = r.steps.find((s) => s.step === id); if (!e) { e = { step: id }; r.steps.push(e); } e.lead_stop = { why: "the lead's words", utc: "2026-11-13T06:00:00.000Z", ...stop }; return r; };
+
+test("H5: a test step missing from a final record with no stop recorded at it or before it fails the record, exit 1", () => {
+  for (const skip of [["T3", "T6"], ["T5", "T7"], ["T2", "T3", "T4", "T5", "T6", "T7", "T8"]]) {
+    const out = judge(syntheticRun({ skip }));
+    assert.equal(out.exit, 1, `${skip}: ${out.verdict}`);
+    assert.match(out.verdict, new RegExp(`^failed: ${skip[0]}: ${skip[0]} is missing from the final record, and no stop is recorded at it or before it`));
+  }
+});
+
+test("H5: with the lead's stop at a missing test step the verdict is stopped there: case a leaves nothing (exit 0), case c leaves the copy in words (exit 4)", () => {
+  const a = judge(withStop(syntheticRun({ skip: ["T3", "T4", "T5", "T6", "T7"] }), "T3", { case: "a", evidence: {} }));
+  assert.equal(a.verdict, "stopped at T3, cleanup complete, nothing left (balances: by position)");
+  assert.equal(a.exit, 0);
+  assert.equal(status(a).T3, "stopped by the lead (case a)");
+  assert.equal(status(a).T4, "not sent: stopped");
+  const c = judge(withStop(syntheticRun({ skip: ["T2", "T3", "T4", "T5", "T6", "T7", "T8"] }), "T2", { case: "c", evidence: { copy: "signed/T2.json", extrinsic_hash: "0x" + "ab".repeat(32), signer: OWNER, nonce: "16" }, unsent: ["signed/T2.json"] }));
+  assert.match(c.verdict, /^stopped at T2, left: signed\/T2\.json of T2: refused at submission with node code 1010 at a first send; they must never be sent/);
+  assert.equal(c.exit, 4);
+});
+
+test("H5: the lead's stop at a cleanup step goes into what is left and the steps after it are judged: as planned, left, exit 4", () => {
+  const out = judge(withStop(syntheticRun({ skip: ["T8"] }), "T8", { case: "a", evidence: {} }));
+  assert.equal(status(out).T8, "stopped by the lead (case a)");
+  assert.equal(status(out).T9, "pass");
+  assert.match(out.verdict, /^as planned, left: T8 was stopped by the lead \(case a\): /);
+  assert.equal(out.exit, 4);
+});
