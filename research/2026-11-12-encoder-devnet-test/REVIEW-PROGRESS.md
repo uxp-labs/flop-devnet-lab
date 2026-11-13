@@ -36,3 +36,16 @@ No file of the builder is changed. Tests of the reviewer are `review-*.test.mjs`
 ## Mutants
 
 `node review-mutants.mjs`: 18 mutants, 17 killed by the builder's tests, R-M17 equivalent (alive, reason in the json). Baseline 0 builder fails, 17 reviewer fails (the DEFECT tests).
+
+## Table F (what is left on chain after each step and answer)
+
+Answers: ok, err (refused in the block), sub (refused at submission or outdated), nf (in a block, not final by the deadline), none (no answer, or the runner ended early, F1 and F3).
+
+- T1: ok device funded, T9 returns it. err/sub nothing. nf/none: unknown, immortal, may still land; plan silent.
+- T2: ok session live, T8 ends it. err/sub nothing. nf/none: may land after the stop, session live with an empty device until A_BLOCKS; plan silent.
+- T3: ok escrow locked, T6 needs the channel id and ack deadline, which nothing gives at run time (F11). err nothing locked. sub nothing. nf/none: a new reads gives nonce + 1, a second T3 fails ChannelExists, fee lost (F12).
+- T4: ok top up locked, assumed back at T6 (not known). err nothing. nf/none: a second T4 tops up again.
+- T5: ok escrow locked, T7 needs the channel id (F11). err nothing. nf/none: a second T5 fails ChannelExists, fee lost.
+- T6/T7: ok back. err (early, F6) escrow stays; the plan's retry cannot be signed or judged (F10). nf/none unknown.
+- T8: ok. err session live to A_BLOCKS; "revoke again" has no command.
+- T9: ok. err funds stay; retry with next nonce.
