@@ -14,13 +14,19 @@ Brief: /mnt/user-data/outputs/briefs/2026-11-13-p2-chain-reads.md. Branch claude
   scripts/read-key-table.mjs), keys, session-state, cross-check, read. Typechecks. No tests of it yet.
 
 ## Next
-Tests T1..T6 under imd-flop/test/chain-read-*.test.ts, README section (W1), REVIEW-LOG round (W2), checks.
+Checks: imd-flop npm run check, research node --test (two folders), observatory npm run check (long), then
+GitHub checks of the last commit. Then remove this file in the last commit.
 
-## Open question for the lead (T3)
+Done since: T1/T4 cb03f54, T2/T3/B2 b333a2c, C2/C4 6d9be3b, T5 2f6a561, T6 pass ca5936f (two
+unreachable guards removed, tests added), W1/W2 d1beb05 (REVIEW-LOG round 30; 29 left for shape @3).
+Sanity mutation pass (not committed, /tmp script): 29 hand mutants over src/chain-read, all killed after ca5936f.
+
+## Open point for the lead (T3)
 The rerun's record holds no absent session: a revoked session is STORED with active false (A10 and B11
 batch answers in recording 4 hold Sessions bytes; results.json A10 reads_after session_active "false").
-No stated session entry is answered null in any recording. T3 is built on a scripted null answer
-for the Sessions key of the rerun's owner and dev2 at block A2 (before session B existed), and flagged.
+T3 uses instead the one recorded null of a stated session entry: SessionNonces(D1 as owner, S as
+delegate) at block 3530299 in the upgrade recording (calls 43 of its requests.json). An Optional
+Sessions answered null is tested on the rerun recording with that one answer changed to null.
 
 ## Decisions
 - B1: serverText moved to its own module rather than duplicated or imported from gateway.ts (a cycle).
