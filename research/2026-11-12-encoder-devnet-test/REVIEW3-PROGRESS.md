@@ -25,6 +25,11 @@ Baseline at a9442dd: 229 of 229 pass.
   find not-found, sent_by missing, sent_by find, code as text, finalized. Cleanup after each stop right.
 - A device 1010 needs case b's reads. sent_by edited in the relay text is refused by its sha256.
 
+- Attack A held (review3-research-signed.test.mjs, 9): nonce and length in longer compact modes,
+  a hash right for other bytes, lying fields beside right bytes, attempt and sweep nonces, a
+  repeated owner step, a device value beginning with -- in callOf. Info: $DEVICE of T1, T2, T8 is
+  taken from the record unchecked (only T9 checks it is 32 bytes).
+
 ## Next
 
-A (research signer bytes, compact forms, callOf), C (submit), D (preflight, dead files), E, F mutants.
+C (submit), D (preflight, dead files), E, F mutants.
