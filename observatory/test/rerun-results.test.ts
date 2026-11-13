@@ -266,6 +266,12 @@ describe("the folder's own checker on results.json (review round 25, M4)", () =>
   it("is what the README of the rerun is written from: the file's sha256, and the table of steps row by row", () => {
     const readme = repoText("research/2026-11-12-session-rerun-1014020/README.md");
     expect(readme).toContain(createHash("sha256").update(TEXT).digest("hex"));
+    // The checker's own summary of the committed record, in the words check.mjs prints.
+    const judged = judgeRun(context(RESULTS));
+    const count = (status: string) => judged.run.filter((r: Rec) => r.status === status).length;
+    const summary = `${count("pass")} pass, ${count("differs")} differ, ${count("incomplete")} incomplete, ${count("not run")} not run`;
+    expect(summary).toBe("23 pass, 0 differ, 0 incomplete, 0 not run");
+    expect(readme).toContain(summary);
     const expect_ = Object.fromEntries((JSON.parse(repoText("research/2026-11-12-session-rerun-1014020/steps.json")) as { steps: Rec[] }).steps.map((s) => [s.id, s.expect]));
     const rows = readme.split("\n").filter((l) => /^\| [AB]\d+ \|/.test(l));
     const seen = (r: string) => (r === "success" ? "success" : r.replace(/^failed: /, "").replace(/ \(pallet .*$/, ""));
