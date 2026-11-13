@@ -15,7 +15,7 @@ import { loadDeviceSigner } from "./device-key.mjs";
 import { leadStop, LeadStopError } from "./lead-stop.mjs";
 import { nextOf } from "./judge.mjs";
 import { recordReading } from "./record-step.mjs";
-import { plan, asPlanned, runFolder, sent, makeKey, tempDir, deviceReads, planSigned, relay } from "./fixtures.mjs";
+import { plan, asPlanned, runFolder, sent, makeKey, tempDir, deviceReads, planSigned, relay, signerReads } from "./fixtures.mjs";
 
 const DIR = tempDir("review3-stop");
 after(() => rmSync(DIR, { recursive: true, force: true }));
@@ -79,10 +79,15 @@ test("review3 B HELD: the table of cases: a stop is recorded exactly where the r
   const lines = [];
   for (const row of ROWS) {
     const run = row.make();
-    const why = isRefused(() => stop(run, row.id));
+    // adapted by the builder (H1): a research signer step with a signed copy is played with the
+    // reads of its signer whose next nonce is the copy's, so c and d can hold and every refusal is
+    // made with the node's count beside it
+    const signed = plan.steps.find((s) => s.id === row.id).tool === "research-signer" && existsSync(join(run, "signed", `${row.id}.json`));
+    const o = signed ? (() => { const x = signerReads(load(run), row.id); return { readsText: x.text, readsSha256: x.sha }; })() : {};
+    const why = isRefused(() => stop(run, row.id, o));
     let got = why === null ? "allowed" : "refused";
     let r = null;
-    if (why === null) r = stop(run, row.id);
+    if (why === null) r = stop(run, row.id, o);
     const ls = r?.steps.find((s) => s.step === row.id)?.lead_stop;
     lines.push(`${row.name}: ${got}${ls ? ` case ${ls.case}` : ""}`);
     if (row.allow === null) { assert.notEqual(why, null, `${row.name}: a stop must be refused`); continue; }
@@ -189,7 +194,8 @@ test("review3 B DEFECT (V3): after case c on T1 for a fee the owner could not pa
   const r = asPlanned(DEVICE, "T1").results;
   r.steps = r.steps.filter((s) => s.step !== "T1");
   const run = withReading((() => { const x = runFolder(r); planSigned(x, "T1", load(x)); return x; })(), "T1", R1010("Inability to pay some fees (e.g. account balance too low)"));
-  const s = stop(run, "T1");
+  const reads = signerReads(load(run), "T1"); // adapted by the builder (H1): case c needs the owner's next nonce, equal to T1's
+  const s = stop(run, "T1", { readsText: reads.text, readsSha256: reads.sha });
   const n = nextOf(plan, s);
   assert.equal(s.steps.find((e) => e.step === "T1").lead_stop.case, "c");
   assert.ok(n.left.some((l) => /T1/.test(l)), `nothing is left in words, while signed/T1.json is an immortal copy with the owner's nonce ${load(run).owner_account_nonce_at_start} that anyone holding the bytes can submit until that nonce is used: left = ${JSON.stringify(n.left)}`);

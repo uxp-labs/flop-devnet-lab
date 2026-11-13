@@ -9,6 +9,7 @@ import { join } from "node:path";
 import { HERE, RERUN, readJson, sha256Text, ss58 } from "./lib.mjs";
 import { loadDeviceSigner, KEY_REFUSAL } from "./device-key.mjs";
 import { recordForm } from "./record-step.mjs";
+import { nextOf } from "./judge.mjs";
 import { plan, V, H, RUNTIME, makeKey, tempDir, relay, deviceReads, explorerAnswer, startedRecord, planSigned } from "./fixtures.mjs";
 
 const SCRIPT = join(HERE, "record-step.mjs"), SIGN = join(HERE, "sign-device.mjs");
@@ -144,11 +145,26 @@ test("R2: the sha256s are checked, the bundle must be the step's file in signed/
   assert.match(step(run, "T1", ...sentArgs(relay(other))).stderr, /is not the one of signed\/T1.json/);
   ownerSigned(run, "T2");
   assert.match(step(run, "T2", ...sentArgs(sentRelay(run, "T2"))).stderr, /T2 is not next by the record: go on T1/);
-  for (const nothing of ["not-sent", "already-sent", "refused-bundle", "not-in-sent-list"]) {
+  for (const nothing of ["not-sent", "refused-bundle", "not-in-sent-list"]) {
     const v = JSON.parse(s.text); v.status = nothing;
     assert.match(step(run, "T1", ...sentArgs(relay(v))).stderr, /nothing was submitted by that call/);
   }
   assert.equal(record(run).steps.find((x) => x.step === "T1").run_time, null, "nothing was written");
+});
+
+test("H2: the pane's already-sent is recorded as a reading: nextOf waits on the step's inclusion, as for a step sent and not in a finalized block", () => {
+  const { run } = started();
+  ownerSigned(run, "T1");
+  const v = JSON.parse(sentRelay(run, "T1").text);
+  Object.assign(v, { status: "already-sent", sent_by: "send", problem: "this extrinsic was sent before" });
+  delete v.statuses;
+  const w = ok(step(run, "T1", ...sentArgs(relay(v))));
+  assert.match(w.stdout, /recorded T1: the runner said already-sent/);
+  assert.match(w.stdout, /wait: T1 is sent and not in a finalized block \(the runner said already-sent\)/);
+  const rt = record(run).steps.find((x) => x.step === "T1").run_time;
+  assert.equal(rt.sent.status, "already-sent");
+  const n = nextOf(plan, record(run));
+  assert.deepEqual([n.word, n.step, n.waiting], ["wait", "T1", "inclusion"]);
 });
 
 test("R2: a run_time that holds a finalized block is never replaced; one that does not is replaced and kept under earlier_readings", () => {

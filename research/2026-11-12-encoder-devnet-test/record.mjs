@@ -28,8 +28,26 @@ export function planStepOf(plan, id) {
 export const NEVER_SENT = "the lead says this copy was never sent";
 /** The lead's stop at an id the record holds (F3), or null. */
 export const leadStopOf = (results, id) => entryOf(results, id)?.lead_stop ?? null;
-/** What a stop by the lead leaves, in words: the unsent files of case d, never to be sent; else nothing. */
-export const unsentLeft = (id, stop) => (stop?.case === "d" ? [`${stop.unsent.join(" and ")} of ${id}: ${NEVER_SENT}; they must never be sent`] : []);
+/**
+ * What a stop by the lead leaves, in words (H4): after case c or d the copy, by its files, its
+ * extrinsic hash, its signer and its nonce. It stays valid until that signer's nonce is used, it must
+ * never be sent, and the next transaction this signer sends ends it. Nothing for cases a and b.
+ */
+export function unsentLeft(id, stop) {
+  if (stop?.case !== "c" && stop?.case !== "d") return [];
+  const ev = stop.evidence ?? {};
+  const files = Array.isArray(stop.unsent) && stop.unsent.length ? stop.unsent : [ev.copy ?? `signed/${id}.json`];
+  const why = stop.case === "d" ? NEVER_SENT : "refused at submission with node code 1010 at a first send";
+  const signer = ev.signer ?? "not known", nonce = ev.nonce ?? "not known";
+  return [`${files.join(" and ")} of ${id}: ${why}; they must never be sent. The copy (extrinsic hash ${ev.extrinsic_hash ?? "not known"}, signer ${signer}, nonce ${nonce}) stays valid until the nonce ${nonce} of ${signer} is used: the next transaction this signer sends ends it`];
+}
+
+/** Every runner reading the record holds of an id, earlier ones first, the current one last. */
+export function readingsOf(view) {
+  const rt = view?.entry?.run_time;
+  if (!rt) return [];
+  return [...(rt.earlier_readings ?? []).map((x) => x?.sent), rt.sent].filter((x) => x && typeof x === "object");
+}
 
 /** The run folder's files. */
 export const runFiles = (run) => ({ results: join(run, "results.json"), signed: join(run, "signed") });

@@ -10,7 +10,7 @@ import { HERE, readJson } from "./lib.mjs";
 import { loadDeviceSigner } from "./device-key.mjs";
 import { leadStop, LeadStopError, NEVER_SENT } from "./lead-stop.mjs";
 import { nextOf } from "./judge.mjs";
-import { plan, asPlanned, runFolder, sent, makeKey, tempDir, deviceReads, planSigned, relay } from "./fixtures.mjs";
+import { plan, asPlanned, runFolder, sent, makeKey, tempDir, deviceReads, planSigned, relay, signerReads, accountReads } from "./fixtures.mjs";
 
 const DIR = tempDir("lead-stop-test");
 after(() => rmSync(DIR, { recursive: true, force: true }));
@@ -22,6 +22,8 @@ const save = (run, r) => writeFileSync(join(run, "results.json"), JSON.stringify
 const load = (run) => readJson(join(run, "results.json"));
 const stop = (run, id, o = {}) => leadStop({ plan, run, results: load(run), id, why: "the lead's words for this stop", ...o });
 const refused = (fn, re) => assert.throws(fn, (e) => e instanceof LeadStopError && re.test(e.message), re.toString());
+/** The signer's reads of an id in a run folder, its next nonce the copy's plus delta (H1). */
+const counted = (run, id, o = {}) => { const r = signerReads(load(run), id, o); return { readsText: r.text, readsSha256: r.sha }; };
 
 /** A run folder through T2, with T3 signed by sign-device (copy A) and a reading of it recorded. */
 function t3Signed(status = "deadline") {
@@ -82,7 +84,7 @@ test("F3 b refused: a copy whose era is not over, a device nonce that moved, and
 
 test("F3 c: T2 refused at submission with node code 1010: stopped, and T9 follows and nothing else", () => {
   const run = t2Signed({ status: "refused-at-submission", sent_by: "send", node: { code: 1010, message: "Invalid Transaction", data: "x" } });
-  const r = stop(run, "T2");
+  const r = stop(run, "T2", counted(run, "T2"));
   assert.equal(r.steps.find((s) => s.step === "T2").lead_stop.case, "c");
   const n = nextOf(plan, r);
   assert.deepEqual([n.stopped_at, n.cleanup, n.step], ["T2", ["T9"], "T9"]);
@@ -97,7 +99,7 @@ test("F3 c refused: the last reading is a deadline, a lost connection, or a refu
 test("F3 d: a research signer copy the record holds no reading of: the record says the lead says it was never sent, and what is left names the unsent files", () => {
   const run = t2Signed(null);
   writeFileSync(join(run, "signed", "T2.send.json"), "{}");
-  const r = stop(run, "T2");
+  const r = stop(run, "T2", counted(run, "T2"));
   const ls = r.steps.find((s) => s.step === "T2").lead_stop;
   assert.equal(ls.case, "d");
   assert.equal(ls.words, NEVER_SENT);
@@ -138,7 +140,7 @@ test("F3: after a stop no tool signs the step, writes a send file for it, or rec
   const s = relay({ step: "T3", bundle_sha256: "00".repeat(32), extrinsic_sha256: "00".repeat(32), status: "deadline" });
   assert.match(cli("record-step.mjs", ["step", "T3", "--run", run, "--sent", s.text, "--sent-sha256", s.sha]).stderr, /the lead stopped T3 \(case b\): nothing of it is recorded after the stop/);
   const run2 = t2Signed({ status: "refused-at-submission", sent_by: "send", node: { code: 1010, message: "Invalid", data: null } });
-  save(run2, stop(run2, "T2"));
+  save(run2, stop(run2, "T2", counted(run2, "T2")));
   const sf = cli("record-step.mjs", ["send-file", "T2", "--run", run2]);
   assert.match(sf.stderr, /the lead stopped T2: no send file is written for it/);
   assert.equal(existsSync(join(run2, "signed", "T2.send.json")), false);
@@ -197,4 +199,105 @@ test("G1: the 1010 row says both: invalid on a first send; on a sendSame after a
   assert.match(row.known, /on a first send: the node judged the extrinsic invalid/);
   assert.match(row.known, /On a sendSame after an outcome that may still land \(deadline, connection-lost, ended\), 1010 can mean the first copy is already in a block/);
   assert.match(row.lead, /lab.find before anything else/);
+});
+
+// ---- fix round 3: the node's own count (H1), already-sent (H2), case a (H3), what is left (H4) ----
+
+/** T2 signed with the plan's bytes and a first send refused with 1010: the record of case c. */
+const t2c = () => t2Signed({ status: "refused-at-submission", sent_by: "send", node: { code: 1010, message: "Invalid Transaction", data: "x" } });
+
+test("H1 c and d: the signer's next nonce equal to the copy's allows the stop, and the evidence holds the head, the next nonce, the copy's hash and nonce", () => {
+  for (const [kase, run] of [["c", t2c()], ["d", t2Signed(null)]]) {
+    const reads = signerReads(load(run), "T2", { number: 3600123 });
+    const ls = stop(run, "T2", { readsText: reads.text, readsSha256: reads.sha }).steps.find((s) => s.step === "T2").lead_stop;
+    const f = readJson(join(run, "signed", "T2.json"));
+    assert.equal(ls.case, kase);
+    assert.deepEqual([ls.evidence.finalized_head.number, ls.evidence.signer_next_nonce, ls.evidence.extrinsic_hash, ls.evidence.nonce, ls.evidence.signer, ls.evidence.reads_sha256],
+      [3600123, Number(f.account_nonce), f.extrinsic_hash, f.account_nonce, plan.values.OWNER.value, reads.sha], kase);
+  }
+});
+
+test("H1 c and d refused: no reads, a next nonce above (names find and sendSame), a next nonce below (the record and the chain disagree)", () => {
+  for (const make of [t2c, () => t2Signed(null)]) {
+    refused(() => stop(make(), "T2"), /case [cd] needs the node's count of the signer's nonce: --reads and --reads-sha256, lab.accountReads of the step's signer/);
+    const up = make();
+    refused(() => stop(up, "T2", counted(up, "T2", { delta: 1 })), /next nonce is \d+, above the copy's \d+: the nonce is used, or a transaction with it is in the pool.*lab\.find from the block before the first send \(the record's start, finalized block 3599990\).*lab\.sendSame/);
+    const down = make();
+    refused(() => stop(down, "T2", counted(down, "T2", { delta: -1 })), /below the copy's \d+: the record and the chain disagree/);
+  }
+});
+
+test("H1 refused: reads of another account than the step's signer, of another runtime, or changed on the way; the device's reads for T9 are taken", () => {
+  const run = t2c();
+  const nonce = Number(readJson(join(run, "signed", "T2.json")).account_nonce);
+  const dev = accountReads(DEVICE, { nonce });
+  refused(() => stop(run, "T2", { readsText: dev.text, readsSha256: dev.sha }), /not the step's signer/);
+  const rt = accountReads(plan.values.OWNER.value, { nonce, runtime: { ...JSON.parse(dev.text).runtime, specVersion: 1 } });
+  refused(() => stop(run, "T2", { readsText: rt.text, readsSha256: rt.sha }), /the runtime of the reads has specVersion 1/);
+  refused(() => stop(run, "T2", { readsText: dev.text, readsSha256: "00".repeat(32) }), /changed on its way/);
+  // T9: the sweep is the device's: its reads are the device's, and the owner's are refused
+  const t9 = runFolder(asPlanned(DEVICE, "T8").results);
+  planSigned(t9, "T9", load(t9));
+  const owner = accountReads(plan.values.OWNER.value, { nonce: 0 });
+  refused(() => stop(t9, "T9", { readsText: owner.text, readsSha256: owner.sha }), /not the step's signer 0x/);
+  assert.equal(stop(t9, "T9", counted(t9, "T9")).steps.find((s) => s.step === "T9").lead_stop.evidence.signer, DEVICE);
+});
+
+test("H1 refused: a signed file that is not the plan's step is refused with the words of checkResearchSigned", () => {
+  const run = t2Signed(null);
+  planSigned(run, "T2", load(run), { nonce: 99n });
+  const reads = accountReads(plan.values.OWNER.value, { nonce: 99 });
+  refused(() => stop(run, "T2", { readsText: reads.text, readsSha256: reads.sha }), /signed\/T2\.json is not the plan's T2, refused: the nonce is 99.*The lead moves a wrong file aside by hand/);
+});
+
+test("H1: find read every finalized block from the start to the head without the copy and the nonce is used: no stop, these tools go no further, and the stop table's nonce row is named", () => {
+  const run = t2Signed({ status: "not-found", sent_by: "find", step: null, from: 3600390, to: 3600500, head: 3600500 });
+  const rec = load(run);
+  rec.steps.find((s) => s.step === "T2").run_time.earlier_readings = [
+    { sent: { status: "deadline", sent_by: "send", step: "T2" }, sent_sha256: "55".repeat(32) },
+    { sent: { status: "not-found", sent_by: "find", step: null, from: 3599990, to: 3600389, head: 3600500 }, sent_sha256: "56".repeat(32) },
+  ];
+  save(run, rec);
+  const row = plan.stop_table.find((r) => r.step === "T2" && r.answer === "nonce");
+  refused(() => stop(run, "T2", counted(run, "T2", { delta: 1 })), new RegExp(`find read the finalized blocks 3599990 to 3600500 and did not find the copy.*a transaction that is not of this batch used the signer's nonce\\. These tools go no further at T2, and no stop is recorded: ${row.on_chain.slice(0, 40)}`));
+  const n = nextOf(plan, load(run));
+  assert.deepEqual([n.word, n.step, n.waiting, n.cleanup], ["wait", "T2", "inclusion", []], "nextOf goes no further: no cleanup step is named");
+  // a gap in the blocks find read is not that: the refusal is the row of not-found
+  const gap = load(run); gap.steps.find((s) => s.step === "T2").run_time.earlier_readings[1].sent.to = 3600300; save(run, gap);
+  assert.throws(() => stop(run, "T2", counted(run, "T2", { delta: 1 })), (e) => e instanceof LeadStopError && !/go no further/.test(e.message) && /follow send_outcomes not-found/.test(e.message));
+});
+
+test("H1: the stop table has a row nonce for each research signer step, saying what is left and that a later piece of work brings it back", () => {
+  const ids = plan.steps.filter((s) => s.tool === "research-signer").map((s) => s.id);
+  const rows = plan.stop_table.filter((r) => r.answer === "nonce");
+  assert.deepEqual(rows.map((r) => r.step), ids);
+  for (const r of rows) { assert.match(r.on_chain, /not of this batch/); assert.match(r.brings_back, /go no further at T\d and record no stop/); }
+  assert.match(rows.find((r) => r.step === "T2").on_chain, /FUND is on the device/);
+});
+
+test("H2: with the pane's already-sent in the record neither c nor d holds: the stop names find and sendSame", () => {
+  for (const earlier of [[], [{ sent: { status: "already-sent", sent_by: "send", step: "T2" }, sent_sha256: "57".repeat(32) }]]) {
+    const run = earlier.length ? t2c() : t2Signed({ status: "already-sent", sent_by: "send" });
+    const rec = load(run); rec.steps.find((s) => s.step === "T2").run_time.earlier_readings = earlier; save(run, rec);
+    refused(() => stop(run, "T2", counted(run, "T2")), /already-sent for it, so these bytes were sent before: neither case c nor case d holds\. Instead use lab\.find from the block before the first send.*lab\.sendSame/);
+  }
+});
+
+test("H3: case a is refused while the record holds a runner reading of the id, current or earlier, and the signed file is gone", () => {
+  const run = t2Signed({ status: "already-sent", sent_by: "send" });
+  rmSync(join(run, "signed", "T2.json"));
+  refused(() => stop(run, "T2"), /the record holds 1 runner reading\(s\) of it \(already-sent\), so something was sent, and signed\/T2\.json is gone: case a \(nothing was signed\) does not hold\. The lead rules/);
+  const a = runFolder(asPlanned(DEVICE, "T2").results);
+  assert.equal(stop(a, "T3").steps.find((s) => s.step === "T3").lead_stop.evidence.runner_readings, "none in the record");
+});
+
+test("H4: after a stop by c or d what is left names the copy's file, extrinsic hash, signer and nonce, and how long it stays valid", () => {
+  for (const make of [t2c, () => t2Signed(null)]) {
+    const run = make();
+    const f = readJson(join(run, "signed", "T2.json"));
+    const n = nextOf(plan, stop(run, "T2", counted(run, "T2")));
+    const l = n.left.find((x) => x.startsWith("signed/T2.json"));
+    assert.ok(l, n.left.join("\n"));
+    for (const w of [f.extrinsic_hash, `signer ${plan.values.OWNER.value}`, `nonce ${f.account_nonce}`, "they must never be sent", `stays valid until the nonce ${f.account_nonce} of ${plan.values.OWNER.value} is used`, "the next transaction this signer sends ends it"]) assert.ok(l.includes(w), `${w} in: ${l}`);
+  }
 });

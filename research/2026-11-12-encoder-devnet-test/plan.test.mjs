@@ -181,7 +181,9 @@ test("P4: the stop table has a row for every cell of the reviewer's table F, and
   assert.match(lapsed[0].brings_back, /later piece of work/);
   const channel = plan.stop_table.filter((r) => r.answer === "channel"); // G4: a row for each step with a channel
   assert.deepEqual(channel.map((r) => r.step), plan.steps.filter((x) => x.channel).map((x) => x.id));
-  assert.equal(plan.stop_table.length, plan.steps.length * ANSWER_KINDS.length + 1 + channel.length);
+  const nonce = plan.stop_table.filter((r) => r.answer === "nonce"); // H1: a row for each research signer step
+  assert.deepEqual(nonce.map((r) => r.step), plan.steps.filter((x) => x.tool === "research-signer").map((x) => x.id));
+  assert.equal(plan.stop_table.length, plan.steps.length * ANSWER_KINDS.length + 1 + channel.length + nonce.length);
   for (const r of plan.stop_table.filter((x) => !["lapsed", "ok", "err", "channel"].includes(x.answer))) {
     const mortal = plan.steps.find((s) => s.id === r.step).tool === "encoder";
     if (mortal && r.answer !== "sub") assert.match(r.brings_back, /last valid block|S4/, `${r.step} ${r.answer}`);

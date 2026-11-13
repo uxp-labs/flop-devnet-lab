@@ -66,7 +66,7 @@ export function costsText(plan) {
 
 const ANSWERS = { ok: "success", err: "refused in its block", sub: "refused at submission", nf: "in a block, not final by the deadline", none: "no answer" };
 export const ANSWER_KINDS = Object.keys(ANSWERS);
-const OTHER_ROWS = { channel: "a channel id the explorer gives that is not the derived one (G4)", lapsed: "lapsed" };
+const OTHER_ROWS = { channel: "a channel id the explorer gives that is not the derived one (G4)", nonce: "the signer's nonce used by a transaction not of this batch (H1)", lapsed: "lapsed" };
 
 /** The stop table as markdown (P4): for each step and each answer, what is on chain and what brings it back. */
 export function stopsText(plan) {

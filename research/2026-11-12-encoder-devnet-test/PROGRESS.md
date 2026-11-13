@@ -1,5 +1,41 @@
 # Progress of the builder (read first if you take over)
 
+## Fix round 3 (brief 2026-11-13-fix3-d1-encoder-devnet-test-prep.md)
+
+Start: head `a9442dd`, no later commits on the branch. The third reviewer's branch (`6f443b3`)
+merged by fast forward and pushed. 8 of its tests failed at the start (261 tests, 253 pass).
+Order of work (the brief's): H1 with H2, H3, H4; H5; H6 to H11; the words; the mutants.
+
+### Done, by rule id
+
+- H1, H2, H3, H4: lead-stop.mjs researchStop, takeSignerReads, findCovers; record.mjs readingsOf
+  and unsentLeft (names the copy for c and d); record-step.mjs records already-sent; steps.json
+  stop_table rows "nonce" for T1, T2, T8, T9. Tests in lead-stop.test.mjs (H1 to H4, 9) and
+  record-step.test.mjs (H2). fixtures.mjs accountReads and signerReads.
+  Reviewer tests changed (case c or d now needs the signer's reads, the interface of H1):
+  review2-next Q8 DEFECT, review3-stop table of attack B (reads for every research signer row
+  with a signed copy), review3-stop DEFECT V3. Own tests changed: lead-stop F3 c, F3 d, the after
+  stop test; record-step R2 (already-sent left the list of nothing submitted); plan P4 (the count
+  holds the nonce rows).
+
+### Next
+
+H5, then H6 to H11, then the words and the mutants.
+
+### Decisions (fix round 3) and why
+
+- H1: "the block before the first send" is the record's start (finalized block of record-step
+  start), as the refusals of fix round 2 already said: it is before every send of the batch.
+- H1: find covers the blocks when its not-found (or find-deadline) readings of the id, current and
+  earlier, join end to end from the record's start up to a not-found that read to its own head.
+  Only then, and only with reads whose next nonce is above the copy's, the refusal says these tools
+  go no further and names the stop table's row "nonce". nextOf is unchanged there: it keeps waiting
+  on the step, so no cleanup step is named and no stop is recorded.
+- H1: when the record holds such a cover, the reads are checked for every research signer stop,
+  not only c and d, so the words are right after a find.
+- H2: an already-sent anywhere in the readings (current or earlier) refuses c and d.
+
+
 ## Fix round 2 (brief 2026-11-13-fix2-d1-encoder-devnet-test-prep.md)
 
 Start: head `e18e725`; the second reviewer's branch (`8ff23d6`) merged by fast forward and pushed.

@@ -25,10 +25,12 @@
 //
 //   node record-step.mjs stop <id> --run <folder> --why '<words>' [--reads '<text>' --reads-sha256 <sha>]
 //        records the lead's stop at a step that will not come on chain (F3, lead-stop.mjs): allowed
-//        only when its copy cannot land without being sent again (nothing signed; a device copy
-//        whose era is over by the device's reads; a research signer copy refused with node code
-//        1010; or a research signer copy the record holds no reading of, which the lead says was
-//        never sent). Then the cleanup steps that apply. After it no tool signs the id.
+//        only when its copy cannot land without being sent again (nothing signed and no reading in
+//        the record; a device copy whose era is over by the device's reads; a research signer copy
+//        refused with node code 1010 at a first send; or a research signer copy the record holds no
+//        reading of, which the lead says was never sent). For the two research signer cases the
+//        reads are lab.accountReads of the step's signer, and its next nonce must equal the copy's
+//        (H1). Then the cleanup steps that apply. After it no tool signs the id.
 //
 // The record says what it is (R3): record "run-time"; every explorer reading carries its source
 // and read_utc; nothing is called verified; a block is called finalized only where the node
@@ -147,8 +149,13 @@ export function explorerReading(plan, step, rt, v, sha256, errors, results) {
   return { source: v.source, read_utc: v.read_utc, hash: v.hash, block_hash: v.block_hash, success: v.success, error, names: v.names.map((n) => { const [s, m] = n.split("."); return `${PALLET(s)}.${m}`; }), events, channel_mismatch: channelMismatch, relay_sha256: sha256 };
 }
 
-/** The outcomes of the runner that submitted nothing in that call: there is nothing to record. */
-export const NOTHING_SUBMITTED = ["refused-bundle", "already-sent", "not-in-sent-list", "not-sent"];
+/**
+ * The outcomes of the runner that submitted nothing in that call: there is nothing to record.
+ * already-sent is not among them (H2): it says the pane's sent list holds these bytes, so they were
+ * written to a socket before. It is recorded as a reading of a step that is sent and not in a
+ * finalized block.
+ */
+export const NOTHING_SUBMITTED = ["refused-bundle", "not-in-sent-list", "not-sent"];
 
 /** The run time record with one reading added (R2). Returns the new record; the input is not changed. */
 export function recordReading({ plan, run, results, id, sent, sentSha256, explorer, explorerSha256, errors, checkSigned = checkResearchSigned }) {

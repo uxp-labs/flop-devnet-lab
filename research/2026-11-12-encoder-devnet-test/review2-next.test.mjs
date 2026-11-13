@@ -57,13 +57,14 @@ test("review2 Q2 HELD: a cleanup step refused once, twice, three times: T6.2, T6
 test("review2 Q8 DEFECT: T2 refused at submission (it never comes on chain): no tool path reaches T9, and FUND stays on the device", async () => {
   // adapted by the builder (F3): the tool path is the lead's stop, record-step.mjs stop, case c (node code 1010)
   const { leadStop } = await import("./lead-stop.mjs");
-  const { runFolder, planSigned } = await import("./fixtures.mjs");
+  const { runFolder, planSigned, signerReads } = await import("./fixtures.mjs");
   const before = cell("T2", "sub");
   before.steps.find((s) => s.step === "T2").run_time.sent.node = { code: 1010, message: "Invalid Transaction", data: null };
   before.steps.find((s) => s.step === "T2").run_time.sent.sent_by = "send"; // F3c: a first send
   const run = runFolder(before);
   planSigned(run, "T2", before);
-  const r = leadStop({ plan, run, results: before, id: "T2", why: "refused at submission with 1010" });
+  const reads = signerReads(before, "T2"); // adapted by the builder (H1): case c needs the owner's next nonce, equal to T2's
+  const r = leadStop({ plan, run, results: before, id: "T2", why: "refused at submission with 1010", readsText: reads.text, readsSha256: reads.sha });
   rmSync(run, { recursive: true, force: true });
   const n = nextOf(plan, r);
   // record-step and sign-device follow nextOf; the only lines plan.mjs next prints are find and sendSame of T2

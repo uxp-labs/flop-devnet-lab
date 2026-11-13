@@ -6,7 +6,7 @@ import { randomBytes } from "node:crypto";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { loadPlan, sha256Text, ss58, substitute, blake2b256Hex } from "./lib.mjs";
-import { expectedOf, envelope } from "./research-signed.mjs";
+import { expectedOf, envelope, signerOf, nonceOf } from "./research-signed.mjs";
 import { template } from "./plan.mjs";
 
 export const plan = loadPlan();
@@ -32,6 +32,17 @@ export const relay = (value) => { const text = JSON.stringify(value); return { t
 export function deviceReads(device, { number = 3600010, accountNonce = 0, sessionNonce = null, hash = "0x" + "cd".repeat(32) } = {}) {
   const raw = sessionNonce === null ? null : "0x" + Buffer.from(new BigUint64Array([BigInt(sessionNonce)]).buffer).toString("hex");
   return relay({ account: ss58(device), runtime: RUNTIME, birth: { number, hash }, account_nonce: accountNonce, session_nonce_raw: raw });
+}
+
+/** An account's reads as lab.accountReads relays them: the runtime, the finalized head and the next nonce. */
+export function accountReads(account, { nonce = 0, number = 3600100, hash = "0x" + "ce".repeat(32), runtime = RUNTIME } = {}) {
+  return relay({ account: ss58(account), runtime, finalized: { number, hash }, account_nonce: Number(nonce) });
+}
+
+/** The reads of a research signer id's signer (H1) whose next nonce is the copy's, plus delta. */
+export function signerReads(results, id, { delta = 0, ...o } = {}) {
+  const step = plan.steps.find((s) => s.id === id.split(".")[0]);
+  return accountReads(signerOf(plan, results, step), { nonce: nonceOf(plan, results, id) + BigInt(delta), ...o });
 }
 
 /** A run time record as record-step.mjs start makes it, for a device. */
