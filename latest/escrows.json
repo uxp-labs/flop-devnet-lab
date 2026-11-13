@@ -1,7 +1,7 @@
 {
   "escrows": [],
-  "observed_at": "2026-11-13T05:38:59.848Z",
+  "observed_at": "2026-11-13T07:18:02.823Z",
   "schema": "flop-observatory/feed-escrows@0",
-  "snapshot_hash": "8f0025b581a70b931b2d3cb42e3feba6c1f55d73617dea524f5c18125aaa4f43",
+  "snapshot_hash": "603facde5972539bc74f8edd700ec4b7b5ad3d2c179d142de0aca78498fdd790",
   "trust": "trusted RPC"
 }

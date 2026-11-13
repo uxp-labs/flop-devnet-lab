@@ -2,21 +2,21 @@
   "census": null,
   "drift": null,
   "escrows": [],
-  "hash": "8f0025b581a70b931b2d3cb42e3feba6c1f55d73617dea524f5c18125aaa4f43",
-  "observed_at": "2026-11-13T05:38:59.848Z",
+  "hash": "603facde5972539bc74f8edd700ec4b7b5ad3d2c179d142de0aca78498fdd790",
+  "observed_at": "2026-11-13T07:18:02.823Z",
   "pin": {
-    "finalized_hash": "0xe810661a4d5f7f5cb88ded841d2554dd3746c548be37c596a7f2ea26dabe2f65",
-    "finalized_height": 3619936,
+    "finalized_hash": "0xcbb26dcd76de236f5055b87c30823488cc88467e4946caf3f95eeb87e85f32d8",
+    "finalized_height": 3625877,
     "genesis": "0x99c172c095340ace980631f9123544c6bebd4839f3437e463533422d8be2d631",
     "node": "v22.23.4",
     "source": "live:rpc wss://rpc.devnet.flop.network",
     "source_sha": "6d7ad0ef0eba311cd351b5176a95592956a3c8ed"
   },
-  "prev_hash": "32aa60b37d5305625d111f6cb1a6852b0a7a704ae268f12d0e39c0e63877c698",
+  "prev_hash": "8f0025b581a70b931b2d3cb42e3feba6c1f55d73617dea524f5c18125aaa4f43",
   "schema": "flop-observatory/snapshot@1",
-  "seq": 40,
+  "seq": 41,
   "status": {
-    "best_height": 3619955,
+    "best_height": 3625882,
     "conflicts": [],
     "faucet": {
       "detail": null,
@@ -31,30 +31,30 @@
         "ipGrantsPerDay": 300,
         "ipPrefixGrantsPerDay": 10000
       },
-      "observed_at": "2026-11-13T05:38:53.603Z",
+      "observed_at": "2026-11-13T07:17:55.368Z",
       "ready": true
     },
-    "finality_lag": 19,
-    "finalized_hash": "0xe810661a4d5f7f5cb88ded841d2554dd3746c548be37c596a7f2ea26dabe2f65",
-    "finalized_height": 3619936,
+    "finality_lag": 5,
+    "finalized_hash": "0xcbb26dcd76de236f5055b87c30823488cc88467e4946caf3f95eeb87e85f32d8",
+    "finalized_height": 3625877,
     "gateway": {
       "detail": null,
       "health": "ok",
       "http": 200,
-      "observed_at": "2026-11-13T05:38:54.926Z"
+      "observed_at": "2026-11-13T07:17:57.813Z"
     },
     "genesis": {
       "faucet": "0x99c172c095340ace980631f9123544c6bebd4839f3437e463533422d8be2d631",
       "pinned": "0x99c172c095340ace980631f9123544c6bebd4839f3437e463533422d8be2d631",
       "rpc": "0x99c172c095340ace980631f9123544c6bebd4839f3437e463533422d8be2d631"
     },
-    "observed_at": "2026-11-13T05:38:59.848Z",
+    "observed_at": "2026-11-13T07:18:02.823Z",
     "reset_detected": false,
     "rpc": {
       "detail": null,
       "health": "ok",
       "http": null,
-      "observed_at": "2026-11-13T05:38:54.934Z",
+      "observed_at": "2026-11-13T07:17:57.875Z",
       "stale": false
     },
     "runtime_version": 1014020,
@@ -64,8 +64,8 @@
   "trust": "trusted RPC",
   "upgrade": {
     "at": {
-      "hash": "0xe810661a4d5f7f5cb88ded841d2554dd3746c548be37c596a7f2ea26dabe2f65",
-      "number": 3619936
+      "hash": "0xcbb26dcd76de236f5055b87c30823488cc88467e4946caf3f95eeb87e85f32d8",
+      "number": 3625877
     },
     "authorization_appeared": false,
     "authorized": {
@@ -75,7 +75,7 @@
       "sha256": null,
       "state": "absent"
     },
-    "compared_with": 3616199,
+    "compared_with": 3619936,
     "executing": {
       "detail": null,
       "spec_name": "tzkv-runtime",
@@ -83,7 +83,7 @@
       "state": "reviewed"
     },
     "executing_changed": false,
-    "observed_at": "2026-11-13T05:38:54.934Z",
+    "observed_at": "2026-11-13T07:17:57.875Z",
     "schema": "flop-observatory/upgrade-watch@0",
     "trust": "trusted RPC"
   }
