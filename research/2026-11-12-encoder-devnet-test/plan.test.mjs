@@ -110,7 +110,7 @@ test("the owner's account nonces follow one another", () => {
 });
 
 // ---- plan.mjs and plan.md ----------------------------------------------------------------------
-import { table, costsText, stopsText, commandsText, costs, printedBlocks, blocksIn, outcomesText, caps, capsText, ANSWER_KINDS } from "./plan.mjs";
+import { table, costsText, stopsText, commandsText, costs, printedBlocks, blocksIn, outcomesText, caps, capsText, ANSWER_KINDS, pastedSha256 } from "./plan.mjs";
 import { nextOf } from "./judge.mjs";
 import { asPlanned } from "./fixtures.mjs";
 import vm from "node:vm";
@@ -301,4 +301,16 @@ test("P1: the SS58 text of an account is the one the earlier records give, and i
   const t = rerun.accounts.owner.ss58;
   const bad = t.slice(0, -1) + (t.endsWith("z") ? "y" : "z");
   assert.equal(fromSs58(bad), null);
+});
+
+test("P6 P8: the README says who carries the batch out and when the owner is told, how the pane lines and the pasted files work, and that the final record is a later piece of work", () => {
+  const md = readFileSync(join(HERE, "README.md"), "utf8");
+  assert.match(md, /the lead carries out by hand, with real test money, after the independent\s+review of this work and its fixes\. The owner gave devnet test batches to the lead on 2026-11-12;\s+the owner is told after the batch/);
+  assert.doesNotMatch(md, /owner's yes/);
+  assert.match(md, /keep the promise on `window` and read it in a second call/);
+  assert.match(md, /`pane-runner.js` is pasted into a tab on the node's own origin,\s+`https:\/\/rpc\.devnet\.flop\.network\/`, and `explorer-reader.js` into a tab on the explorer's own\s+origin/);
+  assert.match(md, /Each pasted file is checked by its sha256 in the\s+pane before use/);
+  for (const [f, sha] of Object.entries(pastedSha256())) assert.ok(md.includes(`sha256 of ${f}: ${sha}`), `the README gives the current sha256 of ${f}`);
+  const p8 = md.split("## Not done here: the final record")[1].split("\n## ")[0];
+  for (const t of [/request list/, /recording/, /fill helper beside/, /by position/, /reviewed shape/, /later piece of work with its own brief/, /nothing here promises it/]) assert.match(p8, t);
 });
