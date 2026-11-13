@@ -8,6 +8,7 @@ import { randomBytes } from "node:crypto";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { HERE, RERUN, loadPlan, readJson, fromSource, computed } from "./lib.mjs";
+import { asPlanned, runFolder, deviceReads } from "./fixtures.mjs";
 
 const plan = loadPlan();
 const V = (n) => plan.values[n].value;
@@ -62,15 +63,18 @@ test("review DEFECT P9 P6: plan.md says what the lead does for each way send can
 });
 
 test("review DEFECT P6: T4 can be signed from what the run time record holds when T3 is done (the pane decodes nothing)", () => {
+  // Adapted by the builder of the fix round to S1 (--run) and S2b (--reads-sha256): the record is
+  // a run time record whose T3 holds only what the runner and the explorer relayed; the decoded
+  // events of the template stay empty, because nothing at run time decodes events_raw.
   const dir = mkdtempSync(join(tmpdir(), "review-plan-"));
   after(() => rmSync(dir, { recursive: true, force: true }));
   const key = join(dir, "device.json");
-  writeFileSync(key, JSON.stringify({ v: 0, alg: "ed25519", seed_b64: randomBytes(32).toString("base64") }), { mode: 0o600 });
-  // What lab.send returned for T3, written into its record as the README says; events stay as the
-  // template has them, because nothing at run time decodes events_raw.
-  const results = join(dir, "results.json");
-  writeFileSync(results, JSON.stringify({ steps: [{ step: "T3", block_hash: "0x" + "ab".repeat(32), finalized_in_block: 3600005, extrinsic_index: 2, events: [], events_raw: "0x1c00" }] }));
-  const reads = { runtime: { specName: V("SPEC_NAME"), specVersion: Number(V("SPEC")), transactionVersion: Number(V("TXV")), genesisHash: V("GENESIS") }, birth: { number: 3600010, hash: "0x" + "cd".repeat(32) }, account_nonce: 1, session_nonce: "1" };
-  const r = spawnSync(process.execPath, [join(HERE, "sign-device.mjs"), "T4", "--key", key, "--reads", JSON.stringify(reads), "--results", results, "--out-dir", join(dir, "signed")], { encoding: "utf8" });
+  writeFileSync(key, JSON.stringify({ v: 0, alg: "ed25519", seed_b64: randomBytes(32).toString("base64") }) + "\n", { mode: 0o600 });
+  const pub = JSON.parse(spawnSync(process.execPath, ["--input-type=module", "-e", `import { loadDeviceSigner } from ${JSON.stringify(join(HERE, "device-key.mjs"))}; console.log(JSON.stringify("0x" + Buffer.from(loadDeviceSigner(${JSON.stringify(key)}).publicKey).toString("hex")))`], { encoding: "utf8" }).stdout);
+  const { results } = asPlanned(pub, "T3");
+  assert.deepEqual(results.steps.find((s) => s.step === "T3").events, [], "no decoded events in the record");
+  const run = runFolder(results);
+  const reads = deviceReads(pub, { number: 3600010, accountNonce: 1, sessionNonce: 1 });
+  const r = spawnSync(process.execPath, [join(HERE, "sign-device.mjs"), "T4", "--run", run, "--key", key, "--reads", reads.text, "--reads-sha256", reads.sha], { encoding: "utf8" });
   assert.equal(r.status, 0, `the plan gives no run time source for T3's channel id: ${r.stderr.trim()}`);
 });

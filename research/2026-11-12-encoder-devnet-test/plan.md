@@ -61,7 +61,7 @@ and signs the step again from new reads; `sign-device.mjs` refuses to write over
 | T3 | device | encoder | execute_via_session(force_open) | 10000000000000000 (0.01 FLOP) owner to pallet | 10000000000000000 (0.01 FLOP) | success | in order | stop |
 | T4 | device | encoder | execute_via_session(top_up_escrow) | 1000000000000000 (0.001 FLOP) owner to pallet | 1000000000000000 (0.001 FLOP) | recorded, not expected: included in a finalized block, and success or a named error of ComputeChannel or FlopSessionKeys | in order | stop |
 | T5 | device | encoder | execute_via_session(open_channel) | 10000000000000000 (0.01 FLOP) owner to pallet | 10000000000000000 (0.01 FLOP) | recorded, not expected: included in a finalized block, and success or a named error of ComputeChannel or FlopSessionKeys | in order | stop |
-| T6 | device | encoder | execute_via_session(expire_force_open) | 10000000000000000 (0.01 FLOP) pallet to owner<br>1000000000000000 (0.001 FLOP) pallet to owner if T4 succeeded | 0 (0 FLOP) | success | only if T3 recorded ComputeChannel.ForceOpenRequested; after block $T3.ComputeChannel.ForceOpenRequested.ack_deadline | stop (cleanup) |
+| T6 | device | encoder | execute_via_session(expire_force_open) | 10000000000000000 (0.01 FLOP) pallet to owner<br>1000000000000000 (0.001 FLOP) pallet to owner if T4 succeeded | 0 (0 FLOP) | success | only if T3 recorded ComputeChannel.ForceOpenRequested; after the greatest of: the block of T3 plus 600 blocks and block $T3.ComputeChannel.ForceOpenRequested.ack_deadline | stop (cleanup) |
 | T7 | device | encoder | execute_via_session(timeout) | 10000000000000000 (0.01 FLOP) pallet to owner | 0 (0 FLOP) | success | only if T5 recorded ComputeChannel.ChannelOpened; after the block of T5 plus 120 blocks | stop (cleanup) |
 | T8 | owner | research-signer | revoke | nothing | none | success | only if T2 succeeded | stop (cleanup) |
 | T9 | device | research-signer | sweep | all it holds device to owner | none | success | only if T1 succeeded | stop (cleanup) |
@@ -195,7 +195,7 @@ node "$LAB/research/2026-11-12-encoder-devnet-test/sign-device.mjs" T4 --key $KE
 node "$LAB/research/2026-11-12-encoder-devnet-test/sign-device.mjs" T5 --key $KEY_DEVICE --results results.json --reads '<what deviceReads printed>'
 #    in the pane: await lab.send(<text of signed/T5.json>, "<its sha256, printed above>")
 
-# T6: device signs with the encoder; expect success; only if T3 recorded ComputeChannel.ForceOpenRequested; after block $T3.ComputeChannel.ForceOpenRequested.ack_deadline
+# T6: device signs with the encoder; expect success; only if T3 recorded ComputeChannel.ForceOpenRequested; after the greatest of: the block of T3 plus 600 blocks and block $T3.ComputeChannel.ForceOpenRequested.ack_deadline
 #    in the pane, moments before: copy(JSON.stringify(await lab.deviceReads("$DEVICE", "<session_nonce key of flop-sign.mjs keys>")))
 node "$LAB/research/2026-11-12-encoder-devnet-test/sign-device.mjs" T6 --key $KEY_DEVICE --results results.json --reads '<what deviceReads printed>'
 #    in the pane: await lab.send(<text of signed/T6.json>, "<its sha256, printed above>")

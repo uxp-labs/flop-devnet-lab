@@ -19,7 +19,7 @@ const KEY = { owner: "$KEY_OWNER", device: "$KEY_DEVICE" };
 
 const amt = (plan, t) => { const v = substitute(t, plan, null); return RAW.test(v) ? `${v} (${flopText(v)} FLOP)` : v; };
 const condText = (c) => (c.event ? `${c.step} recorded ${c.event}` : `${c.step} succeeded`);
-const afterText = (plan, a) => (a.event ? `after block ${a.event}` : `after the block of ${a.step} plus ${substitute(a.plus, plan, null, true)} blocks`);
+const afterText = (plan, a) => (a.greatest_of ? `after the greatest of: ${a.greatest_of.map((x) => afterText(plan, x).replace(/^after /, "")).join(" and ")}` : a.event ? `after block ${a.event}` : `after the block of ${a.step} plus ${substitute(a.plus, plan, null, true)} blocks`);
 
 /** What each step expects, in words. */
 function expectText(st) {
@@ -121,20 +121,24 @@ export function template(plan) {
   const account = () => ({ free: null, reserved: null, nonce: null, absent: null });
   const state = () => ({ accounts: { owner: account(), device: account() }, session: { active: null, spent_raw: null, epoch_spent_raw: null }, session_nonce: null, breaker_tx_count: null });
   return {
-    schema: "encoder-devnet-test/results@0",
-    what: "Filled by the lead while running steps.json. Every null is filled or left null; check.mjs says what is missing. Unknown stays null, never 0.",
+    schema: "encoder-devnet-test/results@1",
+    what: "The record of the batch. record-step.mjs start makes it from this form as a run time record, and record-step.mjs step writes each step's run_time from what the pane relayed. Nothing in it is called verified. A block is called finalized only where the node reported it so, with the block hash beside it. No balance is written at run time. The final record (record \"final\", balances_source \"decoder\" or \"by position\") is filled later from an observatory recording; check.mjs says what is missing. Unknown stays null, never 0.",
+    record: "run-time",
+    balances_source: null,
     spec_version: plan.spec_version,
-    chain: { genesis: plan.values.GENESIS.value, rpc: plan.values.RPC.value, spec_name_at_start: null, spec_version_at_start: null, transaction_version_at_start: null },
+    chain: { genesis: plan.values.GENESIS.value, rpc: plan.values.RPC.value, explorer: plan.values.EXPLORER.value, spec_name_at_start: null, spec_version_at_start: null, transaction_version_at_start: null },
     accounts: { owner: { public_key: null, ss58: null }, device: { public_key: null, ss58: null } },
     owner_account_nonce_at_start: null,
+    start: null,
     before: { block_number: null, block_hash: null, ...state(), raw_reads: {} },
     steps: plan.steps.map((st) => ({
       step: st.id, signer: null, account_nonce: null, call: null, extrinsic_hash: null,
       era: st.tool === "encoder" ? { birth_number: null, birth_hash: null, last_valid_block: null } : "immortal",
       submitted_utc: null, finalized_in_block: null, block_hash: null, extrinsic_index: null,
       last_runtime_upgrade_spec: null, events_value_sha256: null, events: [], result: null, fee_raw: null,
-      after: state(), raw_reads: {}, note: null,
+      after: state(), raw_reads: {}, note: null, run_time: null,
     })),
+    run_time_form: "run_time of a step: { extrinsic_hash and bundle_sha256 of the file in signed/ that was sent, sent: the runner's relay text read back (status, block_hash, block_number, extrinsic_index, events_sha256, events_length, ...), sent_sha256, explorer: null or { source, read_utc, hash, block_hash, success, error: null or { pallet_index, error_index, name }, names, events, relay_sha256 }, earlier_readings: the readings it replaced that held no finalized block, earlier_copies: the copies --again retired }. An attempt of a cleanup step (S5) is its own entry, step \"T6.2\".",
     events_form: "events of this extrinsic only, in order, as { pallet, name, fields }: field names as facts-1014020.json gives them, amounts as decimal strings, accounts and hashes as 0x lower case hex. An ExtrinsicFailed carries fields.dispatch_error = { type: \"Module\", value: { index: <pallet index>, error: \"0x<4 bytes>\" } }.",
     reads_form: "after: the reads at the finalized block that holds the step. An account is { free, reserved, nonce } as decimal strings, or { absent: true } when the node holds no System.Account for it. session.active \"true\" or \"false\". raw_reads: each storage key read and the node's answer, 0x hex or null, as pane-runner.js returned it.",
   };

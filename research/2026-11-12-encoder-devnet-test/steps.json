@@ -18,6 +18,7 @@
   "TXV": { "value": "2", "from": { "file": "upgrade", "path": "transaction_version.after" } },
   "GENESIS": { "value": "0x99c172c095340ace980631f9123544c6bebd4839f3437e463533422d8be2d631", "from": { "file": "upgrade", "path": "genesis" } },
   "RPC": { "value": "wss://rpc.devnet.flop.network", "from": { "file": "upgrade", "path": "rpc" } },
+  "EXPLORER": { "value": "https://explorer.devnet.flop.network", "decided": "FLOP's explorer, read by explorer-reader.js in a tab on its own origin: the lead read the rerun's A6 and A5 there and both agree with the committed record (lead-measurements-2026-11-13.json measurements.explorer and measurements.explorer_answer_shape)" },
   "EVENTS_KEY": { "value": "0x26aa394eea5630e07c48ae0c9558cef780d41e5e16056765bc8461851072c9d7", "from": { "file": "upgrade", "path": "keys[\"System.Events\"]" } },
   "OWNER_NONCE_AFTER_RERUN": { "value": "14", "from": { "file": "run_log", "path": "next_nonce.owner" } },
   "MAX_FEE": { "value": "10558485985000000", "from": { "file": "rerun", "path": "steps[2].fee_raw" } },
@@ -89,7 +90,7 @@
   { "id": "T6", "signer": "device", "tool": "encoder",
     "inner": { "call": "expire_force_open", "channel_id": "$CH_T3" },
     "only_if": { "step": "T3", "event": "ComputeChannel.ForceOpenRequested" },
-    "after_block": { "event": "$T3.ComputeChannel.ForceOpenRequested.ack_deadline" },
+    "after_block": { "greatest_of": [{ "step": "T3", "plus": "$ACK_WINDOW" }, { "event": "$T3.ComputeChannel.ForceOpenRequested.ack_deadline" }], "why": "S7: the greater of T3's block in the record plus the ack window and the explorer's ackDeadline of T3 in the record" },
     "declared": "0", "moves": [
      { "from": "pallet", "to": "owner", "amount": "$ESCROW_1", "comes_back": "this is the return of T3" },
      { "from": "pallet", "to": "owner", "amount": "$TOP_UP", "when": { "step": "T4", "outcome": "success" }, "comes_back": "this is the return of T4" }],
@@ -101,7 +102,7 @@
   { "id": "T7", "signer": "device", "tool": "encoder",
     "inner": { "call": "timeout", "channel_id": "$CH_T5" },
     "only_if": { "step": "T5", "event": "ComputeChannel.ChannelOpened" },
-    "after_block": { "step": "T5", "plus": "$MAX_DURATION_D2" },
+    "after_block": { "step": "T5", "plus": "$MAX_DURATION_D2", "why": "S7: T5's block in the record plus MAX_DURATION_D2. Not known: whether the channel's opened_at is T5's block" },
     "declared": "0", "moves": [{ "from": "pallet", "to": "owner", "amount": "$ESCROW_1", "comes_back": "this is the return of T5" }],
     "refund_event": "ComputeChannel.TimedOutRefunded.refunded",
     "expect": "success", "events": [

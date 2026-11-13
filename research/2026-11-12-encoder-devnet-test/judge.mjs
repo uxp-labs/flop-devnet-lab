@@ -8,6 +8,7 @@
 import { join } from "node:path";
 import { judgeStep, failedWith } from "../2026-11-12-session-rerun-1014020/rerun-lib.mjs";
 import { RERUN, RAW, loadPlan, readJson, substitute, isUnresolved, rerunFee } from "./lib.mjs";
+import { viewOf, idsOf, MAX_ATTEMPTS, afterBlockOf } from "./record.mjs";
 
 export function context(results, dir) {
   const plan = loadPlan(dir);
@@ -117,13 +118,10 @@ function refundProblems(plan, step, rec, results) {
   return String(ev.fields?.[f]) === want.toString() ? [] : [`${p}.${n}.${f} is ${ev.fields?.[f]}, the moves it returns add up to ${want}`];
 }
 
-/** The block a step must follow, as a decimal string, or the reason it is not known. */
+/** The block a step must follow, as a decimal string, or the reason it is not known (record.mjs afterBlockOf, S7). */
 function afterBlock(plan, step, results) {
-  const a = step.after_block;
-  if (!a) return null;
-  if (a.event) { const v = substitute(a.event, plan, results); return isUnresolved(v) ? { unknown: a.event } : v; }
-  const base = recOf(results, a.step);
-  return base ? String(base.finalized_in_block + Number(substitute(a.plus, plan, results, true))) : { unknown: `the block of ${a.step}` };
+  const a = afterBlockOf(plan, step, results);
+  return a === null ? null : typeof a === "object" ? a : String(a);
 }
 
 /** One step, made concrete and judged by the rerun's judgeStep, then by this file's own checks. */
@@ -193,4 +191,90 @@ export function judgeRun(ctx) {
   const fine = (s) => s === "pass" || s === "not needed";
   const all = top.length === 0 && left.length === 0 && stoppedAt === null && run.every((r) => fine(r.status));
   return { all, top, run, stoppedAt, left };
+}
+
+// ---- the run time record: what is next ---------------------------------------------------------
+
+const RUN_TIME_PALLETS = ["ComputeChannel", "FlopSessionKeys"];
+
+/** Whether a step's condition holds by the record of either kind; null while it is not known. */
+export function holdsBy(cond, plan, results) {
+  const v = viewOf(results, cond.step);
+  if (!v || !v.final || v.success === null) return null;
+  if (cond.event) return v.success === true && v.names.includes(cond.event);
+  if (cond.outcome === "success") return v.success === true;
+  throw new Error(`unknown condition ${JSON.stringify(cond)}`);
+}
+
+/**
+ * The run time judgement of one recorded id against its step: from the outcome and the events of
+ * ComputeChannel and FlopSessionKeys the explorer gave, and the names of all events. Returns
+ * { ok, said, problems, findings }. It never says passed: balances are not in a run time record.
+ */
+export function judgeRunTime(plan, step, view, results) {
+  const problems = [], findings = [];
+  let said, events;
+  const named = view.error?.name ?? null;
+  if (step.expect === "success") {
+    if (view.success === true) { said = "success, as expected"; events = step.events ?? []; }
+    else { problems.push(`expected success, it was refused with ${named ?? `pallet ${view.error?.pallet_index} error ${view.error?.error_index}, which the 1014020 table does not name`}`); events = []; }
+  } else if (view.success === true) { said = "recorded: success"; events = step.events_if_success ?? []; }
+  else if (!named) { problems.push(`recorded, not expected, but its error (pallet ${view.error?.pallet_index}, error ${view.error?.error_index}) is not named by the 1014020 table`); events = []; }
+  else if (!step.errors_allowed_of.includes(named.split(".")[0])) { problems.push(`recorded, not expected, but ${named} is not an error of ${step.errors_allowed_of.join(" or ")}`); events = []; }
+  else { said = `recorded: ${named}`; events = []; }
+  if (named && step.finding_if?.[named]) findings.push(`${step.id}: ${named}: ${step.finding_if[named]}`);
+  for (const want of events) {
+    const [pallet, name] = want.event.split(".");
+    if (!RUN_TIME_PALLETS.includes(pallet)) { if (!view.names.includes(want.event)) problems.push(`no ${want.event} among the events`); continue; }
+    const fields = Object.fromEntries(Object.entries(want.fields).map(([k, v]) => [k, substitute(v, plan, results, true)]));
+    const hit = view.events.find((e) => e.pallet === pallet && e.name === name && Object.entries(fields).every(([k, v]) => String(e.fields?.[k]) === v));
+    if (!hit) problems.push(`no ${want.event} with ${JSON.stringify(fields)}`);
+  }
+  for (const pattern of step.forbid ?? []) if (view.names.includes(pattern)) problems.push(`${pattern} must not appear`);
+  return { ok: problems.length === 0, said: said ?? "refused", problems, findings };
+}
+
+/**
+ * What is next by the record (S2c): the one function sign-device.mjs, record-step.mjs and
+ * plan.mjs next ask. While the judge says go on, the next step in the plan's order; after a stop,
+ * the cleanup steps that apply, in their order, an attempt of one when S5 allows it; nothing while
+ * it says wait. Returns { word: "go on" | "wait" | "stop", step, why, waiting, stopped_at, row,
+ * cleanup, left, findings, said }. waiting is "inclusion" while step is sent and not in a
+ * finalized block, "outcome" while its explorer reading is missing, else null.
+ */
+export function nextOf(plan, results) {
+  const findings = [], left = [], said = [];
+  let stoppedAt = null, row = null;
+  const out = (word, step, why, waiting = null) => ({ word: stoppedAt && word === "go on" ? "stop" : word, step, why, waiting, stopped_at: stoppedAt, row, cleanup: cleanupThatApplies(), left, findings, said });
+  const cleanupThatApplies = () => (stoppedAt ? plan.steps.filter((s) => s.cleanup && (!s.only_if || holdsBy(s.only_if, plan, results) !== false)).map((s) => s.id) : []);
+  for (const step of plan.steps) {
+    if (stoppedAt && !step.cleanup) continue;
+    if (step.only_if) {
+      const h = holdsBy(step.only_if, plan, results);
+      if (h === null) return out("wait", step.id, `the outcome of ${step.only_if.step}, which ${step.id} depends on`, "outcome");
+      if (h === false) { said.push(`${step.id}: not needed`); continue; }
+    }
+    let done = false;
+    for (const id of idsOf(step)) {
+      const v = viewOf(results, id);
+      if (!v || !v.entry.run_time) return out("go on", id, stoppedAt ? `the cleanup step ${id}` : `the next step ${id}`);
+      if (!v.final) return out("wait", id, `${id} is sent and not in a finalized block (the runner said ${v.sent_status}): see send_outcomes`, "inclusion");
+      if (v.success === null) return out("wait", id, `the explorer reading of ${id}`, "outcome");
+      const j = judgeRunTime(plan, step, v, results);
+      findings.push(...j.findings);
+      said.push(`${id}: ${j.ok ? j.said : j.problems.join("; ")}`);
+      if (j.ok) { done = true; break; }
+      if (!step.cleanup) { stoppedAt = step.id; row = stopRowOf(plan, step, v); done = true; break; }
+      if (v.success === true) { left.push(`${id} was included and succeeded, but ${j.problems.join("; ")}`); done = true; break; }
+    }
+    if (!done) left.push(`${step.id} was refused ${MAX_ATTEMPTS} times: ${step.left_if_it_fails}`);
+  }
+  return out("go on", null, "nothing is left to send");
+}
+
+/** The plan's row for a stop at a step: from the stop table of steps.json when it has one for the answer, else the step's own words. */
+export function stopRowOf(plan, step, view) {
+  const answer = view.success === false ? "err" : "ok";
+  const hit = (plan.stop_table ?? []).find((r) => r.step === step.id && r.answer === answer);
+  return hit ? `${hit.on_chain}; ${hit.brings_back}` : `${step.id} did not answer as planned; the rule is ${step.on_unexpected}`;
 }

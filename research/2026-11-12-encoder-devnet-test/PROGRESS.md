@@ -15,12 +15,17 @@ in this folder. `imd-flop/dist` must be built.
 - P1: lib.mjs channelId (blake2b of imd-flop's @noble/hashes), ss58 and fromSs58 (prefix 42);
   CH_T3, CH_T5 computed in steps.json; T4, T6, T7 and the events use them; plan.test.mjs derives
   the rerun's A6 channel id. plan.md's printed blocks have markers; `node plan.mjs md` rewrites them.
-  Known failing until S: sign-device.test.mjs "T4, T6 and T7 take the channel id..." (old interface).
+- S1 to S7: device-key.mjs (S6), record.mjs (one reader of both kinds of record), judge.mjs nextOf
+  (S2c), sign-device.mjs rewritten (--run, S2 a to g in order, send file, --again, attempts),
+  steps.json T6 after_block greatest_of (S7), template record "run-time" with run_time per step.
+  fixtures.mjs builds run time records for tests. sign-device.test.mjs rewritten (22 tests).
+  Reviewer tests adapted: review-sign-device.test.mjs (all 7, to --run and --reads-sha256),
+  review-plan.test.mjs "T4 can be signed from the run time record" (to --run).
+  Known failing until C: check.test.mjs and review-check.test.mjs (old CH ids, record kind).
 
 ## Next
 
-- S1 to S7: device-key.mjs (shared loader, S6), sign-device.mjs with --run, the next step from
-  judge.mjs (S2c), send file (S3), --again (S4), attempts (S5), after_block (S7).
+- X1 to X9 in pane-runner.js, then E (explorer-reader.js), R (record-step.mjs, plan.mjs next).
 
 ## Decisions (fix round) and why
 
@@ -31,5 +36,9 @@ in this folder. `imd-flop/dist` must be built.
   `earlier_readings` (non final readings it replaced), `earlier_copies` (from the signed file).
 - An attempt (S5) is its own entry in `steps` with `step: "T6.2"`.
 - The key loader is shared by sign-device.mjs and record-step.mjs in `device-key.mjs`.
+- S2c and S4 read together: when the record holds a reading of the id that is not in a finalized
+  block, nextOf says "wait" with waiting "inclusion" and step that id. sign-device then signs it
+  only with --again (S4), never without. Otherwise S4 could never follow a recorded deadline.
+  This is the builder's reading; it is in the report for the lead to confirm.
 - The runner's transport gets an `onWrite` hook (X4) and an `onLost` hook (X2). Reviewer tests
   that script a transport are adapted to call the hook; the change is listed.
