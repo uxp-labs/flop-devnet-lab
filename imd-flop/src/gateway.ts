@@ -8,8 +8,10 @@
  * takes the path of one that is not JSON, with the reason non_finite_number.
  */
 import { IMD_API, SEAT_CHAIN_ID, SEAT_COLLECTION, USER_AGENT, type NetworkInfo } from "./networks.js";
-import { notJsonBecause, NonFiniteNumber, NON_FINITE_NUMBER, readOutsideJson, responseJson } from "./outside-json.js";
-import { outsideText, type Mark } from "./secrets.js";
+import { rpcCall } from "./node-rpc.js";
+import { notJsonBecause, NonFiniteNumber, NON_FINITE_NUMBER, responseJson } from "./outside-json.js";
+import type { Mark } from "./secrets.js";
+import { serverText } from "./server-text.js";
 
 export type Fetch = typeof globalThis.fetch;
 
@@ -179,65 +181,10 @@ export async function checkGenesis(net: NetworkInfo, f: Fetch = globalThis.fetch
   return { ok, pinnedGenesis, faucetGenesis, rpcGenesis, ...(error ? { error } : {}) };
 }
 
-function rpcCall(url: string, method: string, params: unknown[], timeoutMs = 15000): Promise<unknown> {
-  return new Promise((resolve, reject) => {
-    const ws = new WebSocket(url);
-    let settled = false;
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    const finish = (err: Error | null, result?: unknown) => {
-      if (settled) return;
-      settled = true;
-      if (timer) clearTimeout(timer);
-      try {
-        ws.close();
-      } catch {
-        /* already closed */
-      }
-      if (err) reject(err);
-      else resolve(result);
-    };
-    timer = setTimeout(() => finish(new Error("rpc timeout")), timeoutMs);
-    ws.onopen = () => ws.send(JSON.stringify({ id: 1, jsonrpc: "2.0", method, params }));
-    ws.onmessage = (ev) => {
-      try {
-        const msg = readOutsideJson(String(ev.data)) as { result?: unknown; error?: { message?: string } };
-        if (!msg || typeof msg !== "object" || Array.isArray(msg)) {
-          finish(new Error("rpc returned malformed JSON"));
-          return;
-        }
-        // An error field is a failed read even when a result is also present.
-        if (msg.error) {
-          finish(new Error(`rpc error: ${serverText(msg.error.message ?? "rpc error")}`));
-          return;
-        }
-        finish(null, msg.result ?? null);
-      } catch (e) {
-        // JSON.parse's own message quotes the frame: never repeat it.
-        finish(new Error(notJsonBecause("rpc returned malformed JSON", e)));
-      }
-    };
-    ws.onerror = () => {
-      finish(new Error("rpc websocket error"));
-    };
-  });
-}
-
 /** Rule 4 (real work only), optional live check: the job must exist on imd's public API. */
 export async function checkImdJob(jobId: string, f: Fetch = globalThis.fetch): Promise<{ ok: boolean; status: number }> {
   const res = await uaFetch(f)(`${IMD_API}/jobs/${encodeURIComponent(jobId)}`, { headers: { Accept: "application/json" }, signal: AbortSignal.timeout(15000) });
   return { ok: res.ok, status: res.status };
-}
-
-/** The most characters of one server text a message quotes. */
-const SERVER_TEXT_MAX = 200;
-
-/**
- * Server text (an error message a server or the transport wrote) for a message: through secrets.ts
- * outsideText, cut to SERVER_TEXT_MAX, with every form of the given marks replaced. Every message here that
- * quotes server text quotes it through this (swarm audit 33f3b9f, finding 3).
- */
-function serverText(text: unknown, marks: Mark[] = []): string {
-  return outsideText(text, { marks, max: SERVER_TEXT_MAX });
 }
 
 const CHAIN_ID_RE = /^0x[0-9a-f]+$/i;
