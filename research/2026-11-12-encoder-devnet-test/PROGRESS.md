@@ -78,7 +78,9 @@ Start: head `e18e725`; the second reviewer's branch (`8ff23d6`) merged by fast f
   first send; otherwise refused, naming lab.find from the block before the first send. The 1010 row
   says both. Tests in lead-stop.test.mjs and pane-runner.test.mjs; review2-next Q8 adapted again
   (sent_by "send"). Mutants B2-F3n, B2-F3o, B2-F3p.
-- next: mutants of lead-stop.mjs and pane-runner.js again, then G3 last. F11, the runner, F9, F3 with G1 and G4, F12 and G2, the words, G3.
+- Mutants of lead-stop.mjs (8) and pane-runner.js (31) on 5e98f87 under setpriv: all killed.
+  GitHub checks of 5e98f87: all 7 success, the research check among them.
+- G3: the workflow's paths, the next and last commit, alone. Nothing after it. F11, the runner, F9, F3 with G1 and G4, F12 and G2, the words, G3.
 
 ### Decisions (fix round 2) and why
 
