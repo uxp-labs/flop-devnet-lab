@@ -365,15 +365,35 @@ What it does not show:
 
 ## What is not known
 
-- Whether `expire_force_open` refunds a top up. If it does not, the top up stays in the pallet
-  account under the channel of T3, and no step of this batch brings it back.
-- Whether T5's `opened_at` is T5's block, as T7's earliest block assumes.
-- The fees of T4 and T5: no like step was ever sent.
-- The channel id formula is shown for `force_open` only. T5 shows it for `open_channel` or refutes it.
-- What the chain answers to T4 and T5, and whether `top_up_escrow` is taken on a channel waiting
-  for an ack.
-- Whether an epoch boundary of the session falls inside the batch. So `epoch_spent` and the
-  breaker's `tx_count` are recorded and not judged.
+Written before the run and brought up to the final record. A field named here is a field of
+`results.final.json`.
+
+Answered by the run:
+
+- What the chain answers to T4: `failed: ComputeChannel.BadState (pallet 103, error 11)`
+  (`steps.3.result`), while the channel of T3 was waiting for its ack
+  (`steps.2.after.channel.state.type` is `PendingAck`). So `top_up_escrow` through a session was
+  not taken on a channel waiting for an ack.
+- What the chain answers to T5 (`steps.4.result`):
+  `failed: ComputeChannel.CalibrationUnavailable (pallet 103, error 97)`.
+- The fees of T4 and T5: 5219861070000000 raw and 10295621980000000 raw (`steps.3.fee_raw`,
+  `steps.4.fee_raw`), paid by the device though both calls were refused. No like step was sent
+  before, so they are compared with nothing.
+- The session nonce did not move at the two refused calls: it is 1 after T3, T4 and T5 and 2
+  after T6 (`steps.2.after.session_nonce` to `steps.5.after.session_nonce`).
+
+Still not known:
+
+- Whether `expire_force_open` refunds a top up. T4's top up was refused, so there was none to
+  refund.
+- Whether T5's `opened_at` is T5's block, as T7's earliest block assumes. T5 was refused, so no
+  channel was opened by it and T7 was not needed.
+- The channel id formula for `open_channel`. It is shown for `force_open` only: T5 was refused.
+- Whether an epoch boundary of the session or a new breaker period fell inside the batch.
+  `epoch_spent_raw` and `breaker_tx_count` are recorded and not judged. The record holds
+  `breaker_tx_count` 1 after T3 and 1 after T6, the second session call that was executed
+  (`steps.2.after.breaker_tx_count`, `steps.5.after.breaker_tx_count`). Why it is not 2 the
+  batch does not show.
 - The shapes of the node's transaction statuses: from the lead's and the reviewer's knowledge of
   Substrate, not from a committed file.
 - The encoder's table holds only spec 1014020. If the devnet upgrades first, `sign-device.mjs`

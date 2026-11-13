@@ -142,3 +142,24 @@ test("the section names its sources by the record's filled_from, and calls nothi
   assert.doesNotMatch(s, /verified/i);
   assert.ok(!text("README.md").includes("## Not done here: the final record"));
 });
+
+test("the README's section What is not known: each answer and each count is the value at the field it names", () => {
+  const t = text("README.md");
+  const from = t.indexOf("## What is not known");
+  assert.ok(from >= 0);
+  const s = t.slice(from, t.indexOf("\n## ", from + 1)).replace(/\s+/g, " ");
+  assert.equal(at("steps.3.result"), "failed: ComputeChannel.BadState (pallet 103, error 11)");
+  assert.ok(s.includes(`\`${at("steps.3.result")}\` (\`steps.3.result\`)`));
+  assert.equal(at("steps.2.after.channel.state.type"), "PendingAck");
+  assert.ok(s.includes("(`steps.2.after.channel.state.type` is `PendingAck`)"));
+  assert.equal(at("steps.4.result"), "failed: ComputeChannel.CalibrationUnavailable (pallet 103, error 97)");
+  assert.ok(s.includes(`(\`steps.4.result\`): \`${at("steps.4.result")}\`.`));
+  assert.ok(s.includes(`${at("steps.3.fee_raw")} raw and ${at("steps.4.fee_raw")} raw (\`steps.3.fee_raw\`, \`steps.4.fee_raw\`)`));
+  assert.deepEqual([2, 3, 4].map((i) => at(`steps.${i}.after.session_nonce`)), ["1", "1", "1"]);
+  assert.equal(at("steps.5.after.session_nonce"), "2");
+  assert.ok(s.includes("it is 1 after T3, T4 and T5 and 2 after T6 (`steps.2.after.session_nonce` to `steps.5.after.session_nonce`)"));
+  assert.deepEqual([at("steps.2.after.breaker_tx_count"), at("steps.5.after.breaker_tx_count")], ["1", "1"]);
+  assert.ok(s.includes("`breaker_tx_count` 1 after T3 and 1 after T6"));
+  assert.ok(s.includes("(`steps.2.after.breaker_tx_count`, `steps.5.after.breaker_tx_count`)"));
+  assert.ok(!s.includes("no like step was ever sent."), "the pre run words are gone");
+});
