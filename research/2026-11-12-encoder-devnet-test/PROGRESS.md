@@ -61,9 +61,60 @@ Order of work (the brief's): H1 with H2, H3, H4; H5; H6 to H11; the words; the m
   (B-X4, RV2-X2, RV2-X4, B2-F3l, B2-G4a, B2-F3n, B2-F3o), each saying so. A first run of those 59
   alone, in a scratch copy of the repo, under setpriv: running.
 
+- The 59 alone under setpriv: 56 killed, 3 equivalent, none alive. RV3-R3 was killed (by the H1
+  test whose wrong nonce is 99, in the two byte compact mode), so it is no longer listed equivalent.
+
 ### Next
 
-The 59 alone, then the report below, then the full run (node mutants.mjs <temp> --jobs 6).
+The full run (node mutants.mjs <temp> --jobs 6, under setpriv), then the GitHub checks.
+
+### Report of fix round 3
+
+Branch claude/encoder-devnet-test-prep, from a9442dd. Merged 6f443b3 (the third reviewer) by fast
+forward. Commits: 1c211d8 (H1 to H4), a64e333 (H5), 1c26dd2 (H6), 555329e (H7, H10, H11),
+11567b9 (H8, H9), ad825bd (the words), 31bdc7c (mutants), b0af0e4 and later (progress).
+Every change is in research/2026-11-12-encoder-devnet-test/. No file under observatory/src, no
+recordings/requests.json, no workflow: neither observatory workflow's push paths are touched.
+
+Tested (all under setpriv, in the folder)
+- node --test: 281 tests, 281 pass, 0 fail (start: 261, 253 pass, the reviewer's 8 failing).
+- The 59 new or changed mutants alone: 56 killed, 3 equivalent, none alive.
+- Full mutant run: see the line below, filled in after the run.
+
+The rules
+- H1 done: lead-stop.mjs researchStop, takeSignerReads, findCovers; nonce row in stop_table.
+- H2 done: already-sent recorded (record-step.mjs); rules out c and d, names find and sendSame.
+- H3 done: no case a while the record holds a reading of the id, current or earlier.
+- H4 done: record.mjs unsentLeft names file, hash, signer, nonce, how long it stays valid.
+- H5 done: judgeFinal. The fault came in with the first build, 59f8bd5, before the first review.
+- H6 done: sign-device.mjs retireTo and loneDeadSends in preflight, before the key.
+- H7 done: every send, sendSame and find result carries sent_by.
+- H8 done: research-signed.mjs callOf checks the record's device key for every step.
+- H9 done: only the step that opens a channel (first step naming it) drops its cleanup step.
+- H10 done: find ends within the deadline as find-deadline with from, to, head; row added.
+- H11 done: "the write to the socket failed".
+- Words done: README, plan.md (plan.mjs md), steps.json; pane-runner.js sha256 fe91c295...fcc1e8.
+
+Reviewers' tests changed (H1 needs the signer's reads for c and d; what each shows is kept)
+- review2-next.test.mjs Q8 DEFECT: passes the owner's reads with T2's nonce.
+- review3-stop.test.mjs table of attack B: reads for every research signer row with a signed copy.
+- review3-stop.test.mjs DEFECT V3: passes the owner's reads with T1's nonce.
+Own tests changed: lead-stop F3 c, F3 d, the after stop test (reads); record-step R2
+(already-sent left the list); plan P4 (the count holds the nonce rows).
+
+Source only
+- The node's answer to system_accountNextIndex counting the pool is the brief's statement; no
+  committed file shows it.
+
+Unresolved (for the lead)
+- H5: a missing needed CLEANUP step with no stop stays left, exit 4, not failed: the brief names
+  test steps only.
+- H1: "the block before the first send" is taken as the record's start, as fix round 2's words.
+- H6: a lone dead send file is refused with or without --again (the brief names retire's case).
+- H10: an error answer during find still rejects the promise, as before; only the deadline is new.
+
+Not done
+- None of the rules. GitHub checks: filled in after the last push.
 
 ### Decisions (fix round 3) and why
 

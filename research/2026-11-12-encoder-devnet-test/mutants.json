@@ -1299,8 +1299,7 @@
   "find": "if (n < 1n << 6n) return le(n << 2n, 1);",
   "replace": "if (n < 1n << 7n) return le((n << 2n) & 0xffn, 1);",
   "test": "review3 tests and the builder's",
-  "why": "compact: the one byte mode ends at 63",
-  "equivalent": "the third reviewer's reason: no compact value of the plan lies in 64 to 127: the nonces are under 64 and the bodies over 127 bytes"
+  "why": "compact: the one byte mode ends at 63 (killed in fix round 3 by the H1 test whose wrong nonce is 99, in the two byte mode: not equivalent)"
  },
  {
   "id": "RV3-R4",
