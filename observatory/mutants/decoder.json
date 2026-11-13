@@ -1232,6 +1232,14 @@
     "why": "a block's metadata is found by the sha256 its runtime's line names, not taken from what the block answered last (review round 22)"
   },
   {
+    "id": "reviewed-metadata-unknown-spec-takes-first",
+    "file": "test/helpers/recorded-upgrade.ts",
+    "find": "  const line = lines.find((r) => r.specVersion === spec);\n",
+    "replace": "  const line = lines.find((r) => r.specVersion === spec) ?? lines[0];\n",
+    "test": "test/upgrade-recording.test.ts",
+    "why": "a spec no reviewed line names is refused, never read with another spec's metadata (list 5, the lead's rule on the move)"
+  },
+  {
     "id": "r23-pin-line-not-copied",
     "file": "src/scale/shape.ts",
     "find": "{ pinned: true, metadata: p.metadata, reviewed: reviewedCopy(p.reviewed) }",

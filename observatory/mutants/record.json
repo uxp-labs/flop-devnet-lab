@@ -496,6 +496,62 @@
     "why": "each step reads every field steps.json names for it, here the breaker after A8 (list 4, L2)"
   },
   {
+    "id": "list5-runtime-before-events",
+    "file": "test/helpers/requests/list-5.ts",
+    "find": "  { pallet: \"System\", entry: \"Events\", keys: [] },\n  { pallet: \"System\", entry: \"LastRuntimeUpgrade\", keys: [] },",
+    "replace": "  { pallet: \"System\", entry: \"LastRuntimeUpgrade\", keys: [] },\n  { pallet: \"System\", entry: \"Events\", keys: [] },",
+    "test": "test/encoder-requests.test.ts",
+    "why": "every batch reads System.Events first, then System.LastRuntimeUpgrade (list 5, B4)"
+  },
+  {
+    "id": "list5-device-account-read-as-named",
+    "file": "test/helpers/requests/list-5.ts",
+    "find": "{ pallet: \"System\", entry: \"Account\", keys: [{ account: \"device\" }] },",
+    "replace": "{ pallet: \"System\", entry: \"Account\", keys: [{ account: \"named\" }] },",
+    "test": "test/encoder-requests.test.ts",
+    "why": "the fourth key is System.Account of the device; no key is built from the named account (list 5, B4)"
+  },
+  {
+    "id": "list5-session-keys-swapped",
+    "file": "test/helpers/requests/list-5.ts",
+    "find": "entry: \"Sessions\", keys: [{ account: \"owner\" }, { account: \"device\" }] },",
+    "replace": "entry: \"Sessions\", keys: [{ account: \"device\" }, { account: \"owner\" }] },",
+    "test": "test/encoder-requests.test.ts",
+    "why": "a session is keyed by owner then delegate, as the reference decoder builds it (list 5, B4, B7)"
+  },
+  {
+    "id": "list5-channel-read-dropped",
+    "file": "test/helpers/requests/list-5.ts",
+    "find": "  { pallet: \"ComputeChannel\", entry: \"Channels\", keys: [{ channel: \"t3\" }] },\n",
+    "replace": "",
+    "test": "test/encoder-requests.test.ts",
+    "why": "every batch reads the channel of T3, before it exists, while it is open and after it expired (list 5, B4)"
+  },
+  {
+    "id": "list5-start-said-as-t1",
+    "file": "test/helpers/requests/list-5.ts",
+    "find": "if (id === null) return \"the finalized block the run started from, before any step\";",
+    "replace": "if (id === null) return \"the block of T1\";",
+    "test": "test/encoder-requests.test.ts",
+    "why": "the why of the start block says it is the block the run started from, before any step (list 5, B6)"
+  },
+  {
+    "id": "list5-t4-outcome-success",
+    "file": "test/helpers/requests/list-5.ts",
+    "find": "outcome: \"refused with ComputeChannel.BadState\" },",
+    "replace": "outcome: \"success\" },",
+    "test": "test/encoder-requests.test.ts",
+    "why": "each why gives the outcome the run time record gives, here T4 refused with ComputeChannel.BadState (list 5, B6)"
+  },
+  {
+    "id": "list5-named-miner-shortened",
+    "file": "test/helpers/requests/list-5.ts",
+    "find": "the force_open to ${ACCOUNT_LABEL.named} ${inputs.accounts.named.value}`",
+    "replace": "the force_open to ${ACCOUNT_LABEL.named} ${core.short(inputs.accounts.named.value)}`",
+    "test": "test/encoder-requests.test.ts",
+    "why": "the whys name the named miner whole, so the list changes with that input (list 5, B3, B4)"
+  },
+  {
     "id": "batch-answer-two-sets-read",
     "file": "test/helpers/batch-answer.ts",
     "find": "  if (result.length !== 1) return refuse(`the answer holds ${result.length} sets, not exactly one`);\n",
