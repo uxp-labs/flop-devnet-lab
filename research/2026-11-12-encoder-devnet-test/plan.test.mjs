@@ -352,3 +352,20 @@ test("the words of fix round 2: README and plan.md say the check of a research s
   assert.match(readme, /1013, it is already in the pool, so it is treated as sent/);
   for (const [f, sha] of Object.entries(pastedSha256())) assert.ok(readme.includes(`sha256 of ${f}: ${sha}`) && md.includes(`sha256 of ${f}: ${sha}`), f);
 });
+
+test("the words of fix round 3: README, plan.md and steps.json say what the stop now needs and what already-sent means", () => {
+  const readme = readFileSync(join(HERE, "README.md"), "utf8"), md = readFileSync(join(HERE, "plan.md"), "utf8");
+  for (const [name, text] of [["README.md", readme], ["plan.md", md]]) {
+    const flat = text.replace(/\s+/g, " ");
+    assert.match(flat, /lab\.accountReads`?( relay)? of the step's signer/, `${name}: the reads of c and d`);
+    assert.match(flat, /next nonce must equal the copy's|next nonce of the reads must equal that nonce/, `${name}: the equal nonce`);
+    assert.match(flat, /already-sent`? is a reading/, `${name}: already-sent`);
+    assert.match(flat, /go no further at that step and record no stop/, `${name}: the nonce used by another transaction`);
+    assert.match(flat, /stays valid until/, `${name}: what is left names the copy`);
+    assert.match(flat, /After a mismatch at T4, T6 still applies/, `${name}: H9`);
+  }
+  assert.match(readme.replace(/\s+/g, " "), /A test step that is missing with no stop recorded makes the record wrong: failed, exit 1/);
+  assert.match(readme, /find-deadline/);
+  assert.match(plan.what, /next nonce equals the copy's/);
+  assert.match(plan.what, /already-sent is a reading/);
+});

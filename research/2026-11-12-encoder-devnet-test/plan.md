@@ -224,20 +224,30 @@ by the record, and `plan.mjs next --run <folder>` prints it.
 
 A step that will not come on chain is stopped by the lead with `record-step.mjs stop <id>` and the
 lead's words. It is allowed only at the step `plan.mjs next` names, with no finalized reading of it,
-and only when its copy cannot land without being sent again: (a) nothing was signed; (b) a device
-copy whose era is over by the device's reads, with the device's nonce unmoved; (c) an owner step or
-the sweep refused at submission with node code 1010 on a first send, with no earlier reading (a
-1010 to a sendSame after a deadline, a lost connection or an ended watch can mean the first copy is
-in a block: the lead uses lab.find instead); (d) an owner step or the sweep with no runner
-reading, which the lead says was never sent (what is left then names the unsent files, never to be
-sent). Anything else is refused with the row of the send outcomes to follow. A stopped test step is
-a stop there, with the row for refused at submission below, and the cleanup steps that apply
-follow. A stopped cleanup step counts as not bringing back what it should, and the steps after it
-go on.
+and only when its copy cannot land without being sent again: (a) nothing was signed and the record
+holds no runner reading of it; (b) a device copy whose era is over by the device's reads, with the
+device's nonce unmoved; (c) an owner step or the sweep refused at submission with node code 1010 on
+a first send, with no earlier reading (a 1010 to a sendSame after a deadline, a lost connection or
+an ended watch can mean the first copy is in a block: the lead uses lab.find instead); (d) an owner
+step or the sweep with no runner reading, which the lead says was never sent. For c and d the
+reads are lab.accountReads of the step's signer (the owner for T1, T2, T8; the device for T9), the
+signed file must be the plan's step, and the signer's next nonce must equal the copy's: the node
+counts its pool, so no transaction with that nonce is in a block or in the pool. A nonce above it
+refuses the stop and names lab.find and lab.sendSame; one below it refuses: the record and the
+chain disagree. If find then reads every finalized block from the record's start to the head
+without the copy, a transaction not of this batch used the nonce: these tools go no further at
+that step and record no stop (the row "nonce" below). The pane's already-sent is a reading: with
+it in the record neither c nor d holds. After c or d what is left names the copy, its extrinsic
+hash, its signer and its nonce: it stays valid until that nonce is used, must never be sent, and
+the next transaction of that signer ends it. Anything else is refused with the row of the send
+outcomes to follow. A stopped test step is a stop there, with the row for refused at submission
+below, and the cleanup steps that apply follow. A stopped cleanup step counts as not bringing back
+what it should, and the steps after it go on.
 
 A channel id the explorer gives that is not the derived one is recorded with both ids. The judge
-stops at that step, and the cleanup steps that name that channel do not apply: they would name a
-channel that does not exist.
+stops at that step. Only a mismatch at the step that opens the channel (T3 for CH_T3, T5 for CH_T5)
+drops the cleanup step that names it: that step would name a channel that does not exist. After a
+mismatch at T4, T6 still applies.
 
 `check.mjs` exits 0 when the record is right and nothing is left on chain, 4 when it is right and
 something is left (stopped or not), 1 when it is wrong, 3 for a run time record and 2 for its own

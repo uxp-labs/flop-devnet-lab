@@ -62,7 +62,10 @@ that apply. The lead runs those lines and asks again.
 
 A pane call ends after 45 s, and a watch may take up to the runner's deadline of 120 s. So the pane
 lines keep the promise on `window` and read it in a second call: `window.__s = lab.send(...)`, then
-`await window.__s`.
+`await window.__s`. `lab.find` ends within the same deadline: if it has not finished, its outcome is
+`find-deadline` with the blocks it read, and the lead calls it again from the block after them.
+Every result of `send`, `sendSame` and `find` names its call in `sent_by`, also those that submit
+nothing.
 
 A device step, T3, from the reader's list:
 
@@ -139,7 +142,9 @@ stop: `record-step.mjs stop <id> --run "$RUN" --why '<words>' [--reads '<text>' 
 It is allowed only at the step `plan.mjs next` names, with no finalized reading of it, and only
 when its copy cannot land without being sent again:
 
-- a: nothing was signed for it;
+- a: nothing was signed for it, and the record holds no runner reading of it, current or earlier
+  (with a reading and no file the record says something was sent and the file is gone: the lead
+  rules);
 - b: a device step whose signed copy's era is over by the device's reads (a finalized head above
   its last valid block) and whose next nonce is the device transactions the record holds;
 - c: an owner step or the sweep whose only runner reading is refused at submission with code 1010,
@@ -147,7 +152,32 @@ when its copy cannot land without being sent again:
   watch, a 1010 to `sendSame` can mean the first copy is in a block: no stop, the lead uses
   `lab.find` from the block before the first send;
 - d: an owner step or the sweep with a signed copy and no runner reading: the record says the lead
-  says this copy was never sent, and what is left names the unsent files, which must never be sent.
+  says this copy was never sent.
+
+Cases c and d also need the node's own count. `--reads` and `--reads-sha256` are then the
+`lab.accountReads` relay of the step's signer (the owner for T1, T2, T8; the device for T9), of
+the plan's runtime; `signed/<id>.json` must pass the check of a research signer's file, so its
+nonce is the one the plan gives the id; and the next nonce of the reads must equal that nonce.
+`system_accountNextIndex` counts the chain and the node's pool, so an equal nonce shows that no
+transaction with it is in a block or in the pool. A next nonce above it refuses the stop: the
+nonce is used, or a transaction with it is in the pool, by this copy or another; the lead uses
+`lab.find` from the block before the first send, then `lab.sendSame`. A next nonce below it
+refuses too: the record and the chain disagree. When the find readings in the record cover every
+finalized block from the record's start to the head without the copy, and the nonce is above, a
+transaction that is not of this batch used the signer's nonce: these tools go no further at that
+step and record no stop, and the stop table's row "nonce" says what is left. A signed file that is
+not the plan's is refused with the check's words; the lead moves a wrong file aside by hand. The
+stop's evidence holds the finalized head and the next nonce of the reads, and the copy's extrinsic
+hash and nonce.
+
+The pane's `already-sent` is a reading: the pane's sent list holds these bytes, so they were
+written to a socket before. `record-step.mjs step` records it, and `nextOf` takes the step as sent
+and not in a finalized block. With it in the record neither c nor d holds, and the stop names
+`lab.find` and `lab.sendSame`.
+
+After a stop by c or d what is left names the copy: its files, its extrinsic hash, its signer and
+its nonce. It stays valid until that signer's nonce is used and must never be sent; the next
+transaction this signer sends ends it.
 
 Anything else is refused and names the row of `send_outcomes` to follow. After a stop no tool signs
 the step or writes a send file for it. A stopped test step is a stop of the batch there, and the
@@ -164,14 +194,17 @@ the outcome, the error named by the 1014020 table, the events of `ComputeChannel
 An explorer reading is taken only when its `success` agrees with the one `System.ExtrinsicSuccess`
 or `System.ExtrinsicFailed` among its names, and a failed one's error is the one that event gives.
 A channel id the explorer gives that is not the derived one is recorded with both ids
-(`channel_mismatch`): the judge stops at that step, the cleanup steps that name that channel do not
-apply, and what is under the explorer's id is left for a later piece of work. The run time judge
+(`channel_mismatch`): the judge stops at that step, and what is under the explorer's id is left for
+a later piece of work. Only a mismatch at the step that opens a channel (T3 for `CH_T3`, T5 for
+`CH_T5`) drops the cleanup step that names it. After a mismatch at T4, T6 still applies. The run time judge
 reads the refund of T6 and T7 where the explorer's events give it.
 `node check.mjs "$RUN/results.json"` says go on, wait or stop at a step; it never says passed.
 
 `check.mjs` exits 0 when the record is right and nothing is left on chain; 4 when it is right and
 something is left, stopped or not; 1 when it is wrong; 3 for a run time record; 2 for its own
-refusals. No verdict begins with "passed" when something is left: a top up left after T6 says
+refusals. In a final record every step is run, left out by its own `only_if`, or after a recorded
+stop (a stop by outcome at an earlier step, or a `lead_stop` carried over from the run time
+record). A test step that is missing with no stop recorded makes the record wrong: failed, exit 1. No verdict begins with "passed" when something is left: a top up left after T6 says
 `as planned, left: ...`.
 
 ## Not done here: the final record

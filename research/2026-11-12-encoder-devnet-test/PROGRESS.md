@@ -50,9 +50,14 @@ Order of work (the brief's): H1 with H2, H3, H4; H5; H6 to H11; the words; the m
   derived from steps.json, not typed. steps.json T4 channel row says T6 still applies. Test in
   lead-stop.test.mjs G4 (T4 added).
 
+- The words: README (the lead's stop: case a with no reading, the signer's reads for c and d, the
+  nonce above and below, the nonce row, already-sent, what is left after c and d; find-deadline and
+  sent_by; H9; H5), plan.md prose (the same, shorter), steps.json what. plan.mjs md rewrote the
+  printed blocks. Test in plan.test.mjs ("the words of fix round 3"). 281 of 281 pass.
+
 ### Next
 
-The words (README, plan.md prose, steps.json what), then the mutants.
+The mutants: the third reviewer's 18 into mutants.json, fix round 3's own, then the full run.
 
 ### Decisions (fix round 3) and why
 
