@@ -1,0 +1,451 @@
+{
+ "schema": "encoder-devnet-test/results@0",
+ "what": "Filled by the lead while running steps.json. Every null is filled or left null; check.mjs says what is missing. Unknown stays null, never 0.",
+ "spec_version": 1014020,
+ "chain": {
+  "genesis": "0x99c172c095340ace980631f9123544c6bebd4839f3437e463533422d8be2d631",
+  "rpc": "wss://rpc.devnet.flop.network",
+  "spec_name_at_start": null,
+  "spec_version_at_start": null,
+  "transaction_version_at_start": null
+ },
+ "accounts": {
+  "owner": {
+   "public_key": null,
+   "ss58": null
+  },
+  "device": {
+   "public_key": null,
+   "ss58": null
+  }
+ },
+ "owner_account_nonce_at_start": null,
+ "before": {
+  "block_number": null,
+  "block_hash": null,
+  "accounts": {
+   "owner": {
+    "free": null,
+    "reserved": null,
+    "nonce": null,
+    "absent": null
+   },
+   "device": {
+    "free": null,
+    "reserved": null,
+    "nonce": null,
+    "absent": null
+   }
+  },
+  "session": {
+   "active": null,
+   "spent_raw": null,
+   "epoch_spent_raw": null
+  },
+  "session_nonce": null,
+  "breaker_tx_count": null,
+  "raw_reads": {}
+ },
+ "steps": [
+  {
+   "step": "T1",
+   "signer": null,
+   "account_nonce": null,
+   "call": null,
+   "extrinsic_hash": null,
+   "era": "immortal",
+   "submitted_utc": null,
+   "finalized_in_block": null,
+   "block_hash": null,
+   "extrinsic_index": null,
+   "last_runtime_upgrade_spec": null,
+   "events_value_sha256": null,
+   "events": [],
+   "result": null,
+   "fee_raw": null,
+   "after": {
+    "accounts": {
+     "owner": {
+      "free": null,
+      "reserved": null,
+      "nonce": null,
+      "absent": null
+     },
+     "device": {
+      "free": null,
+      "reserved": null,
+      "nonce": null,
+      "absent": null
+     }
+    },
+    "session": {
+     "active": null,
+     "spent_raw": null,
+     "epoch_spent_raw": null
+    },
+    "session_nonce": null,
+    "breaker_tx_count": null
+   },
+   "raw_reads": {},
+   "note": null
+  },
+  {
+   "step": "T2",
+   "signer": null,
+   "account_nonce": null,
+   "call": null,
+   "extrinsic_hash": null,
+   "era": "immortal",
+   "submitted_utc": null,
+   "finalized_in_block": null,
+   "block_hash": null,
+   "extrinsic_index": null,
+   "last_runtime_upgrade_spec": null,
+   "events_value_sha256": null,
+   "events": [],
+   "result": null,
+   "fee_raw": null,
+   "after": {
+    "accounts": {
+     "owner": {
+      "free": null,
+      "reserved": null,
+      "nonce": null,
+      "absent": null
+     },
+     "device": {
+      "free": null,
+      "reserved": null,
+      "nonce": null,
+      "absent": null
+     }
+    },
+    "session": {
+     "active": null,
+     "spent_raw": null,
+     "epoch_spent_raw": null
+    },
+    "session_nonce": null,
+    "breaker_tx_count": null
+   },
+   "raw_reads": {},
+   "note": null
+  },
+  {
+   "step": "T3",
+   "signer": null,
+   "account_nonce": null,
+   "call": null,
+   "extrinsic_hash": null,
+   "era": {
+    "birth_number": null,
+    "birth_hash": null,
+    "last_valid_block": null
+   },
+   "submitted_utc": null,
+   "finalized_in_block": null,
+   "block_hash": null,
+   "extrinsic_index": null,
+   "last_runtime_upgrade_spec": null,
+   "events_value_sha256": null,
+   "events": [],
+   "result": null,
+   "fee_raw": null,
+   "after": {
+    "accounts": {
+     "owner": {
+      "free": null,
+      "reserved": null,
+      "nonce": null,
+      "absent": null
+     },
+     "device": {
+      "free": null,
+      "reserved": null,
+      "nonce": null,
+      "absent": null
+     }
+    },
+    "session": {
+     "active": null,
+     "spent_raw": null,
+     "epoch_spent_raw": null
+    },
+    "session_nonce": null,
+    "breaker_tx_count": null
+   },
+   "raw_reads": {},
+   "note": null
+  },
+  {
+   "step": "T4",
+   "signer": null,
+   "account_nonce": null,
+   "call": null,
+   "extrinsic_hash": null,
+   "era": {
+    "birth_number": null,
+    "birth_hash": null,
+    "last_valid_block": null
+   },
+   "submitted_utc": null,
+   "finalized_in_block": null,
+   "block_hash": null,
+   "extrinsic_index": null,
+   "last_runtime_upgrade_spec": null,
+   "events_value_sha256": null,
+   "events": [],
+   "result": null,
+   "fee_raw": null,
+   "after": {
+    "accounts": {
+     "owner": {
+      "free": null,
+      "reserved": null,
+      "nonce": null,
+      "absent": null
+     },
+     "device": {
+      "free": null,
+      "reserved": null,
+      "nonce": null,
+      "absent": null
+     }
+    },
+    "session": {
+     "active": null,
+     "spent_raw": null,
+     "epoch_spent_raw": null
+    },
+    "session_nonce": null,
+    "breaker_tx_count": null
+   },
+   "raw_reads": {},
+   "note": null
+  },
+  {
+   "step": "T5",
+   "signer": null,
+   "account_nonce": null,
+   "call": null,
+   "extrinsic_hash": null,
+   "era": {
+    "birth_number": null,
+    "birth_hash": null,
+    "last_valid_block": null
+   },
+   "submitted_utc": null,
+   "finalized_in_block": null,
+   "block_hash": null,
+   "extrinsic_index": null,
+   "last_runtime_upgrade_spec": null,
+   "events_value_sha256": null,
+   "events": [],
+   "result": null,
+   "fee_raw": null,
+   "after": {
+    "accounts": {
+     "owner": {
+      "free": null,
+      "reserved": null,
+      "nonce": null,
+      "absent": null
+     },
+     "device": {
+      "free": null,
+      "reserved": null,
+      "nonce": null,
+      "absent": null
+     }
+    },
+    "session": {
+     "active": null,
+     "spent_raw": null,
+     "epoch_spent_raw": null
+    },
+    "session_nonce": null,
+    "breaker_tx_count": null
+   },
+   "raw_reads": {},
+   "note": null
+  },
+  {
+   "step": "T6",
+   "signer": null,
+   "account_nonce": null,
+   "call": null,
+   "extrinsic_hash": null,
+   "era": {
+    "birth_number": null,
+    "birth_hash": null,
+    "last_valid_block": null
+   },
+   "submitted_utc": null,
+   "finalized_in_block": null,
+   "block_hash": null,
+   "extrinsic_index": null,
+   "last_runtime_upgrade_spec": null,
+   "events_value_sha256": null,
+   "events": [],
+   "result": null,
+   "fee_raw": null,
+   "after": {
+    "accounts": {
+     "owner": {
+      "free": null,
+      "reserved": null,
+      "nonce": null,
+      "absent": null
+     },
+     "device": {
+      "free": null,
+      "reserved": null,
+      "nonce": null,
+      "absent": null
+     }
+    },
+    "session": {
+     "active": null,
+     "spent_raw": null,
+     "epoch_spent_raw": null
+    },
+    "session_nonce": null,
+    "breaker_tx_count": null
+   },
+   "raw_reads": {},
+   "note": null
+  },
+  {
+   "step": "T7",
+   "signer": null,
+   "account_nonce": null,
+   "call": null,
+   "extrinsic_hash": null,
+   "era": {
+    "birth_number": null,
+    "birth_hash": null,
+    "last_valid_block": null
+   },
+   "submitted_utc": null,
+   "finalized_in_block": null,
+   "block_hash": null,
+   "extrinsic_index": null,
+   "last_runtime_upgrade_spec": null,
+   "events_value_sha256": null,
+   "events": [],
+   "result": null,
+   "fee_raw": null,
+   "after": {
+    "accounts": {
+     "owner": {
+      "free": null,
+      "reserved": null,
+      "nonce": null,
+      "absent": null
+     },
+     "device": {
+      "free": null,
+      "reserved": null,
+      "nonce": null,
+      "absent": null
+     }
+    },
+    "session": {
+     "active": null,
+     "spent_raw": null,
+     "epoch_spent_raw": null
+    },
+    "session_nonce": null,
+    "breaker_tx_count": null
+   },
+   "raw_reads": {},
+   "note": null
+  },
+  {
+   "step": "T8",
+   "signer": null,
+   "account_nonce": null,
+   "call": null,
+   "extrinsic_hash": null,
+   "era": "immortal",
+   "submitted_utc": null,
+   "finalized_in_block": null,
+   "block_hash": null,
+   "extrinsic_index": null,
+   "last_runtime_upgrade_spec": null,
+   "events_value_sha256": null,
+   "events": [],
+   "result": null,
+   "fee_raw": null,
+   "after": {
+    "accounts": {
+     "owner": {
+      "free": null,
+      "reserved": null,
+      "nonce": null,
+      "absent": null
+     },
+     "device": {
+      "free": null,
+      "reserved": null,
+      "nonce": null,
+      "absent": null
+     }
+    },
+    "session": {
+     "active": null,
+     "spent_raw": null,
+     "epoch_spent_raw": null
+    },
+    "session_nonce": null,
+    "breaker_tx_count": null
+   },
+   "raw_reads": {},
+   "note": null
+  },
+  {
+   "step": "T9",
+   "signer": null,
+   "account_nonce": null,
+   "call": null,
+   "extrinsic_hash": null,
+   "era": "immortal",
+   "submitted_utc": null,
+   "finalized_in_block": null,
+   "block_hash": null,
+   "extrinsic_index": null,
+   "last_runtime_upgrade_spec": null,
+   "events_value_sha256": null,
+   "events": [],
+   "result": null,
+   "fee_raw": null,
+   "after": {
+    "accounts": {
+     "owner": {
+      "free": null,
+      "reserved": null,
+      "nonce": null,
+      "absent": null
+     },
+     "device": {
+      "free": null,
+      "reserved": null,
+      "nonce": null,
+      "absent": null
+     }
+    },
+    "session": {
+     "active": null,
+     "spent_raw": null,
+     "epoch_spent_raw": null
+    },
+    "session_nonce": null,
+    "breaker_tx_count": null
+   },
+   "raw_reads": {},
+   "note": null
+  }
+ ],
+ "events_form": "events of this extrinsic only, in order, as { pallet, name, fields }: field names as facts-1014020.json gives them, amounts as decimal strings, accounts and hashes as 0x lower case hex. An ExtrinsicFailed carries fields.dispatch_error = { type: \"Module\", value: { index: <pallet index>, error: \"0x<4 bytes>\" } }.",
+ "reads_form": "after: the reads at the finalized block that holds the step. An account is { free, reserved, nonce } as decimal strings, or { absent: true } when the node holds no System.Account for it. session.active \"true\" or \"false\". raw_reads: each storage key read and the node's answer, 0x hex or null, as pane-runner.js returned it."
+}

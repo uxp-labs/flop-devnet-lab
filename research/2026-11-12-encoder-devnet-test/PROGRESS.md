@@ -12,9 +12,12 @@ table, stop rule.
 - (1) steps.json, lib.mjs, plan.mjs, plan.md (made from /tmp scratch template; regenerate the
   tables with `node plan.mjs table|costs|stops|commands` and paste), plan.test.mjs: 17 tests pass.
 
+- (4) DONE results.template.json (node plan.mjs template), judge.mjs, check.mjs, check.test.mjs
+  (18 tests). judge.mjs wraps the rerun's judgeStep; adds recorded steps, balances, session, stop.
+
 ## Next
 
-- (4) results.template.json (node plan.mjs template), judge.mjs + check.mjs + check.test.mjs.
+- (5) README.md; final run of node --test (58 tests now) under setpriv; GitHub checks; report.
 
 - (3) DONE pane-runner.js and pane-runner.test.mjs (12 tests). Interface: createRunner({transport, eventsKey, deadlineMs, store}); heads, read,
   deviceReads(device, sessionNonceKey), send(bundleText, sha256). wsTransport(url) for the browser.
