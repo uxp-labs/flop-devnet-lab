@@ -29,7 +29,7 @@ import { seeded } from "./helpers/random.js";
 import { recorded } from "./helpers/recorded.js";
 import { referenceShape } from "./helpers/reference-shape.js";
 import { TooDeep, writer } from "./helpers/review-gen.js";
-import { type PalletSpec, type TypeSpec, bytes, cat, compact, def, metadata, str, typeEntry, u32, u8, vec } from "./helpers/scale-write.js";
+import { type Entry, type PalletSpec, type TypeSpec, bytes, cat, compact, def, metadata, str, typeEntry, u32, u8, vec } from "./helpers/scale-write.js";
 
 const R = recorded();
 const MD = parseMetadata(R.metadata);
@@ -91,8 +91,8 @@ function shapeMetadata(o: { eventFields?: { name: string; type: number }[]; reco
     ...(o.extra ?? []),
   ];
   /** A map entry of one hasher, a u8 key and a u32 value, but for what a test changes; absent when the test drops it. */
-  const map = (pallet: string, name: string) => (o.drop?.includes(`${pallet}.${name}`) ? [] : [{ name, map: { hashers: ["Blake2_128Concat" as const], key: 0, value: 2 }, ...(name === "Sessions" && o.sessionFallback ? { fallback: o.sessionFallback } : {}) }]);
-  const pallets: PalletSpec[] = [
+  const map = (pallet: string, name: string): Entry[] => (o.drop?.includes(`${pallet}.${name}`) ? [] : [{ name, map: { hashers: ["Blake2_128Concat" as const], key: 0, value: 2 }, ...(name === "Sessions" && o.sessionFallback ? { fallback: o.sessionFallback } : {}) }]);
+  const allPallets: PalletSpec[] = [
     {
       name: "System",
       index: 0,
@@ -104,7 +104,8 @@ function shapeMetadata(o: { eventFields?: { name: string; type: number }[]; reco
     { name: "ModelRegistry", index: 3, entries: ["Models", "MeasuredRoots", "AllowedDecodePolicies"].flatMap((e) => map("ModelRegistry", e)) },
     { name: "MinerStaking", index: 4, entries: map("MinerStaking", "Miners") },
     { name: "HwCalibration", index: 5, entries: ["CalibrationVersions", "LastInitialCalibration"].flatMap((e) => map("HwCalibration", e)) },
-  ].filter((p) => !o.drop?.includes(p.name));
+  ];
+  const pallets = allPallets.filter((p) => !o.drop?.includes(p.name));
   return metadata(types, pallets);
 }
 
