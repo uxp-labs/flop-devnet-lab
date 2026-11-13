@@ -18,6 +18,7 @@ X7 done: chain-read-source.test.ts scans all of src with comments taken out (cod
 X8 done: chain-read-node.test.ts states every cap as a number with its reason, and holds each storage cap, the metadata cap and the header cap at its edge. No cap changed.
 X10 done: scripts/need-observatory.mjs (exports needObservatory, NEEDED, BUILD, OBSERVATORY), prebuild and pretest in package.json, test/need-observatory.test.ts. By hand in a temporary copy with no observatory beside it: one line, exit 1.
 X11 done: sign-device.mjs line 39 comment now two lines naming the observatory first. mutants.json: 211 finds, each exactly once. node --test there: 281 tests, 281 pass.
+W1 done: README Chain reads section and Run it block (npm ci). package-lock.json untouched.
  X2 with X6, X3, X5, X9, X4, X7, X8, W1 to W5.
 
 ## Report of the P2 fix round
