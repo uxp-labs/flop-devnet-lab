@@ -285,8 +285,9 @@ read by position. The number after and the difference are in no other committed 
 `balances_source` is `decoder`). It is the run time record, `results.json`, with its fill fields
 filled from the observatory's fifth recording, and `filled_from` at the end. `results.json` is not
 changed: a record of its day is not rewritten. The sha256 of `results.final.json` is
-496accd3c706d4c4f3b7d5a699a891dc91bfbdfe1b81ea13067c5a5cadc27573. `final-record.test.mjs` holds it and each claim below by its
-field. A field `steps.N` is the step at position N of `steps` in `results.final.json`, counted from 0.
+496accd3c706d4c4f3b7d5a699a891dc91bfbdfe1b81ea13067c5a5cadc27573.
+`final-record.test.mjs` holds it and each claim below by its field. A field `steps.N` is the step at
+position N of `steps` in `results.final.json`, counted from 0.
 
 What it is filled from (`filled_from`):
 - The chain facts come from the recording `observatory/fixtures/recording-20261113182100-8769e8d2841bf49a`
