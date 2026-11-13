@@ -140,12 +140,11 @@ export function explorerReading(plan, step, rt, v, sha256, errors, results) {
     return { pallet: PALLET(e.section), name: e.method, fields: recordForm(e.data ?? {}) };
   });
   const channel = step.channel ? substitute(step.channel, plan, results, true) : null;
-  for (const e of events) {
-    const id = e.fields.channel_id;
-    if (id === undefined) continue;
-    if (id !== channel) no(`the explorer's channelId ${id} in ${e.pallet}.${e.name} is not the derived channel id ${channel ?? "(none for this step)"}: do not go on; the formula is shown for force_open only, and this is the lead's to rule`);
-  }
-  return { source: v.source, read_utc: v.read_utc, hash: v.hash, block_hash: v.block_hash, success: v.success, error, names: v.names.map((n) => { const [s, m] = n.split("."); return `${PALLET(s)}.${m}`; }), events, relay_sha256: sha256 };
+  // G4: a channelId that is not the derived one is recorded with both ids, under a field of its own;
+  // the judge stops at the step (the formula is shown for force_open only).
+  const channelMismatch = events.filter((e) => e.fields.channel_id !== undefined && e.fields.channel_id !== channel)
+    .map((e) => ({ event: `${e.pallet}.${e.name}`, derived: channel, explorer: e.fields.channel_id }));
+  return { source: v.source, read_utc: v.read_utc, hash: v.hash, block_hash: v.block_hash, success: v.success, error, names: v.names.map((n) => { const [s, m] = n.split("."); return `${PALLET(s)}.${m}`; }), events, channel_mismatch: channelMismatch, relay_sha256: sha256 };
 }
 
 /** The outcomes of the runner that submitted nothing in that call: there is nothing to record. */

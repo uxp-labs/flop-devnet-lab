@@ -180,11 +180,15 @@ test("R2: the explorer's hash must be the step's extrinsic hash, its block hash 
   const otherHash = JSON.parse(explorerRelay(signed.extrinsic_hash, H(3600012), t3Answer()).text); otherHash.hash = "0x" + "99".repeat(32);
   assert.match(step(run, "T3", ...exArgs(relay(otherHash))).stderr, /is not the extrinsic hash/);
   assert.match(step(run, "T3", ...exArgs(explorerRelay(signed.extrinsic_hash, H(3600013), t3Answer()))).stderr, /is not the runner's/);
-  const wrong = step(run, "T3", ...exArgs(explorerRelay(signed.extrinsic_hash, H(3600012), t3Answer({ channel: "0x" + "77".repeat(32) }))));
-  assert.match(wrong.stderr, /channelId 0x7{64} in ComputeChannel.ForceOpenRequested is not the derived channel id/);
-  assert.equal(record(run).steps.find((x) => x.step === "T3").run_time.explorer, null);
   const src = JSON.parse(explorerRelay(signed.extrinsic_hash, H(3600012), t3Answer()).text); src.source = "https://elsewhere.example/api/transactions/" + signed.extrinsic_hash;
   assert.match(step(run, "T3", ...exArgs(relay(src))).stderr, /source is https:\/\/elsewhere/);
+  assert.equal(record(run).steps.find((x) => x.step === "T3").run_time.explorer, null);
+  // G4 (adapted from a refusal): a channelId that is not the derived one is recorded with both ids, and the judge stops there
+  const wrong = ok(step(run, "T3", ...exArgs(explorerRelay(signed.extrinsic_hash, H(3600012), t3Answer({ channel: "0x" + "77".repeat(32) })))));
+  assert.deepEqual(record(run).steps.find((x) => x.step === "T3").run_time.explorer.channel_mismatch, [{ event: "ComputeChannel.ForceOpenRequested", derived: V("CH_T3"), explorer: "0x" + "77".repeat(32) }]);
+  assert.match(wrong.stdout, /^stop at T3: /m);
+  assert.match(wrong.stdout, /cleanup steps that apply: T8, T9$/m, "T6 names CH_T3, a channel that does not exist: it does not apply");
+  assert.match(wrong.stdout, new RegExp(`left: .*under the channel id 0x7{64} the explorer gave`));
 });
 
 test("R2: an error is named by the 1014020 table from the pallet index and the error index; a stop prints the plan's row and the cleanup steps that apply", () => {

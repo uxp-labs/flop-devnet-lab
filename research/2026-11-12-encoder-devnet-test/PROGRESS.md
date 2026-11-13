@@ -50,7 +50,12 @@ Start: head `e18e725`; the second reviewer's branch (`8ff23d6`) merged by fast f
   record.mjs NEVER_SENT, leadStopOf, unsentLeft; after a stop sign-device (before nextOf), send-file
   and record-step step refuse. lead-stop.test.mjs (9). Reviewer test changed: review2-next Q8 now
   sets node code 1010 and takes the lead's stop (case c) before it asks whether T9 is reached.
-- next: G4 (channel mismatch recorded), then F12, G2, the words, G3. F11, the runner, F9, F3 with G1 and G4, F12 and G2, the words, G3.
+- G4: explorerReading records channel_mismatch [{event, derived, explorer}] instead of refusing;
+  judge channelMismatches; nextOf stops at a test step with the stop table's "channel" row, leaves
+  what the step moved under the explorer's id, and drops the cleanup steps that name that channel;
+  a cleanup step with a mismatch goes into left (and "included and succeeded, but" stays). Test in
+  lead-stop.test.mjs (G4) and record-step.test.mjs R2 (adapted from the refusal).
+- next: F12, G2, the words, G3. F11, the runner, F9, F3 with G1 and G4, F12 and G2, the words, G3.
 
 ### Decisions (fix round 2) and why
 

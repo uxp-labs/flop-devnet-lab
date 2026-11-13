@@ -144,3 +144,17 @@ test("F3: after a stop no tool signs the step, writes a send file for it, or rec
   assert.equal(existsSync(join(run2, "signed", "T2.send.json")), false);
   assert.ok(readFileSync(join(run, "results.json"), "utf8").includes('"case": "b"'));
 });
+
+test("G4: an explorer channel id that is not the derived one: at T3 the judge stops and T6 does not apply; at T5, T7 does not apply; at T6 it is left and T7 goes on", async () => {
+  const OTHER = "0x" + "e7".repeat(32);
+  const at = (id) => { const { results } = asPlanned(DEVICE, id); const ex = results.steps.find((s) => s.step === id).run_time.explorer; ex.events.find((e) => "channel_id" in e.fields).fields.channel_id = OTHER; return nextOf(plan, results); };
+  const t3 = at("T3");
+  assert.deepEqual([t3.word, t3.stopped_at, t3.cleanup, t3.step], ["stop", "T3", ["T8", "T9"], "T8"]);
+  assert.match(t3.row, /not the derived CH_T3/);
+  assert.ok(t3.left.some((l) => l.includes(`under the channel id ${OTHER} the explorer gave`)), t3.left.join("\n"));
+  const t5 = at("T5");
+  assert.deepEqual([t5.stopped_at, t5.cleanup], ["T5", ["T6", "T8", "T9"]]);
+  const t6 = at("T6");
+  assert.equal(t6.step, "T7");
+  assert.ok(t6.left.some((l) => l.includes(`what T6 moved, under the channel id ${OTHER}`)), t6.left.join("\n"));
+});

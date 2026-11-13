@@ -76,11 +76,15 @@ export function recordProblems(plan, results) {
   return out;
 }
 
-/** The channel ids of an id's events that are not the step's derived one (C7). */
-export function channelProblems(plan, step, view, results) {
+/** The events of an id that name a channel that is not the step's derived one: [{ event, derived, explorer }] (C7, G4). */
+export function channelMismatches(plan, step, view, results) {
   const want = step.channel ? substitute(step.channel, plan, results, true) : null;
-  return view.events.filter((e) => e.fields && "channel_id" in e.fields && e.fields.channel_id !== want)
-    .map((e) => `${e.pallet}.${e.name} names the channel ${e.fields.channel_id}, not the derived ${step.channel ? `${step.channel.slice(1)} ${want}` : "channel of none"}`);
+  return view.events.filter((e) => e.fields && "channel_id" in e.fields && e.fields.channel_id !== want).map((e) => ({ event: `${e.pallet}.${e.name}`, derived: want, explorer: e.fields.channel_id }));
+}
+
+/** The channel ids of an id's events that are not the step's derived one, in words (C7). */
+export function channelProblems(plan, step, view, results) {
+  return channelMismatches(plan, step, view, results).map((m) => `${m.event} names the channel ${m.explorer}, not the derived ${step.channel ? `${step.channel.slice(1)} ${m.derived}` : "channel of none"}`);
 }
 
 // ---- the run time record ------------------------------------------------------------------------
@@ -113,7 +117,7 @@ export function judgeRunTime(plan, step, view, results) {
   }
   for (const pattern of step.forbid ?? []) if (view.names.includes(pattern)) problems.push(`${pattern} must not appear`);
   problems.push(...channelProblems(plan, step, view, results));
-  return { ok: problems.length === 0, said: said ?? "refused", problems, findings };
+  return { ok: problems.length === 0, said: said ?? "refused", problems, findings, channels: channelMismatches(plan, step, view, results) };
 }
 
 /** The plan's row for a stop at a step: from the stop table of steps.json for the answer, else the step's own words. */
@@ -136,10 +140,13 @@ export function nextOf(plan, results) {
   let stoppedAt = null, row = null;
   const broken = recordProblems(plan, results);
   if (broken.length) return { word: "stop", step: null, why: broken.map((b) => b.problem).join("; "), waiting: null, stopped_at: broken[0].id, row: `the record: ${broken[0].problem}`, cleanup: [], left, findings, said };
-  const cleanupThatApplies = () => (stoppedAt ? plan.steps.filter((s) => s.cleanup && (!s.only_if || holdsBy(s.only_if, plan, results, true) !== false)).map((s) => s.id) : []);
+  const badChannels = new Set(); // G4: the channels of steps whose explorer reading named another channel id
+  const usable = (s) => !(s.channel && badChannels.has(s.channel));
+  const cleanupThatApplies = () => (stoppedAt ? plan.steps.filter((s) => s.cleanup && usable(s) && (!s.only_if || holdsBy(s.only_if, plan, results, true) !== false)).map((s) => s.id) : []);
   const out = (word, step, why, waiting = null) => ({ word: stoppedAt && word === "go on" ? "stop" : word, step, why, waiting, stopped_at: stoppedAt, row, cleanup: cleanupThatApplies(), left, findings, said });
   for (const step of plan.steps) {
     if (stoppedAt && !step.cleanup) continue;
+    if (!usable(step)) { said.push(`${step.id}: does not apply: it names ${step.channel.slice(1)}, and the explorer gave another channel id`); continue; }
     if (step.only_if) {
       const h = holdsBy(step.only_if, plan, results, stoppedAt !== null);
       if (h === null) return out("wait", step.id, `the outcome of ${step.only_if.step}, which ${step.id} depends on`, "outcome");
@@ -165,6 +172,15 @@ export function nextOf(plan, results) {
       const j = judgeRunTime(plan, step, v, results);
       findings.push(...j.findings);
       said.push(`${id}: ${j.ok ? j.said : j.problems.join("; ")}`);
+      if (j.channels.length) {
+        // G4: the explorer named a channel that is not the derived one. The judge stops at a test step;
+        // the cleanup steps that use this channel do not apply; what is under the explorer's id is left.
+        if (step.channel) badChannels.add(step.channel);
+        if (step.cleanup && v.success === true) left.push(`${id} was included and succeeded, but ${j.problems.join("; ")}`);
+        for (const m of j.channels) left.push(`what ${id} moved, under the channel id ${m.explorer} the explorer gave (not the derived ${m.derived ?? "none"}): a later piece of work brings it back`);
+        if (!step.cleanup) { stoppedAt = step.id; row = (plan.stop_table ?? []).filter((x) => x.step === step.id && x.answer === "channel").map((x) => `${x.on_chain}; ${x.brings_back}`)[0] ?? `${step.id}: the explorer gave another channel id`; }
+        done = true; break;
+      }
       if (j.ok) { done = true; break; }
       if (!step.cleanup) { stoppedAt = step.id; row = stopRowOf(plan, step, v); done = true; break; }
       if (v.success === true) { left.push(`${id} was included and succeeded, but ${j.problems.join("; ")}`); done = true; break; }
