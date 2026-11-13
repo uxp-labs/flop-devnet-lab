@@ -138,9 +138,9 @@ describe("the storage door, on the second recording", () => {
   it("refuses an entry the reviewed shape does not state, before anything else, whatever its key", () => {
     const r = readAt(3497611, "CircuitBreakers", "device_2");
     for (const [pallet, entry] of [
-      ["FlopSessionKeys", "DelegateSessions"],
-      ["ComputeChannel", "FailedAcks"],
-      ["System", "Account"],
+      ["ModelRegistry", "ModelsByMiner"],
+      ["MinerStaking", "TotalMiners"],
+      ["System", "BlockHash"],
       ["flopsessionkeys", "Sessions"],
       ["FlopSessionKeys", "Sessions "],
     ] as const) {
@@ -267,13 +267,13 @@ describe("the storage door, on the second recording", () => {
   it("reads the pallet and the entry first, and refuses an unstated entry before any other field is read, its malformed key parts included", () => {
     const r = readAt(3497611, "CircuitBreakers", "device_2");
     const seen: string[] = [];
-    const input = new Proxy(doorInput(r, { entry: "DelegateSessions", keys: "not a list" as never }), {
+    const input = new Proxy(doorInput(r, { entry: "SessionCount", keys: "not a list" as never }), {
       get(t, k, recv) {
         seen.push(String(k));
         return Reflect.get(t, k, recv);
       },
     });
-    expect(decodeStorageValue(input)).toEqual({ decoded: false, refused: 'not decoded: "FlopSessionKeys"."DelegateSessions" is not a storage entry the reviewed shape states' });
+    expect(decodeStorageValue(input)).toEqual({ decoded: false, refused: 'not decoded: "FlopSessionKeys"."SessionCount" is not a storage entry the reviewed shape states' });
     expect(seen).toEqual(["pallet", "entry"]);
     // A stated entry: the pin's fields, then the key parts, the key and the answer, each once.
     seen.length = 0;

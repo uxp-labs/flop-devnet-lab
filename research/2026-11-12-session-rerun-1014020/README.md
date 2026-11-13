@@ -1,13 +1,20 @@
 # The session tests again, at spec 1014020
 
 Run by the lead on 2026-11-12, after the owner said yes: 23 transactions on FLOP Devnet, blocks
-3552721 to 3553566, every block executed by spec 1014020. 22 of the 23 steps pass `check.mjs`
-whole. A10 passes in its events and result and is incomplete for one read, which the lab's
-decoder does not state (below). No step answered otherwise than `steps.json` expects.
+3552721 to 3553566, every block executed by spec 1014020. All 23 steps pass `check.mjs` whole
+since the fill was run again on 2026-11-13 (below). At the first fill 22 passed whole and A10 was
+incomplete for one read, which the lab's decoder did not state then. No step answered otherwise
+than `steps.json` expects.
 
-Everything below is written from `results.json` (sha256
-`d4f92522f94f594de59b0ac8ada1b60e669479c09609687bacba44faa6fb4f10`) and the output of
-`node check.mjs results.json`.
+Everything below is written from `results.json` and the output of `node check.mjs results.json`.
+
+On 2026-11-13 the fill was run again with decoder-shape@3 (observatory review round 29), which
+states `FlopSessionKeys.DelegateSessions` and `ComputeChannel.FailedAcks`. A10's
+`delegate_sessions_of_device` is now decoded: an empty list (the node's bytes were `0x00`), and its
+`reads_not_decoded` note is gone. `filled_from` names the shape format. Nothing else changed.
+`results.json` was sha256 `d4f92522f94f594de59b0ac8ada1b60e669479c09609687bacba44faa6fb4f10` after
+the first fill and is sha256 `47292f1ec4af70d77709353307492e45ad022d79ef612c664acd5eba405049c5` now,
+and `node check.mjs results.json` says 23 pass.
 
 ## What was run
 
@@ -62,8 +69,9 @@ on the owner's computer, sent one at a time and each waited to finality (`result
 | B11 | 3553558 | success | success | 3906000695000000 |
 | B12 | 3553566 | success | success | 2770030705000000 |
 
-`check.mjs`: 22 pass, 0 differ, 1 incomplete (A10: `read delegate_sessions_of_device is missing`),
-0 not run. With that one read given, every step passes and the run's balance check holds.
+`check.mjs`: 23 pass, 0 differ, 0 incomplete, 0 not run, and the run's balance check holds. At the
+first fill it said 22 pass, 0 differ, 1 incomplete (A10: `read delegate_sessions_of_device is
+missing`), 0 not run.
 
 ## The cost
 
@@ -77,23 +85,29 @@ on the owner's computer, sent one at a time and each waited to finality (`result
 - The 0.15 FLOP sent to dev1 came back to the owner at B12, less the devices' fees. The 0.01 FLOP of
   escrow locked at A6 came back at A9.
 
-## The A10 read the decoder does not state
+## The A10 read the decoder did not state at the first fill
 
 - What is on the recording: at A10's block the node answers bytes `0x00` for
-  `FlopSessionKeys.DelegateSessions` of dev1 (`results.json` A10 `reads_not_decoded`).
-- The lab's decoder reads only the storage entries its reviewed shape states, and
-  `DelegateSessions` is not one. So `reads_after.delegate_sessions_of_device` stays null: unknown to
-  the decoder, never guessed.
-- Read by position, not through the decoder: the entry's value type in the 1014020 metadata (type
-  700) is a sequence, and `0x00` is a sequence of length 0, an empty list.
+  `FlopSessionKeys.DelegateSessions` of dev1.
+- At the first fill (2026-11-12, decoder-shape@2) the lab's decoder read only the storage entries
+  its reviewed shape stated, and `DelegateSessions` was not one. So
+  `reads_after.delegate_sessions_of_device` stayed null, unknown to the decoder and never guessed,
+  and the bytes were kept in A10's `reads_not_decoded`. Read by position then: the entry's value
+  type in the 1014020 metadata (type 700) is a sequence, and `0x00` is a sequence of length 0, an
+  empty list.
+- At the second fill (2026-11-13, decoder-shape@3, which states the entry) the door decodes those
+  bytes as a stored empty list, and `reads_after.delegate_sessions_of_device` is "empty". The
+  record as the first fill wrote it is kept in
+  `observatory/fixtures/shapes-at-2/session-rerun-results.json`.
 
 ## The claims of the three earlier tests at spec 1014020
 
 What rests on events: the outcome and error of every step, what moved and who paid each fee,
 `SessionCallExecuted`'s running totals, the ack deadline, and the acceptance of a `force_open`
-naming a non miner. What rests on stored values: the session records, nonces and breakers read
-after the steps (decoded through the door), and `FailedAcks` of the named account at A9, which the
-batch answer lists with null, so the node holds nothing there (no decode needed).
+naming a non miner. What rests on stored values, each decoded through the door: the session
+records, nonces and breakers read after the steps; `FailedAcks` of the named account at A9, which
+the batch answer lists with null, so the door answers that no value is stored there; and
+`DelegateSessions` of dev1 at A10, a stored empty list.
 
 Shown at spec 1014020, as at spec 1014014:
 
@@ -105,7 +119,8 @@ Shown at spec 1014020, as at spec 1014014:
 - probe:27: creating and revoking moved nothing but the fee, no `Reserved` or `Held` (A2, A10).
   The amount of `create_session` is different (below).
 - probe:28: the events of A10, and the session record read after it with `active` false. That
-  `DelegateSessions` is empty rests on the by position reading above, not on the decoder.
+  `DelegateSessions` is empty rests on the decoder since the second fill; at the first fill it
+  rested on the by position reading above.
 - escrow:18, escrow:19, escrow:20, escrow:21, escrow:22, escrow:26, escrow:28, escrow:30,
   escrow:31, escrow:33, escrow:35, escrow:94: A5 to A9, events and reads.
 - escrow:44: the `force_open` naming a non miner was accepted (A6, by its events). The capacity
@@ -138,6 +153,10 @@ the signer's bytes against a reference encoder at spec 1014020 (the node accepte
 - `observatory/test/rerun-results.test.ts`: `results.json` is byte for byte the fill, the fill
   gives every filled field back from the recording alone, the lead's fields are untouched, the fees
   add up to the balance's fall.
+- The second fill: `observatory/test/rerun-results.test.ts` decodes the `FailedAcks` read of A9 and
+  the `DelegateSessions` read of A10 through the door and compares them with this record, and holds
+  that nothing else changed from the first fill's record
+  (`observatory/fixtures/shapes-at-2/session-rerun-results.json`).
 - `node --test check.test.mjs`: the checker's own tests, from before the run.
 
 ## Source only
@@ -152,7 +171,4 @@ the signer's bytes against a reference encoder at spec 1014020 (the node accepte
 
 ## Not done
 
-- `ComputeChannel.FailedAcks` and `FlopSessionKeys.DelegateSessions` are not stated in the reviewed
-  shape. When a view needs them, they go in with a new shape version and its review, and the fill
-  is run again.
 - Claims left out of the rerun, with the reason for each, are listed in `plan.md`.

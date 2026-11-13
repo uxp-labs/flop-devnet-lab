@@ -352,7 +352,7 @@ describe("the lab's reads of the runtime upgrade, results.json, where they can b
     for (let i = 0; i + 1 < boundary.length; i++) expect(version(boundary[i]), `boundary ${i}`).toBe(spec(boundary[i + 1]));
   });
 
-  it("agrees with itself on the upgrade block: its events and sums, its extrinsic, the code hash, and the 64 events counted", () => {
+  it("agrees with itself on the upgrade block: its events and sums, its extrinsic, the code hash, and the 64 events counted, decoded with the shape of its day, decoder-shape@2", () => {
     const upgrade = at(RECORDS[UP], "upgrade_block") as Record<string, unknown>;
     const carries = boundary[1] as Record<string, unknown>;
     expect([at(RECORDS[UP], "sum_check.events_3528528_bytes"), at(RECORDS[UP], "sum_check.events_3528528_sha256")]).toEqual([at(carries, "events.bytes"), at(carries, "events.sha256")]);
@@ -362,7 +362,10 @@ describe("the lab's reads of the runtime upgrade, results.json, where they can b
     expect(at(boundary[0], "code.storage_hash")).not.toBe(codeUpdated?.fields.hash);
     expect(Object.values(upgrade.event_counts as Record<string, number>).reduce((a, b) => a + b, 0)).toBe(64);
     expect(at(upgrade, "events_decoded_with.metadata_sha256")).toBe(REVIEWED[0]?.metadataSha256);
-    expect(at(upgrade, "events_decoded_with.shape_sha256")).toBe(REVIEWED[0]?.shapeSha256);
+    // The record names the shape file of its day, decoder-shape@2: the 1014014 file of fixtures/shapes-at-2, taken from git history (round 29).
+    const shapeOfItsDay = readFileSync(new URL("../fixtures/shapes-at-2/tzkv-runtime-1014014.json", import.meta.url), "utf8");
+    expect(JSON.parse(shapeOfItsDay).schema).toBe("flop-observatory/decoder-shape@2");
+    expect(at(upgrade, "events_decoded_with.shape_sha256")).toBe(createHash("sha256").update(shapeOfItsDay).digest("hex"));
     expect(at(upgrade, "events_decoded_with.last_runtime_upgrade_given")).toBe(at(carries, "last_runtime_upgrade.hex"));
   });
 });

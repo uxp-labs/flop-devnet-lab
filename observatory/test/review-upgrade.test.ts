@@ -175,8 +175,8 @@ describe("D. the shape diff script against hand made pairs", () => {
 
   it("R3, fixed (DEFECT 3, low): a shape file of another format version, and one that lacks a stated pallet, are refused in a line of the diff's own, never a TypeError", () => {
     const other = JSON.parse(NEW_TEXT);
-    other.schema = "flop-observatory/decoder-shape@3";
-    expect(() => shapeDiff(JSON.parse(NEW_TEXT), other)).toThrow(/schema is "flop-observatory\/decoder-shape@3"/);
+    other.schema = "flop-observatory/decoder-shape@4";
+    expect(() => shapeDiff(JSON.parse(NEW_TEXT), other)).toThrow(/schema is "flop-observatory\/decoder-shape@4"/);
     const old = JSON.parse(NEW_TEXT);
     old.schema = "flop-observatory/decoder-shape@1";
     delete old.flop_session_keys;
@@ -187,7 +187,7 @@ describe("D. the shape diff script against hand made pairs", () => {
       said = `${(e as Error).constructor.name}: ${(e as Error).message}`;
     }
     expect(said).not.toMatch(/^TypeError/);
-    expect(said).toBe('ShapeRefused: the old shape: the schema is "flop-observatory/decoder-shape@1", not flop-observatory/decoder-shape@2');
+    expect(said).toBe('ShapeRefused: the old shape: the schema is "flop-observatory/decoder-shape@1", not flop-observatory/decoder-shape@3');
   });
 });
 

@@ -47,17 +47,17 @@ describe("the reviewed shape of spec 1014020", () => {
 
   it("is the shape derived again from the reference decoder's own parse with an independent namer", () => {
     const mine = referenceShape(META);
-    expect(Object.keys(mine.types).length).toBe(469);
+    expect(Object.keys(mine.types).length).toBe(482);
     expect([mine.spec_name, mine.spec_version]).toEqual([NEW?.specName, NEW?.specVersion]);
     expect(mine).toEqual(JSON.parse(SHAPE));
   });
 
-  it("states the same pallets and the same six entries as spec 1014014's shape", () => {
+  it("states the same pallets and the same 16 entries as spec 1014014's shape", () => {
     const s = JSON.parse(SHAPE);
     const o = JSON.parse(OLD_SHAPE);
     expect(Object.keys(s)).toEqual(Object.keys(o));
-    for (const k of ["system", "compute_channel", "flop_session_keys"]) expect(Object.keys(s[k]), k).toEqual(Object.keys(o[k]));
-    expect(STATED_ENTRIES).toHaveLength(6);
+    for (const k of ["system", "compute_channel", "flop_session_keys", "model_registry", "miner_staking", "hw_calibration"]) expect(Object.keys(s[k]), k).toEqual(Object.keys(o[k]));
+    expect(STATED_ENTRIES).toHaveLength(16);
     const md = parseMetadata(META);
     for (const [p, e] of STATED_ENTRIES) expect(md.pallets.find((x) => x.name === p)?.storage?.entries.some((x) => x.name === e), `${p}.${e}`).toBe(true);
   });
@@ -78,7 +78,7 @@ describe("the reviewed shape of spec 1014020", () => {
 const renumbered = (text: string, by: number) => JSON.parse(text.replace(/#(\d+)/g, (_m, n) => `#${Number(n) + by}`));
 /** The lines after the first, which names the specs. */
 const body = (lines: string[]) => lines.slice(1);
-const NONE = ["ComputeChannel: no difference in what the shapes state", "FlopSessionKeys: no difference in what the shapes state", "System: no difference in what the shapes state"];
+const NONE = ["ComputeChannel: no difference in what the shapes state", "FlopSessionKeys: no difference in what the shapes state", "HwCalibration: no difference in what the shapes state", "MinerStaking: no difference in what the shapes state", "ModelRegistry: no difference in what the shapes state", "System: no difference in what the shapes state"];
 // biome-ignore lint: hand made shapes are plain JSON
 type Shape = any;
 
@@ -109,6 +109,7 @@ describe("the shape diff, scripts/shape-diff.mjs", () => {
     expect(body(shapeDiff(JSON.parse(SHAPE), copy))).toEqual([
       "ComputeChannel: no difference in what the shapes state",
       "FlopSessionKeys.Sessions value.spent: type was u128, now u64",
+      "HwCalibration: no difference in what the shapes state", "MinerStaking: no difference in what the shapes state", "ModelRegistry: no difference in what the shapes state",
       "System: no difference in what the shapes state",
     ]);
   });
@@ -125,6 +126,7 @@ describe("the shape diff, scripts/shape-diff.mjs", () => {
       `FlopSessionKeys index: was ${s.flop_session_keys.index}, now ${s.flop_session_keys.index + 1}`,
       `FlopSessionKeys.CircuitBreakers hashers: was ${JSON.stringify(s.flop_session_keys.circuit_breakers.hashers)}, now ["Twox64Concat"]`,
       `FlopSessionKeys.SessionNonces default bytes: was "${s.flop_session_keys.session_nonces.default}", now "0x0100000000000000"`,
+      "HwCalibration: no difference in what the shapes state", "MinerStaking: no difference in what the shapes state", "ModelRegistry: no difference in what the shapes state",
       "System: no difference in what the shapes state",
     ]);
   });
@@ -160,6 +162,11 @@ describe("the shape diff, scripts/shape-diff.mjs", () => {
     ["a compact's inner type changed", (c) => { c.types["Compact<u64>"] = { kind: "compact", path: [], type: "u64" }; ty(c, c.system.last_runtime_upgrade.value).fields[0].type = "Compact<u64>"; }, /^System\.LastRuntimeUpgrade value\.spec_version inner: type was u32, now u64$/],
     ["a tuple key lost a part", (c) => { ty(c, c.flop_session_keys.sessions.key).types.pop(); }, /^FlopSessionKeys\.Sessions key: type was \(AccountId32, AccountId32\), now \(AccountId32, AccountId32\)$/],
     ["a tuple key part changed", (c) => { ty(c, c.flop_session_keys.sessions.key).types[1] = "H256#13"; }, /^FlopSessionKeys\.Sessions key\.1:/],
+    // Round 29: the entries and pallets of decoder-shape@3.
+    ["a new entry's hasher changed", (c) => { c.miner_staking.miners.hashers = ["Twox64Concat"]; }, /^MinerStaking\.Miners hashers:/],
+    ["a new pallet's index changed", (c) => { c.hw_calibration.index += 1; }, /^HwCalibration index:/],
+    ["a new entry's value changed deep inside", (c) => { ty(c, c.system.account.value).fields[0].type = "u64"; }, /^System\.Account value\.nonce: type was u32, now u64$/],
+    ["a new tuple key part changed", (c) => { ty(c, c.model_registry.measured_roots.key).types[1] = "u8"; }, /^ModelRegistry\.MeasuredRoots key\.1:/],
   ];
   it.each(CASES)("prints a line where the change is: %s", (_what, f, line) => {
     const lines = changed(f);
@@ -186,7 +193,7 @@ describe("the shape diff, scripts/shape-diff.mjs", () => {
 
   it("ends on a type that refers to itself: no line when it did not change, and when it did, its line once, where it is first met", () => {
     expect(body(shapeDiff(recursive("u32"), recursive("u32")))).toEqual(NONE);
-    expect(body(shapeDiff(recursive("u32"), recursive("u64")))).toEqual(["ComputeChannel: no difference in what the shapes state", "FlopSessionKeys.SessionNonces value.v: type was u32, now u64", "System: no difference in what the shapes state"]);
+    expect(body(shapeDiff(recursive("u32"), recursive("u64")))).toEqual(["ComputeChannel: no difference in what the shapes state", "FlopSessionKeys.SessionNonces value.v: type was u32, now u64", "HwCalibration: no difference in what the shapes state", "MinerStaking: no difference in what the shapes state", "ModelRegistry: no difference in what the shapes state", "System: no difference in what the shapes state"]);
   });
 
   it("gives a type the same structure whatever was asked before it, a type that refers to itself included", () => {
@@ -206,8 +213,10 @@ describe("the shape diff, scripts/shape-diff.mjs", () => {
     for (const text of [OLD_SHAPE, SHAPE]) {
       const s = JSON.parse(text);
       expect(Object.keys(s).sort()).toEqual(HANDLED.top);
-      for (const p of ["system", "compute_channel", "flop_session_keys"] as const) expect(Object.keys(s[p]).sort(), p).toEqual(HANDLED[p]);
-      for (const [p, e] of [["flop_session_keys", "sessions"], ["flop_session_keys", "session_nonces"], ["flop_session_keys", "circuit_breakers"]] as const) expect(Object.keys(s[p][e]).sort(), e).toEqual(HANDLED.entry);
+      for (const p of ["system", "compute_channel", "flop_session_keys", "model_registry", "miner_staking", "hw_calibration"] as const) expect(Object.keys(s[p]).sort(), p).toEqual(HANDLED[p]);
+      // Every stated entry with no list beside it holds exactly the entry's five parts.
+      const plain: [string, string][] = [["system", "account"], ["compute_channel", "failed_acks"], ["compute_channel", "channel_authored_opened_at"], ["flop_session_keys", "sessions"], ["flop_session_keys", "session_nonces"], ["flop_session_keys", "circuit_breakers"], ["flop_session_keys", "delegate_sessions"], ["model_registry", "models"], ["model_registry", "measured_roots"], ["model_registry", "allowed_decode_policies"], ["miner_staking", "miners"], ["hw_calibration", "calibration_versions"], ["hw_calibration", "last_initial_calibration"]];
+      for (const [p, e] of plain) expect(Object.keys(s[p][e]).sort(), e).toEqual(HANDLED.entry);
       expect(() => readShape(text, "f")).not.toThrow();
     }
     const extra = JSON.parse(SHAPE);
@@ -220,8 +229,8 @@ describe("the shape diff, scripts/shape-diff.mjs", () => {
 
   it("refuses a shape of another format version, and one that lacks a part it reads, with a line of its own and never a TypeError", () => {
     const other = JSON.parse(SHAPE);
-    other.schema = "flop-observatory/decoder-shape@3";
-    expect(() => shapeDiff(JSON.parse(SHAPE), other)).toThrow(`the new shape: the schema is "flop-observatory/decoder-shape@3", not ${SHAPE_SCHEMA}`);
+    other.schema = "flop-observatory/decoder-shape@4";
+    expect(() => shapeDiff(JSON.parse(SHAPE), other)).toThrow(`the new shape: the schema is "flop-observatory/decoder-shape@4", not ${SHAPE_SCHEMA}`);
     const old = JSON.parse(SHAPE);
     delete old.flop_session_keys;
     expect(() => shapeDiff(old, JSON.parse(SHAPE))).toThrow("the old shape: the shape lacks flop_session_keys");
@@ -231,7 +240,7 @@ describe("the shape diff, scripts/shape-diff.mjs", () => {
   });
 
   it("as a command: exit 0 when it compared, a difference or none; exit 2 with one line on stderr for a file it will not read", () => {
-    const files: Record<string, string> = { old: OLD_SHAPE, new: SHAPE, bad: "{", v3: SHAPE.replace(SHAPE_SCHEMA, "flop-observatory/decoder-shape@3") };
+    const files: Record<string, string> = { old: OLD_SHAPE, new: SHAPE, bad: "{", v4: SHAPE.replace(SHAPE_SCHEMA, "flop-observatory/decoder-shape@4") };
     const read = (p: string) => {
       const t = files[p];
       if (t === undefined) throw new Error("ENOENT: a stack trace the command must not print");
@@ -241,7 +250,7 @@ describe("the shape diff, scripts/shape-diff.mjs", () => {
     expect(main(["new", "new"], read)).toMatchObject({ code: 0, stderr: "" });
     expect(main(["missing", "new"], read)).toEqual({ code: 2, stdout: "", stderr: "shape-diff refused missing: cannot be read\n" });
     expect(main(["bad", "new"], read)).toEqual({ code: 2, stdout: "", stderr: "shape-diff refused bad: not JSON\n" });
-    expect(main(["old", "v3"], read)).toEqual({ code: 2, stdout: "", stderr: `shape-diff refused v3: the schema is "flop-observatory/decoder-shape@3", not ${SHAPE_SCHEMA}\n` });
+    expect(main(["old", "v4"], read)).toEqual({ code: 2, stdout: "", stderr: `shape-diff refused v4: the schema is "flop-observatory/decoder-shape@4", not ${SHAPE_SCHEMA}\n` });
     expect(main(["old"], read)).toMatchObject({ code: 2, stdout: "" });
   });
 });

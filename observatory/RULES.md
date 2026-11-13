@@ -1129,18 +1129,36 @@ below.
   Refusal 3 is not implied by 2 and 4. It holds the code that derives the shape to the review: if
   `deriveShape` changes and the file is written again from it, 2 and 4 still pass and only 3
   refuses. A test shows that.
-- The shape file, `flop-observatory/decoder-shape@2`, holds the spec, the System, ComputeChannel
-  and FlopSessionKeys entry points a reader starts from (the pallet indices, the ComputeChannel
-  events, the Channels entry, the fields and states of a channel, System.Events,
-  System.LastRuntimeUpgrade, the Sessions, SessionNonces and CircuitBreakers entries and the
-  System.Version type; each entry with its modifier, hashers, key type, value type and default
-  bytes; each of the three pallets with its storage prefix, so a changed prefix changes the file),
-  and a table of types: every type reachable from System.Events (the record, the phase,
-  the outer event enum and every pallet's events), from LastRuntimeUpgrade, from the Channels key
-  and value, from the keys and values of the three FlopSessionKeys entries and from the
-  System.Version constant's type, keyed by its name, each with its kind, its path and what the kind
-  holds. Version 2 added the default bytes, the storage prefixes and the FlopSessionKeys entries. A type with a path is named by the last part of its
-  path, its parameters and its id; the table says what it is.
+- The shape file, `flop-observatory/decoder-shape@3`, holds the spec and one section for each
+  pallet of `STATED_TABLE` in `src/scale/shape.ts`, the one frozen table of what the shape states:
+  each pallet by its name and its section (the name in snake case), each entry by its name and its
+  key (the name in snake case). A section holds the pallet's index, its storage prefix (so a
+  changed prefix changes the file) and each stated entry with its modifier, hashers, key type,
+  value type and default bytes. The 16 stated entries: System Events, LastRuntimeUpgrade and
+  Account; ComputeChannel Channels, FailedAcks and ChannelAuthoredOpenedAt; FlopSessionKeys
+  Sessions, SessionNonces, CircuitBreakers and DelegateSessions; ModelRegistry Models,
+  MeasuredRoots and AllowedDecodePolicies; MinerStaking Miners; HwCalibration CalibrationVersions
+  and LastInitialCalibration. `STATED_ENTRIES` is derived from the table and `deriveShape` writes
+  one entry for each of its lines, so the list and the file cannot differ; `deriveShape` refuses
+  metadata that lacks a pallet or an entry of the table. Beside the entries the file holds the
+  System.Version type, the ComputeChannel events, the fields of an event record, of
+  LastRuntimeUpgrade and of a channel, and a channel's states, and a table of types: every type
+  reachable from the key and the value of every stated entry and from the System.Version
+  constant's type, keyed by its name, each with its kind, its path and what the kind holds.
+  Version 2 added the default bytes, the storage prefixes and the FlopSessionKeys entries.
+  Version 3 (round 29) added System.Account, FailedAcks, ChannelAuthoredOpenedAt, DelegateSessions
+  and the pallets ModelRegistry, MinerStaking and HwCalibration with their entries; every part
+  version 2 held is where it was, with the same name and meaning. A type with a path is named by
+  the last part of its path, its parameters and its id; the table says what it is.
+- A shape file is written by `scripts/write-shape.mjs` and by nothing else. For a reviewed line,
+  by spec version, it finds the metadata on the third recording's tape by the line's metadata
+  sha256, derives the shape and writes `shapes/<file>` only with `--write`; without it, it compares
+  the committed file with what it derives, exit 0 or 1. It refuses with exit 2 and one line a `--spec`
+  with a leading zero and a tape that does not hold the metadata. `scripts/cli-checks.mjs` runs the compare
+  for each line. A shape of another format is refused by every reader, with words that name both
+  formats: the pin (refusal 3 says it), `scripts/shape-diff.mjs`, the writer's compare and
+  imd-flop's `scripts/read-key-table.mjs`. The `decoder-shape@2` files are kept in
+  `fixtures/shapes-at-2` for the tests that show it.
 - `REVIEWED` starts with `tzkv-runtime` 1014014, metadata sha256
   `f4fd2addba7fff1129483d0e66b8e6bc69141292f56443e201d3f073aab03444` of 482132 bytes, and
   `shapes/tzkv-runtime-1014014.json`. Each line there is a review: a reviewer read the shape file
@@ -1159,7 +1177,7 @@ below.
   The version and the metadata read at the block itself are never used to choose: they answer for
   the next block.
 - No caller can change what the decoder has reviewed. `REVIEWED` and each of its lines,
-  `STATED_ENTRIES` and each pair in it, and the parser's `PRIMITIVES` and `HASHERS` are frozen when
+  `STATED_TABLE` with each pallet, entry list and entry in it, `STATED_ENTRIES` and each pair in it, and the parser's `PRIMITIVES` and `HASHERS` are frozen when
   their module loads. No reference to a line ever leaves `src/scale`: `pinShape`,
   `decodeBlockEvents`, `decodeStorageValue` and `runtimeOfBlock` each answer a fresh copy, made by
   `reviewedCopy` in `src/scale/shape.ts`. The parsed metadata a pin holds is parsed again on every
@@ -1186,8 +1204,8 @@ below.
     parameter) and at most 4,000,000 characters of names and paths (`MAX_SHAPE_CHARS`). A name is
     built once per type id and kept, so the work is linear in the size of what it derives. A name
     is at most 2048 characters (`MAX_NAME_LENGTH`), nests at most 16 levels and visits at most 256
-    types; `typeName` alone has a budget of its own. The reviewed shape takes 9,733 steps and
-    18,449 characters;
+    types; `typeName` alone has a budget of its own. The reviewed shape takes 9,919 steps and
+    19,244 characters;
   - finding the events layout looks up each variant of the outer enum among the pallets, at most
     256 times 256, since a pallet index is one byte used once.
 - The hashes take their parameters from code, not bytes: a BLAKE2b length outside 1 to 64 or an
@@ -1212,14 +1230,15 @@ runtime until these steps are done, in this order:
    workflow records it and publishes it (section 8).
 2. Fixture. The recording is copied into `fixtures/` byte for byte, with the request list and the
    inputs it was made from, frozen, and held to the lab's own reads of the upgrade.
-3. Derive. The shape file is derived by `deriveShape` from the new metadata on the tape, and a test
-   derives it a second way from the reference decoder's own parse. If the strict parser does not
+3. Derive. The shape file is derived by `deriveShape` from the new metadata on the tape and written
+   by `scripts/write-shape.mjs --spec <version> --write`, and a test derives it a second way from
+   the reference decoder's own parse. If the strict parser does not
    read the metadata whole, or `deriveShape` needs a change of logic, the work stops for a rule
    from the lead before anything in `src/scale` changes.
 4. Diff. `scripts/shape-diff.mjs` writes what differs from the shape before, types compared by
    structure, never by id, each pair of types followed once, and its output is committed beside the
    shape file and held to a fresh run by a test. Its first line names both specs. It refuses a file
-   that cannot be read, is not JSON, is not `decoder-shape@2`, or lacks or adds a part it reads,
+   that cannot be read, is not JSON, is not `decoder-shape@3`, or lacks or adds a part it reads,
    with one line on stderr and exit code 2. Exit code 0 means it compared, whether or not something
    differs: the diff is a report, and the test that holds the committed diff to a fresh run is the
    check.

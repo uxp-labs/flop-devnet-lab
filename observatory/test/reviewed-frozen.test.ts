@@ -1,6 +1,6 @@
 // No caller can change what the decoder has reviewed (review round 23, rule R1). REVIEWED, each of
-// its lines, STATED_ENTRIES and each pair in it, PRIMITIVES and HASHERS are frozen when their module
-// loads, and pinShape, decodeBlockEvents, decodeStorageValue and runtimeOfBlock each answer a fresh
+// its lines, STATED_TABLE with each pallet, entry list and entry in it, STATED_ENTRIES and each
+// pair in it, PRIMITIVES and HASHERS are frozen when their module loads, and pinShape, decodeBlockEvents, decodeStorageValue and runtimeOfBlock each answer a fresh
 // copy of the line. A write to every field of an answer's line, through each of the four, is
 // followed by the reviewer's second call (spec 1014014 with the 1014020 metadata and shape file),
 // which must be refused.
@@ -9,7 +9,7 @@ import { describe, expect, it } from "vitest";
 import { decodeBlockEvents, decodeStorageValue, runtimeOfBlock } from "../src/scale/block.js";
 import { HASHERS, PRIMITIVES } from "../src/scale/metadata.js";
 import { fromHex } from "../src/scale/reader.js";
-import { REVIEWED, type ReviewedShape, STATED_ENTRIES, pinShape } from "../src/scale/shape.js";
+import { REVIEWED, type ReviewedShape, STATED_ENTRIES, STATED_TABLE, pinShape } from "../src/scale/shape.js";
 import { recordedUpgrade } from "./helpers/recorded-upgrade.js";
 import { keyBytes } from "./helpers/requests/core.js";
 import { UPGRADE_BLOCKS } from "./helpers/requests/list-3.js";
@@ -19,7 +19,7 @@ const U = recordedUpgrade();
 const [OLD, NEW] = REVIEWED as [ReviewedShape, ReviewedShape];
 const text = (r: ReviewedShape) => readFileSync(new URL(`../${r.shapeFile}`, import.meta.url), "utf8");
 const BEFORE = UPGRADE_BLOCKS[0];
-const TABLES = () => JSON.stringify({ REVIEWED, STATED_ENTRIES, PRIMITIVES, HASHERS });
+const TABLES = () => JSON.stringify({ REVIEWED, STATED_TABLE, STATED_ENTRIES, PRIMITIVES, HASHERS });
 const SAVED = TABLES();
 const channel = U.reads.find((x) => x.block === BEFORE && x.answer !== null && x.read.entry === "Channels");
 if (channel === undefined) throw new Error("no read");
@@ -107,7 +107,7 @@ describe("what the decoder has reviewed cannot be changed by a caller", () => {
     expect(runtimeOfBlock(U.upgradeOf(BEFORE))).toEqual({ found: true, reviewed: OLD });
   });
 
-  it("refuses a write through the import to REVIEWED, a line of it, STATED_ENTRIES, a pair of it, PRIMITIVES and HASHERS, and changes nothing", () => {
+  it("refuses a write through the import to REVIEWED, a line of it, STATED_TABLE, a pallet, entry list or entry of it, STATED_ENTRIES, a pair of it, PRIMITIVES and HASHERS, and changes nothing", () => {
     const writes: [string, () => void][] = [
       ["a line's metadataSha256", () => { (REVIEWED[0] as { metadataSha256: string }).metadataSha256 = NEW.metadataSha256; }],
       ["a line's specVersion", () => { (REVIEWED[1] as { specVersion: number }).specVersion = OLD.specVersion; }],
@@ -116,11 +116,15 @@ describe("what the decoder has reviewed cannot be changed by a caller", () => {
       ["REVIEWED[0] replaced", () => { (REVIEWED as ReviewedShape[])[0] = { ...NEW, specVersion: OLD.specVersion }; }],
       ["STATED_ENTRIES.push", () => { (STATED_ENTRIES as [string, string][]).push(["Balances", "Account"]); }],
       ["a stated pair changed", () => { (STATED_ENTRIES[0] as unknown as string[])[1] = "Account"; }],
+      ["STATED_TABLE.push", () => { (STATED_TABLE as unknown as unknown[]).push({ pallet: "Balances", section: "balances", entries: [] }); }],
+      ["a stated pallet renamed", () => { (STATED_TABLE[0] as { pallet: string }).pallet = "Balances"; }],
+      ["a stated entry list grown", () => { (STATED_TABLE[1]?.entries as unknown as unknown[]).push({ entry: "TotalMiners", key: "total_miners" }); }],
+      ["a stated entry renamed", () => { (STATED_TABLE[0]?.entries[0] as { entry: string }).entry = "Account"; }],
       ["HASHERS.push", () => { (HASHERS as unknown as string[]).push("Keccak256"); }],
       ["PRIMITIVES.push", () => { (PRIMITIVES as unknown as string[]).push("u512"); }],
     ];
     for (const [what, write] of writes) expect(write, what).toThrow(TypeError);
-    expect([Object.isFrozen(REVIEWED), REVIEWED.every(Object.isFrozen), Object.isFrozen(STATED_ENTRIES), STATED_ENTRIES.every(Object.isFrozen), Object.isFrozen(PRIMITIVES), Object.isFrozen(HASHERS)]).toEqual([true, true, true, true, true, true]);
+    expect([Object.isFrozen(REVIEWED), REVIEWED.every(Object.isFrozen), Object.isFrozen(STATED_ENTRIES), STATED_ENTRIES.every(Object.isFrozen), Object.isFrozen(STATED_TABLE), STATED_TABLE.every((p) => Object.isFrozen(p) && Object.isFrozen(p.entries) && p.entries.every(Object.isFrozen)), Object.isFrozen(PRIMITIVES), Object.isFrozen(HASHERS)]).toEqual([true, true, true, true, true, true, true, true]);
     expect(TABLES()).toBe(SAVED);
   });
 

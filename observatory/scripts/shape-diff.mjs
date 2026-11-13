@@ -1,8 +1,8 @@
 #!/usr/bin/env node
-// What differs between two reviewed shape files (shapes/*.json, flop-observatory/decoder-shape@2),
-// for everything the shapes state: the index and storage prefix of System, ComputeChannel and
-// FlopSessionKeys, their six stated storage entries (modifier, hashers, key type, value type,
-// default bytes), the ComputeChannel events, the fields of a channel and its states, the fields of
+// What differs between two reviewed shape files (shapes/*.json, flop-observatory/decoder-shape@3),
+// for everything the shapes state: the index and storage prefix of System, ComputeChannel,
+// FlopSessionKeys, ModelRegistry, MinerStaking and HwCalibration, their 16 stated storage entries
+// (modifier, hashers, key type, value type, default bytes), the ComputeChannel events, the fields of a channel and its states, the fields of
 // an event record and of LastRuntimeUpgrade, and the System.Version type. The types of an entry are
 // followed down to where they differ, so a change in System.Events names the pallet and the event of
 // the outer event enum it is in. The stated lists (the fields of a channel and its states, the event
@@ -16,7 +16,7 @@
 // itself ends, and a change in it is printed once, where it is first met.
 //
 // Before it compares, it reads each file: one that does not exist, is not JSON, whose schema is not
-// exactly flop-observatory/decoder-shape@2, that lacks a part the diff reads or holds a part it does
+// exactly flop-observatory/decoder-shape@3, that lacks a part the diff reads or holds a part it does
 // not read is refused with one line on stderr and exit code 2. Exit code 0 means the comparison
 // ran, whether or not something differs: the diff is a report, and the test that holds the committed
 // diff to a fresh run is the check. The first line names both specs; then one line per difference,
@@ -28,7 +28,7 @@ import { readFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 
 /** The one shape format this diff reads, as src/scale/shape.ts writes it. */
-export const SHAPE_SCHEMA = "flop-observatory/decoder-shape@2";
+export const SHAPE_SCHEMA = "flop-observatory/decoder-shape@3";
 
 /** A shape file the diff will not read, and why: the command prints it on one line and exits 2. */
 export class ShapeRefused extends Error {}
@@ -80,10 +80,13 @@ export function structure(types) {
 
 /** The parts of a shape the diff reads, by place: a part outside these is refused, so none is missed. */
 export const HANDLED = {
-  top: ["compute_channel", "flop_session_keys", "schema", "spec_name", "spec_version", "system", "types"],
-  system: ["events", "index", "last_runtime_upgrade", "storage_prefix", "version"],
-  compute_channel: ["channel_states", "channels", "events", "index", "storage_prefix"],
-  flop_session_keys: ["circuit_breakers", "index", "session_nonces", "sessions", "storage_prefix"],
+  top: ["compute_channel", "flop_session_keys", "hw_calibration", "miner_staking", "model_registry", "schema", "spec_name", "spec_version", "system", "types"],
+  system: ["account", "events", "index", "last_runtime_upgrade", "storage_prefix", "version"],
+  compute_channel: ["channel_authored_opened_at", "channel_states", "channels", "events", "failed_acks", "index", "storage_prefix"],
+  flop_session_keys: ["circuit_breakers", "delegate_sessions", "index", "session_nonces", "sessions", "storage_prefix"],
+  model_registry: ["allowed_decode_policies", "index", "measured_roots", "models", "storage_prefix"],
+  miner_staking: ["index", "miners", "storage_prefix"],
+  hw_calibration: ["calibration_versions", "index", "last_initial_calibration", "storage_prefix"],
   entry: ["default", "hashers", "key", "modifier", "value"],
 };
 const LISTS = { "system.events": "record", "system.last_runtime_upgrade": "fields", "compute_channel.channels": "fields" };
@@ -92,14 +95,27 @@ const PALLETS = [
   ["system", "System"],
   ["compute_channel", "ComputeChannel"],
   ["flop_session_keys", "FlopSessionKeys"],
+  ["model_registry", "ModelRegistry"],
+  ["miner_staking", "MinerStaking"],
+  ["hw_calibration", "HwCalibration"],
 ];
 const ENTRIES = [
   ["system", "events", "System.Events"],
   ["system", "last_runtime_upgrade", "System.LastRuntimeUpgrade"],
+  ["system", "account", "System.Account"],
   ["compute_channel", "channels", "ComputeChannel.Channels"],
+  ["compute_channel", "failed_acks", "ComputeChannel.FailedAcks"],
+  ["compute_channel", "channel_authored_opened_at", "ComputeChannel.ChannelAuthoredOpenedAt"],
   ["flop_session_keys", "sessions", "FlopSessionKeys.Sessions"],
   ["flop_session_keys", "session_nonces", "FlopSessionKeys.SessionNonces"],
   ["flop_session_keys", "circuit_breakers", "FlopSessionKeys.CircuitBreakers"],
+  ["flop_session_keys", "delegate_sessions", "FlopSessionKeys.DelegateSessions"],
+  ["model_registry", "models", "ModelRegistry.Models"],
+  ["model_registry", "measured_roots", "ModelRegistry.MeasuredRoots"],
+  ["model_registry", "allowed_decode_policies", "ModelRegistry.AllowedDecodePolicies"],
+  ["miner_staking", "miners", "MinerStaking.Miners"],
+  ["hw_calibration", "calibration_versions", "HwCalibration.CalibrationVersions"],
+  ["hw_calibration", "last_initial_calibration", "HwCalibration.LastInitialCalibration"],
 ];
 
 const isRecord = (v) => v !== null && typeof v === "object" && !Array.isArray(v);

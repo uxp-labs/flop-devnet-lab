@@ -332,9 +332,11 @@ building and testing decoders against real data. It is evidence, never proof of 
   naming spec 1014020 through `runtimeOfBlock`. `scripts/fill-rerun-results.mjs --out <file>`
   fills `results.json` from it through `src/scale/block.ts` (`test/helpers/rerun-fill.ts`), and
   `test/rerun-results.test.ts` holds the committed file to that fill byte for byte and pins the
-  verdict of the rerun's `check.mjs`: 22 steps pass, A10 is incomplete for its one read of
-  `FlopSessionKeys.DelegateSessions`, an entry the reviewed shape does not state, whose bytes
-  `results.json` keeps apart in `reads_not_decoded`.
+  verdict of the rerun's `check.mjs`: all 23 steps pass. Until `decoder-shape@3` A10 was
+  incomplete for its one read of `FlopSessionKeys.DelegateSessions`, an entry the shape did not
+  state; round 29 states it, the fill ran again, and A10's read is an empty list (the node's bytes
+  were 0x00). The record as the @2 fill wrote it is `fixtures/shapes-at-2/session-rerun-results.json`,
+  and a test holds that nothing else changed.
 - Which read covers which claim of the rerun's `plan.md`: every claim that rests on a stored value
   has the read of the step it names. probe:23 the session record and nonce at A3 (`steps.json` names no breaker read there, so the breaker part rests on the breaker read at A6 and A8); probe:28 the
   session record and `DelegateSessions` at A10; escrow:19 and escrow:28 the session record at A6;
@@ -476,17 +478,31 @@ metadata, never by the form of the value.
 The shape pin. `REVIEWED` in `src/scale/shape.ts` lists each reviewed shape: a spec name and
 version, the sha256 and length of the metadata bytes at that spec, and the sha256 of the shape
 file. The first is `tzkv-runtime` 1014014, metadata `f4fd2add...3444` of 482132 bytes, and
-`shapes/tzkv-runtime-1014014.json` (sha256 `679f98aa...60e7`, `decoder-shape@2`). A reviewer read
+`shapes/tzkv-runtime-1014014.json` (sha256 `5e66cf79...a370`, `decoder-shape@3`). A reviewer read
 the shape file and the metadata it came from, and a test derives the file a second way, from the
-reference decoder's own parse. The shape file is derived from that metadata: the spec, the
-ComputeChannel pallet index, its 60 events with each field's name and type, the Channels entry, the
-fields and states of a channel, the System.Events and System.LastRuntimeUpgrade entries, the
-FlopSessionKeys pallet index (94) and its Sessions, SessionNonces and CircuitBreakers entries, the
-System.Version type, and a table of the 469 types reachable from those, each with its kind, path
-and what the kind holds. Each entry is stated with its modifier, hashers, key type, value type and
-the default bytes the metadata gives it, and each of the three pallets with the storage prefix
-every key of it starts from, so a changed prefix changes the file. `STATED_ENTRIES` lists those six
-entries. `pinShape` refuses, and says why, when the spec is not reviewed, the
+reference decoder's own parse. The shape file is derived from that metadata. One frozen table,
+`STATED_TABLE` in `src/scale/shape.ts`, names the stated pallets and their entries, and the file
+has one section for each pallet (its name in snake case) with the pallet's index, its storage
+prefix and one part for each stated entry (the entry's name in snake case). The 16 stated entries:
+System Events, LastRuntimeUpgrade and Account; ComputeChannel Channels, FailedAcks and
+ChannelAuthoredOpenedAt; FlopSessionKeys Sessions, SessionNonces, CircuitBreakers and
+DelegateSessions; ModelRegistry Models, MeasuredRoots and AllowedDecodePolicies; MinerStaking
+Miners; HwCalibration CalibrationVersions and LastInitialCalibration. Beside them the file states
+the System.Version type, the ComputeChannel events with each field's name and type, the fields of
+an event record, of LastRuntimeUpgrade and of a channel, a channel's states, and a table of the 482
+types reachable from the stated entries' keys and values and the Version type, each with its kind,
+path and what the kind holds. Each entry is stated with its modifier, hashers, key type, value type
+and the default bytes the metadata gives it, and each pallet with the storage prefix every key of
+it starts from, so a changed prefix changes the file. `STATED_ENTRIES` lists the 16 entries and is
+derived from the table, so the list and the file cannot differ. Version 3 (review round 29) added
+System.Account, FailedAcks, ChannelAuthoredOpenedAt, DelegateSessions and the three pallets
+ModelRegistry, MinerStaking and HwCalibration with theirs; every part version 2 held is where it
+was. A shape file is written by `scripts/write-shape.mjs` and by nothing else: `node
+scripts/write-shape.mjs --spec <version>` derives the reviewed line's file from the metadata the
+third recording holds by the line's sha256 and says whether the committed file is that, exit 0 or
+1, and with `--write` writes it. It refuses with exit 2 and one line a `--spec` with a leading zero and a tape that does not hold the metadata. `scripts/cli-checks.mjs` runs the compare for both lines. A file
+of another format (the two `decoder-shape@2` files are kept in `fixtures/shapes-at-2`) is refused
+by the pin, the diff and the writer's compare, each naming both formats. `pinShape` refuses, and says why, when the spec is not reviewed, the
 metadata bytes or the shape file are not the reviewed ones, the shape derived again differs from
 the file, or the block's LastRuntimeUpgrade names another spec. It reads each part of its input
 once and copies the bytes, so what is hashed is what is parsed. The first recording pins and
@@ -496,21 +512,23 @@ passes every other check. A new runtime spec is decoded only after its shape fil
 added to `REVIEWED`. Outside `src/scale/`, only `block.ts` may be imported from it.
 
 Two reviewed runtimes. The second line of `REVIEWED` is `tzkv-runtime` 1014020, metadata
-`91294eb6...8238` of 487100 bytes, and `shapes/tzkv-runtime-1014020.json` (sha256 `650b3491...dc81`,
-469 types), derived by the same `deriveShape` from the metadata the third recording holds at block
+`91294eb6...8238` of 487100 bytes, and `shapes/tzkv-runtime-1014020.json` (sha256 `af3f7c69...b185`,
+482 types), derived by the same `deriveShape` from the metadata the third recording holds at block
 3528528 and a second way from the reference's parse (`test/upgrade-shape.test.ts`). What differs
 from 1014014 is `shapes/diff-tzkv-runtime-1014014-1014020.txt`, written by `scripts/shape-diff.mjs`,
 which compares types by structure and never by id: ComputeChannel adds the events
 CapacityReservationRateSet and CapacityReservationDropped, Aleph adds CommitteeSeedFallback to the
-outer event enum, and FlopSessionKeys has no difference. Every stated entry's prefix, hashers, key,
+outer event enum, and FlopSessionKeys, ModelRegistry, MinerStaking and HwCalibration have no
+difference. Every stated entry's prefix, hashers, key,
 modifier and default bytes are unchanged, and so is the value type of every stated entry but
 System.Events, whose value is the outer event enum, which gained those three event variants. The
 diff's first line names both specs; it refuses, in one line on stderr and with exit code 2, a file
-that cannot be read, is not JSON, is not `decoder-shape@2`, or lacks or adds a part it reads. Exit
+that cannot be read, is not JSON, is not `decoder-shape@3`, or lacks or adds a part it reads. Exit
 code 0 means it compared, a difference found or not: a test holds the committed diff to a fresh run,
 and that test is the check.
 
-No caller can change what was reviewed. `REVIEWED` and each line, `STATED_ENTRIES` and each pair,
+No caller can change what was reviewed. `REVIEWED` and each line, `STATED_TABLE` with each pallet,
+entry list and entry, `STATED_ENTRIES` and each pair,
 `PRIMITIVES` and `HASHERS` are frozen when their module loads, and `pinShape`, `decodeBlockEvents`,
 `decodeStorageValue` and `runtimeOfBlock` each answer a fresh copy of the line
 (`reviewedCopy`), so a write to an answer changes nothing a later call pins
@@ -562,7 +580,7 @@ nothing is sized from an untrusted length. A type nests at most 32 levels (`MAX_
 takes at most `1024 + 8 * bytes` steps (`valueBudget`), one step for each type it visits, and a
 step that succeeds builds no text. One `deriveShape` takes at most 1,000,000 steps and 4,000,000
 characters of names, each name built once, at most 2048 characters and 16 levels deep; the reviewed
-shape takes 9,733 steps. RULES.md section 9 states each bound. The fuzz tests in
+shape takes 9,919 steps. RULES.md section 9 states each bound. The fuzz tests in
 `test/scale-fuzz.test.ts` count the steps of every decode against its bound.
 
 The reference. `@polkadot-api/substrate-bindings` and `@polkadot-api/metadata-builders` are pinned
@@ -685,6 +703,7 @@ The two interfaces other teams import are in [../interfaces](../interfaces).
 | `src/scale/`, `src/hash/` | the decoder, pure: reader, hashes, metadata, decode by type, storage keys, events, the shape pin and the one entry point for a block's events ([Decoder](#decoder)) |
 | `shapes/` | the reviewed shape files, one for each runtime spec the decoder may read, and the diff of each against the one before |
 | `scripts/shape-diff.mjs` | what differs between two shape files for what they state, types compared by structure |
+| `scripts/write-shape.mjs`, `test/helpers/shape-file.ts` | the writer of a reviewed shape file (`--spec <version>`, `--write` to write), from the metadata the third recording holds by the line's sha256; without `--write` it compares, exit 0 or 1 |
 | `src/published.ts` | the reader contract for `latest/` on the branch `observatory-data` |
 | `src/snapshot.ts`, `src/cli.ts` | one pass and the command line |
 | `src/snapshot-check.ts`, `src/mcp-bin.ts` | every check a snapshot must pass before the MCP binary serves it, each by name, and the binary that reads, checks and serves it |

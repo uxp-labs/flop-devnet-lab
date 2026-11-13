@@ -6,11 +6,13 @@
 // It writes only the fields the recording gives, and keeps every other field as the lead wrote it:
 // per step last_runtime_upgrade_spec, events, result, fee_raw, the values of reads_after (its keys are
 // the lead's), and reads_not_decoded where a value was answered but the decoder does not state its
-// entry; at the top filled_from. Unknown stays null, never 0. A value is filled only from a block
+// entry; at the top filled_from. Run again on 2026-11-13 with decoder-shape@3 (round 29), which
+// states FailedAcks and DelegateSessions, so both reads are decoded through the door. Unknown stays null, never 0. A value is filled only from a block
 // whose batch answer was read, whose LastRuntimeUpgrade names a reviewed runtime, and whose events
 // decoded; otherwise that step's fill fields stay null.
 import { readFileSync } from "node:fs";
 import { decodeBlockEvents, decodeStorageValue, runtimeOfBlock } from "../../src/scale/block.js";
+import { SHAPE_SCHEMA } from "../../src/scale/shape.js";
 import { RERUN_RECORDING, RERUN_RESULTS, type RerunBlock, recordedRerun } from "./recorded-rerun.js";
 import { keyBytes } from "./requests/core.js";
 import type { Inputs, ReadField } from "./requests/list-4.js";
@@ -33,7 +35,9 @@ interface ErrorRow {
 export const FILLED_FROM = {
   recording: `observatory/fixtures/${RERUN_RECORDING}`,
   by: "observatory/scripts/fill-rerun-results.mjs (test/helpers/rerun-fill.ts)",
-  how: "last_runtime_upgrade_spec, events, result, fee_raw and the values of reads_after are decoded from the recording through the lab's decoder's one door, observatory/src/scale/block.ts, at the spec each block's System.LastRuntimeUpgrade names; failed_acks_of_named \"absent\" is the batch answer listing its key with null, which needs no decode; reads_not_decoded holds bytes the node answered for an entry the reviewed shape does not state, and the read they answer stays null in reads_after. Every other field is the lead's, as read at run time.",
+  how: "last_runtime_upgrade_spec, events, result, fee_raw and the values of reads_after are decoded from the recording through the lab's decoder's one door, observatory/src/scale/block.ts, at the spec each block's System.LastRuntimeUpgrade names, with the reviewed shape the door pinned; failed_acks_of_named \"absent\" is the batch answer listing its key with null, which the door answers as no value stored; reads_not_decoded holds bytes the node answered for an entry the reviewed shape does not state, and the read they answer stays null in reads_after. Every other field is the lead's, as read at run time.",
+  /** The format of the reviewed shape the door pinned when this fill ran: decoder-shape@3 since round 29. */
+  shape: SHAPE_SCHEMA,
 };
 
 const isRec = (v: unknown): v is Rec => v !== null && typeof v === "object" && !Array.isArray(v);
@@ -74,6 +78,8 @@ export interface StepFill {
 }
 
 const hex = (b: Uint8Array) => `0x${Buffer.from(b).toString("hex")}`;
+/** A decoded number, string or bool as text; anything else null. */
+const text = (x: unknown) => (typeof x === "string" || typeof x === "number" || typeof x === "boolean" ? String(x) : null);
 /** The bytes of a key the list asked, as 0x hex (the list writes only whole bytes, lower case). */
 const keyOf = (h: string) => new Uint8Array(Buffer.from(h.slice(2), "hex"));
 
@@ -102,22 +108,28 @@ export function fillStep(b: RerunBlock, inputs: Inputs, metadata: Uint8Array, ex
     const key = b.keys[j];
     if (r === undefined || key === undefined || !values.has(key)) continue;
     const answer = values.get(key) ?? null;
-    if (f === "failed_acks_of_named") {
-      // M1: the batch answer lists the key with null: the node holds nothing there. A stored value needs the decoder, which does not state this entry.
-      if (answer === null) out.reads_after[f] = "absent";
-      else out.reads_not_decoded[f] = { entry: `${r.pallet}.${r.entry}`, bytes: hex(answer), why: "the reviewed shape does not state this entry" };
-      continue;
-    }
     const v = decodeStorageValue({ ...pin, pallet: r.pallet, entry: r.entry, keys: keyBytes(inputs, r), key: keyOf(key), answer });
     if (!v.decoded) {
       // M2: the decoder refuses an entry its reviewed shape does not state; the bytes are kept, the value stays unknown.
       if (answer !== null && v.refused.includes("is not a storage entry the reviewed shape states")) out.reads_not_decoded[f] = { entry: `${r.pallet}.${r.entry}`, bytes: hex(answer), why: "the reviewed shape does not state this entry" };
       continue;
     }
-    if (!v.stored && r.entry === "Sessions") continue;
     const value = v.value as Value;
+    // M1, decoded through the door since decoder-shape@3 (round 29): the node holding nothing under the key is "absent".
+    if (f === "failed_acks_of_named") {
+      out.reads_after[f] = v.stored ? text(value) : "absent";
+      continue;
+    }
+    // A list of (owner, delegate) pairs. The record's form (reads_form) gives "empty" or the stored value; a read the
+    // node holds nothing for is neither, so it is written "absent", the form's word for FailedAcks. The fourth
+    // recording holds no such read. A stored list with no pair is "empty", with pairs the pairs' JSON text.
+    if (f === "delegate_sessions_of_device") {
+      if (!v.stored) out.reads_after[f] = "absent";
+      else if (Array.isArray(value)) out.reads_after[f] = value.length === 0 ? "empty" : JSON.stringify(value);
+      continue;
+    }
+    if (!v.stored && r.entry === "Sessions") continue;
     const field = (name: string) => (isRec(value) ? value[name] : undefined);
-    const text = (x: unknown) => (typeof x === "string" || typeof x === "number" || typeof x === "boolean" ? String(x) : null);
     if (f === "session_active") out.reads_after[f] = text(field("active"));
     else if (f === "spent_raw") out.reads_after[f] = text(field("spent"));
     else if (f === "epoch_spent_raw") out.reads_after[f] = text(field("epoch_spent"));

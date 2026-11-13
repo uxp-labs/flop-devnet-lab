@@ -287,14 +287,28 @@ const cases = [
     ok: (r) => r.exit === 0 && r.same && r.bare === 2 && r.stderr === "usage: node scripts/fill-rerun-results.mjs --out <file>",
   },
   {
-    name: "the rerun's check.mjs on results.json: 22 pass and A10 incomplete for its one read, exit 1",
+    name: "the shape writer: each reviewed line's committed shape file is the shape it derives, exit 0; a call it does not understand is exit 2",
+    run: () => {
+      const lines = [1014014, 1014020].map((spec) => node([join(pkg, "scripts", "write-shape.mjs"), "--spec", String(spec)]));
+      const bare = node([join(pkg, "scripts", "write-shape.mjs")]);
+      return { exit: lines.map((l) => l.status).join(" "), stdout: lines.map((l) => (l.stdout ?? "").trim()), bare: bare.status, stderr: `${lines.map((l) => l.stderr ?? "").join("")}${bare.stderr ?? ""}`.trim() };
+    },
+    ok: (r) =>
+      r.exit === "0 0" &&
+      r.stdout[0] === "shapes/tzkv-runtime-1014014.json is the shape derived from the reviewed metadata of spec 1014014" &&
+      r.stdout[1] === "shapes/tzkv-runtime-1014020.json is the shape derived from the reviewed metadata of spec 1014020" &&
+      r.bare === 2 &&
+      r.stderr === "usage: node scripts/write-shape.mjs --spec <reviewed spec version> [--write]",
+  },
+  {
+    name: "the rerun's check.mjs on results.json: all 23 pass since the fill ran with decoder-shape@3, exit 0",
     run: () => {
       const dir = join(pkg, "..", "research", "2026-11-12-session-rerun-1014020");
       const c = node([join(dir, "check.mjs"), join(dir, "results.json")]);
       const lines = (c.stdout ?? "").split("\n");
-      return { exit: c.status, last: lines.filter(Boolean).at(-1), incomplete: lines.filter((l) => /^(DIFFERS|INCOMPLETE|NOT RUN)/.test(l)), a10: lines[lines.findIndex((l) => l.startsWith("INCOMPLETE A10")) + 1], stderr: (c.stderr ?? "").trim() };
+      return { exit: c.status, last: lines.filter(Boolean).at(-1), other: lines.filter((l) => /^(DIFFERS|INCOMPLETE|NOT RUN)/.test(l)), stderr: (c.stderr ?? "").trim() };
     },
-    ok: (r) => r.exit === 1 && r.last === "22 pass, 0 differ, 1 incomplete, 0 not run" && r.incomplete.length === 1 && r.incomplete[0].trim() === "INCOMPLETE A10" && r.a10?.trim() === "read delegate_sessions_of_device is missing" && r.stderr === "",
+    ok: (r) => r.exit === 0 && r.last === "23 pass, 0 differ, 0 incomplete, 0 not run" && r.other.length === 0 && r.stderr === "",
   },
   {
     name: "the request list writer writes recordings/requests.json byte for byte, and refuses a call without --out",

@@ -53,8 +53,8 @@ describe("the reviewed shapes", () => {
 
   it("name in the shape the ComputeChannel index, events, Channels entry and channel fields, and the System entries", () => {
     const s = JSON.parse(SHAPE);
-    expect(Object.keys(s)).toEqual(["compute_channel", "flop_session_keys", "schema", "spec_name", "spec_version", "system", "types"]);
-    expect(s).toMatchObject({ schema: "flop-observatory/decoder-shape@2", spec_name: "tzkv-runtime", spec_version: 1014014 });
+    expect(Object.keys(s)).toEqual(["compute_channel", "flop_session_keys", "hw_calibration", "miner_staking", "model_registry", "schema", "spec_name", "spec_version", "system", "types"]);
+    expect(s).toMatchObject({ schema: "flop-observatory/decoder-shape@3", spec_name: "tzkv-runtime", spec_version: 1014014 });
     expect(s.compute_channel.index).toBe(103);
     expect(s.compute_channel.events.length).toBe(60);
     expect(s.compute_channel.events.at(23)).toEqual({
@@ -86,6 +86,7 @@ describe("the reviewed shapes", () => {
       sessions: { modifier: "Optional", hashers: pair, key: "(AccountId32#0, AccountId32#0)", value: "SessionToken#697", default: "0x00" },
       session_nonces: { modifier: "Default", hashers: pair, key: "(AccountId32#0, AccountId32#0)", value: "u64", default: "0x0000000000000000" },
       circuit_breakers: { modifier: "Optional", hashers: ["Blake2_128Concat"], key: "AccountId32#0", value: "CircuitBreakerState#701", default: "0x00" },
+      delegate_sessions: { modifier: "Default", hashers: ["Blake2_128Concat"], key: "AccountId32#0", value: "Vec<(AccountId32#0, AccountId32#0)>", default: "0x00" },
     });
     const fields = (t: string) => (s.types[t].fields as { name: string }[]).map((f) => f.name);
     expect(fields("SessionToken#697")).toEqual(["owner", "delegate", "spending_cap", "per_tx_limit", "daily_cap", "epoch_spent", "epoch_start", "spent", "expires_at", "allowed_pallets", "active"]);
@@ -95,7 +96,8 @@ describe("the reviewed shapes", () => {
   it("state the storage prefix of each stated pallet as the metadata gives it, so a changed prefix changes the shape", () => {
     const s = JSON.parse(SHAPE);
     const prefix = (name: string) => MD.pallets.find((p) => p.name === name)?.storage?.prefix;
-    expect([s.system.storage_prefix, s.compute_channel.storage_prefix, s.flop_session_keys.storage_prefix]).toEqual([prefix("System"), prefix("ComputeChannel"), prefix("FlopSessionKeys")]);
+    const sections: [string, string][] = [["system", "System"], ["compute_channel", "ComputeChannel"], ["flop_session_keys", "FlopSessionKeys"], ["model_registry", "ModelRegistry"], ["miner_staking", "MinerStaking"], ["hw_calibration", "HwCalibration"]];
+    expect(sections.map(([k]) => s[k].storage_prefix)).toEqual(sections.map(([, p]) => prefix(p)));
   });
 
   it("state exactly the storage entries STATED_ENTRIES lists, each one the metadata's entry of that name", () => {
@@ -107,8 +109,19 @@ describe("the reviewed shapes", () => {
       ["FlopSessionKeys", "Sessions", s.flop_session_keys.sessions],
       ["FlopSessionKeys", "SessionNonces", s.flop_session_keys.session_nonces],
       ["FlopSessionKeys", "CircuitBreakers", s.flop_session_keys.circuit_breakers],
+      ["FlopSessionKeys", "DelegateSessions", s.flop_session_keys.delegate_sessions],
+      ["System", "Account", s.system.account],
+      ["ComputeChannel", "FailedAcks", s.compute_channel.failed_acks],
+      ["ComputeChannel", "ChannelAuthoredOpenedAt", s.compute_channel.channel_authored_opened_at],
+      ["ModelRegistry", "Models", s.model_registry.models],
+      ["ModelRegistry", "MeasuredRoots", s.model_registry.measured_roots],
+      ["ModelRegistry", "AllowedDecodePolicies", s.model_registry.allowed_decode_policies],
+      ["MinerStaking", "Miners", s.miner_staking.miners],
+      ["HwCalibration", "CalibrationVersions", s.hw_calibration.calibration_versions],
+      ["HwCalibration", "LastInitialCalibration", s.hw_calibration.last_initial_calibration],
     ];
-    expect(STATED_ENTRIES).toEqual(stated.map(([p, e]) => [p, e]));
+    // The same 16, in the table's order there (test/stated-table.test.ts holds the order).
+    expect([...STATED_ENTRIES].map((x) => x.join(".")).sort()).toEqual(stated.map(([p, e]) => `${p}.${e}`).sort());
     for (const [p, e, shape] of stated) {
       const entry = MD.pallets.find((x) => x.name === p)?.storage?.entries.find((x) => x.name === e);
       expect(shape, `${p}.${e}`).toMatchObject({ modifier: entry?.modifier, hashers: entry?.hashers, value: typeName(MD, entry?.value ?? -1), default: `0x${Buffer.from(entry?.fallback ?? []).toString("hex")}` });
@@ -129,13 +142,19 @@ describe("the type closure in the shape", () => {
     return [];
   };
 
-  it("describes 469 types, and every type a description names is described too", () => {
+  it("describes 482 types, and every type a description names is described too", () => {
     const types = s.types as Record<string, Record<string, unknown>>;
-    expect(Object.keys(types).length).toBe(469);
+    expect(Object.keys(types).length).toBe(482);
     for (const [k, d] of Object.entries(types)) for (const x of named(d)) expect(types[x], `${k} names ${x}`).toBeDefined();
     // The entry points name described types.
     const fsk = s.flop_session_keys;
     for (const x of [s.system.events.value, s.system.last_runtime_upgrade.value, s.system.version, s.compute_channel.channels.value, s.compute_channel.channels.key, fsk.sessions.key, fsk.sessions.value, fsk.session_nonces.key, fsk.session_nonces.value, fsk.circuit_breakers.key, fsk.circuit_breakers.value]) expect(types[x], x).toBeDefined();
+    for (const section of ["system", "compute_channel", "flop_session_keys", "model_registry", "miner_staking", "hw_calibration"]) {
+      for (const [k, e] of Object.entries(s[section] as Record<string, { key?: string | null; value?: string; modifier?: string }>)) {
+        if (typeof e !== "object" || e === null || Array.isArray(e) || e.modifier === undefined) continue;
+        for (const x of [e.key, e.value]) if (typeof x === "string") expect(types[x], `${section}.${k} ${x}`).toBeDefined();
+      }
+    }
   });
 
   it("holds the outer event enum with every pallet's events, the phase, and the channel's fields and states", () => {
@@ -162,7 +181,7 @@ describe("the type closure in the shape", () => {
     const text = shapeText(other(MD) as never);
     expect(sha256(R.metadata)).toBe(REVIEWED.at(0)?.metadataSha256);
     expect(shapeText(other(parseMetadata(R.metadata)) as never)).toBe(text);
-    expect(refused({ shapeText: text })).toBe(`the shape file given is not the reviewed ${FILE}`);
+    expect(refused({ shapeText: text })).toBe(`the shape file given is not the reviewed ${FILE}: it is flop-observatory/decoder-shape@0, not flop-observatory/decoder-shape@3`);
   });
 });
 
