@@ -10,7 +10,7 @@ import { REVIEWED, SHAPE_SCHEMA, pinShape, schemaNamed } from "../src/scale/shap
 import { readShape } from "../scripts/shape-diff.mjs";
 import { recordedUpgrade } from "./helpers/recorded-upgrade.js";
 import { UPGRADE_BLOCKS } from "./helpers/requests/list-3.js";
-import { writeShapeMain } from "./helpers/shape-file.js";
+import { derivedShapeFile, writeShapeMain } from "./helpers/shape-file.js";
 
 const OLD_SCHEMA = "flop-observatory/decoder-shape@2";
 const FIXTURE = new URL("../fixtures/shapes-at-2/", import.meta.url);
@@ -74,7 +74,7 @@ describe("a shape of decoder-shape@2", () => {
   it("differs, by the shape writer's compare, from what it derives, naming both formats; it writes nothing", () => {
     for (const l of LINES) {
       const written: string[] = [];
-      const r = writeShapeMain(["--spec", String(l.r.specVersion)], { read: () => l.old, write: (f) => written.push(f) });
+      const r = writeShapeMain(["--spec", String(l.r.specVersion)], { read: () => l.old, write: (f) => written.push(f), derive: derivedShapeFile });
       expect(r).toEqual({ code: 1, stdout: `${l.r.shapeFile} differs from the shape derived from the reviewed metadata of spec ${l.r.specVersion}${BOTH}\n`, stderr: "" });
       expect(written).toEqual([]);
     }
