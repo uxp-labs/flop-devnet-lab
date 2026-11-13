@@ -5,7 +5,7 @@
 // or --tests review2 (review2-*.test.mjs). A mutant is killed when a test that passes on the copy
 // without the change fails with it. For a pasted file the builder's two sha256 binding tests do not
 // count. The worktree is never changed. No network.
-//   node review2-mutants.mjs --tests builder|review2 [--jobs <n>]
+//   node review2-mutants.mjs --tests builder|review2 [--jobs <n>] [--only <id>,<id>]
 import { cpSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync, readdirSync } from "node:fs";
 import { spawn } from "node:child_process";
 import { tmpdir } from "node:os";
@@ -16,7 +16,8 @@ const argv = process.argv.slice(2);
 const opt = (f, d) => (argv.indexOf(`--${f}`) >= 0 ? argv[argv.indexOf(`--${f}`) + 1] : d);
 const which = opt("tests", "builder"), jobs = Number(opt("jobs", 4));
 const pick = which === "review2" ? (f) => f.startsWith("review2-") : (f) => !f.startsWith("review");
-const mutants = JSON.parse(readFileSync(join(HERE, "review2-mutants.json"), "utf8"));
+const only = opt("only", null)?.split(",");
+const mutants = JSON.parse(readFileSync(join(HERE, "review2-mutants.json"), "utf8")).filter((m) => !only || only.includes(m.id));
 for (const m of mutants) if (readFileSync(join(HERE, m.file), "utf8").split(m.find).length !== 2) throw new Error(`${m.id}: the find text does not occur exactly once in ${m.file}`);
 const PASTED = ["pane-runner.js", "explorer-reader.js"];
 const BINDING = [/^R1: plan\.md holds every block plan\.mjs prints/, /^P6 P8: the README says who carries the batch out/];
