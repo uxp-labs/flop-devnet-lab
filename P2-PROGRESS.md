@@ -41,5 +41,9 @@ Sessions answered null is tested on the rerun recording with that one answer cha
 - Scripted nodes: the rerun recording holds no header, so the scripted parent hash is derived in the test;
   the scripted finalized head is the step's own block.
 
-## Report of P2
-(written from the middle of the work on)
+## Report of P2 (draft, before the observatory check)
+- imd-flop npm run check at a2d6207: finished, overall_exit 0, 4 steps (00-observatory-build, 01..03),
+  55 files, 1429 passed, 1 skipped (the skip was there before P2: 1299 passed 1 skipped at B1).
+- research node --test: encoder-devnet-test 281 of 281, session-rerun-1014020 41 of 41.
+- observatory npm run check: running next at the commit that adds this text.
+- Every rule A1..A6, B1, B2, C1..C7, T1..T6, W1, W2 done; W3 done; W2 check and W4 pending.
