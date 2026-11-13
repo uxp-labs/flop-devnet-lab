@@ -14,7 +14,7 @@ import { type DoorEvent, type Pin, type Runtime, eventsOf, runtimeOf, valueOf } 
 import { accountOf, eventsKey, lastRuntimeUpgradeKey, lineOf, sessionKeys } from "./keys.js";
 import { type Transport, blockHash, finalizedHead, header, metadata, storage } from "./node.js";
 import { type Got, type Stored, absent, known, knownEntry, unknown, within } from "./result.js";
-import { type CircuitBreakerRecord, type SessionRecord, circuitBreakerOf, sessionNonceOf, sessionOf } from "./session-state.js";
+import { type CircuitBreakerRecord, type SessionRecord, circuitBreakerOf, ofThePair, sessionNonceOf, sessionOf } from "./session-state.js";
 import { shapeFileText } from "./shape-file.js";
 
 /** The block a read was made at, and the runtime the door pinned for it. */
@@ -93,7 +93,10 @@ export async function readSessionState(t: Transport, owner: string, delegate: st
   if (keys.kind === "unknown") return keys;
   const L = line.value;
   const k = keys.value;
-  const session = await entryAt(t, pin.value, head.value, "session", { ...L.entries.sessions, ...k.sessions }, (v) => sessionOf(L, v));
+  const session = await entryAt(t, pin.value, head.value, "session", { ...L.entries.sessions, ...k.sessions }, (v) => {
+    const r = sessionOf(L, v);
+    return r.kind === "unknown" ? r : ofThePair(r.value, owner, delegate);
+  });
   const sessionNonce = await entryAt(t, pin.value, head.value, "sessionNonce", { ...L.entries.session_nonces, ...k.sessionNonces }, (v) => sessionNonceOf(L, v));
   const circuitBreaker = await entryAt(t, pin.value, head.value, "circuitBreaker", { ...L.entries.circuit_breakers, ...k.circuitBreakers }, (v) => circuitBreakerOf(L, v));
   return known({ ...atOf(h.value.number, head.value, pin.value.runtime), owner, delegate, session, sessionNonce, circuitBreaker });

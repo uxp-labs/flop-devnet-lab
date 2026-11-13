@@ -132,6 +132,16 @@ export function sessionOf(line: RuntimeLine, v: DoorValue): Got<SessionRecord> {
   return recordOf(SESSION_FIELDS, v, "the session") as Got<SessionRecord>;
 }
 
+/**
+ * The session record, only when it names this owner and this delegate (the P2 fix round, rule X3): a stored record
+ * of another pair is unknown, whatever key it was answered under.
+ */
+export function ofThePair(record: SessionRecord, owner: string, delegate: string): Got<SessionRecord> {
+  if (record.owner !== owner) return unknown(`the stored record names another owner, ${record.owner}, than ${owner}`);
+  if (record.delegate !== delegate) return unknown(`the stored record names another delegate, ${record.delegate}, than ${delegate}`);
+  return known(record);
+}
+
 /** The session nonce from the door's value of FlopSessionKeys.SessionNonces. */
 export function sessionNonceOf(line: RuntimeLine, v: DoorValue): Got<bigint> {
   const s = stated(line, "the session nonce", line.records.sessionNonce, SESSION_NONCE_TYPE);

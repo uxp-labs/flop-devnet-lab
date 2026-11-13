@@ -5,12 +5,14 @@
  * total of the event with the session record's field of the same name and type in the reviewed shape, and the
  * rerun's record shows them equal at its successful session calls (test/chain-read-replay.test.ts). A disagreement
  * is unknown and names both values. So is a check that cannot be made: another block, another runtime, a session
- * that is not known, no such event of the session at the block, or more than one. Pure.
+ * that is not known, a session record of another owner or delegate than the state's own (rule X3), no such event
+ * of the session at the block, or more than one. Pure.
  */
 import type { DoorValue } from "./door.js";
 import { lineOf } from "./keys.js";
 import type { BlockEventsAt, SessionState } from "./read.js";
-import { type Got, known, unknown } from "./result.js";
+import { type Got, known, unknown, within } from "./result.js";
+import { ofThePair } from "./session-state.js";
 
 /** The totals that agree, by the stored field's name. */
 export interface Agreement {
@@ -29,6 +31,9 @@ export function crossCheck(state: SessionState, events: BlockEventsAt): Got<Agre
   if (r.specName !== e.specName || r.specVersion !== e.specVersion || r.shapeFile !== e.shapeFile) return unknown("the session and the events were pinned to other runtimes");
   if (state.session.kind === "absent") return unknown("the session is absent");
   if (state.session.kind === "unknown") return unknown(`the session is unknown (${state.session.reason})`);
+  // Rule X3: the known record must name the state's own owner and delegate, before any event is looked at.
+  const pair = ofThePair(state.session.value, state.owner, state.delegate);
+  if (pair.kind === "unknown") return within("the session", pair);
   const line = lineOf(r);
   if (line.kind === "unknown") return line;
   const cc = line.value.crossCheck;

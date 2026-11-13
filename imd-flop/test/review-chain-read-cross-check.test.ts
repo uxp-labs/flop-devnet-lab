@@ -72,11 +72,11 @@ describe("E: the cross check table", () => {
     });
   }
 
-  it("HOLDS (info) a hand built session with no owner and no delegate matches an event with neither: unreachable from a read, whose record has both", async () => {
+  it("HOLDS (info, changed by the lead's rule X3) a hand built session with no owner and no delegate is unknown: the record must name the state's own owner and delegate", async () => {
     const { state, events } = await both();
     const strip = (o: any) => Object.fromEntries(Object.entries(o).filter(([k]) => k !== "owner" && k !== "delegate"));
     const c = crossCheck(withSession(state, strip), withFields(events, strip));
-    // crossCheck compares fields[k] === session[k]; undefined === undefined. It agrees.
-    expect(c.kind).toBe("known");
+    // On fcf75d0 crossCheck compared fields[k] === session[k], undefined === undefined, and agreed. Rule X3 checks the record's owner first.
+    expect(c.kind).toBe("unknown");
   });
 });
