@@ -158,3 +158,11 @@ test("G4: an explorer channel id that is not the derived one: at T3 the judge st
   assert.equal(t6.step, "T7");
   assert.ok(t6.left.some((l) => l.includes(`what T6 moved, under the channel id ${OTHER}`)), t6.left.join("\n"));
 });
+
+test("F3 a refused when a dead copy exists: something was signed, so case b's reads are needed", () => {
+  const { run } = t3Signed(null);
+  const fs = { json: join(run, "signed", "T3.json"), send: join(run, "signed", "T3.send.json") };
+  writeFileSync(join(run, "signed", "T3.dead-1.json"), readFileSync(fs.json)); rmSync(fs.json);
+  writeFileSync(join(run, "signed", "T3.dead-1.send.json"), readFileSync(fs.send)); rmSync(fs.send);
+  refused(() => stop(run, "T3"), /case b needs the device's reads/);
+});

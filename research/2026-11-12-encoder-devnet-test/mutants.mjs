@@ -1,11 +1,12 @@
 #!/usr/bin/env node
-// The mutants of this folder: mutants.json holds the reviewer's (R-M1 to R-M18, adapted to the
-// code of the fix round, each saying so) and the fix round's own (B-*). Each entry is
+// The mutants of this folder: mutants.json holds the first reviewer's (R-M1 to R-M18, adapted to the
+// code of the fix round, each saying so), the fix round's own (B-*), the second reviewer's (RV2-*,
+// from review2-mutants.json) and fix round 2's own (B2-*). Each entry is
 // { id, file, find, replace, test, why } and, for one no test can kill, equivalent: the reason.
 // For each, the research folders this folder reads are copied into a temporary repo (imd-flop
 // linked, not copied), the one change is made there, and every test of the folder runs on the copy.
 // A mutant is killed when a test that passes on the copy without the change fails with it. For a
-// change to a file the lead pastes into the pane, the two tests that bind that file's sha256 into
+// change to a file the lead pastes into the pane, the three tests that bind that file's sha256 into
 // plan.md and README.md do not count as a kill: any change fails them. The worktree is never
 // changed. Usage: node mutants.mjs [<temp parent>] [--jobs <n>] [--only <file>]. No network.
 // Exit 0 only when every mutant is killed or listed as equivalent and an equivalent one lives.
@@ -22,7 +23,7 @@ const only = at("only") >= 0 ? argv[at("only") + 1] : null;
 const parent = argv.find((a, i) => !a.startsWith("--") && i !== at("jobs") + 1 && i !== at("only") + 1) ?? tmpdir();
 const mutants = JSON.parse(readFileSync(join(HERE, "mutants.json"), "utf8")).filter((m) => !only || m.file === only);
 const PASTED = ["pane-runner.js", "explorer-reader.js"];
-const BINDING = [/^R1: plan\.md holds every block plan\.mjs prints/, /^P6 P8: the README says who carries the batch out/];
+const BINDING = [/^R1: plan\.md holds every block plan\.mjs prints/, /^P6 P8: the README says who carries the batch out/, /^the words of fix round 2: /];
 const plan = loadPlan();
 const dirs = new Set(["research/2026-11-12-encoder-devnet-test", "research/2026-11-12-session-rerun-1014020", "research/2026-11-11-session-deny-list", ...Object.values(plan.files).map((f) => f.split("/").slice(0, 2).join("/"))]);
 
