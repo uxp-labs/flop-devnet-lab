@@ -22,5 +22,7 @@ Reviewer worktree: /home/claude/wt-review-shape3, branch claude/review-observato
 - 12: test names compared; nothing lost
 - P9: upgrade-watch, live, snapshot, record-run, decode tests: 199 pass
 
+- 9: key table derived again equals committed file (imd-flop/test/review-shape3-at2.test.ts). imd-flop npm run check had already run 20:02 to 20:07 at 4b4d45b, before the lead cut it; exit 0, 1608 pass 1 skipped
+
 ## Next
-- 9 imd-flop npm run check when the machine is quiet (lead's mutants step running at 19:52)
+- hand back (lead's word, 20:05)
