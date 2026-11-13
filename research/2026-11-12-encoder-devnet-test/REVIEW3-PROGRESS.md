@@ -18,6 +18,9 @@ Baseline at a9442dd: 229 of 229 pass.
 4. low V3. After case c (an immortal copy the node was given, nonce unused) what is left says
    nothing of it. review3-stop.test.mjs "after case c on T1 for a fee".
 
+5. low V5. refused-bundle, not-in-sent-list and already-sent carry no sent_by.
+   review3-pane.test.mjs "the results of send and sendSame that submit nothing".
+
 ## Held
 
 - Table of attack B (21 rows) in review3-stop.test.mjs: allowed exactly at a, b, c, d as ruled;
@@ -30,6 +33,10 @@ Baseline at a9442dd: 229 of 229 pass.
   repeated owner step, a device value beginning with -- in callOf. Info: $DEVICE of T1, T2, T8 is
   taken from the record unchecked (only T9 checks it is 32 bytes).
 
+- Attack C held (review3-pane.test.mjs, 5, a driven fake WebSocket): close between write and
+  answer, late open, a throwing write, finalized with no block read, sendSame after a deadline.
+  Writes and marks counted in each: one mark per first write, none for sendSame, none on a throw.
+
 ## Next
 
-C (submit), D (preflight, dead files), E, F mutants.
+D (preflight, dead files), E, F mutants.
