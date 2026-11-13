@@ -855,14 +855,7 @@
       "fee_raw": "3906000695000000",
       "reads_after": {
         "session_active": "false",
-        "delegate_sessions_of_device": null
-      },
-      "reads_not_decoded": {
-        "delegate_sessions_of_device": {
-          "entry": "FlopSessionKeys.DelegateSessions",
-          "bytes": "0x00",
-          "why": "the reviewed shape does not state this entry"
-        }
+        "delegate_sessions_of_device": "empty"
       },
       "utc": "2026-11-12T11:03:44.765Z",
       "note": "outcome read at run time by a byte pattern in the block's events: as expected: success. The decoded events, the result and the fee are filled from the recording."
@@ -1860,6 +1853,7 @@
   "filled_from": {
     "recording": "observatory/fixtures/recording-20261112132634-0a472f1b49f7b661",
     "by": "observatory/scripts/fill-rerun-results.mjs (test/helpers/rerun-fill.ts)",
-    "how": "last_runtime_upgrade_spec, events, result, fee_raw and the values of reads_after are decoded from the recording through the lab's decoder's one door, observatory/src/scale/block.ts, at the spec each block's System.LastRuntimeUpgrade names; failed_acks_of_named \"absent\" is the batch answer listing its key with null, which needs no decode; reads_not_decoded holds bytes the node answered for an entry the reviewed shape does not state, and the read they answer stays null in reads_after. Every other field is the lead's, as read at run time."
+    "how": "last_runtime_upgrade_spec, events, result, fee_raw and the values of reads_after are decoded from the recording through the lab's decoder's one door, observatory/src/scale/block.ts, at the spec each block's System.LastRuntimeUpgrade names, with the reviewed shape the door pinned; failed_acks_of_named \"absent\" is the batch answer listing its key with null, which the door answers as no value stored; reads_not_decoded holds bytes the node answered for an entry the reviewed shape does not state, and the read they answer stays null in reads_after. Every other field is the lead's, as read at run time.",
+    "shape": "flop-observatory/decoder-shape@3"
   }
 }

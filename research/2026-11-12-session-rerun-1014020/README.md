@@ -9,6 +9,13 @@ Everything below is written from `results.json` (sha256
 `d4f92522f94f594de59b0ac8ada1b60e669479c09609687bacba44faa6fb4f10`) and the output of
 `node check.mjs results.json`.
 
+On 2026-11-13 the fill was run again with decoder-shape@3 (observatory review round 29), which
+states `FlopSessionKeys.DelegateSessions` and `ComputeChannel.FailedAcks`. A10's
+`delegate_sessions_of_device` is now decoded: an empty list (the node's bytes were `0x00`), and its
+`reads_not_decoded` note is gone. `filled_from` names the shape format. Nothing else changed.
+`results.json` is now sha256 `47292f1ec4af70d77709353307492e45ad022d79ef612c664acd5eba405049c5`, and
+`node check.mjs results.json` says 23 pass.
+
 ## What was run
 
 The order of `plan.md`, signed with `../2026-11-11-session-deny-list/flop-sign.mjs --spec 1014020`

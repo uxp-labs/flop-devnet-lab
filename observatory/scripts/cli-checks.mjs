@@ -301,14 +301,14 @@ const cases = [
       r.stderr === "usage: node scripts/write-shape.mjs --spec <reviewed spec version> [--write]",
   },
   {
-    name: "the rerun's check.mjs on results.json: 22 pass and A10 incomplete for its one read, exit 1",
+    name: "the rerun's check.mjs on results.json: all 23 pass since the fill ran with decoder-shape@3, exit 0",
     run: () => {
       const dir = join(pkg, "..", "research", "2026-11-12-session-rerun-1014020");
       const c = node([join(dir, "check.mjs"), join(dir, "results.json")]);
       const lines = (c.stdout ?? "").split("\n");
-      return { exit: c.status, last: lines.filter(Boolean).at(-1), incomplete: lines.filter((l) => /^(DIFFERS|INCOMPLETE|NOT RUN)/.test(l)), a10: lines[lines.findIndex((l) => l.startsWith("INCOMPLETE A10")) + 1], stderr: (c.stderr ?? "").trim() };
+      return { exit: c.status, last: lines.filter(Boolean).at(-1), other: lines.filter((l) => /^(DIFFERS|INCOMPLETE|NOT RUN)/.test(l)), stderr: (c.stderr ?? "").trim() };
     },
-    ok: (r) => r.exit === 1 && r.last === "22 pass, 0 differ, 1 incomplete, 0 not run" && r.incomplete.length === 1 && r.incomplete[0].trim() === "INCOMPLETE A10" && r.a10?.trim() === "read delegate_sessions_of_device is missing" && r.stderr === "",
+    ok: (r) => r.exit === 0 && r.last === "23 pass, 0 differ, 0 incomplete, 0 not run" && r.other.length === 0 && r.stderr === "",
   },
   {
     name: "the request list writer writes recordings/requests.json byte for byte, and refuses a call without --out",

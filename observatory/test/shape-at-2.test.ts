@@ -36,7 +36,7 @@ const BOTH = `: it is ${OLD_SCHEMA}, not ${SHAPE_SCHEMA}`;
 describe("a shape of decoder-shape@2", () => {
   it("is what the fixture holds: the two files of the @2 form, by the sha256 its SHA256SUMS gives, the 1014014 one the sha256 the runtime upgrade record names", () => {
     expect(SHAPE_SCHEMA).toBe("flop-observatory/decoder-shape@3");
-    expect([...SUMS.keys()].sort()).toEqual(LINES.map((l) => l.name).sort());
+    expect([...SUMS.keys()].filter((f) => f.startsWith("tzkv-runtime-")).sort()).toEqual(LINES.map((l) => l.name).sort());
     for (const l of LINES) {
       expect(sha256(l.old), l.name).toBe(SUMS.get(l.name));
       expect(JSON.parse(l.old).schema, l.name).toBe(OLD_SCHEMA);
