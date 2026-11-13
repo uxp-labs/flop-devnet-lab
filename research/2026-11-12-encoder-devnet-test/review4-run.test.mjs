@@ -38,3 +38,12 @@ test("R6: the era of each sent step's signed file is the era its extrinsic bytes
     assert.deepEqual([f.era.period, f.era.birth_number % f.era.period], [period, phase], s.step);
   }
 });
+
+test("R7: the README says the node reported T3's extrinsic hash; the record carries a node report of it", () => {
+  const t = readFileSync(join(HERE, "README.md"), "utf8").replace(/\s+/g, " ");
+  const rt = RESULTS.steps[2].run_time;
+  // run_time.extrinsic_hash is the signed file's hash (results.json run_time_form); the node's relay
+  // (run_time.sent.extrinsic_hash) is null; only the explorer (run_time.explorer.hash) reported it.
+  assert.equal(rt.explorer.hash, rt.extrinsic_hash);
+  assert.ok(!t.includes("the hash the node and the explorer reported for T3") || rt.sent.extrinsic_hash === rt.extrinsic_hash, "the README says the node reported the hash, but steps.2.run_time.sent.extrinsic_hash is null");
+});
