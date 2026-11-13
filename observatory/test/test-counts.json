@@ -23,6 +23,10 @@
     "tests": 40,
     "names": "ccf91ffb198b753d6ede400557b6a2bd36da1afcc99552d21fafc9b2601db7c6"
   },
+  "encoder-recording.test.ts": {
+    "tests": 10,
+    "names": "aefae21286002160679cf6dcc0747d670903736fa59ddf746499ea12dbe20eef"
+  },
   "encoder-requests.test.ts": {
     "tests": 21,
     "names": "8c573cff065c6f8da3ed4b5dc7ab3ccaa6ca04252cfb5a8b7fb7898daab0a819"
