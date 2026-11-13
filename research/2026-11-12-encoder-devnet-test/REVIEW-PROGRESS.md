@@ -9,14 +9,19 @@ No file of the builder is changed. Tests of the reviewer are `review-*.test.mjs`
 
 ## Findings so far (each with its test)
 
-(none committed yet)
+- F1 high P4/P3: `{broadcast:[..]}` status ends the watch as "ended" (review-pane-runner: broadcast).
+- F2 low P4: "dropped"/"invalid" strings ignored, waits to deadline (review-pane-runner: dropped).
+- F3 medium P4: socket close not handled; says "not in any block"; heads() hangs (review-pane-runner: socket x2).
+- F4 low P4: any host accepted (review-pane-runner: host).
+- F5 medium P3: signed/ from cwd; results.json sent step re-signed (review-sign-device: P3 x2).
+- F6 medium P9/P6: T6/T7 signed with an era that ends before their earliest block (review-sign-device: P9 x2).
+- F7 low P2: alg of key file not checked (review-sign-device: sr25519).
 
 ## Held
 
-(none yet)
+- P1 seed in outputs, 12 paths (review-sign-device held test). P2 cwd steps.json not followed. P3 runner submits once (3 node answers).
+- P11 scope diff empty. Genesis/spec checked by runtimeFor.
 
 ## Next
 
-- pane runner statuses (broadcast object, dropped string), socket drop
-- check: order of steps across signers, recovery paths, balances
-- sign-device: key paths, out dir, reads
+- check.mjs wrong records (order, recovery, balances); sums; plan words; mutants; table F
