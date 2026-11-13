@@ -73,22 +73,30 @@ Order of work (the brief's): H1 with H2, H3, H4; H5; H6 to H11; the words; the m
   in the chunk's callback. In a scratch copy B3-H10a, b, c are killed and B-S2d is not. The sha256
   of pane-runner.js is now f034f6ed...5b5a78 (README, plan.md).
 
+- Second full run on 1352a79 under setpriv, last line:
+  {"mutants":211,"killed":202,"equivalent":9,"alive":[],"killed_but_listed_equivalent":[],"baseline_failing":0}
+  exit 0. GitHub checks of 1352a79: all 7 completed, success, the research check among them.
+
 ### Next
 
-The second full run (node mutants.mjs <temp> --jobs 6, under setpriv), then the GitHub checks.
+Nothing. The lead reads, reruns and merges.
 
 ### Report of fix round 3
 
 Branch claude/encoder-devnet-test-prep, from a9442dd. Merged 6f443b3 (the third reviewer) by fast
 forward. Commits: 1c211d8 (H1 to H4), a64e333 (H5), 1c26dd2 (H6), 555329e (H7, H10, H11),
-11567b9 (H8, H9), ad825bd (the words), 31bdc7c (mutants), b0af0e4 and later (progress).
+11567b9 (H8, H9), ad825bd (the words), 31bdc7c (mutants), 1e5981f (report, RV3-R3),
+1352a79 (the H10 test made exact), b0af0e4 and the last (progress).
 Every change is in research/2026-11-12-encoder-devnet-test/. No file under observatory/src, no
 recordings/requests.json, no workflow: neither observatory workflow's push paths are touched.
 
 Tested (all under setpriv, in the folder)
 - node --test: 281 tests, 281 pass, 0 fail (start: 261, 253 pass, the reviewer's 8 failing).
 - The 59 new or changed mutants alone: 56 killed, 3 equivalent, none alive.
-- Full mutant run: see the line below, filled in after the run.
+- First full mutant run (1e5981f): 202 killed, 8 equivalent, B3-H10a alive, B-S2d killed while
+  listed equivalent: both by a timing flake of my H10 test. Fixed in 1352a79 (see above).
+- Second full run (1352a79): {"mutants":211,"killed":202,"equivalent":9,"alive":[],
+  "killed_but_listed_equivalent":[],"baseline_failing":0}, exit 0.
 
 The rules
 - H1 done: lead-stop.mjs researchStop, takeSignerReads, findCovers; nonce row in stop_table.
@@ -123,7 +131,8 @@ Unresolved (for the lead)
 - H10: an error answer during find still rejects the promise, as before; only the deadline is new.
 
 Not done
-- None of the rules. GitHub checks: filled in after the last push.
+- None of the rules. GitHub checks of 1352a79: 7 of 7 success (research folders offline tests,
+  build and offline tests twice, spend-guard twice, viewer twice).
 
 ### Decisions (fix round 3) and why
 
