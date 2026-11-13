@@ -2,8 +2,10 @@
  * P2, rules T5, A1, A4, B1, B2 and C7, as tests over the source text: the list of files under src/chain-read; its
  * pure files hold none of the patterns banned in src/chain; only door.ts imports the observatory, and only its door;
  * only shape-file.ts reads a shape file, through the package; only the five read methods appear; nothing of the
- * encoder is imported; one place opens a socket; and no test of chain-read opens one. Each scan proves itself on a
- * planted sample first.
+ * encoder is imported; one place opens a socket; and no test of chain-read opens one. The P2 fix round, rule X7: under
+ * all of src no file holds a dynamic import, and import.meta, createRequire, a require call and require.resolve appear
+ * only in chain-read/shape-file.ts, so every module a source file loads is named by a static import of a literal text.
+ * Each scan proves itself on a planted sample first.
  */
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { dirname, join, relative } from "node:path";
@@ -33,6 +35,50 @@ function specifiers(t: string): string[] {
   for (const m of t.matchAll(/\brequire(?:\.resolve)?\(\s*["'`]([^"'`$]*)/g)) out.push(m[1] as string);
   return out;
 }
+
+/**
+ * A source text with its comments taken out, so a word in a comment is not code (rule X7). Strings and template
+ * texts are kept whole, and a comment marker inside one is not a comment. A template's ${...} is read as code.
+ */
+function code(t: string): string {
+  let out = "";
+  let i = 0;
+  const stack: ("tpl" | "brace")[] = [];
+  while (i < t.length) {
+    const c = t[i] as string;
+    const n = t[i + 1];
+    if (stack.at(-1) === "tpl") {
+      if (c === "\\") { out += c + (n ?? ""); i += 2; continue; }
+      if (c === "`") { stack.pop(); out += c; i++; continue; }
+      if (c === "$" && n === "{") { stack.push("brace"); out += "${"; i += 2; continue; }
+      out += c; i++; continue;
+    }
+    if (c === "/" && n === "/") { while (i < t.length && t[i] !== "\n") i++; continue; }
+    if (c === "/" && n === "*") { const end = t.indexOf("*/", i + 2); i = end < 0 ? t.length : end + 2; out += " "; continue; }
+    if (c === '"' || c === "'") {
+      let j = i + 1;
+      while (j < t.length && t[j] !== c && t[j] !== "\n") j += t[j] === "\\" ? 2 : 1;
+      out += t.slice(i, j + 1); i = j + 1; continue;
+    }
+    if (c === "`") { stack.push("tpl"); out += c; i++; continue; }
+    if (c === "{" && stack.length > 0) stack.push("brace");
+    if (c === "}" && stack.at(-1) === "brace") stack.pop();
+    out += c; i++;
+  }
+  // A text that ends inside a template was misread (a backtick in a regular expression, say): never a pass.
+  if (stack.length > 0) throw new Error("the text ends inside a template text");
+  return out;
+}
+
+/** The forms rule X7 scans for, each over a text with its comments taken out. */
+const LOADERS = {
+  "a dynamic import": /\bimport\s*\(/,
+  "import.meta": /\bimport\s*\.\s*meta\b/,
+  createRequire: /\bcreateRequire\b/,
+  "a require call": /(?<![\w$.])require\s*\(/,
+  "require.resolve": /\brequire\s*\.\s*resolve\b/,
+} as const;
+const holds = (form: keyof typeof LOADERS, t: string): boolean => LOADERS[form].test(code(t));
 
 /** The two files of chain-read that are not pure: the transport and the shape file's read. */
 const NOT_PURE = ["node.ts", "shape-file.ts"];
@@ -110,6 +156,49 @@ describe("A4, T5: only door.ts imports the observatory, and only its door; only 
   });
 });
 
+describe("X7: every module a source file loads is named by a static import of a literal text", () => {
+  it("each scan finds its planted samples, the reviewer's form among them (control)", () => {
+    const reviewer = 'const m = await import(new URL(["..", "x", "y.js"].join("/"), import.meta.url).href);';
+    expect(holds("a dynamic import", reviewer)).toBe(true);
+    expect(holds("import.meta", reviewer)).toBe(true);
+    expect(holds("a dynamic import", 'await import("./x.js")')).toBe(true);
+    expect(holds("a dynamic import", "await import /* x */ (`./${n}.js`)")).toBe(true);
+    expect(holds("import.meta", "const u = import . meta.url;")).toBe(true);
+    expect(holds("createRequire", 'import { createRequire } from "node:module";')).toBe(true);
+    expect(holds("a require call", 'const x = require("./x.cjs");')).toBe(true);
+    expect(holds("a require call", "const x = require (name);")).toBe(true);
+    expect(holds("require.resolve", "require.resolve(`x/${n}`)")).toBe(true);
+    expect(holds("require.resolve", "require\n  .resolve(n)")).toBe(true);
+  });
+
+  it("a word in a comment is not code, and a static import or a name that starts with require is not a load (control)", () => {
+    for (const form of Object.keys(LOADERS) as (keyof typeof LOADERS)[]) {
+      expect(holds(form, "// import(x); import.meta; createRequire; require(x); require.resolve(x)")).toBe(false);
+      expect(holds(form, "/* import(x)\n import.meta createRequire require(x) require.resolve(x) */")).toBe(false);
+    }
+    expect(holds("a dynamic import", 'import { a } from "./a.js";\nimport type { B } from "./b.js";')).toBe(false);
+    expect(holds("a require call", "requireCap(caps, seat); if (requireWallet) x.require(y);")).toBe(false);
+    expect(holds("a require call", 'const u = "ws://x"; require(y);')).toBe(true);
+    expect(holds("a dynamic import", "const t = `a ${b} // c`; import(d);")).toBe(true);
+  });
+
+  it("every file under src is read to its end in code, not inside a template text", () => {
+    expect(() => code("const a = `x ${b} y`;")).not.toThrow();
+    expect(() => code("const r = /[`]/; import(x);")).toThrow("the text ends inside a template text");
+    for (const f of ALL_SRC) expect(() => code(text(f)), rel(f)).not.toThrow();
+  });
+
+  it("no file under src holds a dynamic import", () => {
+    expect(ALL_SRC.filter((f) => holds("a dynamic import", text(f))).map(rel)).toEqual([]);
+  });
+
+  for (const form of ["import.meta", "createRequire", "a require call", "require.resolve"] as const) {
+    it(`${form} appears only in src/chain-read/shape-file.ts`, () => {
+      expect(ALL_SRC.filter((f) => holds(form, text(f))).map(rel).filter((f) => f !== "src/chain-read/shape-file.ts")).toEqual([]);
+    });
+  }
+});
+
 describe("B2, T5: only the five read methods appear under src/chain-read", () => {
   it("the method scan finds a planted name (control)", () => {
     expect(methodsIn(`t("author_submitExtrinsic", []); t('state_call')`)).toEqual(["author_submitExtrinsic", "state_call"]);
@@ -146,12 +235,37 @@ describe("B1: one place opens a socket to a node", () => {
 });
 
 describe("T5: no test of chain-read opens a socket", () => {
-  // This file is left out: it holds the planted samples of the scans above, as text.
-  const TESTS = [...files(join(PKG, "test")).filter((f) => /\/chain-read-[a-z-]+\.test\.ts$/.test(f) && !f.endsWith("chain-read-source.test.ts")), join(PKG, "test", "lib", "recorded-node.ts")];
+  // This file is left out: it holds the planted samples of the scans above, as text. A test that needs a socket puts
+  // a fake socket class in place of the global WebSocket for its own run (node-rpc.test.ts, chain-read-node.test.ts,
+  // chain-read-unknown.test.ts, review-chain-read-lead.test.ts): that is how those tests work, and no real socket is
+  // made. The list grows by the reviewer's six files and the fix round's (rule X7), and is held against the folder.
+  const NAMES = [
+    "chain-read-head.test.ts",
+    "chain-read-keys.test.ts",
+    "chain-read-node.test.ts",
+    "chain-read-pair.test.ts",
+    "chain-read-pin.test.ts",
+    "chain-read-replay.test.ts",
+    "chain-read-state.test.ts",
+    "chain-read-unknown.test.ts",
+    "node-rpc.test.ts",
+    "review-chain-read-block.test.ts",
+    "review-chain-read-cross-check.test.ts",
+    "review-chain-read-lead.test.ts",
+    "review-chain-read-runtime.test.ts",
+    "review-chain-read-tables-package.test.ts",
+    "review-chain-read-unknown.test.ts",
+  ];
+  const TESTS = [...NAMES.map((n) => join(PKG, "test", n)), join(PKG, "test", "lib", "recorded-node.ts")];
+
+  it("the list is every chain-read test file of the folder, and node-rpc.test.ts", () => {
+    const found = readdirSync(join(PKG, "test")).filter((n) => /^(?:review-)?chain-read-[a-z-]+\.test\.ts$/.test(n) && n !== "chain-read-source.test.ts");
+    expect([...found, "node-rpc.test.ts"].sort()).toEqual(NAMES);
+  });
 
   it("the chain-read tests and their scripted node import no network module and construct no socket", () => {
-    expect(TESTS.length).toBe(9);
     const net = /["'`]node:(?:net|http|https|http2|tls|dgram|dns)["'`]|\bfetch\(|new\s+WebSocket\b/;
+    for (const s of [`import x from "node:net"`, "await fetch(u)", "new WebSocket(u)"]) expect(net.test(s)).toBe(true);
     expect(TESTS.filter((f) => net.test(text(f))).map(rel)).toEqual([]);
   });
 

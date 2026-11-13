@@ -14,6 +14,7 @@ X3 done: session-state.ts ofThePair, used by read.ts and cross-check.ts; test/ch
 X5 done: read.ts asks chain_getBlockHash of the header's number after the header, before pinAt; test/chain-read-head.test.ts (T5 count 8). Full vitest: 2 failed (X4's DEFECT), 1563 passed, 1 skipped.
 X9 done: door.ts provenPin, called by read.ts pinAt with KEY_TABLE.system.last_runtime_upgrade and lastRuntimeUpgradeKey(). The door's value is { spec_version: number, spec_name: text }, so it compares with runtimeOf's spec. test/chain-read-pin.test.ts (T5 count 9). The builder's test in chain-read-unknown.test.ts (upgrade block with its own metadata) pinned the reason prefix "System.Events:"; the refusal now comes at the pin, so the prefix is "the pin:" (one line changed). The spec comparison is not reachable while the door pins: the door reads the same record again and must agree; a mutant that drops it is equivalent.
 X4 done: node.ts thrownWords and measured; tests in test/chain-read-node.test.ts. Full vitest: 1573 passed, 1 skipped, 0 failed.
+X7 done: chain-read-source.test.ts scans all of src with comments taken out (code()), five forms, planted samples incl. the reviewer's; a text that ends inside a template fails the scan. The T5 list is now explicit: 15 files (builder 5, fix round 4, node-rpc.test.ts, reviewer 6), held against the folder. A planted dynamic import in door.ts fails two tests (checked by hand, not committed).
  X2 with X6, X3, X5, X9, X4, X7, X8, W1 to W5.
 
 ## Report of the P2 fix round
