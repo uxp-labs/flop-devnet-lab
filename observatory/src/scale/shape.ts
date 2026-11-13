@@ -353,15 +353,15 @@ export function deriveShape(md: Metadata, n: Namer = namer(md)): ShapeValue {
     if (p === undefined) throw new ScaleError(`the metadata has no ${name} pallet`);
     return p;
   };
-  const pallets = STATED_TABLE.map((t) => ({ t, p: palletOf(t.pallet) }));
   const system = palletOf("System");
   const cc = palletOf("ComputeChannel");
   const version = system.constants.find((c) => c.name === "Version");
   if (version === undefined) throw new ScaleError("the System pallet has no Version constant");
   const v = decodeValue(md, version.type, version.value);
   if (v === null || typeof v !== "object" || Array.isArray(v)) throw new ScaleError("the System.Version constant did not decode as a record");
-  // Every stated entry, found by its pallet and name, in the table's order.
-  const entries = pallets.map(({ t }) => t.entries.map((e) => ({ key: e.key, entry: storageEntryOf(md, t.pallet, e.entry).entry })));
+  // Each stated pallet and every stated entry of it, found by name, in the table's order.
+  const pallets = STATED_TABLE.map((t) => ({ t, p: palletOf(t.pallet) }));
+  const stated = pallets.map(({ t }) => t.entries.map((e) => ({ key: e.key, entry: storageEntryOf(md, t.pallet, e.entry).entry })));
   const keyOf = (e: StorageEntry): number[] => (e.key === null ? [] : [e.key]);
   /** The storage prefix every key of the pallet starts from, written into the shape and paid for. */
   const prefixOf = (p: { storage: { prefix: string } | null }): string => {
@@ -370,12 +370,9 @@ export function deriveShape(md: Metadata, n: Namer = namer(md)): ShapeValue {
     return prefix;
   };
   // Each stated pallet's section: its index, its storage prefix and one entry for each line of the table.
-  const sections: { [section: string]: { [key: string]: ShapeValue } } = {};
-  pallets.forEach(({ t, p }, i) => {
-    const section: { [key: string]: ShapeValue } = { index: p.index, storage_prefix: prefixOf(p) };
-    for (const e of entries[i] ?? []) section[e.key] = entryShape(n, e.entry);
-    sections[t.section] = section;
-  });
+  const sections = new Map(
+    pallets.map(({ t, p }, i) => [t.section, new Map<string, ShapeValue>([["index", p.index], ["storage_prefix", prefixOf(p)], ...(stated.at(i) ?? []).map((e) => [e.key, entryShape(n, e.entry)] as const)])] as const),
+  );
   // What @2 states beside its entries, written as it was.
   const events = storageEntryOf(md, "System", "Events").entry;
   const upgrade = storageEntryOf(md, "System", "LastRuntimeUpgrade").entry;
@@ -384,21 +381,24 @@ export function deriveShape(md: Metadata, n: Namer = namer(md)): ShapeValue {
   if (recordType?.kind !== "sequence") throw new ScaleError("System.Events is not a list");
   const channel = compositeFields(md, channels.value, "the value of ComputeChannel.Channels");
   const state = channel.find((f) => f.name === "state");
-  const sys = sections.system as { [key: string]: ShapeValue };
-  const ccs = sections.compute_channel as { [key: string]: ShapeValue };
-  sys.events = { ...(sys.events as { [key: string]: ShapeValue }), record: fieldsOf(n, compositeFields(md, recordType.type, "an event record")) };
-  sys.last_runtime_upgrade = { ...(sys.last_runtime_upgrade as { [key: string]: ShapeValue }), fields: fieldsOf(n, compositeFields(md, upgrade.value, "the value of System.LastRuntimeUpgrade")) };
-  sys.version = nameOf(n, version.type);
-  ccs.events = variantsOf(n, variants(md, cc.event, "the ComputeChannel event type"));
-  ccs.channels = { ...(ccs.channels as { [key: string]: ShapeValue }), fields: fieldsOf(n, channel) };
-  ccs.channel_states = variantsOf(n, variants(md, state?.type ?? null, "the state of a channel"));
+  const sys = sections.get("system") ?? new Map<string, ShapeValue>();
+  const ccs = sections.get("compute_channel") ?? new Map<string, ShapeValue>();
+  /** A stated entry of a section with more parts beside its own. */
+  const beside = (section: Map<string, ShapeValue>, key: string, more: { [part: string]: ShapeValue }) => section.set(key, { ...(section.get(key) as { [part: string]: ShapeValue }), ...more });
+  beside(sys, "events", { record: fieldsOf(n, compositeFields(md, recordType.type, "an event record")) });
+  beside(sys, "last_runtime_upgrade", { fields: fieldsOf(n, compositeFields(md, upgrade.value, "the value of System.LastRuntimeUpgrade")) });
+  sys.set("version", nameOf(n, version.type));
+  ccs.set("events", variantsOf(n, variants(md, cc.event, "the ComputeChannel event type")));
+  beside(ccs, "channels", { fields: fieldsOf(n, channel) });
+  ccs.set("channel_states", variantsOf(n, variants(md, state?.type ?? null, "the state of a channel")));
   // The closure's roots: the Version type, and the key and the value of every stated entry.
-  const roots = [version.type, ...entries.flat().flatMap((e) => [e.entry.value, ...keyOf(e.entry)])];
+  const roots = [version.type, ...stated.flat().flatMap((e) => [e.entry.value, ...keyOf(e.entry)])];
   return {
     schema: SHAPE_SCHEMA,
     spec_name: v.spec_name ?? null,
     spec_version: v.spec_version ?? null,
-    ...sections,
+    // fromEntries defines each key as an own property, so no key is read through a prototype.
+    ...Object.fromEntries([...sections].map(([k, m]) => [k, Object.fromEntries(m)])),
     types: closure(n, roots),
   };
 }

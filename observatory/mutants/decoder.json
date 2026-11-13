@@ -378,7 +378,7 @@
   {
     "id": "shape-channel-fields-dropped",
     "file": "src/scale/shape.ts",
-    "find": "  ccs.channels = { ...(ccs.channels as { [key: string]: ShapeValue }), fields: fieldsOf(n, channel) };",
+    "find": "  beside(ccs, \"channels\", { fields: fieldsOf(n, channel) });",
     "replace": "",
     "test": "test/shape.test.ts",
     "why": "the shape holds the fields of the channel value, and the file is held to the shape derived again"
@@ -690,7 +690,7 @@
   {
     "id": "r18-closure-root-dropped",
     "file": "src/scale/shape.ts",
-    "find": "  const roots = [version.type, ...entries.flat().flatMap((e) => [e.entry.value, ...keyOf(e.entry)])];",
+    "find": "  const roots = [version.type, ...stated.flat().flatMap((e) => [e.entry.value, ...keyOf(e.entry)])];",
     "replace": "  const roots = [version.type];",
     "test": "test/shape.test.ts",
     "why": "the closure starts from every root the observatory relies on"
@@ -738,8 +738,8 @@
   {
     "id": "r19-session-roots-dropped",
     "file": "src/scale/shape.ts",
-    "find": "...entries.flat().flatMap((e) => [e.entry.value, ...keyOf(e.entry)])",
-    "replace": "...entries.flat().slice(0, 4).flatMap((e) => [e.entry.value, ...keyOf(e.entry)])",
+    "find": "...stated.flat().flatMap((e) => [e.entry.value, ...keyOf(e.entry)])",
+    "replace": "...stated.flat().slice(0, 4).flatMap((e) => [e.entry.value, ...keyOf(e.entry)])",
     "test": "test/shape.test.ts",
     "why": "the type closure starts from the keys and values of every stated entry, FlopSessionKeys' and the round 29 pallets' too"
   },
@@ -754,16 +754,16 @@
   {
     "id": "r19-session-index-wrong",
     "file": "src/scale/shape.ts",
-    "find": "{ index: p.index, storage_prefix: prefixOf(p) }",
-    "replace": "{ index: cc.index, storage_prefix: prefixOf(p) }",
+    "find": "[[\"index\", p.index], [\"storage_prefix\", prefixOf(p)]",
+    "replace": "[[\"index\", cc.index], [\"storage_prefix\", prefixOf(p)]",
     "test": "test/shape.test.ts",
     "why": "the shape states each stated pallet's own index"
   },
   {
     "id": "r19-nonces-stated-as-sessions",
     "file": "src/scale/shape.ts",
-    "find": "section[e.key] = entryShape(n, e.entry);",
-    "replace": "section[e.key] = entryShape(n, (entries[i] ?? [])[0]?.entry ?? e.entry);",
+    "find": "...(stated.at(i) ?? []).map((e) => [e.key, entryShape(n, e.entry)] as const)",
+    "replace": "...(stated.at(i) ?? []).map((e) => [e.key, entryShape(n, (stated.at(i) ?? []).at(0)?.entry ?? e.entry)] as const)",
     "test": "test/shape.test.ts",
     "why": "each entry is stated by its own modifier, key, value and default"
   },
@@ -986,8 +986,8 @@
   {
     "id": "rs-shape-breakers-as-sessions",
     "file": "src/scale/shape.ts",
-    "find": "section[e.key] = entryShape(n, e.entry);",
-    "replace": "section[e.key] = entryShape(n, (entries[i] ?? []).at(-1)?.entry ?? e.entry);",
+    "find": "...(stated.at(i) ?? []).map((e) => [e.key, entryShape(n, e.entry)] as const)",
+    "replace": "...(stated.at(i) ?? []).map((e) => [e.key, entryShape(n, (stated.at(i) ?? []).at(-1)?.entry ?? e.entry)] as const)",
     "test": "test/shape.test.ts",
     "why": "an entry is stated as another of its pallet (review round 19)"
   },
@@ -1098,8 +1098,8 @@
   {
     "id": "r20-shape-prefix-dropped",
     "file": "src/scale/shape.ts",
-    "find": "{ index: p.index, storage_prefix: prefixOf(p) }",
-    "replace": "{ index: p.index }",
+    "find": "[[\"index\", p.index], [\"storage_prefix\", prefixOf(p)]",
+    "replace": "[[\"index\", p.index]",
     "test": "test/shape.test.ts",
     "why": "the shape states the storage prefix of each stated pallet"
   },
@@ -1562,8 +1562,8 @@
   {
     "id": "r29-section-entries-dropped",
     "file": "src/scale/shape.ts",
-    "find": "    for (const e of entries[i] ?? []) section[e.key] = entryShape(n, e.entry);\n",
-    "replace": "",
+    "find": ", ...(stated.at(i) ?? []).map((e) => [e.key, entryShape(n, e.entry)] as const)])",
+    "replace": "])",
     "test": "test/stated-table.test.ts",
     "why": "deriveShape writes one entry for each line of the table (round 29, B1)"
   },

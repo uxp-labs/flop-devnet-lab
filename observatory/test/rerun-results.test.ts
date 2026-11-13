@@ -224,6 +224,18 @@ describe("the fill refuses, never guesses: a step's fill fields stay null when i
     expect(f.reads_not_decoded).toEqual({});
   });
 
+  it("when a read names an entry the reviewed shape does not state: its value stays null, never a guess, and the bytes the node answered are kept apart", () => {
+    // Every entry the rerun reads is stated since decoder-shape@3, so the read is made unstated here by its pallet's name.
+    const a10 = blockOf("A10");
+    const s10 = stepOf("A10");
+    if (!a10.answer.read) throw new Error("A10 was read");
+    const reads = a10.reads.map((r) => (r.entry === "DelegateSessions" ? { ...r, pallet: "FlopSessionKeysOld" } : r));
+    const f = fillStep({ ...a10, reads } as typeof a10, R.inputs, R.metadata, s10.extrinsic_index, Object.keys(s10.reads_after) as ReadField[], ERRORS);
+    expect(f.reads_after.delegate_sessions_of_device).toBeNull();
+    expect(f.reads_not_decoded).toEqual({ delegate_sessions_of_device: { entry: "FlopSessionKeysOld.DelegateSessions", bytes: "0x00", why: "the reviewed shape does not state this entry" } });
+    expect(f.reads_after.session_active).toBe(s10.reads_after.session_active);
+  });
+
   it("when a read does not decode, that read alone stays null", () => {
     const j = b.reads.findIndex((r) => r.entry === "CircuitBreakers");
     const f = fill(withValue(j, new Uint8Array([0x01])));
