@@ -309,7 +309,7 @@ test("P1: the SS58 text of an account is the one the earlier records give, and i
   assert.equal(fromSs58(bad), null);
 });
 
-test("P6 P8: the README says who carries the batch out and when the owner is told, how the pane lines and the pasted files work, and that the final record is a later piece of work", () => {
+test("P6 P8: the README says who carries the batch out and when the owner is told, how the pane lines and the pasted files work, and where the final record is and what it is filled from", () => {
   const md = readFileSync(join(HERE, "README.md"), "utf8");
   assert.match(md, /the lead carries out by hand, with real test money, after the independent\s+review of this work and its fixes\. The owner gave devnet test batches to the lead on 2026-11-12;\s+the owner is told after the batch/);
   assert.doesNotMatch(md, /owner's yes/);
@@ -317,8 +317,10 @@ test("P6 P8: the README says who carries the batch out and when the owner is tol
   assert.match(md, /`pane-runner.js` is pasted into a tab on the node's own origin,\s+`https:\/\/rpc\.devnet\.flop\.network\/`, and `explorer-reader.js` into a tab on the explorer's own\s+origin/);
   assert.match(md, /Each pasted file is checked by its sha256 in the\s+pane before use/);
   for (const [f, sha] of Object.entries(pastedSha256())) assert.ok(md.includes(`sha256 of ${f}: ${sha}`), `the README gives the current sha256 of ${f}`);
-  const p8 = md.split("## Not done here: the final record")[1].split("\n## ")[0];
-  for (const t of [/request list/, /recording/, /fill helper beside/, /by position/, /reviewed shape/, /later piece of work with its own brief/, /nothing here promises it/]) assert.match(p8, t);
+  // P8, since observatory review round 32: the final record is made, results.final.json, and the section that said it was a later piece is replaced.
+  assert.ok(!md.includes("## Not done here: the final record"));
+  const p8 = md.split("## The final record")[1].split("\n## ")[0];
+  for (const t of [/`results\.final\.json`/, /recording/, /fill-encoder-results\.mjs/, /reviewed shape/, /`results\.json` is not\s+changed/, /final-record\.test\.mjs/]) assert.match(p8, t);
 });
 
 test("F11: fromSs58 takes only canonical text: leading 1s added to a valid address are refused", () => {
