@@ -64,10 +64,15 @@ in this folder. `imd-flop/dist` must be built.
   under setpriv: 78 killed, 4 equivalent (R-M17, B-S2d, B-S6b, B-R2i), none alive. The pasted
   files' mutants were run again without the two sha256 binding tests counting: all 22 killed.
 
+- Full check under setpriv: this folder 149 of 149 pass, the rerun's folder 41 of 41.
+- W: .github/workflows/research-offline.yml is the next and last commit, alone. It runs on pull
+  requests and on pushes to main that touch its paths, so it does not run on a push to this
+  branch: its first run is when the lead opens the pull request. Only two research folders hold
+  tests; both are listed.
+
 ## Next
 
-- full check under setpriv, then W (.github/workflows/research-offline.yml) as the last commit,
-  then the GitHub checks of that commit, then the report.
+- After the W commit: read the GitHub checks of it and report. No more commits after W.
 
 ## Decisions (fix round) and why
 
