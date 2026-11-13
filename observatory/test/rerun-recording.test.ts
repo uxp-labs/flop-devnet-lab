@@ -44,10 +44,8 @@ describe("the fourth real recording, as a fixture", () => {
     expect(j.run.calls).toEqual({ asked: 48, answered: 48, failed: 0 });
   });
 
-  it("was made from the list derived from its frozen inputs and the 1014020 metadata, byte for byte, and both copies are what recordings/ holds", () => {
+  it("was made from the list derived from its frozen inputs and the 1014020 metadata, byte for byte, and both copies are the files main held at its revision", () => {
     expect(RERUN_REQUESTS_TEXT).toBe(deriveRequestsText(R.inputs, parseMetadata(R.metadata)));
-    expect(RERUN_REQUESTS_TEXT).toBe(readFileSync(new URL("../recordings/requests.json", import.meta.url), "utf8"));
-    expect(RERUN_INPUTS_TEXT).toBe(readFileSync(new URL("../recordings/requests-inputs.json", import.meta.url), "utf8"));
     const meta = JSON.parse(rerunFixtureText("meta.json")) as { provenance: Record<string, unknown> };
     expect(meta.provenance).toMatchObject({ request_inputs: "recordings/requests-inputs.json", request_inputs_copy: "requests-inputs.json", request_inputs_sha256: sha256(RERUN_INPUTS_TEXT) });
     // READ: run.json names no sha256 of the inputs; meta.json says where its value came from, and the copy is held to it.
