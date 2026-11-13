@@ -88,7 +88,7 @@ describe("T2: the upgrade block 3528528 read with its own metadata is unknown", 
     s.headers.set(CARRIES.hash, { number: CARRIES.height, parentHash: CARRIES.hash });
     const r = await readBlockEvents(transportOf(s), { number: CARRIES.height, hash: CARRIES.hash });
     expect(r.kind).toBe("unknown");
-    expect(reasonOf(r)).toMatch(/^System.Events: the decoder: not decoded: the metadata for spec \d+ is \d+ bytes/);
+    expect(reasonOf(r)).toMatch(/^the pin: the decoder: not decoded: the metadata for spec \d+ is \d+ bytes/);
   });
 
   it("the door itself, given the metadata at the block, refuses", () => {

@@ -150,7 +150,7 @@ describe("T5: no test of chain-read opens a socket", () => {
   const TESTS = [...files(join(PKG, "test")).filter((f) => /\/chain-read-[a-z-]+\.test\.ts$/.test(f) && !f.endsWith("chain-read-source.test.ts")), join(PKG, "test", "lib", "recorded-node.ts")];
 
   it("the chain-read tests and their scripted node import no network module and construct no socket", () => {
-    expect(TESTS.length).toBe(8);
+    expect(TESTS.length).toBe(9);
     const net = /["'`]node:(?:net|http|https|http2|tls|dgram|dns)["'`]|\bfetch\(|new\s+WebSocket\b/;
     expect(TESTS.filter((f) => net.test(text(f))).map(rel)).toEqual([]);
   });

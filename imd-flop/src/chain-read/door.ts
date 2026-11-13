@@ -66,3 +66,29 @@ export function valueOf(pin: Pin, read: EntryRead): Got<DoorEntry> {
   if (!v.decoded) return unknown(`the decoder: ${v.refused}`);
   return known({ stored: v.stored, value: v.value });
 }
+
+/** Where System.LastRuntimeUpgrade is stored: its pallet and entry, and its key from the key table. */
+export interface LastRuntimeUpgradeAt {
+  readonly pallet: string;
+  readonly entry: string;
+  readonly key: Uint8Array;
+}
+
+/**
+ * The pin, proven through the door before it is used (the P2 fix round, rule X9, decision S31). The block's
+ * LastRuntimeUpgrade bytes are decoded as a stored value with this pin, no key parts, the key from the key table and
+ * the answer the bytes already read. The door then checks the metadata against the reviewed line, the shape file's
+ * text and the key; a refusal is unknown with the door's words. The decoded record must name the spec name and spec
+ * version runtimeOf named. So no runtime is stated for a pin the door did not accept.
+ */
+export function provenPin(pin: Pin, at: LastRuntimeUpgradeAt): Got<Pin> {
+  const v = valueOf(pin, { pallet: at.pallet, entry: at.entry, keys: [], key: at.key, answer: pin.lastRuntimeUpgrade });
+  if (v.kind === "unknown") return v;
+  const r = v.value.value;
+  if (!v.value.stored || r === null || typeof r !== "object" || Array.isArray(r)) return unknown(`${at.pallet}.${at.entry}: the door's value is not a stored record`);
+  const named = r as Record<string, DoorValue>;
+  if (named.spec_name !== pin.runtime.specName || named.spec_version !== pin.runtime.specVersion) {
+    return unknown(`${at.pallet}.${at.entry}: the door reads spec ${JSON.stringify(named.spec_name)} ${JSON.stringify(named.spec_version)}, not the spec ${JSON.stringify(pin.runtime.specName)} ${pin.runtime.specVersion} the block's runtime named`);
+  }
+  return known(pin);
+}

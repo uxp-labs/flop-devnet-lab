@@ -12,7 +12,8 @@
  * The runtime must be on the decoder's reviewed list (C7); the encoder's table is not consulted here. Unknown is a
  * value: nothing here throws for what a chain or a node said, and nothing here can send.
  */
-import { type DoorEvent, type Pin, type Runtime, eventsOf, runtimeOf, valueOf } from "./door.js";
+import { type DoorEvent, type Pin, type Runtime, eventsOf, provenPin, runtimeOf, valueOf } from "./door.js";
+import { KEY_TABLE } from "./key-table.js";
 import { accountOf, eventsKey, lastRuntimeUpgradeKey, lineOf, sessionKeys } from "./keys.js";
 import { type Transport, blockHash, finalizedHead, header, metadata, storage } from "./node.js";
 import { type Got, type Stored, absent, known, knownEntry, unknown, within } from "./result.js";
@@ -39,7 +40,10 @@ export interface BlockEventsAt extends At {
   readonly events: readonly DoorEvent[];
 }
 
-/** The pin of a block: its runtime by its own LastRuntimeUpgrade, the metadata at its parent, the shape file. */
+/**
+ * The pin of a block: its runtime by its own LastRuntimeUpgrade, the metadata at its parent, the shape file, proven
+ * through the door before it is used (rule X9): a pin the door refuses makes the whole read unknown.
+ */
 async function pinAt(t: Transport, hash: string, parentHash: string): Promise<Got<Pin>> {
   const lru = await storage(t, "lastRuntimeUpgrade", lastRuntimeUpgradeKey(), hash);
   if (lru.kind === "unknown") return within("System.LastRuntimeUpgrade", lru);
@@ -50,7 +54,9 @@ async function pinAt(t: Transport, hash: string, parentHash: string): Promise<Go
   if (md.kind === "unknown") return within("the metadata at the block's parent", md);
   const shape = shapeFileText(runtime.value.shapeFile);
   if (shape.kind === "unknown") return within("the shape file", shape);
-  return known({ runtime: runtime.value, metadata: md.value, lastRuntimeUpgrade: lru.value, shapeText: shape.value });
+  const lruAt = KEY_TABLE.system.last_runtime_upgrade;
+  const proven = provenPin({ runtime: runtime.value, metadata: md.value, lastRuntimeUpgrade: lru.value, shapeText: shape.value }, { pallet: lruAt.pallet, entry: lruAt.entry, key: lastRuntimeUpgradeKey() });
+  return proven.kind === "unknown" ? within("the pin", proven) : proven;
 }
 
 const atOf = (number: number, hash: string, r: Runtime): At => ({ number, hash, runtime: { specName: r.specName, specVersion: r.specVersion, shapeFile: r.shapeFile } });
