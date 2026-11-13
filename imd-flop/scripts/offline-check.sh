@@ -3,7 +3,9 @@
 #   npm run check
 # from the imd-flop directory (this script).
 #
-# A clean install, a clean build, then the existing offline test script.
+# The observatory first (a clean install and build in ../observatory), because imd-flop reaches its
+# decoder through the file:../observatory dependency (src/chain-read/door.ts). Then a clean install,
+# a clean build, then the existing offline test script.
 # npm test loads test/setup.ts, which rejects fetch and WebSocket.
 #
 # Each run writes a new directory:
@@ -125,6 +127,9 @@ mkdir -p "$evidence" || exit 1
 mv "$dirty_tmp" "$evidence/dirty.txt"
 printf '%s\n' "$source_sha" >"$evidence/source-sha.txt"
 
+# The observatory's clean install and build, before imd-flop's own (P2, rule A5).
+OBSERVATORY_BUILD="cd ../observatory && npm ci --no-audit --no-fund && rm -rf dist && npm run build"
+
 run_step() {
   local name="$1"
   local display="$2"
@@ -165,13 +170,19 @@ if ! command -v node >/dev/null 2>&1 || ! command -v npm >/dev/null 2>&1; then
   } >"$evidence/00-toolchain.log"
   printf '00-toolchain\tnode and npm on PATH\t127\n' >>"$evidence/steps.tsv"
   overall=127
+  skip_step "00-observatory-build" "$OBSERVATORY_BUILD"
   skip_step "01-npm-ci" "npm ci --engine-strict"
   skip_step "02-clean-build" "rm -rf dist && npm run build"
   skip_step "03-npm-test" "npm test"
   exit 127
 fi
 
-run_step "01-npm-ci" "npm ci --engine-strict" npm ci --engine-strict
+run_step "00-observatory-build" "$OBSERVATORY_BUILD" bash -c "$OBSERVATORY_BUILD"
+if [ "$overall" -eq 0 ]; then
+  run_step "01-npm-ci" "npm ci --engine-strict" npm ci --engine-strict
+else
+  skip_step "01-npm-ci" "npm ci --engine-strict"
+fi
 if [ "$overall" -eq 0 ]; then
   run_step "02-clean-build" "rm -rf dist && npm run build" bash -c 'rm -rf dist && npm run build'
 else

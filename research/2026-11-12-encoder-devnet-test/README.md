@@ -35,7 +35,7 @@ the layouts of `open_channel` (D2) and `top_up_escrow`. `plan.md` is the plan fo
 
 ## How the lead runs it
 
-Once, on the PC: build the encoder (`cd imd-flop && npm ci && npm run build`), make the device key
+Once, on the PC: build the encoder (`cd observatory && npm ci && npm run build`, then `cd ../imd-flop && npm ci && npm run build`), make the device key
 with `node flop-sign.mjs keygen --out <file>`, pick a run folder `RUN`, and set `LAB`, `KEY_OWNER`,
 `KEY_DEVICE` and `FLOP_SIGN_LIBS`.
 
@@ -238,7 +238,7 @@ record when one exists: it requires `record: "final"` and `balances_source` (`de
 `node --test` in this folder (Node 22). No network, no key file of the lab: the test keys are made
 inside the tests in temporary folders. The check of a research signer's file runs our own
 `flop-sign.mjs call` (no key) in the tests too. `sign-device.mjs` and its tests need `imd-flop/dist/chain/`:
-run `npm ci && npm run build` in `imd-flop/` first. `.github/workflows/research-offline.yml` runs
+run `npm ci && npm run build` in `observatory/` and then in `imd-flop/` first. `.github/workflows/research-offline.yml` runs
 them on GitHub. `node mutants.mjs` runs the mutants of `mutants.json`: the reviewer's R-M1 to
 R-M18, adapted to this code (the reviewer's own `review-mutants.json` names finds of `fcfb8b5`), and
 the fix round's own. Each is killed or listed as equivalent with its reason.

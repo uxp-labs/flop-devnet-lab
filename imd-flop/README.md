@@ -149,9 +149,10 @@ Not built: when FLOP ships proxies or escrow pools and a call is funded by anoth
 ## Run it
 
 ```
+(cd ../observatory && npm ci && npm run build)   # first: imd-flop imports its decoder (file:../observatory)
 npm install
 npm test          # tsc + vitest, no network (fetch and WebSocket are disabled in tests)
-npm run check     # same command CI runs: clean install, clean build, then npm test
+npm run check     # same command CI runs: the observatory's build, then clean install, clean build, npm test
 ./demo.sh         # init, link, cap, run (mock), status, receipt in a temp IMD_FLOP_HOME
 ```
 
