@@ -64,7 +64,7 @@ export function ss58(publicKey) {
   for (const b of all) { if (b !== 0) break; out = "1" + out; }
   return out;
 }
-/** The 32 byte account of an SS58 text of prefix 42, as 0x hex; null when it is not one or its checksum is wrong. */
+/** The 32 byte account of an SS58 text of prefix 42, as 0x hex; null when it is not one, its checksum is wrong, or encoding its bytes again does not give the same text (F11). */
 export function fromSs58(text) {
   if (typeof text !== "string" || !/^[1-9A-HJ-NP-Za-km-z]{40,50}$/.test(text)) return null;
   let n = 0n;
@@ -73,7 +73,8 @@ export function fromSs58(text) {
   const bytes = Buffer.from(h, "hex");
   if (bytes.length !== 35 || bytes[0] !== SS58_PREFIX) return null;
   if (!ss58Sum(bytes.subarray(0, 33)).equals(bytes.subarray(33))) return null;
-  return hexOf(bytes.subarray(1, 33));
+  const account = hexOf(bytes.subarray(1, 33));
+  return ss58(account) === text ? account : null; // F11: canonical text only
 }
 
 /** The parts of a path like steps[5].events[1].fields.to or keys["System.Events"]. */

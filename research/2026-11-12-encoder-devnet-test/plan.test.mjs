@@ -315,3 +315,9 @@ test("P6 P8: the README says who carries the batch out and when the owner is tol
   const p8 = md.split("## Not done here: the final record")[1].split("\n## ")[0];
   for (const t of [/request list/, /recording/, /fill helper beside/, /by position/, /reviewed shape/, /later piece of work with its own brief/, /nothing here promises it/]) assert.match(p8, t);
 });
+
+test("F11: fromSs58 takes only canonical text: leading 1s added to a valid address are refused", () => {
+  const owner = ss58(plan.values.OWNER.value);
+  assert.equal(fromSs58(owner), plan.values.OWNER.value);
+  for (const t of ["1" + owner, "11" + owner]) assert.equal(fromSs58(t), null, t);
+});

@@ -32,7 +32,8 @@ Start: head `e18e725`; the second reviewer's branch (`8ff23d6`) merged by fast f
 
 ### Next
 
-- F11, F11, the runner, F9, F3 with G1 and G4, F12 and G2, the words, G3.
+- F11 done (lib fromSs58 re-encodes; test in plan.test.mjs).
+- the runner, F11, the runner, F9, F3 with G1 and G4, F12 and G2, the words, G3.
 
 ### Decisions (fix round 2) and why
 
