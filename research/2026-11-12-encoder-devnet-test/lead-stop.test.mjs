@@ -266,6 +266,9 @@ test("H1: find read every finalized block from the start to the head without the
   refused(() => stop(run, "T2", counted(run, "T2", { delta: 1 })), new RegExp(`find read the finalized blocks 3599990 to 3600500 and did not find the copy.*a transaction that is not of this batch used the signer's nonce\\. These tools go no further at T2, and no stop is recorded: ${row.on_chain.slice(0, 40)}`));
   const n = nextOf(plan, load(run));
   assert.deepEqual([n.word, n.step, n.waiting, n.cleanup], ["wait", "T2", "inclusion", []], "nextOf goes no further: no cleanup step is named");
+  // the range of a find that ended at the deadline (H10) counts as read
+  const fd = load(run); Object.assign(fd.steps.find((s) => s.step === "T2").run_time.earlier_readings[1].sent, { status: "find-deadline" }); save(run, fd);
+  refused(() => stop(run, "T2", counted(run, "T2", { delta: 1 })), /These tools go no further at T2/);
   // a gap in the blocks find read is not that: the refusal is the row of not-found
   const gap = load(run); gap.steps.find((s) => s.step === "T2").run_time.earlier_readings[1].sent.to = 3600300; save(run, gap);
   assert.throws(() => stop(run, "T2", counted(run, "T2", { delta: 1 })), (e) => e instanceof LeadStopError && !/go no further/.test(e.message) && /follow send_outcomes not-found/.test(e.message));

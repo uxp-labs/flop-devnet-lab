@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 // The mutants of this folder: mutants.json holds the first reviewer's (R-M1 to R-M18, adapted to the
 // code of the fix round, each saying so), the fix round's own (B-*), the second reviewer's (RV2-*,
-// from review2-mutants.json) and fix round 2's own (B2-*). Each entry is
+// from review2-mutants.json), fix round 2's own (B2-*), the third reviewer's (RV3-*, from
+// review3-mutants.json) and fix round 3's own (B3-*). Each entry is
 // { id, file, find, replace, test, why } and, for one no test can kill, equivalent: the reason.
 // For each, the research folders this folder reads are copied into a temporary repo (imd-flop
 // linked, not copied), the one change is made there, and every test of the folder runs on the copy.
