@@ -12,7 +12,8 @@ on:
   pull_request:
     paths:
       - "research/**"
-      - "imd-flop/src/chain/**"
+      - "imd-flop/src/**"
+      - "imd-flop/tsconfig.json"
       - "imd-flop/package.json"
       - "imd-flop/package-lock.json"
       - ".github/workflows/research-offline.yml"
@@ -20,7 +21,8 @@ on:
     branches: [main]
     paths:
       - "research/**"
-      - "imd-flop/src/chain/**"
+      - "imd-flop/src/**"
+      - "imd-flop/tsconfig.json"
       - "imd-flop/package.json"
       - "imd-flop/package-lock.json"
       - ".github/workflows/research-offline.yml"
