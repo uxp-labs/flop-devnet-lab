@@ -378,3 +378,13 @@ test("F7 F8: a write that throws marks nothing and gives not-sent; a deadline be
   assert.equal(socket.sent.length, 0, "nothing of the ended call is written");
   assert.equal(store2.has(XT), false);
 });
+
+test("F5: a status that comes while the finalized block is read does not end the call", async () => {
+  const blocks = { [H(7)]: { number: 7, extrinsics: [XT], events: EVENTS } };
+  const node = scriptedNode({ statuses: [{ finalized: H(7) }, "dropped"], blocks });
+  const req = node.transport.request;
+  node.transport.request = (m, p) => (m === "chain_getBlock" ? new Promise((res) => setTimeout(() => res(req(m, p)), 40)) : req(m, p));
+  const r = await runner(node).send(BUNDLE, sha(BUNDLE));
+  assert.equal(r.status, "finalized");
+  assert.equal(r.block_hash, H(7));
+});

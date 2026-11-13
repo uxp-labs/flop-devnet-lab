@@ -525,19 +525,19 @@
  },
  {
   "id": "B-R4",
-  "file": "plan.mjs",
-  "find": "BigInt(results.owner_account_nonce_at_start) + BigInt(ownerIncluded)",
-  "replace": "BigInt(results.owner_account_nonce_at_start) + 0n",
-  "test": "plan-next.test.mjs",
-  "why": "R4: the owner's nonce is the start plus the included owner transactions"
+  "file": "research-signed.mjs",
+  "find": "return BigInt(start) + BigInt(included);",
+  "replace": "return BigInt(start);",
+  "test": "plan-next.test.mjs, research-signed.test.mjs",
+  "why": "R4, moved in fix round 2 to research-signed.mjs nonceOf (F1), which plan.mjs next uses: the owner's nonce is the start plus the included owner transactions"
  },
  {
   "id": "B-R4b",
-  "file": "plan.mjs",
-  "find": "device_nonce: String(deviceIncluded(plan, results))",
-  "replace": "device_nonce: \"0\"",
-  "test": "plan-next.test.mjs",
-  "why": "R4: T9's nonce is the device's count"
+  "file": "research-signed.mjs",
+  "find": "if (step.signer === \"device\") return BigInt(deviceIncluded(plan, results))",
+  "replace": "if (step.signer === \"device\") return 0n + 0n * BigInt(deviceIncluded(plan, results))",
+  "test": "plan-next.test.mjs, research-signed.test.mjs",
+  "why": "R4, moved in fix round 2 to research-signed.mjs nonceOf: T9's nonce is the device's count"
  },
  {
   "id": "B-C1",
@@ -689,7 +689,8 @@
   "find": "if (h === null) return out(\"wait\", step.id,",
   "replace": "if (false) return out(\"wait\", step.id,",
   "why": "nextOf: wait while an only_if outcome is unknown",
-  "test": "review2 tests and the builder's"
+  "test": "review2 tests and the builder's",
+  "equivalent": "the second reviewer's ruling (REVIEW2-PROGRESS.md, Held): an earlier check of the same path always refuses first"
  },
  {
   "id": "RV2-S1",
@@ -761,7 +762,8 @@
   "find": "if (viewOf(results, id)?.final) no(`the record holds ${id} in finalized block",
   "replace": "if (false) no(`the record holds ${id} in finalized block",
   "why": "a finalized reading is never replaced",
-  "test": "review2 tests and the builder's"
+  "test": "review2 tests and the builder's",
+  "equivalent": "the second reviewer's ruling (REVIEW2-PROGRESS.md, Held): an earlier check of the same path always refuses first"
  },
  {
   "id": "RV2-R5",

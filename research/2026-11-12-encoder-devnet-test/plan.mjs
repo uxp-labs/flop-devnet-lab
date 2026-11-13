@@ -15,7 +15,7 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { HERE, RERUN, loadPlan, readJson, substitute, rerunFee, flopText, RAW, sessionNonceKey, sha256Text } from "./lib.mjs";
-import { planStepOf, recordedIds, viewOf, deviceIncluded, afterBlockOf, loadRecord, signedFile } from "./record.mjs";
+import { planStepOf, viewOf, afterBlockOf, loadRecord, signedFile } from "./record.mjs";
 import { nextOf } from "./judge.mjs";
 import { nonceOf } from "./research-signed.mjs";
 
@@ -116,11 +116,8 @@ const q = (a) => (/^[A-Za-z0-9_:.,\/=$-]+$/.test(a) ? a : `'${a.replace(/'/g, "'
 export function lineValues(plan, run, results) {
   if (!results) return { run: "$RUN", device_ss58: "$DEVICE_SS58", device: "$DEVICE", session_key: "<session_nonce of flop-sign.mjs keys --owner $OWNER --delegate $DEVICE>", owner_nonce: (st) => `$((OWNER_NONCE+${st.nonce}))`, device_nonce: "$DEVICE_NONCE", filled: false };
   const device = results.accounts.device.public_key;
-  const ownerIncluded = recordedIds(plan, results).filter((id) => planStepOf(plan, id).signer === "owner" && viewOf(results, id).final).length;
-  return {
-    run, device_ss58: results.accounts.device.ss58, device, session_key: sessionNonceKey(plan, plan.values.OWNER.value, device),
-    owner_nonce: () => String(BigInt(results.owner_account_nonce_at_start) + BigInt(ownerIncluded)), device_nonce: String(deviceIncluded(plan, results)), filled: true,
-  };
+  // the nonces of the research signer's steps come from research-signed.mjs nonceOf (F1), by id
+  return { run, device_ss58: results.accounts.device.ss58, device, session_key: sessionNonceKey(plan, plan.values.OWNER.value, device), filled: true };
 }
 
 /** The pane and PC lines that send a signed bundle and record it, for an id. */

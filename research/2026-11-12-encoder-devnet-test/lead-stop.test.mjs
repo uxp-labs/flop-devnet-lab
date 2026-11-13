@@ -166,3 +166,12 @@ test("F3 a refused when a dead copy exists: something was signed, so case b's re
   writeFileSync(join(run, "signed", "T3.dead-1.send.json"), readFileSync(fs.send)); rmSync(fs.send);
   refused(() => stop(run, "T3"), /case b needs the device's reads/);
 });
+
+test("F3: a record that holds a stop by the lead beside a finalized block of the same step is broken: nextOf stops everything", () => {
+  const { results } = asPlanned(DEVICE, "T2");
+  results.steps.find((s) => s.step === "T2").lead_stop = { why: "x", utc: "2026-11-13T05:00:00.000Z", case: "a", evidence: {} };
+  const n = nextOf(plan, results);
+  assert.equal(n.word, "stop");
+  assert.equal(n.step, null);
+  assert.match(n.why, /holds a stop by the lead at T2 beside a finalized block of it/);
+});

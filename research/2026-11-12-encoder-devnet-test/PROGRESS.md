@@ -66,7 +66,13 @@ Start: head `e18e725`; the second reviewer's branch (`8ff23d6`) merged by fast f
 - The words: README (files, rows by code, the check of a research signer's file, the lead's stop,
   F2, G4, G2, exit codes), plan.md prose, steps.json what, template run_time_form; plan.mjs md and
   the README sha256 lines printed again. Test in plan.test.mjs.
-- next: mutants (review2-mutants.json into mutants.json, and the round's own), then G3. F11, the runner, F9, F3 with G1 and G4, F12 and G2, the words, G3.
+- Mutants: mutants.json 156 (82 earlier, RV2 23, B2 51). First full run under setpriv: 146 killed,
+  4 equivalent, 6 alive. Fixed: B-R4 and B-R4b pointed at dead code of plan.mjs lineValues (since
+  F1 the nonces come from research-signed.mjs nonceOf): the dead code is removed and the mutants
+  point at nonceOf. RV2-N4 and RV2-R4 listed equivalent with the second reviewer's reason.
+  B2-F5b and B2-F3m got tests (pane-runner.test.mjs F5 status while reading; lead-stop.test.mjs a
+  stop beside a finalized block). mutants.mjs counts the words test as a sha256 binding test.
+- next: the full mutant run again, then G3 last. F11, the runner, F9, F3 with G1 and G4, F12 and G2, the words, G3.
 
 ### Decisions (fix round 2) and why
 
