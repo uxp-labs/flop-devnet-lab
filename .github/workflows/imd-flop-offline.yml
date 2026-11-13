@@ -4,7 +4,8 @@
 # upload-artifact@v4 stores the evidence through the Actions runtime artifact
 # service. That upload does not use a repository Actions write token.
 # Local and this workflow both run `npm run check` in imd-flop.
-# That command is a clean install, a clean build, and `npm test`.
+# That command builds the observatory first (imd-flop imports its decoder through
+# file:../observatory), then a clean install, a clean build, and `npm test`.
 # `npm test` loads test/setup.ts, which rejects fetch and WebSocket.
 # SHA256SUMS binds the evidence files. It does not prove the tests ran truthfully.
 

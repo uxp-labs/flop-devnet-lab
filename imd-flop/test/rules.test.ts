@@ -102,7 +102,7 @@ describe("faucet and enrollment", () => {
         onmessage?: (ev: { data: string }) => void;
         onerror?: () => void;
         constructor() { setTimeout(() => this.onopen?.(), 0); }
-        send() { setTimeout(() => this.onmessage?.({ data: JSON.stringify({ result: g }) }), 0); }
+        send() { setTimeout(() => this.onmessage?.({ data: JSON.stringify({ jsonrpc: "2.0", id: 1, result: g }) }), 0); }
         close() {}
       };
     try {

@@ -8,6 +8,13 @@
     "flop-observatory": "./dist/cli.js",
     "flop-observatory-mcp": "./dist/mcp-bin.js"
   },
+  "exports": {
+    "./scale/block": {
+      "types": "./dist/scale/block.d.ts",
+      "default": "./dist/scale/block.js"
+    },
+    "./shapes/*.json": "./shapes/*.json"
+  },
   "engines": {
     "node": ">=22.18"
   },

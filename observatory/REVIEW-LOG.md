@@ -2,6 +2,18 @@
 
 What each outside review and independent rerun of FLOP Observatory M0 found, and the fix and proof for each, newest first. Rounds 1 to 10 were first written in the PR #5 description and are kept here word for word, so the log travels with the code it describes: a reviewer reads the rounds at the commit under review. RULES.md holds the rules themselves; where a round and RULES.md differ, RULES.md is binding.
 
+## Round 30: the door and the shape files exported to imd-flop
+
+Built on 2026-11-13 from the lead's brief `2026-11-13-p2-chain-reads.md` (P2, rules A3, A4 and W2; plan decisions S5 and S26). Round 29 is left free: the plan names it for the shape @3 brief. imd-flop reads a session's state and a block's events through this package's door, as a `file:../observatory` dependency.
+
+| # | What | Rule | Proof |
+|---|---|---|---|
+| A3 | the exports map | `package.json` gets `exports` with exactly two entries: `./scale/block` (types `./dist/scale/block.d.ts`, default `./dist/scale/block.js`) and `./shapes/*.json`. No main, module or types entry beside it | `test/package-exports.test.ts`, pinned in `test/test-counts.json` (4 tests) |
+| A3 | declarations | `tsconfig.json` emits declarations, so the door's types reach imd-flop. The typecheck configuration still emits nothing | the same test; `tsc -p tsconfig.check.json` and `tsc -p tsconfig.json` both pass |
+| A4 | the door is not widened | no file under `src` changes; imd-flop takes the types it needs from the door's own exported types | `git diff` of the branch under `observatory/src` is empty |
+
+This round changes nothing under `src`, `recordings/` or `.github/workflows/observatory-*.yml`, so a merge starts no recording and publishes no reading. No mutant's `find` text moved.
+
 ## Round 28: tests that do not fail on a busy machine, and a check that says why it failed
 
 Found by the lead on 2026-11-12. One wall clock test, "decodeValue's time grows with the value" in `test/review-decoder.test.ts`, failed in a local full check at load average 4 and passed alone 3 times out of 3. GitHub's observatory check failed in its `mutants` step on three runs of trees that passed on other runs (`ac5eb4a` on its pull request run, main `7fb426a`, `9389700`); the log said only `mutants        exit 1` and the evidence could not be downloaded, so the cause is not known. The brief is `2026-11-12-round-28-check-noise.md`.

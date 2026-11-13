@@ -2,7 +2,7 @@
 # Workflow permissions are contents: read only. No secrets, wallet keys, deploys or publishing.
 # Checkout does not persist credentials. No test of these folders uses the network.
 # The folders are listed by name below:
-#   research/2026-11-12-encoder-devnet-test     (needs imd-flop/dist, built first)
+#   research/2026-11-12-encoder-devnet-test     (needs imd-flop/dist, built first, after observatory/dist)
 #   research/2026-11-12-session-rerun-1014020
 # No other research folder holds tests.
 
@@ -16,6 +16,11 @@ on:
       - "imd-flop/tsconfig.json"
       - "imd-flop/package.json"
       - "imd-flop/package-lock.json"
+      - "observatory/src/**"
+      - "observatory/shapes/**"
+      - "observatory/tsconfig.json"
+      - "observatory/package.json"
+      - "observatory/package-lock.json"
       - ".github/workflows/research-offline.yml"
   push:
     branches: [main]
@@ -25,6 +30,11 @@ on:
       - "imd-flop/tsconfig.json"
       - "imd-flop/package.json"
       - "imd-flop/package-lock.json"
+      - "observatory/src/**"
+      - "observatory/shapes/**"
+      - "observatory/tsconfig.json"
+      - "observatory/package.json"
+      - "observatory/package-lock.json"
       - ".github/workflows/research-offline.yml"
 
 permissions:
@@ -46,6 +56,10 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
+
+      - name: Build the observatory's decoder, which imd-flop imports through file:../observatory
+        working-directory: observatory
+        run: npm ci && npm run build
 
       - name: Build the chain encoder
         working-directory: imd-flop
