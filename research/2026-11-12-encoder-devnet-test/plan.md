@@ -53,6 +53,7 @@ and signs the step again from new reads; `sign-device.mjs` refuses to write over
 
 ## The steps
 
+<!-- printed by plan.mjs: table -->
 | # | Signs | Tool | Call | Moves | Declared | Expected | When | If not |
 |---|---|---|---|---|---|---|---|---|
 | T1 | owner | research-signer | transfer | 150000000000000000 (0.15 FLOP) owner to device | none | success | in order | stop |
@@ -64,6 +65,7 @@ and signs the step again from new reads; `sign-device.mjs` refuses to write over
 | T7 | device | encoder | execute_via_session(timeout) | 10000000000000000 (0.01 FLOP) pallet to owner | 0 (0 FLOP) | success | only if T5 recorded ComputeChannel.ChannelOpened; after the block of T5 plus 120 blocks | stop (cleanup) |
 | T8 | owner | research-signer | revoke | nothing | none | success | only if T2 succeeded | stop (cleanup) |
 | T9 | device | research-signer | sweep | all it holds device to owner | none | success | only if T1 succeeded | stop (cleanup) |
+<!-- end of printed -->
 
 What each step settles:
 
@@ -101,6 +103,7 @@ The fee of each step is the one the rerun recorded for a like step (`rerun` `ste
 None exists for T4 and T5. T7's like step, A3, was a refused timeout, so its fee is a guess. The
 encoder's era adds one byte to each device extrinsic.
 
+<!-- printed by plan.mjs: costs -->
 | # | Like step of the rerun | Fee there (raw) | FLOP |
 |---|---|---|---|
 | T1 | A1 | 2723545745000000 | 0.002723545745 |
@@ -119,6 +122,7 @@ encoder's era adds one byte to each device extrinsic.
 | T3 | 10000000000000000 | 0.01 | at T6, after the ack window |
 | T4 | 1000000000000000 | 0.001 | at T6 with the escrow, if it moved |
 | T5 | 10000000000000000 | 0.01 | at T7, after max_duration, if it moved |
+<!-- end of printed -->
 
 The device gets `FUND`, 0.15 FLOP (`escrow` `steps[0].what`). That is more than twice six device
 transactions at the rerun's largest fee, `MAX_FEE` (`rerun` `steps[2].fee_raw`), as
@@ -130,6 +134,7 @@ Each step's "If not" in the table above says what the lead does on an answer oth
 A stop ends the test steps. The cleanup steps that apply still run, in order, so no escrow and no
 fee money is left behind.
 
+<!-- printed by plan.mjs: stops -->
 | Stop | The lead | Then sends | Left on chain, and how it comes back |
 |---|---|---|---|
 | T1 answers otherwise | stop the test steps | T9 if T1 succeeded | until those are final: nothing is left on the device |
@@ -141,6 +146,7 @@ fee money is left behind.
 | T7 fails | stop | the cleanup steps after it that apply | the escrow of T5 stays in the pallet account under the channel of T5. timeout is permissionless: sign it again through the session while the session lasts. Do not send T8 before it is back |
 | T8 fails | stop | the cleanup steps after it that apply | the session stays until A_BLOCKS after T2, bounded by its caps; the device holds only its fees. Send T9 anyway, then revoke again |
 | T9 fails | stop | the cleanup steps after it that apply | what the device holds stays on the device: at most FUND less its fees. Sign T9 again with the device's next nonce |
+<!-- end of printed -->
 
 ## How the lead tells the outcome at run time
 
@@ -154,6 +160,7 @@ batch stands:
 
 ## The command lines
 
+<!-- printed by plan.mjs: commands -->
 ```
 # run in a working folder outside the repo, after: mkdir calls signed
 # LAB is the repo checkout; KEY_OWNER and KEY_DEVICE name the key files; FLOP_SIGN_LIBS names the libraries (LAB/imd-flop)
@@ -180,7 +187,7 @@ node "$LAB/research/2026-11-12-encoder-devnet-test/sign-device.mjs" T3 --key $KE
 
 # T4: device signs with the encoder; expect the outcome to be recorded
 #    in the pane, moments before: copy(JSON.stringify(await lab.deviceReads("$DEVICE", "<session_nonce key of flop-sign.mjs keys>")))
-node "$LAB/research/2026-11-12-encoder-devnet-test/sign-device.mjs" T4 --key $KEY_DEVICE --results results.json --reads '<what deviceReads printed>'  ; the channel id is taken from results.json
+node "$LAB/research/2026-11-12-encoder-devnet-test/sign-device.mjs" T4 --key $KEY_DEVICE --results results.json --reads '<what deviceReads printed>'
 #    in the pane: await lab.send(<text of signed/T4.json>, "<its sha256, printed above>")
 
 # T5: device signs with the encoder; expect the outcome to be recorded
@@ -190,12 +197,12 @@ node "$LAB/research/2026-11-12-encoder-devnet-test/sign-device.mjs" T5 --key $KE
 
 # T6: device signs with the encoder; expect success; only if T3 recorded ComputeChannel.ForceOpenRequested; after block $T3.ComputeChannel.ForceOpenRequested.ack_deadline
 #    in the pane, moments before: copy(JSON.stringify(await lab.deviceReads("$DEVICE", "<session_nonce key of flop-sign.mjs keys>")))
-node "$LAB/research/2026-11-12-encoder-devnet-test/sign-device.mjs" T6 --key $KEY_DEVICE --results results.json --reads '<what deviceReads printed>'  ; the channel id is taken from results.json
+node "$LAB/research/2026-11-12-encoder-devnet-test/sign-device.mjs" T6 --key $KEY_DEVICE --results results.json --reads '<what deviceReads printed>'
 #    in the pane: await lab.send(<text of signed/T6.json>, "<its sha256, printed above>")
 
 # T7: device signs with the encoder; expect success; only if T5 recorded ComputeChannel.ChannelOpened; after the block of T5 plus 120 blocks
 #    in the pane, moments before: copy(JSON.stringify(await lab.deviceReads("$DEVICE", "<session_nonce key of flop-sign.mjs keys>")))
-node "$LAB/research/2026-11-12-encoder-devnet-test/sign-device.mjs" T7 --key $KEY_DEVICE --results results.json --reads '<what deviceReads printed>'  ; the channel id is taken from results.json
+node "$LAB/research/2026-11-12-encoder-devnet-test/sign-device.mjs" T7 --key $KEY_DEVICE --results results.json --reads '<what deviceReads printed>'
 #    in the pane: await lab.send(<text of signed/T7.json>, "<its sha256, printed above>")
 
 # T8: owner signs with the research-signer; expect success; only if T2 succeeded
@@ -210,3 +217,4 @@ node "$LAB/research/2026-11-11-session-deny-list/flop-sign.mjs" sign --key $KEY_
 sha256sum signed/T9.json
 #    in the pane: await lab.send(<text of signed/T9.json>, "<its sha256, printed above>")
 ```
+<!-- end of printed -->

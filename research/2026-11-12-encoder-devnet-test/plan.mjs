@@ -8,8 +8,10 @@
 //        sign-device.mjs and the pane for the device's calls. With a results file, the device's
 //        account and the owner's nonce are put in; without, they stay $NAMES.
 //   node plan.mjs template    the empty results form (results.template.json is its output)
+//   node plan.mjs md          rewrites each printed block of plan.md (between its markers) from steps.json
+import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { RERUN, loadPlan, readJson, substitute, rerunFee, flopText, RAW } from "./lib.mjs";
+import { HERE, RERUN, loadPlan, readJson, substitute, rerunFee, flopText, RAW } from "./lib.mjs";
 
 const SIGNER = "\"$LAB/research/2026-11-11-session-deny-list/flop-sign.mjs\"";
 const SIGN_DEVICE = "\"$LAB/research/2026-11-12-encoder-devnet-test/sign-device.mjs\"";
@@ -138,6 +140,22 @@ export function template(plan) {
   };
 }
 
+/** The blocks of plan.md that plan.mjs prints, by the name in their marker. */
+export function printedBlocks(plan) {
+  return { table: table(plan), costs: costsText(plan), stops: stopsText(plan), commands: "```\n" + commandsText(plan, null).trimEnd() + "\n```" };
+}
+const MARK = /<!-- printed by plan\.mjs: ([a-z_]+) -->\n([\s\S]*?)\n<!-- end of printed -->/g;
+/** The printed blocks plan.md holds now, by name. */
+export const blocksIn = (md) => Object.fromEntries([...md.matchAll(MARK)].map((m) => [m[1], m[2]]));
+/** plan.md with every printed block made again from steps.json; a marker plan.mjs does not know is an error. */
+export function renderMd(md, plan) {
+  const b = printedBlocks(plan);
+  return md.replace(MARK, (all, name) => {
+    if (!(name in b)) throw new Error(`plan.md has a printed block ${name} plan.mjs does not print`);
+    return `<!-- printed by plan.mjs: ${name} -->\n${b[name]}\n<!-- end of printed -->`;
+  });
+}
+
 if (import.meta.url === `file://${process.argv[1]}`) {
   const argv = process.argv.slice(2);
   const flag = (n) => { const i = argv.indexOf(`--${n}`); return i < 0 ? undefined : argv[i + 1]; };
@@ -148,6 +166,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   else if (cmd === "stops") console.log(stopsText(plan));
   else if (cmd === "commands") process.stdout.write(commandsText(plan, flag("results") ? readJson(flag("results")) : null));
   else if (cmd === "template") console.log(JSON.stringify(template(plan), null, 1));
-  else { process.stderr.write("commands: table, costs, stops, commands, template\n"); process.exit(2); }
+  else if (cmd === "md") { const f = join(HERE, "plan.md"); writeFileSync(f, renderMd(readFileSync(f, "utf8"), plan)); }
+  else { process.stderr.write("commands: table, costs, stops, commands, template, md\n"); process.exit(2); }
 }
 export const errorsOf = () => readJson(join(RERUN, "errors-1014020.json"));

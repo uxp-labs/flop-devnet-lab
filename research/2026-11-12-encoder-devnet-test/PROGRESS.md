@@ -11,10 +11,16 @@ in this folder. `imd-flop/dist` must be built.
 ## Done (fix round), by rule id
 
 - merge of the reviewer's branch.
+- lead-measurements-2026-11-13.json.
+- P1: lib.mjs channelId (blake2b of imd-flop's @noble/hashes), ss58 and fromSs58 (prefix 42);
+  CH_T3, CH_T5 computed in steps.json; T4, T6, T7 and the events use them; plan.test.mjs derives
+  the rerun's A6 channel id. plan.md's printed blocks have markers; `node plan.mjs md` rewrites them.
+  Known failing until S: sign-device.test.mjs "T4, T6 and T7 take the channel id..." (old interface).
 
 ## Next
 
-- lead-measurements-2026-11-13.json, then P1.
+- S1 to S7: device-key.mjs (shared loader, S6), sign-device.mjs with --run, the next step from
+  judge.mjs (S2c), send file (S3), --again (S4), attempts (S5), after_block (S7).
 
 ## Decisions (fix round) and why
 

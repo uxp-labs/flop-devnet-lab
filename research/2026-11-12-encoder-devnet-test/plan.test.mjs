@@ -3,9 +3,10 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { HERE, RERUN, readJson, loadPlan, fromSource, computed, substitute, stepOf, RAW } from "./lib.mjs";
+import { HERE, RERUN, readJson, loadPlan, fromSource, computed, substitute, stepOf, RAW, channelId, ss58, fromSs58 } from "./lib.mjs";
 
 const plan = loadPlan();
+const V = (n) => plan.values[n].value;
 const errors = readJson(join(RERUN, "errors-1014020.json"));
 const facts = readJson(join(RERUN, "facts-1014020.json"));
 const rerun = readJson(join(RERUN, "results.json"));
@@ -109,14 +110,13 @@ test("the owner's account nonces follow one another", () => {
 });
 
 // ---- plan.mjs and plan.md ----------------------------------------------------------------------
-import { table, costsText, stopsText, commandsText, cleanupAfterStop, costs } from "./plan.mjs";
+import { table, costsText, stopsText, commandsText, cleanupAfterStop, costs, printedBlocks, blocksIn } from "./plan.mjs";
 
-test("R1: plan.md holds the steps table, the cost tables, the stop table and the command lines exactly as plan.mjs prints them", () => {
+test("R1: plan.md holds every block plan.mjs prints, exactly, and nothing else between the markers", () => {
   const md = readFileSync(join(HERE, "plan.md"), "utf8");
-  assert.ok(md.includes(table(plan)), "the steps table");
-  assert.ok(md.includes(costsText(plan)), "the cost tables");
-  assert.ok(md.includes(stopsText(plan)), "the stop table");
-  assert.ok(md.includes(commandsText(plan, null).trimEnd()), "the command lines");
+  const want = printedBlocks(plan), got = blocksIn(md);
+  assert.deepEqual(Object.keys(got).sort(), Object.keys(want).sort());
+  for (const k of Object.keys(want)) assert.equal(got[k], want[k], `the printed block ${k}: run node plan.mjs md`);
 });
 
 test("R1: a change to steps.json shows in the printed table", () => {
@@ -193,4 +193,44 @@ test("R12: no dashes in the prose of the README and plan.md", () => {
       assert.doesNotMatch(l.replace(/^\s*- /, "").replace(/`[^`]*`/g, ""), / - | -- /, `${f}: ${l}`);
     }
   }
+});
+
+test("P1: the channel id of every ForceOpenRequested in the rerun's record is derived from that record's own fields and the rerun's steps.json", () => {
+  const rerunPlan = readJson(join(RERUN, "steps.json"));
+  let seen = 0;
+  for (const s of rerun.steps) for (const e of s.events.filter((x) => x.pallet === "ComputeChannel" && x.name === "ForceOpenRequested")) {
+    const call = rerunPlan.steps.find((x) => x.id === s.step).call;
+    const file = call[call.indexOf("--inner") + 1].replace(/^force-open:/, "");
+    const nonce = rerunPlan.values[rerunPlan.force_open_files[file].nonce.slice(1)].value;
+    assert.equal(channelId(rerun.chain.genesis, e.fields.agent, e.fields.miner, nonce), e.fields.channel_id, s.step);
+    seen += 1;
+  }
+  assert.ok(seen >= 1, "the rerun holds a ForceOpenRequested");
+});
+
+test("P1: CH_T3 and CH_T5 are derived from GENESIS, OWNER, NAMED and N_T3 or N_T5; T4 and T6 use CH_T3, T7 uses CH_T5, and the events of T3 and T5 name them", () => {
+  assert.deepEqual(plan.values.CH_T3.computed, { channel_id: ["GENESIS", "OWNER", "NAMED", "N_T3"] });
+  assert.deepEqual(plan.values.CH_T5.computed, { channel_id: ["GENESIS", "OWNER", "NAMED", "N_T5"] });
+  assert.equal(plan.values.CH_T3.value, channelId(V("GENESIS"), V("OWNER"), V("NAMED"), V("N_T3")));
+  assert.notEqual(plan.values.CH_T3.value, plan.values.CH_T5.value);
+  const step = (id) => plan.steps.find((s) => s.id === id);
+  assert.equal(step("T4").inner.channel_id, "$CH_T3");
+  assert.equal(step("T6").inner.channel_id, "$CH_T3");
+  assert.equal(step("T7").inner.channel_id, "$CH_T5");
+  assert.equal(step("T3").events.find((e) => e.event === "ComputeChannel.ForceOpenRequested").fields.channel_id, "$CH_T3");
+  assert.equal(step("T5").events_if_success.find((e) => e.event === "ComputeChannel.ChannelOpened").fields.channel_id, "$CH_T5");
+  assert.doesNotMatch(JSON.stringify(plan.steps), /\$T[35]\.ComputeChannel\.[A-Za-z]+\.channel_id/, "no channel id is read from an event");
+  assert.match(plan.values.CH_T3.why, /SDK 0\.6\.0/);
+  assert.match(plan.values.CH_T3.why, /lead-measurements-2026-11-13\.json/);
+  assert.match(plan.values.CH_T3.why, /force_open only/);
+});
+
+test("P1: the SS58 text of an account is the one the earlier records give, and it reads back; a wrong checksum is refused", () => {
+  for (const a of Object.values(rerun.accounts)) {
+    assert.equal(ss58(a.public_key), a.ss58);
+    assert.equal(fromSs58(a.ss58), a.public_key);
+  }
+  const t = rerun.accounts.owner.ss58;
+  const bad = t.slice(0, -1) + (t.endsWith("z") ? "y" : "z");
+  assert.equal(fromSs58(bad), null);
 });
