@@ -244,6 +244,7 @@ describe("T5: no test of chain-read opens a socket", () => {
     "chain-read-keys.test.ts",
     "chain-read-node.test.ts",
     "chain-read-pair.test.ts",
+    "chain-read-pin-door.test.ts",
     "chain-read-pin.test.ts",
     "chain-read-replay.test.ts",
     "chain-read-state.test.ts",
