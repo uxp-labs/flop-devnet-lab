@@ -1,0 +1,13 @@
+# List 5 progress (builder, branch claude/observatory-list-5)
+
+Removed in the commit before the last one.
+
+## Done
+- A1: research/2026-11-12-encoder-devnet-test/results.json copied byte for byte, sha256 a0c853cd...c7267f checked before and after. node --test in that folder: 281 pass with it present.
+
+## Next
+- A2 test, A3 README section.
+- B: list 4 tests read the fixture copies; list-5.ts, inputs and tests; test counts, mutants, README, RULES, REVIEW-LOG round 31; last commit requests.json alone.
+
+## Decided
+- B9: the lead's rule of 16:55 UTC, option (b): requests-inputs.json comes with list-5.ts in an earlier commit; requests.json alone in the last commit; the tests that compare recordings/requests.json with list 5 fail until then, named in that commit's message.
