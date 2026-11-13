@@ -1,5 +1,26 @@
 # Progress of the builder (read first if you take over)
 
+## Fix round 2 (brief 2026-11-13-fix2-d1-encoder-devnet-test-prep.md)
+
+Start: head `e18e725`; the second reviewer's branch (`8ff23d6`) merged by fast forward and pushed.
+23 of its tests fail at the start. Order of work (the brief's): F1, F6, F10, F2, F11, the runner
+(F4, F5, F7, F8), F9, F3 with G1 and G4, F12 and G2, the words, G3 last in its own commit.
+
+### Done, by rule id
+
+- merge of the second reviewer's branch.
+
+### Next
+
+- F1: research-signed.mjs (the plan's bytes of a research signer step), send-file and step use it.
+
+### Decisions (fix round 2) and why
+
+(none yet)
+
+## Fix round 1
+
+
 Branch `claude/encoder-devnet-test-prep`. First round from main `6d7ad0e`, head `fcfb8b5`.
 Fix round brief: `/mnt/user-data/outputs/briefs/2026-11-13-fix-d1-encoder-devnet-test-prep.md`.
 The reviewer's branch (`2e6b0e5`) is merged (fast forward). 17 reviewer tests fail at the start.
