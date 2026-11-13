@@ -11,9 +11,19 @@ Brief: /mnt/user-data/outputs/briefs/2026-11-13-shape3-more-stated-entries.md. B
 - T6: test/shape-at-2.test.ts. The pin's refusal and the writer's compare name both formats (schemaNamed in shape.ts).
 - T3, T4: test/stated-entries.test.ts.
 
+- C1, T5: lead ruled (A10 null to "empty", note removed, filled_from.shape, README paragraph, fixture of the @2 day record, test that nothing else changed). check.mjs 23 pass.
+- B6: read-key-table.mjs requires @3; key-table.ts byte for byte the same.
+- T7: 13 moved mutants follow the code, 13 new r29 mutants (11 decoder, 2 record); test-counts updated.
+- W1: README, RULES 9 and 10.
+
 ## Next
 
-- C1 with T5, B6, T7 (mutants, test-counts), W1 to W3.
+- mutate.mjs on decoder.json and record.json (running), REVIEW-LOG round 29, observatory npm test, imd-flop npm run check, research node --test, W3.
+
+## Report of shape 3 (draft)
+
+- Shape files: 1014014 574318 bytes sha256 5e66cf79e9cd5f3ec997e9ff0ac4fca8b08923e0f5cb8f5b2d10ef4aaa03a370, 482 types; 1014020 576231 bytes sha256 af3f7c6996338b8328de0e67f886c1479d5c382a9fc133ddac8d6862732fb185, 482 types.
+- No file on either workflow's push path list is touched.
 
 ## Decided, and why
 
