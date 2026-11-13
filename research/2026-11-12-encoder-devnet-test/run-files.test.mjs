@@ -30,6 +30,13 @@ test("A4: run-2026-11-13 holds exactly the files its SHA256SUMS names, each with
   assert.equal(listed.length, 20);
 });
 
+// Z7: the one value of this folder typed by hand, as the sha256 of results.json is in results.test.mjs.
+// SHA256SUMS lists the folder's files; this pins SHA256SUMS itself, so a signed file changed with the
+// sums written again fails here.
+test("Z7: the sha256 of run-2026-11-13/SHA256SUMS is the one pinned here", () => {
+  assert.equal(createHash("sha256").update(readFileSync(join(RUN, "SHA256SUMS"))).digest("hex"), "cf987b7cbdfe03c9b8d8c2a642684b983c2238c96980a583b1c3aede4e9572f3");
+});
+
 test("A4: for each sent step the blake2b-256 of the signed extrinsic is its extrinsic_hash and the run time extrinsic_hash of results.json", () => {
   const steps = sent();
   assert.equal(steps.length, 8);

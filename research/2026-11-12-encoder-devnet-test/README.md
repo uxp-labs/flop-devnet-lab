@@ -240,9 +240,14 @@ imd-flop/dist/chain signSessionCall"):
   (`era.period`), born at block 3654995 (`era.birth_number`), binding the hash
   0x3467bbce5dc0eb5267fdf1c3abc12fd30f87e82a13bdaea77ec78ed4a106226f (`era.birth_hash`), valid
   until block 3655058 (`era.last_valid_block`). The era is read from the bytes the tool signed: the
-  blake2b-256 of that file's `extrinsic` is its `extrinsic_hash`, the hash the node and the explorer
-  reported for T3 in its block (`steps.2.run_time.extrinsic_hash`). The block's own bytes are read
-  in the final record, from the observatory's recording of the block;
+  blake2b-256 of that file's `extrinsic` is its `extrinsic_hash` (`steps.2.run_time.extrinsic_hash`),
+  the hash of the signed file that was sent, as `run_time_form` of `results.json` says, not a reading
+  of the node. The explorer reported a transaction of that hash in the block
+  (`steps.2.run_time.explorer.hash` and `steps.2.run_time.explorer.block_hash`). The node reported the
+  bytes it was sent as finalized in the same block (`steps.2.run_time.sent.status` and
+  `steps.2.run_time.sent.block_hash`). The bytes it was sent are `run-2026-11-13/signed/T3.send.json`,
+  whose sha256 is `steps.2.run_time.sent.bundle_sha256`. The block's own bytes are read in the final
+  record, from the observatory's recording of the block;
 - with a declared spend equal to the escrow: the tool signed a declared spend of 10000000000000000
   (`declared_spend_raw` of `run-2026-11-13/signed/T3.json`) and an escrow of 10000000000000000
   (`fields.inner.escrow`); the escrow of `ComputeChannel.ForceOpenRequested`, 10000000000000000

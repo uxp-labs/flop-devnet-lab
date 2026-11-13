@@ -6,6 +6,7 @@
 // README drops the field's name or if the field's value changes. No network.
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 
 const REPO = new URL("../../", import.meta.url);
@@ -44,7 +45,17 @@ test("Z2: the README says T3 was accepted 'with a mortal era' only where the sig
   assert.ok(!s.includes("with a mortal era") || (signedShowsEra && s.includes("`era` of `run-2026-11-13/signed/T3.json`")), "the section claims a mortal era that no file it names holds");
   // Z2: each value of the era stands beside its field, and the hash beside the record's field.
   for (const [field, value] of [["era.period", SIGNED_T3.era.period], ["era.birth_number", SIGNED_T3.era.birth_number], ["era.birth_hash", SIGNED_T3.era.birth_hash], ["era.last_valid_block", SIGNED_T3.era.last_valid_block]]) assert.ok(new RegExp(`${value}( blocks)? \\(\`${field.replace(".", "\\.")}\`\\)`).test(s), `${value} beside ${field}`);
-  assert.ok(s.includes("is its `extrinsic_hash`, the hash the node and the explorer reported for T3 in its block (`steps.2.run_time.extrinsic_hash`)"), "the README names the hash fields");
+  // Z8: the sentence names who reported what, each beside its field, and the fields hold the values it claims.
+  assert.ok(s.includes("is its `extrinsic_hash` (`steps.2.run_time.extrinsic_hash`), the hash of the signed file that was sent, as `run_time_form` of `results.json` says, not a reading of the node."), "the README names the hash field");
+  assert.ok(s.includes("The explorer reported a transaction of that hash in the block (`steps.2.run_time.explorer.hash` and `steps.2.run_time.explorer.block_hash`)."), "the explorer's fields");
+  assert.ok(s.includes("The node reported the bytes it was sent as finalized in the same block (`steps.2.run_time.sent.status` and `steps.2.run_time.sent.block_hash`)."), "the node's fields");
+  assert.ok(s.includes("whose sha256 is `steps.2.run_time.sent.bundle_sha256`"), "the send file's sha256 field");
+  assert.ok(!s.includes("the node and the explorer reported"), "the old wrong words");
+  const rt = RESULTS.steps[2].run_time;
+  assert.equal(rt.sent.status, "finalized");
+  assert.equal(rt.sent.block_hash, rt.explorer.block_hash);
+  assert.equal(rt.explorer.hash, hash);
+  assert.equal(createHash("sha256").update(readFileSync(new URL("./run-2026-11-13/signed/T3.send.json", import.meta.url))).digest("hex"), rt.sent.bundle_sha256);
 });
 
 test("Z3: the README says T3 had 'a declared spend equal to the escrow' only where the signed file of T3 holds the declared spend, equal to the escrow it signed", () => {

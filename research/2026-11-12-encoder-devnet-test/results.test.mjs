@@ -162,7 +162,7 @@ test("Z4: the three hedges stand word for word, and the section says neither ver
   assert.doesNotMatch(s, /final record shows/i);
 });
 
-test("Z2, Z5: the mortal era and the encoder of T3 are read from its signed file, whose extrinsic hashes to the hash its block reported", () => {
+test("Z2, Z5: the mortal era and the encoder of T3 are read from its signed file, whose extrinsic hashes to the hash the explorer reported in the node's finalized block", () => {
   const s = flat();
   const r = record();
   const t3 = r.steps[2];
@@ -171,11 +171,16 @@ test("Z2, Z5: the mortal era and the encoder of T3 are read from its signed file
   assert.equal(blake2b256Hex(Uint8Array.from(Buffer.from(f.extrinsic.slice(2), "hex"))), f.extrinsic_hash);
   assert.equal(f.extrinsic_hash, t3.run_time.extrinsic_hash);
   assert.equal(f.extrinsic_hash, t3.run_time.explorer.hash);
+  // Z8: who reported what. The node's relay gave no hash; the two block hashes agree; the send file is the bytes the node was sent.
+  assert.equal(t3.run_time.sent.extrinsic_hash, null);
+  assert.equal(t3.run_time.sent.status, "finalized");
+  assert.equal(t3.run_time.sent.block_hash, t3.run_time.explorer.block_hash);
+  assert.equal(createHash("sha256").update(readFileSync(join(HERE, "run-2026-11-13", "signed", "T3.send.json"))).digest("hex"), t3.run_time.sent.bundle_sha256);
   assert.notEqual(f.era, "immortal");
   for (const line of [
     `through the lab's encoder (\`tool\` of \`run-2026-11-13/signed/T3.json\` is "${f.tool}"):`,
     `- with a mortal era: \`era\` of \`run-2026-11-13/signed/T3.json\` gives a period of ${f.era.period} blocks (\`era.period\`), born at block ${f.era.birth_number} (\`era.birth_number\`), binding the hash ${f.era.birth_hash} (\`era.birth_hash\`), valid until block ${f.era.last_valid_block} (\`era.last_valid_block\`).`,
-    "The era is read from the bytes the tool signed: the blake2b-256 of that file's `extrinsic` is its `extrinsic_hash`, the hash the node and the explorer reported for T3 in its block (`steps.2.run_time.extrinsic_hash`).",
+    "The era is read from the bytes the tool signed: the blake2b-256 of that file's `extrinsic` is its `extrinsic_hash` (`steps.2.run_time.extrinsic_hash`), the hash of the signed file that was sent, as `run_time_form` of `results.json` says, not a reading of the node. The explorer reported a transaction of that hash in the block (`steps.2.run_time.explorer.hash` and `steps.2.run_time.explorer.block_hash`). The node reported the bytes it was sent as finalized in the same block (`steps.2.run_time.sent.status` and `steps.2.run_time.sent.block_hash`). The bytes it was sent are `run-2026-11-13/signed/T3.send.json`, whose sha256 is `steps.2.run_time.sent.bundle_sha256`.",
     "The block's own bytes are read in the final record, from the observatory's recording of the block;",
   ]) assert.ok(s.includes(line), line);
 });
