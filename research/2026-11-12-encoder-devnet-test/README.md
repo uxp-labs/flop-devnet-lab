@@ -153,4 +153,6 @@ record when one exists: it requires `record: "final"` and `balances_source` (`de
 `node --test` in this folder (Node 22). No network, no key file of the lab: the test keys are made
 inside the tests in temporary folders. `sign-device.mjs` and its tests need `imd-flop/dist/chain/`:
 run `npm ci && npm run build` in `imd-flop/` first. `.github/workflows/research-offline.yml` runs
-them on GitHub. `node review-mutants.mjs` and `node mutants.mjs` run the mutants.
+them on GitHub. `node mutants.mjs` runs the mutants of `mutants.json`: the reviewer's R-M1 to
+R-M18, adapted to this code (the reviewer's own `review-mutants.json` names finds of `fcfb8b5`), and
+the fix round's own. Each is killed or listed as equivalent with its reason.

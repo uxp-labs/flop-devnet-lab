@@ -59,9 +59,15 @@ in this folder. `imd-flop/dist` must be built.
   cleanupAfterStop removed: nextOf does that now (its test moved to nextOf). Tests in plan.test.mjs.
   "Binds" is the cap with the least room left after the step.
 
+- P6, P8: README rewritten; tests in plan.test.mjs.
+- Mutants: mutants.json (82: the reviewer's 18 adapted, 64 of the fix round), mutants.mjs. Run
+  under setpriv: 78 killed, 4 equivalent (R-M17, B-S2d, B-S6b, B-R2i), none alive. The pasted
+  files' mutants were run again without the two sha256 binding tests counting: all 22 killed.
+
 ## Next
 
-- P6 and P8: README. Then mutants (the reviewer's and mine), then W.
+- full check under setpriv, then W (.github/workflows/research-offline.yml) as the last commit,
+  then the GitHub checks of that commit, then the report.
 
 ## Decisions (fix round) and why
 

@@ -4,8 +4,10 @@
 // { id, file, find, replace, test, why } and, for one no test can kill, equivalent: the reason.
 // For each, the research folders this folder reads are copied into a temporary repo (imd-flop
 // linked, not copied), the one change is made there, and every test of the folder runs on the copy.
-// A mutant is killed when a test that passes on the copy without the change fails with it. The
-// worktree is never changed. Usage: node mutants.mjs [<temp parent>] [--jobs <n>]. No network.
+// A mutant is killed when a test that passes on the copy without the change fails with it. For a
+// change to a file the lead pastes into the pane, the two tests that bind that file's sha256 into
+// plan.md and README.md do not count as a kill: any change fails them. The worktree is never
+// changed. Usage: node mutants.mjs [<temp parent>] [--jobs <n>] [--only <file>]. No network.
 // Exit 0 only when every mutant is killed or listed as equivalent and an equivalent one lives.
 import { cpSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync, readdirSync } from "node:fs";
 import { spawn } from "node:child_process";
@@ -14,10 +16,13 @@ import { join } from "node:path";
 import { HERE, REPO, loadPlan } from "./lib.mjs";
 
 const argv = process.argv.slice(2);
-const jobsAt = argv.indexOf("--jobs");
-const jobs = jobsAt >= 0 ? Number(argv[jobsAt + 1]) : 4;
-const parent = argv.find((a, i) => !a.startsWith("--") && i !== jobsAt + 1) ?? tmpdir();
-const mutants = JSON.parse(readFileSync(join(HERE, "mutants.json"), "utf8"));
+const at = (f) => argv.indexOf(`--${f}`);
+const jobs = at("jobs") >= 0 ? Number(argv[at("jobs") + 1]) : 4;
+const only = at("only") >= 0 ? argv[at("only") + 1] : null;
+const parent = argv.find((a, i) => !a.startsWith("--") && i !== at("jobs") + 1 && i !== at("only") + 1) ?? tmpdir();
+const mutants = JSON.parse(readFileSync(join(HERE, "mutants.json"), "utf8")).filter((m) => !only || m.file === only);
+const PASTED = ["pane-runner.js", "explorer-reader.js"];
+const BINDING = [/^R1: plan\.md holds every block plan\.mjs prints/, /^P6 P8: the README says who carries the batch out/];
 const plan = loadPlan();
 const dirs = new Set(["research/2026-11-12-encoder-devnet-test", "research/2026-11-12-session-rerun-1014020", "research/2026-11-11-session-deny-list", ...Object.values(plan.files).map((f) => f.split("/").slice(0, 2).join("/"))]);
 
@@ -56,7 +61,7 @@ let next = 0;
 async function worker() {
   while (next < mutants.length) {
     const m = mutants[next++];
-    const failed = [...(await one(m))].filter((n) => !base.has(n));
+    const failed = [...(await one(m))].filter((n) => !base.has(n) && !(PASTED.includes(m.file) && BINDING.some((b) => b.test(n))));
     const row = { id: m.id, killed: failed.length > 0, equivalent: m.equivalent ? true : undefined, by: failed.slice(0, 2) };
     rows.push(row);
     console.log(JSON.stringify(row));
