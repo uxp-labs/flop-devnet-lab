@@ -24,8 +24,8 @@
     "names": "ccf91ffb198b753d6ede400557b6a2bd36da1afcc99552d21fafc9b2601db7c6"
   },
   "encoder-requests.test.ts": {
-    "tests": 18,
-    "names": "9bc4a9ec7c1e08794d3cd59a78304daae21f794fff300561966fe9ddc718c993"
+    "tests": 19,
+    "names": "789523c4be28519c0de642c8514432a794a45997b8c7129b9760820b475462e1"
   },
   "escrow.test.ts": {
     "tests": 180,

@@ -21,7 +21,7 @@ import { REQUESTS_TEXT as LIST_1_TEXT } from "./helpers/recorded.js";
 import { RERUN_INPUTS_TEXT as LIST_4_INPUTS_TEXT, RERUN_REQUESTS_TEXT as LIST_4_TEXT } from "./helpers/recorded-rerun.js";
 import { STORAGE_REQUESTS_TEXT as LIST_2_TEXT } from "./helpers/recorded-storage.js";
 import { UPGRADE_REQUESTS_TEXT as LIST_3_TEXT } from "./helpers/recorded-upgrade.js";
-import type { Source } from "./helpers/requests/core.js";
+import { type Source, deriveCalls as coreDerive } from "./helpers/requests/core.js";
 import { readInputs as readList4Inputs } from "./helpers/requests/list-4.js";
 import { BLOCKS, type Block, type Inputs, READS, type Read, START, STEPS, STEP_IDS, blockOf, deriveCalls, deriveRequestsText, readInputs } from "./helpers/requests/list-5.js";
 import { ENCODER_RESULTS, ENCODER_SPEC_FIELD, listMetadata, requestsListText } from "./helpers/requests-list.js";
@@ -292,5 +292,12 @@ describe("the inputs of the fifth list, recordings/requests-inputs.json", () => 
       }
     }
     expect(deriveRequestsText(INPUTS, MD)).toBe(base);
+  });
+});
+
+describe("the block kind of the request core", () => {
+  it("asks exactly chain_getBlock with the hash of the block named, and carries the block and no read", () => {
+    const [d] = coreDerive([{ kind: "block" as const, block: START, why: "a block" }], INPUTS, MD);
+    expect(d).toEqual({ call: { method: "chain_getBlock", params: [INPUTS.blocks[START].hash.value], why: "a block" }, block: START, read: null, reads: null });
   });
 });

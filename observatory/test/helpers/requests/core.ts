@@ -88,8 +88,8 @@ export interface Read<A extends string, C extends string> {
  * hash by its height, the runtime version or the metadata at a block's hash, System.LastRuntimeUpgrade
  * at a block's hash (the runtime record the shape pin reads), or a storage entry with its key inputs
  * at a block's hash, or a batch of storage entries read together at a block's hash
- * (state_queryStorageAt: one call, one answer for the block, the keys in the plan's order). Each
- * with its why, one plain line.
+ * (state_queryStorageAt: one call, one answer for the block, the keys in the plan's order), or a
+ * block's header and extrinsics at its hash (chain_getBlock). Each with its why, one plain line.
  */
 export type CallSpec<A extends string, C extends string, B extends string> =
   | { kind: "head"; why: string }
@@ -99,7 +99,8 @@ export type CallSpec<A extends string, C extends string, B extends string> =
   | { kind: "metadata"; block: B; why: string }
   | { kind: "upgrade"; block: B; why: string }
   | { kind: "storage"; block: B; read: Read<A, C>; why: string }
-  | { kind: "batch"; block: B; reads: readonly Read<A, C>[]; why: string };
+  | { kind: "batch"; block: B; reads: readonly Read<A, C>[]; why: string }
+  | { kind: "block"; block: B; why: string };
 
 /** One call of a derived list, with the block it is made at and the storage entry it reads, if any, or the entries of a batch in the order asked. */
 export interface DerivedCall<A extends string, C extends string, B extends string> {
@@ -149,6 +150,8 @@ export function deriveCalls<A extends string, C extends string, B extends string
         return { call: { method: "state_getStorage", params: [keyHex(md, s.read.pallet, s.read.entry, keyBytes(inputs, s.read)), hashOf(s.block)], why: s.why }, block: s.block, read: s.read, reads: null };
       case "batch":
         return { call: { method: "state_queryStorageAt", params: [batchKeys(inputs, s.reads, md), hashOf(s.block)], why: s.why }, block: s.block, read: null, reads: s.reads };
+      case "block":
+        return { call: { method: "chain_getBlock", params: [hashOf(s.block)], why: s.why }, block: s.block, read: null, reads: null };
     }
   });
 }

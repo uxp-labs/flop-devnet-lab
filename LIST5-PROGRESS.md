@@ -5,6 +5,8 @@ Removed in the commit before the last one. The first part ended at ae31282 (repo
 ## Done
 - A4: run-2026-11-13/ (SHA256SUMS, calls/ 4, signed/ 16) copied byte for byte, sums checked before and after; run-files.test.mjs, 4 tests; README names the files for the mortal era and says what the folder is.
 
+- B10 core: kind "block" in core.ts, one test in encoder-requests.test.ts, mutant core-block-asks-header; lists 3 and 4 tests unchanged and green.
+
 ## Next
 - B10: core.ts kind "block" (own commit, lists 3 and 4 unchanged); list-5.ts gains chain_getBlock per step block and the birth hash for T3 to T6; inputs; 32 calls.
 - B11: tests, mutants, counts; README, RULES, round 31 say 32 calls.

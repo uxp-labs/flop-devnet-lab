@@ -456,6 +456,14 @@
     "why": "a batch asks its keys in the order the plan gives (list 4, L1)"
   },
   {
+    "id": "core-block-asks-header",
+    "file": "test/helpers/requests/core.ts",
+    "find": "return { call: { method: \"chain_getBlock\", params: [hashOf(s.block)], why: s.why }",
+    "replace": "return { call: { method: \"chain_getHeader\", params: [hashOf(s.block)], why: s.why }",
+    "test": "test/encoder-requests.test.ts",
+    "why": "the block kind asks the whole block, its extrinsics with it, not the header alone (list 5, B10)"
+  },
+  {
     "id": "list4-runtime-before-events",
     "file": "test/helpers/requests/list-4.ts",
     "find": "[EVENTS, LAST_RUNTIME_UPGRADE, ...readsAfter(step)]",
