@@ -287,6 +287,20 @@ const cases = [
     ok: (r) => r.exit === 0 && r.same && r.bare === 2 && r.stderr === "usage: node scripts/fill-rerun-results.mjs --out <file>",
   },
   {
+    name: "the shape writer: each reviewed line's committed shape file is the shape it derives, exit 0; a call it does not understand is exit 2",
+    run: () => {
+      const lines = [1014014, 1014020].map((spec) => node([join(pkg, "scripts", "write-shape.mjs"), "--spec", String(spec)]));
+      const bare = node([join(pkg, "scripts", "write-shape.mjs")]);
+      return { exit: lines.map((l) => l.status).join(" "), stdout: lines.map((l) => (l.stdout ?? "").trim()), bare: bare.status, stderr: `${lines.map((l) => l.stderr ?? "").join("")}${bare.stderr ?? ""}`.trim() };
+    },
+    ok: (r) =>
+      r.exit === "0 0" &&
+      r.stdout[0] === "shapes/tzkv-runtime-1014014.json is the shape derived from the reviewed metadata of spec 1014014" &&
+      r.stdout[1] === "shapes/tzkv-runtime-1014020.json is the shape derived from the reviewed metadata of spec 1014020" &&
+      r.bare === 2 &&
+      r.stderr === "usage: node scripts/write-shape.mjs --spec <reviewed spec version> [--write]",
+  },
+  {
     name: "the rerun's check.mjs on results.json: 22 pass and A10 incomplete for its one read, exit 1",
     run: () => {
       const dir = join(pkg, "..", "research", "2026-11-12-session-rerun-1014020");
