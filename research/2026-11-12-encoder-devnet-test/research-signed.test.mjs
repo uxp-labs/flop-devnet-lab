@@ -145,3 +145,19 @@ test("F1: send-file checks before it writes, and record-step step before it reco
   assert.equal(step.status, 2);
   assert.match(step.stderr, /the nonce is 15, the plan's is 14/);
 });
+
+test("H8: the device's public key the record gives is checked as 0x and 64 lower case hex digits for every step, before the research signer is run", async () => {
+  const { callOf, expectedOf, ResearchSignedError } = await import("./research-signed.mjs");
+  const { startedRecord } = await import("./fixtures.mjs");
+  const ok = "0x" + "d1".repeat(32);
+  for (const bad of ["0x" + "D1".repeat(32), "--to", "0x" + "d1".repeat(31), ok + "00", null]) {
+    const r = startedRecord(ok);
+    r.accounts.device.public_key = bad;
+    for (const id of ["T1", "T2", "T8", "T9"]) {
+      const step = plan.steps.find((s) => s.id === id);
+      // a repo where no research signer exists: the refusal must come before any run of it
+      assert.throws(() => callOf(plan, r, step, "/nonexistent-repo-for-h8"), (e) => e instanceof ResearchSignedError && /device public key .* is not 0x and 64 lower case hex digits: the research signer is not run/.test(e.message), `${id} ${bad}`);
+      assert.throws(() => expectedOf(plan, r, id), (e) => e instanceof ResearchSignedError, `${id} ${bad}`);
+    }
+  }
+});

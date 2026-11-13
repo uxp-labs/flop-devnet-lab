@@ -206,7 +206,9 @@ export function nextOf(plan, results) {
       if (j.channels.length) {
         // G4: the explorer named a channel that is not the derived one. The judge stops at a test step;
         // the cleanup steps that use this channel do not apply; what is under the explorer's id is left.
-        if (step.channel) badChannels.add(step.channel);
+        // H9: only a mismatch at the step that opens the channel (the first step of the plan that names
+        // it: T3 for CH_T3, T5 for CH_T5) drops the cleanup step of that channel
+        if (step.channel && plan.steps.find((s) => s.channel === step.channel) === step) badChannels.add(step.channel);
         if (step.cleanup && v.success === true) left.push(`${id} was included and succeeded, but ${j.problems.join("; ")}`);
         for (const m of j.channels) left.push(`what ${id} moved, under the channel id ${m.explorer} the explorer gave (not the derived ${m.derived ?? "none"}): a later piece of work brings it back`);
         if (!step.cleanup) { stoppedAt = step.id; row = (plan.stop_table ?? []).filter((x) => x.step === step.id && x.answer === "channel").map((x) => `${x.on_chain}; ${x.brings_back}`)[0] ?? `${step.id}: the explorer gave another channel id`; }

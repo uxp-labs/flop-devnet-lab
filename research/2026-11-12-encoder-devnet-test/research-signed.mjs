@@ -83,8 +83,14 @@ export function signerOf(plan, results, step) {
 /** The research signer's arguments of a step's call, every $NAME resolved. */
 export const callArgsOf = (plan, results, step) => step.call.map((a) => substitute(a, plan, results, true));
 
-/** The call bytes our research signer prints for a step: it is run, with no key (F1). */
+/**
+ * The call bytes our research signer prints for a step: it is run, with no key (F1). Before it is
+ * run, the device's public key the record gives ($DEVICE of the calls) must be 0x and 64 lower case
+ * hex digits, for every step (H8).
+ */
 export function callOf(plan, results, step, repo = REPO) {
+  const device = results?.accounts?.device?.public_key;
+  if (typeof device !== "string" || !HASH.test(device)) no(`the record's device public key ${JSON.stringify(device ?? null)} is not 0x and 64 lower case hex digits: the research signer is not run for ${step.id}`);
   const args = callArgsOf(plan, results, step);
   const out = execFileSync(process.execPath, [join(repo, plan.files.signer), "call", ...args, "--libs", join(repo, "imd-flop")], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
   const call = JSON.parse(out).call;

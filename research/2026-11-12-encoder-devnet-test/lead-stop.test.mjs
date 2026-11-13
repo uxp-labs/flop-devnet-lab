@@ -156,6 +156,10 @@ test("G4: an explorer channel id that is not the derived one: at T3 the judge st
   assert.ok(t3.left.some((l) => l.includes(`under the channel id ${OTHER} the explorer gave`)), t3.left.join("\n"));
   const t5 = at("T5");
   assert.deepEqual([t5.stopped_at, t5.cleanup], ["T5", ["T6", "T8", "T9"]]);
+  const t4 = at("T4"); // H9: a mismatch at T4 stops the batch there, and T6 still applies: T3 opened CH_T3 under the derived id
+  assert.deepEqual([t4.word, t4.stopped_at, t4.cleanup, t4.step], ["stop", "T4", ["T6", "T8", "T9"], "T6"]);
+  assert.match(t4.row, /T6 still applies/);
+  assert.ok(!t4.said.some((x) => /^T6: does not apply/.test(x)), t4.said.join("\n"));
   const t6 = at("T6");
   assert.equal(t6.step, "T7");
   assert.ok(t6.left.some((l) => l.includes(`what T6 moved, under the channel id ${OTHER}`)), t6.left.join("\n"));

@@ -43,9 +43,16 @@ Order of work (the brief's): H1 with H2, H3, H4; H5; H6 to H11; the words; the m
   sha256 line of pane-runner.js is fe91c295...fcc1e8 (plan.mjs sha256s).
 - All 279 tests of the folder pass, the reviewers' 8 among them.
 
+- H8: research-signed.mjs callOf refuses, before the research signer runs, a device public key in
+  the record that is not 0x and 64 lower case hex digits, for every step. Test (H8).
+- H9: judge.mjs nextOf drops the cleanup step of a channel only when the mismatch is at the step
+  that opens it: the first step of the plan that names the channel (T3 for CH_T3, T5 for CH_T5),
+  derived from steps.json, not typed. steps.json T4 channel row says T6 still applies. Test in
+  lead-stop.test.mjs G4 (T4 added).
+
 ### Next
 
-H8, H9, then the words and the mutants.
+The words (README, plan.md prose, steps.json what), then the mutants.
 
 ### Decisions (fix round 3) and why
 
