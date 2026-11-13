@@ -3,19 +3,27 @@
 Reviewer 2, branch `claude/review2-encoder-devnet-test`, from the builder's head `e18e725`.
 No builder file is changed. My tests are `review2-*.test.mjs` in this folder.
 
-## Findings so far
+## Findings so far (each test fails on e18e725)
 
-None proved yet. Reading done: sign-device, record, judge, record-step, pane-runner, explorer-reader, device-key, plan.
+1. Q4: the key file is opened before checks that refuse: sign-device before RUNTIME_UNKNOWN and
+   the genesis; record-step start before the owner and runtime checks. `review2-key-order.test.mjs` (4).
+2. Q7: send-file and record-step step take a signed/T2.json signed by the device, with a nonce gap
+   and a transfer's call. `review2-record.test.mjs` (2).
+3. Q3: an explorer reading whose success disagrees with its names is recorded, and the judge goes
+   on. `review2-record.test.mjs` (3).
+4. Q3 low: fromSs58 takes "1" + an SS58 text as the account. `review2-record.test.mjs` (1).
+5. Q5: a status word that is an Object.prototype name ends the watch. `review2-pane.test.mjs` (5).
+6. Q5: after finalized, a node that does not answer locate makes send wait forever (1).
+7. Q5: a socket that opens after the deadline is written to after send said deadline (1).
+8. Q5: ws.send that throws leaves the extrinsic marked as sent, outcome refused-at-submission (1).
+9. Q6: the explorer reader follows a redirect to another host and reports found (1).
 
-## Leads to prove next
+## Next
 
-- record-step start opens the key before its owner and runtime checks (Q4).
-- sign-device opens the key before the runtime check of the encoder (Q4).
-- send-file and record-step take any signed file of a research signer step (Q7).
-- explorer reading: success that disagrees with the names is recorded (Q3).
-- runner: a status word that is an Object.prototype name ends the watch (Q5).
-- refused-at-submission of an immortal step: nextOf waits forever, no tool reaches the cleanup (Q2, Q8).
-- check: "passed as planned, left" is not a C3 verdict; exit 1 covers four verdicts (Q9).
+- Attack A: the bad minutes through sign-device with a test key (held tests), retire crash states.
+- refused-at-submission of an immortal step: nextOf waits forever, T9 never reached (Q2, Q8).
+- check: "passed as planned, left" and the exit codes (Q9).
+- mutants of my own.
 
 ## Held
 
