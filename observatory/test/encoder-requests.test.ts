@@ -5,7 +5,7 @@
 // byte, read its design a second way from the encoder test's steps.json and results.json, derive
 // every storage key a second way with the reference decoder, and hold every input to the record it
 // names. Since its recording became a fixture (fixtures/recording-20261113182100-8769e8d2841bf49a,
-// review round 30), they read the list and the inputs the fixture keeps. Nothing here reads the
+// review round 32), they read the list and the inputs the fixture keeps. Nothing here reads the
 // network or runs a research script.
 import { getDynamicBuilder, getLookupFn } from "@polkadot-api/metadata-builders";
 import { decAnyMetadata, unifyMetadata } from "@polkadot-api/substrate-bindings";

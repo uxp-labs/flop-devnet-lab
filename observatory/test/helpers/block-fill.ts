@@ -1,4 +1,4 @@
-// What every fill of a results file from a recording needs, in one place (review round 30, D2): a
+// What every fill of a results file from a recording needs, in one place (review round 32, D2): a
 // block pinned to the runtime its System.LastRuntimeUpgrade names, through the lab's decoder's one
 // door (src/scale/block.ts); the events of one extrinsic of it, with its result and its fee; one
 // storage read through the door; and the error rows of spec 1014020 that name a failed result. Used
