@@ -17,9 +17,13 @@ Start: head `e18e725`; the second reviewer's branch (`8ff23d6`) merged by fast f
   declared spend by readCall; record-step start runs checkStartReads before the key. Own test in
   sign-device.test.mjs; its import list test now names reader.js.
 
+- F10: sign-device deadCopies and earlierCopies; without --again dead files refuse; with --again
+  and no signed file the newest dead copy's era is checked; a lone send file refuses. Test in
+  sign-device.test.mjs.
+
 ### Next
 
-- F10, then F2, F11, the runner, F9, F3 with G1 and G4, F12 and G2, the words, G3.
+- F2, F11, the runner, F9, F3 with G1 and G4, F12 and G2, the words, G3.
 
 ### Decisions (fix round 2) and why
 

@@ -23,8 +23,10 @@
 //   f. the session nonce in the reads is the number of the device's session calls the record
 //      holds as succeeded (a raw null counts as 0, and only when that number is 0);
 //   g. a step with after_block: the birth block is above that block (S7).
-// Then: without --again a signed file of the id refuses; with --again (S4) the earlier copy's era
-// must be over at the birth block of the new reads.
+// Then: without --again a signed file of the id refuses, and so do dead copies of it in signed/;
+// with --again (S4) the earlier copy's era must be over at the birth block of the new reads. The
+// earlier copy is signed/<id>.json, or the newest dead copy when there is none (F10). The new
+// record's earlier_copies is always made from the <id>.dead-* files in signed/ (F10).
 //
 // It writes signed/<id>.json (the whole record, stays on the PC) and signed/<id>.send.json, exactly
 // {"step":"<id>","extrinsic":"0x…"} on one line with no line end (S3). Stdout is two lines: one JSON
@@ -127,13 +129,16 @@ export function preflight({ plan, run, id, readsText, readsSha256, again = false
   if (after !== null && !(reads.birth.number > after)) no(`${id} is signed only from a birth block above ${after}: the birth block is ${reads.birth.number}, ${after - reads.birth.number + 1} blocks left`);
   let earlier = null;
   const file = signedFile(run, id), send = sendFile(run, id);
+  const dead = deadCopies(run, id);
   if (!again) {
     if (existsSync(file) || existsSync(send)) no(`signed/${id}.json exists: a signed step is never replaced. Sign a second copy only with --again (S4)`);
+    if (dead.length) no(`signed/ holds ${dead.length} dead copies of ${id} and no signed/${id}.json: sign it only with --again, so the era of the newest dead copy is checked and the new record lists them (F10)`);
   } else {
-    if (!existsSync(file)) no(`--again needs signed/${id}.json: there is no earlier copy`);
-    earlier = readJson(file);
+    if (!existsSync(file) && existsSync(send)) no(`signed/${id}.send.json exists without signed/${id}.json, so no earlier copy can be named for it: a stop in the middle of an earlier --again; the lead rules`);
+    if (!existsSync(file) && !dead.length) no(`--again needs signed/${id}.json or a dead copy: there is no earlier copy`);
+    earlier = existsSync(file) ? readJson(file) : readJson(join(runFiles(run).signed, dead[dead.length - 1].file));
     const last = earlier?.era?.last_valid_block;
-    if (!Number.isSafeInteger(last)) no(`signed/${id}.json has no last valid block`);
+    if (!Number.isSafeInteger(last)) no(`the earlier copy of ${id} has no last valid block`);
     if (!(reads.birth.number > last)) no(`--again: the earlier copy is valid to block ${last}, and the birth block of the reads is ${reads.birth.number}: its era is not over`);
   }
   // F6: what can refuse without the key comes before it. The runtime of the reads must be one the
@@ -179,15 +184,32 @@ export function signStep({ plan, id, step, reads, results, signer }) {
 /** The send file's text of a record: exactly {"step","extrinsic"} on one line, no line end (S3). */
 export const sendText = (record) => sendTextOf(record.step, record.extrinsic);
 
-/** For --again: moves the earlier copy's two files to dead-<n> and returns what the new record lists (S4). */
-function retire(run, id, earlier) {
+/** The dead copies of an id in signed/, by their number: [{ n, file, send_file }] (F10). */
+export function deadCopies(run, id) {
   const dir = runFiles(run).signed;
-  const n = 1 + readdirSync(dir).filter((f) => f.startsWith(`${id}.dead-`) && !f.endsWith(".send.json")).length;
-  const dead = join(dir, `${id}.dead-${n}.json`), deadSend = join(dir, `${id}.dead-${n}.send.json`);
-  if (existsSync(dead) || existsSync(deadSend)) no(`signed/${id}.dead-${n}.json exists`);
-  renameSync(signedFile(run, id), dead);
-  if (existsSync(sendFile(run, id))) renameSync(sendFile(run, id), deadSend);
-  return [...(earlier.earlier_copies ?? []), { file: `signed/${id}.dead-${n}.json`, send_file: `signed/${id}.dead-${n}.send.json`, extrinsic_hash: earlier.extrinsic_hash, last_valid_block: earlier.era.last_valid_block }];
+  if (!existsSync(dir)) return [];
+  const esc = id.replace(/\./g, "\\.");
+  const re = new RegExp(`^${esc}\\.dead-([1-9][0-9]*)\\.json$`);
+  return readdirSync(dir).map((f) => re.exec(f)).filter(Boolean).map((m) => ({ n: Number(m[1]), file: m[0], send_file: `${id}.dead-${m[1]}.send.json` })).sort((a, b) => a.n - b.n);
+}
+
+/** For --again: moves signed/<id>.json and its send file to the next dead-<n> (S4). */
+function retire(run, id) {
+  const dir = runFiles(run).signed;
+  const dead = deadCopies(run, id);
+  const n = 1 + (dead.length ? dead[dead.length - 1].n : 0);
+  const to = join(dir, `${id}.dead-${n}.json`), toSend = join(dir, `${id}.dead-${n}.send.json`);
+  if (existsSync(to) || existsSync(toSend)) no(`signed/${id}.dead-${n}.json exists`);
+  renameSync(signedFile(run, id), to);
+  if (existsSync(sendFile(run, id))) renameSync(sendFile(run, id), toSend);
+}
+
+/** earlier_copies of a new record: always the dead files in signed/, with or without --again (F10). */
+export function earlierCopies(run, id) {
+  return deadCopies(run, id).map((d) => {
+    const r = readJson(join(runFiles(run).signed, d.file));
+    return { file: `signed/${d.file}`, send_file: `signed/${d.send_file}`, extrinsic_hash: r.extrinsic_hash ?? null, last_valid_block: r.era?.last_valid_block ?? null };
+  });
 }
 
 const FLAGS = ["run", "key", "reads", "reads-sha256"];
@@ -210,7 +232,8 @@ function main(argv) {
   let record;
   try { record = signStep({ plan, id, step: pre.step, reads: pre.reads, results: pre.results, signer }); } finally { signer.wipe(); }
   mkdirSync(runFiles(run).signed, { recursive: true });
-  if (pre.earlier) record.earlier_copies = retire(run, id, pre.earlier);
+  if (pre.earlier && existsSync(signedFile(run, id))) retire(run, id);
+  record.earlier_copies = earlierCopies(run, id);
   const send = sendText(record);
   writeFileSync(signedFile(run, id), JSON.stringify(record, null, 1) + "\n", { flag: "wx" });
   writeFileSync(sendFile(run, id), send, { flag: "wx" });

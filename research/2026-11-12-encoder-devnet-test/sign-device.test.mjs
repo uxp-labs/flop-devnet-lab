@@ -365,3 +365,26 @@ test("F6: a declared spend that is not steps.json's, a runtime the encoder's tab
   assert.throws(() => preflight({ plan: other, run, id: "T3", readsText: r.text, readsSha256: r.sha }), (e) => e instanceof SignDeviceError && /specName tzkv-runtime, steps.json has another-runtime/.test(e.message));
   assert.match(preflight({ plan, run, id: "T3", readsText: r.text, readsSha256: r.sha }).call, /^0x5e02/);
 });
+
+test("F10: earlier_copies is made from the dead files in signed/; with dead files and no signed file only --again signs, by the newest dead copy's era", () => {
+  const { run } = at("T2");
+  assert.equal(cli("T3", run, t3Reads()).status, 0);
+  const a = readJson(join(run, "signed", "T3.json"));
+  assert.deepEqual(a.earlier_copies, []);
+  const last = a.era.last_valid_block;
+  // a second copy by --again lists the first
+  assert.equal(cli("T3", run, t3Reads({ number: last + 1 }), "--again").status, 0);
+  const b = readJson(join(run, "signed", "T3.json"));
+  assert.deepEqual(b.earlier_copies.map((c) => c.extrinsic_hash), [a.extrinsic_hash]);
+  // both files of b moved away by hand (a stop after both renames of retire): dead-1 and dead-2, no signed file
+  for (const [f, t] of [["T3.json", "T3.dead-2.json"], ["T3.send.json", "T3.dead-2.send.json"]]) writeFileSync(join(run, "signed", t), readFileSync(join(run, "signed", f))), rmSync(join(run, "signed", f));
+  const plain = cli("T3", run, t3Reads({ number: b.era.last_valid_block + 1 }));
+  assert.equal(plain.status, 2);
+  assert.match(plain.stderr, /holds 2 dead copies of T3 and no signed\/T3.json: sign it only with --again/);
+  const early = cli("T3", run, t3Reads({ number: b.era.last_valid_block }), "--again");
+  assert.match(early.stderr, new RegExp(`the earlier copy is valid to block ${b.era.last_valid_block}`), "the newest dead copy's era is checked");
+  assert.equal(cli("T3", run, t3Reads({ number: b.era.last_valid_block + 1 }), "--again").status, 0);
+  const c = readJson(join(run, "signed", "T3.json"));
+  assert.deepEqual(c.earlier_copies.map((x) => x.extrinsic_hash), [a.extrinsic_hash, b.extrinsic_hash]);
+  assert.deepEqual(c.earlier_copies.map((x) => x.file), ["signed/T3.dead-1.json", "signed/T3.dead-2.json"]);
+});
