@@ -36,7 +36,8 @@
 // send file's text. The description goes to stderr.
 //
 // The key file is read by device-key.mjs (S6). Nothing of it reaches any output or error message.
-// Build imd-flop first: cd imd-flop && npm ci && npm run build.
+// Build the observatory first, then imd-flop: cd observatory && npm ci && npm run build, then
+// cd ../imd-flop && npm ci && npm run build.
 import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
