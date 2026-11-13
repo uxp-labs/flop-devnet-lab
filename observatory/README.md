@@ -432,6 +432,14 @@ are pure: no file, network, clock or random access, which the source scan holds 
 | `src/scale/shape.ts`, `shapes/` | the shape pin: the reviewed shapes, the shape with its table of types, and the one function that refuses any other |
 | `src/scale/block.ts` | the one way real chain data is decoded, only once the block's shape is pinned: which reviewed runtime reads a block (`runtimeOfBlock`), a block's events (`decodeBlockEvents`), and the value of a storage entry the shape states (`decodeStorageValue`) |
 
+What this package exports to another package (`package.json` `exports`, held by
+`test/package-exports.test.ts`): exactly two entries. `flop-observatory/scale/block` is the door,
+`src/scale/block.ts` as built to `dist/scale/` with its declarations (`tsconfig.json` emits them).
+`flop-observatory/shapes/*.json` are the reviewed shape files. Nothing else of the package can be
+imported by name. imd-flop reaches the decoder this way (`file:../observatory`, its
+`src/chain-read/door.ts`), so the observatory is built before imd-flop wherever imd-flop is built
+or tested.
+
 What a decoded value proves: nothing about the chain on its own. A recording is what one RPC
 endpoint answered (RULES.md section 8), and a decoded value is that answer read. It is evidence,
 not proof. A value does not say its own type either: a reader goes by the type's kind in the
@@ -664,7 +672,8 @@ The two interfaces other teams import are in [../interfaces](../interfaces).
 | `scripts/check.sh` | the check |
 | `scripts/mutate.mjs`, `scripts/mutate-why.mjs`, `scripts/mutate-canary.mjs` | the mutation runner, the lines it writes to stderr when its result is not a pass, and its self-test |
 | `test/helpers/interleaved-fastest.ts` | the timing ratio of the wall clock tests: the fastest of 15 interleaved samples of each case, never decided early, its clock an argument (`test/interleaved-fastest.test.ts`) |
-| `tsconfig.json`, `tsconfig.check.json` | the build (`src` only) and the typecheck (`src` and `test`) |
+| `tsconfig.json`, `tsconfig.check.json` | the build (`src` only, with declarations) and the typecheck (`src` and `test`) |
+| `package.json` `exports`, `test/package-exports.test.ts` | what another package may import: the door `scale/block` and the shape files, nothing else ([Decoder](#decoder)) |
 | `scripts/canary.mjs` | the harness canary |
 | `scripts/check-lib.sh`, `scripts/check-canary.mjs` | the step runner, signal handling and finalize of the check, and the canary that cuts it on a driver of its own |
 | `scripts/compare-recount.mjs` | TypeScript census against the Python recount, per fixture |
