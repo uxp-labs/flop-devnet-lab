@@ -134,7 +134,7 @@ export function deriveRuntime(src) {
   const { metadata, metadataSha256 } = readSource(src);
   const m = unifyMetadata(decAnyMetadata(metadata));
   const shape = JSON.parse(readFileSync(join(REPO, "observatory", src.shapeFile), "utf8"));
-  if (shape.schema !== "flop-observatory/decoder-shape@2") fail(`${src.shapeFile} is not decoder-shape@2`);
+  if (shape.schema !== "flop-observatory/decoder-shape@3") fail(`${src.shapeFile} is ${JSON.stringify(shape.schema)}, not decoder-shape@3`);
   const sys = { prefix: shape.system.storage_prefix };
   const fsk = { prefix: shape.flop_session_keys.storage_prefix };
   const system = Object.fromEntries(SYSTEM_ENTRIES.map(([k, p, e]) => [k, entryLine(m, { ...sys, entry: shape.system[k] }, p, e)]));
