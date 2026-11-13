@@ -18,13 +18,25 @@ No builder file is changed. My tests are `review2-*.test.mjs` in this folder.
 8. Q5: ws.send that throws leaves the extrinsic marked as sent, outcome refused-at-submission (1).
 9. Q6: the explorer reader follows a redirect to another host and reports found (1).
 
-## Next
+10. Q3 low: a stop after both renames of retire, nothing recorded: T3 is signed without --again
+    and the new record forgets copy A. `review2-two-copies.test.mjs` (1).
+11. Q8: T2 refused at submission: nextOf waits on T2 for ever, no tool reaches T9, FUND stays on
+    the device; the stop table row says nothing is left. `review2-next.test.mjs` (2).
+12. Q9: the top up left after T6 gives "passed as planned, left: ...", none of C3's verdicts,
+    exit 1 like a wrong record. `review2-next.test.mjs` (1).
+
+## Next (older list)
 
 - Attack A: the bad minutes through sign-device with a test key (held tests), retire crash states.
 - refused-at-submission of an immortal step: nextOf waits forever, T9 never reached (Q2, Q8).
 - check: "passed as planned, left" and the exit codes (Q9).
 - mutants of my own.
 
-## Held
+## Held (tests that pass)
 
-Nothing written down yet.
+- Attack A, through sign-device with a test key: deadline, connection-lost, ended with A in the
+  pool; refused at submission; included and not recorded; never sent; explorer not yet; old reads
+  again; a stop after the first rename of retire. No second copy with another nonce in any.
+- nextOf over the 45 cells of table F; a cleanup step refused three times.
+- No form of the seed on the key paths. `node plan.mjs md` changes nothing. The sha256s match.
+- Mutants: review2-mutants.json, running against the builder's tests and mine.
