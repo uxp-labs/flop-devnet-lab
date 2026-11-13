@@ -14,7 +14,10 @@ table, stop rule.
 
 ## Next
 
-- (2) sign-device.mjs: step id, --key, --results (channel id of T3/T5 events), --reads JSON
+- (3) pane-runner.js: createRunner({transport, eventsKey, deadlineMs, store}); heads, read,
+  deviceReads(device, sessionNonceKey), send(bundleText, sha256). wsTransport(url) for the browser.
+
+- (2) DONE sign-device.mjs and sign-device.test.mjs (12 tests). It took: step id, --key, --results (channel id of T3/T5 events), --reads JSON
   {runtime{specName,specVersion,transactionVersion,genesisHash}, birth{number,hash}, account_nonce,
   session_nonce | session_nonce_raw}. Writes signed/<id>.json, prints sha256 of it.
 
