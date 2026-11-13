@@ -15,7 +15,7 @@ cap. The README says what each folder is. In short:
 | `observatory/` | Read only view of the devnet, a recorder and a decoder | `npm ci && npm run check` (25 to 40 minutes) |
 | `spend-guard/`, `viewer/` | Python tools | `python3 -m unittest discover -s . -p "test_*.py"` |
 | `contract/` | The spend rules and test vectors the tools must agree on | held by the tools' tests |
-| `research/` | Reports bought from the swarm and our own devnet tests | docs only |
+| `research/` | Reports bought from the swarm and our own devnet tests | `node --test` in a folder that holds tests, after `npm ci && npm run build` in `imd-flop` |
 
 ## The team
 
