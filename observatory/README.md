@@ -277,7 +277,31 @@ building and testing decoders against real data. It is evidence, never proof of 
   form (sorted keys, two space indent, a newline at the end), with no other key and no key twice,
   and 1 to 64 calls, each `method`, `params` (a list) and `why` (one plain line). It is reviewed
   like code, and it is the list to be recorded next.
-- The list it holds now is the fourth: the lab's session rerun at spec 1014020
+- The list it holds now is the fifth: the lab's devnet test of the chain encoder
+  (`research/2026-11-12-encoder-devnet-test`), run on 2026-11-13 at spec 1014020, eight transactions
+  of nine planned (T7 was not needed), 20 calls. It asks the finalized head and the genesis hash,
+  then for nine blocks, the finalized block the run started from (`start.finalized` of the test's
+  `results.json`) and the block of each sent step (`steps.N.run_time.sent`), the hash at its height
+  and one `state_queryStorageAt` at that hash. Each of those nine batches asks the same eight keys in
+  one fixed order: `System.Events`, `System.LastRuntimeUpgrade`, `System.Account` of the owner and
+  of the device, `FlopSessionKeys` `Sessions(owner, device)`, `SessionNonces(owner, device)`,
+  `CircuitBreakers(device)`, and `ComputeChannel` `Channels` of the channel of T3. The same eight at
+  every block: the final record of the test needs the accounts, the session, its nonce and the
+  breaker after every step, and the channel is read before it exists, while it is open and after it
+  expired. 72 keys. By method: chain_getFinalizedHead 1, chain_getBlockHash 10,
+  state_queryStorageAt 9. `System.Account` is not in the decoder's reviewed shape: the recorder asks
+  any key, and its decode is a later piece; nothing in src changed for it.
+- Nothing in the fifth list is typed by hand: `test/helpers/requests/list-5.ts`, its plan, derives
+  it from `recordings/requests-inputs.json` (the owner and the device from the test's `results.json`
+  `accounts`, the named miner from the value `NAMED` of its `steps.json`, the channel from the
+  `ComputeChannel.ForceOpenRequested` the explorer gave for T3, each block's height and hash from
+  `results.json`) and from the 1014020 metadata, found on the third recording's tape by the sha256
+  its `REVIEWED` line gives. `test/encoder-requests.test.ts` holds the file to that plan byte for
+  byte, reads it a second way from `steps.json` and `results.json`, builds every key again with the
+  reference decoder, derives the channel id again from `steps.json`, and holds every input to the
+  record it names. `node scripts/write-requests.mjs --out recordings/requests.json` writes the file
+  through that same plan, and the check runs it and compares the bytes.
+- The fourth list read the lab's session rerun at spec 1014020
   (`research/2026-11-12-session-rerun-1014020`), 23 transactions in blocks 3552721 to 3553566, 48
   calls. It asks the finalized head and the genesis hash, then for each step, in the order of the
   rerun's `steps.json`, the hash at the height its `results.json` gives and one
@@ -314,20 +338,18 @@ building and testing decoders against real data. It is evidence, never proof of 
   claim rests on the events of its step's extrinsic, which every batch reads: the outcomes and
   errors, what moved and who paid the fee, `SessionCallExecuted`'s running totals (escrow:94), the
   ack deadline (escrow:96) and the acceptance of a `force_open` naming a non miner (escrow:44).
-- Nothing in it is typed by hand: `test/helpers/requests/list-4.ts`, its plan, derives it from
-  `recordings/requests-inputs.json`, where each account, height and block hash names the file and
+- Nothing in the fourth list is typed by hand: `test/helpers/requests/list-4.ts`, its plan, derives
+  it from its inputs, now frozen in its recording's fixture folder, where each account, height and block hash names the file and
   field it was taken from (the rerun's `results.json`, and the deny list test's record for the
   named account), and from the 1014020 metadata, found on the third recording's tape by the sha256
-  its `REVIEWED` line gives. `test/rerun-requests.test.ts` holds the file to that plan byte for byte,
-  reads its design a second way from `steps.json` and `results.json`, builds every key again with
-  the reference decoder, and holds every input to the record it names.
-  `node scripts/write-requests.mjs --out recordings/requests.json` writes the file through that same
-  plan, and the check runs it and compares the bytes. A storage value a node does not hold is
+  its `REVIEWED` line gives. `test/rerun-requests.test.ts` holds the frozen file to that plan byte for
+  byte, reads its design a second way from `steps.json` and `results.json`, builds every key again
+  with the reference decoder, and holds every input to the record it names. A storage value a node does not hold is
   answered as null, and that is an answer too.
 - Which list is where: `recordings/requests.json` and `recordings/requests-inputs.json` are the
   current list. When a list is replaced, its request list and its inputs are already frozen in its
   recording's fixture folder. Each list has one plan module in `test/helpers/requests/`
-  (`list-2.ts`, `list-3.ts`, `list-4.ts`) over one core (`core.ts`) that knows no list, and
+  (`list-2.ts` to `list-5.ts`) over one core (`core.ts`) that knows no list, and
   `test/helpers/requests-list.ts` names the current one. The first list was not derived (it
   predates this) and stays as its fixture keeps it.
 - The third list read FLOP devnet's runtime upgrade from spec 1014014 to spec 1014020
@@ -649,7 +671,7 @@ The two interfaces other teams import are in [../interfaces](../interfaces).
 | `src/sums.ts` | the one form of `SHA256SUMS`, and the check of a folder against it, for the runs that write it and the readers that check it |
 | `src/run-command.ts` | what the live run and the recorder share: exit codes, flags, `SHA256SUMS` over the folder, how the command ends |
 | `src/requests.ts`, `recordings/requests.json` | the request list's form, and the list to be recorded next |
-| `recordings/requests-inputs.json`, `test/helpers/requests/` | the inputs of the current list, each with the file and field it comes from; the core that turns a plan into calls (`core.ts`), and one plan module per list (`list-2.ts`, `list-3.ts`, `list-4.ts`) |
+| `recordings/requests-inputs.json`, `test/helpers/requests/` | the inputs of the current list, each with the file and field it comes from; the core that turns a plan into calls (`core.ts`), and one plan module per list (`list-2.ts` to `list-5.ts`) |
 | `scripts/fill-rerun-results.mjs`, `test/helpers/rerun-fill.ts`, `test/helpers/batch-answer.ts` | the fill of the session rerun's `results.json` from the fourth recording (`--out <file>`), through `src/scale/block.ts` and the reader of a batch answer, which refuses and never guesses |
 | `scripts/write-requests.mjs`, `scripts/ts-resolve.mjs`, `test/helpers/requests-list.ts` | the writer of `recordings/requests.json` (`--out <file>`), through the current list's plan, the same the tests use, run under Node's own type stripping with a hook that resolves a relative .js import from a .ts module to the .ts file |
 | `src/record-run.ts`, `src/record-bin.ts` | one record run and its files, and the command |
