@@ -23,9 +23,14 @@ in this folder. `imd-flop/dist` must be built.
   review-plan.test.mjs "T4 can be signed from the run time record" (to --run).
   Known failing until C: check.test.mjs and review-check.test.mjs (old CH ids, record kind).
 
+- X1 to X9: pane-runner.js rewritten (status table, lost connection, constants, mark at write,
+  sendSame, find, short results with events sha256, relay text and sha256, accountReads).
+  pane-runner.test.mjs rewritten (20 tests). The reviewer's runner tests pass unchanged: a
+  transport that does not report the write is taken to have written once it answers.
+
 ## Next
 
-- X1 to X9 in pane-runner.js, then E (explorer-reader.js), R (record-step.mjs, plan.mjs next).
+- E (explorer-reader.js), then R (record-step.mjs start and step, plan.mjs next).
 
 ## Decisions (fix round) and why
 
