@@ -26,9 +26,14 @@ Order of work (the brief's): H1 with H2, H3, H4; H5; H6 to H11; the words; the m
   is older than the last round: the branch "not run" with no problem for a missing test step came
   in with the first build, 59f8bd5 (R7, R8), before the first review.
 
+- H6: sign-device.mjs retireTo (the next dead-<n> names, refused when one exists) and
+  loneDeadSends (a dead send file with no dead copy of its number), both in preflight before the
+  key: retireTo first (with --again and a signed file), then the lone check with or without
+  --again. retire uses retireTo. Test in sign-device.test.mjs (H6).
+
 ### Next
 
-H6 to H11, then the words and the mutants.
+H7 to H11, then the words and the mutants.
 
 ### Decisions (fix round 3) and why
 

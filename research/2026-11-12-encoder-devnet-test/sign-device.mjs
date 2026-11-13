@@ -26,7 +26,9 @@
 // Then: without --again a signed file of the id refuses, and so do dead copies of it in signed/;
 // with --again (S4) the earlier copy's era must be over at the birth block of the new reads. The
 // earlier copy is signed/<id>.json, or the newest dead copy when there is none (F10). The new
-// record's earlier_copies is always made from the <id>.dead-* files in signed/ (F10).
+// record's earlier_copies is always made from the <id>.dead-* files in signed/ (F10). Every refusal
+// of the move of an earlier copy to dead-<n> is also checked before the key (H6): a dead-<n> name
+// that exists, and a dead send file with no dead copy of its number beside it.
 //
 // It writes signed/<id>.json (the whole record, stays on the PC) and signed/<id>.send.json, exactly
 // {"step":"<id>","extrinsic":"0x…"} on one line with no line end (S3). Stdout is two lines: one JSON
@@ -131,6 +133,10 @@ export function preflight({ plan, run, id, readsText, readsSha256, again = false
   let earlier = null;
   const file = signedFile(run, id), send = sendFile(run, id);
   const dead = deadCopies(run, id);
+  // H6: every refusal of retire comes before the key: a lone dead send file, a dead-<n> name that exists
+  if (again && existsSync(file)) retireTo(run, id);
+  const lone = loneDeadSends(run, id);
+  if (lone.length) no(`signed/ holds ${lone.map((f) => `signed/${f}`).join(", ")} without its dead copy beside it: a stop in the middle of an earlier --again; the lead rules`);
   if (!again) {
     if (existsSync(file) || existsSync(send)) no(`signed/${id}.json exists: a signed step is never replaced. Sign a second copy only with --again (S4)`);
     if (dead.length) no(`signed/ holds ${dead.length} dead copies of ${id} and no signed/${id}.json: sign it only with --again, so the era of the newest dead copy is checked and the new record lists them (F10)`);
@@ -194,13 +200,27 @@ export function deadCopies(run, id) {
   return readdirSync(dir).map((f) => re.exec(f)).filter(Boolean).map((m) => ({ n: Number(m[1]), file: m[0], send_file: `${id}.dead-${m[1]}.send.json` })).sort((a, b) => a.n - b.n);
 }
 
-/** For --again: moves signed/<id>.json and its send file to the next dead-<n> (S4). */
-function retire(run, id) {
+/** The dead send files of an id in signed/ with no dead copy of the same number beside them (H6). */
+export function loneDeadSends(run, id) {
+  const dir = runFiles(run).signed;
+  if (!existsSync(dir)) return [];
+  const re = new RegExp(`^${id.replace(/\./g, "\\.")}\\.dead-([1-9][0-9]*)\\.send\\.json$`);
+  return readdirSync(dir).filter((f) => re.test(f) && !existsSync(join(dir, f.replace(/\.send\.json$/, ".json")))).sort();
+}
+
+/** The names retire moves signed/<id>.json and its send file to, the next dead-<n>; refused when one exists (S4, H6). */
+export function retireTo(run, id) {
   const dir = runFiles(run).signed;
   const dead = deadCopies(run, id);
   const n = 1 + (dead.length ? dead[dead.length - 1].n : 0);
   const to = join(dir, `${id}.dead-${n}.json`), toSend = join(dir, `${id}.dead-${n}.send.json`);
   if (existsSync(to) || existsSync(toSend)) no(`signed/${id}.dead-${n}.json exists`);
+  return { to, toSend };
+}
+
+/** For --again: moves signed/<id>.json and its send file to the next dead-<n> (S4). */
+function retire(run, id) {
+  const { to, toSend } = retireTo(run, id);
   renameSync(signedFile(run, id), to);
   if (existsSync(sendFile(run, id))) renameSync(sendFile(run, id), toSend);
 }

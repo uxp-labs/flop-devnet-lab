@@ -388,3 +388,42 @@ test("F10: earlier_copies is made from the dead files in signed/; with dead file
   assert.deepEqual(c.earlier_copies.map((x) => x.extrinsic_hash), [a.extrinsic_hash, b.extrinsic_hash]);
   assert.deepEqual(c.earlier_copies.map((x) => x.file), ["signed/T3.dead-1.json", "signed/T3.dead-2.json"]);
 });
+
+test("H6: every refusal of retire comes before the key file is opened: a dead-<n> name that exists, and a lone dead send file with or without --again", async () => {
+  const { copyFileSync } = await import("node:fs");
+  const call = (args, key) => spawnSync(process.execPath, [SCRIPT, ...args.slice(0, 3), "--key", key, ...args.slice(3)], { encoding: "utf8", cwd: DIR });
+  const NO_KEY = join(DIR, "h6-no-key.json");
+  const make = () => {
+    const run = runFolder(asPlanned(DEVICE, "T2").results);
+    const r = deviceReads(DEVICE, { number: 3600020, accountNonce: 0 });
+    const out = call(["T3", "--run", run, "--reads", r.text, "--reads-sha256", r.sha], KEY);
+    assert.equal(out.status, 0, out.stderr);
+    const rec = readJson(join(run, "results.json")); sent(rec, "T3", { status: "deadline" }); writeFileSync(join(run, "results.json"), JSON.stringify(rec));
+    return { run, last: readJson(join(run, "signed", "T3.json")).era.last_valid_block };
+  };
+  const sign = (run, reads, again) => call(["T3", "--run", run, "--reads", reads.text, "--reads-sha256", reads.sha, ...(again ? ["--again"] : [])], NO_KEY);
+  // the next dead name is taken: dead-1.send.json is there and dead-1 is next
+  const a = make();
+  writeFileSync(join(a.run, "signed", "T3.dead-1.send.json"), "{}");
+  const late = deviceReads(DEVICE, { number: a.last + 1, accountNonce: 0 });
+  const out1 = sign(a.run, late, true);
+  assert.equal(out1.status, 2);
+  assert.match(out1.stderr, /signed\/T3\.dead-1\.json exists/);
+  assert.ok(!out1.stderr.includes(KEY_REFUSAL), out1.stderr);
+  // a lone dead send file beside a later dead copy, with and without --again
+  const b = make();
+  copyFileSync(join(b.run, "signed", "T3.json"), join(b.run, "signed", "T3.dead-1.json"));
+  writeFileSync(join(b.run, "signed", "T3.dead-2.send.json"), "{}");
+  for (const again of [true, false]) {
+    const out = sign(b.run, late, again);
+    assert.equal(out.status, 2);
+    assert.ok(!out.stderr.includes(KEY_REFUSAL), out.stderr);
+    if (again) assert.match(out.stderr, /T3\.dead-2\.json exists|T3\.dead-2\.send\.json without its dead copy beside it/);
+  }
+  // no signed file, no dead copy, only a lone dead send file: refused without --again too
+  const c = runFolder(asPlanned(DEVICE, "T2").results);
+  writeFileSync(join(c, "signed", "T3.dead-1.send.json"), "{}");
+  const out3 = sign(c, deviceReads(DEVICE, { number: 3600020, accountNonce: 0 }), false);
+  assert.equal(out3.status, 2);
+  assert.match(out3.stderr, /signed\/T3\.dead-1\.send\.json without its dead copy beside it/);
+});
