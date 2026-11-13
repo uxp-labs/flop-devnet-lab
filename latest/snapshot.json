@@ -2,24 +2,22 @@
   "census": null,
   "drift": null,
   "escrows": [],
-  "hash": "e1cbe68c2c14b9fe6c4dbc4e72a86c052b48eaa9adccbbd3af2416f569aecf16",
-  "observed_at": "2026-11-12T23:45:35.889Z",
+  "hash": "8f69584355d96a8bd06ad92c253b47e66acf686821b13fa28bed387bb6718d24",
+  "observed_at": "2026-11-13T01:10:38.955Z",
   "pin": {
-    "finalized_hash": "0xecb1d84396754090b067e1391dcd87c111078f0488c4ff121da3ed0904300f5c",
-    "finalized_height": 3588630,
+    "finalized_hash": "0xb23bc7d732d5affd08967c65d30243807b73fd657190c6ced0e0e6454692fd82",
+    "finalized_height": 3603975,
     "genesis": "0x99c172c095340ace980631f9123544c6bebd4839f3437e463533422d8be2d631",
     "node": "v22.23.4",
     "source": "live:rpc wss://rpc.devnet.flop.network",
     "source_sha": "6d7ad0ef0eba311cd351b5176a95592956a3c8ed"
   },
-  "prev_hash": "d824c4fda753ee0486f5fd485a222a1fd037fa5daae11620d9c14146c8a3b27a",
+  "prev_hash": "e1cbe68c2c14b9fe6c4dbc4e72a86c052b48eaa9adccbbd3af2416f569aecf16",
   "schema": "flop-observatory/snapshot@1",
-  "seq": 35,
+  "seq": 36,
   "status": {
-    "best_height": 3588640,
-    "conflicts": [
-      "finalized height went backwards from 3588643 to 3588630 on the same genesis"
-    ],
+    "best_height": 3603979,
+    "conflicts": [],
     "faucet": {
       "detail": "status degraded, ready false, http 503",
       "health": "degraded",
@@ -33,31 +31,31 @@
         "ipGrantsPerDay": 300,
         "ipPrefixGrantsPerDay": 10000
       },
-      "observed_at": "2026-11-12T23:45:30.175Z",
+      "observed_at": "2026-11-13T01:10:33.202Z",
       "ready": false
     },
-    "finality_lag": 10,
-    "finalized_hash": "0xecb1d84396754090b067e1391dcd87c111078f0488c4ff121da3ed0904300f5c",
-    "finalized_height": 3588630,
+    "finality_lag": 4,
+    "finalized_hash": "0xb23bc7d732d5affd08967c65d30243807b73fd657190c6ced0e0e6454692fd82",
+    "finalized_height": 3603975,
     "gateway": {
       "detail": null,
       "health": "ok",
       "http": 200,
-      "observed_at": "2026-11-12T23:45:31.683Z"
+      "observed_at": "2026-11-13T01:10:34.483Z"
     },
     "genesis": {
       "faucet": "0x99c172c095340ace980631f9123544c6bebd4839f3437e463533422d8be2d631",
       "pinned": "0x99c172c095340ace980631f9123544c6bebd4839f3437e463533422d8be2d631",
       "rpc": "0x99c172c095340ace980631f9123544c6bebd4839f3437e463533422d8be2d631"
     },
-    "observed_at": "2026-11-12T23:45:35.889Z",
-    "reset_detected": null,
+    "observed_at": "2026-11-13T01:10:38.955Z",
+    "reset_detected": false,
     "rpc": {
-      "detail": "finalized height went backwards; finalized height stuck at 3588630 for 6949s",
-      "health": "degraded",
+      "detail": null,
+      "health": "ok",
       "http": null,
-      "observed_at": "2026-11-12T23:45:31.684Z",
-      "stale": true
+      "observed_at": "2026-11-13T01:10:34.492Z",
+      "stale": false
     },
     "runtime_version": 1014020,
     "schema": "flop-observatory/network-status@0",
@@ -66,8 +64,8 @@
   "trust": "trusted RPC",
   "upgrade": {
     "at": {
-      "hash": "0xecb1d84396754090b067e1391dcd87c111078f0488c4ff121da3ed0904300f5c",
-      "number": 3588630
+      "hash": "0xb23bc7d732d5affd08967c65d30243807b73fd657190c6ced0e0e6454692fd82",
+      "number": 3603975
     },
     "authorization_appeared": false,
     "authorized": {
@@ -77,7 +75,7 @@
       "sha256": null,
       "state": "absent"
     },
-    "compared_with": 3585350,
+    "compared_with": 3588630,
     "executing": {
       "detail": null,
       "spec_name": "tzkv-runtime",
@@ -85,7 +83,7 @@
       "state": "reviewed"
     },
     "executing_changed": false,
-    "observed_at": "2026-11-12T23:45:31.684Z",
+    "observed_at": "2026-11-13T01:10:34.492Z",
     "schema": "flop-observatory/upgrade-watch@0",
     "trust": "trusted RPC"
   }
