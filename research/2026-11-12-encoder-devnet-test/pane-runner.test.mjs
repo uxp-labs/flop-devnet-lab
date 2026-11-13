@@ -410,23 +410,22 @@ test("H7: every result of send, sendSame and find names its call, also those tha
 });
 
 test("H10: find ends within the runner's deadline: find-deadline with the blocks it read, and nothing is asked of the node after it", async () => {
+  // the first chunk of 20 blocks is answered; the second chunk's block reads are held until after the deadline
   const node = scriptedNode({ head: 1000 });
-  const slow = { request: (m, p) => new Promise((res, rej) => setTimeout(() => node.transport.request(m, p).then(res, rej), m === "chain_getBlock" ? 12 : 0)), subscribe: node.transport.subscribe };
-  const lab = load().createRunner({ transport: slow, store: memStore(), deadlineMs: 60 });
+  const held = [];
+  let reads = 0;
+  const t = { request: (m, p) => (m === "chain_getBlock" && ++reads > 20 ? new Promise((res, rej) => held.push(() => node.transport.request(m, p).then(res, rej))) : node.transport.request(m, p)), subscribe: node.transport.subscribe };
+  const lab = load().createRunner({ transport: t, store: memStore(), deadlineMs: 60 });
   const r = await lab.find(XT, 100);
-  assert.equal(r.status, "find-deadline");
-  assert.equal(r.sent_by, "find");
-  assert.equal(r.from, 100);
-  assert.equal(r.head, 1000);
-  assert.ok(Number.isInteger(r.to) && r.to >= 119 && r.to < 499 && (r.to - 99) % 20 === 0, `to ${r.to}: a whole number of chunks of 20 read`);
-  assert.match(r.problem, new RegExp(`it read the finalized blocks 100 to ${r.to} and the extrinsic is not in them`));
+  assert.deepEqual([r.status, r.sent_by, r.from, r.to, r.head], ["find-deadline", "find", 100, 119, 1000]);
+  assert.match(r.problem, /it read the finalized blocks 100 to 119 and the extrinsic is not in them/);
   assert.equal(r.extrinsic_sha256, sha(XT), "record-step can match it to the signed file");
-  const asked = node.log.length;
-  await new Promise((res) => setTimeout(res, 100));
-  assert.ok(node.log.length - asked <= 20, "at most the blocks of the chunk in flight are answered after the deadline");
-  const later = node.log.length;
-  await new Promise((res) => setTimeout(res, 60));
-  assert.equal(node.log.length, later, "no new chunk is asked after the deadline");
+  const hashes = () => node.log.filter((x) => x === "chain_getBlockHash").length;
+  const asked = hashes();
+  assert.equal(asked, 1 + 40, "the genesis hash of the head read, and two chunks of 20");
+  held.splice(0).forEach((f) => f()); // the second chunk answers after the deadline
+  await new Promise((res) => setTimeout(res, 30));
+  assert.equal(hashes(), asked, "no new chunk is asked after the deadline");
   // a node that never answers the head: find-deadline with no block read
   const mute = load().createRunner({ transport: { request: () => new Promise(() => {}), subscribe: node.transport.subscribe }, store: memStore(), deadlineMs: 30 });
   const m = await mute.find(XT, 5);

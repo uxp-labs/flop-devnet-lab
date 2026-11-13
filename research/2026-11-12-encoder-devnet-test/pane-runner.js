@@ -382,7 +382,6 @@
             head = h.finalized.number;
             var to = Math.min(head, fromNumber + FIND_MAX - 1), n = fromNumber;
             function chunk() {
-              if (done) return;
               if (n > to) { end(Object.assign({}, base, { status: "not-found", from: fromNumber, to: to < fromNumber ? null : to, head: head, problem: to < fromNumber ? "the finalized head is below the block to start from" : "not in any finalized block read" })); return; }
               var nums = [];
               for (var i = 0; i < 20 && n <= to; i++, n++) nums.push(n);

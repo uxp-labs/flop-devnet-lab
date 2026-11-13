@@ -64,9 +64,18 @@ Order of work (the brief's): H1 with H2, H3, H4; H5; H6 to H11; the words; the m
 - The 59 alone under setpriv: 56 killed, 3 equivalent, none alive. RV3-R3 was killed (by the H1
   test whose wrong nonce is 99, in the two byte compact mode), so it is no longer listed equivalent.
 
+- First full run on 1e5981f under setpriv: 211 mutants, 202 killed, 8 equivalent, alive B3-H10a,
+  killed_but_listed_equivalent B-S2d. Both came from the H10 test: it counted log entries against
+  timers and failed under load (B-S2d does not touch find). Fixed: the H10 test holds the second
+  chunk's block reads and releases them after the deadline, so it counts exactly (to 119, 41
+  block hash requests, none after). The "if (done) return" at the head of find's chunk was dead
+  code (both callers check done just before it): removed, and B3-H10a now removes the live check
+  in the chunk's callback. In a scratch copy B3-H10a, b, c are killed and B-S2d is not. The sha256
+  of pane-runner.js is now f034f6ed...5b5a78 (README, plan.md).
+
 ### Next
 
-The full run (node mutants.mjs <temp> --jobs 6, under setpriv), then the GitHub checks.
+The second full run (node mutants.mjs <temp> --jobs 6, under setpriv), then the GitHub checks.
 
 ### Report of fix round 3
 
@@ -93,7 +102,7 @@ The rules
 - H9 done: only the step that opens a channel (first step naming it) drops its cleanup step.
 - H10 done: find ends within the deadline as find-deadline with from, to, head; row added.
 - H11 done: "the write to the socket failed".
-- Words done: README, plan.md (plan.mjs md), steps.json; pane-runner.js sha256 fe91c295...fcc1e8.
+- Words done: README, plan.md (plan.mjs md), steps.json; pane-runner.js sha256 f034f6ed...5b5a78.
 
 Reviewers' tests changed (H1 needs the signer's reads for c and d; what each shows is kept)
 - review2-next.test.mjs Q8 DEFECT: passes the owner's reads with T2's nonce.

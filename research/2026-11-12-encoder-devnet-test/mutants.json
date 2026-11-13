@@ -1667,10 +1667,10 @@
  {
   "id": "B3-H10a",
   "file": "pane-runner.js",
-  "find": "function chunk() {\n              if (done) return;",
-  "replace": "function chunk() {",
+  "find": "if (done) return;\n                for (var j = 0;",
+  "replace": "for (var j = 0;",
   "test": "pane-runner.test.mjs H10",
-  "why": "H10: no new chunk after the deadline"
+  "why": "H10: a chunk answered after the deadline asks for no new chunk"
  },
  {
   "id": "B3-H10b",
