@@ -64,6 +64,34 @@ describe("B: the events read", () => {
   });
 });
 
+describe("B: one above the head, at a height the node holds a canonical hash for", () => {
+  it("HOLDS (kills R2) a head whose header says A9's number minus one: A9 itself, canonical, one above, is unknown", async () => {
+    const s = rerunScript(A6.block_hash);
+    s.headers.set(A6.block_hash, { ...(s.headers.get(A6.block_hash) as any), number: A9.finalized_in_block - 1 });
+    const control = rerunScript(A6.block_hash);
+    control.headers.set(A6.block_hash, { ...(control.headers.get(A6.block_hash) as any), number: A9.finalized_in_block });
+    expect((await readBlockEvents(transportOf(control), { number: A9.finalized_in_block, hash: A9.block_hash })).kind).toBe("known");
+    const r = await readBlockEvents(transportOf(s), { number: A9.finalized_in_block, hash: A9.block_hash });
+    expect(r.kind).toBe("unknown");
+    expect((r as any).reason).toMatch(/is not at or below the finalized head/);
+  });
+});
+
+describe("B: a node that reads hashes in any letter case", () => {
+  /** A node that, like a real one, takes a hash param in upper case letters for the same block. */
+  const caseBlind = (head: string): Transport => {
+    const base = transportOf(rerunScript(A6.block_hash));
+    const low = (p: readonly unknown[]) => p.map((x) => (typeof x === "string" ? x.toLowerCase() : x));
+    return (m, p) => (m === "chain_getFinalizedHead" ? Promise.resolve(head) : base(m, low(p)));
+  };
+  it("HOLDS (kills N1) a finalized head answered in upper case letters is unknown for both reads, even when the node reads it", async () => {
+    const upper = `0x${A6.block_hash.slice(2).toUpperCase()}`;
+    expect((await readSessionState(caseBlind(A6.block_hash), OWNER, DEV1)).kind).toBe("known");
+    expect((await readSessionState(caseBlind(upper), OWNER, DEV1)).kind).toBe("unknown");
+    expect((await readBlockEvents(caseBlind(upper), AT)).kind).toBe("unknown");
+  });
+});
+
 describe("B: the session read", () => {
   it("HOLDS every storage read and the metadata are made at the one head hash and its header's parent", async () => {
     const log: Log = [];
