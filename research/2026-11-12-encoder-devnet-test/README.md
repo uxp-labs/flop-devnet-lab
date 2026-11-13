@@ -359,6 +359,12 @@ What the record shows: the eight transactions as the chain executed them, their 
 fees, and the two accounts, the session and the channel after each, read through the lab's decoder.
 What it does not show:
 - proof of chain state: one endpoint answered, and nothing here checks it against another;
+- a judgment of every field: `check.mjs` gives the same verdict when one of these is changed: a
+  step's `result` text, T5's `dispatch_error`, a `block_hash`, an `extrinsic_index`, an
+  `events_value_sha256`, an `after.channel`, the amount of T6's refund transfer, the words for
+  nothing stored (`review5-words.test.mjs` shows each). Those fields are held by the
+  observatory's test that this file is byte for byte the fill
+  (`observatory/test/encoder-results.test.ts`) and by the sha256 above;
 - `epoch_spent_raw` and `breaker_tx_count` are recorded and not judged (see below);
 - a top up on an open channel, an `open_channel` that succeeds, and whether an expiry refunds a top up;
 - a like step in the session rerun for T4 and T5, so their fees are compared with nothing.
