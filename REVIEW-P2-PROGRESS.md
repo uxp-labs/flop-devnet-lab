@@ -11,9 +11,13 @@ Test file `imd-flop/test/review-chain-read-lead.test.ts` (9 DEFECT tests fail on
 2. L2 proven. nodeTransport(url)("author_submitExtrinsic" as any, ...) puts that method on the wire.
 3. L3 proven. Node answers (O,D1) keys with (O,D2) bytes at B10: session known with delegate D2; crossCheck agrees with dev2's event for a state whose delegate is D1.
 
+4. A: a transport that throws an Error whose message getter throws, or answers a header JSON.stringify cannot write (bigint), makes readSessionState throw (low: not a JSON node answer). `review-chain-read-unknown.test.ts`, 2 DEFECT.
+
 ## Held
 
-(none yet)
+- A (22 HOLDS in review-chain-read-unknown.test.ts): every JSON value for head, header, block hash, metadata, LRU, Events and the three entries is unknown; "0x" is unknown everywhere; caps over by one refused; header number forms refused; thrown text/null/undefined/object unknown.
+- Info: metadata "0x" leaves the session read known with three unknown entries and a runtime named by LRU only.
+- R12: rpcCall is byte identical to gateway.ts at 23f4e4e but for `export`.
 
 ## Next
 
