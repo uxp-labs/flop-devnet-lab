@@ -21,7 +21,8 @@ import { UPGRADE_INPUTS_TEXT as LIST_3_INPUTS_TEXT, UPGRADE_REQUESTS_TEXT as LIS
 import { type Source, batchKeys, deriveCalls as coreDerive } from "./helpers/requests/core.js";
 import { readInputs as readList3Inputs } from "./helpers/requests/list-3.js";
 import { type Block, type Inputs, type Read, STEPS, type StepId, blockOf, deriveCalls, deriveRequestsText, readInputs } from "./helpers/requests/list-4.js";
-import { RERUN_RESULTS, RERUN_SPEC_FIELD, requestsListText, rerunMetadata } from "./helpers/requests-list.js";
+import { RERUN_RESULTS, RERUN_SPEC_FIELD, rerunMetadata } from "./helpers/recorded-rerun.js";
+import { requestsListText } from "./helpers/requests-list.js";
 
 const REPO = new URL("../../", import.meta.url);
 const repoText = (path: string) => readFileSync(new URL(path, REPO), "utf8");

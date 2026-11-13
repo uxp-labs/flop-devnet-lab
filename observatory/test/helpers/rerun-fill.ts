@@ -11,11 +11,10 @@
 // decoded; otherwise that step's fill fields stay null.
 import { readFileSync } from "node:fs";
 import { decodeBlockEvents, decodeStorageValue, runtimeOfBlock } from "../../src/scale/block.js";
-import { RERUN_RECORDING, type RerunBlock, recordedRerun } from "./recorded-rerun.js";
+import { RERUN_RECORDING, RERUN_RESULTS, type RerunBlock, recordedRerun } from "./recorded-rerun.js";
 import { keyBytes } from "./requests/core.js";
 import type { Inputs, ReadField } from "./requests/list-4.js";
 import { ENTRY_OF } from "./requests/list-4.js";
-import { RERUN_RESULTS } from "./requests-list.js";
 
 const REPO = new URL("../../../", import.meta.url);
 const repoText = (path: string) => readFileSync(new URL(path, REPO), "utf8");

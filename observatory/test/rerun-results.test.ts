@@ -9,9 +9,8 @@ import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import type { ReadField } from "./helpers/requests/list-4.js";
-import { recordedRerun } from "./helpers/recorded-rerun.js";
+import { RERUN_RESULTS, recordedRerun } from "./helpers/recorded-rerun.js";
 import { ERRORS_FILE, FILLED_FROM, clearFill, fillResults, fillStep, rerunResultsText } from "./helpers/rerun-fill.js";
-import { RERUN_RESULTS } from "./helpers/requests-list.js";
 // The folder's own checker, read as a module: tests start no process. check.mjs is its command line.
 import { context, judgeRun } from "../../research/2026-11-12-session-rerun-1014020/rerun-lib.mjs";
 

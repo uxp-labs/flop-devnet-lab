@@ -240,8 +240,8 @@
     "names": "4928d77de0190e17b04fa7d36905e0d45f3c1ed7b1a05b6c5eaf771913d4a188"
   },
   "upgrade-recording.test.ts": {
-    "tests": 9,
-    "names": "16aec6aa9ace2425763bcafa97c1c8fab4f87f01b2e6573a79bf7d19f0e37982"
+    "tests": 12,
+    "names": "182be3701b83c645605d6e5ef6e541d8c9d592e481829822bad9acc11145d9bf"
   },
   "upgrade-requests.test.ts": {
     "tests": 24,

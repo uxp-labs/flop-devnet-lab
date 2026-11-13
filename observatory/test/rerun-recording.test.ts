@@ -13,9 +13,8 @@ import { judgeRecording } from "../src/recording.js";
 import { runtimeOfBlock } from "../src/scale/block.js";
 import { parseMetadata } from "../src/scale/metadata.js";
 import { readBatchAnswer } from "./helpers/batch-answer.js";
-import { RERUN_INPUTS_TEXT, RERUN_RECORDING, RERUN_REQUESTS_TEXT, recordedRerun, rerunFixtureText, rerunRecordingFiles } from "./helpers/recorded-rerun.js";
+import { RERUN_INPUTS_TEXT, RERUN_RECORDING, RERUN_REQUESTS_TEXT, RERUN_RESULTS, recordedRerun, rerunFixtureText, rerunRecordingFiles } from "./helpers/recorded-rerun.js";
 import { deriveRequestsText } from "./helpers/requests/list-4.js";
-import { RERUN_RESULTS } from "./helpers/requests-list.js";
 
 const sha256 = (b: string | Uint8Array) => createHash("sha256").update(b).digest("hex");
 const R = recordedRerun();

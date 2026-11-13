@@ -10,7 +10,8 @@ import { writtenValue } from "../src/feed.js";
 import { judgeRecording } from "../src/recording.js";
 import { parseMetadata } from "../src/scale/metadata.js";
 import { toHex } from "../src/scale/reader.js";
-import { UPGRADE_INPUTS_TEXT, UPGRADE_RECORDING, UPGRADE_REQUESTS_TEXT, recordedUpgrade, upgradeFixtureText, upgradeRecordingFiles } from "./helpers/recorded-upgrade.js";
+import { REVIEWED } from "../src/scale/shape.js";
+import { UPGRADE_INPUTS_TEXT, UPGRADE_RECORDING, UPGRADE_REQUESTS_TEXT, recordedUpgrade, reviewedMetadata, upgradeFixtureText, upgradeRecordingFiles } from "./helpers/recorded-upgrade.js";
 import { recorded } from "./helpers/recorded.js";
 import { UPGRADE_BLOCKS, deriveRequestsText } from "./helpers/requests/list-3.js";
 
@@ -103,5 +104,27 @@ describe("the third recording held to the lab's own reads of the upgrade (review
     expect([U.metadataAt(carries).length, sha256(U.metadataAt(carries))]).toEqual([LAB[1]?.metadata.bytes, LAB[1]?.metadata.sha256]);
     for (const b of [LAB[2], LAB[3]]) expect(b?.metadata).toEqual(LAB[1]?.metadata);
     expect(U.metadataAt(before)).toEqual(recorded().metadata);
+  });
+});
+
+describe("the metadata of a reviewed spec, found on the third recording's tape (reviewedMetadata)", () => {
+  it("gives, for each spec on the reviewed list, the metadata of the length and sha256 its line names", () => {
+    expect(REVIEWED.length).toBeGreaterThan(1);
+    for (const r of REVIEWED) {
+      const m = reviewedMetadata(r.specVersion);
+      expect([m.length, sha256(m)], String(r.specVersion)).toEqual([r.metadataBytes, r.metadataSha256]);
+    }
+  });
+
+  it("refuses a spec no reviewed line names", () => {
+    expect(() => reviewedMetadata(1014021)).toThrow("no reviewed runtime of spec 1014021");
+    expect(() => reviewedMetadata("1014020")).toThrow("no reviewed runtime of spec 1014020");
+  });
+
+  it("refuses a reviewed line whose sha256 the tape holds no metadata of", () => {
+    const line = REVIEWED[1] as (typeof REVIEWED)[number];
+    const planted = [{ ...line, metadataSha256: "00".repeat(32) }];
+    expect(() => reviewedMetadata(line.specVersion, planted)).toThrow(`the tape holds no metadata of sha256 ${"00".repeat(32)}`);
+    expect(reviewedMetadata(line.specVersion, [line]).length).toBe(line.metadataBytes);
   });
 });
