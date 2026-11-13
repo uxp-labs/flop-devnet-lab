@@ -69,10 +69,12 @@ const H256 = idOf((t) => t.path.at(-1) === "H256");
 /**
  * A small metadata with what deriveShape and decodeEvents look for: System (a Version constant,
  * Events, LastRuntimeUpgrade), ComputeChannel (its event enum, Channels) and FlopSessionKeys
- * (Sessions, SessionNonces, CircuitBreakers). The event enum has one
+ * (Sessions, SessionNonces, CircuitBreakers, DelegateSessions), and the entries of decoder-shape@3:
+ * System.Account, ComputeChannel's FailedAcks and ChannelAuthoredOpenedAt, and ModelRegistry,
+ * MinerStaking and HwCalibration with theirs. drop leaves out a pallet or a Pallet.Entry. The event enum has one
  * event E, whose fields are given; extra types follow from id 12.
  */
-function shapeMetadata(o: { eventFields?: { name: string; type: number }[]; record?: { name: string; type: number }[]; extra?: TypeSpec[]; constants?: { name: string; type: number; value: Uint8Array }[]; sessionKeys?: string[]; sessionFallback?: Uint8Array }): Uint8Array {
+function shapeMetadata(o: { eventFields?: { name: string; type: number }[]; record?: { name: string; type: number }[]; extra?: TypeSpec[]; constants?: { name: string; type: number; value: Uint8Array }[]; drop?: string[]; sessionFallback?: Uint8Array }): Uint8Array {
   const types: TypeSpec[] = [
     { def: def.primitive("u8") }, // 0
     { def: def.primitive("str") }, // 1
@@ -88,20 +90,21 @@ function shapeMetadata(o: { eventFields?: { name: string; type: number }[]; reco
     { path: ["ChannelState"], def: def.variant([{ name: "Open", index: 0 }]) }, // 11
     ...(o.extra ?? []),
   ];
+  /** A map entry of one hasher, a u8 key and a u32 value, but for what a test changes; absent when the test drops it. */
+  const map = (pallet: string, name: string) => (o.drop?.includes(`${pallet}.${name}`) ? [] : [{ name, map: { hashers: ["Blake2_128Concat" as const], key: 0, value: 2 }, ...(name === "Sessions" && o.sessionFallback ? { fallback: o.sessionFallback } : {}) }]);
   const pallets: PalletSpec[] = [
     {
       name: "System",
       index: 0,
-      entries: [{ name: "Events", plain: 6 }, { name: "LastRuntimeUpgrade", plain: 9 }],
+      entries: [{ name: "Events", plain: 6 }, { name: "LastRuntimeUpgrade", plain: 9 }, ...map("System", "Account")],
       constants: o.constants ?? [{ name: "Version", type: 3, value: cat(str("tzkv-runtime"), u32(1014014)) }],
     },
-    { name: "ComputeChannel", index: 1, event: 8, entries: [{ name: "Channels", map: { hashers: ["Blake2_128Concat"], key: 0, value: 10 } }] },
-    {
-      name: "FlopSessionKeys",
-      index: 2,
-      entries: (o.sessionKeys ?? ["Sessions", "SessionNonces", "CircuitBreakers"]).map((name) => ({ name, map: { hashers: ["Blake2_128Concat"], key: 0, value: 2 }, ...(name === "Sessions" && o.sessionFallback ? { fallback: o.sessionFallback } : {}) })),
-    },
-  ];
+    { name: "ComputeChannel", index: 1, event: 8, entries: [{ name: "Channels", map: { hashers: ["Blake2_128Concat"], key: 0, value: 10 } }, ...map("ComputeChannel", "FailedAcks"), ...map("ComputeChannel", "ChannelAuthoredOpenedAt")] },
+    { name: "FlopSessionKeys", index: 2, entries: ["Sessions", "SessionNonces", "CircuitBreakers", "DelegateSessions"].flatMap((e) => map("FlopSessionKeys", e)) },
+    { name: "ModelRegistry", index: 3, entries: ["Models", "MeasuredRoots", "AllowedDecodePolicies"].flatMap((e) => map("ModelRegistry", e)) },
+    { name: "MinerStaking", index: 4, entries: map("MinerStaking", "Miners") },
+    { name: "HwCalibration", index: 5, entries: ["CalibrationVersions", "LastInitialCalibration"].flatMap((e) => map("HwCalibration", e)) },
+  ].filter((p) => !o.drop?.includes(p.name));
   return metadata(types, pallets);
 }
 
@@ -128,7 +131,7 @@ describe("crashes that are not a ScaleError", () => {
     deriveShape(MD, n);
     const steps = MAX_SHAPE_STEPS - n.steps.left;
     const chars = MAX_SHAPE_CHARS - n.chars.left;
-    expect({ steps, chars }).toEqual({ steps: 9733, chars: 18449 });
+    expect({ steps, chars }).toEqual({ steps: 9919, chars: 19244 });
     // Past either budget, a ScaleError.
     const tight = namer(MD);
     tight.steps.left = 100;
@@ -246,13 +249,15 @@ describe("values decoded wrong, or valid values refused", () => {
     expect(thrown(() => decodeEvents(md, b))).toEqual({ cls: "ScaleError", message: "an event record of System.Events does not have exactly the fields phase, event and topics" });
   });
 
-  it("storage round: deriveShape refuses metadata without a FlopSessionKeys pallet or one of its three entries, with a ScaleError naming it", () => {
+  it("storage round and round 29: deriveShape refuses metadata without a stated pallet or one of its stated entries, with a ScaleError naming it", () => {
     expect(() => deriveShape(parseMetadata(shapeMetadata({})))).not.toThrow();
-    const noPallet = parseMetadata(shapeMetadata({})).pallets.filter((p) => p.name !== "FlopSessionKeys");
-    expect(thrown(() => deriveShape({ ...parseMetadata(shapeMetadata({})), pallets: noPallet }))).toEqual({ cls: "ScaleError", message: "the metadata has no FlopSessionKeys pallet" });
-    for (const missing of ["Sessions", "SessionNonces", "CircuitBreakers"]) {
-      const md = parseMetadata(shapeMetadata({ sessionKeys: ["Sessions", "SessionNonces", "CircuitBreakers"].filter((e) => e !== missing) }));
-      expect(thrown(() => deriveShape(md))).toEqual({ cls: "ScaleError", message: `pallet FlopSessionKeys has no storage entry ${JSON.stringify(missing)}` });
+    for (const pallet of ["System", "ComputeChannel", "FlopSessionKeys", "ModelRegistry", "MinerStaking", "HwCalibration"]) {
+      expect(thrown(() => deriveShape(parseMetadata(shapeMetadata({ drop: [pallet] })))), pallet).toEqual({ cls: "ScaleError", message: `the metadata has no ${pallet} pallet` });
+    }
+    const entries = ["System.Account", "ComputeChannel.FailedAcks", "ComputeChannel.ChannelAuthoredOpenedAt", "FlopSessionKeys.Sessions", "FlopSessionKeys.SessionNonces", "FlopSessionKeys.CircuitBreakers", "FlopSessionKeys.DelegateSessions", "ModelRegistry.Models", "ModelRegistry.MeasuredRoots", "ModelRegistry.AllowedDecodePolicies", "MinerStaking.Miners", "HwCalibration.CalibrationVersions", "HwCalibration.LastInitialCalibration"];
+    for (const missing of entries) {
+      const [pallet, entry] = missing.split(".");
+      expect(thrown(() => deriveShape(parseMetadata(shapeMetadata({ drop: [missing] })))), missing).toEqual({ cls: "ScaleError", message: `pallet ${pallet} has no storage entry ${JSON.stringify(entry)}` });
     }
   });
 
@@ -478,7 +483,7 @@ describe("the shape pin", () => {
 
   it("HELD: the whole shape file, its type closure included, derived again from the reference's own parse with an independent namer, equals the file", () => {
     const mine = referenceShape(R.metadata);
-    expect(Object.keys(mine.types).length).toBe(469);
+    expect(Object.keys(mine.types).length).toBe(482);
     expect(mine.flop_session_keys.index).toBe(94);
     expect(mine.compute_channel.events.length).toBe(60);
     expect(mine.compute_channel.index).toBe(103);

@@ -1,5 +1,14 @@
 {
   "compute_channel": {
+    "channel_authored_opened_at": {
+      "default": "0x00",
+      "hashers": [
+        "Blake2_128Concat"
+      ],
+      "key": "H256#13",
+      "modifier": "Optional",
+      "value": "u32"
+    },
     "channel_states": [
       {
         "fields": [],
@@ -1393,6 +1402,15 @@
         "name": "CapacityReservationDropped"
       }
     ],
+    "failed_acks": {
+      "default": "0x00000000",
+      "hashers": [
+        "Blake2_128Concat"
+      ],
+      "key": "AccountId32#0",
+      "modifier": "Default",
+      "value": "u32"
+    },
     "index": 103,
     "storage_prefix": "ComputeChannel"
   },
@@ -1405,6 +1423,15 @@
       "key": "AccountId32#0",
       "modifier": "Optional",
       "value": "CircuitBreakerState#701"
+    },
+    "delegate_sessions": {
+      "default": "0x00",
+      "hashers": [
+        "Blake2_128Concat"
+      ],
+      "key": "AccountId32#0",
+      "modifier": "Default",
+      "value": "Vec<(AccountId32#0, AccountId32#0)>"
     },
     "index": 94,
     "session_nonces": {
@@ -1429,10 +1456,86 @@
     },
     "storage_prefix": "FlopSessionKeys"
   },
-  "schema": "flop-observatory/decoder-shape@2",
+  "hw_calibration": {
+    "calibration_versions": {
+      "default": "0x00000000",
+      "hashers": [
+        "Blake2_128Concat"
+      ],
+      "key": "AccountId32#0",
+      "modifier": "Default",
+      "value": "u32"
+    },
+    "index": 87,
+    "last_initial_calibration": {
+      "default": "0x00",
+      "hashers": [
+        "Blake2_128Concat"
+      ],
+      "key": "AccountId32#0",
+      "modifier": "Optional",
+      "value": "u32"
+    },
+    "storage_prefix": "HwCalibration"
+  },
+  "miner_staking": {
+    "index": 97,
+    "miners": {
+      "default": "0x00",
+      "hashers": [
+        "Blake2_128Concat"
+      ],
+      "key": "AccountId32#0",
+      "modifier": "Optional",
+      "value": "MinerInfo#730"
+    },
+    "storage_prefix": "MinerStaking"
+  },
+  "model_registry": {
+    "allowed_decode_policies": {
+      "default": "0x00",
+      "hashers": [
+        "Blake2_128Concat"
+      ],
+      "key": "H256#13",
+      "modifier": "Optional",
+      "value": "BoundedVec<H256#13>#764"
+    },
+    "index": 101,
+    "measured_roots": {
+      "default": "0x00",
+      "hashers": [
+        "Blake2_128Concat",
+        "Blake2_128Concat"
+      ],
+      "key": "(H256#13, ModelPrecision#246)",
+      "modifier": "Optional",
+      "value": "H256#13"
+    },
+    "models": {
+      "default": "0x00",
+      "hashers": [
+        "Blake2_128Concat"
+      ],
+      "key": "H256#13",
+      "modifier": "Optional",
+      "value": "ModelRegistryEntry<AccountId32#0>#749"
+    },
+    "storage_prefix": "ModelRegistry"
+  },
+  "schema": "flop-observatory/decoder-shape@3",
   "spec_name": "tzkv-runtime",
   "spec_version": 1014020,
   "system": {
+    "account": {
+      "default": "0x0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000080",
+      "hashers": [
+        "Blake2_128Concat"
+      ],
+      "key": "AccountId32#0",
+      "modifier": "Default",
+      "value": "AccountInfo<u32, AccountData<u128>#5>#3"
+    },
     "events": {
       "default": "0x00",
       "hashers": [],
@@ -1551,6 +1654,14 @@
         "Data#117"
       ]
     },
+    "(H256#13, ModelPrecision#246)": {
+      "kind": "tuple",
+      "path": [],
+      "types": [
+        "H256#13",
+        "ModelPrecision#246"
+      ]
+    },
     "(H256#13, bool)": {
       "kind": "tuple",
       "path": [],
@@ -1607,6 +1718,32 @@
         "u64"
       ]
     },
+    "AccountData<u128>#5": {
+      "fields": [
+        {
+          "name": "free",
+          "type": "u128"
+        },
+        {
+          "name": "reserved",
+          "type": "u128"
+        },
+        {
+          "name": "frozen",
+          "type": "u128"
+        },
+        {
+          "name": "flags",
+          "type": "ExtraFlags#7"
+        }
+      ],
+      "kind": "composite",
+      "path": [
+        "pallet_balances",
+        "types",
+        "AccountData"
+      ]
+    },
     "AccountId32#0": {
       "fields": [
         {
@@ -1619,6 +1756,35 @@
         "sp_core",
         "crypto",
         "AccountId32"
+      ]
+    },
+    "AccountInfo<u32, AccountData<u128>#5>#3": {
+      "fields": [
+        {
+          "name": "nonce",
+          "type": "u32"
+        },
+        {
+          "name": "consumers",
+          "type": "u32"
+        },
+        {
+          "name": "providers",
+          "type": "u32"
+        },
+        {
+          "name": "sufficients",
+          "type": "u32"
+        },
+        {
+          "name": "data",
+          "type": "AccountData<u128>#5"
+        }
+      ],
+      "kind": "composite",
+      "path": [
+        "frame_system",
+        "AccountInfo"
       ]
     },
     "AccountVote<u128>#57": {
@@ -2583,6 +2749,20 @@
         "BoundedVec"
       ]
     },
+    "BoundedVec<AccountId32#0>#751": {
+      "fields": [
+        {
+          "name": null,
+          "type": "Vec<AccountId32#0>"
+        }
+      ],
+      "kind": "composite",
+      "path": [
+        "bounded_collections",
+        "bounded_vec",
+        "BoundedVec"
+      ]
+    },
     "BoundedVec<AgentCapability#330>#329": {
       "fields": [
         {
@@ -2644,6 +2824,34 @@
         {
           "name": null,
           "type": "Vec<Capability#252>"
+        }
+      ],
+      "kind": "composite",
+      "path": [
+        "bounded_collections",
+        "bounded_vec",
+        "BoundedVec"
+      ]
+    },
+    "BoundedVec<H256#13>#764": {
+      "fields": [
+        {
+          "name": null,
+          "type": "Vec<H256#13>"
+        }
+      ],
+      "kind": "composite",
+      "path": [
+        "bounded_collections",
+        "bounded_vec",
+        "BoundedVec"
+      ]
+    },
+    "BoundedVec<MinerAvailability<AccountId32#0>#753>#752": {
+      "fields": [
+        {
+          "name": null,
+          "type": "Vec<MinerAvailability<AccountId32#0>#753>"
         }
       ],
       "kind": "composite",
@@ -20427,6 +20635,20 @@
         "ExactPaymentAuthorization"
       ]
     },
+    "ExtraFlags#7": {
+      "fields": [
+        {
+          "name": null,
+          "type": "u128"
+        }
+      ],
+      "kind": "composite",
+      "path": [
+        "pallet_balances",
+        "types",
+        "ExtraFlags"
+      ]
+    },
     "EzklVk#386": {
       "fields": [
         {
@@ -21178,6 +21400,52 @@
         "MemoryProfileV"
       ]
     },
+    "MinerAvailability<AccountId32#0>#753": {
+      "fields": [
+        {
+          "name": "miner",
+          "type": "AccountId32#0"
+        },
+        {
+          "name": "gpu_model",
+          "type": "BoundedVec<u8>#178"
+        },
+        {
+          "name": "vram_gb",
+          "type": "u32"
+        },
+        {
+          "name": "tee_type",
+          "type": "TeeType#249"
+        },
+        {
+          "name": "availability",
+          "type": "MinerAvailabilityStatus#259"
+        },
+        {
+          "name": "last_active",
+          "type": "u64"
+        },
+        {
+          "name": "tasks_completed",
+          "type": "u64"
+        },
+        {
+          "name": "avg_latency_ms",
+          "type": "u64"
+        },
+        {
+          "name": "success_rate",
+          "type": "Permill#430"
+        }
+      ],
+      "kind": "composite",
+      "path": [
+        "pallet_model_registry",
+        "types",
+        "MinerAvailability"
+      ]
+    },
     "MinerAvailabilityStatus#259": {
       "kind": "variant",
       "path": [
@@ -21206,6 +21474,40 @@
           "index": 3,
           "name": "Offline"
         }
+      ]
+    },
+    "MinerInfo#730": {
+      "fields": [
+        {
+          "name": "self_stake",
+          "type": "u128"
+        },
+        {
+          "name": "delegated_stake",
+          "type": "u128"
+        },
+        {
+          "name": "commission_rate",
+          "type": "Perbill#208"
+        },
+        {
+          "name": "is_active",
+          "type": "bool"
+        },
+        {
+          "name": "total_rewards_earned",
+          "type": "u128"
+        },
+        {
+          "name": "registered_at",
+          "type": "u32"
+        }
+      ],
+      "kind": "composite",
+      "path": [
+        "pallet_miner_staking",
+        "pallet",
+        "MinerInfo"
       ]
     },
     "ModelArchitecture#244": {
@@ -21296,6 +21598,116 @@
           "index": 5,
           "name": "Mixed"
         }
+      ]
+    },
+    "ModelRegistryEntry<AccountId32#0>#749": {
+      "fields": [
+        {
+          "name": "model_hash",
+          "type": "H256#13"
+        },
+        {
+          "name": "model_name",
+          "type": "BoundedVec<u8>#178"
+        },
+        {
+          "name": "version",
+          "type": "BoundedVec<u8>#183"
+        },
+        {
+          "name": "publisher",
+          "type": "AccountId32#0"
+        },
+        {
+          "name": "published_at",
+          "type": "u64"
+        },
+        {
+          "name": "model_uri",
+          "type": "BoundedVec<u8>#184"
+        },
+        {
+          "name": "license_hash",
+          "type": "H256#13"
+        },
+        {
+          "name": "architecture",
+          "type": "ModelArchitecture#244"
+        },
+        {
+          "name": "params_billion",
+          "type": "u32"
+        },
+        {
+          "name": "supported_precisions",
+          "type": "BoundedVec<ModelPrecision#246>#245"
+        },
+        {
+          "name": "gflops_per_token",
+          "type": "u64"
+        },
+        {
+          "name": "min_vram_gb",
+          "type": "u32"
+        },
+        {
+          "name": "status",
+          "type": "VerificationStatus#750"
+        },
+        {
+          "name": "approved_by",
+          "type": "BoundedVec<AccountId32#0>#751"
+        },
+        {
+          "name": "supported_tee_platforms",
+          "type": "BoundedVec<TeeType#249>#248"
+        },
+        {
+          "name": "benchmark_scores",
+          "type": "BoundedVec<BenchmarkScore#256>#255"
+        },
+        {
+          "name": "registered_miners",
+          "type": "BoundedVec<MinerAvailability<AccountId32#0>#753>#752"
+        },
+        {
+          "name": "online_miner_count",
+          "type": "u32"
+        },
+        {
+          "name": "avg_price_per_gflop",
+          "type": "u128"
+        },
+        {
+          "name": "avg_latency_ms",
+          "type": "u64"
+        },
+        {
+          "name": "p99_latency_ms",
+          "type": "u64"
+        },
+        {
+          "name": "task_success_rate",
+          "type": "Permill#430"
+        },
+        {
+          "name": "total_tasks_completed",
+          "type": "u64"
+        },
+        {
+          "name": "total_gflops_consumed",
+          "type": "u64"
+        },
+        {
+          "name": "task_types",
+          "type": "BoundedVec<Capability#252>#251"
+        }
+      ],
+      "kind": "composite",
+      "path": [
+        "pallet_model_registry",
+        "types",
+        "ModelRegistryEntry"
       ]
     },
     "ModelSource#267": {
@@ -25652,6 +26064,11 @@
         "ValidatorAttestation"
       ]
     },
+    "Vec<(AccountId32#0, AccountId32#0)>": {
+      "element": "(AccountId32#0, AccountId32#0)",
+      "kind": "sequence",
+      "path": []
+    },
     "Vec<(AccountId32#0, AirdropTier#226, u128, Option<u32>#93)>": {
       "element": "(AccountId32#0, AirdropTier#226, u128, Option<u32>#93)",
       "kind": "sequence",
@@ -25764,6 +26181,11 @@
     },
     "Vec<H256#13>": {
       "element": "H256#13",
+      "kind": "sequence",
+      "path": []
+    },
+    "Vec<MinerAvailability<AccountId32#0>#753>": {
+      "element": "MinerAvailability<AccountId32#0>#753",
       "kind": "sequence",
       "path": []
     },
@@ -25898,6 +26320,36 @@
           "fields": [],
           "index": 3,
           "name": "Expired"
+        }
+      ]
+    },
+    "VerificationStatus#750": {
+      "kind": "variant",
+      "path": [
+        "pallet_model_registry",
+        "types",
+        "VerificationStatus"
+      ],
+      "variants": [
+        {
+          "fields": [],
+          "index": 0,
+          "name": "Pending"
+        },
+        {
+          "fields": [],
+          "index": 1,
+          "name": "Verified"
+        },
+        {
+          "fields": [],
+          "index": 2,
+          "name": "Deprecated"
+        },
+        {
+          "fields": [],
+          "index": 3,
+          "name": "Revoked"
         }
       ]
     },

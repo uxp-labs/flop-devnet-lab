@@ -1,8 +1,8 @@
 // The whole decoder shape derived a second way, from the reference decoder's own parse of the
 // metadata (polkadot-api, tests only), with a namer and a type closure of its own: nothing here
 // calls src/scale. A test holds each reviewed shape file to it, so the shape the decoder pins is
-// the one an independent reader of the same metadata finds (review round 18, and round 22 for
-// spec 1014020).
+// the one an independent reader of the same metadata finds (review round 18, round 22 for
+// spec 1014020, and round 29 for the entries decoder-shape@3 adds, listed here by hand).
 import { getDynamicBuilder, getLookupFn } from "@polkadot-api/metadata-builders";
 import { decAnyMetadata, unifyMetadata } from "@polkadot-api/substrate-bindings";
 
@@ -99,12 +99,30 @@ export function referenceShape(metadata: Uint8Array) {
   const sessions = entry("FlopSessionKeys", "Sessions");
   const nonces = entry("FlopSessionKeys", "SessionNonces");
   const breakers = entry("FlopSessionKeys", "CircuitBreakers");
+  // The entries decoder-shape@3 adds, each pallet's section and each entry's key by hand.
+  const added: [section: string, pallet: string, [key: string, entry: string][]][] = [
+    ["system", "System", [["account", "Account"]]],
+    ["compute_channel", "ComputeChannel", [["failed_acks", "FailedAcks"], ["channel_authored_opened_at", "ChannelAuthoredOpenedAt"]]],
+    ["flop_session_keys", "FlopSessionKeys", [["delegate_sessions", "DelegateSessions"]]],
+    ["model_registry", "ModelRegistry", [["models", "Models"], ["measured_roots", "MeasuredRoots"], ["allowed_decode_policies", "AllowedDecodePolicies"]]],
+    ["miner_staking", "MinerStaking", [["miners", "Miners"]]],
+    ["hw_calibration", "HwCalibration", [["calibration_versions", "CalibrationVersions"], ["last_initial_calibration", "LastInitialCalibration"]]],
+  ];
+  const addedEntries = added.flatMap(([, p, es]) => es.map(([, e]) => entry(p, e)));
+  const sectionOf = (section: string, p: string, es: [string, string][]) => {
+    const x = pallet(p);
+    const out: Record<string, unknown> = Object.fromEntries(es.map(([k, e]) => [k, strip(entry(p, e))]));
+    if (["model_registry", "miner_staking", "hw_calibration"].includes(section)) Object.assign(out, { index: x?.index, storage_prefix: x?.storage?.prefix });
+    return out;
+  };
+  const more = Object.fromEntries(added.map(([section, p, es]) => [section, sectionOf(section, p, es)]));
   const versionConstant = sys?.constants.find((c) => c.name === "Version");
   const version = BUILDER.buildConstant("System", "Version").dec(versionConstant?.value ?? "0x") as { spec_name: string; spec_version: number };
   const mine = {
     compute_channel: {
       channel_states: variants(state?.type ?? -1),
       channels: { ...strip(channels), fields: fields(channel) },
+      ...more.compute_channel,
       events: variants(cc?.events ?? -1),
       index: cc?.index,
       storage_prefix: cc?.storage?.prefix,
@@ -115,8 +133,12 @@ export function referenceShape(metadata: Uint8Array) {
       storage_prefix: fsk?.storage?.prefix,
       session_nonces: strip(nonces),
       sessions: strip(sessions),
+      ...more.flop_session_keys,
     },
-    schema: "flop-observatory/decoder-shape@2",
+    hw_calibration: more.hw_calibration,
+    miner_staking: more.miner_staking,
+    model_registry: more.model_registry,
+    schema: "flop-observatory/decoder-shape@3",
     spec_name: version.spec_name,
     spec_version: version.spec_version,
     system: {
@@ -125,8 +147,9 @@ export function referenceShape(metadata: Uint8Array) {
       storage_prefix: sys?.storage?.prefix,
       last_runtime_upgrade: { ...strip(upgrade), fields: fields(composite(upgrade.valueId)) },
       version: name(versionConstant?.type ?? -1),
+      ...more.system,
     },
-    types: closure([events.valueId, upgrade.valueId, channels.valueId, ...channels.keyId, versionConstant?.type ?? -1, ...[sessions, nonces, breakers].flatMap((e) => [e.valueId, ...e.keyId])]),
+    types: closure([events.valueId, upgrade.valueId, channels.valueId, ...channels.keyId, versionConstant?.type ?? -1, ...[sessions, nonces, breakers, ...addedEntries].flatMap((e) => [e.valueId, ...e.keyId])]),
   };
   return mine;
 }

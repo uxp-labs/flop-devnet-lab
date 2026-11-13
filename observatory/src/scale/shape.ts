@@ -127,7 +127,7 @@ export const REVIEWED: readonly ReviewedShape[] = Object.freeze([
     metadataSha256: "f4fd2addba7fff1129483d0e66b8e6bc69141292f56443e201d3f073aab03444",
     metadataBytes: 482132,
     shapeFile: "shapes/tzkv-runtime-1014014.json",
-    shapeSha256: "679f98aa06abf1d9b376fe4243e4d13c1b5ae80e9b6cdf1fd1e0190c1e7660e7",
+    shapeSha256: "5e66cf79e9cd5f3ec997e9ff0ac4fca8b08923e0f5cb8f5b2d10ef4aaa03a370",
   }),
   Object.freeze({
     specName: "tzkv-runtime",
@@ -135,7 +135,7 @@ export const REVIEWED: readonly ReviewedShape[] = Object.freeze([
     metadataSha256: "91294eb61225c4de7459e6a8fed3c37169a2c8a1b1906b46a5890d5e0d328238",
     metadataBytes: 487100,
     shapeFile: "shapes/tzkv-runtime-1014020.json",
-    shapeSha256: "650b34919b04744dbbfbaaf917ce83aa804ae361d53f8c15f3979f604574dc81",
+    shapeSha256: "af3f7c6996338b8328de0e67f886c1479d5c382a9fc133ddac8d6862732fb185",
   }),
 ]);
 
@@ -421,6 +421,15 @@ export function shapeText(shape: ShapeValue): string {
   return `${JSON.stringify(sortDeep(shape), null, 2)}\n`;
 }
 
+/**
+ * The schema a shape text names at its top level, read without parsing the text, so a refusal can
+ * name the format of a file that is not the reviewed one: the one line of two spaces indent that
+ * shapeText writes for it. Null when there is no such line. Nothing is decided by it.
+ */
+export function schemaNamed(text: string): string | null {
+  return /\n {2}"schema": "([^"\\\n]{1,128})",?\n/.exec(text)?.[1] ?? null;
+}
+
 /** What a block's decode is pinned to, or the reason it is refused. */
 export type Pin = { pinned: true; metadata: Metadata; reviewed: ReviewedShape } | { pinned: false; refused: string };
 
@@ -542,7 +551,10 @@ export function pinLine(input: PinInput): Pin {
   if (i.metadata.length !== reviewed.metadataBytes || hash !== reviewed.metadataSha256) {
     return refuse(`the metadata for spec ${reviewed.specVersion} is ${i.metadata.length} bytes with sha256 ${hash}, not the reviewed ${reviewed.metadataBytes} bytes with sha256 ${reviewed.metadataSha256}`);
   }
-  if (sha256(i.shapeText) !== reviewed.shapeSha256) return refuse(`the shape file given is not the reviewed ${reviewed.shapeFile}`);
+  if (sha256(i.shapeText) !== reviewed.shapeSha256) {
+    const named = schemaNamed(i.shapeText);
+    return refuse(`the shape file given is not the reviewed ${reviewed.shapeFile}${named !== null && named !== SHAPE_SCHEMA ? `: it is ${named}, not ${SHAPE_SCHEMA}` : ""}`);
+  }
   try {
     const md = parseMetadata(i.metadata);
     const derived = shapeText(deriveShape(md));

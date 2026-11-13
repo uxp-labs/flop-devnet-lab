@@ -5,7 +5,7 @@
 // it is asked to write.
 import { readFileSync, writeFileSync } from "node:fs";
 import { parseMetadata } from "../../src/scale/metadata.js";
-import { REVIEWED, deriveShape, shapeText } from "../../src/scale/shape.js";
+import { REVIEWED, SHAPE_SCHEMA, deriveShape, schemaNamed, shapeText } from "../../src/scale/shape.js";
 import { reviewedMetadata } from "./recorded-upgrade.js";
 
 const PKG = new URL("../../", import.meta.url);
@@ -32,7 +32,8 @@ export const USAGE = "usage: node scripts/write-shape.mjs --spec <reviewed spec 
 /**
  * The command. Without --write it compares the committed file with the derived text: exit 0 when
  * they are the same bytes, 1 when not (or when the file cannot be read). With --write it writes the
- * derived text to the line's file and exits 0. A call it does not understand, or a spec no
+ * derived text to the line's file and exits 0. A committed file of another shape format is named
+ * so, with both formats. A call it does not understand, or a spec no
  * reviewed line names, is exit 2 with one line on stderr.
  */
 export function writeShapeMain(args: readonly string[], io: ShapeFileIo = fileIo): { code: number; stdout: string; stderr: string } {
@@ -52,5 +53,8 @@ export function writeShapeMain(args: readonly string[], io: ShapeFileIo = fileIo
     committed = null;
   }
   if (committed === text) return { code: 0, stdout: `${file} is the shape derived from the reviewed metadata of spec ${spec}\n`, stderr: "" };
-  return { code: 1, stdout: `${file} ${committed === null ? "cannot be read" : "differs from the shape derived from the reviewed metadata"} of spec ${spec}\n`, stderr: "" };
+  if (committed === null) return { code: 1, stdout: `${file} cannot be read; spec ${spec}\n`, stderr: "" };
+  const named = schemaNamed(committed);
+  const format = named !== null && named !== SHAPE_SCHEMA ? `: it is ${named}, not ${SHAPE_SCHEMA}` : "";
+  return { code: 1, stdout: `${file} differs from the shape derived from the reviewed metadata of spec ${spec}${format}\n`, stderr: "" };
 }

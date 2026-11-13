@@ -39,7 +39,7 @@ describe("the shape writer", () => {
     const off = memory({ [OLD.shapeFile]: `${derived.text} ` });
     expect(writeShapeMain(["--spec", String(OLD.specVersion)], off.io)).toEqual({ code: 1, stdout: `${OLD.shapeFile} differs from the shape derived from the reviewed metadata of spec ${OLD.specVersion}\n`, stderr: "" });
     const none = memory({});
-    expect(writeShapeMain(["--spec", String(OLD.specVersion)], none.io)).toMatchObject({ code: 1, stdout: `${OLD.shapeFile} cannot be read of spec ${OLD.specVersion}\n` });
+    expect(writeShapeMain(["--spec", String(OLD.specVersion)], none.io)).toMatchObject({ code: 1, stdout: `${OLD.shapeFile} cannot be read; spec ${OLD.specVersion}\n` });
     expect([same.written, off.written, none.written]).toEqual([{}, {}, {}]);
   });
 
