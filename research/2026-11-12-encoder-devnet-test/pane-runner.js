@@ -10,8 +10,9 @@
 //                                  until a final status or the deadline (X1)
 //   sendSame(bundleText, sha256)   submits again an extrinsic the sent list holds (X5)
 //   find(extrinsicHex, fromNumber) looks for the extrinsic in finalized blocks (X6)
-// The result of send, sendSame and find names its call in sent_by ("send", "sendSame" or "find"),
-// so the record knows whether a refusal answered a first send or a later sendSame (F3c).
+// Every result of send, sendSame and find names its call in sent_by ("send", "sendSame" or "find"),
+// also those that submit nothing (H7), so the record knows whether a refusal answered a first send
+// or a later sendSame (F3c). find ends within the runner's deadline (H10).
 // accountReads, deviceReads, send, sendSame and find return, beside their value, the exact text the
 // lead relays to the PC (relay) and that text's sha256 (relay_sha256) (X8). The PC refuses a text
 // whose sha256 is not the one given.
@@ -59,7 +60,7 @@
   var OUTCOMES = [
     "finalized", "finalized-not-found", "finalized-not-canonical", "finalized-unread",
     "refused-bundle", "already-sent", "not-in-sent-list", "not-sent", "refused-at-submission",
-    "deadline", "connection-lost", "ended", "not-found",
+    "deadline", "connection-lost", "ended", "not-found", "find-deadline",
   ];
 
   var HEX = /^0x([0-9a-f]{2})*$/;
@@ -326,7 +327,7 @@
           sub = s;
           if (done || locating !== null) unwatch();
         }, function (e) {
-          if (!written) { end(Object.assign({}, base, { status: "not-sent", problem: "the connection was not open: nothing was written, nothing is marked as sent" })); return; }
+          if (!written) { end(Object.assign({}, base, { status: "not-sent", problem: e && e.message === "write-failed" ? "the write to the socket failed: nothing was written, nothing is marked as sent" : "the connection was not open: nothing was written, nothing is marked as sent" })); return; }
           if (e && e.message === LOST && e.written !== undefined) { end(Object.assign({}, base, { status: "connection-lost", in_block: null, final: false, problem: "the connection was lost after the extrinsic was written to it: it may be in the pool or in a block" })); return; }
           end(Object.assign({}, base, { status: "refused-at-submission", node: nodeWords(e) }));
         });
@@ -335,8 +336,8 @@
 
     function send(bundleText, sha256) {
       return takeBundle(bundleText, sha256).then(function (b) {
-        if (b.refusal) return finish(b.refusal, null);
-        if (store.has(b.xt)) return finish(Object.assign({}, b.base, { status: "already-sent", problem: "this extrinsic was sent before: send never sends it twice. sendSame submits the same bytes again" }), null);
+        if (b.refusal) return finish(Object.assign({}, b.refusal, { sent_by: "send" }), null);
+        if (store.has(b.xt)) return finish(Object.assign({}, b.base, { sent_by: "send", status: "already-sent", problem: "this page's sent list holds these bytes: they were written to a socket before. send never sends them twice; sendSame submits the same bytes again" }), null);
         return submit(b.xt, Object.assign({}, b.base, { sent_by: "send" }), true);
       });
     }
@@ -348,8 +349,8 @@
      */
     function sendSame(bundleText, sha256) {
       return takeBundle(bundleText, sha256).then(function (b) {
-        if (b.refusal) return finish(b.refusal, null);
-        if (!store.has(b.xt)) return finish(Object.assign({}, b.base, { status: "not-in-sent-list", problem: "sendSame sends only what send sent before; use send" }), null);
+        if (b.refusal) return finish(Object.assign({}, b.refusal, { sent_by: "sendSame" }), null);
+        if (!store.has(b.xt)) return finish(Object.assign({}, b.base, { sent_by: "sendSame", status: "not-in-sent-list", problem: "sendSame sends only what send sent before; use send" }), null);
         return submit(b.xt, Object.assign({}, b.base, { sent_by: "sendSame" }), false);
       });
     }
@@ -357,28 +358,46 @@
     /**
      * Reads finalized blocks from fromNumber up to the finalized head, at most 400 a call, and looks
      * for the extrinsic (X6). Returns what send returns for a finalized extrinsic, or not-found with
-     * the range it read and the head.
+     * the range it read and the head. It ends within the runner's deadline (H10): if it has not
+     * finished, the outcome is find-deadline with the blocks it read (from, to: the last block of the
+     * blocks read one after another from fromNumber, null when none) and the head; nothing more is
+     * asked of the node after that. A block found and not read by the deadline is finalized-unread.
      */
     function find(extrinsicHex, fromNumber) {
-      if (typeof extrinsicHex !== "string" || !HEX.test(extrinsicHex) || extrinsicHex.length < 4) return finish({ status: "refused-bundle", problem: "find needs the extrinsic as 0x hex" }, null);
-      if (!Number.isSafeInteger(fromNumber) || fromNumber < 0) return finish({ status: "refused-bundle", problem: "find needs a block number to start from" }, null);
-      return Promise.all([heads(), sha256Hex(extrinsicHex)]).then(function (hx) {
-        var head = hx[0].finalized.number, to = Math.min(head, fromNumber + FIND_MAX - 1);
-        var base = { step: null, bundle_sha256: null, extrinsic_sha256: hx[1], extrinsic_hash: null, found_by: "find", sent_by: "find", statuses: [] };
+      if (typeof extrinsicHex !== "string" || !HEX.test(extrinsicHex) || extrinsicHex.length < 4) return finish({ status: "refused-bundle", sent_by: "find", problem: "find needs the extrinsic as 0x hex" }, null);
+      if (!Number.isSafeInteger(fromNumber) || fromNumber < 0) return finish({ status: "refused-bundle", sent_by: "find", problem: "find needs a block number to start from" }, null);
+      return sha256Hex(extrinsicHex).then(function (xsha) {
+        var base = { step: null, bundle_sha256: null, extrinsic_sha256: xsha, extrinsic_hash: null, found_by: "find", sent_by: "find", statuses: [] };
         var raw = { statuses: [], events_raw: null };
-        var n = fromNumber;
-        function chunk() {
-          if (n > to) return finish(Object.assign({}, base, { status: "not-found", from: fromNumber, to: to < fromNumber ? null : to, head: head, problem: to < fromNumber ? "the finalized head is below the block to start from" : "not in any finalized block read" }), raw);
-          var nums = [];
-          for (var i = 0; i < 20 && n <= to; i++, n++) nums.push(n);
-          return Promise.all(nums.map(function (k) {
-            return t.request("chain_getBlockHash", [k]).then(function (h) { return t.request("chain_getBlock", [h]).then(function (b) { return { hash: h, has: b.block.extrinsics.indexOf(extrinsicHex) >= 0 }; }); });
-          })).then(function (rs) {
-            for (var j = 0; j < rs.length; j++) if (rs[j].has) return locate(extrinsicHex, rs[j].hash, base, raw).then(function (v) { return finish(v, raw); });
-            return chunk();
-          });
-        }
-        return chunk();
+        return new Promise(function (resolve, reject) {
+          var done = false, head = null, readTo = null, locating = null, timer = null;
+          function end(value) { if (done) return; done = true; clearTimeout(timer); resolve(finish(value, raw)); }
+          function fail(e) { if (done) return; done = true; clearTimeout(timer); reject(e); }
+          timer = setTimeout(function () {
+            if (locating !== null) { end(Object.assign({}, base, { status: "finalized-unread", block_hash: locating, problem: "find found the extrinsic in this finalized block and did not read the block before the deadline" })); return; }
+            end(Object.assign({}, base, { status: "find-deadline", from: fromNumber, to: readTo, head: head, problem: readTo === null ? "find did not finish before the deadline and read no block" : "find did not finish before the deadline: it read the finalized blocks " + fromNumber + " to " + readTo + " and the extrinsic is not in them" }));
+          }, deadlineMs);
+          heads().then(function (h) {
+            if (done) return;
+            head = h.finalized.number;
+            var to = Math.min(head, fromNumber + FIND_MAX - 1), n = fromNumber;
+            function chunk() {
+              if (done) return;
+              if (n > to) { end(Object.assign({}, base, { status: "not-found", from: fromNumber, to: to < fromNumber ? null : to, head: head, problem: to < fromNumber ? "the finalized head is below the block to start from" : "not in any finalized block read" })); return; }
+              var nums = [];
+              for (var i = 0; i < 20 && n <= to; i++, n++) nums.push(n);
+              Promise.all(nums.map(function (k) {
+                return t.request("chain_getBlockHash", [k]).then(function (bh) { return t.request("chain_getBlock", [bh]).then(function (b) { return { hash: bh, has: b.block.extrinsics.indexOf(extrinsicHex) >= 0 }; }); });
+              })).then(function (rs) {
+                if (done) return;
+                for (var j = 0; j < rs.length; j++) if (rs[j].has) { locating = rs[j].hash; locate(extrinsicHex, rs[j].hash, base, raw).then(end, fail); return; }
+                readTo = nums[nums.length - 1];
+                chunk();
+              }, fail);
+            }
+            chunk();
+          }, fail);
+        });
       });
     }
 

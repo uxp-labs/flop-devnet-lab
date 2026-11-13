@@ -397,3 +397,60 @@ test("F3c: send, sendSame and find name their call in sent_by", async () => {
   assert.equal(JSON.parse((await lab.sendSame(BUNDLE, sha(BUNDLE))).relay).sent_by, "sendSame");
   assert.equal((await lab.find(XT, 7)).sent_by, "find");
 });
+
+// ---- fix round 3 ------------------------------------------------------------------------------
+
+test("H7: every result of send, sendSame and find names its call, also those that submit nothing", async () => {
+  const node = scriptedNode({ statuses: ["ready"] });
+  const lab = runner(node, { deadlineMs: 30 });
+  const r = [await lab.send(BUNDLE, "00".repeat(32)), await lab.sendSame(BUNDLE, "00".repeat(32)), await lab.sendSame(BUNDLE, sha(BUNDLE)), await lab.send(BUNDLE, sha(BUNDLE)), await lab.send(BUNDLE, sha(BUNDLE)), await lab.find("xx", 1), await lab.find(XT, -1)];
+  assert.deepEqual(r.map((x) => [x.status, x.sent_by]), [["refused-bundle", "send"], ["refused-bundle", "sendSame"], ["not-in-sent-list", "sendSame"], ["deadline", "send"], ["already-sent", "send"], ["refused-bundle", "find"], ["refused-bundle", "find"]]);
+  for (const x of r) assert.equal(JSON.parse(x.relay).sent_by, x.sent_by, "the relay text carries it");
+  assert.match(r[4].problem, /sent list holds these bytes: they were written to a socket before/);
+});
+
+test("H10: find ends within the runner's deadline: find-deadline with the blocks it read, and nothing is asked of the node after it", async () => {
+  const node = scriptedNode({ head: 1000 });
+  const slow = { request: (m, p) => new Promise((res, rej) => setTimeout(() => node.transport.request(m, p).then(res, rej), m === "chain_getBlock" ? 12 : 0)), subscribe: node.transport.subscribe };
+  const lab = load().createRunner({ transport: slow, store: memStore(), deadlineMs: 60 });
+  const r = await lab.find(XT, 100);
+  assert.equal(r.status, "find-deadline");
+  assert.equal(r.sent_by, "find");
+  assert.equal(r.from, 100);
+  assert.equal(r.head, 1000);
+  assert.ok(Number.isInteger(r.to) && r.to >= 119 && r.to < 499 && (r.to - 99) % 20 === 0, `to ${r.to}: a whole number of chunks of 20 read`);
+  assert.match(r.problem, new RegExp(`it read the finalized blocks 100 to ${r.to} and the extrinsic is not in them`));
+  assert.equal(r.extrinsic_sha256, sha(XT), "record-step can match it to the signed file");
+  const asked = node.log.length;
+  await new Promise((res) => setTimeout(res, 100));
+  assert.ok(node.log.length - asked <= 20, "at most the blocks of the chunk in flight are answered after the deadline");
+  const later = node.log.length;
+  await new Promise((res) => setTimeout(res, 60));
+  assert.equal(node.log.length, later, "no new chunk is asked after the deadline");
+  // a node that never answers the head: find-deadline with no block read
+  const mute = load().createRunner({ transport: { request: () => new Promise(() => {}), subscribe: node.transport.subscribe }, store: memStore(), deadlineMs: 30 });
+  const m = await mute.find(XT, 5);
+  assert.deepEqual([m.status, m.to, m.head], ["find-deadline", null, null]);
+  assert.match(m.problem, /read no block/);
+});
+
+test("H10: a block find found and could not read before the deadline is finalized-unread with its hash", async () => {
+  const node = scriptedNode({ blocks: { [H(7)]: { number: 7, extrinsics: [XT], events: EVENTS } }, head: 9 });
+  const t = { request: (m, p) => (m === "state_getStorage" ? new Promise(() => {}) : node.transport.request(m, p)), subscribe: node.transport.subscribe };
+  const r = await load().createRunner({ transport: t, store: memStore(), deadlineMs: 80 }).find(XT, 3);
+  assert.deepEqual([r.status, r.block_hash, r.sent_by], ["finalized-unread", H(7), "find"]);
+});
+
+test("H11: the not-sent words after a write that threw say that the write failed", async () => {
+  const pr = load();
+  const sockets = [];
+  class WS { constructor() { this.readyState = 0; sockets.push(this); } send() { throw new Error("boom"); } close() {} }
+  const lab = pr.createRunner({ transport: pr.wsTransport(undefined, WS), store: memStore(), deadlineMs: 300 });
+  const p = lab.send(BUNDLE, sha(BUNDLE));
+  await new Promise((res) => setTimeout(res, 10));
+  sockets[0].readyState = 1; sockets[0].onopen();
+  const r = await p;
+  assert.equal(r.status, "not-sent");
+  assert.match(r.problem, /^the write to the socket failed: nothing was written, nothing is marked as sent$/);
+  assert.doesNotMatch(r.problem, /not open/);
+});

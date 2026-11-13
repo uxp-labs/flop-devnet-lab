@@ -31,9 +31,21 @@ Order of work (the brief's): H1 with H2, H3, H4; H5; H6 to H11; the words; the m
   key: retireTo first (with --again and a signed file), then the lone check with or without
   --again. retire uses retireTo. Test in sign-device.test.mjs (H6).
 
+- H7: pane-runner.js: refused-bundle, not-in-sent-list and already-sent of send and sendSame, and
+  refused-bundle of find, carry sent_by. Test in pane-runner.test.mjs (H7).
+- H10: pane-runner.js find ends within the runner's deadline: find-deadline with from, to (the
+  last block of the chunks read one after another, null for none) and head; no new chunk after it;
+  a block found and not read by then is finalized-unread. OUTCOMES and steps.json send_outcomes
+  hold find-deadline (P2 covers it). lead-stop findCovers counts its range. Tests in
+  pane-runner.test.mjs (H10, 2).
+- H11: the not-sent words after a write that threw: "the write to the socket failed". Test (H11).
+- already-sent row of send_outcomes says what H2 makes of it. plan.md regenerated; the README's
+  sha256 line of pane-runner.js is fe91c295...fcc1e8 (plan.mjs sha256s).
+- All 279 tests of the folder pass, the reviewers' 8 among them.
+
 ### Next
 
-H7 to H11, then the words and the mutants.
+H8, H9, then the words and the mutants.
 
 ### Decisions (fix round 3) and why
 

@@ -46,7 +46,7 @@ pane before use. `node plan.mjs sha256s` prints both, and the reader's list prin
 
 ```
 # the node's tab, https://rpc.devnet.flop.network/: put the text of pane-runner.js in window.__src, check its sha256 there, then run it and make the runner
-#   sha256 of pane-runner.js: ce0ad874c48ae5d58900b0960cf542f9984c81df8132591c4d4c8ba68ea02efb
+#   sha256 of pane-runner.js: fe91c295a41e59ea56d9b7b5ee1fcbcb990f2961b2a7d628f89d1bf66fbcc1e8
 #   [...new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(window.__src)))].map((b) => b.toString(16).padStart(2, "0")).join("")
 #   (0, eval)(window.__src); const lab = paneRunner.createRunner()
 # the explorer's tab, https://explorer.devnet.flop.network/: the same with explorer-reader.js
