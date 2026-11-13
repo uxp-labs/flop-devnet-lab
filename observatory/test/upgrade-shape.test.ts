@@ -162,6 +162,11 @@ describe("the shape diff, scripts/shape-diff.mjs", () => {
     ["a compact's inner type changed", (c) => { c.types["Compact<u64>"] = { kind: "compact", path: [], type: "u64" }; ty(c, c.system.last_runtime_upgrade.value).fields[0].type = "Compact<u64>"; }, /^System\.LastRuntimeUpgrade value\.spec_version inner: type was u32, now u64$/],
     ["a tuple key lost a part", (c) => { ty(c, c.flop_session_keys.sessions.key).types.pop(); }, /^FlopSessionKeys\.Sessions key: type was \(AccountId32, AccountId32\), now \(AccountId32, AccountId32\)$/],
     ["a tuple key part changed", (c) => { ty(c, c.flop_session_keys.sessions.key).types[1] = "H256#13"; }, /^FlopSessionKeys\.Sessions key\.1:/],
+    // Round 29: the entries and pallets of decoder-shape@3.
+    ["a new entry's hasher changed", (c) => { c.miner_staking.miners.hashers = ["Twox64Concat"]; }, /^MinerStaking\.Miners hashers:/],
+    ["a new pallet's index changed", (c) => { c.hw_calibration.index += 1; }, /^HwCalibration index:/],
+    ["a new entry's value changed deep inside", (c) => { ty(c, c.system.account.value).fields[0].type = "u64"; }, /^System\.Account value\.nonce: type was u32, now u64$/],
+    ["a new tuple key part changed", (c) => { ty(c, c.model_registry.measured_roots.key).types[1] = "u8"; }, /^ModelRegistry\.MeasuredRoots key\.1:/],
   ];
   it.each(CASES)("prints a line where the change is: %s", (_what, f, line) => {
     const lines = changed(f);

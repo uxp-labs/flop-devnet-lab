@@ -370,16 +370,16 @@
   {
     "id": "shape-file-hash-unchecked",
     "file": "src/scale/shape.ts",
-    "find": "  if (sha256(i.shapeText) !== reviewed.shapeSha256) return refuse(`the shape file given is not the reviewed ${reviewed.shapeFile}`);\n",
-    "replace": "",
+    "find": "  if (sha256(i.shapeText) !== reviewed.shapeSha256) {",
+    "replace": "  if (false) {",
     "test": "test/shape.test.ts",
     "why": "the shape file must be the reviewed file"
   },
   {
     "id": "shape-channel-fields-dropped",
     "file": "src/scale/shape.ts",
-    "find": "      channels: { ...entryShape(n, channels), fields: fieldsOf(n, channel) },",
-    "replace": "      channels: { ...entryShape(n, channels) },",
+    "find": "  ccs.channels = { ...(ccs.channels as { [key: string]: ShapeValue }), fields: fieldsOf(n, channel) };",
+    "replace": "",
     "test": "test/shape.test.ts",
     "why": "the shape holds the fields of the channel value, and the file is held to the shape derived again"
   },
@@ -690,8 +690,8 @@
   {
     "id": "r18-closure-root-dropped",
     "file": "src/scale/shape.ts",
-    "find": "  const roots = [events.value, upgrade.value, channels.value, ...keyOf(channels), version.type, ...[sessions, nonces, breakers].flatMap((e) => [e.value, ...keyOf(e)])];",
-    "replace": "  const roots = [events.value, upgrade.value, channels.value];",
+    "find": "  const roots = [version.type, ...entries.flat().flatMap((e) => [e.entry.value, ...keyOf(e.entry)])];",
+    "replace": "  const roots = [version.type];",
     "test": "test/shape.test.ts",
     "why": "the closure starts from every root the observatory relies on"
   },
@@ -738,50 +738,50 @@
   {
     "id": "r19-session-roots-dropped",
     "file": "src/scale/shape.ts",
-    "find": "version.type, ...[sessions, nonces, breakers].flatMap((e) => [e.value, ...keyOf(e)])];",
-    "replace": "version.type];",
+    "find": "...entries.flat().flatMap((e) => [e.entry.value, ...keyOf(e.entry)])",
+    "replace": "...entries.flat().slice(0, 4).flatMap((e) => [e.entry.value, ...keyOf(e.entry)])",
     "test": "test/shape.test.ts",
-    "why": "the type closure starts from the FlopSessionKeys keys and values too"
+    "why": "the type closure starts from the keys and values of every stated entry, FlopSessionKeys' and the round 29 pallets' too"
   },
   {
     "id": "r19-session-pallet-unchecked",
     "file": "src/scale/shape.ts",
-    "find": "  if (fsk === undefined) throw new ScaleError(\"the metadata has no FlopSessionKeys pallet\");",
+    "find": "    if (p === undefined) throw new ScaleError(`the metadata has no ${name} pallet`);",
     "replace": "",
     "test": "test/review-decoder.test.ts",
-    "why": "metadata without FlopSessionKeys is refused with a ScaleError, not a TypeError"
+    "why": "metadata without a stated pallet (FlopSessionKeys and the round 29 pallets included) is refused with a ScaleError, not a TypeError"
   },
   {
     "id": "r19-session-index-wrong",
     "file": "src/scale/shape.ts",
-    "find": "      index: fsk.index,",
-    "replace": "      index: cc.index,",
+    "find": "{ index: p.index, storage_prefix: prefixOf(p) }",
+    "replace": "{ index: cc.index, storage_prefix: prefixOf(p) }",
     "test": "test/shape.test.ts",
-    "why": "the shape states FlopSessionKeys' own pallet index"
+    "why": "the shape states each stated pallet's own index"
   },
   {
     "id": "r19-nonces-stated-as-sessions",
     "file": "src/scale/shape.ts",
-    "find": "      session_nonces: entryShape(n, nonces),",
-    "replace": "      session_nonces: entryShape(n, sessions),",
+    "find": "section[e.key] = entryShape(n, e.entry);",
+    "replace": "section[e.key] = entryShape(n, (entries[i] ?? [])[0]?.entry ?? e.entry);",
     "test": "test/shape.test.ts",
     "why": "each entry is stated by its own modifier, key, value and default"
   },
   {
     "id": "r19-stated-breakers-dropped",
     "file": "src/scale/shape.ts",
-    "find": "  Object.freeze([\"FlopSessionKeys\", \"CircuitBreakers\"] as const),\n]);",
-    "replace": "]);",
+    "find": "    [\"CircuitBreakers\", \"circuit_breakers\"],\n",
+    "replace": "",
     "test": "test/storage-values.test.ts",
     "why": "the door reads every entry the shape states"
   },
   {
     "id": "r19-stated-extra-entry",
     "file": "src/scale/shape.ts",
-    "find": "  Object.freeze([\"FlopSessionKeys\", \"CircuitBreakers\"] as const),\n]);",
-    "replace": "  Object.freeze([\"FlopSessionKeys\", \"CircuitBreakers\"] as const),\n  Object.freeze([\"FlopSessionKeys\", \"DelegateSessions\"] as const),\n]);",
-    "test": "test/shape.test.ts",
-    "why": "the door reads no entry the shape does not state"
+    "find": "= statedEntriesOf(STATED_TABLE);",
+    "replace": "= Object.freeze([...statedEntriesOf(STATED_TABLE), Object.freeze([\"ModelRegistry\", \"ModelsByMiner\"] as const)]);",
+    "test": "test/stated-table.test.ts",
+    "why": "the door reads no entry the shape does not state: the list is the table's"
   },
   {
     "id": "r19-door-stated-unchecked",
@@ -986,10 +986,10 @@
   {
     "id": "rs-shape-breakers-as-sessions",
     "file": "src/scale/shape.ts",
-    "find": "circuit_breakers: entryShape(n, breakers),",
-    "replace": "circuit_breakers: entryShape(n, sessions),",
+    "find": "section[e.key] = entryShape(n, e.entry);",
+    "replace": "section[e.key] = entryShape(n, (entries[i] ?? []).at(-1)?.entry ?? e.entry);",
     "test": "test/shape.test.ts",
-    "why": "the breakers entry is stated as the sessions entry (review round 19)"
+    "why": "an entry is stated as another of its pallet (review round 19)"
   },
   {
     "id": "rs-shape-sessions-modifier",
@@ -1098,8 +1098,8 @@
   {
     "id": "r20-shape-prefix-dropped",
     "file": "src/scale/shape.ts",
-    "find": "      storage_prefix: prefixOf(fsk),",
-    "replace": "",
+    "find": "{ index: p.index, storage_prefix: prefixOf(p) }",
+    "replace": "{ index: p.index }",
     "test": "test/shape.test.ts",
     "why": "the shape states the storage prefix of each stated pallet"
   },
@@ -1298,16 +1298,16 @@
   {
     "id": "r23-stated-not-frozen",
     "file": "src/scale/shape.ts",
-    "find": "= Object.freeze([\n  Object.freeze([\"System\", \"Events\"] as const),",
-    "replace": "= ([\n  Object.freeze([\"System\", \"Events\"] as const),",
+    "find": "  return Object.freeze(table.flatMap(",
+    "replace": "  return (table.flatMap(",
     "test": "test/reviewed-frozen.test.ts",
     "why": "STATED_ENTRIES is frozen: no entry is added (review round 23, R1)"
   },
   {
     "id": "r23-stated-pair-not-frozen",
     "file": "src/scale/shape.ts",
-    "find": "  Object.freeze([\"System\", \"Events\"] as const),",
-    "replace": "  [\"System\", \"Events\"] as const,",
+    "find": "p.entries.map((e) => Object.freeze([p.pallet, e.entry] as const))",
+    "replace": "p.entries.map((e) => [p.pallet, e.entry] as const)",
     "test": "test/reviewed-frozen.test.ts",
     "why": "a stated pair is frozen (review round 23, R1)"
   },
@@ -1526,5 +1526,93 @@
     "replace": "return { found: true, reviewed: reviewedCopy(line), named: null };",
     "test": "test/block-runtime.test.ts",
     "why": "a found answer is the line alone (upgrade watch, D3)"
+  },
+  {
+    "id": "r29-table-entry-dropped",
+    "file": "src/scale/shape.ts",
+    "find": "    [\"Account\", \"account\"],\n",
+    "replace": "",
+    "test": "test/stated-table.test.ts",
+    "why": "the table states System.Account, so the list and the shape hold it (round 29, B1)"
+  },
+  {
+    "id": "r29-table-key-not-snake",
+    "file": "src/scale/shape.ts",
+    "find": "[\"FailedAcks\", \"failed_acks\"]",
+    "replace": "[\"FailedAcks\", \"failedacks\"]",
+    "test": "test/stated-table.test.ts",
+    "why": "an entry's key is its name in snake case (round 29, A2)"
+  },
+  {
+    "id": "r29-table-entries-not-frozen",
+    "file": "src/scale/shape.ts",
+    "find": "entries: Object.freeze(entries.map(([entry, key]) => Object.freeze({ entry, key })))",
+    "replace": "entries: entries.map(([entry, key]) => ({ entry, key }))",
+    "test": "test/reviewed-frozen.test.ts",
+    "why": "a stated pallet's entry list and each entry are frozen (round 29, B1)"
+  },
+  {
+    "id": "r29-table-not-frozen",
+    "file": "src/scale/shape.ts",
+    "find": "export const STATED_TABLE: readonly StatedPallet[] = Object.freeze([",
+    "replace": "export const STATED_TABLE: readonly StatedPallet[] = ([",
+    "test": "test/reviewed-frozen.test.ts",
+    "why": "the stated table is frozen: no pallet is added (round 29, B1)"
+  },
+  {
+    "id": "r29-section-entries-dropped",
+    "file": "src/scale/shape.ts",
+    "find": "    for (const e of entries[i] ?? []) section[e.key] = entryShape(n, e.entry);\n",
+    "replace": "",
+    "test": "test/stated-table.test.ts",
+    "why": "deriveShape writes one entry for each line of the table (round 29, B1)"
+  },
+  {
+    "id": "r29-pin-format-unnamed",
+    "file": "src/scale/shape.ts",
+    "find": "    return refuse(`the shape file given is not the reviewed ${reviewed.shapeFile}${named",
+    "replace": "    return refuse(`the shape file given is not the reviewed ${reviewed.shapeFile}${null",
+    "test": "test/shape-at-2.test.ts",
+    "why": "the pin's refusal of a shape file of another format names both formats (round 29, A4)"
+  },
+  {
+    "id": "r29-schema-named-any-indent",
+    "file": "src/scale/shape.ts",
+    "find": "/\\n {2}\"schema\"",
+    "replace": "/\\n {2,}\"schema\"",
+    "test": "test/shape-at-2.test.ts",
+    "why": "the schema is read only from the top level line shapeText writes (round 29, A4)"
+  },
+  {
+    "id": "r29-writer-writes-unasked",
+    "file": "test/helpers/shape-file.ts",
+    "find": "  if (write) {",
+    "replace": "  if (true) {",
+    "test": "test/write-shape.test.ts",
+    "why": "the shape writer writes only with --write (round 29, B4)"
+  },
+  {
+    "id": "r29-writer-format-unnamed",
+    "file": "test/helpers/shape-file.ts",
+    "find": "const format = named !== null && named !== SHAPE_SCHEMA ?",
+    "replace": "const format = false ?",
+    "test": "test/shape-at-2.test.ts",
+    "why": "the writer's compare names both formats for a committed file of another (round 29, A4)"
+  },
+  {
+    "id": "r29-diff-entry-unread",
+    "file": "scripts/shape-diff.mjs",
+    "find": "  [\"miner_staking\", \"miners\", \"MinerStaking.Miners\"],\n",
+    "replace": "",
+    "test": "test/upgrade-shape.test.ts",
+    "why": "the shape diff compares every stated entry, the round 29 ones too (round 29, B5)"
+  },
+  {
+    "id": "r29-diff-schema-at-2",
+    "file": "scripts/shape-diff.mjs",
+    "find": "export const SHAPE_SCHEMA = \"flop-observatory/decoder-shape@3\";",
+    "replace": "export const SHAPE_SCHEMA = \"flop-observatory/decoder-shape@2\";",
+    "test": "test/shape-at-2.test.ts",
+    "why": "the shape diff reads decoder-shape@3 and refuses @2 (round 29, A4)"
   }
 ]

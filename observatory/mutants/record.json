@@ -698,10 +698,10 @@
   {
     "id": "fill-absent-without-null",
     "file": "test/helpers/rerun-fill.ts",
-    "find": "      if (answer === null) out.reads_after[f] = \"absent\";",
-    "replace": "      if (answer === null || answer !== null) out.reads_after[f] = \"absent\";",
+    "find": "      out.reads_after[f] = v.stored ? text(value) : \"absent\";",
+    "replace": "      out.reads_after[f] = \"absent\";",
     "test": "test/rerun-results.test.ts",
-    "why": "absent only when the batch answer lists the key with null (M1)"
+    "why": "absent only when the node holds no value under the key (M1); a stored value is its decimal text"
   },
   {
     "id": "fill-refused-batch-read",
@@ -710,5 +710,21 @@
     "replace": "",
     "test": "test/rerun-results.test.ts",
     "why": "a refused batch answer fills nothing (L4)"
+  },
+  {
+    "id": "r29-fill-delegate-pairs-dropped",
+    "file": "test/helpers/rerun-fill.ts",
+    "find": "value.length === 0 ? \"empty\" : JSON.stringify(value)",
+    "replace": "\"empty\"",
+    "test": "test/rerun-results.test.ts",
+    "why": "a non empty DelegateSessions list is written as its pairs, never as empty (round 29, C1)"
+  },
+  {
+    "id": "r29-fill-shape-unnamed",
+    "file": "test/helpers/rerun-fill.ts",
+    "find": "  shape: SHAPE_SCHEMA,\n",
+    "replace": "",
+    "test": "test/rerun-results.test.ts",
+    "why": "filled_from names the shape format the door pinned (round 29, C1)"
   }
 ]
