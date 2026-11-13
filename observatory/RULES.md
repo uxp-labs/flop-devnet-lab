@@ -989,7 +989,9 @@ for everything it reads.
   are kept apart and the value it answers stays unknown.
 - The fifth list reads the encoder's devnet test at spec 1014020: the start block and the block of
   each sent step, each hash by its height, and at each one `state_queryStorageAt` of the same eight
-  keys in one fixed order, built from the 1014020 metadata. It reads `System.Account`, an entry the
+  keys in one fixed order, built from the 1014020 metadata; each step's block whole by
+  `chain_getBlock` at its hash; and for each step signed with a mortal era the hash at the era's
+  birth height, which the step's signature binds. 32 calls. It reads `System.Account`, an entry the
   reviewed shape does not state: the recorder asks any key, and until a reviewed shape states it,
   the value it answers stays undecoded, kept apart, and unknown.
 - Nothing is sent before the whole list is judged: a list not in that form is refused, and the run

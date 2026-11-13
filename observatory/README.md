@@ -279,7 +279,7 @@ building and testing decoders against real data. It is evidence, never proof of 
   like code, and it is the list to be recorded next.
 - The list it holds now is the fifth: the lab's devnet test of the chain encoder
   (`research/2026-11-12-encoder-devnet-test`), run on 2026-11-13 at spec 1014020, eight transactions
-  of nine planned (T7 was not needed), 20 calls. It asks the finalized head and the genesis hash,
+  of nine planned (T7 was not needed), 32 calls. It asks the finalized head and the genesis hash,
   then for nine blocks, the finalized block the run started from (`start.finalized` of the test's
   `results.json`) and the block of each sent step (`steps.N.run_time.sent`), the hash at its height
   and one `state_queryStorageAt` at that hash. Each of those nine batches asks the same eight keys in
@@ -288,14 +288,20 @@ building and testing decoders against real data. It is evidence, never proof of 
   `CircuitBreakers(device)`, and `ComputeChannel` `Channels` of the channel of T3. The same eight at
   every block: the final record of the test needs the accounts, the session, its nonce and the
   breaker after every step, and the channel is read before it exists, while it is open and after it
-  expired. 72 keys. By method: chain_getFinalizedHead 1, chain_getBlockHash 10,
-  state_queryStorageAt 9. `System.Account` is not in the decoder's reviewed shape: the recorder asks
+  expired. 72 keys. After the batch of each step's block, the list asks the block itself
+  (`chain_getBlock` at its hash), so the recording holds the extrinsics as the block holds them: the
+  extrinsic at the index the run time record names must be byte for byte the step's signed
+  extrinsic. After that, for the four steps signed with a mortal era (T3 to T6), it asks the hash at
+  the era's birth height, the hash the step's signature binds. By method: chain_getFinalizedHead 1,
+  chain_getBlockHash 14, state_queryStorageAt 9, chain_getBlock 8. It is the first list to ask
+  `chain_getBlock`, which the read only guard already allowed. `System.Account` is not in the decoder's reviewed shape: the recorder asks
   any key, and its decode is a later piece; nothing in src changed for it.
 - Nothing in the fifth list is typed by hand: `test/helpers/requests/list-5.ts`, its plan, derives
   it from `recordings/requests-inputs.json` (the owner and the device from the test's `results.json`
   `accounts`, the named miner from the value `NAMED` of its `steps.json`, the channel from the
   `ComputeChannel.ForceOpenRequested` the explorer gave for T3, each block's height and hash from
-  `results.json`) and from the 1014020 metadata, found on the third recording's tape by the sha256
+  `results.json`, each birth block from `era.birth_number` and `era.birth_hash` of the step's file in
+  the test's `run-2026-11-13/signed/`) and from the 1014020 metadata, found on the third recording's tape by the sha256
   its `REVIEWED` line gives. `test/encoder-requests.test.ts` holds the file to that plan byte for
   byte, reads it a second way from `steps.json` and `results.json`, builds every key again with the
   reference decoder, derives the channel id again from `steps.json`, and holds every input to the
