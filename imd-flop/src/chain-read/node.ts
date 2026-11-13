@@ -67,12 +67,32 @@ const NUMBER = /^0x(?:0|[1-9a-f][0-9a-f]{0,7})$/;
 /** The largest block number a chain read takes: a u32. */
 const U32_MAX = 0xffffffff;
 
+/** The words of what a transport threw: an Error's text message, read inside its own guard (rule X4), or "the transport failed". */
+function thrownWords(e: unknown): string {
+  try {
+    const m = e instanceof Error ? e.message : undefined;
+    return typeof m === "string" ? serverText(m) : "the transport failed";
+  } catch {
+    return "the transport failed";
+  }
+}
+
 /** One call, its throw turned into unknown with the method's name and the node's words, through server-text.ts. */
 async function call(t: Transport, method: ReadMethod, params: readonly unknown[]): Promise<Got<unknown>> {
   try {
     return known(await t(method, params));
   } catch (e) {
-    return unknown(`${method}: ${serverText(e instanceof Error ? e.message : "the transport failed")}`);
+    return unknown(`${method}: ${thrownWords(e)}`);
+  }
+}
+
+/** The length of a header's JSON text, or null when it cannot be measured (rule X4). */
+function measured(h: object): number | null {
+  try {
+    const text = JSON.stringify(h);
+    return typeof text === "string" ? text.length : null;
+  } catch {
+    return null;
   }
 }
 
@@ -111,7 +131,9 @@ export async function header(t: Transport, hash: string): Promise<Got<Header>> {
   const h = a.value;
   if (h === null) return unknown(`chain_getHeader: the node holds no block ${hash}`);
   if (typeof h !== "object" || Array.isArray(h)) return unknown("chain_getHeader: the answer is not a header");
-  if (JSON.stringify(h).length > CAPS.header) return unknown(`chain_getHeader: the answer is more than its cap of ${CAPS.header} characters`);
+  const size = measured(h);
+  if (size === null) return unknown("chain_getHeader: the answer cannot be measured");
+  if (size > CAPS.header) return unknown(`chain_getHeader: the answer is more than its cap of ${CAPS.header} characters`);
   const { number, parentHash } = h as { number?: unknown; parentHash?: unknown };
   if (typeof number !== "string" || !NUMBER.test(number)) return unknown("chain_getHeader: the header's number is not a hex quantity of a u32");
   if (typeof parentHash !== "string" || !HASH.test(parentHash)) return unknown("chain_getHeader: the header's parentHash is not a 32 byte hash");

@@ -7,6 +7,7 @@
  */
 import { afterEach, describe, expect, it } from "vitest";
 import { CAPS, nodeTransport, READ_METHODS } from "../src/chain-read/node.js";
+import { readSessionState } from "../src/chain-read/read.js";
 import { RERUN_RESULTS, repoJson, rerunScript } from "./lib/recorded-node.js";
 
 const RESULTS = repoJson(RERUN_RESULTS);
@@ -67,5 +68,33 @@ describe("X2 with X6: nothing but the five", () => {
     for (const m of READ_METHODS) await t(m, []);
     expect(seen.sockets).toBe(5);
     expect(seen.sent.map((f) => f.method)).toEqual([...READ_METHODS]);
+  });
+});
+
+describe("X4: nothing a transport does makes a read throw", () => {
+  it("a thrown value whose message cannot be read gives the transport failed", async () => {
+    const bad = { get message(): string { throw new Error("no"); } };
+    Object.setPrototypeOf(bad, Error.prototype);
+    const t = async () => {
+      throw bad;
+    };
+    const r = await readSessionState(t, OWNER, DEV1);
+    expect(r).toEqual({ kind: "unknown", reason: "the finalized head: chain_getFinalizedHead: the transport failed" });
+  });
+
+  it("a thrown value that is not an Error gives the transport failed", async () => {
+    const t = async () => {
+      throw "a text";
+    };
+    expect(await readSessionState(t, OWNER, DEV1)).toEqual({ kind: "unknown", reason: "the finalized head: chain_getFinalizedHead: the transport failed" });
+  });
+
+  it("a header that cannot be measured is unknown", async () => {
+    const base = rerunScript(A6.block_hash);
+    const loop: Record<string, unknown> = { number: "0x1", parentHash: `0x${"00".repeat(32)}` };
+    loop.self = loop;
+    const t = async (m: string, p: readonly unknown[]) => (m === "chain_getHeader" ? loop : m === "chain_getFinalizedHead" ? base.head : null);
+    const r = await readSessionState(t as any, OWNER, DEV1);
+    expect(r).toEqual({ kind: "unknown", reason: "the finalized head's header: chain_getHeader: the answer cannot be measured" });
   });
 });
