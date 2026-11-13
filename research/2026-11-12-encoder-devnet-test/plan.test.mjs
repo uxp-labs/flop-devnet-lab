@@ -159,6 +159,7 @@ test("R8 P4: after a stop the judge sends the cleanup steps whose condition stan
   const t5 = asPlanned(DEV, "T5").results;
   t5.steps.find((x) => x.step === "T5").run_time.explorer.success = false;
   t5.steps.find((x) => x.step === "T5").run_time.explorer.error = { pallet_index: 4, error_index: 2, name: null };
+  t5.steps.find((x) => x.step === "T5").run_time.explorer.names = ["System.ExtrinsicFailed"]; // F2: the names agree with success
   const n = nextOf(plan, t5);
   assert.equal(n.stopped_at, "T5");
   assert.deepEqual(n.cleanup, ["T6", "T8", "T9"], "T7 does not apply: T5 opened nothing");

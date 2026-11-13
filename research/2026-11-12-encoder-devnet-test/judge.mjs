@@ -51,6 +51,12 @@ export function recordProblems(plan, results) {
     if (seen.has(e.step)) out.push({ id: e.step, problem: `the record holds ${e.step} twice` });
     seen.set(e.step, true);
     const v = viewOf(results, e.step);
+    const ex = results.record === "run-time" ? e.run_time?.explorer : null;
+    if (ex) {
+      // F2: the explorer's success agrees with the one outcome event among its names
+      const outcome = (ex.names ?? []).filter((n) => n === "System.ExtrinsicSuccess" || n === "System.ExtrinsicFailed");
+      if (outcome.length !== 1 || ex.success !== (outcome[0] === "System.ExtrinsicSuccess")) out.push({ id: e.step, problem: `the explorer reading of ${e.step} says success ${ex.success} beside ${outcome.length ? outcome.join(" and ") : "no outcome event"}` });
+    }
     const h = v?.extrinsic_hash;
     if (v?.final && h) {
       if (hashes.has(h)) out.push({ id: e.step, problem: `the extrinsic ${h} is recorded twice, as ${hashes.get(h)} and ${e.step}` });

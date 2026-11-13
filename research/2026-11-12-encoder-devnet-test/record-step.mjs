@@ -89,9 +89,21 @@ export function recordForm(v) {
   return v;
 }
 
+/**
+ * { index, error } as numbers from a dispatchError of the shape {"Module":{"index":"94","error":"0x14000000"}}
+ * (lead-measurements-2026-11-13.json), the same rule as explorer-reader.js; null fields for any other shape.
+ */
+export function moduleError(d) {
+  const m = d && typeof d === "object" ? d.Module : null;
+  if (!m || typeof m !== "object") return { index: null, error: null };
+  const index = typeof m.index === "string" && /^[0-9]+$/.test(m.index) ? Number(m.index) : Number.isInteger(m.index) ? m.index : null;
+  const error = typeof m.error === "string" && /^0x[0-9a-f]{8}$/.test(m.error) ? parseInt(m.error.slice(2, 4), 16) : null;
+  return { index, error };
+}
+
 /** The explorer's reading in the record's form, checked against the run time record of the id (R2, R3). */
 export function explorerReading(plan, step, rt, v, sha256, errors, results) {
-  for (const k of ["source", "read_utc", "hash", "block_hash", "success", "error", "names", "events"]) if (!(k in v)) no(`the explorer reading has no ${k}`);
+  for (const k of ["source", "read_utc", "hash", "block_hash", "success", "error", "failed_data", "names", "events"]) if (!(k in v)) no(`the explorer reading has no ${k}`);
   const want = `${plan.values.EXPLORER.value}/api/transactions/${rt.extrinsic_hash}`;
   if (v.source !== want) no(`the explorer reading's source is ${v.source}, not ${want}`);
   if (typeof v.read_utc !== "string" || Number.isNaN(Date.parse(v.read_utc))) no("the explorer reading has no read_utc");
@@ -100,12 +112,19 @@ export function explorerReading(plan, step, rt, v, sha256, errors, results) {
   if (typeof v.success !== "boolean") no("the explorer's success is not true or false");
   if (!Array.isArray(v.names) || !v.names.every((n) => typeof n === "string" && /^[a-z][A-Za-z0-9]*\.[A-Z][A-Za-z0-9]*$/.test(n))) no("the explorer's names are not section.method");
   if (!Array.isArray(v.events)) no("the explorer's events are not a list");
+  // F2: exactly one of system.ExtrinsicSuccess and system.ExtrinsicFailed among the names, and
+  // success agrees with it; a failed one carries the error that event's dispatchError gives.
+  const outcome = v.names.filter((n) => n === "system.ExtrinsicSuccess" || n === "system.ExtrinsicFailed");
+  if (outcome.length !== 1) no(`the explorer's names hold ${outcome.length ? outcome.join(" and ") : "neither system.ExtrinsicSuccess nor system.ExtrinsicFailed"}: exactly one of them is needed`);
+  if (v.success !== (outcome[0] === "system.ExtrinsicSuccess")) no(`the explorer says success ${v.success}, but its names hold ${outcome[0]}`);
   let error = null;
   if (v.success === false) {
     if (!v.error || typeof v.error !== "object") no("a failed extrinsic needs its error");
+    const from = moduleError(v.failed_data);
+    if (v.error.index !== from.index || v.error.error !== from.error || Object.keys(v.error).length !== 2) no(`the explorer reading's error ${JSON.stringify(v.error)} is not the one its system.ExtrinsicFailed gives, ${JSON.stringify(from)}`);
     const named = Number.isInteger(v.error.index) && Number.isInteger(v.error.error) ? errors.errors.find((e) => e.pallet_index === v.error.index && e.error_index === v.error.error) : null;
     error = { pallet_index: v.error.index ?? null, error_index: v.error.error ?? null, name: named ? `${named.pallet}.${named.name}` : null };
-  } else if (v.error !== null) no("a successful extrinsic has no error");
+  } else if (v.error !== null || v.failed_data !== null) no("a successful extrinsic has no error");
   const events = v.events.map((e) => {
     if (!e || typeof e.section !== "string" || typeof e.method !== "string") no("an explorer event is not { section, method, data }");
     if (!["computeChannel", "flopSessionKeys"].includes(e.section)) no(`the explorer reading carries an event of ${e.section}: only computeChannel and flopSessionKeys are kept`);

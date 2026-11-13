@@ -21,9 +21,18 @@ Start: head `e18e725`; the second reviewer's branch (`8ff23d6`) merged by fast f
   and no signed file the newest dead copy's era is checked; a lone send file refuses. Test in
   sign-device.test.mjs.
 
+- F2: explorer-reader.js carries failed_data (the ExtrinsicFailed's dispatchError, unchanged) and
+  takes the error from the last ExtrinsicFailed; record-step explorerReading needs exactly one
+  outcome event among the names, success agreeing with it, and the error moduleError derives from
+  failed_data; judge recordProblems refuses a run time explorer reading whose success disagrees.
+  Tests: record-step.test.mjs F2; explorerRelay helper adds failed_data; plan.test.mjs R8 P4 sets
+  names that agree with the success it changes.
+- F9 (done early, same file as F2): redirect "error", the answer's url must be the address asked.
+  explorer-reader.test.mjs fetcher gives url; new F9 test.
+
 ### Next
 
-- F2, F11, the runner, F9, F3 with G1 and G4, F12 and G2, the words, G3.
+- F11, F11, the runner, F9, F3 with G1 and G4, F12 and G2, the words, G3.
 
 ### Decisions (fix round 2) and why
 

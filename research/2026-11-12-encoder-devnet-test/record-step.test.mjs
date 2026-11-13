@@ -46,8 +46,9 @@ function sentRelay(run, id, { status = "finalized", block = 3600000, index = 2, 
 function explorerRelay(hash, blockHash, answer, read = "2026-11-13T02:01:00.000Z") {
   const keep = answer.events.filter((e) => ["computeChannel", "flopSessionKeys"].includes(e.section)).map(({ section, method, data }) => ({ section, method, data }));
   const last = answer.events[answer.events.length - 1];
-  const error = last.section === "system" && last.method === "ExtrinsicFailed" ? { index: Number(last.data.dispatchError.Module.index), error: parseInt(last.data.dispatchError.Module.error.slice(2, 4), 16) } : null;
-  return relay({ source: `${V("EXPLORER")}/api/transactions/${hash}`, read_utc: read, hash, block_hash: blockHash, success: answer.success, error, names: answer.events.map((e) => `${e.section}.${e.method}`), events: keep });
+  const failed = last.section === "system" && last.method === "ExtrinsicFailed";
+  const error = failed ? { index: Number(last.data.dispatchError.Module.index), error: parseInt(last.data.dispatchError.Module.error.slice(2, 4), 16) } : null;
+  return relay({ source: `${V("EXPLORER")}/api/transactions/${hash}`, read_utc: read, hash, block_hash: blockHash, success: answer.success, error, failed_data: failed ? last.data.dispatchError : null, names: answer.events.map((e) => `${e.section}.${e.method}`), events: keep });
 }
 const step = (run, id, ...a) => node(SCRIPT, ["step", id, "--run", run, ...a]);
 const sentArgs = (r) => ["--sent", r.text, "--sent-sha256", r.sha];
@@ -225,4 +226,25 @@ test("R2: the record's form of the explorer's values: commas out, SS58 accounts 
   assert.equal(recordForm("BF16"), "BF16");
   assert.deepEqual(recordForm({ channelId: "0xab", epochSpent: "1,000", class: { type: "TeeToploc" } }), { channel_id: "0xab", epoch_spent: "1000", class: { type: "TeeToploc" } });
   assert.equal(recordForm(42), "42");
+});
+
+test("F2: the explorer's success must agree with the one outcome event among its names, and a failed one's error must be the one its ExtrinsicFailed gives", async () => {
+  const { explorerReading } = await import("./record-step.mjs");
+  const T1 = plan.steps.find((s) => s.id === "T1");
+  const X = "0x" + "ab".repeat(32), B = H(3600003);
+  const rt = { extrinsic_hash: X, sent: { status: "finalized", block_hash: B } };
+  const v = (o) => ({ source: `${V("EXPLORER")}/api/transactions/${X}`, read_utc: "2026-11-13T03:00:00.000Z", hash: X, block_hash: B, success: true, error: null, failed_data: null, names: ["balances.Transfer", "system.ExtrinsicSuccess"], events: [], ...o });
+  const read = (o) => explorerReading(plan, T1, rt, v(o), "55".repeat(32), errors, null);
+  assert.equal(read({}).success, true, "control");
+  const fd = { Module: { index: "94", error: "0x14000000" } };
+  assert.equal(read({ success: false, error: { index: 94, error: 20 }, failed_data: fd, names: ["system.ExtrinsicFailed"] }).error.pallet_index, 94, "control");
+  assert.throws(() => read({ names: ["balances.Transfer"] }), /neither system.ExtrinsicSuccess nor system.ExtrinsicFailed/);
+  assert.throws(() => read({ names: ["system.ExtrinsicSuccess", "system.ExtrinsicFailed"] }), /exactly one of them is needed/);
+  assert.throws(() => read({ names: ["system.ExtrinsicSuccess", "system.ExtrinsicSuccess"] }), /exactly one of them is needed/);
+  assert.throws(() => read({ names: ["system.ExtrinsicFailed"] }), /says success true, but its names hold system.ExtrinsicFailed/);
+  assert.throws(() => read({ success: false, error: { index: 94, error: 21 }, failed_data: fd, names: ["system.ExtrinsicFailed"] }), /is not the one its system.ExtrinsicFailed gives/);
+  assert.throws(() => read({ success: false, error: { index: 94, error: 20 }, failed_data: null, names: ["system.ExtrinsicFailed"] }), /is not the one its system.ExtrinsicFailed gives/);
+  assert.throws(() => read({ failed_data: fd }), /a successful extrinsic has no error/);
+  const noKey = v({}); delete noKey.failed_data;
+  assert.throws(() => explorerReading(plan, T1, rt, noKey, "55".repeat(32), errors, null), /has no failed_data/);
 });

@@ -285,7 +285,7 @@ with every value filled from the record.
 #   [...new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(window.__src)))].map((b) => b.toString(16).padStart(2, "0")).join("")
 #   (0, eval)(window.__src); const lab = paneRunner.createRunner()
 # the explorer's tab, https://explorer.devnet.flop.network/: the same with explorer-reader.js
-#   sha256 of explorer-reader.js: ea4b8aab39fc180d070ac2dc2f8c5e37de2931f71ca372434c66c64da863d5af
+#   sha256 of explorer-reader.js: 26a479201af916eb7f0896e173fc7d89bb95b4bdac0e6f106caf5cf06e6c2c33
 #   (0, eval)(window.__src); const explorer = explorerReader.createReader()
 # a pane call ends after 45 s: keep each promise on window and read it in a second call
 # plan.mjs next --run "$RUN" prints the lines of the next step only, with every value filled
