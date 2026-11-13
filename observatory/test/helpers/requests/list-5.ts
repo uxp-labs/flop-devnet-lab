@@ -15,7 +15,8 @@
 // session, the session nonce and the breaker after every step, and the channel of T3 is read before it
 // exists, while it is open and after it expired. System.Account is not in the decoder's reviewed shape
 // (src/scale/shape.ts): the recorder asks any key, and its decode is a later piece. The named account
-// is an input because the whys name the miner of the channel; no key is built from it.
+// is an input because the whys name the miner of the channel, whole, so the list changes with it; no
+// key is built from it.
 import type { Metadata } from "../../../src/scale/metadata.js";
 import * as core from "./core.js";
 
@@ -76,7 +77,7 @@ export const STEPS: readonly Step[] = [
 
 const ACCOUNT_LABEL: Record<Account, string> = { owner: "the owner", device: "the device", named: "the named miner" };
 const keyWords = (inputs: Inputs, k: core.KeyInput<Account, Channel>) =>
-  "account" in k ? `${ACCOUNT_LABEL[k.account]} ${core.short(inputs.accounts[k.account].value)}` : `the channel of T3 ${core.short(inputs.channels[k.channel].value)}, the force_open to ${ACCOUNT_LABEL.named} ${core.short(inputs.accounts.named.value)}`;
+  "account" in k ? `${ACCOUNT_LABEL[k.account]} ${core.short(inputs.accounts[k.account].value)}` : `the channel of T3 ${core.short(inputs.channels[k.channel].value)}, the force_open to ${ACCOUNT_LABEL.named} ${inputs.accounts.named.value}`;
 const readWords = (inputs: Inputs, r: Read) => (r.keys.length === 0 ? `${r.pallet}.${r.entry}` : `${r.pallet}.${r.entry} of ${r.keys.map((k) => keyWords(inputs, k)).join(" and ")}`);
 
 /** What a block is, in words: the start of the run, or the step sent in it and the outcome the run time record gives. */

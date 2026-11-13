@@ -23,6 +23,10 @@
     "tests": 40,
     "names": "ccf91ffb198b753d6ede400557b6a2bd36da1afcc99552d21fafc9b2601db7c6"
   },
+  "encoder-requests.test.ts": {
+    "tests": 18,
+    "names": "9bc4a9ec7c1e08794d3cd59a78304daae21f794fff300561966fe9ddc718c993"
+  },
   "escrow.test.ts": {
     "tests": 180,
     "names": "bd439ca49837d3e62977352e9315883dd115a9abd92613ad412e6457ee0f7bc5"
@@ -96,8 +100,8 @@
     "names": "fbb55db87c6aa5772251733c776a9ab07d30c43e3fb49956c14772490373a33c"
   },
   "record-run.test.ts": {
-    "tests": 24,
-    "names": "35754409d35865613945aeee5d120576072b612ef70b208a1eea95bdb5a82b7c"
+    "tests": 25,
+    "names": "b9bb132472c198e0becd4ed92ee3c8d94904fe6324efadc0017d44bf5aa818f8"
   },
   "record-workflow.test.ts": {
     "tests": 19,
