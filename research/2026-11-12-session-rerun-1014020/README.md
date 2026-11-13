@@ -104,10 +104,10 @@ missing`), 0 not run.
 
 What rests on events: the outcome and error of every step, what moved and who paid each fee,
 `SessionCallExecuted`'s running totals, the ack deadline, and the acceptance of a `force_open`
-naming a non miner. What rests on stored values, each decoded through the door: the session records, nonces and
-breakers read after the steps; `FailedAcks` of the named account at A9, which the batch answer
-lists with null, so the door answers that no value is stored there; and `DelegateSessions` of dev1
-at A10, a stored empty list.
+naming a non miner. What rests on stored values, each decoded through the door: the session
+records, nonces and breakers read after the steps; `FailedAcks` of the named account at A9, which
+the batch answer lists with null, so the door answers that no value is stored there; and
+`DelegateSessions` of dev1 at A10, a stored empty list.
 
 Shown at spec 1014020, as at spec 1014014:
 
