@@ -14,7 +14,13 @@ Reviewer worktree: /home/claude/wt-review-shape3, branch claude/review-observato
 ## Found
 - F2 (low, P10): FailedAcks stored 0 written absent survives branch tests
 - F3 (low, P10): imd-flop schema check has no test
+- W1, W2 (low, P11): rerun README 114-115 and 162-164 still false
 - F1 (medium, P4): fill writes DelegateSessions absent as "empty", same as a stored empty list.
 
+- 8: research diff read; check.mjs 23 pass exit 0; node --test encoder 305/305, rerun 41/41; old sha grep: records of their day only
+- 11: words. research/2026-11-12-session-rerun-1014020/review-shape3-words.test.mjs
+- 12: test names compared; nothing lost
+- P9: upgrade-watch, live, snapshot, record-run, decode tests: 199 pass
+
 ## Next
-- 8 records, 9 imd-flop check, 11 words, 12 test counts
+- 9 imd-flop npm run check when the machine is quiet (lead's mutants step running at 19:52)
