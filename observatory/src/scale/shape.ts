@@ -6,13 +6,13 @@
 //   metadata bytes at that spec, and the sha256 of the committed shape file.
 // - The shape file, shapes/<spec name>-<spec version>.json, derived from that metadata by
 //   deriveShape and written by shapeText: what the observatory relies on, in a form a reviewer can
-//   read. The System.Version constant, the ComputeChannel pallet index, its event table, its
-//   Channels entry with the fields and states of a channel, the System entries the events and the
-//   spec are read from, the FlopSessionKeys pallet index and its Sessions, SessionNonces and
-//   CircuitBreakers entries, the storage prefix of each of the three pallets, and a table of every
-//   type reachable from those, each with its kind,
-//   its path and what the kind holds. Each storage entry is stated with its modifier, hashers, key
-//   type, value type and the default bytes the metadata gives it.
+//   read. One section for each pallet of STATED_TABLE with the pallet's index, its storage prefix
+//   and each stated entry of it; beside those the System.Version type, the ComputeChannel event
+//   table, the fields of an event record, of LastRuntimeUpgrade and of a channel, and a channel's
+//   states; and a table of every type reachable from the stated entries' keys and values and the
+//   Version type, each with its kind, its path and what the kind holds. Each storage entry is stated
+//   with its modifier, hashers, key type, value type and the default bytes the metadata gives it.
+//   scripts/write-shape.mjs writes the file, and nothing else does.
 // - pinShape, the one function that says whether a block may be decoded, and why not.
 //
 // A type is named by its shape: a primitive by itself, a type with a path by the last part of its
@@ -29,21 +29,69 @@ import { parseMetadata } from "./metadata.js";
 import { MAX_INPUT_BYTES, ScaleError, toHex } from "./reader.js";
 import { storageEntryOf } from "./storage-key.js";
 
-/** @2: each entry states its default bytes, each stated pallet its storage prefix, and the FlopSessionKeys entries are stated. */
-export const SHAPE_SCHEMA = "flop-observatory/decoder-shape@2";
+/** @3: @2's form with ten more stated entries and three more pallets (the table below). */
+export const SHAPE_SCHEMA = "flop-observatory/decoder-shape@3";
+
+/** One stated storage entry: its name in the metadata, and its key in its pallet's section of the shape. */
+export interface StatedEntry {
+  readonly entry: string;
+  readonly key: string;
+}
+
+/** One stated pallet: its name in the metadata, its section of the shape, and its stated entries in order. */
+export interface StatedPallet {
+  readonly pallet: string;
+  readonly section: string;
+  readonly entries: readonly StatedEntry[];
+}
+
+const stated = (pallet: string, section: string, entries: readonly (readonly [entry: string, key: string])[]): StatedPallet =>
+  Object.freeze({ pallet, section, entries: Object.freeze(entries.map(([entry, key]) => Object.freeze({ entry, key }))) });
+
+/**
+ * The one table of what the shape states: each pallet with its section, each entry with its key,
+ * a section and a key each the name in snake case. deriveShape writes one entry of the shape for
+ * each line, and STATED_ENTRIES is derived from it, so the two cannot differ. Frozen whole.
+ */
+export const STATED_TABLE: readonly StatedPallet[] = Object.freeze([
+  stated("System", "system", [
+    ["Events", "events"],
+    ["LastRuntimeUpgrade", "last_runtime_upgrade"],
+    ["Account", "account"],
+  ]),
+  stated("ComputeChannel", "compute_channel", [
+    ["Channels", "channels"],
+    ["FailedAcks", "failed_acks"],
+    ["ChannelAuthoredOpenedAt", "channel_authored_opened_at"],
+  ]),
+  stated("FlopSessionKeys", "flop_session_keys", [
+    ["Sessions", "sessions"],
+    ["SessionNonces", "session_nonces"],
+    ["CircuitBreakers", "circuit_breakers"],
+    ["DelegateSessions", "delegate_sessions"],
+  ]),
+  stated("ModelRegistry", "model_registry", [
+    ["Models", "models"],
+    ["MeasuredRoots", "measured_roots"],
+    ["AllowedDecodePolicies", "allowed_decode_policies"],
+  ]),
+  stated("MinerStaking", "miner_staking", [["Miners", "miners"]]),
+  stated("HwCalibration", "hw_calibration", [
+    ["CalibrationVersions", "calibration_versions"],
+    ["LastInitialCalibration", "last_initial_calibration"],
+  ]),
+]);
+
+/** The pallet and entry name of each line of a table, in its order, the list and each pair frozen. */
+export function statedEntriesOf(table: readonly StatedPallet[]): readonly (readonly [pallet: string, entry: string])[] {
+  return Object.freeze(table.flatMap((p) => p.entries.map((e) => Object.freeze([p.pallet, e.entry] as const))));
+}
 
 /**
  * The storage entries the shape states, by pallet and entry name: the only entries whose values
- * real chain data is decoded from (src/scale/block.ts).
+ * real chain data is decoded from (src/scale/block.ts). Derived from STATED_TABLE.
  */
-export const STATED_ENTRIES: readonly (readonly [pallet: string, entry: string])[] = Object.freeze([
-  Object.freeze(["System", "Events"] as const),
-  Object.freeze(["System", "LastRuntimeUpgrade"] as const),
-  Object.freeze(["ComputeChannel", "Channels"] as const),
-  Object.freeze(["FlopSessionKeys", "Sessions"] as const),
-  Object.freeze(["FlopSessionKeys", "SessionNonces"] as const),
-  Object.freeze(["FlopSessionKeys", "CircuitBreakers"] as const),
-]);
+export const STATED_ENTRIES: readonly (readonly [pallet: string, entry: string])[] = statedEntriesOf(STATED_TABLE);
 /** How deep one name may nest. */
 export const MAX_NAME_DEPTH = 16;
 /** How many types one name may visit, a type named again included. */
@@ -300,21 +348,20 @@ function closure(n: Namer, roots: number[]): { [name: string]: ShapeValue } {
  * Its work is bounded by one namer's budget: MAX_SHAPE_STEPS steps and MAX_SHAPE_CHARS characters.
  */
 export function deriveShape(md: Metadata, n: Namer = namer(md)): ShapeValue {
-  const system = md.pallets.find((p) => p.name === "System");
-  const cc = md.pallets.find((p) => p.name === "ComputeChannel");
-  const fsk = md.pallets.find((p) => p.name === "FlopSessionKeys");
-  if (system === undefined || cc === undefined) throw new ScaleError("the metadata has no System or no ComputeChannel pallet");
-  if (fsk === undefined) throw new ScaleError("the metadata has no FlopSessionKeys pallet");
+  const palletOf = (name: string) => {
+    const p = md.pallets.find((x) => x.name === name);
+    if (p === undefined) throw new ScaleError(`the metadata has no ${name} pallet`);
+    return p;
+  };
+  const pallets = STATED_TABLE.map((t) => ({ t, p: palletOf(t.pallet) }));
+  const system = palletOf("System");
+  const cc = palletOf("ComputeChannel");
   const version = system.constants.find((c) => c.name === "Version");
   if (version === undefined) throw new ScaleError("the System pallet has no Version constant");
   const v = decodeValue(md, version.type, version.value);
   if (v === null || typeof v !== "object" || Array.isArray(v)) throw new ScaleError("the System.Version constant did not decode as a record");
-  const events = storageEntryOf(md, "System", "Events").entry;
-  const upgrade = storageEntryOf(md, "System", "LastRuntimeUpgrade").entry;
-  const channels = storageEntryOf(md, "ComputeChannel", "Channels").entry;
-  const sessions = storageEntryOf(md, "FlopSessionKeys", "Sessions").entry;
-  const nonces = storageEntryOf(md, "FlopSessionKeys", "SessionNonces").entry;
-  const breakers = storageEntryOf(md, "FlopSessionKeys", "CircuitBreakers").entry;
+  // Every stated entry, found by its pallet and name, in the table's order.
+  const entries = pallets.map(({ t }) => t.entries.map((e) => ({ key: e.key, entry: storageEntryOf(md, t.pallet, e.entry).entry })));
   const keyOf = (e: StorageEntry): number[] => (e.key === null ? [] : [e.key]);
   /** The storage prefix every key of the pallet starts from, written into the shape and paid for. */
   const prefixOf = (p: { storage: { prefix: string } | null }): string => {
@@ -322,36 +369,36 @@ export function deriveShape(md: Metadata, n: Namer = namer(md)): ShapeValue {
     write(n, prefix.length);
     return prefix;
   };
+  // Each stated pallet's section: its index, its storage prefix and one entry for each line of the table.
+  const sections: { [section: string]: { [key: string]: ShapeValue } } = {};
+  pallets.forEach(({ t, p }, i) => {
+    const section: { [key: string]: ShapeValue } = { index: p.index, storage_prefix: prefixOf(p) };
+    for (const e of entries[i] ?? []) section[e.key] = entryShape(n, e.entry);
+    sections[t.section] = section;
+  });
+  // What @2 states beside its entries, written as it was.
+  const events = storageEntryOf(md, "System", "Events").entry;
+  const upgrade = storageEntryOf(md, "System", "LastRuntimeUpgrade").entry;
+  const channels = storageEntryOf(md, "ComputeChannel", "Channels").entry;
   const recordType = md.types.at(events.value)?.def;
   if (recordType?.kind !== "sequence") throw new ScaleError("System.Events is not a list");
   const channel = compositeFields(md, channels.value, "the value of ComputeChannel.Channels");
   const state = channel.find((f) => f.name === "state");
-  const roots = [events.value, upgrade.value, channels.value, ...keyOf(channels), version.type, ...[sessions, nonces, breakers].flatMap((e) => [e.value, ...keyOf(e)])];
+  const sys = sections.system as { [key: string]: ShapeValue };
+  const ccs = sections.compute_channel as { [key: string]: ShapeValue };
+  sys.events = { ...(sys.events as { [key: string]: ShapeValue }), record: fieldsOf(n, compositeFields(md, recordType.type, "an event record")) };
+  sys.last_runtime_upgrade = { ...(sys.last_runtime_upgrade as { [key: string]: ShapeValue }), fields: fieldsOf(n, compositeFields(md, upgrade.value, "the value of System.LastRuntimeUpgrade")) };
+  sys.version = nameOf(n, version.type);
+  ccs.events = variantsOf(n, variants(md, cc.event, "the ComputeChannel event type"));
+  ccs.channels = { ...(ccs.channels as { [key: string]: ShapeValue }), fields: fieldsOf(n, channel) };
+  ccs.channel_states = variantsOf(n, variants(md, state?.type ?? null, "the state of a channel"));
+  // The closure's roots: the Version type, and the key and the value of every stated entry.
+  const roots = [version.type, ...entries.flat().flatMap((e) => [e.entry.value, ...keyOf(e.entry)])];
   return {
     schema: SHAPE_SCHEMA,
     spec_name: v.spec_name ?? null,
     spec_version: v.spec_version ?? null,
-    system: {
-      index: system.index,
-      storage_prefix: prefixOf(system),
-      events: { ...entryShape(n, events), record: fieldsOf(n, compositeFields(md, recordType.type, "an event record")) },
-      last_runtime_upgrade: { ...entryShape(n, upgrade), fields: fieldsOf(n, compositeFields(md, upgrade.value, "the value of System.LastRuntimeUpgrade")) },
-      version: nameOf(n, version.type),
-    },
-    compute_channel: {
-      index: cc.index,
-      storage_prefix: prefixOf(cc),
-      events: variantsOf(n, variants(md, cc.event, "the ComputeChannel event type")),
-      channels: { ...entryShape(n, channels), fields: fieldsOf(n, channel) },
-      channel_states: variantsOf(n, variants(md, state?.type ?? null, "the state of a channel")),
-    },
-    flop_session_keys: {
-      index: fsk.index,
-      storage_prefix: prefixOf(fsk),
-      sessions: entryShape(n, sessions),
-      session_nonces: entryShape(n, nonces),
-      circuit_breakers: entryShape(n, breakers),
-    },
+    ...sections,
     types: closure(n, roots),
   };
 }
