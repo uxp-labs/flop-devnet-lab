@@ -14,16 +14,26 @@ import { serverText } from "../server-text.js";
 import { bytesOf, hexOf, isHex } from "./bytes.js";
 import { type Got, known, unknown } from "./result.js";
 
-/** The five methods a chain read calls. */
-export const READ_METHODS = ["chain_getFinalizedHead", "chain_getHeader", "chain_getBlockHash", "state_getStorage", "state_getMetadata"] as const;
+/** The five methods a chain read calls, frozen at their definition (the P2 fix round, rule X6). */
+export const READ_METHODS = Object.freeze(["chain_getFinalizedHead", "chain_getHeader", "chain_getBlockHash", "state_getStorage", "state_getMetadata"] as const);
 export type ReadMethod = (typeof READ_METHODS)[number];
+
+/** Whether a text is one of the five, read from the frozen list at run time. */
+const isReadMethod = (m: unknown): m is ReadMethod => typeof m === "string" && (READ_METHODS as readonly string[]).includes(m);
 
 /** One JSON-RPC call: the result, or a throw for a node error, a timeout or a broken socket. */
 export type Transport = (method: ReadMethod, params: readonly unknown[]) => Promise<unknown>;
 
-/** The transport to a node at a WebSocket URL, through node-rpc.ts rpcCall. timeoutMs is rpcCall's own. */
+/**
+ * The transport to a node at a WebSocket URL, through node-rpc.ts rpcCall. timeoutMs is rpcCall's own. It refuses,
+ * at run time and before rpcCall is called, any method that is not one of the five (rule X2), so a cast cannot put
+ * another method on the wire; call turns the refusal into unknown.
+ */
 export function nodeTransport(url: string, timeoutMs?: number): Transport {
-  return (method, params) => rpcCall(url, method, [...params], timeoutMs);
+  return async (method, params) => {
+    if (!isReadMethod(method)) throw new Error("the method is not one of the five a chain read calls; nothing was sent");
+    return rpcCall(url, method, [...params], timeoutMs);
+  };
 }
 
 const MiB = 1024 * 1024;
