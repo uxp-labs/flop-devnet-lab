@@ -143,6 +143,14 @@
     "tests": 37,
     "names": "e51a2679c107bfc51f2ebe6f7e5cd11ea1d6bf77f2ecebdbbe44e49c504e0736"
   },
+  "review-final-mutants.test.ts": {
+    "tests": 3,
+    "names": "dd80010e74097ff6e6622bfcec4679d57f663eeaf135538f9f440da2d3bfbb65"
+  },
+  "review-final-thirdway.test.ts": {
+    "tests": 19,
+    "names": "d0afccd646f85ed44b1a94026311265126022eab5906ab6459a806d5404bbbd0"
+  },
   "review-memory.test.ts": {
     "tests": 2,
     "names": "db7cc5f5fc51f2f7ad3eacabb6a786a7a9e066f7f5623690d16d9bf798068a14"
