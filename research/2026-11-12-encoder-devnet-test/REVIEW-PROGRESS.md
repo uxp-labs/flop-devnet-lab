@@ -31,4 +31,8 @@ No file of the builder is changed. Tests of the reviewer are `review-*.test.mjs`
 
 ## Next
 
-- mutants; table F; report
+- table F; report
+
+## Mutants
+
+`node review-mutants.mjs`: 18 mutants, 17 killed by the builder's tests, R-M17 equivalent (alive, reason in the json). Baseline 0 builder fails, 17 reviewer fails (the DEFECT tests).
