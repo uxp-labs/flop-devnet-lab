@@ -10,12 +10,12 @@ cap. The README says what each folder is. In short:
 
 | Folder | What | Check |
 |---|---|---|
-| `imd-flop/` | The capped spend path for a seat (TypeScript CLI) | `npm ci && npm run check` |
+| `imd-flop/` | The capped spend path for a seat (TypeScript CLI) | `npm ci && npm run check` (the check builds `observatory/` first; before `npm run build` or `npm test` alone, run `npm ci && npm run build` in `observatory/`) |
 | `imd-hire/` | Offline signer for hiring the IMD swarm | `npm ci && npm test` |
 | `observatory/` | Read only view of the devnet, a recorder and a decoder | `npm ci && npm run check` (25 to 40 minutes) |
 | `spend-guard/`, `viewer/` | Python tools | `python3 -m unittest discover -s . -p "test_*.py"` |
 | `contract/` | The spend rules and test vectors the tools must agree on | held by the tools' tests |
-| `research/` | Reports bought from the swarm and our own devnet tests | `node --test` in a folder that holds tests, after `npm ci && npm run build` in `imd-flop` |
+| `research/` | Reports bought from the swarm and our own devnet tests | `node --test` in a folder that holds tests, after `npm ci && npm run build` in `observatory/` and then in `imd-flop/` |
 
 ## The team
 
