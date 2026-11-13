@@ -94,11 +94,9 @@ test("review DEFECT P9: T6 is refused when its whole era ends before T3's ack de
 });
 
 test("review DEFECT P9: T7 is refused when its whole era ends before T5's block plus MAX_DURATION_D2", () => {
-  const { results, blocks } = asPlanned(pub, "T6", { from: 3599000 });
-  const t5 = results.steps.find((s) => s.step === "T5");
-  t5.run_time.sent.block_number = 3600000;
+  const { results, blocks } = asPlanned(pub, "T6", { from: 3599985 });
   const r = cli(["T7", "--key", KEY], { run: runFolder(results), reads: READ({ account_nonce: 4, session_nonce_raw: "0x0400000000000000" }) });
-  assert.ok(blocks.T5 < 3600000);
+  assert.equal(blocks.T5, 3600000);
   assert.match(r.stderr, new RegExp(`above ${3600000 + Number(V("MAX_DURATION_D2"))}`));
   assert.notEqual(r.status, 0, `T7 signed valid to 3600073, but timeout needs a block after ${3600000 + Number(V("MAX_DURATION_D2"))}`);
 });

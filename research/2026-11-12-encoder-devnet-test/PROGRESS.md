@@ -45,9 +45,17 @@ in this folder. `imd-flop/dist` must be built.
   TWOX_*, read from flop-sign.mjs text), tested equal to flop-sign.mjs keys. plan-next.test.mjs.
   Known failing until P6: plan.test.mjs "R12: the README says ..." (README lines are old).
 
+- C1 to C7: judge.mjs rewritten (record kinds, recordProblems for order and repeats, channel ids,
+  attempts judged by their recorded error, C5 findings, C6 top up left, verdicts with
+  balances_source), check.mjs (run time exits 3), check.test.mjs (+8 tests), review-check adapted
+  (final record, balances_source, derived channel ids, T6 after T3 + ACK_WINDOW, T6.2 with its own
+  extrinsic hash). Decided: a cleanup step whose last attempt is refused stops the batch there
+  (verdict "stopped at T6, left: ..."); the C6 case is "passed as planned, left: ..." and exits 1.
+  nextOf stops everything (step null) when recordProblems finds any.
+
 ## Next
 
-- C1 to C7 (judge.mjs and check.mjs, check.test.mjs, review-check.test.mjs).
+- P2 to P8: send_outcomes, caps table, stop table of table F, plan.md and README words.
 
 ## Decisions (fix round) and why
 

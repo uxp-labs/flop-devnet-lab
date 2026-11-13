@@ -80,6 +80,7 @@
     "events_if_success": [
      { "event": "ComputeChannel.EscrowToppedUp", "fields": { "channel_id": "$CH_T3", "added": "$TOP_UP" } },
      { "event": "FlopSessionKeys.SessionCallExecuted", "fields": { "owner": "$OWNER", "delegate": "$DEVICE" } }],
+    "finding_if": { "FlopSessionKeys.SpendExceedsDeclared": "the encoder's declared spend for top_up_escrow is wrong (C5): the step still counts as recorded" },
     "fee_like": null, "on_unexpected": "stop", "cleanup": false, "shows": "the chain reads the encoder's layout of top_up_escrow: the call is included and named by its outcome" },
   { "id": "T5", "signer": "device", "tool": "encoder", "channel": "$CH_T5",
     "inner": { "call": "open_channel", "miner": "$NAMED", "model_hash": "$MODEL", "measured_root": "$ROOT", "decode_policy_hash": "$POLICY", "precision": "$PRECISION", "enclave_key": "$ENCLAVE_KEY", "agent_key": "$DEVICE",
@@ -89,6 +90,7 @@
     "events_if_success": [
      { "event": "ComputeChannel.ChannelOpened", "fields": { "channel_id": "$CH_T5", "agent": "$OWNER", "miner": "$NAMED", "escrow": "$ESCROW_1" } },
      { "event": "FlopSessionKeys.SessionCallExecuted", "fields": { "owner": "$OWNER", "delegate": "$DEVICE" } }],
+    "finding_if": { "FlopSessionKeys.SpendExceedsDeclared": "the encoder's declared spend for open_channel is wrong (C5): the step still counts as recorded" },
     "fee_like": null, "on_unexpected": "stop", "cleanup": false, "shows": "D2: the chain reads the encoder's layout of open_channel" },
   { "id": "T6", "signer": "device", "tool": "encoder", "channel": "$CH_T3",
     "inner": { "call": "expire_force_open", "channel_id": "$CH_T3" },

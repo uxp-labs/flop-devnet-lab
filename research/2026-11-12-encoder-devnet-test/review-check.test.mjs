@@ -1,6 +1,9 @@
 // Reviewer's tests of check.mjs and judge.mjs (P6, P7, P8). No network, no key. A right run is built
 // here, by the reviewer's own code, from steps.json; each wrong record is that run with one fault.
 // Tests named "DEFECT" fail on fcfb8b5.
+// Adapted by the builder of the fix round: the right run is a final record (C1) with its
+// balances_source (C4), the derived channel ids (P1, C7), and T6 after T3's block plus the ack
+// window (S7); the recovery's second T6 is "T6.2" (S5) with an extrinsic hash of its own (C2).
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { join } from "node:path";
@@ -13,7 +16,7 @@ const errors = readJson(join(RERUN, "errors-1014020.json"));
 const V = (n) => plan.values[n].value;
 const OWNER = V("OWNER"), NAMED = V("NAMED"), PALLET = V("PALLET_ACCOUNT");
 const DEVICE = "0x" + "d7".repeat(32);
-const CH3 = "0x" + "a3".repeat(32), CH5 = "0x" + "a5".repeat(32);
+const CH3 = V("CH_T3"), CH5 = V("CH_T5");
 const H = (n) => "0x" + n.toString(16).padStart(64, "0");
 const ev = (pallet, name, fields) => ({ pallet, name, fields });
 const modErr = (name) => { const [p, n] = name.split("."); const e = errors.errors.find((x) => x.pallet === p && x.name === n); return { index: e.pallet_index, error: "0x" + e.error_index.toString(16).padStart(2, "0") + "000000" }; };
@@ -22,16 +25,18 @@ const E1 = BigInt(V("ESCROW_1")), TOP = BigInt(V("TOP_UP"));
 /** The run of the plan with T4 succeeding (so T6 returns the top up) and T5 opening a channel. */
 function rightRun() {
   const r = template(plan);
+  r.record = "final";
+  r.balances_source = "by position";
   r.accounts = { owner: { public_key: OWNER, ss58: "o" }, device: { public_key: DEVICE, ss58: "d" } };
   r.owner_account_nonce_at_start = V("OWNER_NONCE_AFTER_RERUN");
   const a = { owner: { free: 30n * 10n ** 18n, nonce: BigInt(V("OWNER_NONCE_AFTER_RERUN")) }, device: null };
   const snap = () => ({ owner: { free: String(a.owner.free), reserved: "0", nonce: String(a.owner.nonce), absent: false },
     device: a.device ? { free: String(a.device.free), reserved: "0", nonce: String(a.device.nonce), absent: false } : { free: null, reserved: null, nonce: null, absent: true } });
   r.before = { ...r.before, block_number: 4000000, block_hash: H(4000000), accounts: snap() };
-  let block = 4000000, nonceS = 0n, spent = 0n, active = null, ack = 0, t5 = 0;
+  let block = 4000000, nonceS = 0n, spent = 0n, active = null, ack = 0, t5 = 0, t3 = 0;
   const steps = [];
   for (const st of plan.steps) {
-    block = st.id === "T6" ? Math.max(block, ack) + 3 : st.id === "T7" ? Math.max(block, t5 + Number(V("MAX_DURATION_D2"))) + 3 : block + 3;
+    block = st.id === "T6" ? Math.max(block, ack, t3 + Number(V("ACK_WINDOW"))) + 3 : st.id === "T7" ? Math.max(block, t5 + Number(V("MAX_DURATION_D2"))) + 3 : block + 3;
     const fee = BigInt(rerunFee(st.fee_like) ?? "9000000000000000");
     const who = a[st.signer], signer = st.signer === "owner" ? OWNER : DEVICE;
     const nonce = who.nonce; who.free -= fee; who.nonce += 1n;
@@ -41,7 +46,7 @@ function rightRun() {
     const back = (x) => { a.owner.free += x; events.push(ev("Balances", "Transfer", { from: PALLET, to: OWNER, amount: String(x) })); };
     if (st.id === "T1") { a.owner.free -= BigInt(V("FUND")); a.device = { free: BigInt(V("FUND")), nonce: 0n }; events.push(ev("Balances", "Transfer", { from: OWNER, to: DEVICE, amount: V("FUND") })); }
     if (st.id === "T2") { active = "true"; events.push(ev("FlopSessionKeys", "SessionCreated", { owner: OWNER, delegate: DEVICE, spending_cap: V("A_CAP"), per_tx_limit: V("A_PER_TX"), daily_cap: V("A_DAILY"), expires_at: block + 7200 })); }
-    if (st.id === "T3") { out(E1); ack = block + 595; events.push(ev("ComputeChannel", "ForceOpenRequested", { channel_id: CH3, agent: OWNER, miner: NAMED, escrow: String(E1), ack_deadline: ack })); exec(E1); }
+    if (st.id === "T3") { out(E1); ack = block + 595; t3 = block; events.push(ev("ComputeChannel", "ForceOpenRequested", { channel_id: CH3, agent: OWNER, miner: NAMED, escrow: String(E1), ack_deadline: ack })); exec(E1); }
     if (st.id === "T4") { out(TOP); events.push(ev("ComputeChannel", "EscrowToppedUp", { channel_id: CH3, added: String(TOP), total: String(E1 + TOP) })); exec(TOP); }
     if (st.id === "T5") { out(E1); t5 = block; events.push(ev("ComputeChannel", "ChannelOpened", { channel_id: CH5, agent: OWNER, miner: NAMED, escrow: String(E1), measured_root: V("ROOT") })); exec(E1); }
     if (st.id === "T6") { back(E1 + TOP); events.push(ev("ComputeChannel", "ForceOpenExpired", { channel_id: CH3, miner: NAMED, refunded: String(E1 + TOP), failed_acks: "0" })); exec(0n); }
@@ -97,12 +102,12 @@ test("review DEFECT P6 P7: the plan's own recovery for a failed T6 (signed again
   const ok = r.steps[i], failed = structuredClone(ok);
   const fee = BigInt(failed.fee_raw);
   failed.events = [ev("TransactionPayment", "TransactionFeePaid", { who: DEVICE, actual_fee: String(fee), tip: "0" }), ev("System", "ExtrinsicFailed", { dispatch_error: { type: "Module", value: modErr("ComputeChannel.AckWindowNotElapsed") }, dispatch_info: {} })];
-  failed.finalized_in_block -= 2; failed.block_hash = H(failed.finalized_in_block);
+  failed.finalized_in_block -= 2; failed.block_hash = H(failed.finalized_in_block); failed.extrinsic_hash = H(failed.finalized_in_block * 13);
   const prev = r.steps[i - 1].after;
   failed.after = structuredClone(prev);
   failed.after.accounts.device.free = String(BigInt(prev.accounts.device.free) - fee);
   failed.after.accounts.device.nonce = String(BigInt(prev.accounts.device.nonce) + 1n);
-  const retry = { ...ok, step: "T6b" };
+  const retry = { ...ok, step: "T6.2" };
   retry.account_nonce = String(BigInt(ok.account_nonce) + 1n);
   r.steps.splice(i, 1, failed, retry);
   // every later device step and balance moves by one more fee and one more nonce

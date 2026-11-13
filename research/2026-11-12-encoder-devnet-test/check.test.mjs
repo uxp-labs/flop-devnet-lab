@@ -1,5 +1,6 @@
-// Tests of check.mjs and judge.mjs (rules R7, R8): node --test in this folder. No network, no key.
-// A synthetic run built from steps.json must pass, and each wrong outcome must be caught.
+// Tests of check.mjs and judge.mjs (rules R7, R8 of the first brief; C1 to C7 of the fix brief):
+// node --test in this folder. No network, no key. A synthetic final record built from steps.json
+// must pass, and each wrong outcome must be caught.
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
@@ -16,7 +17,7 @@ const errors = readJson(join(RERUN, "errors-1014020.json"));
 const V = (n) => plan.values[n].value;
 const OWNER = V("OWNER"), NAMED = V("NAMED"), PALLET = V("PALLET_ACCOUNT");
 const DEVICE = "0x" + "d1".repeat(32);
-const CH3 = "0x" + "c3".repeat(32), CH5 = "0x" + "c5".repeat(32);
+const CH3 = V("CH_T3"), CH5 = V("CH_T5");
 const H = (n) => "0x" + n.toString(16).padStart(64, "0");
 const err = (name) => { const [p, n] = name.split("."); const e = errors.errors.find((x) => x.pallet === p && x.name === n); return { index: e.pallet_index, error: "0x" + e.error_index.toString(16).padStart(2, "0") + "000000" }; };
 const ev = (pallet, name, fields) => ({ pallet, name, fields });
@@ -27,12 +28,14 @@ const ev = (pallet, name, fields) => ({ pallet, name, fields });
  */
 function syntheticRun({ t4 = "ComputeChannel.BadState", t5 = "success", t3 = "success", skip = [] } = {}) {
   const r = template(plan);
+  r.record = "final";
+  r.balances_source = "by position";
   r.accounts = { owner: { public_key: OWNER, ss58: "o" }, device: { public_key: DEVICE, ss58: "d" } };
   r.owner_account_nonce_at_start = V("OWNER_NONCE_AFTER_RERUN");
   const acct = { owner: { free: 24000000000000000000n, reserved: 0n, nonce: BigInt(V("OWNER_NONCE_AFTER_RERUN")) }, device: null };
   const snap = () => ({ owner: { free: acct.owner.free.toString(), reserved: "0", nonce: acct.owner.nonce.toString(), absent: null }, device: acct.device ? { free: acct.device.free.toString(), reserved: "0", nonce: acct.device.nonce.toString(), absent: null } : { free: null, reserved: null, nonce: null, absent: true } });
   r.before = { ...r.before, block_number: 3599999, block_hash: H(3599999), accounts: snap() };
-  let block = 3600000, sessionNonce = 0n, spent = 0n, active = null, ackDeadline = null, t5Block = null;
+  let block = 3600000, sessionNonce = 0n, spent = 0n, active = null, ackDeadline = null, t5Block = null, t3Block = null;
   const outcome = { T3: t3, T4: t4, T5: t5 };
   const ok = (id) => (outcome[id] ?? "success") === "success";
   const steps = [];
@@ -40,7 +43,7 @@ function syntheticRun({ t4 = "ComputeChannel.BadState", t5 = "success", t3 = "su
     if (skip.includes(st.id)) continue;
     if (st.id === "T6" && !ok("T3")) continue;
     if (st.id === "T7" && (!ok("T5") || skip.includes("T5"))) continue;
-    if (st.id === "T6") block = ackDeadline + 1;
+    if (st.id === "T6") block = Math.max(ackDeadline, t3Block + Number(V("ACK_WINDOW"))) + 1;
     if (st.id === "T7") block = Math.max(block, t5Block + Number(V("MAX_DURATION_D2")) + 1);
     block += 5;
     const fee = BigInt(rerunFee(st.fee_like) ?? "5000000000000000");
@@ -56,7 +59,7 @@ function syntheticRun({ t4 = "ComputeChannel.BadState", t5 = "success", t3 = "su
     if (success) {
       if (st.id === "T1") { acct.owner.free -= BigInt(V("FUND")); acct.device = { free: BigInt(V("FUND")), reserved: 0n, nonce: 0n }; acct.device.free; events.push(ev("Balances", "Transfer", { from: OWNER, to: DEVICE, amount: V("FUND") })); }
       if (st.id === "T2") { active = "true"; events.push(ev("FlopSessionKeys", "SessionCreated", { owner: OWNER, delegate: DEVICE, spending_cap: V("A_CAP"), per_tx_limit: V("A_PER_TX"), daily_cap: V("A_DAILY"), expires_at: block + 7200 })); }
-      if (st.id === "T3") { moveFromOwner(BigInt(V("ESCROW_1"))); ackDeadline = block + 595; events.push(ev("ComputeChannel", "ForceOpenRequested", { channel_id: CH3, agent: OWNER, miner: NAMED, escrow: V("ESCROW_1"), ack_deadline: ackDeadline })); executed(BigInt(V("ESCROW_1"))); }
+      if (st.id === "T3") { moveFromOwner(BigInt(V("ESCROW_1"))); ackDeadline = block + 595; t3Block = block; events.push(ev("ComputeChannel", "ForceOpenRequested", { channel_id: CH3, agent: OWNER, miner: NAMED, escrow: V("ESCROW_1"), ack_deadline: ackDeadline })); executed(BigInt(V("ESCROW_1"))); }
       if (st.id === "T4") { moveFromOwner(BigInt(V("TOP_UP"))); events.push(ev("ComputeChannel", "EscrowToppedUp", { channel_id: CH3, added: V("TOP_UP"), total: "11000000000000000" })); executed(BigInt(V("TOP_UP"))); }
       if (st.id === "T5") { moveFromOwner(BigInt(V("ESCROW_1"))); t5Block = block; events.push(ev("ComputeChannel", "ChannelOpened", { channel_id: CH5, agent: OWNER, miner: NAMED, escrow: V("ESCROW_1"), measured_root: V("ROOT") })); executed(BigInt(V("ESCROW_1"))); }
       if (st.id === "T6") { const back = BigInt(V("ESCROW_1")) + (ok("T4") ? BigInt(V("TOP_UP")) : 0n); moveToOwner(back); events.push(ev("ComputeChannel", "ForceOpenExpired", { channel_id: CH3, miner: NAMED, refunded: back.toString(), failed_acks: "0" })); executed(0n); }
@@ -136,17 +139,18 @@ test("R7: a recorded step's allowed pallets are held: an error of a pallet not l
 });
 
 
-test("R7: SpendExceedsDeclared at T3 is a finding about rule E5, and the batch stops; the cleanup still passes", () => {
+test("R7 C5: SpendExceedsDeclared at T3 is a finding about rule E5, and the batch stops; the cleanup still passes", () => {
   const r = syntheticRun({ t3: "FlopSessionKeys.SpendExceedsDeclared", skip: ["T4", "T5"] });
   const out = judge(r);
   assert.equal(status(out).T3, "differs");
-  assert.match(problemsOf(out, "T3"), /finding: the encoder's rule E5/);
+  assert.match(out.findings.join("\n"), /T3: FlopSessionKeys.SpendExceedsDeclared: the encoder's rule E5/);
   assert.equal(out.stoppedAt, "T3");
   assert.equal(status(out).T4, "not sent: stopped");
   assert.equal(status(out).T6, "not needed");
   assert.equal(status(out).T8, "pass");
   assert.equal(status(out).T9, "pass");
   assert.deepEqual(out.left, []);
+  assert.equal(out.verdict, "stopped at T3, cleanup complete, nothing left (balances: by position)");
   assert.equal(out.all, false);
 });
 
@@ -172,9 +176,10 @@ test("R7: the device's balance must fall by exactly its fee", () => {
 test("R7: the refund must return what the steps moved: T6 with the top up when T4 moved one", () => {
   const r = syntheticRun({ t4: "success" });
   const t6 = recIn(r, "T6");
-  t6.events.find((e) => e.name === "ForceOpenExpired").fields.refunded = V("ESCROW_1");
+  t6.events.find((e) => e.name === "ForceOpenExpired").fields.refunded = String(BigInt(V("ESCROW_1")) + BigInt(V("TOP_UP")) - 1n);
   const out = judge(r);
-  assert.match(problemsOf(out, "T6"), /ForceOpenExpired.refunded is 10000000000000000, the moves it returns add up to 11000000000000000/);
+  assert.match(problemsOf(out, "T6"), /ForceOpenExpired.refunded is 10999999999999999, the moves it returns add up to 11000000000000000/);
+  assert.match(out.verdict, /^failed: /);
 });
 
 test("R7: the session's nonce and spent are read after each step and must count the session calls that succeeded", () => {
@@ -237,6 +242,163 @@ test("check.mjs exits 0 on a run as planned and 1 otherwise", () => {
     const g = spawnSync(process.execPath, [join(HERE, "check.mjs"), good], { encoding: "utf8" });
     assert.equal(g.status, 0, g.stdout);
     assert.match(g.stdout, /9 pass, 0 differ, 0 incomplete, 0 not needed, 0 not run/);
+    assert.match(g.stdout, /^verdict: passed as planned \(balances: by position\)$/m);
     assert.equal(spawnSync(process.execPath, [join(HERE, "check.mjs"), bad], { encoding: "utf8" }).status, 1);
   } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+// ---- the fix round: C1 to C7 ----------------------------------------------------------------------
+import { nextOf, recordProblems } from "./judge.mjs";
+import { asPlanned, runFolder as runFolderOf } from "./fixtures.mjs";
+
+const cliCheck = (r) => { const dir = mkdtempSync(join(tmpdir(), "encoder-check-")); try { const f = join(dir, "r.json"); writeFileSync(f, JSON.stringify(r)); return spawnSync(process.execPath, [join(HERE, "check.mjs"), f], { encoding: "utf8" }); } finally { rmSync(dir, { recursive: true, force: true }); } };
+
+test("C1: a run time record is judged by order, outcomes and the explorer's events; it says go on, wait or stop at, never passed, and check.mjs exits 3", () => {
+  const all = asPlanned(DEVICE, "T9").results;
+  const out = judge(all);
+  assert.equal(out.kind, "run-time");
+  assert.equal(out.all, false);
+  assert.equal(out.word, "go on: nothing is left to send");
+  const c = cliCheck(all);
+  assert.equal(c.status, 3);
+  assert.match(c.stdout, /^run time record: go on/m);
+  assert.doesNotMatch(c.stdout, /pass/i);
+  const stop = asPlanned(DEVICE, "T3", { outcomes: { T3: "ComputeChannel.BadState" }, errors }).results;
+  assert.match(judge(stop).word, /^stop at T3: /);
+  const w = asPlanned(DEVICE, "T2").results; w.steps.find((s) => s.step === "T2").run_time.explorer = null;
+  assert.equal(judge(w).word, "wait: the explorer reading of T2");
+  const none = syntheticRun(); delete none.record;
+  assert.match(judge(none).verdict, /^failed: results.json says record null/);
+});
+
+test("C2: the blocks of the recorded steps rise in the plan's order across signers, and a step id or an extrinsic hash twice fails the record", () => {
+  const r = syntheticRun();
+  recIn(r, "T8").finalized_in_block = recIn(r, "T5").finalized_in_block + 1;
+  recIn(r, "T8").block_hash = H(recIn(r, "T8").finalized_in_block);
+  assert.match(judge(r).verdict, /^failed: .*T8 is in block \d+ at index 2, not after T7/);
+  const same = syntheticRun();
+  recIn(same, "T4").finalized_in_block = recIn(same, "T3").finalized_in_block;
+  recIn(same, "T4").block_hash = recIn(same, "T3").block_hash;
+  recIn(same, "T4").extrinsic_index = 1;
+  assert.match(judge(same).verdict, /T4 is in block \d+ at index 1, not after T3 \(block \d+ at index 2\)/, "then the extrinsic index");
+  const twice = syntheticRun();
+  twice.steps.push(structuredClone(recIn(twice, "T4")));
+  assert.match(judge(twice).verdict, /the record holds T4 twice/);
+  const hash = syntheticRun();
+  recIn(hash, "T5").extrinsic_hash = recIn(hash, "T4").extrinsic_hash;
+  assert.match(judge(hash).verdict, /is recorded twice, as T4 and T5/);
+  const rt = asPlanned(DEVICE, "T4").results;
+  rt.steps.find((s) => s.step === "T4").run_time.sent.block_number = rt.steps.find((s) => s.step === "T3").run_time.sent.block_number - 1;
+  const n = nextOf(plan, rt);
+  assert.equal(n.word, "stop");
+  assert.equal(n.step, null, "a broken run time record lets nothing be signed");
+  assert.equal(recordProblems(plan, rt).length, 1);
+});
+
+/** A final record whose T6 was refused once and then attempted again as T6.2 with success. */
+function withAttempt() {
+  const r = syntheticRun({ t4: "success" });
+  const i = r.steps.findIndex((s) => s.step === "T6");
+  const ok = r.steps[i], failed = structuredClone(ok);
+  const fee = BigInt(failed.fee_raw);
+  failed.events = [ev("TransactionPayment", "TransactionFeePaid", { who: DEVICE, actual_fee: String(fee), tip: "0" }), ev("System", "ExtrinsicFailed", { dispatch_error: { type: "Module", value: err("ComputeChannel.AckWindowNotElapsed") }, dispatch_info: {} })];
+  failed.finalized_in_block -= 2; failed.block_hash = H(failed.finalized_in_block); failed.extrinsic_hash = H(7777);
+  const prev = r.steps[i - 1].after;
+  failed.after = structuredClone(prev);
+  failed.after.accounts.device.free = String(BigInt(prev.accounts.device.free) - fee);
+  failed.after.accounts.device.nonce = String(BigInt(prev.accounts.device.nonce) + 1n);
+  const retry = { ...ok, step: "T6.2", account_nonce: String(BigInt(ok.account_nonce) + 1n) };
+  r.steps.splice(i, 1, failed, retry);
+  for (const s of r.steps.slice(i + 1)) {
+    if (s.signer === DEVICE && s !== retry) s.account_nonce = String(BigInt(s.account_nonce) + 1n);
+    const acc = s.after.accounts.device;
+    if (acc.free !== null) { acc.free = String(BigInt(acc.free) - fee); acc.nonce = String(BigInt(acc.nonce) + 1n); }
+  }
+  const t9 = recIn(r, "T9"); const tr = t9.events.find((e) => e.name === "Transfer"); tr.fields.amount = String(BigInt(tr.fields.amount) - fee);
+  for (const s of r.steps.slice(r.steps.indexOf(t9))) s.after.accounts.owner.free = String(BigInt(s.after.accounts.owner.free) - fee);
+  return { r, fee };
+}
+
+test("C3: a cleanup step refused once and attempted again as T6.2 passes; the failed attempt's fee is counted in the balance check", () => {
+  const { r } = withAttempt();
+  const out = judge(r);
+  assert.equal(out.verdict, "passed as planned (balances: by position)", JSON.stringify(out.run.filter((x) => x.status !== "pass")));
+  assert.match(out.run.find((x) => x.id === "T6").info.join(" "), /refused, attempted again: ComputeChannel.AckWindowNotElapsed/);
+  const noFee = withAttempt().r;
+  recIn(noFee, "T6").after.accounts.device.free = recIn(noFee, "T5").after.accounts.device.free;
+  assert.match(judge(noFee).verdict, /^failed: .*T6: the device's free balance moved by 0/);
+  const t32 = syntheticRun(); recIn(t32, "T3").step = "T3.2";
+  assert.match(judge(t32).verdict, /T3.2 the plan does not have, and it is not an attempt S5 allows/);
+});
+
+test("C3: the verdicts: a cleanup step refused and not attempted again stops the batch there and names what is left", () => {
+  const r = syntheticRun({ t4: "success" });
+  const t6 = recIn(r, "T6");
+  const fee = BigInt(t6.fee_raw);
+  t6.events = [ev("TransactionPayment", "TransactionFeePaid", { who: DEVICE, actual_fee: String(fee), tip: "0" }), ev("System", "ExtrinsicFailed", { dispatch_error: { type: "Module", value: err("ComputeChannel.AckWindowNotElapsed") }, dispatch_info: {} })];
+  // the record after T6 keeps the escrow in the pallet: the owner gets nothing back
+  const back = BigInt(V("ESCROW_1")) + BigInt(V("TOP_UP"));
+  for (const s of r.steps.slice(r.steps.indexOf(t6))) s.after.accounts.owner.free = String(BigInt(s.after.accounts.owner.free) - back);
+  for (const s of r.steps.slice(r.steps.indexOf(t6))) s.after.session.spent_raw = s.after.session.epoch_spent_raw = s.after.session.spent_raw;
+  for (const s of r.steps.slice(r.steps.indexOf(t6))) s.after.session_nonce = String(BigInt(s.after.session_nonce) - 1n);
+  const out = judge(r);
+  assert.match(out.verdict, /^stopped at T6, left: T6 was refused: the escrow of T3/);
+  assert.equal(status(out).T6, "pass", "the refused attempt itself is a consistent record");
+  assert.match(out.run.find((x) => x.id === "T6").info.join(" "), /refused: ComputeChannel.AckWindowNotElapsed/);
+  assert.equal(out.all, false);
+});
+
+test("C4: a final record must say where its balances come from, and the verdict prints it", () => {
+  const r = syntheticRun();
+  r.balances_source = null;
+  assert.match(judge(r).verdict, /^failed: balances_source is null: a final record says "decoder" or "by position"/);
+  r.balances_source = "decoder";
+  assert.equal(judge(r).verdict, "passed as planned (balances: decoder)");
+  r.balances_source = "guess";
+  assert.equal(judge(r).all, false);
+});
+
+test("C5: SpendExceedsDeclared on T4 or T5 is a finding the verdict prints, and the step still counts as recorded", () => {
+  for (const id of ["T4", "T5"]) {
+    const r = syntheticRun(id === "T4" ? { t4: "FlopSessionKeys.SpendExceedsDeclared" } : { t5: "FlopSessionKeys.SpendExceedsDeclared" });
+    const out = judge(r);
+    assert.equal(status(out)[id], "pass", JSON.stringify(out.run.find((x) => x.id === id)));
+    assert.match(out.findings.join("\n"), new RegExp(`${id}: FlopSessionKeys.SpendExceedsDeclared: the encoder's declared spend for`));
+    assert.equal(out.verdict, "passed as planned (balances: by position)");
+    const c = cliCheck(r);
+    assert.match(c.stdout, new RegExp(`^FINDING ${id}: FlopSessionKeys.SpendExceedsDeclared`, "m"));
+    const rt = asPlanned(DEVICE, id, { outcomes: { [id]: "FlopSessionKeys.SpendExceedsDeclared" }, errors }).results;
+    const n = nextOf(plan, rt);
+    assert.equal(n.word, "go on", "at run time too it counts as recorded");
+    assert.match(n.findings.join("\n"), /SpendExceedsDeclared/);
+  }
+});
+
+test("C6: T6 refunding the escrow alone after T4 succeeded is not a failed record: the verdict says the top up is left under the channel of T3", () => {
+  const r = syntheticRun({ t4: "success" });
+  const t6 = recIn(r, "T6");
+  t6.events.find((e) => e.name === "ForceOpenExpired").fields.refunded = V("ESCROW_1");
+  t6.events.find((e) => e.name === "Transfer" && e.fields.to === OWNER).fields.amount = V("ESCROW_1");
+  for (const s of r.steps.slice(r.steps.indexOf(t6))) s.after.accounts.owner.free = String(BigInt(s.after.accounts.owner.free) - BigInt(V("TOP_UP")));
+  const out = judge(r);
+  assert.equal(status(out).T6, "pass", JSON.stringify(out.run.find((x) => x.id === "T6")));
+  assert.doesNotMatch(out.verdict, /^failed/);
+  assert.match(out.verdict, new RegExp(`left: the top up of T4, ${V("TOP_UP")} \\(0.001 FLOP\\), is left in the pallet account ${PALLET} under the channel ${CH3} of T3; no step of this batch brings it back`));
+  const clean = judge(syntheticRun({ t4: "success" }));
+  assert.equal(clean.verdict, "passed as planned (balances: by position)", "escrow and top up back is clean");
+});
+
+test("C7: every channel id in the record's events must be CH_T3 or CH_T5, in a final record and at run time", () => {
+  const r = syntheticRun();
+  recIn(r, "T3").events.find((e) => e.name === "ForceOpenRequested").fields.channel_id = "0x" + "c3".repeat(32);
+  const out = judge(r);
+  assert.match(problemsOf(out, "T3"), new RegExp(`ComputeChannel.ForceOpenRequested names the channel 0x(c3){32}, not the derived CH_T3 ${CH3}`));
+  const r5 = syntheticRun();
+  recIn(r5, "T7").events.find((e) => e.name === "TimedOutRefunded").fields.channel_id = CH3;
+  assert.match(problemsOf(judge(r5), "T7"), /not the derived CH_T5/);
+  const rt = asPlanned(DEVICE, "T5").results;
+  rt.steps.find((s) => s.step === "T5").run_time.explorer.events.find((e) => e.name === "ChannelOpened").fields.channel_id = CH3;
+  const n = nextOf(plan, rt);
+  assert.equal(n.word, "stop");
+  assert.match(n.said.join("\n"), /T5: .*ComputeChannel.ChannelOpened names the channel/);
 });
