@@ -49,7 +49,7 @@ function pinnedWs() {
     onopen?: () => void;
     onmessage?: (ev: { data: string }) => void;
     constructor() { setTimeout(() => this.onopen?.(), 0); }
-    send() { setTimeout(() => this.onmessage?.({ data: JSON.stringify({ result: PIN }) }), 0); }
+    send() { setTimeout(() => this.onmessage?.({ data: JSON.stringify({ jsonrpc: "2.0", id: 1, result: PIN }) }), 0); }
     close() {}
   };
 }

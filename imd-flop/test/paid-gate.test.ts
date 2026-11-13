@@ -138,9 +138,9 @@ async function withWs<T>(mode: WsMode, fn: () => Promise<T>): Promise<T> {
     send() {
       setTimeout(() => {
         if (mode === "malformed") this.onmessage?.({ data: "not-json{" });
-        else if (mode === "short") this.onmessage?.({ data: JSON.stringify({ result: PIN.slice(0, 18) }) });
+        else if (mode === "short") this.onmessage?.({ data: JSON.stringify({ jsonrpc: "2.0", id: 1, result: PIN.slice(0, 18) }) });
         else if (mode === "error-result") this.onmessage?.({ data: JSON.stringify({ error: { message: "nope" }, result: PIN }) });
-        else this.onmessage?.({ data: JSON.stringify({ result: mode === "wrong" ? WRONG : PIN }) });
+        else this.onmessage?.({ data: JSON.stringify({ jsonrpc: "2.0", id: 1, result: mode === "wrong" ? WRONG : PIN }) });
       }, 0);
     }
     close() {}
@@ -470,7 +470,7 @@ describe("FlopProvider.complete refuses before the child-key mint", () => {
         setTimeout(() => this.onopen?.(), 0);
       }
       send() {
-        setTimeout(() => this.onmessage?.({ data: JSON.stringify({ result: PIN }) }), 0);
+        setTimeout(() => this.onmessage?.({ data: JSON.stringify({ jsonrpc: "2.0", id: 1, result: PIN }) }), 0);
       }
       close() {}
     }
