@@ -61,6 +61,13 @@
       "why": "at block 3654835, the block where the owner sends the device its fees (step T1; the run time record says success): System.Events, the events of every extrinsic of the block, and System.LastRuntimeUpgrade, the runtime that executed it, then the stored values at the block: System.Account of the owner 0xe462d014..., System.Account of the device 0x3be70673..., FlopSessionKeys.Sessions of the owner 0xe462d014... and the device 0x3be70673..., FlopSessionKeys.SessionNonces of the owner 0xe462d014... and the device 0x3be70673..., FlopSessionKeys.CircuitBreakers of the device 0x3be70673..., ComputeChannel.Channels of the channel of T3 0xd8ae28f5..., the force_open to the named miner 0x1ec8abdfa88707679f8a2fbfc0bcd80184e2f731d91bb9fa152b750210556c7f; asked together in one call, answered as one set for the block, a key that holds nothing listed with null"
     },
     {
+      "method": "chain_getBlock",
+      "params": [
+        "0x05a8b32e2f9ef401e147d7594e0f09348ba4a310568356edeb70c827e72853e0"
+      ],
+      "why": "the block 3654835 of step T1, its header and extrinsics: the extrinsic at the index the run time record names for step T1 must be byte for byte the signed extrinsic of step T1"
+    },
+    {
       "method": "chain_getBlockHash",
       "params": [
         3654914
@@ -83,6 +90,13 @@
         "0xc36ced0ba0f84bbcafbe8a1a34508a32cd40e5b1849d737d9d8c81ff3cb197c8"
       ],
       "why": "at block 3654914, the block where the owner creates the session for the device (step T2; the run time record says success): System.Events, the events of every extrinsic of the block, and System.LastRuntimeUpgrade, the runtime that executed it, then the stored values at the block: System.Account of the owner 0xe462d014..., System.Account of the device 0x3be70673..., FlopSessionKeys.Sessions of the owner 0xe462d014... and the device 0x3be70673..., FlopSessionKeys.SessionNonces of the owner 0xe462d014... and the device 0x3be70673..., FlopSessionKeys.CircuitBreakers of the device 0x3be70673..., ComputeChannel.Channels of the channel of T3 0xd8ae28f5..., the force_open to the named miner 0x1ec8abdfa88707679f8a2fbfc0bcd80184e2f731d91bb9fa152b750210556c7f; asked together in one call, answered as one set for the block, a key that holds nothing listed with null"
+    },
+    {
+      "method": "chain_getBlock",
+      "params": [
+        "0xc36ced0ba0f84bbcafbe8a1a34508a32cd40e5b1849d737d9d8c81ff3cb197c8"
+      ],
+      "why": "the block 3654914 of step T2, its header and extrinsics: the extrinsic at the index the run time record names for step T2 must be byte for byte the signed extrinsic of step T2"
     },
     {
       "method": "chain_getBlockHash",
@@ -109,6 +123,20 @@
       "why": "at block 3655037, the block where the device sends ComputeChannel.force_open through the session, signed through the lab's encoder with a mortal era and a declared spend equal to the escrow (step T3; the run time record says success): System.Events, the events of every extrinsic of the block, and System.LastRuntimeUpgrade, the runtime that executed it, then the stored values at the block: System.Account of the owner 0xe462d014..., System.Account of the device 0x3be70673..., FlopSessionKeys.Sessions of the owner 0xe462d014... and the device 0x3be70673..., FlopSessionKeys.SessionNonces of the owner 0xe462d014... and the device 0x3be70673..., FlopSessionKeys.CircuitBreakers of the device 0x3be70673..., ComputeChannel.Channels of the channel of T3 0xd8ae28f5..., the force_open to the named miner 0x1ec8abdfa88707679f8a2fbfc0bcd80184e2f731d91bb9fa152b750210556c7f; asked together in one call, answered as one set for the block, a key that holds nothing listed with null"
     },
     {
+      "method": "chain_getBlock",
+      "params": [
+        "0x9045529eb1c4e8eaf063c9d1ca63702c26f6c434989408b0b04dc4933ecc3957"
+      ],
+      "why": "the block 3655037 of step T3, its header and extrinsics: the extrinsic at the index the run time record names for step T3 must be byte for byte the signed extrinsic of step T3"
+    },
+    {
+      "method": "chain_getBlockHash",
+      "params": [
+        3654995
+      ],
+      "why": "the canonical hash at height 3654995, to compare with 0x3467bbce5dc0eb5267fdf1c3abc12fd30f87e82a13bdaea77ec78ed4a106226f, the birth block of the mortal era step T3 was signed with: the signature of step T3 binds this block's hash"
+    },
+    {
       "method": "chain_getBlockHash",
       "params": [
         3655115
@@ -131,6 +159,20 @@
         "0xb9b084f43fa77338fa9f329d5208551eb92d084004c56923997a986f358255ee"
       ],
       "why": "at block 3655115, the block where the device sends ComputeChannel.top_up_escrow on the channel of T3 through the session, signed through the lab's encoder (step T4; the run time record says refused with ComputeChannel.BadState): System.Events, the events of every extrinsic of the block, and System.LastRuntimeUpgrade, the runtime that executed it, then the stored values at the block: System.Account of the owner 0xe462d014..., System.Account of the device 0x3be70673..., FlopSessionKeys.Sessions of the owner 0xe462d014... and the device 0x3be70673..., FlopSessionKeys.SessionNonces of the owner 0xe462d014... and the device 0x3be70673..., FlopSessionKeys.CircuitBreakers of the device 0x3be70673..., ComputeChannel.Channels of the channel of T3 0xd8ae28f5..., the force_open to the named miner 0x1ec8abdfa88707679f8a2fbfc0bcd80184e2f731d91bb9fa152b750210556c7f; asked together in one call, answered as one set for the block, a key that holds nothing listed with null"
+    },
+    {
+      "method": "chain_getBlock",
+      "params": [
+        "0xb9b084f43fa77338fa9f329d5208551eb92d084004c56923997a986f358255ee"
+      ],
+      "why": "the block 3655115 of step T4, its header and extrinsics: the extrinsic at the index the run time record names for step T4 must be byte for byte the signed extrinsic of step T4"
+    },
+    {
+      "method": "chain_getBlockHash",
+      "params": [
+        3655082
+      ],
+      "why": "the canonical hash at height 3655082, to compare with 0xf9c69a25c8cb4c8f61cfb8bdeb5d5eeb4827f24ba231c9d4a6dac74c7bbd430d, the birth block of the mortal era step T4 was signed with: the signature of step T4 binds this block's hash"
     },
     {
       "method": "chain_getBlockHash",
@@ -157,6 +199,20 @@
       "why": "at block 3655185, the block where the device sends ComputeChannel.open_channel through the session, signed through the lab's encoder (step T5; the run time record says refused with ComputeChannel.CalibrationUnavailable): System.Events, the events of every extrinsic of the block, and System.LastRuntimeUpgrade, the runtime that executed it, then the stored values at the block: System.Account of the owner 0xe462d014..., System.Account of the device 0x3be70673..., FlopSessionKeys.Sessions of the owner 0xe462d014... and the device 0x3be70673..., FlopSessionKeys.SessionNonces of the owner 0xe462d014... and the device 0x3be70673..., FlopSessionKeys.CircuitBreakers of the device 0x3be70673..., ComputeChannel.Channels of the channel of T3 0xd8ae28f5..., the force_open to the named miner 0x1ec8abdfa88707679f8a2fbfc0bcd80184e2f731d91bb9fa152b750210556c7f; asked together in one call, answered as one set for the block, a key that holds nothing listed with null"
     },
     {
+      "method": "chain_getBlock",
+      "params": [
+        "0xce1b29311dcb8eea6438d8d7972290967a20ec881970d1e111ab9a3856fcea85"
+      ],
+      "why": "the block 3655185 of step T5, its header and extrinsics: the extrinsic at the index the run time record names for step T5 must be byte for byte the signed extrinsic of step T5"
+    },
+    {
+      "method": "chain_getBlockHash",
+      "params": [
+        3655152
+      ],
+      "why": "the canonical hash at height 3655152, to compare with 0x950061bf30acf44a910cf6f0565bfa135e5ac0e17676740d85ba0846a2fe1cef, the birth block of the mortal era step T5 was signed with: the signature of step T5 binds this block's hash"
+    },
+    {
       "method": "chain_getBlockHash",
       "params": [
         3655678
@@ -179,6 +235,20 @@
         "0x8225561fd91aa365f80f81a3fde5f3ab9bab65a79e81aa87dc0345c983fc4a49"
       ],
       "why": "at block 3655678, the block where the device sends ComputeChannel.expire_force_open for the channel of T3 through the session, signed through the lab's encoder (step T6; the run time record says success): System.Events, the events of every extrinsic of the block, and System.LastRuntimeUpgrade, the runtime that executed it, then the stored values at the block: System.Account of the owner 0xe462d014..., System.Account of the device 0x3be70673..., FlopSessionKeys.Sessions of the owner 0xe462d014... and the device 0x3be70673..., FlopSessionKeys.SessionNonces of the owner 0xe462d014... and the device 0x3be70673..., FlopSessionKeys.CircuitBreakers of the device 0x3be70673..., ComputeChannel.Channels of the channel of T3 0xd8ae28f5..., the force_open to the named miner 0x1ec8abdfa88707679f8a2fbfc0bcd80184e2f731d91bb9fa152b750210556c7f; asked together in one call, answered as one set for the block, a key that holds nothing listed with null"
+    },
+    {
+      "method": "chain_getBlock",
+      "params": [
+        "0x8225561fd91aa365f80f81a3fde5f3ab9bab65a79e81aa87dc0345c983fc4a49"
+      ],
+      "why": "the block 3655678 of step T6, its header and extrinsics: the extrinsic at the index the run time record names for step T6 must be byte for byte the signed extrinsic of step T6"
+    },
+    {
+      "method": "chain_getBlockHash",
+      "params": [
+        3655648
+      ],
+      "why": "the canonical hash at height 3655648, to compare with 0x227016243e02f2997d2074833e4a1de7a965cb7c8d4651b3cefcc660e2a9cbd9, the birth block of the mortal era step T6 was signed with: the signature of step T6 binds this block's hash"
     },
     {
       "method": "chain_getBlockHash",
@@ -205,6 +275,13 @@
       "why": "at block 3655735, the block where the owner revokes the session of the device (step T8; the run time record says success): System.Events, the events of every extrinsic of the block, and System.LastRuntimeUpgrade, the runtime that executed it, then the stored values at the block: System.Account of the owner 0xe462d014..., System.Account of the device 0x3be70673..., FlopSessionKeys.Sessions of the owner 0xe462d014... and the device 0x3be70673..., FlopSessionKeys.SessionNonces of the owner 0xe462d014... and the device 0x3be70673..., FlopSessionKeys.CircuitBreakers of the device 0x3be70673..., ComputeChannel.Channels of the channel of T3 0xd8ae28f5..., the force_open to the named miner 0x1ec8abdfa88707679f8a2fbfc0bcd80184e2f731d91bb9fa152b750210556c7f; asked together in one call, answered as one set for the block, a key that holds nothing listed with null"
     },
     {
+      "method": "chain_getBlock",
+      "params": [
+        "0xebfabc3ede98df1965b89d9273c021e2c88708cf3ecef0c53744226b0eb68c41"
+      ],
+      "why": "the block 3655735 of step T8, its header and extrinsics: the extrinsic at the index the run time record names for step T8 must be byte for byte the signed extrinsic of step T8"
+    },
+    {
       "method": "chain_getBlockHash",
       "params": [
         3655782
@@ -227,6 +304,13 @@
         "0xce99b03c34850c1ef31e8d9eb9c8cf9a2f58bc204f86cd98e40d791a180a9300"
       ],
       "why": "at block 3655782, the block where the device sends all it holds back to the owner (step T9; the run time record says success): System.Events, the events of every extrinsic of the block, and System.LastRuntimeUpgrade, the runtime that executed it, then the stored values at the block: System.Account of the owner 0xe462d014..., System.Account of the device 0x3be70673..., FlopSessionKeys.Sessions of the owner 0xe462d014... and the device 0x3be70673..., FlopSessionKeys.SessionNonces of the owner 0xe462d014... and the device 0x3be70673..., FlopSessionKeys.CircuitBreakers of the device 0x3be70673..., ComputeChannel.Channels of the channel of T3 0xd8ae28f5..., the force_open to the named miner 0x1ec8abdfa88707679f8a2fbfc0bcd80184e2f731d91bb9fa152b750210556c7f; asked together in one call, answered as one set for the block, a key that holds nothing listed with null"
+    },
+    {
+      "method": "chain_getBlock",
+      "params": [
+        "0xce99b03c34850c1ef31e8d9eb9c8cf9a2f58bc204f86cd98e40d791a180a9300"
+      ],
+      "why": "the block 3655782 of step T9, its header and extrinsics: the extrinsic at the index the run time record names for step T9 must be byte for byte the signed extrinsic of step T9"
     }
   ],
   "schema": "flop-observatory/requests@0"
