@@ -2,7 +2,10 @@
 // plan: turns steps.json into what the lead needs. No network, no key, signs nothing.
 //   node plan.mjs table       the steps as the table of plan.md
 //   node plan.mjs costs       the fee of each step and the escrows, as the tables of plan.md
-//   node plan.mjs stops       what the lead does on each stop, and what is left, as the table of plan.md
+//   node plan.mjs stops       for each step and answer, what is on chain and what brings it back (P4)
+//   node plan.mjs caps        the caps per device step (P3)
+//   node plan.mjs sha256s     the sha256 of pane-runner.js and explorer-reader.js, checked in the pane before use (P6)
+//   node plan.mjs outcomes    for each outcome of the runner, what is known and what the lead does (P2)
 //   node plan.mjs commands    the reader's list: the command lines of every step, values as $NAMES
 //   node plan.mjs next --run <run folder>
 //        only what the lead does next, by the record: the pane and PC lines of the next step with
@@ -11,7 +14,7 @@
 //   node plan.mjs md          rewrites each printed block of plan.md (between its markers) from steps.json
 import { readFileSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
-import { HERE, RERUN, loadPlan, readJson, substitute, rerunFee, flopText, RAW, sessionNonceKey } from "./lib.mjs";
+import { HERE, RERUN, loadPlan, readJson, substitute, rerunFee, flopText, RAW, sessionNonceKey, sha256Text } from "./lib.mjs";
 import { planStepOf, recordedIds, viewOf, deviceIncluded, afterBlockOf, loadRecord, signedFile } from "./record.mjs";
 import { nextOf } from "./judge.mjs";
 
@@ -60,25 +63,44 @@ export function costsText(plan) {
   return fee.join("\n") + "\n\n" + esc.join("\n");
 }
 
-/** For a stop at a step, the cleanup steps the lead then sends, each with its condition. */
-export function cleanupAfterStop(plan, stopId) {
-  const ids = plan.steps.map((s) => s.id);
-  const at = ids.indexOf(stopId);
-  return plan.steps.filter((s) => s.cleanup && ids.indexOf(s.id) > at && ids.indexOf(s.only_if.step) <= at)
-    .map((s) => ({ id: s.id, needs: s.only_if, sure: ids.indexOf(s.only_if.step) < at }));
+const ANSWERS = { ok: "success", err: "refused in its block", sub: "refused at submission", nf: "in a block, not final by the deadline", none: "no answer" };
+export const ANSWER_KINDS = Object.keys(ANSWERS);
+
+/** The stop table as markdown (P4): for each step and each answer, what is on chain and what brings it back. */
+export function stopsText(plan) {
+  const rows = plan.stop_table.map((r) => `| ${r.step} | ${ANSWERS[r.answer] ?? r.answer} | ${r.on_chain} | ${r.brings_back} |`);
+  return ["| Step | Answer | On chain | What brings it back |", "|---|---|---|---|", ...rows].join("\n");
 }
 
-/** The stop rule as a markdown table: each way the batch can stop, what the lead sends then, and what is left. */
-export function stopsText(plan) {
-  const rows = [];
-  for (const st of plan.steps.filter((s) => !s.cleanup && s.on_unexpected === "stop")) {
-    const then = cleanupAfterStop(plan, st.id);
-    const send = then.length ? then.map((c) => (c.sure ? c.id : `${c.id} if ${condText(c.needs)}`)).join(", ") : "nothing";
-    const left = then.length ? `until those are final: ${then.map((c) => plan.steps.find((s) => s.id === c.id).shows.replace(/^the /, "")).join("; ")}` : "nothing but the owner's fee";
-    rows.push(`| ${st.id} answers otherwise | stop the test steps | ${send} | ${left} |`);
-  }
-  for (const st of plan.steps.filter((s) => s.cleanup)) rows.push(`| ${st.id} fails | stop | the cleanup steps after it that apply | ${st.left_if_it_fails} |`);
-  return ["| Stop | The lead | Then sends | Left on chain, and how it comes back |", "|---|---|---|---|", ...rows].join("\n");
+/** The send outcomes as markdown (P2): for every outcome the runner can give, what is known, what the lead does, and when a second copy may be signed. */
+export function outcomesText(plan) {
+  const rows = plan.send_outcomes.map((r) => `| ${r.outcome}${r.node_word ? ` (${r.node_word})` : ""} | ${r.known} | ${r.lead} | ${r.second_copy} |`);
+  return ["| Outcome | What is known | The lead | A second copy |", "|---|---|---|---|", ...rows].join("\n");
+}
+
+/**
+ * The caps per device step (P3): its declared spend against the per transaction limit, and the
+ * running sum of declared spends against the daily cap and the session cap, each earlier step taken
+ * as succeeded. The cap that binds is the one with the least room left after the step.
+ */
+export function caps(plan) {
+  const V = (n) => BigInt(plan.values[n].value);
+  const perTx = V("A_PER_TX"), daily = V("A_DAILY"), cap = V("A_CAP");
+  let sum = 0n;
+  return plan.steps.filter((s) => s.tool === "encoder").map((st) => {
+    const d = BigInt(substitute(st.declared, plan, null, true));
+    sum += d;
+    const room = { "per transaction limit": perTx - d, "daily cap": daily - sum, "session cap": cap - sum };
+    const binds = Object.entries(room).sort((a, b) => (a[1] < b[1] ? -1 : a[1] > b[1] ? 1 : 0))[0][0];
+    return { id: st.id, declared: d.toString(), per_tx: perTx.toString(), sum: sum.toString(), daily_left: (daily - sum).toString(), cap_left: (cap - sum).toString(), binds, within: d <= perTx && sum <= daily && sum <= cap };
+  });
+}
+
+/** The caps table as markdown. */
+export function capsText(plan) {
+  const f = (raw) => `${raw} (${flopText(raw)})`;
+  const rows = caps(plan).map((c) => `| ${c.id} | ${f(c.declared)} | ${f(c.per_tx)} | ${f(c.sum)} | ${f(c.daily_left)} | ${f(c.cap_left)} | ${c.binds} |`);
+  return [`| # | Declared | Per transaction limit | Sum so far | Daily cap left | Session cap left | Binds |`, "|---|---|---|---|---|---|---|", ...rows].join("\n");
 }
 
 const RECORD = "\"$LAB/research/2026-11-12-encoder-devnet-test/record-step.mjs\"";
@@ -142,14 +164,23 @@ export function commandsOf(plan, st, results, v = lineValues(plan, null, null), 
   ].join("\n");
 }
 
+/** The sha256 of the two files the lead pastes into the pane (P6). */
+export const pastedSha256 = () => Object.fromEntries(["pane-runner.js", "explorer-reader.js"].map((f) => [f, sha256Text(readFileSync(join(HERE, f), "utf8"))]));
+const PANE_SHA = "[...new Uint8Array(await crypto.subtle.digest(\"SHA-256\", new TextEncoder().encode(window.__src)))].map((b) => b.toString(16).padStart(2, \"0\")).join(\"\")";
+
 /** Every step's command lines, with the header that says how to run them: the reader's list. */
 export function commandsText(plan, results) {
   const head = [
     "# RUN is the run folder on the PC (record-step.mjs start makes its results.json); LAB is the repo checkout",
     "# KEY_OWNER and KEY_DEVICE name the key files; FLOP_SIGN_LIBS names the libraries (LAB/imd-flop)",
     "# OWNER_NONCE is the owner's next nonce at the start; DEVICE_NONCE the device's transactions included before T9",
-    `# the node's tab: paste pane-runner.js, check its sha256, then: const lab = paneRunner.createRunner()`,
-    `# the explorer's tab: paste explorer-reader.js, check its sha256, then: const explorer = explorerReader.createReader()`,
+    `# the node's tab, ${NODE_TAB}: put the text of pane-runner.js in window.__src, check its sha256 there, then run it and make the runner`,
+    `#   sha256 of pane-runner.js: ${pastedSha256()["pane-runner.js"]}`,
+    `#   ${PANE_SHA}`,
+    "#   (0, eval)(window.__src); const lab = paneRunner.createRunner()",
+    `# the explorer's tab, ${EXPLORER_TAB}: the same with explorer-reader.js`,
+    `#   sha256 of explorer-reader.js: ${pastedSha256()["explorer-reader.js"]}`,
+    "#   (0, eval)(window.__src); const explorer = explorerReader.createReader()",
     "# a pane call ends after 45 s: keep each promise on window and read it in a second call",
     "# plan.mjs next --run \"$RUN\" prints the lines of the next step only, with every value filled",
     "", ""].join("\n");
@@ -225,7 +256,7 @@ export function template(plan) {
 
 /** The blocks of plan.md that plan.mjs prints, by the name in their marker. */
 export function printedBlocks(plan) {
-  return { table: table(plan), costs: costsText(plan), stops: stopsText(plan), commands: "```\n" + commandsText(plan, null).trimEnd() + "\n```" };
+  return { table: table(plan), costs: costsText(plan), caps: capsText(plan), outcomes: outcomesText(plan), stops: stopsText(plan), commands: "```\n" + commandsText(plan, null).trimEnd() + "\n```" };
 }
 const MARK = /<!-- printed by plan\.mjs: ([a-z_]+) -->\n([\s\S]*?)\n<!-- end of printed -->/g;
 /** The printed blocks plan.md holds now, by name. */
@@ -247,10 +278,13 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   if (cmd === "table") console.log(table(plan));
   else if (cmd === "costs") console.log(costsText(plan));
   else if (cmd === "stops") console.log(stopsText(plan));
+  else if (cmd === "caps") console.log(capsText(plan));
+  else if (cmd === "sha256s") console.log(JSON.stringify(pastedSha256(), null, 1));
+  else if (cmd === "outcomes") console.log(outcomesText(plan));
   else if (cmd === "commands") process.stdout.write(commandsText(plan, null));
   else if (cmd === "next") { const run = resolve(flag("run") ?? (process.stderr.write("plan.mjs next --run <run folder>\n"), process.exit(2))); const r = loadRecord(run); if (!r) { process.stderr.write("the run folder has no results.json: make it with record-step.mjs start\n"); process.exit(2); } process.stdout.write(nextText(plan, run, r)); }
   else if (cmd === "template") console.log(JSON.stringify(template(plan), null, 1));
   else if (cmd === "md") { const f = join(HERE, "plan.md"); writeFileSync(f, renderMd(readFileSync(f, "utf8"), plan)); }
-  else { process.stderr.write("commands: table, costs, stops, commands, next, template, md\n"); process.exit(2); }
+  else { process.stderr.write("commands: table, costs, caps, outcomes, stops, sha256s, commands, next, template, md\n"); process.exit(2); }
 }
 export const errorsOf = () => readJson(join(RERUN, "errors-1014020.json"));

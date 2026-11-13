@@ -53,9 +53,15 @@ in this folder. `imd-flop/dist` must be built.
   (verdict "stopped at T6, left: ..."); the C6 case is "passed as planned, left: ..." and exits 1.
   nextOf stops everything (step null) when recordProblems finds any.
 
+- P2, P3, P4, P5, P7: steps.json send_outcomes (16 rows), stop_table (45 cells of table F and the
+  lapsed session), plan.mjs outcomes, caps, stops, sha256s; plan.md rewritten with every printed
+  block between markers; left_if_it_fails words of T6 to T9 name the attempts of S5. plan.mjs
+  cleanupAfterStop removed: nextOf does that now (its test moved to nextOf). Tests in plan.test.mjs.
+  "Binds" is the cap with the least room left after the step.
+
 ## Next
 
-- P2 to P8: send_outcomes, caps table, stop table of table F, plan.md and README words.
+- P6 and P8: README. Then mutants (the reviewer's and mine), then W.
 
 ## Decisions (fix round) and why
 

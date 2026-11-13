@@ -110,7 +110,10 @@ test("the owner's account nonces follow one another", () => {
 });
 
 // ---- plan.mjs and plan.md ----------------------------------------------------------------------
-import { table, costsText, stopsText, commandsText, cleanupAfterStop, costs, printedBlocks, blocksIn } from "./plan.mjs";
+import { table, costsText, stopsText, commandsText, costs, printedBlocks, blocksIn, outcomesText, caps, capsText, ANSWER_KINDS } from "./plan.mjs";
+import { nextOf } from "./judge.mjs";
+import { asPlanned } from "./fixtures.mjs";
+import vm from "node:vm";
 
 test("R1: plan.md holds every block plan.mjs prints, exactly, and nothing else between the markers", () => {
   const md = readFileSync(join(HERE, "plan.md"), "utf8");
@@ -146,14 +149,85 @@ test("R2 S1: the device's session calls are command lines for sign-device.mjs on
   }
 });
 
-test("R8: a stop sends the cleanup steps whose condition stands before it, never a later test step", () => {
-  assert.deepEqual(cleanupAfterStop(plan, "T1").map((c) => c.id), ["T9"]);
-  assert.deepEqual(cleanupAfterStop(plan, "T2").map((c) => c.id), ["T8", "T9"]);
-  assert.deepEqual(cleanupAfterStop(plan, "T3").map((c) => c.id), ["T6", "T8", "T9"]);
-  assert.deepEqual(cleanupAfterStop(plan, "T4").map((c) => c.id), ["T6", "T8", "T9"]);
-  assert.deepEqual(cleanupAfterStop(plan, "T5").map((c) => c.id), ["T6", "T7", "T8", "T9"]);
+test("R8 P4: after a stop the judge sends the cleanup steps whose condition stands, never a later test step", () => {
+  const errs = readJson(join(RERUN, "errors-1014020.json"));
+  const DEV = "0x" + "d9".repeat(32);
+  const stopAt = (id, err) => nextOf(plan, asPlanned(DEV, id, { outcomes: { [id]: err }, errors: errs }).results);
+  assert.deepEqual(stopAt("T1", "FlopSessionKeys.SessionNotFound").cleanup, []);
+  assert.deepEqual(stopAt("T2", "FlopSessionKeys.SessionNotFound").cleanup, ["T9"]);
+  assert.deepEqual(stopAt("T3", "ComputeChannel.BadState").cleanup, ["T8", "T9"]);
+  const t5 = asPlanned(DEV, "T5").results;
+  t5.steps.find((x) => x.step === "T5").run_time.explorer.success = false;
+  t5.steps.find((x) => x.step === "T5").run_time.explorer.error = { pallet_index: 4, error_index: 2, name: null };
+  const n = nextOf(plan, t5);
+  assert.equal(n.stopped_at, "T5");
+  assert.deepEqual(n.cleanup, ["T6", "T8", "T9"], "T7 does not apply: T5 opened nothing");
+  assert.equal(n.step, "T6");
+});
+
+test("P4: the stop table has a row for every cell of the reviewer's table F, and one for a lapsed session, each saying what is on chain and what brings it back", () => {
+  const F = readFileSync(join(HERE, "REVIEW-PROGRESS.md"), "utf8").split("## Table F")[1];
+  const answers = /^Answers: (.*)$/m.exec(F)[1].split(/, (?![^(]*\))/).map((a) => a.split(" ")[0]);
+  assert.deepEqual([...new Set(answers)], ["ok", "err", "sub", "nf", "none"], "the answers of table F");
+  for (const st of plan.steps) for (const a of ANSWER_KINDS) {
+    const rows = plan.stop_table.filter((r) => r.step === st.id && r.answer === a);
+    assert.equal(rows.length, 1, `${st.id} ${a}`);
+    assert.ok(rows[0].on_chain.length > 10 && rows[0].brings_back.length > 3, `${st.id} ${a} says something`);
+  }
+  const lapsed = plan.stop_table.filter((r) => r.answer === "lapsed");
+  assert.equal(lapsed.length, 1);
+  assert.match(lapsed[0].brings_back, /the owner's own call/);
+  assert.match(lapsed[0].brings_back, /later piece of work/);
+  assert.equal(plan.stop_table.length, plan.steps.length * ANSWER_KINDS.length + 1);
+  for (const r of plan.stop_table.filter((x) => x.answer !== "lapsed" && x.answer !== "ok" && x.answer !== "err")) {
+    const mortal = plan.steps.find((s) => s.id === r.step).tool === "encoder";
+    if (mortal && r.answer !== "sub") assert.match(r.brings_back, /last valid block|S4/, `${r.step} ${r.answer}`);
+    if (!mortal) assert.doesNotMatch(r.brings_back, /S4/, `${r.step} ${r.answer}: an immortal step has no second copy`);
+  }
   const t = stopsText(plan);
-  for (const st of plan.steps.filter((s) => s.cleanup)) assert.ok(t.includes(st.left_if_it_fails), `${st.id}: what is left if it fails`);
+  for (const r of plan.stop_table) assert.ok(t.includes(r.on_chain), `${r.step} ${r.answer} is printed`);
+});
+
+test("P2: send_outcomes has a row for every outcome the runner lists, and one for each node word that ends a watch", () => {
+  const src = readFileSync(join(HERE, "pane-runner.js"), "utf8");
+  const g = { crypto: globalThis.crypto, TextEncoder };
+  vm.runInNewContext(src, g);
+  const outcomes = [...g.paneRunner.OUTCOMES];
+  const ends = Object.entries(g.paneRunner.STATUSES).filter(([, k]) => k === "end").map(([w]) => w);
+  assert.ok(ends.length === 4);
+  for (const o of outcomes) {
+    if (o === "ended") for (const w of ends) assert.equal(plan.send_outcomes.filter((r) => r.outcome === "ended" && r.node_word === w).length, 1, `ended ${w}`);
+    else assert.equal(plan.send_outcomes.filter((r) => r.outcome === o).length, 1, o);
+  }
+  assert.deepEqual([...new Set(plan.send_outcomes.map((r) => r.outcome))].sort(), [...outcomes].sort(), "no row for an outcome the runner does not give");
+  for (const r of plan.send_outcomes) for (const k of ["known", "lead", "second_copy"]) assert.ok(r[k]?.length > 3, `${r.outcome} ${r.node_word ?? ""} ${k}`);
+  for (const r of plan.send_outcomes.filter((x) => !/^(never|not needed)/.test(x.second_copy))) assert.match(r.second_copy, /S4/, `${r.outcome}: a mortal copy only by S4`);
+  const md = readFileSync(join(HERE, "plan.md"), "utf8");
+  assert.ok(md.includes(outcomesText(plan)));
+  assert.match(md, /An immortal step \(T1, T2, T8, T9\) is never signed to different\s+bytes: the lead uses `lab.find`, then `lab.sendSame`/);
+});
+
+test("P3: the caps per device step, computed from steps.json: declared spend, per transaction limit, running sums against the daily and the session cap, and the cap that binds", () => {
+  const c = caps(plan);
+  assert.deepEqual(c.map((x) => x.id), ["T3", "T4", "T5", "T6", "T7"]);
+  assert.deepEqual(c.map((x) => x.sum), ["10000000000000000", "11000000000000000", "21000000000000000", "21000000000000000", "21000000000000000"]);
+  assert.deepEqual(c.map((x) => x.binds), ["per transaction limit", "daily cap", "daily cap", "daily cap", "daily cap"]);
+  assert.ok(c.every((x) => x.within));
+  assert.equal(c[2].daily_left, String(BigInt(V("A_DAILY")) - 21000000000000000n));
+  const tight = structuredClone(plan); tight.values.A_DAILY.value = "20000000000000000";
+  assert.equal(caps(tight)[2].within, false, "a daily cap below the sum is caught");
+  assert.ok(readFileSync(join(HERE, "plan.md"), "utf8").includes(capsText(plan)));
+});
+
+test("P5 P7 P8: plan.md names the measurement file, the three hops and the send file, and says what is not known", () => {
+  const md = readFileSync(join(HERE, "plan.md"), "utf8");
+  const m = readJson(join(HERE, "lead-measurements-2026-11-13.json")).measurements;
+  assert.match(md, /lives about 58 blocks, about a minute/);
+  assert.equal(m.mortal_life_blocks.value, "58");
+  for (const k of ["block_time_s", "mortal_life_blocks", "relay_hop_s", "send_text_chars", "pane_call_limit_s"]) assert.ok(md.includes(k), k);
+  assert.match(md, /three hops/);
+  assert.match(md, /what crosses is the send file/i);
+  for (const t of [/Whether `expire_force_open` refunds a top up/, /Whether T5's `opened_at` is T5's block/, /The fees of T4 and T5/, /shown for `force_open` only/]) assert.match(md.split("## What is not known")[1], t);
 });
 
 test("R9: the cost table sums the known fees and names the unknown ones", () => {
