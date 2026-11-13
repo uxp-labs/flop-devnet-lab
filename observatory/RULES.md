@@ -1153,7 +1153,8 @@ below.
 - A shape file is written by `scripts/write-shape.mjs` and by nothing else. For a reviewed line,
   by spec version, it finds the metadata on the third recording's tape by the line's metadata
   sha256, derives the shape and writes `shapes/<file>` only with `--write`; without it, it compares
-  the committed file with what it derives, exit 0 or 1. `scripts/cli-checks.mjs` runs the compare
+  the committed file with what it derives, exit 0 or 1. It refuses with exit 2 and one line a `--spec`
+  with a leading zero and a tape that does not hold the metadata. `scripts/cli-checks.mjs` runs the compare
   for each line. A shape of another format is refused by every reader, with words that name both
   formats: the pin (refusal 3 says it), `scripts/shape-diff.mjs`, the writer's compare and
   imd-flop's `scripts/read-key-table.mjs`. The `decoder-shape@2` files are kept in

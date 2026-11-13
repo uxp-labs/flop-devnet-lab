@@ -19,6 +19,7 @@ const memory = (files: Record<string, string>) => {
       write: (f: string, t: string) => {
         written[f] = t;
       },
+      derive: derivedShapeFile,
     },
   };
 };
@@ -51,10 +52,24 @@ describe("the shape writer", () => {
 
   it("refuses with exit 2 and one line a call it does not understand, and a spec no reviewed line names", () => {
     const m = memory({});
-    for (const args of [[], ["--spec"], ["--spec", "x"], ["--spec", "1014014", "--force"], ["--write", "--spec", "1014014"], ["--spec", "1014014", "--write", "--write"]]) {
+    for (const args of [[], ["--spec"], ["--spec", "x"], ["--spec", "01014014"], ["--spec", "01014014", "--write"], ["--spec", "1014014", "--force"], ["--write", "--spec", "1014014"], ["--spec", "1014014", "--write", "--write"]]) {
       expect(writeShapeMain(args, m.io), args.join(" ")).toEqual({ code: 2, stdout: "", stderr: `${USAGE}\n` });
     }
     expect(writeShapeMain(["--spec", "1014015", "--write"], m.io)).toEqual({ code: 2, stdout: "", stderr: "write-shape refused: no reviewed line names spec 1014015\n" });
+    expect(m.written).toEqual({});
+  });
+
+  it("refuses in one line when the metadata cannot be derived, with or without --write, and writes nothing", () => {
+    const m = memory({ [OLD.shapeFile]: derived.text });
+    const io = {
+      ...m.io,
+      derive: () => {
+        throw new Error("the tape does not hold the metadata");
+      },
+    };
+    for (const args of [["--spec", String(OLD.specVersion)], ["--spec", String(OLD.specVersion), "--write"]]) {
+      expect(writeShapeMain(args, io), args.join(" ")).toEqual({ code: 2, stdout: "", stderr: "write-shape refused: the tape does not hold the metadata\n" });
+    }
     expect(m.written).toEqual({});
   });
 });

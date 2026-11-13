@@ -1600,6 +1600,22 @@
     "why": "the writer's compare names both formats for a committed file of another (round 29, A4)"
   },
   {
+    "id": "r29-writer-leading-zero",
+    "file": "test/helpers/shape-file.ts",
+    "find": "/^[1-9][0-9]*$/",
+    "replace": "/^[0-9]+$/",
+    "test": "test/write-shape.test.ts",
+    "why": "the writer's --spec takes no leading zero (round 29, F5)"
+  },
+  {
+    "id": "r29-writer-derive-throws",
+    "file": "test/helpers/shape-file.ts",
+    "find": "    derived = io.derive(spec);\n  } catch (e) {",
+    "replace": "    derived = io.derive(spec);\n  } catch (e) {\n    if (e !== null) throw e;",
+    "test": "test/write-shape.test.ts",
+    "why": "the writer refuses in one line, exit 2, when the metadata cannot be derived (round 29, F5)"
+  },
+  {
     "id": "r29-diff-entry-unread",
     "file": "scripts/shape-diff.mjs",
     "find": "  [\"miner_staking\", \"miners\", \"MinerStaking.Miners\"],\n",

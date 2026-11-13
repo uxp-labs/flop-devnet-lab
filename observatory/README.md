@@ -500,7 +500,7 @@ ModelRegistry, MinerStaking and HwCalibration with theirs; every part version 2 
 was. A shape file is written by `scripts/write-shape.mjs` and by nothing else: `node
 scripts/write-shape.mjs --spec <version>` derives the reviewed line's file from the metadata the
 third recording holds by the line's sha256 and says whether the committed file is that, exit 0 or
-1, and with `--write` writes it. `scripts/cli-checks.mjs` runs the compare for both lines. A file
+1, and with `--write` writes it. It refuses with exit 2 and one line a `--spec` with a leading zero and a tape that does not hold the metadata. `scripts/cli-checks.mjs` runs the compare for both lines. A file
 of another format (the two `decoder-shape@2` files are kept in `fixtures/shapes-at-2`) is refused
 by the pin, the diff and the writer's compare, each naming both formats. `pinShape` refuses, and says why, when the spec is not reviewed, the
 metadata bytes or the shape file are not the reviewed ones, the shape derived again differs from
