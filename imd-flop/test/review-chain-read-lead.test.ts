@@ -2,7 +2,8 @@
  * Review of P2 (reviewer, not the builder): the three things the lead saw, L1, L2 and L3.
  *
  * Which test is which:
- *  - "DEFECT ..." tests state the promise. Each FAILS on fcf75d0 and shows a defect.
+ *  - "RULE X..." tests were the reviewer's DEFECT tests: each failed on fcf75d0 and now holds the lead's rule of
+ *    that id (the P2 fix round), so its name states the rule.
  *  - "HOLDS ..." tests are controls. They pass on fcf75d0.
  *
  * Every hash, account and answer comes from a committed recording through test/lib/recorded-node.ts and
@@ -83,7 +84,7 @@ describe("L1: a frame with no result key is taken as the result null", () => {
     ["an answer to another id with a null result", (req: any) => JSON.stringify({ jsonrpc: "2.0", id: req.id + 1, result: null })],
     ["a frame whose error is 0 and that has no result", (req: any) => JSON.stringify({ jsonrpc: "2.0", id: req.id, error: 0 })],
   ] as const) {
-    it(`DEFECT a session entry answered with ${what} is unknown, not absent and not the default 0 (fails on fcf75d0)`, async () => {
+    it(`RULE X1 a session entry answered with ${what} is unknown, not absent and not the default 0`, async () => {
       const keys = sessionEntryKeys();
       fakeSocket(rerunScript(A6.block_hash), [], (req, honest) => (req.method === "state_getStorage" && keys.has(req.params[0]) ? frame(req) : honest));
       const r = await readSessionState(nodeTransport("ws://scripted.invalid", 2000), OWNER, DEV1);
@@ -95,7 +96,7 @@ describe("L1: a frame with no result key is taken as the result null", () => {
     });
   }
 
-  it("DEFECT a frame answering another id is not taken as this call's answer (fails on fcf75d0)", async () => {
+  it("RULE X1 a frame answering another id is not taken as this call's answer", async () => {
     // The head is answered under id 2 with the recorded A6 hash: rpcCall takes it as the answer to its id 1.
     const sent: any[] = [];
     fakeSocket(rerunScript(A6.block_hash), sent, (req, honest) => JSON.stringify({ ...JSON.parse(honest), id: req.id + 1 }));
@@ -104,7 +105,7 @@ describe("L1: a frame with no result key is taken as the result null", () => {
     expect(r.kind).toBe("unknown");
   });
 
-  it("DEFECT a frame with no jsonrpc field is not taken as an answer (fails on fcf75d0)", async () => {
+  it("RULE X1 a frame with no jsonrpc field is not taken as an answer", async () => {
     fakeSocket(rerunScript(A6.block_hash), [], (_req, honest) => {
       const f = JSON.parse(honest);
       delete f.jsonrpc;
@@ -116,7 +117,7 @@ describe("L1: a frame with no result key is taken as the result null", () => {
 });
 
 describe("L2: nodeTransport sends any method text a caller hands it", () => {
-  it("DEFECT a cast cannot make chain-read's transport put author_submitExtrinsic on the wire (fails on fcf75d0)", async () => {
+  it("RULE X2 a cast cannot make chain-read's transport put author_submitExtrinsic on the wire", async () => {
     const sent: any[] = [];
     fakeSocket(rerunScript(A6.block_hash), sent, (req) => JSON.stringify({ jsonrpc: "2.0", id: req.id, result: `0x${"00".repeat(32)}` }));
     const t = nodeTransport("ws://scripted.invalid", 2000);
@@ -159,7 +160,7 @@ describe("L3: the stored record's owner and delegate are not compared with the o
     expect((r as any).value.session.value.delegate).toBe(DEV2);
   });
 
-  it("DEFECT a read of (OWNER, DEV1) never answers known a session record whose delegate is DEV2 (fails on fcf75d0)", async () => {
+  it("RULE X3 a read of (OWNER, DEV1) never answers known a session record whose delegate is DEV2", async () => {
     const r = await readSessionState(transportOf(swapped()), OWNER, DEV1);
     expect(r.kind).toBe("known");
     const session = (r as any).value.session;
@@ -168,7 +169,7 @@ describe("L3: the stored record's owner and delegate are not compared with the o
     expect(session.kind).toBe("unknown");
   });
 
-  it("DEFECT crossCheck of the (OWNER, DEV1) read against B10's events, which hold only dev2's SessionCallExecuted, does not agree (fails on fcf75d0)", async () => {
+  it("RULE X3 crossCheck of the (OWNER, DEV1) read against B10's events, which hold only dev2's SessionCallExecuted, does not agree", async () => {
     const t = transportOf(swapped());
     const state = await readSessionState(t, OWNER, DEV1);
     const events = await readBlockEvents(t, { number: B10.finalized_in_block, hash: B10.block_hash });

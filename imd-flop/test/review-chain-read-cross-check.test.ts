@@ -1,7 +1,8 @@
 /**
  * Review of P2 (reviewer, not the builder): attack E, the cross check (R7), played as a table.
  *
- * All "HOLDS": each case passes on fcf75d0. Several kill mutants the builder's tests leave alive (named per case:
+ * All "HOLDS": each case passes on fcf75d0, but one: the lead's rule X3 (the P2 fix round) makes the hand built session
+ * with no owner and no delegate unknown, and that test says so in its name. Several kill mutants the builder's tests leave alive (named per case:
  * X1 number not compared, X2 hash not compared, X3 runtime not compared, X7 leading zero taken, X9 pallet not
  * compared). The L3 case (a stored record of another delegate) is in review-chain-read-lead.test.ts.
  *

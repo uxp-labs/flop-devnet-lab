@@ -2,7 +2,8 @@
  * Review of P2 (reviewer, not the builder): attack A, unknown is a value (R1, R6).
  *
  * Which test is which:
- *  - "DEFECT ..." tests state the promise and FAIL on fcf75d0.
+ *  - "RULE X..." tests were the reviewer's DEFECT tests: each failed on fcf75d0 and now holds the lead's rule of
+ *    that id (the P2 fix round), so its name states the rule.
  *  - "HOLDS ..." tests pass on fcf75d0 and pin what held, so the next reviewer does not repeat it.
  *
  * A scripted node answers from the rerun's committed recording (test/lib/recorded-node.ts) at results.json step A6;
@@ -182,7 +183,7 @@ describe("A: the transport itself", () => {
     }
   });
 
-  it("DEFECT a thrown Error whose message getter throws is unknown, and the read does not throw (fails on fcf75d0)", async () => {
+  it("RULE X4 a thrown Error whose message getter throws is unknown, and the read does not throw", async () => {
     const e = new Error("x");
     Object.defineProperty(e, "message", {
       get() {
@@ -201,7 +202,7 @@ describe("A: the transport itself", () => {
     expect((r as any)?.kind).toBe("unknown");
   });
 
-  it("DEFECT a header the transport answers that JSON.stringify cannot write (a bigint) is unknown, and the read does not throw (fails on fcf75d0)", async () => {
+  it("RULE X4 a header the transport answers that JSON.stringify cannot write (a bigint) is unknown, and the read does not throw", async () => {
     const h = (await honestOf((m) => m === "chain_getHeader")) as Record<string, unknown>;
     let threw = false;
     let r: unknown;

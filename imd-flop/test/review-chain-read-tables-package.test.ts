@@ -2,7 +2,8 @@
  * Review of P2 (reviewer, not the builder): attack F (the frozen tables, R8) and attack G (the packaging, R9).
  *
  * Which test is which:
- *  - "DEFECT ..." tests state the promise and FAIL on fcf75d0.
+ *  - "RULE X..." tests were the reviewer's DEFECT tests: each failed on fcf75d0 and now holds the lead's rule of
+ *    that id (the P2 fix round), so its name states the rule.
  *  - "HOLDS ..." tests pass on fcf75d0.
  *
  * Module names are resolved from imd-flop's own package (createRequire at this file), as door.ts and shape-file.ts
@@ -37,7 +38,7 @@ describe("F: the frozen tables", () => {
     expect(KEY_TABLE.runtimes[0]?.entries.sessions.entryPart).toBe(before);
   });
 
-  it("DEFECT READ_METHODS is frozen, so no code at run time can add a method to the list of the five (fails on fcf75d0)", () => {
+  it("RULE X6 READ_METHODS is frozen, so no code at run time can add a method to the list of the five", () => {
     // READ_METHODS is `[...] as const`: read only by type, an ordinary array at run time.
     expect(Object.isFrozen(READ_METHODS)).toBe(true);
   });

@@ -2,7 +2,8 @@
  * Review of P2 (reviewer, not the builder): attack B, one block (R2).
  *
  * Which test is which:
- *  - "DEFECT ..." tests state the promise and FAIL on fcf75d0.
+ *  - "RULE X..." tests were the reviewer's DEFECT tests: each failed on fcf75d0 and now holds the lead's rule of
+ *    that id (the P2 fix round), so its name states the rule.
  *  - "HOLDS ..." tests pass on fcf75d0.
  *
  * Every hash and height comes from research/2026-11-12-session-rerun-1014020/results.json (steps[].block_hash,
@@ -99,7 +100,7 @@ describe("B: the session read", () => {
     for (const c of log.filter((x) => x.method === "state_getStorage")) expect(c.params[1]).toBe(A6.block_hash);
   });
 
-  it("DEFECT the session read's block number is the canonical number of its hash: a header of the head that names another number is not answered as the block's number (fails on fcf75d0)", async () => {
+  it("RULE X5 the session read's block number is the canonical number of its hash: a header of the head that names another number is not answered as the block's number", async () => {
     // The node answers the head's header with A9's number. The storage values are A6's; the read says they are of
     // block A9.finalized_in_block. A later caller compares the session's expires_at with this number.
     const s = rerunScript(A6.block_hash);
