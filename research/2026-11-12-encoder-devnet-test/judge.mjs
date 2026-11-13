@@ -117,7 +117,36 @@ export function judgeRunTime(plan, step, view, results) {
   }
   for (const pattern of step.forbid ?? []) if (view.names.includes(pattern)) problems.push(`${pattern} must not appear`);
   problems.push(...channelProblems(plan, step, view, results));
-  return { ok: problems.length === 0, said: said ?? "refused", problems, findings, channels: channelMismatches(plan, step, view, results) };
+  const refund = runTimeRefund(plan, step, view, results);
+  problems.push(...refund.problems);
+  return { ok: problems.length === 0, said: said ?? "refused", problems, findings, channels: channelMismatches(plan, step, view, results), left: refund.left, info: refund.info };
+}
+
+/** The words of C6: a top up the refund did not bring back, left in the pallet account under the step's channel. */
+function topUpText(plan, step, missing, results) {
+  const amount = missing.reduce((s, m) => s + BigInt(substitute(m.amount, plan, results, true)), 0n);
+  return `the top up of ${missing.map((m) => m.when.step).join(", ")}, ${amount} (${flopText(amount)} FLOP), is left in the pallet account ${plan.values.PALLET_ACCOUNT.value} under the channel ${substitute(step.channel, plan, results, true)} of T3; no step of this batch brings it back`;
+}
+
+/**
+ * G2: the refund of a step with a refund event (T6, T7 and their attempts) where the explorer's
+ * events give it, against the moves back to the owner whose condition holds. A refund of the escrow
+ * alone after a top up is not a problem: what is left is said, by C6. Not given: said, not judged.
+ */
+export function runTimeRefund(plan, step, view, results) {
+  const out = { problems: [], left: [], info: [] };
+  if (!step.refund_event || view.success !== true) return out;
+  const [p, n, f] = step.refund_event.split(".");
+  const got = big(view.events.find((e) => e.pallet === p && e.name === n)?.fields?.[f]);
+  if (got === null) { out.info.push(`${view.id}: the explorer's events give no ${step.refund_event}: the refund is not known`); return out; }
+  const back = step.moves.filter((m) => m.to === "owner");
+  const base = back.filter((m) => !m.when);
+  const extra = back.filter((m) => m.when && holdsBy({ step: m.when.step, outcome: m.when.outcome }, plan, results) === true);
+  const sum = (ms) => ms.reduce((s, m) => s + BigInt(substitute(m.amount, plan, results, true)), 0n);
+  if (got === sum(base) + sum(extra)) return out;
+  if (extra.length && got === sum(base)) { out.left.push(topUpText(plan, step, extra, results)); return out; }
+  out.problems.push(`${step.refund_event} is ${got}, the moves it returns add up to ${sum(base) + sum(extra)}`);
+  return out;
 }
 
 /** The plan's row for a stop at a step: from the stop table of steps.json for the answer, else the step's own words. */
@@ -171,6 +200,8 @@ export function nextOf(plan, results) {
       if (v.success === null) return out("wait", id, `the explorer reading of ${id}`, "outcome");
       const j = judgeRunTime(plan, step, v, results);
       findings.push(...j.findings);
+      left.push(...j.left);
+      said.push(...j.info);
       said.push(`${id}: ${j.ok ? j.said : j.problems.join("; ")}`);
       if (j.channels.length) {
         // G4: the explorer named a channel that is not the derived one. The judge stops at a test step;
@@ -194,7 +225,7 @@ export function nextOf(plan, results) {
 function judgeRunTimeRecord(ctx) {
   const n = nextOf(ctx.plan, ctx.results);
   const word = n.word === "wait" ? `wait: ${n.why}` : n.word === "stop" ? `stop at ${n.stopped_at}: ${n.row}` : `go on: ${n.why}`;
-  return { kind: "run-time", all: false, word, verdict: word, next: n, top: [], run: n.said.map((s) => ({ id: s.split(":")[0], status: "said", problems: [], info: [s] })), left: n.left, findings: n.findings, stoppedAt: n.stopped_at };
+  return { kind: "run-time", all: false, exit: 3, word, verdict: word, next: n, top: [], run: n.said.map((s) => ({ id: s.split(":")[0], status: "said", problems: [], info: [s] })), left: n.left, findings: n.findings, stoppedAt: n.stopped_at };
 }
 
 // ---- the final record ---------------------------------------------------------------------------
@@ -246,8 +277,7 @@ export function topUpLeft(plan, step, rec, results) {
   const done = movesDone(plan, step, rec, results);
   const missing = all.filter((m) => !done.includes(m));
   if (!missing.length) return null;
-  const amount = missing.reduce((s, m) => s + BigInt(substitute(m.amount, plan, results, true)), 0n);
-  return `the top up of ${missing.map((m) => m.when.step).join(", ")}, ${amount} (${flopText(amount)} FLOP), is left in the pallet account ${plan.values.PALLET_ACCOUNT.value} under the channel ${substitute(step.channel, plan, results, true)} of T3; no step of this batch brings it back`;
+  return topUpText(plan, step, missing, results);
 }
 
 /** An account read as numbers, or null when a field is not recorded. An absent account holds nothing. */
@@ -408,10 +438,13 @@ function judgeFinal(ctx) {
   else if (incomplete.length) verdict = `failed: incomplete: ${incomplete.map((r) => `${r.id} (${r.problems.join("; ")})`).join("; ")}`;
   else if (bad.length) verdict = `failed: ${bad.map((r) => `${r.id}: ${r.problems.join("; ")}`).join(" | ")}`;
   else if (stoppedAt) verdict = left.length ? `stopped at ${stoppedAt}, left: ${left.join("; ")}` : `stopped at ${stoppedAt}, cleanup complete, nothing left`;
-  else verdict = left.length ? `passed as planned, left: ${left.join("; ")}` : "passed as planned";
+  else verdict = left.length ? `as planned, left: ${left.join("; ")}` : "passed as planned";
   verdict = `${verdict} (${src})`;
   const all = verdict === `passed as planned (${src})`;
-  return { kind: "final", all, verdict, top, run, stoppedAt, left, findings };
+  // F12: 0 when the record is right and nothing is left on chain; 4 when it is right and something
+  // is left, stopped or not; 1 when it is wrong. No verdict begins with "passed" when something is left.
+  const exit = /^failed: /.test(verdict) ? 1 : left.length ? 4 : 0;
+  return { kind: "final", all, exit, verdict, top, run, stoppedAt, left, findings };
 }
 
 /** Judges a whole record of either kind (C1). An unnamed kind fails. */
@@ -420,5 +453,5 @@ export function judgeRun(ctx) {
   if (kind === "run-time") return judgeRunTimeRecord(ctx);
   if (kind === "final") return judgeFinal(ctx);
   const verdict = `failed: results.json says record ${JSON.stringify(kind ?? null)}, not "run-time" or "final"`;
-  return { kind: kind ?? null, all: false, verdict, word: verdict, top: [verdict], run: [], stoppedAt: null, left: [], findings: [] };
+  return { kind: kind ?? null, all: false, exit: 1, verdict, word: verdict, top: [verdict], run: [], stoppedAt: null, left: [], findings: [] };
 }

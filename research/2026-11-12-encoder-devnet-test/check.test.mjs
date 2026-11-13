@@ -343,6 +343,7 @@ test("C3: the verdicts: a cleanup step refused and not attempted again stops the
   for (const s of r.steps.slice(r.steps.indexOf(t6))) s.after.session_nonce = String(BigInt(s.after.session_nonce) - 1n);
   const out = judge(r);
   assert.match(out.verdict, /^stopped at T6, left: T6 was refused: the escrow of T3/);
+  assert.equal(cliCheck(r).status, 4, "F12: stopped with something left exits 4");
   assert.equal(status(out).T6, "pass", "the refused attempt itself is a consistent record");
   assert.match(out.run.find((x) => x.id === "T6").info.join(" "), /refused: ComputeChannel.AckWindowNotElapsed/);
   assert.equal(out.all, false);
@@ -409,4 +410,54 @@ test("C3 S5: an attempt recorded after its step succeeded fails the record", () 
   const extra = structuredClone(t7); extra.step = "T7.2"; extra.finalized_in_block += 1; extra.block_hash = H(extra.finalized_in_block); extra.extrinsic_hash = H(424242);
   r.steps.splice(r.steps.indexOf(t7) + 1, 0, extra);
   assert.match(judge(r).verdict, /^failed: .*T7 succeeded, yet T7.2 was sent after it/);
+});
+
+test("F12: exit 2 for check.mjs's own refusals: no file, or a file that is not JSON", async () => {
+  const { spawnSync } = await import("node:child_process");
+  const { mkdtempSync, writeFileSync, rmSync } = await import("node:fs");
+  const { tmpdir } = await import("node:os");
+  const { join } = await import("node:path");
+  const d = mkdtempSync(join(tmpdir(), "check-f12-"));
+  const run = (...a) => spawnSync(process.execPath, [new URL("./check.mjs", import.meta.url).pathname, ...a], { encoding: "utf8" });
+  try {
+    assert.equal(run().status, 2);
+    assert.equal(run(join(d, "none.json")).status, 2);
+    writeFileSync(join(d, "bad.json"), "{");
+    const bad = run(join(d, "bad.json"));
+    assert.equal(bad.status, 2);
+    assert.match(bad.stderr, /is not a JSON file this script can read/);
+  } finally { rmSync(d, { recursive: true, force: true }); }
+});
+
+test("F12: the exit codes by verdict: 0 passed or stopped with nothing left, 4 right with something left (stopped or not), 1 wrong, 3 run time; no verdict begins with passed when something is left", () => {
+  const code = (r) => cliCheck(r).status;
+  assert.equal(code(syntheticRun()), 0, "passed as planned");
+  assert.equal(code(syntheticRun({ t3: "FlopSessionKeys.SpendExceedsDeclared", skip: ["T4", "T5"] })), 0, "stopped, cleanup complete, nothing left");
+  const top = syntheticRun({ t4: "success" });
+  const t6 = recIn(top, "T6");
+  t6.events.find((e) => e.name === "ForceOpenExpired").fields.refunded = V("ESCROW_1");
+  t6.events.find((e) => e.name === "Transfer" && e.fields.to === OWNER).fields.amount = V("ESCROW_1");
+  for (const s of top.steps.slice(top.steps.indexOf(t6))) s.after.accounts.owner.free = String(BigInt(s.after.accounts.owner.free) - BigInt(V("TOP_UP")));
+  const out = cliCheck(top);
+  assert.equal(out.status, 4);
+  assert.match(out.stdout, /^verdict: as planned, left: the top up of T4/m);
+  assert.doesNotMatch(out.stdout, /^verdict: passed/m);
+  const wrong = syntheticRun(); recIn(wrong, "T9").after.accounts.owner.free = "1";
+  assert.equal(code(wrong), 1);
+});
+
+test("G2: the run time judge reads T6's refund from the explorer's events: escrow and top up is clean, the escrow alone leaves the top up (C6), another amount is a problem, none is not known", async () => {
+  const { nextOf } = await import("./judge.mjs");
+  const { asPlanned } = await import("./fixtures.mjs");
+  const at = (refunded) => { const { results } = asPlanned(DEVICE, "T6"); const e = results.steps.find((x) => x.step === "T6").run_time.explorer.events.find((x) => x.name === "ForceOpenExpired"); if (refunded === null) delete e.fields.refunded; else e.fields.refunded = refunded; return nextOf(plan, results); };
+  const clean = at("11000000000000000");
+  assert.equal(clean.step, "T7"); assert.deepEqual(clean.left, []);
+  const alone = at(V("ESCROW_1"));
+  assert.equal(alone.step, "T7");
+  assert.ok(alone.left.some((l) => l.startsWith(`the top up of T4, ${V("TOP_UP")} (0.001 FLOP), is left in the pallet account`)), alone.left.join("\n"));
+  const other = at("5");
+  assert.ok(other.left.some((l) => /T6 was included and succeeded, but ComputeChannel.ForceOpenExpired.refunded is 5, the moves it returns add up to 11000000000000000/.test(l)), other.left.join("\n"));
+  const none = at(null);
+  assert.equal(none.step, "T7");
+  assert.ok(none.said.some((l) => /the refund is not known/.test(l)));
 });

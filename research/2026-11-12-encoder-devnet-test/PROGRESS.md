@@ -55,7 +55,15 @@ Start: head `e18e725`; the second reviewer's branch (`8ff23d6`) merged by fast f
   what the step moved under the explorer's id, and drops the cleanup steps that name that channel;
   a cleanup step with a mismatch goes into left (and "included and succeeded, but" stays). Test in
   lead-stop.test.mjs (G4) and record-step.test.mjs R2 (adapted from the refusal).
-- next: F12, G2, the words, G3. F11, the runner, F9, F3 with G1 and G4, F12 and G2, the words, G3.
+- F12: judgeFinal gives exit (0 right and nothing left, 4 right and something left, 1 wrong),
+  the top up case says "as planned, left: ..."; run time exit 3; check.mjs exits by it and 2 for
+  its own refusals (no file, not JSON). Tests in check.test.mjs. Reviewer tests changed:
+  review2-next Q9 DEFECT (exit 4, the new verdict among the allowed ones, not "passed") and Q9
+  measured (left exits 4).
+- G2: judge runTimeRefund: T6, T7 and attempts, from the explorer's events; C6's words shared with
+  the final judge (topUpText). Test in check.test.mjs.
+- All 222 tests of the folder pass.
+- next: the words (README, plan.md, steps.json, template run_time_form), mutants, then G3. F11, the runner, F9, F3 with G1 and G4, F12 and G2, the words, G3.
 
 ### Decisions (fix round 2) and why
 

@@ -147,8 +147,10 @@ function topUpLeft() {
 
 test("review2 Q9 DEFECT: the top up left after T6 gets a verdict that is none of C3's four and begins with passed as planned, with exit 1", () => {
   const out = cli(topUpLeft());
-  assert.equal(out.code, 1);
-  assert.ok(C3.some((re) => re.test(out.verdict)), `verdict: ${out.verdict}`);
+  // adapted by the builder (F12, the lead's ruling 4): exit 4 (right, something left) and the verdict "as planned, left: ..."
+  assert.equal(out.code, 4);
+  assert.ok([...C3, /^as planned, left: /].some((re) => re.test(out.verdict)), `verdict: ${out.verdict}`);
+  assert.doesNotMatch(out.verdict, /^passed/);
 });
 
 test("review2 Q9 measured: the exit code of each kind of verdict (info for ruling 4)", () => {
@@ -158,7 +160,7 @@ test("review2 Q9 measured: the exit code of each kind of verdict (info for rulin
   const left = cli(topUpLeft());
   assert.equal(right.code, 0); assert.match(right.verdict, /^passed as planned \(/);
   assert.equal(bad.code, 1); assert.match(bad.verdict, /^failed: /);
-  assert.equal(left.code, 1); // the same code as a wrong record: ruling 4 is open
+  assert.equal(left.code, 4); // adapted by the builder: ruling 4 (F12) gives 4, not the code of a wrong record
   const d = mkdtempSync(join(tmpdir(), "review2-rt-")); const f = join(d, "r.json"); writeFileSync(f, JSON.stringify(asPlanned(DEVICE, "T3").results));
   assert.equal(spawnSync(process.execPath, [join(HERE, "check.mjs"), f]).status, 3); rmSync(d, { recursive: true, force: true });
 });
