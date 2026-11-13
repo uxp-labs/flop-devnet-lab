@@ -10,7 +10,10 @@
 // decoder, and holds each input to the record it names.
 //
 // The list is the finalized head, the genesis hash, and for each block the canonical hash at its
-// height and one state_queryStorageAt at its hash: 20 calls. Every batch asks the same eight keys in
+// height and one state_queryStorageAt at its hash; after the batch of each step's block, the block
+// itself (chain_getBlock), so the recording holds the extrinsics as the block holds them; and after
+// that, for the four steps signed with a mortal era (T3 to T6), the canonical hash at the era's birth
+// height, the hash the step's signature binds: 32 calls. Every batch asks the same eight keys in
 // the fixed order of READS, at every block: the final record of the test needs the accounts, the
 // session, the session nonce and the breaker after every step, and the channel of T3 is read before it
 // exists, while it is open and after it expired. System.Account is not in the decoder's reviewed shape
@@ -27,14 +30,21 @@ export const STEP_IDS = ["T1", "T2", "T3", "T4", "T5", "T6", "T8", "T9"] as cons
 export type Account = (typeof ACCOUNTS)[number];
 export type Channel = (typeof CHANNELS)[number];
 export type StepId = (typeof STEP_IDS)[number];
-export type Block = "encoder-devnet-test/start" | `encoder-devnet-test/${StepId}`;
+/** The steps signed with a mortal era, whose birth block's hash the signature binds (run-2026-11-13/signed/T<id>.json, era). */
+export const MORTAL_IDS = ["T3", "T4", "T5", "T6"] as const satisfies readonly StepId[];
+export type MortalId = (typeof MORTAL_IDS)[number];
+export type Block = "encoder-devnet-test/start" | `encoder-devnet-test/${StepId}` | `encoder-devnet-test/${MortalId}-birth`;
 export const START: Block = "encoder-devnet-test/start";
 export const blockOf = (id: StepId): Block => `encoder-devnet-test/${id}`;
+export const birthOf = (id: MortalId): Block => `encoder-devnet-test/${id}-birth`;
+const isMortal = (id: StepId): id is MortalId => (MORTAL_IDS as readonly StepId[]).includes(id);
 /** The nine blocks read, in order: the start, then each step's block. */
 export const BLOCKS: readonly Block[] = [START, ...STEP_IDS.map(blockOf)];
+/** The four birth blocks, asked by height only. */
+export const BIRTHS: readonly Block[] = MORTAL_IDS.map(birthOf);
 export const MENTIONED = [] as const;
 export type Mentioned = never;
-export const NAMES: core.Names<Account, Channel, Block, Mentioned> = { accounts: ACCOUNTS, channels: CHANNELS, blocks: BLOCKS, mentioned: MENTIONED };
+export const NAMES: core.Names<Account, Channel, Block, Mentioned> = { accounts: ACCOUNTS, channels: CHANNELS, blocks: [...BLOCKS, ...BIRTHS], mentioned: MENTIONED };
 
 export type Inputs = core.Inputs<Account, Channel, Block, Mentioned>;
 export type Read = core.Read<Account, Channel>;
@@ -87,7 +97,11 @@ function blockWords(id: StepId | null): string {
   return `the block where ${s.sent} (step ${s.id}; the run time record says ${s.outcome})`;
 }
 
-/** The plan as call specs, in order, each with its why: the heads, then for each block its hash by height and one batch at that hash. */
+/**
+ * The plan as call specs, in order, each with its why: the heads, then for each block its hash by
+ * height and one batch at that hash; for a step's block then the block itself, and for a mortal step
+ * then the hash at its era's birth height.
+ */
 export function plan(inputs: Inputs): Spec[] {
   const out: Spec[] = [
     { kind: "head", why: "the finalized head when the run read it: every block below must be at or under it" },
@@ -106,6 +120,16 @@ export function plan(inputs: Inputs): Spec[] {
         why: `at block ${h}, ${blockWords(id)}: System.Events, the events of every extrinsic of the block, and System.LastRuntimeUpgrade, the runtime that executed it, then the stored values at the block: ${READS.slice(2).map((r) => readWords(inputs, r)).join(", ")}; asked together in one call, answered as one set for the block, a key that holds nothing listed with null`,
       },
     );
+    if (id === null) continue;
+    out.push({ kind: "block", block: b, why: `the block ${h} of step ${id}, its header and extrinsics: the extrinsic at the index the run time record names for step ${id} must be byte for byte the signed extrinsic of step ${id}` });
+    if (isMortal(id)) {
+      const birth = inputs.blocks[birthOf(id)];
+      out.push({
+        kind: "hash",
+        block: birthOf(id),
+        why: `the canonical hash at height ${birth.height.value}, to compare with ${birth.hash.value}, the birth block of the mortal era step ${id} was signed with: the signature of step ${id} binds this block's hash`,
+      });
+    }
   }
   return out;
 }

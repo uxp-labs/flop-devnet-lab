@@ -53,6 +53,18 @@
         "value": 3655037
       }
     },
+    "encoder-devnet-test/T3-birth": {
+      "hash": {
+        "field": "era.birth_hash",
+        "file": "research/2026-11-12-encoder-devnet-test/run-2026-11-13/signed/T3.json",
+        "value": "0x3467bbce5dc0eb5267fdf1c3abc12fd30f87e82a13bdaea77ec78ed4a106226f"
+      },
+      "height": {
+        "field": "era.birth_number",
+        "file": "research/2026-11-12-encoder-devnet-test/run-2026-11-13/signed/T3.json",
+        "value": 3654995
+      }
+    },
     "encoder-devnet-test/T4": {
       "hash": {
         "field": "steps.3.run_time.sent.block_hash",
@@ -63,6 +75,18 @@
         "field": "steps.3.run_time.sent.block_number",
         "file": "research/2026-11-12-encoder-devnet-test/results.json",
         "value": 3655115
+      }
+    },
+    "encoder-devnet-test/T4-birth": {
+      "hash": {
+        "field": "era.birth_hash",
+        "file": "research/2026-11-12-encoder-devnet-test/run-2026-11-13/signed/T4.json",
+        "value": "0xf9c69a25c8cb4c8f61cfb8bdeb5d5eeb4827f24ba231c9d4a6dac74c7bbd430d"
+      },
+      "height": {
+        "field": "era.birth_number",
+        "file": "research/2026-11-12-encoder-devnet-test/run-2026-11-13/signed/T4.json",
+        "value": 3655082
       }
     },
     "encoder-devnet-test/T5": {
@@ -77,6 +101,18 @@
         "value": 3655185
       }
     },
+    "encoder-devnet-test/T5-birth": {
+      "hash": {
+        "field": "era.birth_hash",
+        "file": "research/2026-11-12-encoder-devnet-test/run-2026-11-13/signed/T5.json",
+        "value": "0x950061bf30acf44a910cf6f0565bfa135e5ac0e17676740d85ba0846a2fe1cef"
+      },
+      "height": {
+        "field": "era.birth_number",
+        "file": "research/2026-11-12-encoder-devnet-test/run-2026-11-13/signed/T5.json",
+        "value": 3655152
+      }
+    },
     "encoder-devnet-test/T6": {
       "hash": {
         "field": "steps.5.run_time.sent.block_hash",
@@ -87,6 +123,18 @@
         "field": "steps.5.run_time.sent.block_number",
         "file": "research/2026-11-12-encoder-devnet-test/results.json",
         "value": 3655678
+      }
+    },
+    "encoder-devnet-test/T6-birth": {
+      "hash": {
+        "field": "era.birth_hash",
+        "file": "research/2026-11-12-encoder-devnet-test/run-2026-11-13/signed/T6.json",
+        "value": "0x227016243e02f2997d2074833e4a1de7a965cb7c8d4651b3cefcc660e2a9cbd9"
+      },
+      "height": {
+        "field": "era.birth_number",
+        "file": "research/2026-11-12-encoder-devnet-test/run-2026-11-13/signed/T6.json",
+        "value": 3655648
       }
     },
     "encoder-devnet-test/T8": {

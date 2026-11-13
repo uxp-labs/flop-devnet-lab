@@ -23,7 +23,7 @@ import { STORAGE_REQUESTS_TEXT as LIST_2_TEXT } from "./helpers/recorded-storage
 import { UPGRADE_REQUESTS_TEXT as LIST_3_TEXT } from "./helpers/recorded-upgrade.js";
 import { type Source, deriveCalls as coreDerive } from "./helpers/requests/core.js";
 import { readInputs as readList4Inputs } from "./helpers/requests/list-4.js";
-import { BLOCKS, type Block, type Inputs, READS, type Read, START, STEPS, STEP_IDS, blockOf, deriveCalls, deriveRequestsText, readInputs } from "./helpers/requests/list-5.js";
+import { BIRTHS, BLOCKS, type Block, type Inputs, MORTAL_IDS, READS, type Read, START, STEPS, STEP_IDS, birthOf, blockOf, deriveCalls, deriveRequestsText, readInputs } from "./helpers/requests/list-5.js";
 import { ENCODER_RESULTS, ENCODER_SPEC_FIELD, listMetadata, requestsListText } from "./helpers/requests-list.js";
 
 const REPO = new URL("../../", import.meta.url);
@@ -38,8 +38,17 @@ const BUILDER = getDynamicBuilder(getLookupFn(unifyMetadata(decAnyMetadata(META)
 const RESULTS_FILE = ENCODER_RESULTS;
 const STEPS_FILE = "research/2026-11-12-encoder-devnet-test/steps.json";
 const UP_FILE = "research/2026-11-12-runtime-upgrade/results.json";
+/** The signed file of a step, as the lab's tools wrote it when the lead signed. */
+const SIGNED_FILE = (id: string) => `research/2026-11-12-encoder-devnet-test/run-2026-11-13/signed/${id}.json`;
 const record = (file: string) => JSON.parse(repoText(file)) as Record<string, unknown>;
-const RECORDS: Record<string, Record<string, unknown>> = { [RESULTS_FILE]: record(RESULTS_FILE), [STEPS_FILE]: record(STEPS_FILE) };
+const RECORDS: Record<string, Record<string, unknown>> = {
+  [RESULTS_FILE]: record(RESULTS_FILE),
+  [STEPS_FILE]: record(STEPS_FILE),
+  ...Object.fromEntries(STEP_IDS.map((id) => [SIGNED_FILE(id), record(SIGNED_FILE(id))])),
+};
+/** The era of a step's signed file: "immortal", or its period, birth and last valid block. */
+type Era = "immortal" | { period: number; birth_number: number; birth_hash: string; last_valid_block: number };
+const eraOf = (id: string) => (RECORDS[SIGNED_FILE(id)] as { era: Era }).era;
 type Explorer = { success: boolean; error: { name: string } | null; events: { pallet: string; name: string; fields: Record<string, string> }[] };
 type Sent = { status: string; block_number: number; block_hash: string };
 const RESULTS = RECORDS[RESULTS_FILE] as {
@@ -85,25 +94,26 @@ describe("the fifth request list, recordings/requests.json", () => {
   const read = readRequests(new TextEncoder().encode(LIST_TEXT));
   const calls = typeof read === "string" ? [] : read.calls;
 
-  it("is in the written form, holds 20 calls (at most MAX_CALLS), every method one the guard allows, and only the finalized head, block hashes and batches", () => {
+  it("is in the written form, holds 32 calls (at most MAX_CALLS), every method one the guard allows, and only the finalized head, block hashes, batches and blocks", () => {
     expect(read).not.toBeTypeOf("string");
-    expect(calls.length).toBe(20);
+    expect(calls.length).toBe(32);
     expect(MAX_CALLS).toBe(64);
     expect(calls.length).toBeLessThanOrEqual(MAX_CALLS);
     for (const c of calls) expect(READ_ONLY_RPC_METHODS.has(c.method), c.method).toBe(true);
     const by: Record<string, number> = {};
     for (const c of calls) by[c.method] = (by[c.method] ?? 0) + 1;
-    expect(by).toEqual({ chain_getFinalizedHead: 1, chain_getBlockHash: 10, state_queryStorageAt: 9 });
+    expect(by).toEqual({ chain_getFinalizedHead: 1, chain_getBlockHash: 14, state_queryStorageAt: 9, chain_getBlock: 8 });
   });
 
   it("passes the read only guard on every call, as the derived list does", () => {
     for (const c of [...calls, ...DERIVED.map((d) => d.call)]) expect(() => guardRpc(c.method), c.method).not.toThrow();
   });
 
-  it("asks no method the fourth list did not ask", () => {
+  it("asks one method no earlier list asked, chain_getBlock, and every other method one the fourth list asked", () => {
     const earlier = new Set([LIST_1_TEXT, LIST_2_TEXT, LIST_3_TEXT, LIST_4_TEXT].flatMap((t) => (JSON.parse(t) as { calls: { method: string }[] }).calls.map((c) => c.method)));
     const four = new Set((JSON.parse(LIST_4_TEXT) as { calls: { method: string }[] }).calls.map((c) => c.method));
-    for (const d of DERIVED) expect([earlier.has(d.call.method), four.has(d.call.method)], d.call.method).toEqual([true, true]);
+    expect([...new Set(DERIVED.map((d) => d.call.method).filter((m) => !earlier.has(m)))]).toEqual(["chain_getBlock"]);
+    for (const d of DERIVED) if (d.call.method !== "chain_getBlock") expect(four.has(d.call.method), d.call.method).toBe(true);
   });
 
   it("is, byte for byte, the list derived from recordings/requests-inputs.json and the recorded 1014020 metadata", () => {
@@ -127,24 +137,45 @@ describe("the fifth request list, recordings/requests.json", () => {
     expect([META.length, sha256(META)]).toEqual([line?.metadataBytes, line?.metadataSha256]);
   });
 
-  it("asks the heads, then for the start and each sent step of results.json in its order the hash at its height and one batch at its hash", () => {
-    // Read a second way: the heights and hashes from results.json's start and its steps' run time readings.
+  it("asks the heads, then for the start and each sent step of results.json in its order the hash at its height and one batch at its hash, then for a step the block, then for a mortal step the hash at its era's birth height", () => {
+    // Read a second way: the heights and hashes from results.json's start and its steps' run time
+    // readings, the mortal steps and their birth heights from the signed files the run left.
     expect(DERIVED.map((d) => [d.call.method, d.call.method === "state_queryStorageAt" ? (d.call.params as unknown[])[1] : d.call.params])).toEqual([
       ["chain_getFinalizedHead", []],
       ["chain_getBlockHash", [0]],
       ["chain_getBlockHash", [RESULTS.start.finalized.number]],
       ["state_queryStorageAt", RESULTS.start.finalized.hash],
-      ...SENT.flatMap((s) => [
-        ["chain_getBlockHash", [s.run_time.sent.block_number]],
-        ["state_queryStorageAt", s.run_time.sent.block_hash],
-      ]),
+      ...SENT.flatMap((s) => {
+        const era = eraOf(s.step);
+        return [
+          ["chain_getBlockHash", [s.run_time.sent.block_number]],
+          ["state_queryStorageAt", s.run_time.sent.block_hash],
+          ["chain_getBlock", [s.run_time.sent.block_hash]],
+          ...(era === "immortal" ? [] : [["chain_getBlockHash", [era.birth_number]]]),
+        ];
+      }),
     ]);
+    expect(SENT.filter((s) => eraOf(s.step) !== "immortal").map((s) => s.step)).toEqual([...MORTAL_IDS]);
     for (const s of SENT) expect(s.run_time.sent.status, s.step).toBe("finalized");
     expect(SENT.map((s) => s.step)).toEqual([...STEP_IDS]);
     expect(STEPS_JSON.steps.map((s) => s.id).filter((id) => SENT.some((s) => s.step === id))).toEqual([...STEP_IDS]);
     expect(STEPS_JSON.steps.map((s) => s.id).filter((id) => !(STEP_IDS as readonly string[]).includes(id))).toEqual(["T7"]);
     expect(BLOCKS).toEqual([START, ...STEP_IDS.map(blockOf)]);
-    expect(DERIVED.slice(2).map((d) => d.block)).toEqual(BLOCKS.flatMap((b) => [b, b]));
+    expect(DERIVED.slice(2).map((d) => d.block)).toEqual([
+      START,
+      START,
+      ...STEP_IDS.flatMap((id) => [blockOf(id), blockOf(id), blockOf(id), ...((MORTAL_IDS as readonly string[]).includes(id) ? [birthOf(id as (typeof MORTAL_IDS)[number])] : [])]),
+    ]);
+  });
+
+  it("asks each chain_getBlock at the hash of its step's block, the block the run time record names, and at no other block", () => {
+    const blocks = DERIVED.filter((d) => d.call.method === "chain_getBlock");
+    expect(blocks.map((d) => d.block)).toEqual(STEP_IDS.map(blockOf));
+    for (const [i, d] of blocks.entries()) {
+      expect(d.call.params).toEqual([INPUTS.blocks[d.block as Block].hash.value]);
+      expect(d.call.params).toEqual([SENT[i]?.run_time.sent.block_hash]);
+      expect([d.read, d.reads]).toEqual([null, null]);
+    }
   });
 
   it("asks at every block the same eight keys in one fixed order, System.Events and System.LastRuntimeUpgrade first by the keys the lab's reads of the upgrade asked", () => {
@@ -193,9 +224,12 @@ describe("the fifth request list, recordings/requests.json", () => {
       expect(d.call.why, d.call.why).not.toMatch(/[‒-―]| - /);
       if (d.block === null) continue;
       const b = INPUTS.blocks[d.block];
+      const id = d.block.split("/")[1]?.replace(/-birth$/, "");
       expect(d.call.why, d.call.why).toContain(`${d.call.method === "chain_getBlockHash" ? "height" : "block"} ${b.height.value}`);
-      expect(d.call.why, d.call.why).toContain(d.block !== START ? `step ${d.block.split("/")[1]}` : d.call.method === "chain_getBlockHash" ? "for the start of the run" : "the finalized block the run started from, before any step");
+      expect(d.call.why, d.call.why).toContain(d.block !== START ? `step ${id}` : d.call.method === "chain_getBlockHash" ? "for the start of the run" : "the finalized block the run started from, before any step");
       if (d.call.method === "chain_getBlockHash") expect(d.call.why).toContain(b.hash.value);
+      if (d.call.method === "chain_getBlock") expect(d.call.why).toContain(`the extrinsic at the index the run time record names for step ${id} must be byte for byte the signed extrinsic of step ${id}`);
+      if ((BIRTHS as readonly string[]).includes(d.block)) expect(d.call.why).toContain(`the birth block of the mortal era step ${id} was signed with: the signature of step ${id} binds this block's hash`);
     }
     for (const [i, s] of SENT.entries()) {
       const ex = s.run_time.explorer;
@@ -228,8 +262,8 @@ describe("the inputs of the fifth list, recordings/requests-inputs.json", () => 
     expect(() => readInputs(LIST_4_INPUTS_TEXT)).toThrow();
   });
 
-  it("names only the encoder test's results.json and steps.json", () => {
-    expect([...new Set(sources(INPUTS).map(([, s]) => s.file))].sort()).toEqual([RESULTS_FILE, STEPS_FILE].sort());
+  it("names only the encoder test's results.json and steps.json, and the signed files of its four mortal steps", () => {
+    expect([...new Set(sources(INPUTS).map(([, s]) => s.file))].sort()).toEqual([RESULTS_FILE, STEPS_FILE, ...MORTAL_IDS.map(SIGNED_FILE)].sort());
   });
 
   it("holds every input to the value at its field in the record it names", () => {
@@ -238,7 +272,7 @@ describe("the inputs of the fifth list, recordings/requests-inputs.json", () => 
       expect(at(RECORDS[s.file], s.field), `${where}: ${s.file} ${s.field}`).toEqual(s.value);
       n++;
     }
-    expect(n).toBe(22);
+    expect(n).toBe(30);
   });
 
   it("takes the owner and the device from results.json's accounts, and the named account from the value NAMED of steps.json, the miner of T3's force_open", () => {
@@ -271,6 +305,21 @@ describe("the inputs of the fifth list, recordings/requests-inputs.json", () => 
         return [RESULTS_FILE, `steps.${i}.run_time.sent.block_number`, RESULTS_FILE, `steps.${i}.run_time.sent.block_hash`];
       }),
     );
+  });
+
+  it("takes each birth block from era.birth_number and era.birth_hash of its step's signed file, at or below the step's block and within the era's 64 blocks of it", () => {
+    expect(BIRTHS).toEqual(MORTAL_IDS.map(birthOf));
+    for (const id of MORTAL_IDS) {
+      const birth = INPUTS.blocks[birthOf(id)];
+      expect([birth.height.file, birth.height.field, birth.hash.file, birth.hash.field], id).toEqual([SIGNED_FILE(id), "era.birth_number", SIGNED_FILE(id), "era.birth_hash"]);
+      const era = eraOf(id);
+      if (era === "immortal") throw new Error(`${id} is immortal`);
+      const landed = INPUTS.blocks[blockOf(id)].height.value;
+      expect(era.period, id).toBe(64);
+      expect(birth.height.value, id).toBeLessThanOrEqual(landed);
+      expect(landed - birth.height.value, id).toBeLessThan(era.period);
+      expect(birth.height.value, id).toBeGreaterThan(INPUTS.blocks[START].height.value);
+    }
   });
 
   it("reads blocks that rise from the start step by step, the start above the first block the 1014020 runtime executed", () => {

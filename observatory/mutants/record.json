@@ -560,6 +560,46 @@
     "why": "the whys name the named miner whole, so the list changes with that input (list 5, B3, B4)"
   },
   {
+    "id": "list5-no-block-of-T1",
+    "file": "test/helpers/requests/list-5.ts",
+    "find": "    if (id === null) continue;\n",
+    "replace": "    if (id === null || id === \"T1\") continue;\n",
+    "test": "test/encoder-requests.test.ts",
+    "why": "every step's block is read whole by chain_getBlock after its batch, T1's too (list 5, B10)"
+  },
+  {
+    "id": "list5-block-asked-at-start",
+    "file": "test/helpers/requests/list-5.ts",
+    "find": "out.push({ kind: \"block\", block: b, why:",
+    "replace": "out.push({ kind: \"block\", block: START, why:",
+    "test": "test/encoder-requests.test.ts",
+    "why": "each chain_getBlock asks the hash of its own step's block (list 5, B10, B11)"
+  },
+  {
+    "id": "list5-birth-asked-at-step-height",
+    "file": "test/helpers/requests/list-5.ts",
+    "find": "        kind: \"hash\",\n        block: birthOf(id),\n",
+    "replace": "        kind: \"hash\",\n        block: blockOf(id),\n",
+    "test": "test/encoder-requests.test.ts",
+    "why": "a mortal step's extra hash is asked at its era's birth height, not again at its own block (list 5, B10)"
+  },
+  {
+    "id": "list5-block-why-without-claim",
+    "file": "test/helpers/requests/list-5.ts",
+    "find": "the extrinsic at the index the run time record names for step ${id} must be byte for byte the signed extrinsic of step ${id}",
+    "replace": "the extrinsics of step ${id}",
+    "test": "test/encoder-requests.test.ts",
+    "why": "the why of chain_getBlock says what the block must show: the signed extrinsic, byte for byte, at the recorded index (list 5, B10)"
+  },
+  {
+    "id": "list5-birth-why-without-binding",
+    "file": "test/helpers/requests/list-5.ts",
+    "find": "the signature of step ${id} binds this block's hash",
+    "replace": "a block before step ${id}",
+    "test": "test/encoder-requests.test.ts",
+    "why": "the why of a birth hash says the step's signature binds that block's hash (list 5, B10)"
+  },
+  {
     "id": "batch-answer-two-sets-read",
     "file": "test/helpers/batch-answer.ts",
     "find": "  if (result.length !== 1) return refuse(`the answer holds ${result.length} sets, not exactly one`);\n",
