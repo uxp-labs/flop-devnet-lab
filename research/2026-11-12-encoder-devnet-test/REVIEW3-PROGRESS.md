@@ -21,6 +21,9 @@ Baseline at a9442dd: 229 of 229 pass.
 5. low V5. refused-bundle, not-in-sent-list and already-sent carry no sent_by.
    review3-pane.test.mjs "the results of send and sendSame that submit nothing".
 
+6. low V6. A lone signed/T3.dead-1.send.json beside signed/T3.json: --again opens the key file,
+   then retire refuses ("dead-1.json exists"). review3-preflight.test.mjs "a lone dead send file".
+
 ## Held
 
 - Table of attack B (21 rows) in review3-stop.test.mjs: allowed exactly at a, b, c, d as ruled;
@@ -37,6 +40,9 @@ Baseline at a9442dd: 229 of 229 pass.
   answer, late open, a throwing write, finalized with no block read, sendSame after a deadline.
   Writes and marks counted in each: one mark per first write, none for sendSame, none on a throw.
 
+- Attack D held (review3-preflight.test.mjs, 2): two dead copies and no signed file; the newest
+  dead copy's era decides; the nonce refuses before the key; a lone send file refused before the key.
+
 ## Next
 
-D (preflight, dead files), E, F mutants.
+E, F mutants.
