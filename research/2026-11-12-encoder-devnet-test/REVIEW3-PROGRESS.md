@@ -24,6 +24,10 @@ Baseline at a9442dd: 229 of 229 pass.
 6. low V6. A lone signed/T3.dead-1.send.json beside signed/T3.json: --again opens the key file,
    then retire refuses ("dead-1.json exists"). review3-preflight.test.mjs "a lone dead send file".
 
+7. medium V8. The final judge ignores what is missing: a final record with T2 to T8 absent and T9
+   swept gets "passed as planned" and exit 0, with or without a lead_stop at T2.
+   review3-exit.test.mjs (two DEFECT tests).
+
 ## Held
 
 - Table of attack B (21 rows) in review3-stop.test.mjs: allowed exactly at a, b, c, d as ruled;
