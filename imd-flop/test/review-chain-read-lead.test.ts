@@ -65,7 +65,7 @@ function fakeSocket(script: Script, sent: any[], frameFor: (req: any, honest: st
   };
 }
 
-describe("L1: a frame with no result key is taken as the result null", () => {
+describe("L1 (found on fcf75d0, now rule X1): only a frame with its own result key is the call's answer", () => {
   const sessionEntryKeys = () => {
     const k = keysOf(OWNER, DEV1);
     return new Set([hexOf(k.sessions.key), hexOf(k.sessionNonces.key), hexOf(k.circuitBreakers.key)]);
@@ -116,7 +116,7 @@ describe("L1: a frame with no result key is taken as the result null", () => {
   });
 });
 
-describe("L2: nodeTransport sends any method text a caller hands it", () => {
+describe("L2 (found on fcf75d0, now rule X2): nodeTransport sends only the five read methods", () => {
   it("RULE X2 a cast cannot make chain-read's transport put author_submitExtrinsic on the wire", async () => {
     const sent: any[] = [];
     fakeSocket(rerunScript(A6.block_hash), sent, (req) => JSON.stringify({ jsonrpc: "2.0", id: req.id, result: `0x${"00".repeat(32)}` }));
@@ -137,7 +137,7 @@ describe("L2: nodeTransport sends any method text a caller hands it", () => {
   });
 });
 
-describe("L3: the stored record's owner and delegate are not compared with the ones asked", () => {
+describe("L3 (found on fcf75d0, now rule X3): the stored record's owner and delegate must be the ones asked", () => {
   /**
    * At B10 (dev2's successful session call) a node answers the three keys of (OWNER, DEV1) with the recorded bytes of
    * (OWNER, DEV2) at that block. The door builds the key from the asked parts, so the key check passes; the bytes are
