@@ -18,3 +18,12 @@ Done also: test/helpers/encoder-fill.ts, scripts/fill-encoder-results.mjs, resul
 
 Next: test/helpers/encoder-fill.ts, scripts/fill-encoder-results.mjs, results.final.json,
 test/encoder-results.test.ts, cli-checks case, mutants, research folder test, words (W1, W2).
+
+Done also: test/encoder-results.test.ts (127750e), cli-checks cases (D4), mutants/encoder-fill.json (17).
+
+STOPPED again (a rule cannot be met as written):
+- judge.mjs imports lib.mjs, which loads @noble/hashes from imd-flop/node_modules. The observatory check
+  (observatory-check.yml: npm run check in observatory only) and mutate.mjs (links only observatory/node_modules)
+  have no imd-flop install. So encoder-results.test.ts (it imports judge.mjs for the verdict, T2) and the cli-checks
+  case running check.mjs (D4) fail there: mutate.mjs control fails with "Cannot find module '@noble/hashes/blake2.js'".
+  Local runs pass only because imd-flop is built here. Waiting for the lead's rule.
