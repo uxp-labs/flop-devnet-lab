@@ -14,7 +14,9 @@ table, stop rule.
 
 ## Next
 
-- (3) pane-runner.js: createRunner({transport, eventsKey, deadlineMs, store}); heads, read,
+- (4) results.template.json (node plan.mjs template), judge.mjs + check.mjs + check.test.mjs.
+
+- (3) DONE pane-runner.js and pane-runner.test.mjs (12 tests). Interface: createRunner({transport, eventsKey, deadlineMs, store}); heads, read,
   deviceReads(device, sessionNonceKey), send(bundleText, sha256). wsTransport(url) for the browser.
 
 - (2) DONE sign-device.mjs and sign-device.test.mjs (12 tests). It took: step id, --key, --results (channel id of T3/T5 events), --reads JSON
