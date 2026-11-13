@@ -121,7 +121,7 @@ describe("C4: the session nonce and the circuit breaker", () => {
 describe("C3: the door's refusal is unknown with the door's words", () => {
   it("a shape file the package does not hold, or a name that is not a shape file's, is unknown", () => {
     expect(shapeFileText("shapes/none.json").kind).toBe("unknown");
-    for (const bad of ["../package.json", "shapes/../package.json", "src/scale/block.ts", "/etc/passwd"]) expect(shapeFileText(bad).kind).toBe("unknown");
+    for (const bad of ["../package.json", "shapes/../package.json", "src/scale/block.ts", "/etc/passwd", "scale/block"]) expect(shapeFileText(bad).kind).toBe("unknown");
     expect(shapeFileText(LINE.shapeFile).kind).toBe("known");
   });
 

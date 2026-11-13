@@ -168,6 +168,15 @@ describe("T4: the cross check of S4 on the rerun", () => {
     expect((two as { reason: string }).reason).toMatch(/exactly one/);
   });
 
+  it("the event of another session at the block is not taken for this one's", async () => {
+    const { state, events } = await bothAt(CALLS[0]);
+    const other = DELEGATES.find((d) => d !== state.delegate) as string;
+    const moved = events.events.map((e: any) => (e.event === "SessionCallExecuted" ? { ...e, fields: { ...e.fields, delegate: other } } : e));
+    const c = crossCheck(state, { ...events, events: moved });
+    expect(c.kind).toBe("unknown");
+    expect((c as { reason: string }).reason).toMatch(/^no FlopSessionKeys.SessionCallExecuted of this session/);
+  });
+
   it("an absent or unknown session is not checked", async () => {
     const { state, events } = await bothAt(CALLS[0]);
     expect(crossCheck({ ...state, session: { kind: "absent" } }, events).kind).toBe("unknown");

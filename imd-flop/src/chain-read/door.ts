@@ -38,14 +38,10 @@ export function runtimeOf(lastRuntimeUpgrade: Uint8Array): Got<Runtime> {
 
 const pinInput = (p: Pin) => ({ specName: p.runtime.specName, specVersion: p.runtime.specVersion, metadata: p.metadata, lastRuntimeUpgrade: p.lastRuntimeUpgrade, shapeText: p.shapeText });
 
-/** The door's line must be the runtime the block named: a door that pinned another is unknown. */
-const samePin = (p: Pin, reviewed: { specName: string; specVersion: number }): boolean => reviewed.specName === p.runtime.specName && reviewed.specVersion === p.runtime.specVersion;
-
 /** The events of a block. */
 export function eventsOf(pin: Pin, events: Uint8Array): Got<readonly DoorEvent[]> {
   const d = decodeBlockEvents({ ...pinInput(pin), events });
   if (!d.decoded) return unknown(`the decoder: ${d.refused}`);
-  if (!samePin(pin, d.reviewed)) return unknown("the decoder pinned another runtime than the block's");
   return known(d.events);
 }
 
@@ -62,6 +58,5 @@ export interface EntryRead {
 export function valueOf(pin: Pin, read: EntryRead): Stored<DoorValue> {
   const v = decodeStorageValue({ ...pinInput(pin), pallet: read.pallet, entry: read.entry, keys: read.keys, key: read.key, answer: read.answer });
   if (!v.decoded) return unknown(`the decoder: ${v.refused}`);
-  if (!samePin(pin, v.reviewed)) return unknown("the decoder pinned another runtime than the block's");
   return v.stored ? known(v.value) : absent();
 }

@@ -278,10 +278,42 @@ describe("T2: events of a block that is not canonical, or above the finalized he
     expect(reasonOf(r)).toBe(`block ${later.finalized_in_block} is not at or below the finalized head ${A6.finalized_in_block}`);
   });
 
+  it("a block number that is not a whole number at or above 0 is unknown", async () => {
+    for (const n of [-1, 1.5, Number.NaN]) expect((await readBlockEvents(transportOf(rerunScript(A6.block_hash)), { number: n, hash: A6.block_hash })).kind).toBe("unknown");
+  });
+
   it("a block at or below the finalized head is read", async () => {
     const later = RESULTS.steps.find((s: any) => s.step === "A9");
     expect((await readBlockEvents(transportOf(rerunScript(later.block_hash)), at(A6))).kind).toBe("known");
   });
+});
+
+describe("B2: a header of the wrong shape is unknown", () => {
+  const withHeader = (h: unknown) => {
+    const base = transportOf(rerunScript(A6.block_hash));
+    return (m: any, p: readonly unknown[]) => (m === "chain_getHeader" ? Promise.resolve(h) : base(m, p));
+  };
+  const good = () => ({ number: `0x${A6.finalized_in_block.toString(16)}`, parentHash: (rerunScript(A6.block_hash).headers.get(A6.block_hash) as any).parentHash });
+
+  it("the control: the recorded header's number and stand in parent are read", async () => {
+    expect((await readSessionState(withHeader(good()), OWNER, DEV1)).kind).toBe("known");
+  });
+
+  for (const [what, h, reason] of [
+    ["no block", null, /holds no block/],
+    ["a list", [], /is not a header/],
+    ["a number in decimal", { ...{}, number: "3552838" }, /number is not a hex quantity/],
+    ["a number past a u32", { number: "0x100000000" }, /number is not a hex quantity/],
+    ["a number with a leading zero", { number: "0x0a" }, /number is not a hex quantity/],
+    ["a parent hash of 31 bytes", { parentHash: `0x${"ab".repeat(31)}` }, /parentHash is not a 32 byte hash/],
+  ] as const) {
+    it(`a header with ${what}`, async () => {
+      const header = h === null || Array.isArray(h) ? h : { ...good(), ...h };
+      const r = await readSessionState(withHeader(header), OWNER, DEV1);
+      expect(r.kind).toBe("unknown");
+      expect(reasonOf(r)).toMatch(reason);
+    });
+  }
 });
 
 describe("B2: one finalized head, and every call at it", () => {
