@@ -95,7 +95,7 @@
     "expect": "success", "events": [
      { "event": "ComputeChannel.ForceOpenExpired", "fields": { "channel_id": "$T3.ComputeChannel.ForceOpenRequested.channel_id", "miner": "$NAMED", "failed_acks": "0" } },
      { "event": "FlopSessionKeys.SessionCallExecuted", "fields": { "owner": "$OWNER", "delegate": "$DEVICE" } }],
-    "fee_like": "A9", "on_unexpected": "stop", "cleanup": true, "shows": "the escrow of T3 comes back" },
+    "fee_like": "A9", "on_unexpected": "stop", "cleanup": true, "left_if_it_fails": "the escrow of T3 (and its top up, if T4 moved one) stays in the pallet account under the channel of T3. expire_force_open is permissionless and stays possible: sign T6 again with a new step id through the session while it lasts (A_BLOCKS from T2). Do not send T8 before it is back", "shows": "the escrow of T3 comes back" },
   { "id": "T7", "signer": "device", "tool": "encoder",
     "inner": { "call": "timeout", "channel_id": "$T5.ComputeChannel.ChannelOpened.channel_id" },
     "only_if": { "step": "T5", "event": "ComputeChannel.ChannelOpened" },
@@ -105,16 +105,16 @@
     "expect": "success", "events": [
      { "event": "ComputeChannel.TimedOutRefunded", "fields": { "channel_id": "$T5.ComputeChannel.ChannelOpened.channel_id" } },
      { "event": "FlopSessionKeys.SessionCallExecuted", "fields": { "owner": "$OWNER", "delegate": "$DEVICE" } }],
-    "fee_like": "A3", "on_unexpected": "stop", "cleanup": true, "shows": "the escrow of T5 comes back" },
+    "fee_like": "A3", "on_unexpected": "stop", "cleanup": true, "left_if_it_fails": "the escrow of T5 stays in the pallet account under the channel of T5. timeout is permissionless: sign it again through the session while the session lasts. Do not send T8 before it is back", "shows": "the escrow of T5 comes back" },
   { "id": "T8", "signer": "owner", "tool": "research-signer", "nonce": 2, "call": ["revoke", "--delegate", "$DEVICE"],
     "declared": null, "moves": [],
     "expect": "success", "events": [{ "event": "FlopSessionKeys.SessionRevoked", "fields": { "owner": "$OWNER", "delegate": "$DEVICE" } }],
     "only_if": { "step": "T2", "outcome": "success" },
-    "fee_like": "A10", "on_unexpected": "stop", "cleanup": true, "shows": "the session is ended" },
+    "fee_like": "A10", "on_unexpected": "stop", "cleanup": true, "left_if_it_fails": "the session stays until A_BLOCKS after T2, bounded by its caps; the device holds only its fees. Send T9 anyway, then revoke again", "shows": "the session is ended" },
   { "id": "T9", "signer": "device", "tool": "research-signer", "call": ["sweep", "--to", "$OWNER"],
     "declared": null, "moves": [{ "from": "device", "to": "owner", "amount": "rest", "comes_back": "this is the return of T1, less the device's fees" }],
     "expect": "success", "events": [{ "event": "System.KilledAccount", "fields": { "account": "$DEVICE" } }, { "event": "Balances.Transfer", "fields": { "from": "$DEVICE", "to": "$OWNER" } }],
     "only_if": { "step": "T1", "outcome": "success" },
-    "fee_like": "A11", "on_unexpected": "stop", "cleanup": true, "shows": "nothing is left on the device" }
+    "fee_like": "A11", "on_unexpected": "stop", "cleanup": true, "left_if_it_fails": "what the device holds stays on the device: at most FUND less its fees. Sign T9 again with the device's next nonce", "shows": "nothing is left on the device" }
  ]
 }

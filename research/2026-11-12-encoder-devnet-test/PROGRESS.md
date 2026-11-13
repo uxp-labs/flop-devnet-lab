@@ -9,11 +9,14 @@ table, stop rule.
 
 ## Done
 
-- nothing yet
+- (1) steps.json, lib.mjs, plan.mjs, plan.md (made from /tmp scratch template; regenerate the
+  tables with `node plan.mjs table|costs|stops|commands` and paste), plan.test.mjs: 17 tests pass.
 
 ## Next
 
-- steps.json
+- (2) sign-device.mjs: step id, --key, --results (channel id of T3/T5 events), --reads JSON
+  {runtime{specName,specVersion,transactionVersion,genesisHash}, birth{number,hash}, account_nonce,
+  session_nonce | session_nonce_raw}. Writes signed/<id>.json, prints sha256 of it.
 
 ## For a successor
 

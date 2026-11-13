@@ -107,3 +107,64 @@ test("the owner's account nonces follow one another", () => {
   assert.deepEqual(plan.steps.filter((s) => s.signer === "owner").map((s) => s.nonce), [0, 1, 2]);
   for (const s of plan.steps.filter((x) => x.signer === "device")) assert.equal(s.nonce, undefined, `${s.id}: a device nonce is read from the chain`);
 });
+
+// ---- plan.mjs and plan.md ----------------------------------------------------------------------
+import { table, costsText, stopsText, commandsText, cleanupAfterStop, costs } from "./plan.mjs";
+
+test("R1: plan.md holds the steps table, the cost tables, the stop table and the command lines exactly as plan.mjs prints them", () => {
+  const md = readFileSync(join(HERE, "plan.md"), "utf8");
+  assert.ok(md.includes(table(plan)), "the steps table");
+  assert.ok(md.includes(costsText(plan)), "the cost tables");
+  assert.ok(md.includes(stopsText(plan)), "the stop table");
+  assert.ok(md.includes(commandsText(plan, null).trimEnd()), "the command lines");
+});
+
+test("R1: a change to steps.json shows in the printed table", () => {
+  const changed = structuredClone(plan);
+  changed.values.ESCROW_1.value = "20000000000000000";
+  assert.notEqual(table(changed), table(plan));
+});
+
+test("R5: the owner's calls and the sweep are research signer command lines, immortal, with the spec, version and genesis of steps.json", () => {
+  const text = commandsText(plan, null);
+  for (const st of plan.steps.filter((s) => s.tool === "research-signer")) {
+    const block = text.split("\n\n").find((b) => b.startsWith(`# ${st.id}:`));
+    assert.ok(block.includes(`flop-sign.mjs" call ${st.call[0]}`), st.id);
+    assert.ok(block.includes(`--spec ${plan.values.SPEC.value} --txv ${plan.values.TXV.value} --genesis ${plan.values.GENESIS.value}`), st.id);
+    assert.ok(!block.includes("sign-device.mjs"), st.id);
+  }
+  assert.match(text, /research signer signs immortal/);
+});
+
+test("R2: the device's session calls are command lines for sign-device.mjs only", () => {
+  const text = commandsText(plan, null);
+  for (const st of plan.steps.filter((s) => s.tool === "encoder")) {
+    const block = text.split("\n\n").find((b) => b.startsWith(`# ${st.id}:`));
+    assert.ok(block.includes(`sign-device.mjs" ${st.id} --key $KEY_DEVICE`), st.id);
+    assert.ok(!block.split("\n").some((l) => l.startsWith(`node ${"\""}$LAB/research/2026-11-11`)), st.id);
+  }
+});
+
+test("the owner's nonces are put in from a filled results file", () => {
+  const text = commandsText(plan, { owner_account_nonce_at_start: "14", accounts: { device: { public_key: "0x" + "ab".repeat(32) } } });
+  assert.match(text, /--nonce 14 --out signed\/T1\.json/);
+  assert.match(text, /--nonce 16 --out signed\/T8\.json/);
+  assert.match(text, new RegExp(`--to 0x${"ab".repeat(32)} --amount ${plan.values.FUND.value}`));
+});
+
+test("R8: a stop sends the cleanup steps whose condition stands before it, never a later test step", () => {
+  assert.deepEqual(cleanupAfterStop(plan, "T1").map((c) => c.id), ["T9"]);
+  assert.deepEqual(cleanupAfterStop(plan, "T2").map((c) => c.id), ["T8", "T9"]);
+  assert.deepEqual(cleanupAfterStop(plan, "T3").map((c) => c.id), ["T6", "T8", "T9"]);
+  assert.deepEqual(cleanupAfterStop(plan, "T4").map((c) => c.id), ["T6", "T8", "T9"]);
+  assert.deepEqual(cleanupAfterStop(plan, "T5").map((c) => c.id), ["T6", "T7", "T8", "T9"]);
+  const t = stopsText(plan);
+  for (const st of plan.steps.filter((s) => s.cleanup)) assert.ok(t.includes(st.left_if_it_fails), `${st.id}: what is left if it fails`);
+});
+
+test("R9: the cost table sums the known fees and names the unknown ones", () => {
+  const c = costs(plan);
+  assert.equal(c.known_sum_raw, c.rows.filter((r) => r.fee_raw).reduce((n, r) => n + BigInt(r.fee_raw), 0n).toString());
+  assert.deepEqual(c.unknown, ["T4", "T5"]);
+  assert.deepEqual(c.escrows.map((e) => [e.id, e.amount]), [["T3", plan.values.ESCROW_1.value], ["T4", plan.values.TOP_UP.value], ["T5", plan.values.ESCROW_1.value]]);
+});
