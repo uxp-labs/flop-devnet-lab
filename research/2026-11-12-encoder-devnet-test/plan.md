@@ -281,7 +281,7 @@ with every value filled from the record.
 # KEY_OWNER and KEY_DEVICE name the key files; FLOP_SIGN_LIBS names the libraries (LAB/imd-flop)
 # OWNER_NONCE is the owner's next nonce at the start; DEVICE_NONCE the device's transactions included before T9
 # the node's tab, https://rpc.devnet.flop.network/: put the text of pane-runner.js in window.__src, check its sha256 there, then run it and make the runner
-#   sha256 of pane-runner.js: 1708fd18d6a7dfbabe3aef835e41880e030b2478b8f398f47559c35c656a51ec
+#   sha256 of pane-runner.js: dc2fb0245b1a1b783f3943f9b693b162000db980148646a58aca1b66d5949d55
 #   [...new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(window.__src)))].map((b) => b.toString(16).padStart(2, "0")).join("")
 #   (0, eval)(window.__src); const lab = paneRunner.createRunner()
 # the explorer's tab, https://explorer.devnet.flop.network/: the same with explorer-reader.js

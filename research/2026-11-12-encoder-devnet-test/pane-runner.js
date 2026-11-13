@@ -23,11 +23,13 @@
 //   window.__r = lab.send('<text of signed/T3.send.json>', "<its sha256>");
 //   (await window.__r).relay            and   (await window.__r).relay_sha256
 //
-// A transport is { request(method, params, onWrite) -> Promise<result>, subscribe(method, params,
-// unsubscribeMethod, onNotification, onWrite) -> Promise<{ unsubscribe() }>, onLost(fn) }. onWrite is
-// called at the moment the request is written to the socket. A node error rejects with
-// { code, message, data }; a lost or never opened connection rejects with message "connection-lost"
-// and written true or false.
+// A transport is { request(method, params, onWrite, mayWrite) -> Promise<result>, subscribe(method,
+// params, unsubscribeMethod, onNotification, onWrite, mayWrite) -> Promise<{ unsubscribe() }>,
+// onLost(fn) }. mayWrite is asked just before the request would be written: when it says no, nothing
+// is written and the request rejects with message "call-ended" (F7). onWrite is called only after a
+// write to the socket that did not throw; a write that throws rejects with message "write-failed"
+// and written false (F8). A node error rejects with { code, message, data }; a lost or never opened
+// connection rejects with message "connection-lost" and written true or false.
 (function (root) {
   "use strict";
 
@@ -144,19 +146,24 @@
         if (subs[s]) subs[s](m.params.result); else (early[s] = early[s] || []).push(m.params.result);
       }
     };
-    function request(method, params, onWrite) {
+    function request(method, params, onWrite, mayWrite) {
       return open.then(function () {
         return new Promise(function (resolve, reject) {
           if (lost || (ws.readyState !== undefined && ws.readyState !== 1)) { reject(lostError(false)); return; }
+          if (mayWrite && !mayWrite()) { reject({ code: null, message: "call-ended", data: null, written: false }); return; }
           var id = nextId++;
           pending[id] = { resolve: resolve, reject: reject };
+          try { ws.send(JSON.stringify({ jsonrpc: "2.0", id: id, method: method, params: params })); } catch (e) {
+            delete pending[id];
+            reject({ code: null, message: "write-failed", data: null, written: false });
+            return;
+          }
           if (onWrite) onWrite();
-          ws.send(JSON.stringify({ jsonrpc: "2.0", id: id, method: method, params: params }));
         });
       });
     }
-    function subscribe(method, params, unsubscribeMethod, onNotification, onWrite) {
-      return request(method, params, onWrite).then(function (sid) {
+    function subscribe(method, params, unsubscribeMethod, onNotification, onWrite, mayWrite) {
+      return request(method, params, onWrite, mayWrite).then(function (sid) {
         subs[sid] = onNotification;
         (early[sid] || []).forEach(onNotification);
         delete early[sid];
@@ -265,50 +272,57 @@
     }
 
     /**
-     * Submits xt and watches it. mark: whether it goes on the sent list, at the moment the request
-     * is written (X4). A transport that does not report the write is taken to have written once it
-     * answers.
+     * Submits xt and watches it. mark: whether it goes on the sent list, once the request is written
+     * without a throw (X4, F8). A transport that does not report the write is taken to have written
+     * once it answers. Once the call has ended nothing of it is written (F7): a deadline before the
+     * write ends it as not-sent. The deadline also covers the locate step after finalized: a node
+     * that does not answer the block read ends it as finalized-unread with the status's block (F5).
      */
     function submit(xt, base0, mark) {
       var base = Object.assign({}, base0, { submitted_utc: nowIso(), statuses: [] });
       var raw = { statuses: [], events_raw: null };
       return new Promise(function (resolve) {
-        var done = false, sub = null, inBlock = null, timer = null, written = false;
+        var done = false, sub = null, inBlock = null, timer = null, written = false, locating = null, unsubscribed = false;
         function wrote() { if (written) return; written = true; if (mark) store.add(xt); }
+        function unwatch() { if (sub && !unsubscribed) { unsubscribed = true; sub.unsubscribe(); } }
         function end(value) {
           if (done) return;
           done = true;
           if (timer !== null) clearTimeout(timer);
-          if (sub) sub.unsubscribe();
+          unwatch();
           resolve(finish(value, raw));
         }
         timer = setTimeout(function () {
+          if (locating !== null) { end(Object.assign({}, base, { status: "finalized-unread", block_hash: locating, problem: "the node reported the block finalized and did not answer the block read before the deadline" })); return; }
+          if (!written) { end(Object.assign({}, base, { status: "not-sent", problem: "nothing was written before the deadline: nothing is marked as sent, and nothing of this call will be written" })); return; }
           end(Object.assign({}, base, { status: "deadline", in_block: inBlock, final: false, problem: inBlock ? "in block " + inBlock + ", which did not become final before the deadline" : "not in any block before the deadline; it may still be in the pool" }));
         }, deadlineMs);
         if (typeof t.onLost === "function") t.onLost(function () {
           if (done || !written) return;
+          if (locating !== null) { end(Object.assign({}, base, { status: "finalized-unread", block_hash: locating, problem: "the connection was lost while the finalized block was read" })); return; }
           end(Object.assign({}, base, { status: "connection-lost", in_block: inBlock, final: false, problem: "the connection was lost after the extrinsic was written to it: it may be in the pool or in a block" }));
         });
         function onStatus(s) {
-          if (done) return;
+          if (done || locating !== null) return;
           raw.statuses.push(s);
-          var w = wordOf(s), kind = w === null ? undefined : STATUSES[w];
+          // F4: the table's own keys only; a word such as constructor or __proto__ is unknown
+          var w = wordOf(s), kind = w !== null && Object.prototype.hasOwnProperty.call(STATUSES, w) ? STATUSES[w] : undefined;
           base.statuses.push(kind ? w : s);
           if (!kind || kind === "watch") return;
           if (kind === "remember") { inBlock = s.inBlock; return; }
           if (kind === "forget") { inBlock = null; return; }
           if (kind === "final") {
             var h = s.finalized;
-            done = true; clearTimeout(timer); if (sub) sub.unsubscribe();
-            locate(xt, h, base, raw).then(function (v) { resolve(finish(v, raw)); }, function (e) { resolve(finish(Object.assign({}, base, { status: "finalized-unread", block_hash: h, node: nodeWords(e) }), raw)); });
+            locating = h; unwatch();
+            locate(xt, h, base, raw).then(function (v) { end(v); }, function (e) { end(Object.assign({}, base, { status: "finalized-unread", block_hash: h, node: nodeWords(e) })); });
             return;
           }
           end(Object.assign({}, base, { status: "ended", node_status: w, in_block: inBlock, final: false }));
         }
-        t.subscribe("author_submitAndWatchExtrinsic", [xt], "author_unwatchExtrinsic", onStatus, wrote).then(function (s) {
+        t.subscribe("author_submitAndWatchExtrinsic", [xt], "author_unwatchExtrinsic", onStatus, wrote, function () { return !done; }).then(function (s) {
           wrote();
           sub = s;
-          if (done) s.unsubscribe();
+          if (done || locating !== null) unwatch();
         }, function (e) {
           if (!written) { end(Object.assign({}, base, { status: "not-sent", problem: "the connection was not open: nothing was written, nothing is marked as sent" })); return; }
           if (e && e.message === LOST && e.written !== undefined) { end(Object.assign({}, base, { status: "connection-lost", in_block: null, final: false, problem: "the connection was lost after the extrinsic was written to it: it may be in the pool or in a block" })); return; }

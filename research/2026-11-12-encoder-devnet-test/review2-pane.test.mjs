@@ -71,7 +71,7 @@ test("review2 Q5 DEFECT: a socket that opens after the deadline gets the extrins
   const store = memStore();
   const lab = g.paneRunner.createRunner({ transport: g.paneRunner.wsTransport(undefined, WS), deadlineMs: 100, store });
   const out = plain(await lab.send(BUNDLE, sha(BUNDLE)));
-  assert.equal(out.status, "deadline");
+  assert.equal(out.status, "not-sent"); // adapted by the builder: F7 names this outcome not-sent, not deadline
   await sleep(500);
   const submits = sent.filter((m) => m.method === "author_submitAndWatchExtrinsic");
   assert.equal(submits.length, 0, `the extrinsic was written ${submits.length} time(s) after the call had ended with deadline, and marked as sent: ${store.has(XT)}`);

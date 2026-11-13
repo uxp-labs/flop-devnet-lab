@@ -33,7 +33,13 @@ Start: head `e18e725`; the second reviewer's branch (`8ff23d6`) merged by fast f
 ### Next
 
 - F11 done (lib fromSs58 re-encodes; test in plan.test.mjs).
-- the runner, F11, the runner, F9, F3 with G1 and G4, F12 and G2, the words, G3.
+- F4, F5, F7, F8: pane-runner.js: own keys of STATUSES only; the deadline stays on through locate
+  (finalized-unread with the status's block, also on a lost connection while locating); the
+  transport asks mayWrite before a write (no write once the call ended, "call-ended") and calls
+  onWrite only after a write that did not throw ("write-failed" otherwise); a deadline with nothing
+  written ends as not-sent. Tests in pane-runner.test.mjs. Reviewer test changed: review2-pane
+  "a socket that opens after the deadline" now expects not-sent (F7's word), still no write.
+- next: F11, the runner, F9, F3 with G1 and G4, F12 and G2, the words, G3.
 
 ### Decisions (fix round 2) and why
 

@@ -342,3 +342,39 @@ test("X9 R6: one file with no import, no require and no export, that decodes not
   assert.ok([...SRC.matchAll(/(?:https?|wss?):\/\/[^\s"',)]+/g)].every((m) => /^(https|wss):\/\/rpc\.devnet\.flop\.network\/?$/.test(m[0])), "no other host");
   assert.doesNotMatch(SRC, /\bfetch\(/);
 });
+
+test("F4: a status word that is a name of Object.prototype is unknown: kept in statuses, and the watch goes on to finalized", async () => {
+  const blocks = { [H(7)]: { number: 7, extrinsics: [XT], events: EVENTS } };
+  const node = scriptedNode({ statuses: ["constructor", "__proto__", { toString: H(3) }, { finalized: H(7) }], blocks });
+  const r = await runner(node).send(BUNDLE, sha(BUNDLE));
+  assert.equal(r.status, "finalized");
+  assert.deepEqual(plainOf(r.statuses).slice(0, 2), ["constructor", "__proto__"]);
+});
+
+test("F5: the deadline covers the locate step: a finalized status with no answer to the block read ends as finalized-unread with that block", async () => {
+  const node = scriptedNode({ statuses: [{ finalized: H(7) }] });
+  const req = node.transport.request;
+  node.transport.request = (m, p) => (m === "chain_getBlock" ? new Promise(() => {}) : req(m, p));
+  const t0 = Date.now();
+  const r = await runner(node, { deadlineMs: 100 }).send(BUNDLE, sha(BUNDLE));
+  assert.equal(r.status, "finalized-unread");
+  assert.equal(r.block_hash, H(7));
+  assert.ok(Date.now() - t0 < 1000);
+});
+
+test("F7 F8: a write that throws marks nothing and gives not-sent; a deadline before the socket opens writes nothing later and gives not-sent", async () => {
+  const pr = load();
+  class Throws { constructor() { this.readyState = 0; this.sent = []; setTimeout(() => { this.readyState = 1; this.onopen(); }, 1); } send() { throw new Error("InvalidStateError"); } close() {} }
+  const store = memStore();
+  const r = await pr.createRunner({ transport: pr.wsTransport(undefined, Throws), store, deadlineMs: 300 }).send(BUNDLE, sha(BUNDLE));
+  assert.equal(r.status, "not-sent");
+  assert.equal(store.has(XT), false);
+  let socket = null;
+  class Late { constructor() { socket = this; this.readyState = 0; this.sent = []; setTimeout(() => { this.readyState = 1; this.onopen(); }, 150); } send(m) { this.sent.push(m); } close() {} }
+  const store2 = memStore();
+  const r2 = await pr.createRunner({ transport: pr.wsTransport(undefined, Late), store: store2, deadlineMs: 50 }).send(BUNDLE, sha(BUNDLE));
+  assert.equal(r2.status, "not-sent");
+  await new Promise((res) => setTimeout(res, 300));
+  assert.equal(socket.sent.length, 0, "nothing of the ended call is written");
+  assert.equal(store2.has(XT), false);
+});
