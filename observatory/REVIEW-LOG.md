@@ -20,6 +20,8 @@ Built on 2026-11-13 from the lead's brief `2026-11-13-list5-encoder-test-recordi
 
 Mutants: 13 new in `mutants/record.json` (12 `list5-*` and `core-block-asks-header`), 1 in `mutants/decoder.json` (`reviewed-metadata-unknown-spec-takes-first`). No existing mutant's `find` text moved.
 
+An independent review read `ae31282` (branch `claude/review-observatory-list-5`, to `aba7893`): no wrong key, no wrong block, every change it made to the list or the inputs failed a test; its findings were in the words of the research folder's README. The lead's rules Z1 to Z6 are built in that folder: the section on the run names a committed field for each claim, `results.test.mjs` builds each outcome line from the record and the signed files and holds it word for word, and the reviewer's six README mutants are killed. The reviewer's `review4-*` files came in, its keys test changed in one assertion as the list grew to 32 calls.
+
 The branch changes no file on the push paths of `.github/workflows/observatory-live.yml`, and of those of `observatory-record.yml` only `recordings/requests.json`, in its last commit: a merge starts one recording and publishes no reading.
 
 ## Round 30: the door and the shape files exported to imd-flop
