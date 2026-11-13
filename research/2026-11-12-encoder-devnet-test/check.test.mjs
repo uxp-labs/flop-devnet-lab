@@ -402,3 +402,11 @@ test("C7: every channel id in the record's events must be CH_T3 or CH_T5, in a f
   assert.equal(n.word, "stop");
   assert.match(n.said.join("\n"), /T5: .*ComputeChannel.ChannelOpened names the channel/);
 });
+
+test("C3 S5: an attempt recorded after its step succeeded fails the record", () => {
+  const r = syntheticRun();
+  const t7 = recIn(r, "T7");
+  const extra = structuredClone(t7); extra.step = "T7.2"; extra.finalized_in_block += 1; extra.block_hash = H(extra.finalized_in_block); extra.extrinsic_hash = H(424242);
+  r.steps.splice(r.steps.indexOf(t7) + 1, 0, extra);
+  assert.match(judge(r).verdict, /^failed: .*T7 succeeded, yet T7.2 was sent after it/);
+});
