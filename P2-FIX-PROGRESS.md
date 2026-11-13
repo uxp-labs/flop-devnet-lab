@@ -19,6 +19,10 @@ X8 done: chain-read-node.test.ts states every cap as a number with its reason, a
 X10 done: scripts/need-observatory.mjs (exports needObservatory, NEEDED, BUILD, OBSERVATORY), prebuild and pretest in package.json, test/need-observatory.test.ts. By hand in a temporary copy with no observatory beside it: one line, exit 1.
 X11 done: sign-device.mjs line 39 comment now two lines naming the observatory first. mutants.json: 211 finds, each exactly once. node --test there: 281 tests, 281 pass.
 W1 done: README Chain reads section and Run it block (npm ci). package-lock.json untouched.
+W3 done: 31 hand mutants in /tmp/p2fix/mut (a copy, not committed), runner /tmp/p2fix/run-mutants.mjs. 28 killed. 3 alive, each equivalent: X1-e (result ?? null: a JSON frame with an own result key cannot hold undefined), X9-c and X9-d (the spec comparison and the stored record check in provenPin: the door pins with the same spec and reads the same LastRuntimeUpgrade again with the reviewed metadata's type and must agree, and the answer is bytes, so neither branch can be reached while the door accepts).
+
+## Next
+W2 and the progress file's removal in the last commit; W4 the checks; W5 the GitHub checks.
  X2 with X6, X3, X5, X9, X4, X7, X8, W1 to W5.
 
 ## Report of the P2 fix round
