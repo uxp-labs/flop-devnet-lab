@@ -1252,5 +1252,29 @@
   "replace": "return out;",
   "test": "check.test.mjs G2",
   "why": "G2: another refund is a problem"
+ },
+ {
+  "id": "B2-F3n",
+  "file": "lead-stop.mjs",
+  "find": "if (earlier.length || sent.sent_by !== \"send\") {",
+  "replace": "if (false) {",
+  "test": "lead-stop.test.mjs F3c",
+  "why": "F3c: case c only for a lone refusal of a first send"
+ },
+ {
+  "id": "B2-F3o",
+  "file": "lead-stop.mjs",
+  "find": "if (earlier.length || sent.sent_by !== \"send\") {",
+  "replace": "if (sent.sent_by !== \"send\") {",
+  "test": "lead-stop.test.mjs F3c",
+  "why": "F3c: an earlier reading refuses case c even after a send"
+ },
+ {
+  "id": "B2-F3p",
+  "file": "pane-runner.js",
+  "find": "Object.assign({}, b.base, { sent_by: \"sendSame\" })",
+  "replace": "Object.assign({}, b.base, { sent_by: \"send\" })",
+  "test": "pane-runner.test.mjs F3c",
+  "why": "F3c: the relay names sendSame"
  }
 ]

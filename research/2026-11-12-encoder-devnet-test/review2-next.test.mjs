@@ -60,6 +60,7 @@ test("review2 Q8 DEFECT: T2 refused at submission (it never comes on chain): no 
   const { runFolder, planSigned } = await import("./fixtures.mjs");
   const before = cell("T2", "sub");
   before.steps.find((s) => s.step === "T2").run_time.sent.node = { code: 1010, message: "Invalid Transaction", data: null };
+  before.steps.find((s) => s.step === "T2").run_time.sent.sent_by = "send"; // F3c: a first send
   const run = runFolder(before);
   planSigned(run, "T2", before);
   const r = leadStop({ plan, run, results: before, id: "T2", why: "refused at submission with 1010" });

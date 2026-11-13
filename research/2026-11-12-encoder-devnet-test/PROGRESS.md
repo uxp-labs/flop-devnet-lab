@@ -72,7 +72,13 @@ Start: head `e18e725`; the second reviewer's branch (`8ff23d6`) merged by fast f
   point at nonceOf. RV2-N4 and RV2-R4 listed equivalent with the second reviewer's reason.
   B2-F5b and B2-F3m got tests (pane-runner.test.mjs F5 status while reading; lead-stop.test.mjs a
   stop beside a finalized block). mutants.mjs counts the words test as a sha256 binding test.
-- next: the full mutant run again, then G3 last. F11, the runner, F9, F3 with G1 and G4, F12 and G2, the words, G3.
+- Second full mutant run on 604ce49 under setpriv: 156 mutants, 150 killed, 6 equivalent, none alive.
+- F3c tightened (the lead's added rule): the runner's result names its call in sent_by (send,
+  sendSame, find), recorded with the reading; case c holds only for a lone reading that answered a
+  first send; otherwise refused, naming lab.find from the block before the first send. The 1010 row
+  says both. Tests in lead-stop.test.mjs and pane-runner.test.mjs; review2-next Q8 adapted again
+  (sent_by "send"). Mutants B2-F3n, B2-F3o, B2-F3p.
+- next: mutants of lead-stop.mjs and pane-runner.js again, then G3 last. F11, the runner, F9, F3 with G1 and G4, F12 and G2, the words, G3.
 
 ### Decisions (fix round 2) and why
 

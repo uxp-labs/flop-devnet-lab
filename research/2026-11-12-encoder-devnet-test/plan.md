@@ -199,7 +199,7 @@ a wrong one is refused by the node at no cost.
 | already-sent | nothing was sent now: this page sent the same bytes before | lab.find from the birth block (mortal) or the start of the run (immortal); if not found, lab.sendSame (immortal) or S4 (mortal) | mortal: only by S4. Immortal: never |
 | not-in-sent-list | nothing was sent: sendSame sends only bytes send sent before | use lab.send | not needed |
 | not-sent | nothing was written: the connection was not open. Nothing is marked as sent | paste the runner again in a fresh tab on the node, check its sha256, and lab.send the same send file | not needed: the same copy is sent |
-| refused-at-submission (node code 1010) | the node judged the extrinsic invalid (a bad signature, a used or future nonce it will not keep, a mortal copy whose era is over, or a fee it cannot pay): it is not in the pool and cannot be included as it is. Nothing moved | record it. For an immortal step this is case c of record-step.mjs stop: the lead may stop at the step, and the cleanup steps that apply follow. For a mortal step, once the finalized head is above its last valid block, case b, or a second copy by S4 | mortal: by S4, when the nonce rule holds. Immortal: never; the lead stops at the step instead |
+| refused-at-submission (node code 1010) | on a first send: the node judged the extrinsic invalid (a bad signature, a used or future nonce it will not keep, a mortal copy whose era is over, or a fee it cannot pay): it is not in the pool and cannot be included as it is, and nothing moved. On a sendSame after an outcome that may still land (deadline, connection-lost, ended), 1010 can mean the first copy is already in a block (its nonce is used) | record it. After a sendSame that followed a deadline, connection-lost or ended: lab.find before anything else, from the block before the first send. After a first send: for an immortal step this is case c of record-step.mjs stop, and the cleanup steps that apply follow; for a mortal step, once the finalized head is above its last valid block, case b, or a second copy by S4 | mortal: by S4, when the nonce rule holds. Immortal: never; the lead stops at the step instead |
 | refused-at-submission (node code 1013) | already imported: the node holds these bytes in its pool. It IS in the pool and may be included | treat it as sent: record it, then lab.find from the birth block (mortal) or the start of the run (immortal). No stop by the lead: the copy can land | mortal: by S4 only, once its era is over at a finalized head and find did not see it. Immortal: never |
 | refused-at-submission (node code 1014) | the priority is too low: another transaction of the same signer and nonce is in the pool. A copy the record does not hold exists | stop signing and find out which transaction it is (lab.find from the birth block or the start of the run). S2e refuses every device step until the record holds what is on chain. No stop by the lead | never while the other is in the pool; the lead rules |
 | refused-at-submission (node code other) | any other code: not in the pool, by the node's word | record it and read the node's words. lab.sendSame of the same bytes later; no stop by the lead (record-step.mjs stop allows case c only with 1010) | mortal: by S4, when the nonce rule holds. Immortal: never; lab.sendSame |
@@ -225,7 +225,9 @@ A step that will not come on chain is stopped by the lead with `record-step.mjs 
 lead's words. It is allowed only at the step `plan.mjs next` names, with no finalized reading of it,
 and only when its copy cannot land without being sent again: (a) nothing was signed; (b) a device
 copy whose era is over by the device's reads, with the device's nonce unmoved; (c) an owner step or
-the sweep refused at submission with node code 1010; (d) an owner step or the sweep with no runner
+the sweep refused at submission with node code 1010 on a first send, with no earlier reading (a
+1010 to a sendSame after a deadline, a lost connection or an ended watch can mean the first copy is
+in a block: the lead uses lab.find instead); (d) an owner step or the sweep with no runner
 reading, which the lead says was never sent (what is left then names the unsent files, never to be
 sent). Anything else is refused with the row of the send outcomes to follow. A stopped test step is
 a stop there, with the row for refused at submission below, and the cleanup steps that apply
@@ -319,7 +321,7 @@ with every value filled from the record.
 # KEY_OWNER and KEY_DEVICE name the key files; FLOP_SIGN_LIBS names the libraries (LAB/imd-flop)
 # OWNER_NONCE is the owner's next nonce at the start; DEVICE_NONCE the device's transactions included before T9
 # the node's tab, https://rpc.devnet.flop.network/: put the text of pane-runner.js in window.__src, check its sha256 there, then run it and make the runner
-#   sha256 of pane-runner.js: dc2fb0245b1a1b783f3943f9b693b162000db980148646a58aca1b66d5949d55
+#   sha256 of pane-runner.js: ce0ad874c48ae5d58900b0960cf542f9984c81df8132591c4d4c8ba68ea02efb
 #   [...new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(window.__src)))].map((b) => b.toString(16).padStart(2, "0")).join("")
 #   (0, eval)(window.__src); const lab = paneRunner.createRunner()
 # the explorer's tab, https://explorer.devnet.flop.network/: the same with explorer-reader.js

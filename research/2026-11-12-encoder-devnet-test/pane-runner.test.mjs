@@ -388,3 +388,12 @@ test("F5: a status that comes while the finalized block is read does not end the
   assert.equal(r.status, "finalized");
   assert.equal(r.block_hash, H(7));
 });
+
+test("F3c: send, sendSame and find name their call in sent_by", async () => {
+  const blocks = { [H(7)]: { number: 7, extrinsics: [XT], events: EVENTS } };
+  const node = scriptedNode({ statuses: [{ finalized: H(7) }], blocks, head: 7 });
+  const lab = runner(node);
+  assert.equal((await lab.send(BUNDLE, sha(BUNDLE))).sent_by, "send");
+  assert.equal(JSON.parse((await lab.sendSame(BUNDLE, sha(BUNDLE))).relay).sent_by, "sendSame");
+  assert.equal((await lab.find(XT, 7)).sent_by, "find");
+});

@@ -10,6 +10,8 @@
 //                                  until a final status or the deadline (X1)
 //   sendSame(bundleText, sha256)   submits again an extrinsic the sent list holds (X5)
 //   find(extrinsicHex, fromNumber) looks for the extrinsic in finalized blocks (X6)
+// The result of send, sendSame and find names its call in sent_by ("send", "sendSame" or "find"),
+// so the record knows whether a refusal answered a first send or a later sendSame (F3c).
 // accountReads, deviceReads, send, sendSame and find return, beside their value, the exact text the
 // lead relays to the PC (relay) and that text's sha256 (relay_sha256) (X8). The PC refuses a text
 // whose sha256 is not the one given.
@@ -335,7 +337,7 @@
       return takeBundle(bundleText, sha256).then(function (b) {
         if (b.refusal) return finish(b.refusal, null);
         if (store.has(b.xt)) return finish(Object.assign({}, b.base, { status: "already-sent", problem: "this extrinsic was sent before: send never sends it twice. sendSame submits the same bytes again" }), null);
-        return submit(b.xt, b.base, true);
+        return submit(b.xt, Object.assign({}, b.base, { sent_by: "send" }), true);
       });
     }
 
@@ -348,7 +350,7 @@
       return takeBundle(bundleText, sha256).then(function (b) {
         if (b.refusal) return finish(b.refusal, null);
         if (!store.has(b.xt)) return finish(Object.assign({}, b.base, { status: "not-in-sent-list", problem: "sendSame sends only what send sent before; use send" }), null);
-        return submit(b.xt, b.base, false);
+        return submit(b.xt, Object.assign({}, b.base, { sent_by: "sendSame" }), false);
       });
     }
 
@@ -362,7 +364,7 @@
       if (!Number.isSafeInteger(fromNumber) || fromNumber < 0) return finish({ status: "refused-bundle", problem: "find needs a block number to start from" }, null);
       return Promise.all([heads(), sha256Hex(extrinsicHex)]).then(function (hx) {
         var head = hx[0].finalized.number, to = Math.min(head, fromNumber + FIND_MAX - 1);
-        var base = { step: null, bundle_sha256: null, extrinsic_sha256: hx[1], extrinsic_hash: null, found_by: "find", statuses: [] };
+        var base = { step: null, bundle_sha256: null, extrinsic_sha256: hx[1], extrinsic_hash: null, found_by: "find", sent_by: "find", statuses: [] };
         var raw = { statuses: [], events_raw: null };
         var n = fromNumber;
         function chunk() {

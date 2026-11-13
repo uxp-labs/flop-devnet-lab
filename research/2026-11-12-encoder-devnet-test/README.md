@@ -46,7 +46,7 @@ pane before use. `node plan.mjs sha256s` prints both, and the reader's list prin
 
 ```
 # the node's tab, https://rpc.devnet.flop.network/: put the text of pane-runner.js in window.__src, check its sha256 there, then run it and make the runner
-#   sha256 of pane-runner.js: dc2fb0245b1a1b783f3943f9b693b162000db980148646a58aca1b66d5949d55
+#   sha256 of pane-runner.js: ce0ad874c48ae5d58900b0960cf542f9984c81df8132591c4d4c8ba68ea02efb
 #   [...new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(window.__src)))].map((b) => b.toString(16).padStart(2, "0")).join("")
 #   (0, eval)(window.__src); const lab = paneRunner.createRunner()
 # the explorer's tab, https://explorer.devnet.flop.network/: the same with explorer-reader.js
@@ -142,7 +142,10 @@ when its copy cannot land without being sent again:
 - a: nothing was signed for it;
 - b: a device step whose signed copy's era is over by the device's reads (a finalized head above
   its last valid block) and whose next nonce is the device transactions the record holds;
-- c: an owner step or the sweep whose last runner reading is refused at submission with code 1010;
+- c: an owner step or the sweep whose only runner reading is refused at submission with code 1010,
+  from a first `send` (the runner's `sent_by`). After a deadline, a lost connection or an ended
+  watch, a 1010 to `sendSame` can mean the first copy is in a block: no stop, the lead uses
+  `lab.find` from the block before the first send;
 - d: an owner step or the sweep with a signed copy and no runner reading: the record says the lead
   says this copy was never sent, and what is left names the unsent files, which must never be sent.
 

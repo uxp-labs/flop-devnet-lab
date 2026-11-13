@@ -81,7 +81,7 @@ test("F3 b refused: a copy whose era is not over, a device nonce that moved, and
 });
 
 test("F3 c: T2 refused at submission with node code 1010: stopped, and T9 follows and nothing else", () => {
-  const run = t2Signed({ status: "refused-at-submission", node: { code: 1010, message: "Invalid Transaction", data: "x" } });
+  const run = t2Signed({ status: "refused-at-submission", sent_by: "send", node: { code: 1010, message: "Invalid Transaction", data: "x" } });
   const r = stop(run, "T2");
   assert.equal(r.steps.find((s) => s.step === "T2").lead_stop.case, "c");
   const n = nextOf(plan, r);
@@ -137,7 +137,7 @@ test("F3: after a stop no tool signs the step, writes a send file for it, or rec
   assert.match(again.stderr, /the lead stopped T3 \(case b\): it is never signed after the stop/);
   const s = relay({ step: "T3", bundle_sha256: "00".repeat(32), extrinsic_sha256: "00".repeat(32), status: "deadline" });
   assert.match(cli("record-step.mjs", ["step", "T3", "--run", run, "--sent", s.text, "--sent-sha256", s.sha]).stderr, /the lead stopped T3 \(case b\): nothing of it is recorded after the stop/);
-  const run2 = t2Signed({ status: "refused-at-submission", node: { code: 1010, message: "Invalid", data: null } });
+  const run2 = t2Signed({ status: "refused-at-submission", sent_by: "send", node: { code: 1010, message: "Invalid", data: null } });
   save(run2, stop(run2, "T2"));
   const sf = cli("record-step.mjs", ["send-file", "T2", "--run", run2]);
   assert.match(sf.stderr, /the lead stopped T2: no send file is written for it/);
@@ -174,4 +174,27 @@ test("F3: a record that holds a stop by the lead beside a finalized block of the
   assert.equal(n.word, "stop");
   assert.equal(n.step, null);
   assert.match(n.why, /holds a stop by the lead at T2 beside a finalized block of it/);
+});
+
+test("F3c: a 1010 after a deadline or a lost connection (from sendSame) is refused and names find; a 1010 with no call named is refused", () => {
+  const after = (first) => {
+    const run = t2Signed({ status: "refused-at-submission", sent_by: "sendSame", node: { code: 1010, message: "Invalid Transaction", data: null } });
+    const rec = load(run);
+    rec.steps.find((s) => s.step === "T2").run_time.earlier_readings = [{ sent: { status: first, sent_by: "send", step: null }, sent_sha256: "55".repeat(32) }];
+    save(run, rec);
+    return run;
+  };
+  refused(() => stop(after("deadline"), "T2"), /answered sendSame, not a first send, and follows 1 earlier runner reading\(s\) of it \(deadline\).*use lab.find from the block before the first send \(the record's start, finalized block 3599990\)/);
+  refused(() => stop(after("connection-lost"), "T2"), /\(connection-lost\).*lab.find from the block before the first send/);
+  const sameFirst = t2Signed({ status: "refused-at-submission", sent_by: "send", node: { code: 1010, message: "x", data: null } });
+  const rec = load(sameFirst); rec.steps.find((s) => s.step === "T2").run_time.earlier_readings = [{ sent: { status: "deadline" }, sent_sha256: "55".repeat(32) }]; save(sameFirst, rec);
+  refused(() => stop(sameFirst, "T2"), /follows 1 earlier runner reading/);
+  refused(() => stop(t2Signed({ status: "refused-at-submission", node: { code: 1010, message: "x", data: null } }), "T2"), /answered a call the reading does not name/);
+});
+
+test("G1: the 1010 row says both: invalid on a first send; on a sendSame after a deadline, connection-lost or ended, find first", () => {
+  const row = plan.send_outcomes.find((r) => r.outcome === "refused-at-submission" && r.node_code === 1010);
+  assert.match(row.known, /on a first send: the node judged the extrinsic invalid/);
+  assert.match(row.known, /On a sendSame after an outcome that may still land \(deadline, connection-lost, ended\), 1010 can mean the first copy is already in a block/);
+  assert.match(row.lead, /lab.find before anything else/);
 });

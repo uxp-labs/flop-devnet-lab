@@ -7,8 +7,11 @@
 //      none), and the device's reads (lab.deviceReads, with their sha256) show a finalized head above
 //      that copy's last valid block and a next nonce equal to the device transactions the record
 //      holds as finalized: the copy is dead (the test of S4);
-//   c. a research signer step with a signed copy, whose last runner reading in the record is
-//      refused-at-submission with node code 1010 (the node judged it invalid: it is not in the pool);
+//   c. a research signer step with a signed copy, whose only runner reading in the record is
+//      refused-at-submission with node code 1010 from a first send (sent_by "send", no earlier
+//      readings): the node judged it invalid and it is not in the pool. After a deadline, a lost
+//      connection or an ended watch, a 1010 to a sendSame can mean the first copy is in a block: refused;
+//      the lead uses find;
 //   d. a research signer step with a signed copy and no runner reading of it in the record: the
 //      record says that the lead says this copy was never sent, and what is left names the unsent
 //      files and says they must never be sent.
@@ -68,6 +71,14 @@ export function leadStop({ plan, run, results, id, why, readsText, readsSha256, 
   } else if (!sent) {
     stop = { case: "d", words: NEVER_SENT, evidence: { signed: `signed/${id}.json`, runner_readings: "none in the record" }, unsent: [`signed/${id}.json`, ...(existsSync(sendFile(run, id)) ? [`signed/${id}.send.json`] : [])] };
   } else if (sent.status === "refused-at-submission" && sent.node?.code === 1010) {
+    // F3c: only when this refusal is the one runner reading of the id, and it answered a first send.
+    // After a deadline, a lost connection or an ended watch the first copy may be in a block, and a
+    // later sendSame of the same bytes is then refused with 1010 because its nonce is used.
+    const earlier = v.entry.run_time.earlier_readings ?? [];
+    if (earlier.length || sent.sent_by !== "send") {
+      const from = results.start?.finalized?.number;
+      no(`no stop at ${id}: the refusal with 1010 ${sent.sent_by === "send" ? "" : `answered ${sent.sent_by ?? "a call the reading does not name"}, not a first send, and `}follows ${earlier.length} earlier runner reading(s) of it (${earlier.map((x) => x.sent?.status).join(", ") || "none"}): the first copy may be in a block, its nonce used. Instead use lab.find from the block before the first send (the record's start, finalized block ${from ?? "unknown"}) and record what it returns`);
+    }
     stop = { case: "c", evidence: { last_reading: { status: sent.status, node: sent.node }, sent_sha256: v.entry.run_time.sent_sha256 } };
   } else {
     refuse(plan, id, `the last runner reading of ${id} is ${sent.status}${sent.node?.code !== undefined && sent.node?.code !== null ? ` with node code ${sent.node.code}` : ""}: its copy may still land`, sent);
