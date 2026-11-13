@@ -2,6 +2,8 @@
  * The two entry points of the chain reads (P2, rule C6), and no more:
  *  - readSessionState: a session's state at the finalized head, for an owner and a delegate. The finalized head is
  *    taken once and every other call is made at that one hash, so a head that moves between calls changes nothing.
+ *    The number its header names is checked with chain_getBlockHash before any storage read (the P2 fix round, X5),
+ *    and a stored record must name the owner and the delegate asked (X3).
  *  - readBlockEvents: the events of a named block, read only when the node reports it finalized and canonical: its
  *    number is at or below the finalized head's, and chain_getBlockHash(number) is its hash.
  * Each answers the block's number and hash and the runtime the door pinned beside the values. What is fetched is what
@@ -85,6 +87,10 @@ export async function readSessionState(t: Transport, owner: string, delegate: st
   if (head.kind === "unknown") return within("the finalized head", head);
   const h = await header(t, head.value);
   if (h.kind === "unknown") return within("the finalized head's header", h);
+  // Rule X5: the number the header names is the chain's for this hash, asked once, before any storage read.
+  const canonical = await blockHash(t, h.value.number);
+  if (canonical.kind === "unknown") return within("the canonical hash of the head's number", canonical);
+  if (canonical.value !== head.value) return unknown(`the head's header names block ${h.value.number}, whose hash at the node is ${canonical.value}, not the head ${head.value}`);
   const pin = await pinAt(t, head.value, h.value.parentHash);
   if (pin.kind === "unknown") return pin;
   const line = lineOf(pin.value.runtime);
