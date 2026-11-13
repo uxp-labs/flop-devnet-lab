@@ -29,7 +29,7 @@
     "find": "if (sent?.status !== \"finalized\" || ",
     "replace": "if (",
     "why": "a step's chain fields are filled only where the run time record reports its block finalized (C7)",
-    "test": "test/review-final-mutants.test.ts"
+    "test": "test/encoder-results.test.ts"
   },
   {
     "id": "r32rv-owner-device-swapped",
@@ -37,6 +37,6 @@
     "find": "owner: accountText(outcome((r) => entryIs(r, \"System\", \"Account\") && ofAccount(r, \"owner\"))),",
     "replace": "owner: accountText(outcome((r) => entryIs(r, \"System\", \"Account\") && ofAccount(r, \"device\"))),",
     "why": "the owner's account is the owner's System.Account read",
-    "test": "test/review-final-mutants.test.ts"
+    "test": "test/encoder-results.test.ts"
   }
 ]
