@@ -2,14 +2,14 @@
 // filled from the fifth recording through the decoder's one door (src/scale/block.ts) by
 // test/helpers/encoder-fill.ts, which scripts/fill-encoder-results.mjs runs (review round 32). These
 // tests hold the committed file to that fill byte for byte, show the fill gives every filled field
-// back from the fixture and the run folder alone, hold the run time record untouched, pin the verdict
-// of the folder's own checker exactly, hold the balances step by step, and hold every word the fill
-// writes for a read the node holds nothing for. Offline.
+// back from the fixture and the run folder alone, hold the run time record untouched, hold the
+// balances step by step, and hold every word the fill writes for a read the node holds nothing for.
+// Offline. The observatory depends on nothing of imd-flop, so no test here imports the encoder
+// folder's judge (judge.mjs, check.mjs, lib.mjs, record.mjs): the verdict of its checker on the
+// final record is held by that folder's own final-record.test.mjs, where both packages are built.
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-// The folder's own checker, read as a module: tests start no process. check.mjs is its command line.
-import { context, judgeRun } from "../../research/2026-11-12-encoder-devnet-test/judge.mjs";
 import { SHAPE_SCHEMA } from "../src/scale/shape.js";
 import { pinBlock } from "./helpers/block-fill.js";
 import {
@@ -185,24 +185,6 @@ describe("the channel of T3 (C6)", () => {
     }
     for (const id of ["T6", "T8", "T9"]) expect(stepOf(id).after.channel.state, id).toEqual({ type: "Closed", value: null });
     expect(stepOf("T3").after.channel.agent).toBe(FINAL.accounts.owner.public_key);
-  });
-});
-
-describe("the folder's own checker on results.final.json (C8)", () => {
-  it("passes as planned with balances from the decoder, exit 0: eight steps pass, T7 not needed", () => {
-    const out = judgeRun(context(FINAL));
-    expect([out.verdict, out.exit, out.all]).toEqual(["passed as planned (balances: decoder)", 0, true]);
-    expect(out.top).toEqual([]);
-    expect(out.run.map((r: Rec) => [r.id, r.status])).toEqual([...["T1", "T2", "T3", "T4", "T5", "T6"].map((id) => [id, "pass"]), ["T7", "not needed"], ["T8", "pass"], ["T9", "pass"]]);
-  });
-
-  it("would fail the record if a step's fill fields were unknown, so the fill is what passes it", () => {
-    const unknown = structuredClone(FINAL);
-    const t3 = (unknown.steps as Rec[]).find((x) => x.step === "T3");
-    if (t3 === undefined) throw new Error("the record holds T3");
-    t3.fee_raw = null;
-    const out = judgeRun(context(unknown));
-    expect([out.exit, out.verdict]).toEqual([1, "failed: incomplete: T3 (fee_raw is missing or malformed) (balances: decoder)"]);
   });
 });
 

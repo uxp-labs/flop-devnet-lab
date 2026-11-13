@@ -32,8 +32,8 @@
     "names": "8c573cff065c6f8da3ed4b5dc7ab3ccaa6ca04252cfb5a8b7fb7898daab0a819"
   },
   "encoder-results.test.ts": {
-    "tests": 28,
-    "names": "d2ef139ca494afe99c945e621c9cee0fdeaacd1a818262f540bb0cecd8a0e41e"
+    "tests": 26,
+    "names": "4f53a3e143e5fe772cb4c9820e49718f6e9cb55768914ad1a818c8bc7d74f55c"
   },
   "escrow.test.ts": {
     "tests": 180,
