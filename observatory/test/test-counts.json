@@ -75,6 +75,10 @@
     "tests": 36,
     "names": "cf3456300c8dafe090a66ccfd2b8ba5a8d686a6cee78a5ce27a0b358c137de24"
   },
+  "package-exports.test.ts": {
+    "tests": 4,
+    "names": "9c1caefa37934708adeac1133cbd6a8bee22d88ab42d81a8e3094392a65269f9"
+  },
   "page.test.ts": {
     "tests": 40,
     "names": "c1629a5c9e7fa1134a7e062494c93ae5e762fbe1cc26328108e74d808eb49693"
