@@ -179,8 +179,10 @@ test("P4: the stop table has a row for every cell of the reviewer's table F, and
   assert.equal(lapsed.length, 1);
   assert.match(lapsed[0].brings_back, /the owner's own call/);
   assert.match(lapsed[0].brings_back, /later piece of work/);
-  assert.equal(plan.stop_table.length, plan.steps.length * ANSWER_KINDS.length + 1);
-  for (const r of plan.stop_table.filter((x) => x.answer !== "lapsed" && x.answer !== "ok" && x.answer !== "err")) {
+  const channel = plan.stop_table.filter((r) => r.answer === "channel"); // G4: a row for each step with a channel
+  assert.deepEqual(channel.map((r) => r.step), plan.steps.filter((x) => x.channel).map((x) => x.id));
+  assert.equal(plan.stop_table.length, plan.steps.length * ANSWER_KINDS.length + 1 + channel.length);
+  for (const r of plan.stop_table.filter((x) => !["lapsed", "ok", "err", "channel"].includes(x.answer))) {
     const mortal = plan.steps.find((s) => s.id === r.step).tool === "encoder";
     if (mortal && r.answer !== "sub") assert.match(r.brings_back, /last valid block|S4/, `${r.step} ${r.answer}`);
     if (!mortal) assert.doesNotMatch(r.brings_back, /S4/, `${r.step} ${r.answer}: an immortal step has no second copy`);
@@ -198,6 +200,7 @@ test("P2: send_outcomes has a row for every outcome the runner lists, and one fo
   assert.ok(ends.length === 4);
   for (const o of outcomes) {
     if (o === "ended") for (const w of ends) assert.equal(plan.send_outcomes.filter((r) => r.outcome === "ended" && r.node_word === w).length, 1, `ended ${w}`);
+    else if (o === "refused-at-submission") for (const c of [1010, 1013, 1014, "other"]) assert.equal(plan.send_outcomes.filter((r) => r.outcome === o && r.node_code === c).length, 1, `${o} ${c}`);
     else assert.equal(plan.send_outcomes.filter((r) => r.outcome === o).length, 1, o);
   }
   assert.deepEqual([...new Set(plan.send_outcomes.map((r) => r.outcome))].sort(), [...outcomes].sort(), "no row for an outcome the runner does not give");
@@ -320,4 +323,17 @@ test("F11: fromSs58 takes only canonical text: leading 1s added to a valid addre
   const owner = ss58(plan.values.OWNER.value);
   assert.equal(fromSs58(owner), plan.values.OWNER.value);
   for (const t of ["1" + owner, "11" + owner]) assert.equal(fromSs58(t), null, t);
+});
+
+test("G1: refused at submission has a row for each node code: 1010 not in the pool, 1013 in the pool and sent, 1014 another of the same nonce, any other; the source of the codes is said", async () => {
+  const { outcomeRow } = await import("./plan.mjs");
+  const row = (code) => outcomeRow(plan, { status: "refused-at-submission", node: { code, message: "x", data: null } });
+  assert.match(row(1010).known, /invalid/); assert.match(row(1010).lead, /case c/);
+  assert.match(row(1013).known, /IS in the pool/); assert.match(row(1013).lead, /treat it as sent/);
+  assert.match(row(1014).known, /same signer and nonce is in the pool/); assert.match(row(1014).lead, /stop signing/);
+  assert.equal(row(1012).node_code, "other"); assert.equal(row(null).node_code, "other");
+  assert.match(row(1012).lead, /sendSame/);
+  assert.match(plan.node_codes_source, /lead's knowledge of Substrate's author RPC. No committed file/);
+  assert.ok(outcomesText(plan).includes(plan.node_codes_source));
+  assert.equal(outcomeRow(plan, { status: "ended", node_status: "dropped" }).node_word, "dropped");
 });

@@ -66,17 +66,18 @@ export function costsText(plan) {
 
 const ANSWERS = { ok: "success", err: "refused in its block", sub: "refused at submission", nf: "in a block, not final by the deadline", none: "no answer" };
 export const ANSWER_KINDS = Object.keys(ANSWERS);
+const OTHER_ROWS = { channel: "a channel id the explorer gives that is not the derived one (G4)", lapsed: "lapsed" };
 
 /** The stop table as markdown (P4): for each step and each answer, what is on chain and what brings it back. */
 export function stopsText(plan) {
-  const rows = plan.stop_table.map((r) => `| ${r.step} | ${ANSWERS[r.answer] ?? r.answer} | ${r.on_chain} | ${r.brings_back} |`);
+  const rows = plan.stop_table.map((r) => `| ${r.step} | ${ANSWERS[r.answer] ?? OTHER_ROWS[r.answer] ?? r.answer} | ${r.on_chain} | ${r.brings_back} |`);
   return ["| Step | Answer | On chain | What brings it back |", "|---|---|---|---|", ...rows].join("\n");
 }
 
 /** The send outcomes as markdown (P2): for every outcome the runner can give, what is known, what the lead does, and when a second copy may be signed. */
 export function outcomesText(plan) {
-  const rows = plan.send_outcomes.map((r) => `| ${r.outcome}${r.node_word ? ` (${r.node_word})` : ""} | ${r.known} | ${r.lead} | ${r.second_copy} |`);
-  return ["| Outcome | What is known | The lead | A second copy |", "|---|---|---|---|", ...rows].join("\n");
+  const rows = plan.send_outcomes.map((r) => `| ${r.outcome}${r.node_word ? ` (${r.node_word})` : ""}${r.node_code !== undefined ? ` (node code ${r.node_code})` : ""} | ${r.known} | ${r.lead} | ${r.second_copy} |`);
+  return ["| Outcome | What is known | The lead | A second copy |", "|---|---|---|---|", ...rows].join("\n") + "\n\n" + plan.node_codes_source;
 }
 
 /**
@@ -189,8 +190,19 @@ export function commandsText(plan, results) {
   return head + plan.steps.map((st) => commandsOf(plan, st, results) + "\n\n").join("");
 }
 
-/** The send_outcomes row of a runner outcome, or null. */
-export const outcomeRow = (plan, status, word = null) => (plan.send_outcomes ?? []).find((r) => r.outcome === status && (r.node_word ?? null) === (status === "ended" ? word : null)) ?? null;
+/** The node codes refused-at-submission has rows for (G1); any other code takes the row "other". */
+export const NODE_CODES = [1010, 1013, 1014];
+/**
+ * The send_outcomes row of a runner reading ({ status, node_status, node }), or null. ended goes by
+ * the node's word; refused-at-submission by the node's code (G1).
+ */
+export function outcomeRow(plan, sent) {
+  const status = sent?.status;
+  const rows = (plan.send_outcomes ?? []).filter((r) => r.outcome === status);
+  if (status === "ended") return rows.find((r) => r.node_word === (sent.node_status ?? null)) ?? null;
+  if (status === "refused-at-submission") { const c = sent.node?.code; return rows.find((r) => r.node_code === (NODE_CODES.includes(c) ? c : "other")) ?? null; }
+  return rows[0] ?? null;
+}
 
 /** What the lead does next, by the record of a run folder (R4): the next lines with every value filled, the stop row, or the wait. */
 export function nextText(plan, run, results) {
@@ -211,7 +223,7 @@ export function nextText(plan, run, results) {
   if (n.word === "wait" && n.waiting === "outcome") { out.push(`# wait: ${n.why}`); return out.join("\n") + "\n"; }
   if (n.word === "wait") {
     const rt = viewOf(results, n.step).entry.run_time;
-    const row = outcomeRow(plan, rt.sent.status, rt.sent.node_status ?? null);
+    const row = outcomeRow(plan, rt.sent);
     const signed = readJson(signedFile(run, n.step));
     out.push(`# wait: ${n.why}`);
     if (row) out.push(`# known: ${row.known}`, `# the lead: ${row.lead}`, `# a second copy: ${row.second_copy}`);

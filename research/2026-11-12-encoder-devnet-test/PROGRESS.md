@@ -39,7 +39,12 @@ Start: head `e18e725`; the second reviewer's branch (`8ff23d6`) merged by fast f
   onWrite only after a write that did not throw ("write-failed" otherwise); a deadline with nothing
   written ends as not-sent. Tests in pane-runner.test.mjs. Reviewer test changed: review2-pane
   "a socket that opens after the deadline" now expects not-sent (F7's word), still no write.
-- next: F11, the runner, F9, F3 with G1 and G4, F12 and G2, the words, G3.
+- G1: steps.json send_outcomes: refused-at-submission rows by node_code 1010, 1013, 1014, "other";
+  node_codes_source says the codes are the lead's knowledge; plan.mjs outcomeRow(plan, sent) goes by
+  the code. stop_table "sub" rows say what earlier steps left and name the lead's stop (T2: FUND,
+  T9). Channel rows (answer "channel") for T3 to T7 are in for G4. plan.test.mjs P2 and P4 adapted
+  (rows by code; the channel rows counted), G1 test added.
+- next: F3 (record-step.mjs stop, judge lead_stop), G4 (channel mismatch recorded), then F12, G2. F11, the runner, F9, F3 with G1 and G4, F12 and G2, the words, G3.
 
 ### Decisions (fix round 2) and why
 
