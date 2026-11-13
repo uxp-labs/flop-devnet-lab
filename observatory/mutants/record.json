@@ -726,5 +726,21 @@
     "replace": "",
     "test": "test/rerun-results.test.ts",
     "why": "filled_from names the shape format the door pinned (round 29, C1)"
+  },
+  {
+    "id": "r29-fill-delegate-absent-as-empty",
+    "file": "test/helpers/rerun-fill.ts",
+    "find": "if (!v.stored) out.reads_after[f] = \"absent\";\n      else if (Array.isArray(value))",
+    "replace": "if (Array.isArray(value))",
+    "test": "test/review-shape3-fill.test.ts",
+    "why": "a DelegateSessions read with nothing stored is written absent, not as a stored empty list (round 29, F1)"
+  },
+  {
+    "id": "r29-fill-failed-acks-zero-absent",
+    "file": "test/helpers/rerun-fill.ts",
+    "find": "v.stored ? text(value) : \"absent\"",
+    "replace": "v.stored && value !== 0 ? text(value) : \"absent\"",
+    "test": "test/review-shape3-fill.test.ts",
+    "why": "a stored FailedAcks of 0 is written 0, not absent (round 29, F2)"
   }
 ]

@@ -120,9 +120,12 @@ export function fillStep(b: RerunBlock, inputs: Inputs, metadata: Uint8Array, ex
       out.reads_after[f] = v.stored ? text(value) : "absent";
       continue;
     }
-    // A list of (owner, delegate) pairs: "empty", or the stored pairs as JSON text.
+    // A list of (owner, delegate) pairs. The record's form (reads_form) gives "empty" or the stored value; a read the
+    // node holds nothing for is neither, so it is written "absent", the form's word for FailedAcks. The fourth
+    // recording holds no such read. A stored list with no pair is "empty", with pairs the pairs' JSON text.
     if (f === "delegate_sessions_of_device") {
-      if (Array.isArray(value)) out.reads_after[f] = value.length === 0 ? "empty" : JSON.stringify(value);
+      if (!v.stored) out.reads_after[f] = "absent";
+      else if (Array.isArray(value)) out.reads_after[f] = value.length === 0 ? "empty" : JSON.stringify(value);
       continue;
     }
     if (!v.stored && r.entry === "Sessions") continue;
