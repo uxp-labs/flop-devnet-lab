@@ -63,7 +63,10 @@ Start: head `e18e725`; the second reviewer's branch (`8ff23d6`) merged by fast f
 - G2: judge runTimeRefund: T6, T7 and attempts, from the explorer's events; C6's words shared with
   the final judge (topUpText). Test in check.test.mjs.
 - All 222 tests of the folder pass.
-- next: the words (README, plan.md, steps.json, template run_time_form), mutants, then G3. F11, the runner, F9, F3 with G1 and G4, F12 and G2, the words, G3.
+- The words: README (files, rows by code, the check of a research signer's file, the lead's stop,
+  F2, G4, G2, exit codes), plan.md prose, steps.json what, template run_time_form; plan.mjs md and
+  the README sha256 lines printed again. Test in plan.test.mjs.
+- next: mutants (review2-mutants.json into mutants.json, and the round's own), then G3. F11, the runner, F9, F3 with G1 and G4, F12 and G2, the words, G3.
 
 ### Decisions (fix round 2) and why
 

@@ -22,13 +22,15 @@ the layouts of `open_channel` (D2) and `top_up_escrow`. `plan.md` is the plan fo
 | `record.mjs` | Reads a record of either kind the same way for every tool. |
 | `device-key.mjs` | The one loader of the device's key file. |
 | `sign-device.mjs` | Signs one device step (T3 to T7, or an attempt) through `signSessionCall` of `imd-flop/dist/chain/`, and nothing else. |
-| `record-step.mjs` | Writes the run time record from the texts the lead relays, each with its sha256. |
+| `record-step.mjs` | Writes the run time record from the texts the lead relays, each with its sha256; writes the send file of a research signer step; records the lead's stop. |
+| `research-signed.mjs` | The check of a research signer step's signed file: its extrinsic's bytes must be the plan's step. |
+| `lead-stop.mjs` | The lead's stop at a step that will not come on chain, and when it is allowed. |
 | `pane-runner.js` | Pasted into a tab on the node's own origin: reads, submits once, watches, finds, returns short texts to relay. |
 | `explorer-reader.js` | Pasted into a tab on the explorer's own origin: reads one extrinsic's outcome and events. |
 | `results.template.json` | The empty record, as `node plan.mjs template` prints it. |
 | `judge.mjs`, `check.mjs` | Judge a record against `steps.json`: a run time record by order and outcomes, a final record whole. |
 | `fixtures.mjs`, `*.test.mjs` | The offline tests and their fixtures. |
-| `review-*` | The reviewer's tests and mutants, and `REVIEW-PROGRESS.md`. |
+| `review-*`, `review2-*` | The two reviewers' tests and mutants, and `REVIEW-PROGRESS.md`, `REVIEW2-PROGRESS.md`. |
 | `PROGRESS.md` | The builder's notes, for a successor. |
 
 ## How the lead runs it
@@ -111,7 +113,43 @@ The device step is mortal: it lives about a minute from the read of its birth bl
 finalized block, the send outcomes table of `plan.md` says what is known, what the lead does, and
 when a second copy may be signed: only by `sign-device.mjs --again` (S4), never two live copies,
 because the device's next nonce counts the pool. An owner step is immortal and never signed to
-different bytes: `lab.find`, then `lab.sendSame`.
+different bytes: `lab.find`, then `lab.sendSame`. A refusal at submission is read by the node's
+code (the rows of `send_outcomes`): 1010, the node judged it invalid and it is not in the pool;
+1013, it is already in the pool, so it is treated as sent; 1014, another transaction of the same
+signer and nonce is in the pool, so the lead stops signing and finds out which; any other code, not
+in the pool by the node's word. The codes are from the lead's knowledge of Substrate's author RPC,
+not from a committed file (`steps.json` `node_codes_source`).
+
+### The check of a research signer's file
+
+`record-step.mjs send-file` writes the send file of T1, T2, T8 or T9 only when the extrinsic's own
+bytes are the plan's step (`research-signed.mjs`): the signer (OWNER, or the recorded device for
+T9), the account nonce by the record (the start nonce plus the owner transactions the record holds
+as finalized; for T9 the device's), an immortal era, no tip, and the call our research signer
+prints for the step's line of `steps.json`. It builds the envelope exactly as `flop-sign.mjs sign`
+writes it, takes the 64 signature bytes from the file, and requires the file's extrinsic to equal
+it byte for byte and its `extrinsic_hash` to be its blake2b-256. Anything else is refused with what
+differs. `record-step.mjs step` runs the same check before it records a reading of such a step. The
+signature itself is not checked: a wrong one is refused by the node at no cost.
+
+### The lead's stop
+
+A step that will not come on chain would make the record wait for ever. The lead may then record a
+stop: `record-step.mjs stop <id> --run "$RUN" --why '<words>' [--reads '<text>' --reads-sha256 <sha>]`.
+It is allowed only at the step `plan.mjs next` names, with no finalized reading of it, and only
+when its copy cannot land without being sent again:
+
+- a: nothing was signed for it;
+- b: a device step whose signed copy's era is over by the device's reads (a finalized head above
+  its last valid block) and whose next nonce is the device transactions the record holds;
+- c: an owner step or the sweep whose last runner reading is refused at submission with code 1010;
+- d: an owner step or the sweep with a signed copy and no runner reading: the record says the lead
+  says this copy was never sent, and what is left names the unsent files, which must never be sent.
+
+Anything else is refused and names the row of `send_outcomes` to follow. After a stop no tool signs
+the step or writes a send file for it. A stopped test step is a stop of the batch there, and the
+cleanup steps that apply follow; a stopped cleanup step counts as not bringing back what it should,
+and the steps after it go on.
 
 ## The record at run time
 
@@ -120,7 +158,18 @@ holds what the runner relayed (the block's hash and number, the extrinsic's inde
 length of the block's `System.Events`) and what the explorer relayed (its source and `read_utc`,
 the outcome, the error named by the 1014020 table, the events of `ComputeChannel` and
 `FlopSessionKeys` in the record's form). Nothing in it is called verified, and no balance is in it.
+An explorer reading is taken only when its `success` agrees with the one `System.ExtrinsicSuccess`
+or `System.ExtrinsicFailed` among its names, and a failed one's error is the one that event gives.
+A channel id the explorer gives that is not the derived one is recorded with both ids
+(`channel_mismatch`): the judge stops at that step, the cleanup steps that name that channel do not
+apply, and what is under the explorer's id is left for a later piece of work. The run time judge
+reads the refund of T6 and T7 where the explorer's events give it.
 `node check.mjs "$RUN/results.json"` says go on, wait or stop at a step; it never says passed.
+
+`check.mjs` exits 0 when the record is right and nothing is left on chain; 4 when it is right and
+something is left, stopped or not; 1 when it is wrong; 3 for a run time record; 2 for its own
+refusals. No verdict begins with "passed" when something is left: a top up left after T6 says
+`as planned, left: ...`.
 
 ## Not done here: the final record
 
@@ -151,7 +200,8 @@ record when one exists: it requires `record: "final"` and `balances_source` (`de
 ## Tests
 
 `node --test` in this folder (Node 22). No network, no key file of the lab: the test keys are made
-inside the tests in temporary folders. `sign-device.mjs` and its tests need `imd-flop/dist/chain/`:
+inside the tests in temporary folders. The check of a research signer's file runs our own
+`flop-sign.mjs call` (no key) in the tests too. `sign-device.mjs` and its tests need `imd-flop/dist/chain/`:
 run `npm ci && npm run build` in `imd-flop/` first. `.github/workflows/research-offline.yml` runs
 them on GitHub. `node mutants.mjs` runs the mutants of `mutants.json`: the reviewer's R-M1 to
 R-M18, adapted to this code (the reviewer's own `review-mutants.json` names finds of `fcfb8b5`), and

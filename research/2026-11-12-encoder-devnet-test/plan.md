@@ -179,6 +179,14 @@ again only by S4, and before that the lead uses `lab.find` from the birth block 
 head is above the last valid block. An immortal step (T1, T2, T8, T9) is never signed to different
 bytes: the lead uses `lab.find`, then `lab.sendSame`, and signs no later step until it is in a
 finalized block or the batch is stopped. An outdated extrinsic comes back as refused-at-submission.
+A refusal at submission is read by the node's code: one row for each of 1010, 1013 and 1014, and
+one for any other code.
+
+Before the send file of T1, T2, T8 or T9 is written, `record-step.mjs send-file` checks that the
+extrinsic's own bytes are the plan's step (`research-signed.mjs`): the signer, the account nonce by
+the record, an immortal era, no tip, and the call our research signer prints for the step's line.
+`record-step.mjs step` checks it again before it records a reading. The signature is not checked:
+a wrong one is refused by the node at no cost.
 
 <!-- printed by plan.mjs: outcomes -->
 | Outcome | What is known | The lead | A second copy |
@@ -211,8 +219,28 @@ The node codes of the rows for refused-at-submission (1010 invalid, 1013 already
 Each step's "If not" in the steps table says what the lead does on an answer other than expected.
 A stop ends the test steps. The cleanup steps that apply still run, in order, so no escrow and no
 fee money is left behind where the batch can bring it back. `judge.mjs` `nextOf` says what is next
-by the record, and `plan.mjs next --run <folder>` prints it. For each step and each answer, what is
-on chain and what brings it back:
+by the record, and `plan.mjs next --run <folder>` prints it.
+
+A step that will not come on chain is stopped by the lead with `record-step.mjs stop <id>` and the
+lead's words. It is allowed only at the step `plan.mjs next` names, with no finalized reading of it,
+and only when its copy cannot land without being sent again: (a) nothing was signed; (b) a device
+copy whose era is over by the device's reads, with the device's nonce unmoved; (c) an owner step or
+the sweep refused at submission with node code 1010; (d) an owner step or the sweep with no runner
+reading, which the lead says was never sent (what is left then names the unsent files, never to be
+sent). Anything else is refused with the row of the send outcomes to follow. A stopped test step is
+a stop there, with the row for refused at submission below, and the cleanup steps that apply
+follow. A stopped cleanup step counts as not bringing back what it should, and the steps after it
+go on.
+
+A channel id the explorer gives that is not the derived one is recorded with both ids. The judge
+stops at that step, and the cleanup steps that name that channel do not apply: they would name a
+channel that does not exist.
+
+`check.mjs` exits 0 when the record is right and nothing is left on chain, 4 when it is right and
+something is left (stopped or not), 1 when it is wrong, 3 for a run time record and 2 for its own
+refusals. No verdict begins with "passed" when something is left.
+
+For each step and each answer, what is on chain and what brings it back:
 
 <!-- printed by plan.mjs: stops -->
 | Step | Answer | On chain | What brings it back |

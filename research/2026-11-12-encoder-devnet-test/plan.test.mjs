@@ -337,3 +337,16 @@ test("G1: refused at submission has a row for each node code: 1010 not in the po
   assert.ok(outcomesText(plan).includes(plan.node_codes_source));
   assert.equal(outcomeRow(plan, { status: "ended", node_status: "dropped" }).node_word, "dropped");
 });
+
+test("the words of fix round 2: README and plan.md say the check of a research signer's file, the lead's stop and when it is allowed, the rows by node code and the exit codes", () => {
+  const readme = readFileSync(join(HERE, "README.md"), "utf8"), md = readFileSync(join(HERE, "plan.md"), "utf8");
+  for (const [name, text] of [["README.md", readme], ["plan.md", md]]) {
+    assert.match(text, /research-signed\.mjs/, `${name}: the check of a research signer's file`);
+    assert.match(text, /record-step\.mjs stop/, `${name}: the lead's stop`);
+    assert.match(text, /1010/, `${name}: the rows by node code`);
+    assert.match(text, /exits 0 when the record is right and nothing is left on chain/, `${name}: the exit codes`);
+    assert.match(text, /never sent/, `${name}: case d`);
+  }
+  assert.match(readme, /1013, it is already in the pool, so it is treated as sent/);
+  for (const [f, sha] of Object.entries(pastedSha256())) assert.ok(readme.includes(`sha256 of ${f}: ${sha}`) && md.includes(`sha256 of ${f}: ${sha}`), f);
+});
