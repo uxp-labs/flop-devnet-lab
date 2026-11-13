@@ -1,0 +1,20 @@
+[
+ {"id":"RV3-R1","file":"research-signed.mjs","find":"filter((x) => x !== id && planStepOf","replace":"filter((x) => planStepOf","why":"nonceOf: the id itself is not counted in its own owner nonce"},
+ {"id":"RV3-R2","file":"research-signed.mjs","find":" - (viewOf(results, id)?.final ? 1n : 0n)","replace":"","why":"nonceOf: T9 once final does not count itself"},
+ {"id":"RV3-R3","file":"research-signed.mjs","find":"if (n < 1n << 6n) return le(n << 2n, 1);","replace":"if (n < 1n << 7n) return le((n << 2n) & 0xffn, 1);","why":"compact: the one byte mode ends at 63"},
+ {"id":"RV3-R4","file":"research-signed.mjs","find":"if (typeof call !== \"string\" || !/^0x([0-9a-f]{2})+$/.test(call)) no(","replace":"if (false) no(","why":"callOf: the research signer printed a call"},
+ {"id":"RV3-R5","file":"research-signed.mjs","find":"if (!p.signature) no(","replace":"if (false) no(","why":"checkResearchSigned: an extrinsic that ends before the signature"},
+ {"id":"RV3-L1","file":"lead-stop.mjs","find":"sent.node?.code === 1010","replace":"sent.node?.code == 1010","why":"case c: the node code is the number 1010"},
+ {"id":"RV3-L2","file":"lead-stop.mjs","find":"if (reads.account !== device?.public_key && reads.account !== device?.ss58) no(","replace":"if (false) no(","why":"case b: the reads are the device's"},
+ {"id":"RV3-L3","file":"lead-stop.mjs","find":"if (existsSync(sendFile(run, id))) no(`signed/${id}.send.json exists without","replace":"if (false) no(`signed/${id}.send.json exists without","why":"case a: a lone send file is not nothing signed"},
+ {"id":"RV3-L4","file":"lead-stop.mjs","find":"if (n.step !== id || (n.word === \"wait\" && n.waiting !== \"inclusion\")) no(","replace":"if (n.step !== id) no(","why":"a stop only at the step waited on for inclusion, not for its outcome"},
+ {"id":"RV3-L5","file":"lead-stop.mjs","find":"if (earlier.length || sent.sent_by !== \"send\")","replace":"if (sent.sent_by !== \"send\")","why":"case c: no earlier readings"},
+ {"id":"RV3-L6","file":"lead-stop.mjs","find":"if (reads.accountNonce !== included) refuse(","replace":"if (reads.accountNonce < included) refuse(","why":"case b: a device nonce above the record refuses"},
+ {"id":"RV3-N1","file":"judge.mjs","find":"if (leadStopOf(results, cond.step)) return false;","replace":"","why":"holdsBy: a stopped step never came on chain"},
+ {"id":"RV3-N2","file":"judge.mjs","find":"left.push(...unsentLeft(id, ls));","replace":"","why":"nextOf: case d's unsent files are left in words"},
+ {"id":"RV3-N3","file":"judge.mjs","find":"else left.push(`${id} was stopped by the lead (case ${ls.case}): ${step.left_if_it_fails}`);","replace":"","why":"nextOf: a stopped cleanup step leaves what it should bring back"},
+ {"id":"RV3-S1","file":"pane-runner.js","find":"if (done || !written) return;","replace":"if (done) return;","why":"submit: a lost connection before any write is not connection-lost"},
+ {"id":"RV3-S2","file":"pane-runner.js","find":"if (done || locating !== null) unwatch();","replace":"if (done) unwatch();","why":"submit: a watch that saw finalized early is ended once subscribed"},
+ {"id":"RV3-S3","file":"pane-runner.js","find":"if (mayWrite && !mayWrite()) { reject(","replace":"if (false) { reject(","why":"transport: no write once the call has ended (F7)"},
+ {"id":"RV3-S4","file":"pane-runner.js","find":"function wrote() { if (written) return; written = true; if (mark) store.add(xt); }","replace":"function wrote() { if (written) return; written = true; store.add(xt); }","why":"submit: sendSame does not mark"}
+]
