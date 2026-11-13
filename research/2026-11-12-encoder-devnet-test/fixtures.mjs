@@ -123,3 +123,17 @@ export function asPlanned(device, upTo, { from = 3600000, outcomes = {}, errors 
   }
   return { results: r, blocks };
 }
+
+/** An explorer answer of the shape the lead described (lead-measurements-2026-11-13.json), made up here: numbers as strings with commas, accounts as SS58 text. */
+export function explorerAnswer({ hash = "0x" + "ab".repeat(32), blockHash = "0x" + "cd".repeat(32), success = true, failedWith = null, events: given = null, extra = [] } = {}) {
+  const events = given ? [...given, ...extra] : [
+    { id: "1-0", section: "balances", method: "Withdraw", data: { who: "5Device", amount: "9,422,731,810,000,000" } },
+    { id: "1-1", section: "balances", method: "Transfer", data: { from: "5Owner", to: "5Pallet", amount: "10,000,000,000,000,000" } },
+    { id: "1-2", section: "computeChannel", method: "ForceOpenRequested", data: { channelId: "0x" + "77".repeat(32), agent: "5Owner", miner: "5Named", escrow: "10,000,000,000,000,000", ackDeadline: "3,553,433" } },
+    { id: "1-3", section: "flopSessionKeys", method: "SessionCallExecuted", data: { owner: "5Owner", delegate: "5Device", spent: "10,000,000,000,000,000", epochSpent: "10,000,000,000,000,000" } },
+    ...extra,
+  ];
+  events.push(
+    success ? { id: "1-9", section: "system", method: "ExtrinsicSuccess", data: { dispatchInfo: {} } } : { id: "1-9", section: "system", method: "ExtrinsicFailed", data: { dispatchError: failedWith, dispatchInfo: {} } });
+  return { hash, blockHash, method: "executeViaSession", section: "flopSessionKeys", sender: "5Device", params: {}, success, events, timestamp: "1763000000000" };
+}

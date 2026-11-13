@@ -28,9 +28,12 @@ in this folder. `imd-flop/dist` must be built.
   pane-runner.test.mjs rewritten (20 tests). The reviewer's runner tests pass unchanged: a
   transport that does not report the write is taken to have written once it answers.
 
+- E1 to E3: explorer-reader.js and explorer-reader.test.mjs (4 tests). The relay object also
+  carries source and read_utc (R3 needs them and only the pane knows read_utc).
+
 ## Next
 
-- E (explorer-reader.js), then R (record-step.mjs start and step, plan.mjs next).
+- R (record-step.mjs start and step, plan.mjs next).
 
 ## Decisions (fix round) and why
 
