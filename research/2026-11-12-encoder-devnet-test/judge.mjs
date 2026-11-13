@@ -198,8 +198,9 @@ export function judgeRun(ctx) {
 const RUN_TIME_PALLETS = ["ComputeChannel", "FlopSessionKeys"];
 
 /** Whether a step's condition holds by the record of either kind; null while it is not known. */
-export function holdsBy(cond, plan, results) {
+export function holdsBy(cond, plan, results, stopped = false) {
   const v = viewOf(results, cond.step);
+  if (stopped && (!v || (results.record !== "final" && !v.entry.run_time))) return false; // after a stop, a step not sent never will be
   if (!v || !v.final || v.success === null) return null;
   if (cond.event) return v.success === true && v.names.includes(cond.event);
   if (cond.outcome === "success") return v.success === true;
@@ -246,11 +247,11 @@ export function nextOf(plan, results) {
   const findings = [], left = [], said = [];
   let stoppedAt = null, row = null;
   const out = (word, step, why, waiting = null) => ({ word: stoppedAt && word === "go on" ? "stop" : word, step, why, waiting, stopped_at: stoppedAt, row, cleanup: cleanupThatApplies(), left, findings, said });
-  const cleanupThatApplies = () => (stoppedAt ? plan.steps.filter((s) => s.cleanup && (!s.only_if || holdsBy(s.only_if, plan, results) !== false)).map((s) => s.id) : []);
+  const cleanupThatApplies = () => (stoppedAt ? plan.steps.filter((s) => s.cleanup && (!s.only_if || holdsBy(s.only_if, plan, results, true) !== false)).map((s) => s.id) : []);
   for (const step of plan.steps) {
     if (stoppedAt && !step.cleanup) continue;
     if (step.only_if) {
-      const h = holdsBy(step.only_if, plan, results);
+      const h = holdsBy(step.only_if, plan, results, stoppedAt !== null);
       if (h === null) return out("wait", step.id, `the outcome of ${step.only_if.step}, which ${step.id} depends on`, "outcome");
       if (h === false) { said.push(`${step.id}: not needed`); continue; }
     }

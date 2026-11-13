@@ -31,9 +31,16 @@ in this folder. `imd-flop/dist` must be built.
 - E1 to E3: explorer-reader.js and explorer-reader.test.mjs (4 tests). The relay object also
   carries source and read_utc (R3 needs them and only the pane knows read_utc).
 
+- R1 to R3: record-step.mjs start and step, record-step.test.mjs (10 tests). steps.json gets a
+  "channel" per encoder step. judge.mjs holdsBy: after a stop, a step never sent does not hold.
+  Decided: record-step refuses to record a runner outcome that submitted nothing (refused-bundle,
+  already-sent, not-in-sent-list, not-sent). A find result has no bundle sha256, so record-step
+  checks the extrinsic's sha256 (extrinsic_sha256, given by every runner result) against the
+  signed file's extrinsic. A channelId that is not the derived one is refused, not recorded.
+
 ## Next
 
-- R (record-step.mjs start and step, plan.mjs next).
+- R4 plan.mjs next --run, then C1 to C7.
 
 ## Decisions (fix round) and why
 
