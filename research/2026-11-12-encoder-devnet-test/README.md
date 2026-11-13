@@ -210,7 +210,11 @@ record). A test step that is missing with no stop recorded makes the record wron
 ## The run of 2026-11-13
 
 The lead ran the batch on 2026-11-13. Its record is `results.json` in this folder, committed byte
-for byte as the run left it. `results.test.mjs` holds it. Each value below is read from that file,
+for byte as the run left it. `results.test.mjs` holds it.
+The folder `run-2026-11-13` holds what the lab's tools wrote on the lead's machine when the lead
+signed: the calls of the research signer's steps (`calls/`), each signed extrinsic with its hash and
+era, and the exact text sent (`signed/`), with their `SHA256SUMS`, byte for byte. It holds no key.
+`run-files.test.mjs` holds it. Each value below is read from that file,
 with its field named. A field `steps.N` is the step at position N of `steps`, counted from 0.
 
 - Eight transactions of nine planned were sent. Each is in a block the node reported finalized
@@ -225,8 +229,9 @@ with its field named. A field `steps.N` is the step at position N of `steps`, co
 
 T3 is the result the test was made for. The chain accepted a session call that the device signed
 through the lab's encoder:
-- with a mortal era (the form of `steps.2.era`, birth number, birth hash and last valid block, as
-  the plan's T3 says in `shows` of `steps.json`; the values are left for the final record);
+- with a mortal era: `era` of `run-2026-11-13/signed/T3.json` gives a period of 64 blocks, the birth
+  number, the birth hash the signature binds, and the last valid block, at or above the block T3
+  landed in (`run-files.test.mjs` holds it; T4, T5 and T6 likewise, T1, T2, T8 and T9 immortal);
 - with a declared spend equal to the escrow: the escrow of `ComputeChannel.ForceOpenRequested`,
   10000000000000000 (`steps.2.run_time.explorer.events.1.fields.escrow`), is what the session spent,
   10000000000000000 (`steps.2.run_time.explorer.events.2.fields.spent`);
