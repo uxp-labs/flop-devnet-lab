@@ -47,6 +47,18 @@ Baseline at a9442dd: 229 of 229 pass.
 - Attack D held (review3-preflight.test.mjs, 2): two dead copies and no signed file; the newest
   dead copy's era decides; the nonce refuses before the key; a lone send file refused before the key.
 
+## Mutants (V9)
+
+review3-mutants.json, 18, run by review3-mutants.mjs (a copy of review2-mutants.mjs).
+- Against the tests there at a9442dd (every test file not review3-*): 11 killed, 7 alive (L1, L2,
+  L3, L4, R2, R3, R4). S1, S2 and S4 are killed there only by the words test, which binds the
+  sha256 of pane-runner.js: alive by behaviour.
+- Against review3-*: R2, L1, L2, L3, S1, S4 killed (review3-kills.test.mjs, review3-stop table,
+  review3-pane counting test).
+- Equivalent: L4 (a step nextOf waits on for its outcome is final, refused by the finalized check);
+  R3 (no compact value of the plan lies in 64..127: nonces under 64, bodies over 127 bytes); R4 (a
+  call that is not hex makes envelope throw, still a refusal); S2 (end always unwatches once sub is set).
+
 ## Next
 
-E, F mutants.
+Report. Not done: V7 beyond a source read; no rerun of the earlier reviews' fault lists.
