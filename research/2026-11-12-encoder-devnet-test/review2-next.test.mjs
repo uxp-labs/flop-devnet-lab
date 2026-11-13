@@ -54,8 +54,16 @@ test("review2 Q2 HELD: a cleanup step refused once, twice, three times: T6.2, T6
   assert.match(n.left.join("\n"), /T6 was refused 3 times/);
 });
 
-test("review2 Q8 DEFECT: T2 refused at submission (it never comes on chain): no tool path reaches T9, and FUND stays on the device", () => {
-  const r = cell("T2", "sub");
+test("review2 Q8 DEFECT: T2 refused at submission (it never comes on chain): no tool path reaches T9, and FUND stays on the device", async () => {
+  // adapted by the builder (F3): the tool path is the lead's stop, record-step.mjs stop, case c (node code 1010)
+  const { leadStop } = await import("./lead-stop.mjs");
+  const { runFolder, planSigned } = await import("./fixtures.mjs");
+  const before = cell("T2", "sub");
+  before.steps.find((s) => s.step === "T2").run_time.sent.node = { code: 1010, message: "Invalid Transaction", data: null };
+  const run = runFolder(before);
+  planSigned(run, "T2", before);
+  const r = leadStop({ plan, run, results: before, id: "T2", why: "refused at submission with 1010" });
+  rmSync(run, { recursive: true, force: true });
   const n = nextOf(plan, r);
   // record-step and sign-device follow nextOf; the only lines plan.mjs next prints are find and sendSame of T2
   const reaches = n.step === "T9" || n.cleanup.includes("T9");

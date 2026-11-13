@@ -44,12 +44,22 @@ Start: head `e18e725`; the second reviewer's branch (`8ff23d6`) merged by fast f
   the code. stop_table "sub" rows say what earlier steps left and name the lead's stop (T2: FUND,
   T9). Channel rows (answer "channel") for T3 to T7 are in for G4. plan.test.mjs P2 and P4 adapted
   (rows by code; the channel rows counted), G1 test added.
-- next: F3 (record-step.mjs stop, judge lead_stop), G4 (channel mismatch recorded), then F12, G2. F11, the runner, F9, F3 with G1 and G4, F12 and G2, the words, G3.
+- F3: lead-stop.mjs leadStop (cases a to d, refusals naming the send_outcomes row), record-step.mjs
+  stop; judge nextOf reads lead_stop (test step: stop with the "sub" row; cleanup step: left, go
+  on), holdsBy of a stopped step is false, recordProblems refuses a stop beside a finalized block;
+  record.mjs NEVER_SENT, leadStopOf, unsentLeft; after a stop sign-device (before nextOf), send-file
+  and record-step step refuse. lead-stop.test.mjs (9). Reviewer test changed: review2-next Q8 now
+  sets node code 1010 and takes the lead's stop (case c) before it asks whether T9 is reached.
+- next: G4 (channel mismatch recorded), then F12, G2, the words, G3. F11, the runner, F9, F3 with G1 and G4, F12 and G2, the words, G3.
 
 ### Decisions (fix round 2) and why
 
 - F1: the id itself is never counted in its own nonce, so the check gives the same answer when an
   explorer reading is added after the step is final. An attempt (T8.2) counts the refused T8.
+- F3: for an encoder step whose signed file is gone but dead copies exist, the copy of case b is the
+  newest dead copy (as F10 does for --again). Case a needs no signed file and no dead copy.
+- F3: a stopped test step takes the stop table's "sub" row (the row of a step that never came on
+  chain), prefixed with "stopped by the lead (case x)".
 - F1: the F1 unit tests set OWNER to a test key in a copy of the plan held in memory, so the file
   flop-sign.mjs sign makes with that key passes as an owner step. CLI tests use planSigned.
 

@@ -40,7 +40,7 @@ import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { REPO, HASH, RAW, loadPlan, readJson, substitute, sha256Text, ss58, planRuntime } from "./lib.mjs";
 import { DeviceKeyError, loadDeviceSigner } from "./device-key.mjs";
-import { sendText as sendTextOf, planStepOf, loadRecord, viewOf, deviceIncluded, sessionSucceeded, afterBlockOf, signedFile, sendFile, runFiles } from "./record.mjs";
+import { leadStopOf, sendText as sendTextOf, planStepOf, loadRecord, viewOf, deviceIncluded, sessionSucceeded, afterBlockOf, signedFile, sendFile, runFiles } from "./record.mjs";
 import { nextOf } from "./judge.mjs";
 
 const chain = (f) => import(pathToFileURL(join(REPO, "imd-flop", "dist", "chain", f)).href);
@@ -115,6 +115,7 @@ export function preflight({ plan, run, id, readsText, readsSha256, again = false
   if (results.record !== "run-time") no(`results.json is a ${results.record ?? "unnamed"} record, not a run time record`);
   const device = results.accounts?.device?.public_key;
   if (!HASH.test(device ?? "")) no("results.json names no device: make it with record-step.mjs start");
+  if (leadStopOf(results, id)) no(`the lead stopped ${id} (case ${leadStopOf(results, id).case}): it is never signed after the stop`);
   const next = nextOf(plan, results);
   const mayAgain = again && next.word === "wait" && next.waiting === "inclusion" && next.step === id;
   if (next.step !== id || (next.word === "wait" && !mayAgain)) no(`${id} is not next by the record: ${next.word}${next.step ? ` ${next.step}` : ""}: ${next.why}`);

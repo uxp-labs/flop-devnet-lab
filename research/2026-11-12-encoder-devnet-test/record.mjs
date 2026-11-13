@@ -24,6 +24,13 @@ export function planStepOf(plan, id) {
   return step;
 }
 
+/** The words the record carries for a stop by the lead of case d (F3). */
+export const NEVER_SENT = "the lead says this copy was never sent";
+/** The lead's stop at an id the record holds (F3), or null. */
+export const leadStopOf = (results, id) => entryOf(results, id)?.lead_stop ?? null;
+/** What a stop by the lead leaves, in words: the unsent files of case d, never to be sent; else nothing. */
+export const unsentLeft = (id, stop) => (stop?.case === "d" ? [`${stop.unsent.join(" and ")} of ${id}: ${NEVER_SENT}; they must never be sent`] : []);
+
 /** The run folder's files. */
 export const runFiles = (run) => ({ results: join(run, "results.json"), signed: join(run, "signed") });
 export const signedFile = (run, id) => join(run, "signed", `${id}.json`);

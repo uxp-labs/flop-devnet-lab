@@ -23,6 +23,13 @@
 //        replaces a run_time that holds a finalized block. Then it prints the judge's word for the
 //        run so far, and which cleanup steps apply.
 //
+//   node record-step.mjs stop <id> --run <folder> --why '<words>' [--reads '<text>' --reads-sha256 <sha>]
+//        records the lead's stop at a step that will not come on chain (F3, lead-stop.mjs): allowed
+//        only when its copy cannot land without being sent again (nothing signed; a device copy
+//        whose era is over by the device's reads; a research signer copy refused with node code
+//        1010; or a research signer copy the record holds no reading of, which the lead says was
+//        never sent). Then the cleanup steps that apply. After it no tool signs the id.
+//
 // The record says what it is (R3): record "run-time"; every explorer reading carries its source
 // and read_utc; nothing is called verified; a block is called finalized only where the node
 // reported it so, with the block hash beside it; no balance is written.
@@ -30,10 +37,12 @@ import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "
 import { join, resolve } from "node:path";
 import { HASH, RAW, RERUN, loadPlan, readJson, sha256Text, ss58, fromSs58, substitute, planRuntime } from "./lib.mjs";
 import { DeviceKeyError, loadDeviceSigner } from "./device-key.mjs";
-import { planStepOf, loadRecord, entryOf, viewOf, signedFile, sendFile, runFiles, sendText } from "./record.mjs";
+import { planStepOf, loadRecord, entryOf, viewOf, signedFile, sendFile, runFiles, sendText, leadStopOf } from "./record.mjs";
 import { nextOf } from "./judge.mjs";
 import { template } from "./plan.mjs";
 import { checkResearchSigned, ResearchSignedError } from "./research-signed.mjs";
+import { leadStop, LeadStopError } from "./lead-stop.mjs";
+import { SignDeviceError } from "./sign-device.mjs";
 
 export class RecordStepError extends Error {}
 const no = (m) => { throw new RecordStepError(m); };
@@ -147,6 +156,7 @@ export function recordReading({ plan, run, results, id, sent, sentSha256, explor
   const step = planStepOf(plan, id) ?? no(`steps.json has no step ${id}, and ${id} is not an attempt S5 allows`);
   if (results.record !== "run-time") no(`results.json is a ${results.record ?? "unnamed"} record, not a run time record`);
   if (!sent && !explorer) no("give --sent, --explorer or both");
+  if (leadStopOf(results, id)) no(`the lead stopped ${id} (case ${leadStopOf(results, id).case}): nothing of it is recorded after the stop`);
   // F1: a research signer step's file must be the plan's bytes before any reading of it is recorded
   if (step.tool === "research-signer") {
     if (!existsSync(signedFile(run, id))) no(`signed/${id}.json is not in the run folder`);
@@ -236,6 +246,7 @@ function main(argv) {
     const step = planStepOf(plan, id) ?? no(`steps.json has no step ${id}, and ${id} is not an attempt S5 allows`);
     if (step.tool !== "research-signer") no(`${id} is signed by sign-device.mjs, which writes its own send file`);
     const results = loadRecord(run) ?? no("the run folder has no results.json: make it with record-step.mjs start");
+    if (leadStopOf(results, id)) no(`the lead stopped ${id}: no send file is written for it`);
     if (!existsSync(signedFile(run, id))) no(`signed/${id}.json is not in the run folder`);
     const signed = readJson(signedFile(run, id));
     checkResearchSigned(plan, results, id, signed); // F1: before the send file is written
@@ -259,12 +270,24 @@ function main(argv) {
     console.log(wordOf(plan, r));
     return;
   }
-  no("commands: start, send-file, step (see the head of this file)");
+  if (argv[0] === "stop") {
+    const id = argv[1] && !argv[1].startsWith("--") ? argv[1] : no("usage: node record-step.mjs stop <id> --run <folder> --why '<words>' [--reads '<text>' --reads-sha256 <sha>]");
+    const f = flags(argv.slice(2), ["run", "why", "reads", "reads-sha256"]);
+    const run = resolve(f.run ?? no("--run <run folder> is required"));
+    const results = loadRecord(run) ?? no("the run folder has no results.json: make it with record-step.mjs start");
+    const r = leadStop({ plan, run, results, id, why: f.why, readsText: f.reads, readsSha256: f["reads-sha256"] });
+    writeRecord(run, r);
+    const s = leadStopOf(r, id);
+    console.log(`recorded the lead's stop at ${id}, case ${s.case}${s.words ? `: ${s.words}` : ""}`);
+    console.log(wordOf(plan, r));
+    return;
+  }
+  no("commands: start, send-file, step, stop (see the head of this file)");
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === resolve(new URL(import.meta.url).pathname)) {
   try { main(process.argv.slice(2)); } catch (e) {
-    const words = e instanceof RecordStepError || e instanceof DeviceKeyError || e instanceof ResearchSignedError ? e.message : `failed (${e?.constructor?.name ?? typeof e})`;
+    const words = e instanceof RecordStepError || e instanceof DeviceKeyError || e instanceof ResearchSignedError || e instanceof LeadStopError || e instanceof SignDeviceError ? e.message : `failed (${e?.constructor?.name ?? typeof e})`;
     process.stderr.write(`record-step: ${words}\n`);
     process.exit(2);
   }

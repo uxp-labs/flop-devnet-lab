@@ -13,7 +13,7 @@
 import { join } from "node:path";
 import { judgeStep, failedWith } from "../2026-11-12-session-rerun-1014020/rerun-lib.mjs";
 import { RERUN, RAW, loadPlan, readJson, substitute, rerunFee, flopText } from "./lib.mjs";
-import { viewOf, idsOf, MAX_ATTEMPTS, afterBlockOf, planStepOf, entryOf } from "./record.mjs";
+import { viewOf, idsOf, MAX_ATTEMPTS, afterBlockOf, planStepOf, entryOf, leadStopOf, unsentLeft } from "./record.mjs";
 
 export function context(results, dir) {
   const plan = loadPlan(dir);
@@ -26,6 +26,7 @@ const succeeded = (rec) => !!rec && Array.isArray(rec.events) && rec.events.some
 /** Whether a step's condition holds by the record of either kind; null while it is not known. */
 export function holdsBy(cond, plan, results, stopped = false) {
   const v = viewOf(results, cond.step);
+  if (leadStopOf(results, cond.step)) return false; // F3: a step the lead stopped never came on chain
   if (stopped && (!v || (results.record === "final" ? !v.final : !v.entry.run_time))) return false; // after a stop, a step not sent never will be
   if (!v || !v.final || v.success === null) return null;
   if (cond.event) return v.success === true && v.names.includes(cond.event);
@@ -49,6 +50,7 @@ export function recordProblems(plan, results) {
   for (const e of results.steps ?? []) {
     if (!planStepOf(plan, e.step)) out.push({ id: e.step, problem: `results has a step ${e.step} the plan does not have, and it is not an attempt S5 allows` });
     if (seen.has(e.step)) out.push({ id: e.step, problem: `the record holds ${e.step} twice` });
+    if (e.lead_stop && viewOf(results, e.step)?.final) out.push({ id: e.step, problem: `the record holds a stop by the lead at ${e.step} beside a finalized block of it` });
     seen.set(e.step, true);
     const v = viewOf(results, e.step);
     const ex = results.record === "run-time" ? e.run_time?.explorer : null;
@@ -115,8 +117,7 @@ export function judgeRunTime(plan, step, view, results) {
 }
 
 /** The plan's row for a stop at a step: from the stop table of steps.json for the answer, else the step's own words. */
-export function stopRowOf(plan, step, view) {
-  const answer = view.success === false ? "err" : "ok";
+export function stopRowOf(plan, step, view, answer = view.success === false ? "err" : "ok") {
   const hit = (plan.stop_table ?? []).find((r) => r.step === step.id && r.answer === answer);
   return hit ? `${hit.on_chain}; ${hit.brings_back}` : `${step.id} did not answer as planned; the rule is ${step.on_unexpected}`;
 }
@@ -147,6 +148,17 @@ export function nextOf(plan, results) {
     let done = false;
     for (const id of idsOf(step)) {
       const v = viewOf(results, id);
+      const ls = leadStopOf(results, id);
+      if (ls) {
+        // F3: the lead stopped this id: it never came on chain. A test step is a stop there, with the
+        // stop table's row for a step that never came on chain; a cleanup step did not bring back
+        // what it should, and the steps after it go on.
+        said.push(`${id}: stopped by the lead (case ${ls.case}): ${ls.why}`);
+        left.push(...unsentLeft(id, ls));
+        if (!step.cleanup) { stoppedAt = step.id; row = `stopped by the lead (case ${ls.case}): ${stopRowOf(plan, step, v, "sub")}`; }
+        else left.push(`${id} was stopped by the lead (case ${ls.case}): ${step.left_if_it_fails}`);
+        done = true; break;
+      }
       if (!v || !v.entry.run_time) return out("go on", id, stoppedAt ? `the cleanup step ${id}` : `the next step ${id}`);
       if (!v.final) return out("wait", id, `${id} is sent and not in a finalized block (the runner said ${v.sent_status}): see send_outcomes`, "inclusion");
       if (v.success === null) return out("wait", id, `the explorer reading of ${id}`, "outcome");
