@@ -22,12 +22,20 @@ export interface Absent {
 /** A value that is either known or unknown. */
 export type Got<T> = Known<T> | Unknown;
 
-/** A stored entry: its value, absent, or unknown. */
-export type Stored<T> = Known<T> | Absent | Unknown;
+/**
+ * A storage entry's value. Known carries stored: true when the node answered bytes, and false when it answered none
+ * and the entry is a Default one, whose value is then the chain's own default (the metadata's default bytes). An
+ * Optional entry answered with none is absent. A Default entry is never absent.
+ */
+export interface KnownEntry<T> extends Known<T> {
+  readonly stored: boolean;
+}
+export type Stored<T> = KnownEntry<T> | Absent | Unknown;
 
 export const known = <T>(value: T): Known<T> => ({ kind: "known", value });
 export const unknown = (reason: string): Unknown => ({ kind: "unknown", reason });
 export const absent = (): Absent => ({ kind: "absent" });
+export const knownEntry = <T>(value: T, stored: boolean): KnownEntry<T> => ({ kind: "known", value, stored });
 
 /** An unknown with a step's name put before its reason. */
 export const within = (step: string, u: Unknown): Unknown => unknown(`${step}: ${u.reason}`);

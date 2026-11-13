@@ -13,15 +13,11 @@ Brief: /mnt/user-data/outputs/briefs/2026-11-13-p2-chain-reads.md. Branch claude
 - Source of src/chain-read written: result, bytes, freeze, door, shape-file, node, key-table(+types, by
   scripts/read-key-table.mjs), keys, session-state, cross-check, read. Typechecks. No tests of it yet.
 
-## STOPPED: a question for the lead (two rules disagree)
-A2 adds the runtime dependency "flop-observatory": "file:../observatory". The existing test
-imd-flop/test/chain-table.test.ts, "E11: ... > the runtime dependencies are the five there were before
-P3" (line 82), pins Object.keys(dependencies) to exactly @flop-labs/client, @noble/curves,
-@noble/hashes, @scure/base, viem. It is a test of src/chain (the encoder's table), and the brief says
-none of src/chain's tests is changed. So imd-flop's check fails at 32aef51: 1 failed, 1425 passed,
-1 skipped. Choices for the lead: (a) allow that one line of E11 to list six, flop-observatory added;
-(b) make flop-observatory a devDependency (but then src imports a dev dependency, which the next E11
-test forbids for src); (c) another rule. Nothing changed until the lead rules.
+## The lead's rule on the stop (10:52 UTC), done
+- E11: one assertion changed, six runtime dependencies, flop-observatory exactly file:../observatory: d6d21be.
+- T3: SessionNonces is Default: no value is known 0 with stored false (the recorded null at 3530299 is the
+  real case). Sessions and CircuitBreakers are Optional: no value is absent (made cases on A6). The key
+  table carries each entry's modifier; Stored<T> known carries stored.
 
 ## Next (before the stop)
 Checks: imd-flop npm run check, research node --test (two folders), observatory npm run check (long), then

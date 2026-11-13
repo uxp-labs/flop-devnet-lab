@@ -89,7 +89,7 @@ function entryLine(m, stated, pallet, entry) {
   if (JSON.stringify(shapeHashers.map((h) => HASHERS[h] ?? `unknown ${h}`)) !== JSON.stringify(hashers)) fail(`${pallet}.${entry}: the shape's hashers ${shapeHashers} are not the metadata's ${hashers}, or not ones keys.ts computes`);
   const modifier = item.modifier === 0 ? "Optional" : "Default";
   if (stated.entry.modifier !== modifier) fail(`${pallet}.${entry}: the shape's modifier ${stated.entry.modifier} is not the metadata's ${modifier}`);
-  return { pallet, entry, palletPart: twox128(prefix), entryPart: twox128(entry), hashers: shapeHashers };
+  return { pallet, entry, palletPart: twox128(prefix), entryPart: twox128(entry), hashers: shapeHashers, modifier };
 }
 
 /** The event of the cross check in the shape's outer event enum, by the pallet's index and the event's name. */

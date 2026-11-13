@@ -23,7 +23,7 @@ function decodedAtA6(): { session: Record<string, DoorValue>; nonce: DoorValue; 
   const runtime = (runtimeOf(lru) as any).value;
   const pin = { runtime, metadata: bytesOf(s.metadata.values().next().value as string), lastRuntimeUpgrade: lru, shapeText: (shapeFileText(runtime.shapeFile) as any).value };
   const k = (sessionKeys(LINE, acc(RESULTS.accounts.owner.public_key), acc(RESULTS.accounts.dev1.public_key)) as any).value;
-  const v = (e: string, key: { key: Uint8Array; parts: Uint8Array[] }) => (valueOf(pin, { pallet: "FlopSessionKeys", entry: e, keys: key.parts, key: key.key, answer: bytesOf(s.storage.get(`${A6.block_hash} ${hexOf(key.key)}`) as string) }) as any).value;
+  const v = (e: string, key: { key: Uint8Array; parts: Uint8Array[] }) => (valueOf(pin, { pallet: "FlopSessionKeys", entry: e, keys: key.parts, key: key.key, answer: bytesOf(s.storage.get(`${A6.block_hash} ${hexOf(key.key)}`) as string) }) as any).value.value;
   return { session: v("Sessions", k.sessions), nonce: v("SessionNonces", k.sessionNonces), breaker: v("CircuitBreakers", k.circuitBreakers) };
 }
 

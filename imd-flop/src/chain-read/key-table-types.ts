@@ -21,6 +21,8 @@ export interface EntryLine {
   readonly palletPart: string;
   readonly entryPart: string;
   readonly hashers: readonly string[];
+  /** The shape's modifier: Optional (no value is absent) or Default (no value is the metadata's default). */
+  readonly modifier: "Optional" | "Default";
 }
 
 export interface RuntimeLine {

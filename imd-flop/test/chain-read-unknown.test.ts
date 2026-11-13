@@ -353,12 +353,16 @@ describe("B2: one finalized head, and every call at it", () => {
   });
 });
 
-describe("T3: an entry with no stored value is absent, not unknown", () => {
-  it("SessionNonces of device D1 as owner and S as delegate, answered null at block 3530299 of the upgrade recording, is absent", async () => {
+describe("T3: an Optional entry with no stored value is absent; a Default one is its default, known, not stored", () => {
+  it("the modifiers come from the shape: Sessions and CircuitBreakers Optional, SessionNonces Default", () => {
+    expect([LINE.entries.sessions.modifier, LINE.entries.circuit_breakers.modifier, LINE.entries.session_nonces.modifier]).toEqual(["Optional", "Optional", "Default"]);
+  });
+
+  it("the real case: SessionNonces of device D1 as owner and S as delegate, answered null at block 3530299 of the upgrade recording, is known 0 with stored false, not absent and not unknown", async () => {
     const r = await readSessionState(transportOf(upgrade()), D1, S);
     expect(r.kind).toBe("known");
     expect((r as any).value.number).toBe(LATER.height);
-    expect((r as any).value.sessionNonce).toEqual({ kind: "absent" });
+    expect((r as any).value.sessionNonce).toEqual({ kind: "known", value: 0n, stored: false });
   });
 
   it("the same read's entries the recording did not ask are unknown, not absent", async () => {
@@ -367,12 +371,24 @@ describe("T3: an entry with no stored value is absent, not unknown", () => {
     expect((r as any).value.circuitBreaker.kind).toBe("unknown");
   });
 
-  it("an Optional entry (Sessions) answered null is absent too", async () => {
+  it("the made case: Sessions (Optional) with the rerun's recorded answer at A6 changed to null is absent", async () => {
     const s = rerunScript(A6.block_hash);
     s.storage.set(`${A6.block_hash} ${hexOf(keysOf(OWNER, DEV1).sessions.key)}`, null);
     const r = await readSessionState(transportOf(s), OWNER, DEV1);
     expect((r as any).value.session).toEqual({ kind: "absent" });
     expect((r as any).value.sessionNonce.kind).toBe("known");
+  });
+
+  it("the made case: CircuitBreakers (Optional) with the rerun's recorded answer at A6 changed to null is absent", async () => {
+    const s = rerunScript(A6.block_hash);
+    s.storage.set(`${A6.block_hash} ${hexOf(keysOf(OWNER, DEV1).circuitBreakers.key)}`, null);
+    const r = await readSessionState(transportOf(s), OWNER, DEV1);
+    expect((r as any).value.circuitBreaker).toEqual({ kind: "absent" });
+  });
+
+  it("an answer with bytes is known with stored true, for a Default entry too", async () => {
+    const r = await readSessionState(transportOf(rerunScript(A6.block_hash)), OWNER, DEV1);
+    for (const e of ["session", "sessionNonce", "circuitBreaker"]) expect([e, (r as any).value[e].stored]).toEqual([e, true]);
   });
 
   it("S and D1's session at block 3530299, recorded whole, is known at the new runtime", async () => {

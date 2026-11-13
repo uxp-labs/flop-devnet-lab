@@ -13,7 +13,7 @@
 import { type DoorEvent, type Pin, type Runtime, eventsOf, runtimeOf, valueOf } from "./door.js";
 import { accountOf, eventsKey, lastRuntimeUpgradeKey, lineOf, sessionKeys } from "./keys.js";
 import { type Transport, blockHash, finalizedHead, header, metadata, storage } from "./node.js";
-import { type Got, type Stored, known, unknown, within } from "./result.js";
+import { type Got, type Stored, absent, known, knownEntry, unknown, within } from "./result.js";
 import { type CircuitBreakerRecord, type SessionRecord, circuitBreakerOf, sessionNonceOf, sessionOf } from "./session-state.js";
 import { shapeFileText } from "./shape-file.js";
 
@@ -53,15 +53,26 @@ async function pinAt(t: Transport, hash: string, parentHash: string): Promise<Go
 
 const atOf = (number: number, hash: string, r: Runtime): At => ({ number, hash, runtime: { specName: r.specName, specVersion: r.specVersion, shapeFile: r.shapeFile } });
 
-/** One entry's value at the block, turned into its record; absent stays absent. */
-async function entryAt<T>(t: Transport, pin: Pin, at: string, what: Parameters<typeof storage>[1], read: { pallet: string; entry: string; key: Uint8Array; parts: readonly Uint8Array[] }, turn: (v: Parameters<typeof sessionOf>[1]) => Got<T>): Promise<Stored<T>> {
+/**
+ * One entry's value at the block, turned into its record. No bytes is absent for an Optional entry, and for a
+ * Default entry the metadata's default, known with stored: false (the key table gives the shape's modifier).
+ */
+async function entryAt<T>(
+  t: Transport,
+  pin: Pin,
+  at: string,
+  what: Parameters<typeof storage>[1],
+  read: { pallet: string; entry: string; modifier: "Optional" | "Default"; key: Uint8Array; parts: readonly Uint8Array[] },
+  turn: (v: Parameters<typeof sessionOf>[1]) => Got<T>,
+): Promise<Stored<T>> {
   const name = `${read.pallet}.${read.entry}`;
   const a = await storage(t, what, read.key, at);
   if (a.kind === "unknown") return within(name, a);
   const v = valueOf(pin, { pallet: read.pallet, entry: read.entry, keys: read.parts, key: read.key, answer: a.value });
-  if (v.kind !== "known") return v.kind === "unknown" ? within(name, v) : v;
-  const r = turn(v.value);
-  return r.kind === "unknown" ? within(name, r) : r;
+  if (v.kind === "unknown") return within(name, v);
+  if (!v.value.stored && read.modifier === "Optional") return absent();
+  const r = turn(v.value.value);
+  return r.kind === "unknown" ? within(name, r) : knownEntry(r.value, v.value.stored);
 }
 
 /** A session's state at the finalized head. owner and delegate are 0x and 32 bytes of lower case hex. */

@@ -5,7 +5,7 @@
  * in (shape-file.ts reads it).
  */
 import { type BlockEvents, type StorageValue, decodeBlockEvents, decodeStorageValue, runtimeOfBlock } from "flop-observatory/scale/block";
-import { type Got, type Stored, absent, known, unknown } from "./result.js";
+import { type Got, known, unknown } from "./result.js";
 
 /** A runtime on the decoder's reviewed list, as the door names it (C7). */
 export interface Runtime {
@@ -54,9 +54,15 @@ export interface EntryRead {
   readonly answer: Uint8Array | null;
 }
 
-/** The value of a stored entry; absent when the node answered no bytes, whatever default the metadata states. */
-export function valueOf(pin: Pin, read: EntryRead): Stored<DoorValue> {
+/** What the door said of an entry: whether the node answered bytes, and the value (for no bytes, null or the metadata's default). */
+export interface DoorEntry {
+  readonly stored: boolean;
+  readonly value: DoorValue;
+}
+
+/** The value of a storage entry, as the door gives it. Absent or default is the caller's to say, by the entry's modifier. */
+export function valueOf(pin: Pin, read: EntryRead): Got<DoorEntry> {
   const v = decodeStorageValue({ ...pinInput(pin), pallet: read.pallet, entry: read.entry, keys: read.keys, key: read.key, answer: read.answer });
   if (!v.decoded) return unknown(`the decoder: ${v.refused}`);
-  return v.stored ? known(v.value) : absent();
+  return known({ stored: v.stored, value: v.value });
 }

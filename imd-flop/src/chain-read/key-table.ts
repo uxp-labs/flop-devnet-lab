@@ -18,14 +18,16 @@ export const KEY_TABLE: KeyTable = deepFreeze({
       "entry": "Events",
       "palletPart": "0x26aa394eea5630e07c48ae0c9558cef7",
       "entryPart": "0x80d41e5e16056765bc8461851072c9d7",
-      "hashers": []
+      "hashers": [],
+      "modifier": "Default"
     },
     "last_runtime_upgrade": {
       "pallet": "System",
       "entry": "LastRuntimeUpgrade",
       "palletPart": "0x26aa394eea5630e07c48ae0c9558cef7",
       "entryPart": "0xf9cce9c888469bb1a0dceaa129672ef8",
-      "hashers": []
+      "hashers": [],
+      "modifier": "Optional"
     }
   },
   "runtimes": [
@@ -43,7 +45,8 @@ export const KEY_TABLE: KeyTable = deepFreeze({
           "hashers": [
             "Blake2_128Concat",
             "Blake2_128Concat"
-          ]
+          ],
+          "modifier": "Optional"
         },
         "session_nonces": {
           "pallet": "FlopSessionKeys",
@@ -53,7 +56,8 @@ export const KEY_TABLE: KeyTable = deepFreeze({
           "hashers": [
             "Blake2_128Concat",
             "Blake2_128Concat"
-          ]
+          ],
+          "modifier": "Default"
         },
         "circuit_breakers": {
           "pallet": "FlopSessionKeys",
@@ -62,7 +66,8 @@ export const KEY_TABLE: KeyTable = deepFreeze({
           "entryPart": "0x8ab2f41796e7514fa8610f8d361c94e7",
           "hashers": [
             "Blake2_128Concat"
-          ]
+          ],
+          "modifier": "Optional"
         }
       },
       "records": {
