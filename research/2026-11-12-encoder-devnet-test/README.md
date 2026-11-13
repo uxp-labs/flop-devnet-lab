@@ -210,12 +210,17 @@ record). A test step that is missing with no stop recorded makes the record wron
 ## The run of 2026-11-13
 
 The lead ran the batch on 2026-11-13. Its record is `results.json` in this folder, committed byte
-for byte as the run left it. `results.test.mjs` holds it.
+for byte as the run left it. `results.test.mjs` holds it. A field `steps.N` is the step at position
+N of `steps` in `results.json`, counted from 0.
+
 The folder `run-2026-11-13` holds what the lab's tools wrote on the lead's machine when the lead
 signed: the calls of the research signer's steps (`calls/`), each signed extrinsic with its hash and
 era, and the exact text sent (`signed/`), with their `SHA256SUMS`, byte for byte. It holds no key.
-`run-files.test.mjs` holds it. Each value below is read from that file,
-with its field named. A field `steps.N` is the step at position N of `steps`, counted from 0.
+`run-files.test.mjs` holds it.
+
+Each value below is read from `results.json` or from a file of `run-2026-11-13`, with its field
+named. `results.test.mjs` builds each line of outcome from those files and holds the README to it
+word for word.
 
 - Eight transactions of nine planned were sent. Each is in a block the node reported finalized
   (`steps.N.run_time.sent.status` is `finalized`, with `steps.N.run_time.sent.block_hash` beside it).
@@ -224,16 +229,24 @@ with its field named. A field `steps.N` is the step at position N of `steps`, co
 - The runtime was spec 1014020 (`spec_version`).
 - T1, T2, T3, T6, T8 and T9 succeeded (`steps.N.run_time.explorer.success` is `true`).
 - T4 was refused by the chain with `ComputeChannel.BadState` (`steps.3.run_time.explorer.error.name`).
-- T5 was refused with `ComputeChannel.CalibrationUnavailable` (`steps.4.run_time.explorer.error.name`).
+- T5 was refused by the chain with `ComputeChannel.CalibrationUnavailable`
+  (`steps.4.run_time.explorer.error.name`).
 - T7 was not needed: T5 opened no channel. It has no run time reading (`steps.6.run_time` is null).
 
 T3 is the result the test was made for. The chain accepted a session call that the device signed
-through the lab's encoder:
-- with a mortal era: `era` of `run-2026-11-13/signed/T3.json` gives a period of 64 blocks, the birth
-  number, the birth hash the signature binds, and the last valid block, at or above the block T3
-  landed in (`run-files.test.mjs` holds it; T4, T5 and T6 likewise, T1, T2, T8 and T9 immortal);
-- with a declared spend equal to the escrow: the escrow of `ComputeChannel.ForceOpenRequested`,
-  10000000000000000 (`steps.2.run_time.explorer.events.1.fields.escrow`), is what the session spent,
+through the lab's encoder (`tool` of `run-2026-11-13/signed/T3.json` is "chain encoder,
+imd-flop/dist/chain signSessionCall"):
+- with a mortal era: `era` of `run-2026-11-13/signed/T3.json` gives a period of 64 blocks
+  (`era.period`), born at block 3654995 (`era.birth_number`), binding the hash
+  0x3467bbce5dc0eb5267fdf1c3abc12fd30f87e82a13bdaea77ec78ed4a106226f (`era.birth_hash`), valid
+  until block 3655058 (`era.last_valid_block`). The era is read from the bytes the tool signed: the
+  blake2b-256 of that file's `extrinsic` is its `extrinsic_hash`, the hash the node and the explorer
+  reported for T3 in its block (`steps.2.run_time.extrinsic_hash`). The block's own bytes are read
+  in the final record, from the observatory's recording of the block;
+- with a declared spend equal to the escrow: the tool signed a declared spend of 10000000000000000
+  (`declared_spend_raw` of `run-2026-11-13/signed/T3.json`) and an escrow of 10000000000000000
+  (`fields.inner.escrow`); the escrow of `ComputeChannel.ForceOpenRequested`, 10000000000000000
+  (`steps.2.run_time.explorer.events.1.fields.escrow`), is what the session spent,
   10000000000000000 (`steps.2.run_time.explorer.events.2.fields.spent`);
 - with the channel id the plan derived:
   0xd8ae28f57ec645b73a4ea6deaa2d0b1f9228b93b08eb77779481898d371b8480
@@ -255,7 +268,10 @@ The owner's free balance, read by the lead through the pane, by position, at the
 - after: 24658876452470000000 raw;
 - down 49390869035000000 raw (0.049390869035 FLOP).
 
-These three numbers are the lead's reading by position. They are in no committed file but this README.
+These three numbers are the lead's reading by position. The number before is also in a committed
+file: it is `owner_free_balance_raw.after` of `research/2026-11-12-session-rerun-1014020/results.json`,
+the owner's free balance at block 3553688 after that rerun (its `owner_free_balance_raw.read`), also
+read by position. The number after and the difference are in no other committed file.
 
 ## Not done here: the final record
 

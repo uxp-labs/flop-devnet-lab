@@ -8,7 +8,7 @@ import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { join } from "node:path";
-import { HERE, loadPlan } from "./lib.mjs";
+import { HERE, blake2b256Hex, loadPlan, readJson } from "./lib.mjs";
 
 const FILE = join(HERE, "results.json");
 const SHA256 = "a0c853cda774e3e57a44663519eef92cfe4405d4fe3952f33e8b8561c9c7267f";
@@ -95,12 +95,100 @@ test("A3: each value the README's section on the run names beside a field is the
   assert.match(s, /T1, T2, T3, T6, T8 and T9 succeeded/);
 });
 
-test("A3: the owner's balances the README gives as the lead's reading add up, and are said to be in no committed file but the README", () => {
-  const s = section();
+test("Z1: the balance before is the committed owner_free_balance_raw.after of the session rerun's results.json; the README says so, and that only the after and the difference are in no other committed file", () => {
+  const s = section().replace(/\s+/g, " ");
   const raw = [...s.matchAll(/(\d+) raw/g)].map((m) => BigInt(m[1]));
   assert.equal(raw.length, 3);
   const [before, after, down] = raw;
   assert.equal(before - after, down);
-  assert.ok(s.includes(`(${Number(down) / 1e18} FLOP)`) || s.includes(`(0.${down.toString().padStart(18, "0").replace(/0+$/, "")} FLOP)`));
-  assert.match(s, /They are in no committed file but this README\./);
+  assert.ok(s.includes(`(0.${down.toString().padStart(18, "0").replace(/0+$/, "")} FLOP)`));
+  const rerun = readJson(join(HERE, "..", "2026-11-12-session-rerun-1014020", "results.json"));
+  assert.equal(BigInt(rerun.owner_free_balance_raw.after), before);
+  const block = /finalized block (\d+) \(after B12\)/.exec(rerun.owner_free_balance_raw.read)?.[1];
+  assert.ok(block, "the rerun's owner_free_balance_raw.read names the block of its after");
+  for (const line of [
+    "These three numbers are the lead's reading by position.",
+    `The number before is also in a committed file: it is \`owner_free_balance_raw.after\` of \`research/2026-11-12-session-rerun-1014020/results.json\`, the owner's free balance at block ${block} after that rerun (its \`owner_free_balance_raw.read\`), also read by position.`,
+    "The number after and the difference are in no other committed file.",
+  ]) assert.ok(s.includes(line), line);
+  assert.ok(!s.includes("in no committed file but this README"));
+});
+
+/** The signed file of a step in the run folder. */
+const signedOf = (id) => readJson(join(HERE, "run-2026-11-13", "signed", `${id}.json`));
+const flat = () => section().replace(/\s+/g, " ");
+const words = (n) => ["zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten"][n];
+const cap = (w) => w[0].toUpperCase() + w.slice(1);
+const listed = (ids) => (ids.length === 1 ? ids[0] : `${ids.slice(0, -1).join(", ")} and ${ids.at(-1)}`);
+
+/** Each line of outcome of the section, built from results.json, steps.json and the signed files. */
+function outcomeLines() {
+  const r = record();
+  const plan = loadPlan();
+  const steps = r.steps;
+  const sent = steps.filter((x) => x.run_time !== null);
+  const i = (id) => steps.findIndex((x) => x.step === id);
+  const lines = [
+    `- ${cap(words(sent.length))} transactions of ${words(plan.steps.length)} planned were sent.`,
+    `- The blocks run from ${sent[0].run_time.sent.block_number} (\`steps.${i(sent[0].step)}.run_time.sent.block_number\`, ${sent[0].step}) to ${sent.at(-1).run_time.sent.block_number} (\`steps.${i(sent.at(-1).step)}.run_time.sent.block_number\`, ${sent.at(-1).step}).`,
+    `- The runtime was spec ${r.spec_version} (\`spec_version\`).`,
+    `- ${listed(sent.filter((x) => x.run_time.explorer.success === true).map((x) => x.step))} succeeded (\`steps.N.run_time.explorer.success\` is \`true\`).`,
+    ...sent.filter((x) => x.run_time.explorer.success === false).map((x) => `- ${x.step} was refused by the chain with \`${x.run_time.explorer.error.name}\` (\`steps.${i(x.step)}.run_time.explorer.error.name\`).`),
+    ...steps.filter((x) => x.run_time === null).map((x) => {
+      const cond = plan.steps.find((p) => p.id === x.step).only_if;
+      return `- ${x.step} was not needed: ${cond.step} opened no channel. It has no run time reading (\`steps.${i(x.step)}.run_time\` is null).`;
+    }),
+  ];
+  for (const x of sent) assert.equal(x.run_time.sent.status, "finalized", x.step);
+  return lines;
+}
+
+test("Z4: each line of outcome of the section is the one results.json and steps.json give, word for word", () => {
+  const s = flat();
+  const lines = outcomeLines();
+  assert.equal(lines.length, 7);
+  for (const line of lines) assert.ok(s.includes(line), line);
+});
+
+test("Z4: the three hedges stand word for word, and the section says neither verified nor final record shows", () => {
+  const s = flat();
+  assert.equal(record().record, "run-time");
+  for (const line of [
+    "These three numbers are the lead's reading by position.",
+    "It is not yet decoded with the lab's decoder.",
+    "The record is a run time record (`record` is `run-time`).",
+  ]) assert.ok(s.includes(line), line);
+  assert.doesNotMatch(s, /verified/i);
+  assert.doesNotMatch(s, /final record shows/i);
+});
+
+test("Z2, Z5: the mortal era and the encoder of T3 are read from its signed file, whose extrinsic hashes to the hash its block reported", () => {
+  const s = flat();
+  const r = record();
+  const t3 = r.steps[2];
+  assert.equal(t3.step, "T3");
+  const f = signedOf("T3");
+  assert.equal(blake2b256Hex(Uint8Array.from(Buffer.from(f.extrinsic.slice(2), "hex"))), f.extrinsic_hash);
+  assert.equal(f.extrinsic_hash, t3.run_time.extrinsic_hash);
+  assert.equal(f.extrinsic_hash, t3.run_time.explorer.hash);
+  assert.notEqual(f.era, "immortal");
+  for (const line of [
+    `through the lab's encoder (\`tool\` of \`run-2026-11-13/signed/T3.json\` is "${f.tool}"):`,
+    `- with a mortal era: \`era\` of \`run-2026-11-13/signed/T3.json\` gives a period of ${f.era.period} blocks (\`era.period\`), born at block ${f.era.birth_number} (\`era.birth_number\`), binding the hash ${f.era.birth_hash} (\`era.birth_hash\`), valid until block ${f.era.last_valid_block} (\`era.last_valid_block\`).`,
+    "The era is read from the bytes the tool signed: the blake2b-256 of that file's `extrinsic` is its `extrinsic_hash`, the hash the node and the explorer reported for T3 in its block (`steps.2.run_time.extrinsic_hash`).",
+    "The block's own bytes are read in the final record, from the observatory's recording of the block;",
+  ]) assert.ok(s.includes(line), line);
+});
+
+test("Z3: the declared spend and the escrow the tool signed for T3 equal the escrow taken and the amount spent the record gives, and the README names all four fields", () => {
+  const s = flat();
+  const f = signedOf("T3");
+  const ev = record().steps[2].run_time.explorer.events;
+  const open = ev.findIndex((e) => e.pallet === "ComputeChannel" && e.name === "ForceOpenRequested");
+  const spent = ev.findIndex((e) => e.pallet === "FlopSessionKeys" && e.name === "SessionCallExecuted");
+  const four = [f.declared_spend_raw, f.fields.inner.escrow, ev[open].fields.escrow, ev[spent].fields.spent];
+  assert.equal(new Set(four).size, 1, four.join(" "));
+  const [v] = four;
+  const line = `- with a declared spend equal to the escrow: the tool signed a declared spend of ${v} (\`declared_spend_raw\` of \`run-2026-11-13/signed/T3.json\`) and an escrow of ${v} (\`fields.inner.escrow\`); the escrow of \`ComputeChannel.ForceOpenRequested\`, ${v} (\`steps.2.run_time.explorer.events.${open}.fields.escrow\`), is what the session spent, ${v} (\`steps.2.run_time.explorer.events.${spent}.fields.spent\`);`;
+  assert.ok(s.includes(line), line);
 });
