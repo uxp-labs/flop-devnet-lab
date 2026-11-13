@@ -17,6 +17,7 @@ import { join, resolve } from "node:path";
 import { HERE, RERUN, loadPlan, readJson, substitute, rerunFee, flopText, RAW, sessionNonceKey, sha256Text } from "./lib.mjs";
 import { planStepOf, recordedIds, viewOf, deviceIncluded, afterBlockOf, loadRecord, signedFile } from "./record.mjs";
 import { nextOf } from "./judge.mjs";
+import { nonceOf } from "./research-signed.mjs";
 
 const SIGNER = "\"$LAB/research/2026-11-11-session-deny-list/flop-sign.mjs\"";
 const SIGN_DEVICE = "\"$LAB/research/2026-11-12-encoder-devnet-test/sign-device.mjs\"";
@@ -152,13 +153,14 @@ export function commandsOf(plan, st, results, v = lineValues(plan, null, null), 
     ].join("\n");
   }
   const args = st.call.map((a) => (a === "$DEVICE" ? v.device : substitute(a, plan, results)));
-  const nonce = st.signer === "owner" ? v.owner_nonce(st) : v.device_nonce;
+  const nonce = v.filled ? String(nonceOf(plan, results, id)) : st.signer === "owner" ? v.owner_nonce(st) : v.device_nonce;
   return [head,
     "#  immortal: never signed to different bytes",
     "#  PC:",
     `mkdir -p "${v.run}/calls" "${v.run}/signed"`,
     `node ${SIGNER} call ${args.map(q).join(" ")} > "${v.run}/calls/${id}.json"`,
     `node ${SIGNER} sign --key "${KEY[st.signer]}" --call "$(node -p 'require(process.argv[1]).call' "${v.run}/calls/${id}.json")" --nonce ${nonce} --out "${v.run}/signed/${id}.json" --spec ${plan.values.SPEC.value} --txv ${plan.values.TXV.value} --genesis ${plan.values.GENESIS.value}`,
+    "#  send-file writes the send file only when the extrinsic's bytes are the plan's step: signer, nonce, immortal, no tip, this call (F1)",
     `node ${RECORD} send-file ${id} --run "${v.run}"`,
     ...sendAndRecord(id, v, `<the second line send-file printed: the text of signed/${id}.send.json>`, "<its send_sha256>"),
   ].join("\n");

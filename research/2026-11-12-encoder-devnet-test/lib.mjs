@@ -22,6 +22,8 @@ const unhex = (h, n) => {
   return Uint8Array.from(Buffer.from(h.slice(2), "hex"));
 };
 const hexOf = (b) => "0x" + Buffer.from(b).toString("hex");
+/** The blake2b-256 of bytes, as 0x hex: the hash of an extrinsic. */
+export const blake2b256Hex = (bytes) => hexOf(blake2b(bytes, { dkLen: 32 }));
 
 /** The sha256 of a text, as lower case hex: what the PC checks of every text the lead relays. */
 export const sha256Text = (text) => createHash("sha256").update(text, "utf8").digest("hex");

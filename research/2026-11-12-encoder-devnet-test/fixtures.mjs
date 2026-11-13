@@ -5,7 +5,8 @@ import { mkdtempSync, mkdirSync, writeFileSync } from "node:fs";
 import { randomBytes } from "node:crypto";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { loadPlan, sha256Text, ss58, substitute } from "./lib.mjs";
+import { loadPlan, sha256Text, ss58, substitute, blake2b256Hex } from "./lib.mjs";
+import { expectedOf, envelope } from "./research-signed.mjs";
 import { template } from "./plan.mjs";
 
 export const plan = loadPlan();
@@ -136,4 +137,19 @@ export function explorerAnswer({ hash = "0x" + "ab".repeat(32), blockHash = "0x"
   events.push(
     success ? { id: "1-9", section: "system", method: "ExtrinsicSuccess", data: { dispatchInfo: {} } } : { id: "1-9", section: "system", method: "ExtrinsicFailed", data: { dispatchError: failedWith, dispatchInfo: {} } });
   return { hash, blockHash, method: "executeViaSession", section: "flopSessionKeys", sender: "5Device", params: {}, success, events, timestamp: "1763000000000" };
+}
+
+/**
+ * A stand in of a research signer's signed/<id>.json with the plan's bytes (F1): the envelope
+ * research-signed.mjs builds, the call from our research signer, the nonce by the record, and 64
+ * made up signature bytes. Its signature is not valid for OWNER, and nothing checks it here: the
+ * node does. No key is used. Pass { nonce } to make a wrong one on purpose.
+ */
+export function planSigned(run, id, results, { nonce, signature = randomBytes(64) } = {}) {
+  const want = expectedOf(plan, results, id);
+  const xt = envelope({ ...want, nonce: nonce ?? want.nonce, signature });
+  const file = { what: `stand in for ${id}`, signer: want.signer, account_nonce: String(nonce ?? want.nonce), tip: "0", era: "immortal", call: want.call, extrinsic: "0x" + xt.toString("hex"), extrinsic_hash: blake2b256Hex(xt) };
+  mkdirSync(join(run, "signed"), { recursive: true });
+  writeFileSync(join(run, "signed", `${id}.json`), JSON.stringify(file, null, 2) + "\n");
+  return file;
 }

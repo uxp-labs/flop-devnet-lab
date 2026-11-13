@@ -7,7 +7,7 @@ import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { HERE, REPO, RERUN, readJson, sessionNonceKey, sha256Text, ss58 } from "./lib.mjs";
 import { nextText } from "./plan.mjs";
-import { plan, V, asPlanned, runFolder, sent, startedRecord, tempDir } from "./fixtures.mjs";
+import { plan, V, asPlanned, runFolder, sent, startedRecord, tempDir, planSigned } from "./fixtures.mjs";
 
 const DIR = tempDir("plan-next-test");
 after(() => rmSync(DIR, { recursive: true, force: true }));
@@ -112,11 +112,11 @@ test("R4: a stop prints the stop row and the cleanup steps that apply, then the 
 test("send-file: an owner step's send file is exactly {step, extrinsic} with no line end; a device step's is sign-device's own", () => {
   const run = runFolder(startedRecord(DEVICE));
   mkdirSync(join(run, "signed"), { recursive: true });
-  writeFileSync(join(run, "signed", "T1.json"), JSON.stringify({ what: "x", extrinsic: "0x1234", extrinsic_hash: "0x" + "00".repeat(32) }, null, 2) + "\n");
+  const f = planSigned(run, "T1", startedRecord(DEVICE));
   const r = spawnSync(process.execPath, [join(HERE, "record-step.mjs"), "send-file", "T1", "--run", run], { encoding: "utf8" });
   assert.equal(r.status, 0, r.stderr);
   const text = readFileSync(join(run, "signed", "T1.send.json"), "utf8");
-  assert.equal(text, '{"step":"T1","extrinsic":"0x1234"}');
+  assert.equal(text, `{"step":"T1","extrinsic":"${f.extrinsic}"}`);
   assert.equal(JSON.parse(r.stdout.split("\n")[0]).send_sha256, sha256Text(text));
   assert.equal(r.stdout.split("\n")[1], text);
   const again = spawnSync(process.execPath, [join(HERE, "record-step.mjs"), "send-file", "T1", "--run", run], { encoding: "utf8" });

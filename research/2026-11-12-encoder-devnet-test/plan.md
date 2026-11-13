@@ -296,6 +296,7 @@ with every value filled from the record.
 mkdir -p "$RUN/calls" "$RUN/signed"
 node "$LAB/research/2026-11-11-session-deny-list/flop-sign.mjs" call transfer --to $DEVICE --amount 150000000000000000 > "$RUN/calls/T1.json"
 node "$LAB/research/2026-11-11-session-deny-list/flop-sign.mjs" sign --key "$KEY_OWNER" --call "$(node -p 'require(process.argv[1]).call' "$RUN/calls/T1.json")" --nonce $((OWNER_NONCE+0)) --out "$RUN/signed/T1.json" --spec 1014020 --txv 2 --genesis 0x99c172c095340ace980631f9123544c6bebd4839f3437e463533422d8be2d631
+#  send-file writes the send file only when the extrinsic's bytes are the plan's step: signer, nonce, immortal, no tip, this call (F1)
 node "$LAB/research/2026-11-12-encoder-devnet-test/record-step.mjs" send-file T1 --run "$RUN"
 #  pane, tab on the node (https://rpc.devnet.flop.network/):
 window.__s = lab.send('<the second line send-file printed: the text of signed/T1.send.json>', "<its send_sha256>")
@@ -314,6 +315,7 @@ node "$LAB/research/2026-11-12-encoder-devnet-test/record-step.mjs" step T1 --ru
 mkdir -p "$RUN/calls" "$RUN/signed"
 node "$LAB/research/2026-11-11-session-deny-list/flop-sign.mjs" call create-session --delegate $DEVICE --cap 50000000000000000 --per-tx 20000000000000000 --daily 25000000000000000 --blocks 7200 --allow ComputeChannel > "$RUN/calls/T2.json"
 node "$LAB/research/2026-11-11-session-deny-list/flop-sign.mjs" sign --key "$KEY_OWNER" --call "$(node -p 'require(process.argv[1]).call' "$RUN/calls/T2.json")" --nonce $((OWNER_NONCE+1)) --out "$RUN/signed/T2.json" --spec 1014020 --txv 2 --genesis 0x99c172c095340ace980631f9123544c6bebd4839f3437e463533422d8be2d631
+#  send-file writes the send file only when the extrinsic's bytes are the plan's step: signer, nonce, immortal, no tip, this call (F1)
 node "$LAB/research/2026-11-12-encoder-devnet-test/record-step.mjs" send-file T2 --run "$RUN"
 #  pane, tab on the node (https://rpc.devnet.flop.network/):
 window.__s = lab.send('<the second line send-file printed: the text of signed/T2.send.json>', "<its send_sha256>")
@@ -422,6 +424,7 @@ node "$LAB/research/2026-11-12-encoder-devnet-test/record-step.mjs" step T7 --ru
 mkdir -p "$RUN/calls" "$RUN/signed"
 node "$LAB/research/2026-11-11-session-deny-list/flop-sign.mjs" call revoke --delegate $DEVICE > "$RUN/calls/T8.json"
 node "$LAB/research/2026-11-11-session-deny-list/flop-sign.mjs" sign --key "$KEY_OWNER" --call "$(node -p 'require(process.argv[1]).call' "$RUN/calls/T8.json")" --nonce $((OWNER_NONCE+2)) --out "$RUN/signed/T8.json" --spec 1014020 --txv 2 --genesis 0x99c172c095340ace980631f9123544c6bebd4839f3437e463533422d8be2d631
+#  send-file writes the send file only when the extrinsic's bytes are the plan's step: signer, nonce, immortal, no tip, this call (F1)
 node "$LAB/research/2026-11-12-encoder-devnet-test/record-step.mjs" send-file T8 --run "$RUN"
 #  pane, tab on the node (https://rpc.devnet.flop.network/):
 window.__s = lab.send('<the second line send-file printed: the text of signed/T8.send.json>', "<its send_sha256>")
@@ -440,6 +443,7 @@ node "$LAB/research/2026-11-12-encoder-devnet-test/record-step.mjs" step T8 --ru
 mkdir -p "$RUN/calls" "$RUN/signed"
 node "$LAB/research/2026-11-11-session-deny-list/flop-sign.mjs" call sweep --to 0xe462d014cab1239a123233647052f4e3b572322e982441d6b7a5c1694d8419e2 > "$RUN/calls/T9.json"
 node "$LAB/research/2026-11-11-session-deny-list/flop-sign.mjs" sign --key "$KEY_DEVICE" --call "$(node -p 'require(process.argv[1]).call' "$RUN/calls/T9.json")" --nonce $DEVICE_NONCE --out "$RUN/signed/T9.json" --spec 1014020 --txv 2 --genesis 0x99c172c095340ace980631f9123544c6bebd4839f3437e463533422d8be2d631
+#  send-file writes the send file only when the extrinsic's bytes are the plan's step: signer, nonce, immortal, no tip, this call (F1)
 node "$LAB/research/2026-11-12-encoder-devnet-test/record-step.mjs" send-file T9 --run "$RUN"
 #  pane, tab on the node (https://rpc.devnet.flop.network/):
 window.__s = lab.send('<the second line send-file printed: the text of signed/T9.send.json>', "<its send_sha256>")

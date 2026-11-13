@@ -13,6 +13,9 @@
 //        makes signed/<id>.send.json from the research signer's signed/<id>.json of an owner step or
 //        the sweep: exactly {"step","extrinsic"} on one line, as sign-device.mjs writes for the
 //        device's steps (S3), so what the lead types into the pane is short. Prints its sha256.
+//        Before it writes, the extrinsic's own bytes must be the plan's step (research-signed.mjs, F1):
+//        the signer, the nonce by the record, immortal, no tip, the call the research signer prints.
+//        record-step.mjs step runs the same check for a research signer id before it records.
 //
 //   node record-step.mjs step <id> --run <folder> [--sent '<text>' --sent-sha256 <sha>] [--explorer '<text>' --explorer-sha256 <sha>]
 //        writes the run_time of a step or an attempt (R2): the runner's reading (lab.send,
@@ -30,6 +33,7 @@ import { DeviceKeyError, loadDeviceSigner } from "./device-key.mjs";
 import { planStepOf, loadRecord, entryOf, viewOf, signedFile, sendFile, runFiles, sendText } from "./record.mjs";
 import { nextOf } from "./judge.mjs";
 import { template } from "./plan.mjs";
+import { checkResearchSigned, ResearchSignedError } from "./research-signed.mjs";
 
 export class RecordStepError extends Error {}
 const no = (m) => { throw new RecordStepError(m); };
@@ -116,10 +120,15 @@ export function explorerReading(plan, step, rt, v, sha256, errors, results) {
 export const NOTHING_SUBMITTED = ["refused-bundle", "already-sent", "not-in-sent-list", "not-sent"];
 
 /** The run time record with one reading added (R2). Returns the new record; the input is not changed. */
-export function recordReading({ plan, run, results, id, sent, sentSha256, explorer, explorerSha256, errors }) {
+export function recordReading({ plan, run, results, id, sent, sentSha256, explorer, explorerSha256, errors, checkSigned = checkResearchSigned }) {
   const step = planStepOf(plan, id) ?? no(`steps.json has no step ${id}, and ${id} is not an attempt S5 allows`);
   if (results.record !== "run-time") no(`results.json is a ${results.record ?? "unnamed"} record, not a run time record`);
   if (!sent && !explorer) no("give --sent, --explorer or both");
+  // F1: a research signer step's file must be the plan's bytes before any reading of it is recorded
+  if (step.tool === "research-signer") {
+    if (!existsSync(signedFile(run, id))) no(`signed/${id}.json is not in the run folder`);
+    checkSigned(plan, results, id, readJson(signedFile(run, id)));
+  }
   const r = structuredClone(results);
   let e = entryOf(r, id);
   if (!e) { e = { step: id, run_time: null }; r.steps.push(e); }
@@ -202,8 +211,10 @@ function main(argv) {
     const run = resolve(f.run ?? no("--run <run folder> is required"));
     const step = planStepOf(plan, id) ?? no(`steps.json has no step ${id}, and ${id} is not an attempt S5 allows`);
     if (step.tool !== "research-signer") no(`${id} is signed by sign-device.mjs, which writes its own send file`);
+    const results = loadRecord(run) ?? no("the run folder has no results.json: make it with record-step.mjs start");
+    if (!existsSync(signedFile(run, id))) no(`signed/${id}.json is not in the run folder`);
     const signed = readJson(signedFile(run, id));
-    if (typeof signed.extrinsic !== "string" || !/^0x([0-9a-f]{2})+$/.test(signed.extrinsic)) no(`signed/${id}.json has no extrinsic`);
+    checkResearchSigned(plan, results, id, signed); // F1: before the send file is written
     const text = sendText(id, signed.extrinsic);
     writeFileSync(sendFile(run, id), text, { flag: "wx" });
     console.log(JSON.stringify({ send_file: sendFile(run, id), send_sha256: sha256Text(text) }));
@@ -229,7 +240,7 @@ function main(argv) {
 
 if (process.argv[1] && resolve(process.argv[1]) === resolve(new URL(import.meta.url).pathname)) {
   try { main(process.argv.slice(2)); } catch (e) {
-    const words = e instanceof RecordStepError || e instanceof DeviceKeyError ? e.message : `failed (${e?.constructor?.name ?? typeof e})`;
+    const words = e instanceof RecordStepError || e instanceof DeviceKeyError || e instanceof ResearchSignedError ? e.message : `failed (${e?.constructor?.name ?? typeof e})`;
     process.stderr.write(`record-step: ${words}\n`);
     process.exit(2);
   }

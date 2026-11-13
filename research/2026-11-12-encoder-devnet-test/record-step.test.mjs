@@ -1,6 +1,6 @@
 // Tests of record-step.mjs (R1 to R3): node --test in this folder. No network. The device key is
-// made here in a temporary folder. The owner's signed files are stand ins written here: the owner's
-// key is never used.
+// made here in a temporary folder. The owner's signed files are stand ins written here with the plan's
+// bytes and a made up signature (fixtures.mjs planSigned): the owner's key is never used.
 import { test, after } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
@@ -9,7 +9,7 @@ import { join } from "node:path";
 import { HERE, RERUN, readJson, sha256Text, ss58 } from "./lib.mjs";
 import { loadDeviceSigner, KEY_REFUSAL } from "./device-key.mjs";
 import { recordForm } from "./record-step.mjs";
-import { plan, V, H, RUNTIME, makeKey, tempDir, relay, deviceReads, explorerAnswer, startedRecord } from "./fixtures.mjs";
+import { plan, V, H, RUNTIME, makeKey, tempDir, relay, deviceReads, explorerAnswer, startedRecord, planSigned } from "./fixtures.mjs";
 
 const SCRIPT = join(HERE, "record-step.mjs"), SIGN = join(HERE, "sign-device.mjs");
 const DIR = tempDir("record-step-test");
@@ -27,12 +27,9 @@ function started(o) {
   return { run, out };
 }
 const record = (run) => readJson(join(run, "results.json"));
-/** A stand in for the research signer's signed file of an owner step (the extrinsic is made up). */
+/** A stand in for the research signer's signed file of an owner step, with the plan's bytes by the record (F1). */
 function ownerSigned(run, id) {
-  mkdirSync(join(run, "signed"), { recursive: true });
-  const xt = "0x" + sha256Text(`owner ${id} ${run}`).repeat(3);
-  const file = { what: `stand in for ${id}`, extrinsic: xt, extrinsic_hash: "0x" + sha256Text(xt) };
-  writeFileSync(join(run, "signed", `${id}.json`), JSON.stringify(file, null, 2) + "\n");
+  const file = planSigned(run, id, record(run));
   ok(node(SCRIPT, ["send-file", id, "--run", run]));
   return file;
 }
