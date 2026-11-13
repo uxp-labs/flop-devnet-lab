@@ -1,34 +1,29 @@
 # Progress of the builder (read first if you take over)
 
-Branch `claude/encoder-devnet-test-prep`, from main `6d7ad0e`. Brief:
-`/mnt/user-data/outputs/briefs/2026-11-12-d1-encoder-devnet-test-prep.md`.
+Branch `claude/encoder-devnet-test-prep`. First round from main `6d7ad0e`, head `fcfb8b5`.
+Fix round brief: `/mnt/user-data/outputs/briefs/2026-11-13-fix-d1-encoder-devnet-test-prep.md`.
+The reviewer's branch (`2e6b0e5`) is merged (fast forward). 17 reviewer tests fail at the start.
 
-Order of work: (1) steps.json, plan.md, plan.test.mjs; (2) sign-device.mjs and tests; (3)
-pane-runner.js and tests; (4) results.template.json, check.mjs and tests; (5) README, cost
-table, stop rule.
+Order of work (the brief's): P1, S1 to S7, X1 to X9, E1 to E3, R1 to R4, C1 to C7, P2 to P8, W.
+Run tests: `setpriv --inh-caps=-dac_override,-dac_read_search --bounding-set=-dac_override,-dac_read_search node --test`
+in this folder. `imd-flop/dist` must be built.
 
-## Done
+## Done (fix round), by rule id
 
-- (1) steps.json, lib.mjs, plan.mjs, plan.md (made from /tmp scratch template; regenerate the
-  tables with `node plan.mjs table|costs|stops|commands` and paste), plan.test.mjs: 17 tests pass.
-
-- (4) DONE results.template.json (node plan.mjs template), judge.mjs, check.mjs, check.test.mjs
-  (18 tests). judge.mjs wraps the rerun's judgeStep; adds recorded steps, balances, session, stop.
-- (5) DONE README.md, with the words tests in plan.test.mjs. 60 tests pass.
+- merge of the reviewer's branch.
 
 ## Next
 
-- (5) final run of node --test under setpriv; GitHub checks; report.
+- lead-measurements-2026-11-13.json, then P1.
 
-- (3) DONE pane-runner.js and pane-runner.test.mjs (12 tests). Interface: createRunner({transport, eventsKey, deadlineMs, store}); heads, read,
-  deviceReads(device, sessionNonceKey), send(bundleText, sha256). wsTransport(url) for the browser.
+## Decisions (fix round) and why
 
-- (2) DONE sign-device.mjs and sign-device.test.mjs (12 tests). It took: step id, --key, --results (channel id of T3/T5 events), --reads JSON
-  {runtime{specName,specVersion,transactionVersion,genesisHash}, birth{number,hash}, account_nonce,
-  session_nonce | session_nonce_raw}. Writes signed/<id>.json, prints sha256 of it.
-
-## For a successor
-
-- `imd-flop/dist/chain/` is built by `npm run build` in `imd-flop/` (it is ignored by git).
-- Facts found: System.Account is not in the observatory decoder's reviewed shape; open_channel
-  emits ChannelOpened and its channel is Open at once; no lower bound on max_duration is stated.
+- Run folder layout: `<run>/results.json`, `<run>/signed/<id>.json`, `<id>.send.json`,
+  `<id>.dead-<n>.json`, `<id>.dead-<n>.send.json`.
+- The run time record keeps each step's reading under `steps[i].run_time`: `sent` (the runner's
+  relay text, parsed), `sent_sha256`, `explorer` (record form, with source and read_utc),
+  `earlier_readings` (non final readings it replaced), `earlier_copies` (from the signed file).
+- An attempt (S5) is its own entry in `steps` with `step: "T6.2"`.
+- The key loader is shared by sign-device.mjs and record-step.mjs in `device-key.mjs`.
+- The runner's transport gets an `onWrite` hook (X4) and an `onLost` hook (X2). Reviewer tests
+  that script a transport are adapted to call the hook; the change is listed.

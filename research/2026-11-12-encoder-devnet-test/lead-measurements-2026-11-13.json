@@ -1,0 +1,28 @@
+{
+ "what": "The lead's measurements of 2026-11-13, copied from the lead's notes (2026-11-13-d1-lead-notes.md, written 01:02 UTC) and the fix brief (2026-11-13-fix-d1-encoder-devnet-test-prep.md, section 'What changed since you built it'). The lead measured them in the browser pane and on the PC. Reads only: nothing was signed with a real key and nothing was sent.",
+ "measured_by": "the lead",
+ "reads_only": true,
+ "measurements": {
+  "block_time_s": { "value": "1.06", "what": "seconds a block takes", "when": "2026-11-13, before 01:02 UTC", "how": "21 blocks in 22.3 s, read in the pane on the node's own origin" },
+  "finalized_lag_blocks": { "value": "4 to 5", "what": "blocks the finalized head is behind the best head", "when": "2026-11-13, before 01:02 UTC", "how": "the pane, the node's own origin" },
+  "mortal_life_blocks": { "value": "58", "what": "blocks a device step lives from the read of its birth block, about a minute", "when": "2026-11-13", "how": "the era of 64 blocks less the finalized lag, at the block time above" },
+  "relay_hop_s": { "value": "14", "what": "seconds one hop of the lead takes: a pane call or a PC call with a short text", "when": "2026-11-13, before 01:02 UTC", "how": "timed by the lead" },
+  "signed_file_bytes_t3": { "value": "4607", "what": "bytes of signed/T3.json as sign-device.mjs of fcfb8b5 writes it", "when": "2026-11-13", "how": "a throwaway key in a temporary folder on the PC" },
+  "signed_file_bytes_t5": { "value": "4971", "what": "bytes of signed/T5.json as sign-device.mjs of fcfb8b5 writes it", "when": "2026-11-13", "how": "a throwaway key in a temporary folder on the PC" },
+  "extrinsic_hex_chars": { "value": "794", "what": "hex characters of the extrinsic of T3", "when": "2026-11-13", "how": "the same throwaway signing" },
+  "send_text_chars": { "value": "822", "what": "characters of {\"step\",\"extrinsic\"} alone", "when": "2026-11-13", "how": "the same throwaway signing" },
+  "pane_call_limit_s": { "value": "45", "what": "seconds after which a script call of the pane ends", "when": "2026-11-13", "how": "the pane" },
+  "runner_deadline_s": { "value": "120", "what": "the runner's own deadline for a watch", "when": "2026-11-13", "how": "pane-runner.js, its default deadlineMs" },
+  "pc_reaches_node": { "value": "no", "what": "whether the PC's shell reaches the node", "when": "2026-11-13", "how": "curl to https://rpc.devnet.flop.network gives 403 from the proxy after CONNECT; node's fetch and WebSocket fail too. Not worked around" },
+  "pane_websocket": { "value": "works", "what": "the real WebSocket from a tab on https://rpc.devnet.flop.network/", "when": "2026-11-13", "how": "lab.heads() answered in 2.3 s: tzkv-runtime 1014020, transaction version 2, genesis as steps.json has it" },
+  "owner_next_nonce": { "value": "14", "what": "the owner's next account nonce before T1", "when": "2026-11-13", "how": "lab.deviceReads(<the owner's address>, <System.Events key>) in the pane, 1.7 s" },
+  "explorer": { "value": "https://explorer.devnet.flop.network", "what": "FLOP's explorer answers GET /api/transactions/<extrinsic hash> with one JSON object", "when": "2026-11-13", "how": "the lead read the rerun's A6 and A5 there: both agree with the committed record" },
+  "explorer_answer_shape": {
+   "value": "keys hash, blockHash, method, section, sender, params, success (true or false), events, timestamp. Each event {id, section, method, data}. Names polkadot-js style: section computeChannel, flopSessionKeys, balances, system; method ForceOpenRequested; data keys camel case (channelId, ackDeadline, agent, miner, escrow). Numbers are strings with commas (\"3,553,433\"). Accounts are SS58 text. A failed extrinsic has success false and a last event system.ExtrinsicFailed whose data.dispatchError is {\"Module\":{\"index\":\"94\",\"error\":\"0x14000000\"}}: pallet index 94, error index 20 in the first byte. There is no block number field. An unknown hash answers 404 with {\"error\":\"Transaction not found\"}",
+   "what": "the shape of the explorer's answer", "when": "2026-11-13", "how": "read in the browser pane by the lead" },
+  "channel_id_formula": {
+   "value": "blake2b-256(\"FLOP/COMPUTE_CHANNEL/ID\" || 0x01 || genesis || agent || miner || u64 little endian nonce), agent the owner",
+   "what": "how a channel id is made", "when": "2026-11-13",
+   "how": "read by the lead in FLOP's SDK 0.6.0 (channelIdV1) and checked with our own lines against the rerun's A6: owner, NAMED and nonce 7320261112000001 give 0x7cee53edb4537323733eef3ff1bcac31fd09135ce94a8b6c8e3bae57619949f2, the channel_id of ComputeChannel.ForceOpenRequested in research/2026-11-12-session-rerun-1014020/results.json. Shown for force_open only" }
+ }
+}
