@@ -1,0 +1,128 @@
+[
+ {
+  "id": "R-M1",
+  "file": "pane-runner.js",
+  "find": "if (store.has(xt)) return",
+  "replace": "if (false) return",
+  "why": "P3: the runner refuses an extrinsic it sent before"
+ },
+ {
+  "id": "R-M2",
+  "file": "pane-runner.js",
+  "find": "if (got !== String(sha256).toLowerCase())",
+  "replace": "if (false)",
+  "why": "P4: a bundle whose sha256 is wrong is refused"
+ },
+ {
+  "id": "R-M3",
+  "file": "pane-runner.js",
+  "find": "if (index < 0) {",
+  "replace": "if (false) {",
+  "why": "P4: no success without the extrinsic in the finalized block"
+ },
+ {
+  "id": "R-M4",
+  "file": "pane-runner.js",
+  "find": "else if (q[0] !== blockHash)",
+  "replace": "else if (false)",
+  "why": "P4: the finalized block must be the canonical one at its height"
+ },
+ {
+  "id": "R-M5",
+  "file": "sign-device.mjs",
+  "find": "if (existsSync(file)) no(",
+  "replace": "if (false) no(",
+  "why": "P3: a signed step is not signed again"
+ },
+ {
+  "id": "R-M6",
+  "file": "sign-device.mjs",
+  "find": "wipe: () => { seed.fill(0); seed = undefined; }",
+  "replace": "wipe: () => {}",
+  "why": "P1: the seed is wiped after signing; no output shows it, so tests of outputs cannot see this"
+ },
+ {
+  "id": "R-M7",
+  "file": "sign-device.mjs",
+  "find": "if (known && known !== hex(signer.publicKey))",
+  "replace": "if (false)",
+  "why": "P2: the key is the device of results.json"
+ },
+ {
+  "id": "R-M8",
+  "file": "sign-device.mjs",
+  "find": "if (out.fields.spend.toString() !== declared)",
+  "replace": "if (false)",
+  "why": "P2: the encoder's declared spend is the plan's"
+ },
+ {
+  "id": "R-M9",
+  "file": "judge.mjs",
+  "find": "if (after.reserved !== before.reserved)",
+  "replace": "if (false)",
+  "why": "P8: the reserved balance must not move"
+ },
+ {
+  "id": "R-M10",
+  "file": "judge.mjs",
+  "find": "String(ev.fields?.[f]) === want.toString() ?",
+  "replace": "true ?",
+  "why": "P7: the refund equals what the steps moved"
+ },
+ {
+  "id": "R-M11",
+  "file": "judge.mjs",
+  "find": "if (!needed) { j.status = \"differs\";",
+  "replace": "if (false) { j.status = \"differs\";",
+  "why": "P7: a step sent though its condition does not hold differs"
+ },
+ {
+  "id": "R-M12",
+  "file": "judge.mjs",
+  "find": "if (stoppedAt && !step.cleanup)",
+  "replace": "if (false)",
+  "why": "P6: only cleanup steps follow a stop"
+ },
+ {
+  "id": "R-M13",
+  "file": "judge.mjs",
+  "find": "nonce: step.signer === \"device\" ? deviceSent : step.nonce",
+  "replace": "nonce: step.signer === \"device\" ? 0 : step.nonce",
+  "why": "P7: the device's nonce counts its steps"
+ },
+ {
+  "id": "R-M14",
+  "file": "judge.mjs",
+  "find": "if (!step.errors_allowed_of.includes(",
+  "replace": "if (false && !step.errors_allowed_of.includes(",
+  "why": "P7: a recorded step's error is of an allowed pallet"
+ },
+ {
+  "id": "R-M15",
+  "file": "judge.mjs",
+  "find": "const nonce = step.signer === who ? 1n : 0n;",
+  "replace": "const nonce = step.signer === who ? 1n : 1n;",
+  "why": "P8: the account that did not sign keeps its nonce"
+ },
+ {
+  "id": "R-M16",
+  "file": "pane-runner.js",
+  "find": "if (s && s.retracted) { inBlock = null; return; }",
+  "replace": "if (false) { inBlock = null; return; }",
+  "why": "P4: a retracted block is not the end of the watch"
+ },
+ {
+  "id": "R-M17",
+  "file": "sign-device.mjs",
+  "find": "if (seed.length !== 32) throw new Error();",
+  "replace": "",
+  "why": "P1: equivalent: the regex of 43 base64 characters and one = always decodes to 32 bytes"
+ },
+ {
+  "id": "R-M18",
+  "file": "judge.mjs",
+  "find": "step.on_unexpected === \"stop\" && j.status === \"differs\") stoppedAt = step.id;",
+  "replace": "step.on_unexpected === \"stop\" && j.status === \"never\") stoppedAt = step.id;",
+  "why": "P6: a step that differs and whose rule is stop stops the batch"
+ }
+]

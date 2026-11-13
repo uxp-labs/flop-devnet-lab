@@ -1,0 +1,163 @@
+[
+ {
+  "id": "RV2-N1",
+  "file": "judge.mjs",
+  "find": "if (!v || !v.entry.run_time) return out(\"go on\"",
+  "replace": "if (!v) return out(\"go on\"",
+  "why": "nextOf: a step with no reading is next, not waited for"
+ },
+ {
+  "id": "RV2-N2",
+  "file": "judge.mjs",
+  "find": "if (stoppedAt && !step.cleanup) continue;",
+  "replace": "if (false) continue;",
+  "why": "nextOf: after a stop only cleanup steps"
+ },
+ {
+  "id": "RV2-N3",
+  "file": "judge.mjs",
+  "find": "if (v.success === true) { left.push(",
+  "replace": "if (false) { left.push(",
+  "why": "nextOf: a cleanup step that succeeded with wrong events gets no attempt"
+ },
+ {
+  "id": "RV2-N4",
+  "file": "judge.mjs",
+  "find": "if (h === null) return out(\"wait\", step.id,",
+  "replace": "if (false) return out(\"wait\", step.id,",
+  "why": "nextOf: wait while an only_if outcome is unknown"
+ },
+ {
+  "id": "RV2-S1",
+  "file": "sign-device.mjs",
+  "find": "if (reads.accountNonce !== included)",
+  "replace": "if (reads.accountNonce < included)",
+  "why": "S2e: a nonce above the record's count (a copy in the pool) refuses"
+ },
+ {
+  "id": "RV2-S2",
+  "file": "sign-device.mjs",
+  "find": "if (!(reads.birth.number > last))",
+  "replace": "if (!(reads.birth.number >= last))",
+  "why": "S4: the era is over only above the last valid block"
+ },
+ {
+  "id": "RV2-S3",
+  "file": "sign-device.mjs",
+  "find": "next.word === \"wait\" && next.waiting === \"inclusion\" && next.step === id",
+  "replace": "next.word === \"wait\" && next.step === id",
+  "why": "S4: --again only while waiting for inclusion"
+ },
+ {
+  "id": "RV2-S4",
+  "file": "sign-device.mjs",
+  "find": "if (reads.account !== device && reads.account !== ss58(device))",
+  "replace": "if (false)",
+  "why": "the reads are of the device"
+ },
+ {
+  "id": "RV2-S5",
+  "file": "sign-device.mjs",
+  "find": "if (after !== null && !(reads.birth.number > after))",
+  "replace": "if (after !== null && !(reads.birth.number >= after))",
+  "why": "S7: above the block, not at it"
+ },
+ {
+  "id": "RV2-R1",
+  "file": "record-step.mjs",
+  "find": "if (NOTHING_SUBMITTED.includes(sent.status))",
+  "replace": "if (false)",
+  "why": "a call that submitted nothing is not recorded"
+ },
+ {
+  "id": "RV2-R2",
+  "file": "record-step.mjs",
+  "find": "if (v.block_hash !== rt.sent.block_hash)",
+  "replace": "if (false)",
+  "why": "the explorer's block is the runner's"
+ },
+ {
+  "id": "RV2-R3",
+  "file": "record-step.mjs",
+  "find": "if (rt.explorer) no(",
+  "replace": "if (false) no(",
+  "why": "an explorer reading is not replaced"
+ },
+ {
+  "id": "RV2-R4",
+  "file": "record-step.mjs",
+  "find": "if (viewOf(results, id)?.final) no(`the record holds ${id} in finalized block",
+  "replace": "if (false) no(`the record holds ${id} in finalized block",
+  "why": "a finalized reading is never replaced"
+ },
+ {
+  "id": "RV2-R5",
+  "file": "record-step.mjs",
+  "find": "if (sha256Text(text) !== sha256) no(`the sha256 of --${what}",
+  "replace": "if (false) no(`the sha256 of --${what}",
+  "why": "every relayed text is checked by its sha256"
+ },
+ {
+  "id": "RV2-R6",
+  "file": "record-step.mjs",
+  "find": "if (sent.extrinsic_sha256 !== sha256Text(signed.extrinsic ?? \"\"))",
+  "replace": "if (false)",
+  "why": "the reading is of the step's own signed extrinsic"
+ },
+ {
+  "id": "RV2-X1",
+  "file": "pane-runner.js",
+  "find": "function wrote() { if (written) return; written = true; if (mark) store.add(xt); }",
+  "replace": "function wrote() { if (written) return; written = true; }",
+  "why": "X4: marked as sent when written"
+ },
+ {
+  "id": "RV2-X2",
+  "file": "pane-runner.js",
+  "find": "if (!written) { end(Object.assign({}, base, { status: \"not-sent\"",
+  "replace": "if (false) { end(Object.assign({}, base, { status: \"not-sent\"",
+  "why": "X4: not-sent when nothing was written"
+ },
+ {
+  "id": "RV2-X3",
+  "file": "pane-runner.js",
+  "find": "if (!kind || kind === \"watch\") return;",
+  "replace": "if (kind === \"watch\") return;",
+  "why": "X1: an unknown status never ends the watch"
+ },
+ {
+  "id": "RV2-X4",
+  "file": "pane-runner.js",
+  "find": "if (n > to) return finish(",
+  "replace": "if (n >= to) return finish(",
+  "why": "X6: find reads up to the head"
+ },
+ {
+  "id": "RV2-X5",
+  "file": "pane-runner.js",
+  "find": "else if (q[0] !== blockHash) { out.status = \"finalized-not-canonical\"",
+  "replace": "else if (false) { out.status = \"finalized-not-canonical\"",
+  "why": "X6: a block not at its height is not canonical"
+ },
+ {
+  "id": "RV2-E1",
+  "file": "explorer-reader.js",
+  "find": "a.hash === extrinsicHash &&",
+  "replace": "true &&",
+  "why": "E2: the answer is of the hash asked"
+ },
+ {
+  "id": "RV2-E2",
+  "file": "explorer-reader.js",
+  "find": "DIGITS.indexOf(m.error[2]) * 16 + DIGITS.indexOf(m.error[3])",
+  "replace": "DIGITS.indexOf(m.error[3]) * 16 + DIGITS.indexOf(m.error[2])",
+  "why": "E2: the error index is the first byte"
+ },
+ {
+  "id": "RV2-E3",
+  "file": "explorer-reader.js",
+  "find": "KEPT.indexOf(e.section) >= 0",
+  "replace": "true",
+  "why": "E2: only the two pallets' events are relayed"
+ }
+]

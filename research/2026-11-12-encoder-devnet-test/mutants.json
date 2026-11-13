@@ -1,0 +1,1699 @@
+[
+ {
+  "id": "R-M1",
+  "file": "pane-runner.js",
+  "find": "if (store.has(b.xt)) return finish(",
+  "replace": "if (false) return finish(",
+  "test": "pane-runner.test.mjs",
+  "why": "the reviewer's R-M1, adapted: send refuses an extrinsic it sent before"
+ },
+ {
+  "id": "R-M2",
+  "file": "pane-runner.js",
+  "find": "if (got !== String(sha256).toLowerCase())",
+  "replace": "if (false)",
+  "test": "pane-runner.test.mjs",
+  "why": "the reviewer's R-M2: a bundle whose sha256 is wrong is refused"
+ },
+ {
+  "id": "R-M3",
+  "file": "pane-runner.js",
+  "find": "if (index < 0) {",
+  "replace": "if (false) {",
+  "test": "pane-runner.test.mjs",
+  "why": "the reviewer's R-M3: no success without the extrinsic in the finalized block"
+ },
+ {
+  "id": "R-M4",
+  "file": "pane-runner.js",
+  "find": "else if (q[0] !== blockHash)",
+  "replace": "else if (false)",
+  "test": "pane-runner.test.mjs",
+  "why": "the reviewer's R-M4: the finalized block must be the canonical one at its height"
+ },
+ {
+  "id": "R-M5",
+  "file": "sign-device.mjs",
+  "find": "if (existsSync(file) || existsSync(send)) no(",
+  "replace": "if (false) no(",
+  "test": "sign-device.test.mjs",
+  "why": "the reviewer's R-M5, adapted: without --again a signed step is not signed again"
+ },
+ {
+  "id": "R-M6",
+  "file": "device-key.mjs",
+  "find": "wipe: () => { seed.fill(0); seed = undefined; }",
+  "replace": "wipe: () => {}",
+  "test": "sign-device.test.mjs",
+  "why": "the reviewer's R-M6, moved to device-key.mjs: the seed is wiped after signing"
+ },
+ {
+  "id": "R-M7",
+  "file": "sign-device.mjs",
+  "find": "if (known && known !== hex(signer.publicKey))",
+  "replace": "if (false)",
+  "test": "sign-device.test.mjs",
+  "why": "the reviewer's R-M7: the key is the device of results.json"
+ },
+ {
+  "id": "R-M8",
+  "file": "sign-device.mjs",
+  "find": "if (out.fields.spend.toString() !== declared)",
+  "replace": "if (false)",
+  "test": "sign-device.test.mjs",
+  "why": "the reviewer's R-M8: the encoder's declared spend is the plan's"
+ },
+ {
+  "id": "R-M9",
+  "file": "judge.mjs",
+  "find": "if (after.reserved !== before.reserved)",
+  "replace": "if (false)",
+  "test": "check.test.mjs",
+  "why": "the reviewer's R-M9: the reserved balance must not move"
+ },
+ {
+  "id": "R-M10",
+  "file": "judge.mjs",
+  "find": "String(ev.fields?.[f]) === want.toString() ?",
+  "replace": "true ?",
+  "test": "check.test.mjs",
+  "why": "the reviewer's R-M10: the refund equals what the steps moved"
+ },
+ {
+  "id": "R-M11",
+  "file": "judge.mjs",
+  "find": "if (!needed) { j.status = \"differs\";",
+  "replace": "if (false) { j.status = \"differs\";",
+  "test": "check.test.mjs",
+  "why": "the reviewer's R-M11: a step sent though its condition does not hold differs"
+ },
+ {
+  "id": "R-M12",
+  "file": "judge.mjs",
+  "find": "if (stoppedAt && !step.cleanup) { j.status = \"differs\";",
+  "replace": "if (false) { j.status = \"differs\";",
+  "test": "check.test.mjs",
+  "why": "the reviewer's R-M12, adapted: only cleanup steps follow a stop"
+ },
+ {
+  "id": "R-M13",
+  "file": "judge.mjs",
+  "find": "nonce: step.signer === \"device\" ? deviceSent : step.nonce",
+  "replace": "nonce: step.signer === \"device\" ? 0 : step.nonce",
+  "test": "check.test.mjs",
+  "why": "the reviewer's R-M13: the device's nonce counts its transactions"
+ },
+ {
+  "id": "R-M14",
+  "file": "judge.mjs",
+  "find": "if (!step.errors_allowed_of.includes(named.error.split",
+  "replace": "if (false && !step.errors_allowed_of.includes(named.error.split",
+  "test": "check.test.mjs",
+  "why": "the reviewer's R-M14, adapted: a recorded step's error is of an allowed pallet (final record)"
+ },
+ {
+  "id": "R-M15",
+  "file": "judge.mjs",
+  "find": "const nonce = step.signer === who ? 1n : 0n;",
+  "replace": "const nonce = step.signer === who ? 1n : 1n;",
+  "test": "check.test.mjs",
+  "why": "the reviewer's R-M15: the account that did not sign keeps its nonce"
+ },
+ {
+  "id": "R-M16",
+  "file": "pane-runner.js",
+  "find": "if (kind === \"forget\") { inBlock = null; return; }",
+  "replace": "if (kind === \"forget\") { return; }",
+  "test": "pane-runner.test.mjs",
+  "why": "the reviewer's R-M16, adapted to the status table: a retracted block is forgotten"
+ },
+ {
+  "id": "R-M17",
+  "file": "device-key.mjs",
+  "find": "return seed.length === 32 ? seed : null;",
+  "replace": "return seed;",
+  "test": "sign-device.test.mjs",
+  "why": "the reviewer's R-M17, moved to device-key.mjs: the seed is 32 bytes",
+  "equivalent": "the base64 pattern ^[A-Za-z0-9+/]{43}=$ admits only texts of exactly 32 bytes, so the length check never refuses what the pattern let through (the reviewer listed it equivalent too)"
+ },
+ {
+  "id": "R-M18",
+  "file": "judge.mjs",
+  "find": "if (!stoppedAt && !step.cleanup && step.on_unexpected === \"stop\" && last.j.status === \"differs\") stoppedAt = step.id;",
+  "replace": "if (false) stoppedAt = step.id;",
+  "test": "check.test.mjs",
+  "why": "the reviewer's R-M18, adapted: a test step that differs stops the batch"
+ },
+ {
+  "id": "B-P1",
+  "file": "lib.mjs",
+  "find": "Buffer.from(\"FLOP/COMPUTE_CHANNEL/ID\", \"ascii\"), Buffer.of(1)",
+  "replace": "Buffer.from(\"FLOP/COMPUTE_CHANNEL/ID\", \"ascii\"), Buffer.of(0)",
+  "test": "plan.test.mjs",
+  "why": "P1: the channel id formula"
+ },
+ {
+  "id": "B-S2a",
+  "file": "sign-device.mjs",
+  "find": "if (step.tool !== \"encoder\") no(`${id} is not signed by the encoder",
+  "replace": "if (false) no(`${id} is not signed by the encoder",
+  "test": "sign-device.test.mjs",
+  "why": "S2a: only an encoder step"
+ },
+ {
+  "id": "B-S2b",
+  "file": "sign-device.mjs",
+  "find": "if (sha256Text(text) !== sha256) no(",
+  "replace": "if (false) no(",
+  "test": "sign-device.test.mjs",
+  "why": "S2b: the reads' sha256"
+ },
+ {
+  "id": "B-S2c",
+  "file": "sign-device.mjs",
+  "find": "if (next.step !== id || (next.word === \"wait\" && !mayAgain)) no(",
+  "replace": "if (false) no(",
+  "test": "sign-device.test.mjs",
+  "why": "S2c: only the next step by the record"
+ },
+ {
+  "id": "B-S2d",
+  "file": "sign-device.mjs",
+  "find": "if (viewOf(results, id)?.final) no(",
+  "replace": "if (false) no(",
+  "test": "sign-device.test.mjs",
+  "why": "S2d: a step the record holds as included",
+  "equivalent": "S2c refuses first: nextOf never names an id the record holds in a finalized block, so this check is a second guard that no input can reach"
+ },
+ {
+  "id": "B-S2e",
+  "file": "sign-device.mjs",
+  "find": "if (reads.accountNonce !== included) no(",
+  "replace": "if (false) no(",
+  "test": "sign-device.test.mjs",
+  "why": "S2e: the device's next nonce counts the record's included device transactions"
+ },
+ {
+  "id": "B-S2f",
+  "file": "sign-device.mjs",
+  "find": "reads.sessionNonce === null ? succeeded !== 0 :",
+  "replace": "reads.sessionNonce === null ? false :",
+  "test": "sign-device.test.mjs",
+  "why": "S2f: a raw null counts as 0 only when no session call succeeded"
+ },
+ {
+  "id": "B-S2f2",
+  "file": "sign-device.mjs",
+  "find": ": reads.sessionNonce !== BigInt(succeeded)) no(",
+  "replace": ": false) no(",
+  "test": "sign-device.test.mjs",
+  "why": "S2f: the session nonce counts the succeeded session calls"
+ },
+ {
+  "id": "B-S2acct",
+  "file": "sign-device.mjs",
+  "find": "if (reads.account !== device && reads.account !== ss58(device)) no(",
+  "replace": "if (false) no(",
+  "test": "sign-device.test.mjs",
+  "why": "the reads are of the device"
+ },
+ {
+  "id": "B-S7",
+  "file": "sign-device.mjs",
+  "find": "!(reads.birth.number > after)",
+  "replace": "!(reads.birth.number >= after)",
+  "test": "sign-device.test.mjs",
+  "why": "S7: the birth block is above the block the step waits for"
+ },
+ {
+  "id": "B-S7max",
+  "file": "record.mjs",
+  "find": "return unknown ?? Math.max(...parts);",
+  "replace": "return unknown ?? Math.min(...parts);",
+  "test": "sign-device.test.mjs",
+  "why": "S7: T6 waits for the greater of the two"
+ },
+ {
+  "id": "B-S4",
+  "file": "sign-device.mjs",
+  "find": "if (!(reads.birth.number > last)) no(",
+  "replace": "if (false) no(",
+  "test": "sign-device.test.mjs",
+  "why": "S4: --again only when the earlier copy's era is over"
+ },
+ {
+  "id": "B-S4b",
+  "file": "sign-device.mjs",
+  "find": "const mayAgain = again && next.word === \"wait\" && next.waiting === \"inclusion\" && next.step === id;",
+  "replace": "const mayAgain = again;",
+  "test": "sign-device.test.mjs",
+  "why": "S4: --again does not pass a wait for an outcome"
+ },
+ {
+  "id": "B-S5",
+  "file": "record.mjs",
+  "find": "(step.cleanup ? [step.id,",
+  "replace": "(false ? [step.id,",
+  "test": "sign-device.test.mjs",
+  "why": "S5: attempts of a cleanup step"
+ },
+ {
+  "id": "B-S6",
+  "file": "device-key.mjs",
+  "find": "if (text !== JSON.stringify({ v: 0, alg: \"ed25519\", seed_b64: o.seed_b64 }) + \"\\n\") return null;",
+  "replace": "",
+  "test": "sign-device.test.mjs",
+  "why": "S6: exactly keygen's text"
+ },
+ {
+  "id": "B-S6b",
+  "file": "device-key.mjs",
+  "find": "if (o.v !== 0 || o.alg !== \"ed25519\") return null;",
+  "replace": "",
+  "test": "sign-device.test.mjs",
+  "why": "S6: v and alg",
+  "equivalent": "the canonical text check that follows holds v 0 and alg ed25519 too: a file with any other v or alg is not that text. The check is kept for its own fixed refusal in reading order"
+ },
+ {
+  "id": "B-S3",
+  "file": "record.mjs",
+  "find": "export const sendText = (id, extrinsic) => JSON.stringify({ step: id, extrinsic });",
+  "replace": "export const sendText = (id, extrinsic) => JSON.stringify({ step: id, extrinsic }) + \"\\n\";",
+  "test": "sign-device.test.mjs",
+  "why": "S3: the send file has no line end"
+ },
+ {
+  "id": "B-X1",
+  "file": "pane-runner.js",
+  "find": "future: \"watch\", ready: \"watch\", broadcast: \"watch\",",
+  "replace": "future: \"watch\", ready: \"watch\", broadcast: \"end\",",
+  "test": "pane-runner.test.mjs",
+  "why": "X1: broadcast does not end the watch"
+ },
+ {
+  "id": "B-X1u",
+  "file": "pane-runner.js",
+  "find": "if (!kind || kind === \"watch\") return;",
+  "replace": "if (kind === \"watch\") return;",
+  "test": "pane-runner.test.mjs",
+  "why": "X1: a status not in the table never ends the watch"
+ },
+ {
+  "id": "B-X1e",
+  "file": "pane-runner.js",
+  "find": "usurped: \"end\", finalityTimeout: \"end\", dropped: \"end\", invalid: \"end\",",
+  "replace": "usurped: \"end\", finalityTimeout: \"end\", dropped: \"watch\", invalid: \"end\",",
+  "test": "pane-runner.test.mjs",
+  "why": "X1: dropped ends the watch"
+ },
+ {
+  "id": "B-X2",
+  "file": "pane-runner.js",
+  "find": "for (var j = 0; j < lostFns.length; j++) lostFns[j]();",
+  "replace": "",
+  "test": "pane-runner.test.mjs",
+  "why": "X2: an open watch ends as connection-lost"
+ },
+ {
+  "id": "B-X2b",
+  "file": "pane-runner.js",
+  "find": "p.reject(lostError(true));",
+  "replace": "",
+  "test": "pane-runner.test.mjs",
+  "why": "X2: a waiting request is rejected"
+ },
+ {
+  "id": "B-X2c",
+  "file": "pane-runner.js",
+  "find": "if (lost || (ws.readyState !== undefined && ws.readyState !== 1)) { reject(lostError(false)); return; }",
+  "replace": "",
+  "test": "pane-runner.test.mjs",
+  "why": "X2: a later request is rejected at once"
+ },
+ {
+  "id": "B-X3",
+  "file": "pane-runner.js",
+  "find": "if (url !== undefined && url !== RPC) throw",
+  "replace": "if (false) throw",
+  "test": "pane-runner.test.mjs",
+  "why": "X3: one node"
+ },
+ {
+  "id": "B-X3b",
+  "file": "pane-runner.js",
+  "find": "if (opts.eventsKey !== undefined && opts.eventsKey !== EVENTS_KEY) throw",
+  "replace": "if (false) throw",
+  "test": "pane-runner.test.mjs",
+  "why": "X3: the events key is the constant"
+ },
+ {
+  "id": "B-X4",
+  "file": "pane-runner.js",
+  "find": "if (!written) { end(Object.assign({}, base, { status: \"not-sent\", problem: e && e.message",
+  "replace": "if (false) { end(Object.assign({}, base, { status: \"not-sent\", problem: e && e.message",
+  "test": "pane-runner.test.mjs",
+  "why": "X4: nothing written is not-sent (find made longer in fix round 2: F7 added a second not-sent line) (find adapted in fix round 3: H11 words)"
+ },
+ {
+  "id": "B-X4b",
+  "file": "pane-runner.js",
+  "find": "function wrote() { if (written) return; written = true; if (mark) store.add(xt); }",
+  "replace": "function wrote() { if (written) return; written = true; }",
+  "test": "pane-runner.test.mjs",
+  "why": "X4: marked as sent at the write"
+ },
+ {
+  "id": "B-X5",
+  "file": "pane-runner.js",
+  "find": "if (!store.has(b.xt)) return finish(",
+  "replace": "if (false) return finish(",
+  "test": "pane-runner.test.mjs",
+  "why": "X5: sendSame only of what was sent"
+ },
+ {
+  "id": "B-X6",
+  "file": "pane-runner.js",
+  "find": "var FIND_MAX = 400;",
+  "replace": "var FIND_MAX = 401;",
+  "test": "pane-runner.test.mjs",
+  "why": "X6: at most 400 blocks a call"
+ },
+ {
+  "id": "B-X7",
+  "file": "pane-runner.js",
+  "find": "return root.crypto.subtle.digest(\"SHA-256\", b).then(",
+  "replace": "return root.crypto.subtle.digest(\"SHA-256\", new TextEncoder().encode(h)).then(",
+  "test": "pane-runner.test.mjs",
+  "why": "X7: the events' sha256 is of their bytes"
+ },
+ {
+  "id": "B-X8",
+  "file": "pane-runner.js",
+  "find": "out.relay = text;",
+  "replace": "out.relay = text + \" \";",
+  "test": "pane-runner.test.mjs",
+  "why": "X8: the relay text is the value"
+ },
+ {
+  "id": "B-E1",
+  "file": "explorer-reader.js",
+  "find": "var KEPT = [\"computeChannel\", \"flopSessionKeys\"];",
+  "replace": "var KEPT = [\"computeChannel\", \"flopSessionKeys\", \"balances\"];",
+  "test": "explorer-reader.test.mjs",
+  "why": "E2: only the events of the two pallets"
+ },
+ {
+  "id": "B-E2",
+  "file": "explorer-reader.js",
+  "find": "DIGITS.indexOf(m.error[2]) * 16",
+  "replace": "DIGITS.indexOf(m.error[2]) * 15",
+  "test": "explorer-reader.test.mjs",
+  "why": "E2: the error index is the first byte"
+ },
+ {
+  "id": "B-E2b",
+  "file": "explorer-reader.js",
+  "find": "if (res.status === 404) return { status: \"not-found\"",
+  "replace": "if (false) return { status: \"not-found\"",
+  "test": "explorer-reader.test.mjs",
+  "why": "E2: the 404 is not-found"
+ },
+ {
+  "id": "B-R1",
+  "file": "record-step.mjs",
+  "find": "if (reads.account !== owner && reads.account !== ss58(owner)) no(",
+  "replace": "if (false) no(",
+  "test": "record-step.test.mjs",
+  "why": "R1: the start reads are the owner's"
+ },
+ {
+  "id": "B-R1b",
+  "file": "record-step.mjs",
+  "find": "if (existsSync(runFiles(run).results)) no(",
+  "replace": "if (false) no(",
+  "test": "record-step.test.mjs",
+  "why": "R1: start never writes over a record"
+ },
+ {
+  "id": "B-R2a",
+  "file": "record-step.mjs",
+  "find": "&& sent.bundle_sha256 !== bundleSha) no(",
+  "replace": "&& false) no(",
+  "test": "record-step.test.mjs",
+  "why": "R2: the bundle is the step's send file"
+ },
+ {
+  "id": "B-R2b",
+  "file": "record-step.mjs",
+  "find": "if (sent.extrinsic_sha256 !== sha256Text(signed.extrinsic ?? \"\")) no(",
+  "replace": "if (false) no(",
+  "test": "record-step.test.mjs",
+  "why": "R2: the extrinsic is the signed file's"
+ },
+ {
+  "id": "B-R2c",
+  "file": "record-step.mjs",
+  "find": "if (v.block_hash !== rt.sent.block_hash) no(",
+  "replace": "if (false) no(",
+  "test": "record-step.test.mjs",
+  "why": "R2: the explorer's block hash is the runner's"
+ },
+ {
+  "id": "B-R2d",
+  "file": "record-step.mjs",
+  "find": "if (v.hash !== rt.extrinsic_hash) no(",
+  "replace": "if (false) no(",
+  "test": "record-step.test.mjs",
+  "why": "R2: the explorer's hash is the step's"
+ },
+ {
+  "id": "B-R2e",
+  "file": "record-step.mjs",
+  "find": "derived: channel, explorer: e.fields.channel_id }))",
+  "replace": "derived: e.fields.channel_id, explorer: e.fields.channel_id }))",
+  "test": "record-step.test.mjs",
+  "why": "R2, changed by G4 in fix round 2: a channelId that is not the derived one is recorded with the derived id beside it (it was refused before)"
+ },
+ {
+  "id": "B-R2f",
+  "file": "record-step.mjs",
+  "find": "const SNAKE = (k) => k.replace(/[A-Z]/g, (c) => \"_\" + c.toLowerCase());",
+  "replace": "const SNAKE = (k) => k;",
+  "test": "record-step.test.mjs",
+  "why": "R2: field names in snake case"
+ },
+ {
+  "id": "B-R2g",
+  "file": "record-step.mjs",
+  "find": "if (COMMAS.test(v)) return v.replace(/,/g, \"\");",
+  "replace": "if (COMMAS.test(v)) return v;",
+  "test": "record-step.test.mjs",
+  "why": "R2: numbers as decimal strings"
+ },
+ {
+  "id": "B-R2h",
+  "file": "record-step.mjs",
+  "find": "name: named ? `${named.pallet}.${named.name}` : null };",
+  "replace": "name: null };",
+  "test": "record-step.test.mjs",
+  "why": "R2: the error named by the 1014020 table"
+ },
+ {
+  "id": "B-R2i",
+  "file": "record-step.mjs",
+  "find": "if (viewOf(results, id)?.final) no(",
+  "replace": "if (false) no(",
+  "test": "record-step.test.mjs",
+  "why": "R2: a finalized run_time is never replaced",
+  "equivalent": "the next-step check refuses first: nextOf never names an id the record holds in a finalized block, so this check is a second guard no input reaches"
+ },
+ {
+  "id": "B-R2j",
+  "file": "record-step.mjs",
+  "find": "if (NOTHING_SUBMITTED.includes(sent.status)) no(",
+  "replace": "if (false) no(",
+  "test": "record-step.test.mjs",
+  "why": "R2: an outcome that submitted nothing is not recorded"
+ },
+ {
+  "id": "B-R2k",
+  "file": "record-step.mjs",
+  "find": "if (rt.explorer) no(",
+  "replace": "if (false) no(",
+  "test": "record-step.test.mjs",
+  "why": "R2: an explorer reading is not replaced"
+ },
+ {
+  "id": "B-R4",
+  "file": "research-signed.mjs",
+  "find": "return BigInt(start) + BigInt(included);",
+  "replace": "return BigInt(start);",
+  "test": "plan-next.test.mjs, research-signed.test.mjs",
+  "why": "R4, moved in fix round 2 to research-signed.mjs nonceOf (F1), which plan.mjs next uses: the owner's nonce is the start plus the included owner transactions"
+ },
+ {
+  "id": "B-R4b",
+  "file": "research-signed.mjs",
+  "find": "if (step.signer === \"device\") return BigInt(deviceIncluded(plan, results))",
+  "replace": "if (step.signer === \"device\") return 0n + 0n * BigInt(deviceIncluded(plan, results))",
+  "test": "plan-next.test.mjs, research-signed.test.mjs",
+  "why": "R4, moved in fix round 2 to research-signed.mjs nonceOf: T9's nonce is the device's count"
+ },
+ {
+  "id": "B-C1",
+  "file": "judge.mjs",
+  "find": "if (kind === \"run-time\") return judgeRunTimeRecord(ctx);",
+  "replace": "if (kind === \"run-time\") return judgeFinal(ctx);",
+  "test": "check.test.mjs",
+  "why": "C1: a run time record is judged by its own rules"
+ },
+ {
+  "id": "B-C2",
+  "file": "judge.mjs",
+  "find": "if (last && !(pos[0] > last.pos[0] || (pos[0] === last.pos[0] && pos[1] > last.pos[1])))",
+  "replace": "if (false)",
+  "test": "check.test.mjs",
+  "why": "C2: the blocks rise in the plan's order"
+ },
+ {
+  "id": "B-C2i",
+  "file": "judge.mjs",
+  "find": "(pos[0] === last.pos[0] && pos[1] > last.pos[1])",
+  "replace": "(pos[0] === last.pos[0] && true)",
+  "test": "check.test.mjs",
+  "why": "C2: then the extrinsic index"
+ },
+ {
+  "id": "B-C2d",
+  "file": "judge.mjs",
+  "find": "if (seen.has(e.step)) out.push(",
+  "replace": "if (false) out.push(",
+  "test": "check.test.mjs",
+  "why": "C2: a step id twice"
+ },
+ {
+  "id": "B-C2h",
+  "file": "judge.mjs",
+  "find": "if (hashes.has(h)) out.push(",
+  "replace": "if (false) out.push(",
+  "test": "check.test.mjs",
+  "why": "C2: an extrinsic hash twice"
+ },
+ {
+  "id": "B-C2n",
+  "file": "judge.mjs",
+  "find": "if (broken.length) return {",
+  "replace": "if (false) return {",
+  "test": "check.test.mjs",
+  "why": "C2: a broken record lets nothing be signed"
+ },
+ {
+  "id": "B-C3",
+  "file": "judge.mjs",
+  "find": "const j = judgeOne(ctx, step, rec, prev, deviceSent, i < ids.length - 1 ? \"refused, attempted again\" : step.cleanup && !succeeded(rec) ? \"refused\" : false);",
+  "replace": "const j = judgeOne(ctx, step, rec, prev, deviceSent, false);",
+  "test": "check.test.mjs",
+  "why": "C3: a refused attempt is judged by its recorded error"
+ },
+ {
+  "id": "B-C3b",
+  "file": "judge.mjs",
+  "find": "if (i < ids.length - 1 && succeeded(rec)) { j.status = \"differs\";",
+  "replace": "if (false) { j.status = \"differs\";",
+  "test": "check.test.mjs",
+  "why": "C3: no attempt after a success"
+ },
+ {
+  "id": "B-C4",
+  "file": "judge.mjs",
+  "find": "if (![\"decoder\", \"by position\"].includes(results.balances_source)) top.push(",
+  "replace": "if (false) top.push(",
+  "test": "check.test.mjs",
+  "why": "C4: balances_source is required"
+ },
+ {
+  "id": "B-C5",
+  "file": "judge.mjs",
+  "find": "if (named && step.finding_if?.[named]) findings.push(",
+  "replace": "if (false) findings.push(",
+  "test": "check.test.mjs",
+  "why": "C5: the finding at run time"
+ },
+ {
+  "id": "B-C5f",
+  "file": "judge.mjs",
+  "find": "if (f && step.finding_if?.[f]) findings.push(",
+  "replace": "if (false) findings.push(",
+  "test": "check.test.mjs",
+  "why": "C5: the finding in a final record"
+ },
+ {
+  "id": "B-C6",
+  "file": "judge.mjs",
+  "find": "if (refunded === base) return moves.filter(",
+  "replace": "if (false) return moves.filter(",
+  "test": "check.test.mjs",
+  "why": "C6: a refund of the escrow alone counts only the escrow"
+ },
+ {
+  "id": "B-C6l",
+  "file": "judge.mjs",
+  "find": "if (lu) left.push(lu);",
+  "replace": "",
+  "test": "check.test.mjs",
+  "why": "C6: the verdict says the top up is left"
+ },
+ {
+  "id": "B-C7",
+  "file": "judge.mjs",
+  "find": "e.fields && \"channel_id\" in e.fields && e.fields.channel_id !== want",
+  "replace": "false",
+  "test": "check.test.mjs",
+  "why": "C7: the channel ids are the derived ones"
+ },
+ {
+  "id": "B-P3",
+  "file": "plan.mjs",
+  "find": "(a[1] < b[1] ? -1 : a[1] > b[1] ? 1 : 0)",
+  "replace": "(a[1] > b[1] ? -1 : a[1] < b[1] ? 1 : 0)",
+  "test": "plan.test.mjs",
+  "why": "P3: the cap that binds has the least room"
+ },
+ {
+  "id": "RV2-N1",
+  "file": "judge.mjs",
+  "find": "if (!v || !v.entry.run_time) return out(\"go on\"",
+  "replace": "if (!v) return out(\"go on\"",
+  "why": "nextOf: a step with no reading is next, not waited for",
+  "test": "review2 tests and the builder's"
+ },
+ {
+  "id": "RV2-N2",
+  "file": "judge.mjs",
+  "find": "if (stoppedAt && !step.cleanup) continue;",
+  "replace": "if (false) continue;",
+  "why": "nextOf: after a stop only cleanup steps",
+  "test": "review2 tests and the builder's"
+ },
+ {
+  "id": "RV2-N3",
+  "file": "judge.mjs",
+  "find": "if (v.success === true) { left.push(",
+  "replace": "if (false) { left.push(",
+  "why": "nextOf: a cleanup step that succeeded with wrong events gets no attempt",
+  "test": "review2 tests and the builder's"
+ },
+ {
+  "id": "RV2-N4",
+  "file": "judge.mjs",
+  "find": "if (h === null) return out(\"wait\", step.id,",
+  "replace": "if (false) return out(\"wait\", step.id,",
+  "why": "nextOf: wait while an only_if outcome is unknown",
+  "test": "review2 tests and the builder's",
+  "equivalent": "the second reviewer's ruling (REVIEW2-PROGRESS.md, Held): an earlier check of the same path always refuses first"
+ },
+ {
+  "id": "RV2-S1",
+  "file": "sign-device.mjs",
+  "find": "if (reads.accountNonce !== included)",
+  "replace": "if (reads.accountNonce < included)",
+  "why": "S2e: a nonce above the record's count (a copy in the pool) refuses",
+  "test": "review2 tests and the builder's"
+ },
+ {
+  "id": "RV2-S2",
+  "file": "sign-device.mjs",
+  "find": "if (!(reads.birth.number > last))",
+  "replace": "if (!(reads.birth.number >= last))",
+  "why": "S4: the era is over only above the last valid block",
+  "test": "review2 tests and the builder's"
+ },
+ {
+  "id": "RV2-S3",
+  "file": "sign-device.mjs",
+  "find": "next.word === \"wait\" && next.waiting === \"inclusion\" && next.step === id",
+  "replace": "next.word === \"wait\" && next.step === id",
+  "why": "S4: --again only while waiting for inclusion",
+  "test": "review2 tests and the builder's"
+ },
+ {
+  "id": "RV2-S4",
+  "file": "sign-device.mjs",
+  "find": "if (reads.account !== device && reads.account !== ss58(device))",
+  "replace": "if (false)",
+  "why": "the reads are of the device",
+  "test": "review2 tests and the builder's"
+ },
+ {
+  "id": "RV2-S5",
+  "file": "sign-device.mjs",
+  "find": "if (after !== null && !(reads.birth.number > after))",
+  "replace": "if (after !== null && !(reads.birth.number >= after))",
+  "why": "S7: above the block, not at it",
+  "test": "review2 tests and the builder's"
+ },
+ {
+  "id": "RV2-R1",
+  "file": "record-step.mjs",
+  "find": "if (NOTHING_SUBMITTED.includes(sent.status))",
+  "replace": "if (false)",
+  "why": "a call that submitted nothing is not recorded",
+  "test": "review2 tests and the builder's"
+ },
+ {
+  "id": "RV2-R2",
+  "file": "record-step.mjs",
+  "find": "if (v.block_hash !== rt.sent.block_hash)",
+  "replace": "if (false)",
+  "why": "the explorer's block is the runner's",
+  "test": "review2 tests and the builder's"
+ },
+ {
+  "id": "RV2-R3",
+  "file": "record-step.mjs",
+  "find": "if (rt.explorer) no(",
+  "replace": "if (false) no(",
+  "why": "an explorer reading is not replaced",
+  "test": "review2 tests and the builder's"
+ },
+ {
+  "id": "RV2-R4",
+  "file": "record-step.mjs",
+  "find": "if (viewOf(results, id)?.final) no(`the record holds ${id} in finalized block",
+  "replace": "if (false) no(`the record holds ${id} in finalized block",
+  "why": "a finalized reading is never replaced",
+  "test": "review2 tests and the builder's",
+  "equivalent": "the second reviewer's ruling (REVIEW2-PROGRESS.md, Held): an earlier check of the same path always refuses first"
+ },
+ {
+  "id": "RV2-R5",
+  "file": "record-step.mjs",
+  "find": "if (sha256Text(text) !== sha256) no(`the sha256 of --${what}",
+  "replace": "if (false) no(`the sha256 of --${what}",
+  "why": "every relayed text is checked by its sha256",
+  "test": "review2 tests and the builder's"
+ },
+ {
+  "id": "RV2-R6",
+  "file": "record-step.mjs",
+  "find": "if (sent.extrinsic_sha256 !== sha256Text(signed.extrinsic ?? \"\"))",
+  "replace": "if (false)",
+  "why": "the reading is of the step's own signed extrinsic",
+  "test": "review2 tests and the builder's"
+ },
+ {
+  "id": "RV2-X1",
+  "file": "pane-runner.js",
+  "find": "function wrote() { if (written) return; written = true; if (mark) store.add(xt); }",
+  "replace": "function wrote() { if (written) return; written = true; }",
+  "why": "X4: marked as sent when written",
+  "test": "review2 tests and the builder's"
+ },
+ {
+  "id": "RV2-X2",
+  "file": "pane-runner.js",
+  "find": "if (!written) { end(Object.assign({}, base, { status: \"not-sent\", problem: e && e.message",
+  "replace": "if (false) { end(Object.assign({}, base, { status: \"not-sent\", problem: e && e.message",
+  "why": "X4: not-sent when nothing was written (the find made longer by the builder: F7 added a second not-sent line) (find adapted in fix round 3: H11 words)",
+  "test": "review2 tests and the builder's"
+ },
+ {
+  "id": "RV2-X3",
+  "file": "pane-runner.js",
+  "find": "if (!kind || kind === \"watch\") return;",
+  "replace": "if (kind === \"watch\") return;",
+  "why": "X1: an unknown status never ends the watch",
+  "test": "review2 tests and the builder's"
+ },
+ {
+  "id": "RV2-X4",
+  "file": "pane-runner.js",
+  "find": "if (n > to) { end(",
+  "replace": "if (n >= to) { end(",
+  "why": "X6: find reads up to the head (find adapted in fix round 3: H10 made find end by end())",
+  "test": "review2 tests and the builder's"
+ },
+ {
+  "id": "RV2-X5",
+  "file": "pane-runner.js",
+  "find": "else if (q[0] !== blockHash) { out.status = \"finalized-not-canonical\"",
+  "replace": "else if (false) { out.status = \"finalized-not-canonical\"",
+  "why": "X6: a block not at its height is not canonical",
+  "test": "review2 tests and the builder's"
+ },
+ {
+  "id": "RV2-E1",
+  "file": "explorer-reader.js",
+  "find": "a.hash === extrinsicHash &&",
+  "replace": "true &&",
+  "why": "E2: the answer is of the hash asked",
+  "test": "review2 tests and the builder's"
+ },
+ {
+  "id": "RV2-E2",
+  "file": "explorer-reader.js",
+  "find": "DIGITS.indexOf(m.error[2]) * 16 + DIGITS.indexOf(m.error[3])",
+  "replace": "DIGITS.indexOf(m.error[3]) * 16 + DIGITS.indexOf(m.error[2])",
+  "why": "E2: the error index is the first byte",
+  "test": "review2 tests and the builder's"
+ },
+ {
+  "id": "RV2-E3",
+  "file": "explorer-reader.js",
+  "find": "KEPT.indexOf(e.section) >= 0",
+  "replace": "true",
+  "why": "E2: only the two pallets' events are relayed",
+  "test": "review2 tests and the builder's"
+ },
+ {
+  "id": "B2-F1a",
+  "file": "research-signed.mjs",
+  "find": "if (b.equals(want)) return { extrinsic_hash: signed.extrinsic_hash };",
+  "replace": "if (true) return { extrinsic_hash: signed.extrinsic_hash };",
+  "test": "research-signed.test.mjs",
+  "why": "F1: the bytes must equal the plan's envelope"
+ },
+ {
+  "id": "B2-F1b",
+  "file": "research-signed.mjs",
+  "find": "if (signed.extrinsic_hash !== blake2b256Hex(b)) no(",
+  "replace": "if (false) no(",
+  "test": "research-signed.test.mjs",
+  "why": "F1: extrinsic_hash is the blake2b-256 of the extrinsic"
+ },
+ {
+  "id": "B2-F1c",
+  "file": "research-signed.mjs",
+  "find": "filter((x) => x !== id && planStepOf",
+  "replace": "filter((x) => planStepOf",
+  "test": "research-signed.test.mjs",
+  "why": "F1: the id itself is not counted in its own nonce"
+ },
+ {
+  "id": "B2-F1d",
+  "file": "research-signed.mjs",
+  "find": "compact(nonce), compact(0), Buffer.of(0x00)",
+  "replace": "compact(nonce), compact(1), Buffer.of(0x00)",
+  "test": "research-signed.test.mjs",
+  "why": "F1: no tip"
+ },
+ {
+  "id": "B2-F1e",
+  "file": "record-step.mjs",
+  "find": "checkResearchSigned(plan, results, id, signed); // F1",
+  "replace": "void 0; // F1",
+  "test": "review2-record.test.mjs, research-signed.test.mjs",
+  "why": "F1: send-file checks before it writes"
+ },
+ {
+  "id": "B2-F1f",
+  "file": "record-step.mjs",
+  "find": "checkSigned(plan, results, id, readJson(signedFile(run, id)));",
+  "replace": "void 0;",
+  "test": "review2-record.test.mjs, research-signed.test.mjs",
+  "why": "F1: record-step step checks before it records"
+ },
+ {
+  "id": "B2-F6a",
+  "file": "sign-device.mjs",
+  "find": "  runtimeFor(reads.runtime);\n",
+  "replace": "\n",
+  "test": "review2-key-order.test.mjs",
+  "why": "F6: the encoder's table is asked before the key"
+ },
+ {
+  "id": "B2-F6b",
+  "file": "sign-device.mjs",
+  "find": "if (spend.toString() !== declared) no(`the encoder declares ${spend}, steps.json says ${declared}: not signed`);",
+  "replace": "",
+  "test": "sign-device.test.mjs F6",
+  "why": "F6: the declared spend is compared before the key"
+ },
+ {
+  "id": "B2-F6c",
+  "file": "sign-device.mjs",
+  "find": "if (reads.runtime[k] !== want[k]) no(`the runtime of the reads has",
+  "replace": "if (false) no(`the runtime of the reads has",
+  "test": "sign-device.test.mjs F6",
+  "why": "F6: the plan's runtime before the key"
+ },
+ {
+  "id": "B2-F6d",
+  "file": "record-step.mjs",
+  "find": "checkStartReads(plan, reads); // F6",
+  "replace": "void 0; // F6",
+  "test": "review2-key-order.test.mjs",
+  "why": "F6: record-step start checks the reads before the key"
+ },
+ {
+  "id": "B2-F10a",
+  "file": "sign-device.mjs",
+  "find": "if (dead.length) no(`signed/ holds",
+  "replace": "if (false) no(`signed/ holds",
+  "test": "sign-device.test.mjs F10, review2-two-copies.test.mjs",
+  "why": "F10: dead files make --again needed"
+ },
+ {
+  "id": "B2-F10b",
+  "file": "sign-device.mjs",
+  "find": "record.earlier_copies = earlierCopies(run, id);",
+  "replace": "record.earlier_copies = [];",
+  "test": "sign-device.test.mjs F10",
+  "why": "F10: earlier_copies is the dead files"
+ },
+ {
+  "id": "B2-F10c",
+  "file": "sign-device.mjs",
+  "find": "readJson(join(runFiles(run).signed, dead[dead.length - 1].file))",
+  "replace": "readJson(join(runFiles(run).signed, dead[0].file))",
+  "test": "sign-device.test.mjs F10",
+  "why": "F10: the era check uses the newest dead copy"
+ },
+ {
+  "id": "B2-F10d",
+  "file": "sign-device.mjs",
+  "find": "if (!existsSync(file) && existsSync(send)) no(",
+  "replace": "if (false) no(",
+  "test": "review2-two-copies.test.mjs",
+  "why": "F10: a lone send file refuses --again"
+ },
+ {
+  "id": "B2-F2a",
+  "file": "record-step.mjs",
+  "find": "if (outcome.length !== 1) no(",
+  "replace": "if (false) no(",
+  "test": "record-step.test.mjs F2",
+  "why": "F2: exactly one outcome event among the names"
+ },
+ {
+  "id": "B2-F2b",
+  "file": "record-step.mjs",
+  "find": "if (v.success !== (outcome[0] === \"system.ExtrinsicSuccess\")) no(",
+  "replace": "if (false) no(",
+  "test": "record-step.test.mjs F2, review2-record.test.mjs",
+  "why": "F2: success agrees with the outcome event"
+ },
+ {
+  "id": "B2-F2c",
+  "file": "record-step.mjs",
+  "find": "if (v.error.index !== from.index || v.error.error !== from.error || ",
+  "replace": "if (",
+  "test": "record-step.test.mjs F2",
+  "why": "F2: the error comes from the ExtrinsicFailed's data"
+ },
+ {
+  "id": "B2-F2d",
+  "file": "judge.mjs",
+  "find": "out.push({ id: e.step, problem: `the explorer reading of ${e.step} says success",
+  "replace": "void ({ id: e.step, problem: `the explorer reading of ${e.step} says success",
+  "test": "review2-record.test.mjs",
+  "why": "F2: the judge refuses a record whose explorer success disagrees with its names"
+ },
+ {
+  "id": "B2-F2e",
+  "file": "explorer-reader.js",
+  "find": "failed.data && failed.data.dispatchError !== undefined ? failed.data.dispatchError : null",
+  "replace": "null",
+  "test": "explorer-reader.test.mjs",
+  "why": "F2: the reader relays the ExtrinsicFailed's dispatchError"
+ },
+ {
+  "id": "B2-F9a",
+  "file": "explorer-reader.js",
+  "find": "redirect: \"error\" };",
+  "replace": "redirect: \"follow\" };",
+  "test": "explorer-reader.test.mjs F9, review2-pane.test.mjs",
+  "why": "F9: no redirect"
+ },
+ {
+  "id": "B2-F9b",
+  "file": "explorer-reader.js",
+  "find": "if (!res || res.url !== asked) return",
+  "replace": "if (!res) return",
+  "test": "explorer-reader.test.mjs F9",
+  "why": "F9: the answer's url must be the address asked"
+ },
+ {
+  "id": "B2-F11",
+  "file": "lib.mjs",
+  "find": "return ss58(account) === text ? account : null; // F11: canonical text only",
+  "replace": "return account;",
+  "test": "plan.test.mjs F11, review2-record.test.mjs",
+  "why": "F11: canonical SS58 only"
+ },
+ {
+  "id": "B2-F4",
+  "file": "pane-runner.js",
+  "find": "Object.prototype.hasOwnProperty.call(STATUSES, w)",
+  "replace": "w in STATUSES",
+  "test": "pane-runner.test.mjs F4, review2-pane.test.mjs",
+  "why": "F4: the status table's own keys only"
+ },
+ {
+  "id": "B2-F5a",
+  "file": "pane-runner.js",
+  "find": "if (locating !== null) { end(Object.assign({}, base, { status: \"finalized-unread\", block_hash: locating, problem: \"the node reported",
+  "replace": "if (false) { end(Object.assign({}, base, { status: \"finalized-unread\", block_hash: locating, problem: \"the node reported",
+  "test": "pane-runner.test.mjs F5, review2-pane.test.mjs",
+  "why": "F5: the deadline covers locate"
+ },
+ {
+  "id": "B2-F5b",
+  "file": "pane-runner.js",
+  "find": "if (done || locating !== null) return;",
+  "replace": "if (done) return;",
+  "test": "pane-runner.test.mjs",
+  "why": "F5: no status is taken while the block is read"
+ },
+ {
+  "id": "B2-F7a",
+  "file": "pane-runner.js",
+  "find": "if (mayWrite && !mayWrite()) {",
+  "replace": "if (false) {",
+  "test": "pane-runner.test.mjs F7 F8, review2-pane.test.mjs",
+  "why": "F7: nothing of an ended call is written"
+ },
+ {
+  "id": "B2-F7b",
+  "file": "pane-runner.js",
+  "find": "if (!written) { end(Object.assign({}, base, { status: \"not-sent\", problem: \"nothing was written before the deadline",
+  "replace": "if (false) { end(Object.assign({}, base, { status: \"not-sent\", problem: \"nothing was written before the deadline",
+  "test": "pane-runner.test.mjs F7 F8, review2-pane.test.mjs",
+  "why": "F7: a deadline with nothing written is not-sent"
+ },
+ {
+  "id": "B2-F8",
+  "file": "pane-runner.js",
+  "find": "          try { ws.send(JSON.stringify({ jsonrpc: \"2.0\", id: id, method: method, params: params })); } catch (e) {",
+  "replace": "          if (onWrite) onWrite(); try { ws.send(JSON.stringify({ jsonrpc: \"2.0\", id: id, method: method, params: params })); } catch (e) {",
+  "test": "pane-runner.test.mjs F7 F8, review2-pane.test.mjs",
+  "why": "F8: marked only after a write that did not throw"
+ },
+ {
+  "id": "B2-F3a",
+  "file": "lead-stop.mjs",
+  "find": "if (v?.final) no(",
+  "replace": "if (false) no(",
+  "test": "lead-stop.test.mjs",
+  "why": "F3: no stop of a step with a finalized reading"
+ },
+ {
+  "id": "B2-F3b",
+  "file": "lead-stop.mjs",
+  "find": "if (n.step !== id || (n.word === \"wait\" && n.waiting !== \"inclusion\")) no(",
+  "replace": "if (false) no(",
+  "test": "lead-stop.test.mjs",
+  "why": "F3: only at the step nextOf names"
+ },
+ {
+  "id": "B2-F3c",
+  "file": "lead-stop.mjs",
+  "find": "if (!(reads.birth.number > last)) refuse(",
+  "replace": "if (false) refuse(",
+  "test": "lead-stop.test.mjs",
+  "why": "F3 b: the copy's era must be over"
+ },
+ {
+  "id": "B2-F3d",
+  "file": "lead-stop.mjs",
+  "find": "if (reads.accountNonce !== included) refuse(",
+  "replace": "if (false) refuse(",
+  "test": "lead-stop.test.mjs",
+  "why": "F3 b: the device's nonce must be unmoved"
+ },
+ {
+  "id": "B2-F3e",
+  "file": "lead-stop.mjs",
+  "find": "sent.status === \"refused-at-submission\" && sent.node?.code === 1010",
+  "replace": "sent.status === \"refused-at-submission\"",
+  "test": "lead-stop.test.mjs",
+  "why": "F3 c: only node code 1010"
+ },
+ {
+  "id": "B2-F3f",
+  "file": "lead-stop.mjs",
+  "find": "if (!hasSigned && !dead.length) {",
+  "replace": "if (!hasSigned) {",
+  "test": "lead-stop.test.mjs",
+  "why": "F3 a: a dead copy means something was signed"
+ },
+ {
+  "id": "B2-F3g",
+  "file": "judge.mjs",
+  "find": "if (leadStopOf(results, cond.step)) return false;",
+  "replace": "void 0;",
+  "test": "lead-stop.test.mjs, review2-next.test.mjs",
+  "why": "F3: a stopped step does not hold its condition"
+ },
+ {
+  "id": "B2-F3h",
+  "file": "judge.mjs",
+  "find": "if (!step.cleanup) { stoppedAt = step.id; row = `stopped by the lead",
+  "replace": "if (false) { stoppedAt = step.id; row = `stopped by the lead",
+  "test": "lead-stop.test.mjs",
+  "why": "F3: a stopped test step stops the batch"
+ },
+ {
+  "id": "B2-F3i",
+  "file": "sign-device.mjs",
+  "find": "if (leadStopOf(results, id)) no(`the lead stopped ${id} (case ${leadStopOf(results, id).case}): it is never signed after the stop`);",
+  "replace": "",
+  "test": "lead-stop.test.mjs",
+  "why": "F3: no signature after a stop"
+ },
+ {
+  "id": "B2-F3j",
+  "file": "record-step.mjs",
+  "find": "if (leadStopOf(results, id)) no(`the lead stopped ${id}: no send file is written for it`);",
+  "replace": "",
+  "test": "lead-stop.test.mjs",
+  "why": "F3: no send file after a stop"
+ },
+ {
+  "id": "B2-F3k",
+  "file": "record-step.mjs",
+  "find": "if (leadStopOf(results, id)) no(`the lead stopped ${id} (case ${leadStopOf(results, id).case}): nothing of it is recorded after the stop`);",
+  "replace": "",
+  "test": "lead-stop.test.mjs",
+  "why": "F3: no reading after a stop"
+ },
+ {
+  "id": "B2-F3l",
+  "file": "record.mjs",
+  "find": "if (stop?.case !== \"c\" && stop?.case !== \"d\") return [];",
+  "replace": "if (stop?.case !== \"c\") return [];",
+  "test": "lead-stop.test.mjs",
+  "why": "F3 d: what is left names the unsent files (find adapted in fix round 3: H4 names the copy for c and d; the mutant leaves d out)"
+ },
+ {
+  "id": "B2-F3m",
+  "file": "judge.mjs",
+  "find": "if (e.lead_stop && viewOf(results, e.step)?.final) out.push(",
+  "replace": "if (false) out.push(",
+  "test": "lead-stop.test.mjs",
+  "why": "F3: a stop beside a finalized block is a broken record"
+ },
+ {
+  "id": "B2-G1",
+  "file": "plan.mjs",
+  "find": "NODE_CODES.includes(c) ? c : \"other\"",
+  "replace": "\"other\"",
+  "test": "plan.test.mjs G1, lead-stop.test.mjs",
+  "why": "G1: rows by the node's code"
+ },
+ {
+  "id": "B2-G4a",
+  "file": "judge.mjs",
+  "find": "if (step.channel && plan.steps.find((s) => s.channel === step.channel) === step) badChannels.add(step.channel);",
+  "replace": "void 0;",
+  "test": "lead-stop.test.mjs G4, record-step.test.mjs",
+  "why": "G4: cleanup steps naming that channel do not apply (find adapted in fix round 3: H9)"
+ },
+ {
+  "id": "B2-G4b",
+  "file": "record-step.mjs",
+  "find": "filter((e) => e.fields.channel_id !== undefined && e.fields.channel_id !== channel)",
+  "replace": "filter(() => false)",
+  "test": "record-step.test.mjs",
+  "why": "G4: the mismatch is recorded with both ids"
+ },
+ {
+  "id": "B2-G4c",
+  "file": "judge.mjs",
+  "find": "if (!step.cleanup) { stoppedAt = step.id; row = (plan.stop_table",
+  "replace": "if (false) { stoppedAt = step.id; row = (plan.stop_table",
+  "test": "lead-stop.test.mjs G4, record-step.test.mjs",
+  "why": "G4: the judge stops at a test step"
+ },
+ {
+  "id": "B2-F12a",
+  "file": "judge.mjs",
+  "find": "const exit = /^failed: /.test(verdict) ? 1 : left.length ? 4 : 0;",
+  "replace": "const exit = /^failed: /.test(verdict) ? 1 : left.length ? 1 : 0;",
+  "test": "check.test.mjs F12, review2-next.test.mjs",
+  "why": "F12: 4 when right and something is left"
+ },
+ {
+  "id": "B2-F12b",
+  "file": "judge.mjs",
+  "find": "verdict = left.length ? `as planned, left:",
+  "replace": "verdict = left.length ? `passed as planned, left:",
+  "test": "check.test.mjs F12, review2-next.test.mjs",
+  "why": "F12: no verdict begins with passed when something is left"
+ },
+ {
+  "id": "B2-F12c",
+  "file": "check.mjs",
+  "find": "process.exit(out.exit);",
+  "replace": "process.exit(out.all ? 0 : 1);",
+  "test": "check.test.mjs F12",
+  "why": "F12: check.mjs exits by the verdict"
+ },
+ {
+  "id": "B2-F12d",
+  "file": "check.mjs",
+  "find": "try { results = readJson(file); } catch (e) {",
+  "replace": "try { results = readJson(file); } finally {",
+  "test": "check.test.mjs F12",
+  "why": "F12: its own refusals exit 2"
+ },
+ {
+  "id": "B2-G2a",
+  "file": "judge.mjs",
+  "find": "if (extra.length && got === sum(base)) { out.left.push(",
+  "replace": "if (false) { out.left.push(",
+  "test": "check.test.mjs G2",
+  "why": "G2: the escrow alone leaves the top up"
+ },
+ {
+  "id": "B2-G2b",
+  "file": "judge.mjs",
+  "find": "if (got === sum(base) + sum(extra)) return out;",
+  "replace": "return out;",
+  "test": "check.test.mjs G2",
+  "why": "G2: another refund is a problem"
+ },
+ {
+  "id": "B2-F3n",
+  "file": "lead-stop.mjs",
+  "find": "if (earlier.length || sent.sent_by !== \"send\") no(",
+  "replace": "if (false) no(",
+  "test": "lead-stop.test.mjs F3c",
+  "why": "F3c: case c only for a lone refusal of a first send (find adapted in fix round 3: the check moved into researchStop)"
+ },
+ {
+  "id": "B2-F3o",
+  "file": "lead-stop.mjs",
+  "find": "if (earlier.length || sent.sent_by !== \"send\") no(",
+  "replace": "if (sent.sent_by !== \"send\") no(",
+  "test": "lead-stop.test.mjs F3c",
+  "why": "F3c: an earlier reading refuses case c even after a send (find adapted in fix round 3: the check moved into researchStop)"
+ },
+ {
+  "id": "B2-F3p",
+  "file": "pane-runner.js",
+  "find": "Object.assign({}, b.base, { sent_by: \"sendSame\" })",
+  "replace": "Object.assign({}, b.base, { sent_by: \"send\" })",
+  "test": "pane-runner.test.mjs F3c",
+  "why": "F3c: the relay names sendSame"
+ },
+ {
+  "id": "RV3-R1",
+  "file": "research-signed.mjs",
+  "find": "filter((x) => x !== id && planStepOf",
+  "replace": "filter((x) => planStepOf",
+  "test": "review3 tests and the builder's",
+  "why": "nonceOf: the id itself is not counted in its own owner nonce"
+ },
+ {
+  "id": "RV3-R2",
+  "file": "research-signed.mjs",
+  "find": " - (viewOf(results, id)?.final ? 1n : 0n)",
+  "replace": "",
+  "test": "review3 tests and the builder's",
+  "why": "nonceOf: T9 once final does not count itself"
+ },
+ {
+  "id": "RV3-R3",
+  "file": "research-signed.mjs",
+  "find": "if (n < 1n << 6n) return le(n << 2n, 1);",
+  "replace": "if (n < 1n << 7n) return le((n << 2n) & 0xffn, 1);",
+  "test": "review3 tests and the builder's",
+  "why": "compact: the one byte mode ends at 63 (killed in fix round 3 by the H1 test whose wrong nonce is 99, in the two byte mode: not equivalent)"
+ },
+ {
+  "id": "RV3-R4",
+  "file": "research-signed.mjs",
+  "find": "if (typeof call !== \"string\" || !/^0x([0-9a-f]{2})+$/.test(call)) no(",
+  "replace": "if (false) no(",
+  "test": "review3 tests and the builder's",
+  "why": "callOf: the research signer printed a call",
+  "equivalent": "the third reviewer's reason: a call that is not hex makes envelope throw, still a refusal"
+ },
+ {
+  "id": "RV3-R5",
+  "file": "research-signed.mjs",
+  "find": "if (!p.signature) no(",
+  "replace": "if (false) no(",
+  "test": "review3 tests and the builder's",
+  "why": "checkResearchSigned: an extrinsic that ends before the signature"
+ },
+ {
+  "id": "RV3-L1",
+  "file": "lead-stop.mjs",
+  "find": "sent.node?.code === 1010",
+  "replace": "sent.node?.code == 1010",
+  "test": "review3 tests and the builder's",
+  "why": "case c: the node code is the number 1010"
+ },
+ {
+  "id": "RV3-L2",
+  "file": "lead-stop.mjs",
+  "find": "if (reads.account !== device?.public_key && reads.account !== device?.ss58) no(",
+  "replace": "if (false) no(",
+  "test": "review3 tests and the builder's",
+  "why": "case b: the reads are the device's"
+ },
+ {
+  "id": "RV3-L3",
+  "file": "lead-stop.mjs",
+  "find": "if (existsSync(sendFile(run, id))) no(`signed/${id}.send.json exists without",
+  "replace": "if (false) no(`signed/${id}.send.json exists without",
+  "test": "review3 tests and the builder's",
+  "why": "case a: a lone send file is not nothing signed"
+ },
+ {
+  "id": "RV3-L4",
+  "file": "lead-stop.mjs",
+  "find": "if (n.step !== id || (n.word === \"wait\" && n.waiting !== \"inclusion\")) no(",
+  "replace": "if (n.step !== id) no(",
+  "test": "review3 tests and the builder's",
+  "why": "a stop only at the step waited on for inclusion, not for its outcome",
+  "equivalent": "the third reviewer's reason: a step nextOf waits on for its outcome is final, so the finalized check refuses it before"
+ },
+ {
+  "id": "RV3-L5",
+  "file": "lead-stop.mjs",
+  "find": "if (earlier.length || sent.sent_by !== \"send\")",
+  "replace": "if (sent.sent_by !== \"send\")",
+  "test": "review3 tests and the builder's",
+  "why": "case c: no earlier readings"
+ },
+ {
+  "id": "RV3-L6",
+  "file": "lead-stop.mjs",
+  "find": "if (reads.accountNonce !== included) refuse(",
+  "replace": "if (reads.accountNonce < included) refuse(",
+  "test": "review3 tests and the builder's",
+  "why": "case b: a device nonce above the record refuses"
+ },
+ {
+  "id": "RV3-N1",
+  "file": "judge.mjs",
+  "find": "if (leadStopOf(results, cond.step)) return false;",
+  "replace": "",
+  "test": "review3 tests and the builder's",
+  "why": "holdsBy: a stopped step never came on chain"
+ },
+ {
+  "id": "RV3-N2",
+  "file": "judge.mjs",
+  "find": "left.push(...unsentLeft(id, ls));\n        if (!step.cleanup)",
+  "replace": "\n        if (!step.cleanup)",
+  "test": "review3 tests and the builder's",
+  "why": "nextOf: case d's unsent files are left in words (find made longer by the builder in fix round 3: judgeFinal holds the same line for H5)"
+ },
+ {
+  "id": "RV3-N3",
+  "file": "judge.mjs",
+  "find": "else left.push(`${id} was stopped by the lead (case ${ls.case}): ${step.left_if_it_fails}`);",
+  "replace": "",
+  "test": "review3 tests and the builder's",
+  "why": "nextOf: a stopped cleanup step leaves what it should bring back"
+ },
+ {
+  "id": "RV3-S1",
+  "file": "pane-runner.js",
+  "find": "if (done || !written) return;",
+  "replace": "if (done) return;",
+  "test": "review3 tests and the builder's",
+  "why": "submit: a lost connection before any write is not connection-lost"
+ },
+ {
+  "id": "RV3-S2",
+  "file": "pane-runner.js",
+  "find": "if (done || locating !== null) unwatch();",
+  "replace": "if (done) unwatch();",
+  "test": "review3 tests and the builder's",
+  "why": "submit: a watch that saw finalized early is ended once subscribed",
+  "equivalent": "the third reviewer's reason: end always unwatches once sub is set"
+ },
+ {
+  "id": "RV3-S3",
+  "file": "pane-runner.js",
+  "find": "if (mayWrite && !mayWrite()) { reject(",
+  "replace": "if (false) { reject(",
+  "test": "review3 tests and the builder's",
+  "why": "transport: no write once the call has ended (F7)"
+ },
+ {
+  "id": "RV3-S4",
+  "file": "pane-runner.js",
+  "find": "function wrote() { if (written) return; written = true; if (mark) store.add(xt); }",
+  "replace": "function wrote() { if (written) return; written = true; store.add(xt); }",
+  "test": "review3 tests and the builder's",
+  "why": "submit: sendSame does not mark"
+ },
+ {
+  "id": "B3-H1a",
+  "file": "lead-stop.mjs",
+  "find": "if (readsText === undefined) no(`no stop at ${id}: case ${kase} needs",
+  "replace": "if (false) no(`no stop at ${id}: case ${kase} needs",
+  "test": "lead-stop.test.mjs H1",
+  "why": "H1: c and d need the signer's reads"
+ },
+ {
+  "id": "B3-H1b",
+  "file": "lead-stop.mjs",
+  "find": "if (next > nonce) no(`no stop at ${id}: the signer's next nonce is",
+  "replace": "if (false) no(`no stop at ${id}: the signer's next nonce is",
+  "test": "lead-stop.test.mjs H1",
+  "why": "H1: a next nonce above the copy's refuses"
+ },
+ {
+  "id": "B3-H1c",
+  "file": "lead-stop.mjs",
+  "find": "if (next < nonce) no(",
+  "replace": "if (false) no(",
+  "test": "lead-stop.test.mjs H1",
+  "why": "H1: a next nonce below the copy's refuses"
+ },
+ {
+  "id": "B3-H1d",
+  "file": "lead-stop.mjs",
+  "find": "try { checkResearchSigned(plan, results, id, signed); } catch (e) {",
+  "replace": "try { } catch (e) {",
+  "test": "lead-stop.test.mjs H1",
+  "why": "H1: the signed file must be the plan's step"
+ },
+ {
+  "id": "B3-H1e",
+  "file": "lead-stop.mjs",
+  "find": "if (reads.account !== signer && reads.account !== ss58(signer)) no(",
+  "replace": "if (false) no(",
+  "test": "lead-stop.test.mjs H1",
+  "why": "H1: the reads are of the step's signer"
+ },
+ {
+  "id": "B3-H1f",
+  "file": "lead-stop.mjs",
+  "find": "for (const k of Object.keys(want)) if (reads.runtime?.[k] !== want[k]) no(",
+  "replace": "for (const k of []) if (reads.runtime?.[k] !== want[k]) no(",
+  "test": "lead-stop.test.mjs H1",
+  "why": "H1: the reads are of the plan's runtime"
+ },
+ {
+  "id": "B3-H1g",
+  "file": "lead-stop.mjs",
+  "find": "if (sha256Text(text) !== sha256) no(",
+  "replace": "if (false) no(",
+  "test": "lead-stop.test.mjs H1",
+  "why": "H1: the reads are checked by their sha256"
+ },
+ {
+  "id": "B3-H1h",
+  "file": "lead-stop.mjs",
+  "find": "if (next > nonce) no(`no stop at ${id}: find read",
+  "replace": "if (false) no(`no stop at ${id}: find read",
+  "test": "lead-stop.test.mjs H1 find",
+  "why": "H1: find covered the blocks and the nonce is used: go no further"
+ },
+ {
+  "id": "B3-H1i",
+  "file": "lead-stop.mjs",
+  "find": "const whole = reach.find((x) => x.status === \"not-found\" && x.to === x.head);",
+  "replace": "const whole = reach.find((x) => x.status === \"not-found\");",
+  "test": "lead-stop.test.mjs H1 find",
+  "why": "findCovers: only a find that read to its head ends the cover"
+ },
+ {
+  "id": "B3-H1j",
+  "file": "lead-stop.mjs",
+  "find": "const reach = ranges.filter((x) => x.from <= cur && x.to >= cur);",
+  "replace": "const reach = ranges.filter((x) => x.to >= cur);",
+  "test": "lead-stop.test.mjs H1 find",
+  "why": "findCovers: a gap in the blocks read is not a cover"
+ },
+ {
+  "id": "B3-H1k",
+  "file": "lead-stop.mjs",
+  "find": "(x.status === \"not-found\" || x.status === \"find-deadline\")",
+  "replace": "(x.status === \"not-found\")",
+  "test": "lead-stop.test.mjs H1 find",
+  "why": "findCovers: the range of a find-deadline counts"
+ },
+ {
+  "id": "B3-H2a",
+  "file": "lead-stop.mjs",
+  "find": "if (readings.some((x) => x.status === \"already-sent\")) no(",
+  "replace": "if (false) no(",
+  "test": "lead-stop.test.mjs H2",
+  "why": "H2: already-sent rules out c and d"
+ },
+ {
+  "id": "B3-H2b",
+  "file": "record-step.mjs",
+  "find": "export const NOTHING_SUBMITTED = [\"refused-bundle\", \"not-in-sent-list\", \"not-sent\"];",
+  "replace": "export const NOTHING_SUBMITTED = [\"refused-bundle\", \"already-sent\", \"not-in-sent-list\", \"not-sent\"];",
+  "test": "record-step.test.mjs H2",
+  "why": "H2: already-sent is recorded"
+ },
+ {
+  "id": "B3-H3a",
+  "file": "lead-stop.mjs",
+  "find": "if (readings.length) no(`no stop at ${id}: the record holds",
+  "replace": "if (false) no(`no stop at ${id}: the record holds",
+  "test": "lead-stop.test.mjs H3",
+  "why": "H3: no case a beside a reading"
+ },
+ {
+  "id": "B3-H4a",
+  "file": "record.mjs",
+  "find": "stays valid until the nonce ${nonce} of ${signer} is used: the next transaction this signer sends ends it",
+  "replace": "is left",
+  "test": "lead-stop.test.mjs H4",
+  "why": "H4: what is left says how long the copy stays valid"
+ },
+ {
+  "id": "B3-H4b",
+  "file": "record.mjs",
+  "find": "if (stop?.case !== \"c\" && stop?.case !== \"d\") return [];",
+  "replace": "if (stop?.case !== \"d\") return [];",
+  "test": "lead-stop.test.mjs H4",
+  "why": "H4: case c leaves the copy in words"
+ },
+ {
+  "id": "B3-H5a",
+  "file": "judge.mjs",
+  "find": "else j = { status: \"differs\", problems: [`${step.id} is missing from the final record",
+  "replace": "else j = { status: \"not run\", problems: [`${step.id} is missing from the final record",
+  "test": "check.test.mjs H5",
+  "why": "H5: a missing test step with no stop fails the record"
+ },
+ {
+  "id": "B3-H5b",
+  "file": "judge.mjs",
+  "find": "if (!step.cleanup && !stoppedAt) stoppedAt = step.id;",
+  "replace": "void 0;",
+  "test": "check.test.mjs H5",
+  "why": "H5: the lead's stop at a missing test step stops the batch there"
+ },
+ {
+  "id": "B3-H5c",
+  "file": "judge.mjs",
+  "find": "if (step.cleanup) left.push(`${id} was stopped by the lead",
+  "replace": "if (false) left.push(`${id} was stopped by the lead",
+  "test": "check.test.mjs H5",
+  "why": "H5: a stopped cleanup step goes into what is left"
+ },
+ {
+  "id": "B3-H5d",
+  "file": "judge.mjs",
+  "find": "left.push(...unsentLeft(id, ls));\n      if (step.cleanup)",
+  "replace": "\n      if (step.cleanup)",
+  "test": "check.test.mjs H5",
+  "why": "H5: the copy of case c or d is left in words in the final verdict"
+ },
+ {
+  "id": "B3-H6a",
+  "file": "sign-device.mjs",
+  "find": "if (again && existsSync(file)) retireTo(run, id);",
+  "replace": "void 0;",
+  "test": "sign-device.test.mjs H6",
+  "why": "H6: a dead-<n> name that exists refuses before the key"
+ },
+ {
+  "id": "B3-H6b",
+  "file": "sign-device.mjs",
+  "find": "if (lone.length) no(",
+  "replace": "if (false) no(",
+  "test": "sign-device.test.mjs H6",
+  "why": "H6: a lone dead send file refuses before the key"
+ },
+ {
+  "id": "B3-H6c",
+  "file": "sign-device.mjs",
+  "find": "re.test(f) && !existsSync(join(dir, f.replace(/\\.send\\.json$/, \".json\")))",
+  "replace": "re.test(f)",
+  "test": "review3-preflight HELD, sign-device.test.mjs",
+  "why": "H6: a dead send file beside its dead copy is not lone"
+ },
+ {
+  "id": "B3-H7a",
+  "file": "pane-runner.js",
+  "find": "if (b.refusal) return finish(Object.assign({}, b.refusal, { sent_by: \"send\" }), null);",
+  "replace": "if (b.refusal) return finish(b.refusal, null);",
+  "test": "pane-runner.test.mjs H7",
+  "why": "H7: refused-bundle of send names it"
+ },
+ {
+  "id": "B3-H7b",
+  "file": "pane-runner.js",
+  "find": "if (b.refusal) return finish(Object.assign({}, b.refusal, { sent_by: \"sendSame\" }), null);",
+  "replace": "if (b.refusal) return finish(b.refusal, null);",
+  "test": "pane-runner.test.mjs H7",
+  "why": "H7: refused-bundle of sendSame names it"
+ },
+ {
+  "id": "B3-H7c",
+  "file": "pane-runner.js",
+  "find": "{ sent_by: \"send\", status: \"already-sent\"",
+  "replace": "{ status: \"already-sent\"",
+  "test": "pane-runner.test.mjs H7",
+  "why": "H7: already-sent names send"
+ },
+ {
+  "id": "B3-H7d",
+  "file": "pane-runner.js",
+  "find": "{ sent_by: \"sendSame\", status: \"not-in-sent-list\"",
+  "replace": "{ status: \"not-in-sent-list\"",
+  "test": "pane-runner.test.mjs H7",
+  "why": "H7: not-in-sent-list names sendSame"
+ },
+ {
+  "id": "B3-H7e",
+  "file": "pane-runner.js",
+  "find": "{ status: \"refused-bundle\", sent_by: \"find\", problem: \"find needs the extrinsic as 0x hex\" }",
+  "replace": "{ status: \"refused-bundle\", problem: \"find needs the extrinsic as 0x hex\" }",
+  "test": "pane-runner.test.mjs H7",
+  "why": "H7: a refusal of find names it"
+ },
+ {
+  "id": "B3-H8a",
+  "file": "research-signed.mjs",
+  "find": "if (typeof device !== \"string\" || !HASH.test(device)) no(",
+  "replace": "if (false) no(",
+  "test": "research-signed.test.mjs H8",
+  "why": "H8: the record's device key is checked before the research signer runs"
+ },
+ {
+  "id": "B3-H9a",
+  "file": "judge.mjs",
+  "find": "plan.steps.find((s) => s.channel === step.channel) === step) badChannels",
+  "replace": "true) badChannels",
+  "test": "lead-stop.test.mjs G4",
+  "why": "H9: only the step that opens a channel drops its cleanup step"
+ },
+ {
+  "id": "B3-H10a",
+  "file": "pane-runner.js",
+  "find": "if (done) return;\n                for (var j = 0;",
+  "replace": "for (var j = 0;",
+  "test": "pane-runner.test.mjs H10",
+  "why": "H10: a chunk answered after the deadline asks for no new chunk"
+ },
+ {
+  "id": "B3-H10b",
+  "file": "pane-runner.js",
+  "find": "readTo = nums[nums.length - 1];",
+  "replace": "void 0;",
+  "test": "pane-runner.test.mjs H10",
+  "why": "H10: find-deadline gives the blocks it read"
+ },
+ {
+  "id": "B3-H10c",
+  "file": "pane-runner.js",
+  "find": "locating = rs[j].hash; locate(",
+  "replace": "locate(",
+  "test": "pane-runner.test.mjs H10",
+  "why": "H10: a block found and not read by the deadline is finalized-unread"
+ },
+ {
+  "id": "B3-H11a",
+  "file": "pane-runner.js",
+  "find": "e && e.message === \"write-failed\" ?",
+  "replace": "false ?",
+  "test": "pane-runner.test.mjs H11",
+  "why": "H11: not-sent after a throwing write says the write failed"
+ }
+]

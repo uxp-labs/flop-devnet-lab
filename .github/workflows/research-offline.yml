@@ -1,0 +1,60 @@
+# Offline tests of the research folders that hold tests.
+# Workflow permissions are contents: read only. No secrets, wallet keys, deploys or publishing.
+# Checkout does not persist credentials. No test of these folders uses the network.
+# The folders are listed by name below:
+#   research/2026-11-12-encoder-devnet-test     (needs imd-flop/dist, built first)
+#   research/2026-11-12-session-rerun-1014020
+# No other research folder holds tests.
+
+name: research offline
+
+on:
+  pull_request:
+    paths:
+      - "research/**"
+      - "imd-flop/src/**"
+      - "imd-flop/tsconfig.json"
+      - "imd-flop/package.json"
+      - "imd-flop/package-lock.json"
+      - ".github/workflows/research-offline.yml"
+  push:
+    branches: [main]
+    paths:
+      - "research/**"
+      - "imd-flop/src/**"
+      - "imd-flop/tsconfig.json"
+      - "imd-flop/package.json"
+      - "imd-flop/package-lock.json"
+      - ".github/workflows/research-offline.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  research-tests:
+    name: research folders, offline tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+
+      - name: Use Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Build the chain encoder
+        working-directory: imd-flop
+        run: npm ci && npm run build
+
+      - name: research/2026-11-12-encoder-devnet-test
+        working-directory: research/2026-11-12-encoder-devnet-test
+        run: node --test
+
+      - name: research/2026-11-12-session-rerun-1014020
+        working-directory: research/2026-11-12-session-rerun-1014020
+        run: node --test
