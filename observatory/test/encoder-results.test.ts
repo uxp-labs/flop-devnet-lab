@@ -217,7 +217,37 @@ describe("the fill refuses, never guesses: a step's chain fields stay null when 
   });
 
   it("when the events do not decode: the runtime is named, nothing else", () => {
-    expect(fill(withValue(0, new Uint8Array([0x04])))).toEqual({ last_runtime_upgrade_spec: 1014020 });
+    // The events the runner saw are made to be those bytes, so the events refusal does not answer first.
+    const events = new Uint8Array([0x04]);
+    const sent = { ...s.run_time.sent, events_sha256: sha256(events), events_length: events.length };
+    expect(chainFill(withValue(0, events), sent, ext, R.inputs, R.metadata)).toEqual({ last_runtime_upgrade_spec: 1014020 });
+  });
+
+  it("when the events on the tape are not the ones the runner saw: the sha256 or the length it relayed is not theirs", () => {
+    const sent = s.run_time.sent as Rec;
+    const digit = (sent.events_sha256 as string).slice(-1) === "0" ? "1" : "0";
+    expect(fill(b)).not.toEqual({});
+    expect(chainFill(b, { ...sent, events_sha256: `${(sent.events_sha256 as string).slice(0, -1)}${digit}` }, ext, R.inputs, R.metadata)).toEqual({});
+    expect(chainFill(b, { ...sent, events_length: (sent.events_length as number) + 1 }, ext, R.inputs, R.metadata)).toEqual({});
+    expect(chainFill(b, { ...sent, events_sha256: undefined }, ext, R.inputs, R.metadata)).toEqual({});
+  });
+
+  it("when the run time record's events_sha256 or events_length of one step is changed, that step's chain fields stay null and every other step is filled as before", () => {
+    const record = (change: (sent: Rec) => void): Rec[] => {
+      const copy = structuredClone(RUN_TIME) as Rec;
+      change((copy.steps as Rec[]).find((x) => x.step === "T3")?.run_time.sent as Rec);
+      return fillFinal(copy).steps as Rec[];
+    };
+    const digitChanged = (sent: Rec) => {
+      sent.events_sha256 = `${(sent.events_sha256 as string).slice(0, -1)}${(sent.events_sha256 as string).endsWith("0") ? "1" : "0"}`;
+    };
+    for (const change of [digitChanged, (sent: Rec) => { sent.events_length += 1; }]) {
+      const steps = record(change);
+      const t3 = steps.find((x) => x.step === "T3") as Rec;
+      const runT3 = (RUN_TIME.steps as Rec[]).find((x) => x.step === "T3") as Rec;
+      for (const f of CHAIN_FIELDS) expect(t3[f], f).toEqual(runT3[f]);
+      for (const x of steps.filter((y) => y.step !== "T3")) expect(x, x.step).toEqual((FINAL.steps as Rec[]).find((y) => y.step === x.step));
+    }
   });
 
   it("when the block is not the one the run time record names finalized, or does not hold the signed extrinsic exactly once", () => {

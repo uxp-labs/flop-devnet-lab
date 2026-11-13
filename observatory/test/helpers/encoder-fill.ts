@@ -16,7 +16,7 @@
 // Nothing stored is { "absent": true } for an account (reads_form), a session and the channel, and
 // "absent" for the session nonce and the breaker (the lead's words, C5); null is unknown. A step's
 // chain fields are filled only from a block whose batch answer was read, whose LastRuntimeUpgrade
-// names a reviewed runtime and whose events decoded; otherwise they stay null (C7).
+// names a reviewed runtime and whose events are the runner's and decoded; otherwise they stay null (C7).
 import { createHash } from "node:crypto";
 import { SHAPE_SCHEMA } from "../../src/scale/shape.js";
 import { type Pin, type Rec, type Value, errorRows, extrinsicFill, hex, isRec, pinBlock, readThroughDoor, repoText, resultsForm, text } from "./block-fill.js";
@@ -131,11 +131,14 @@ interface RunSent {
   block_number?: unknown;
   block_hash?: unknown;
   submitted_utc?: unknown;
+  events_sha256?: unknown;
+  events_length?: unknown;
 }
 
 /**
  * The chain fields of one step from its block on the tape (C7): none when the block is not the one
- * the run time record names finalized, its batch answer was not read, its runtime is not reviewed,
+ * the run time record names finalized (its number, its hash, and the sha256 and length of its
+ * System.Events value, which are the runner's), its batch answer was not read, its runtime is not reviewed,
  * or it does not hold the signed extrinsic exactly once; only last_runtime_upgrade_spec when its
  * events do not decode, as the rerun's fill; every one otherwise. A field not given keeps the run
  * time record's null.
@@ -143,6 +146,9 @@ interface RunSent {
 export function chainFill(b: EncoderBlock, sent: RunSent | null, extrinsic: string, inputs: Inputs, metadata: Uint8Array): Partial<Record<(typeof CHAIN_FIELDS)[number], unknown>> {
   // The block is the one the run time record names finalized, by its number and the hash the tape answered.
   if (sent?.status !== "finalized" || sent.block_number !== b.height || sent.block_hash !== b.answeredHash) return {};
+  // The events on the tape are the ones the runner saw: the sha256 and the length it relayed, checked before any read is decoded.
+  const tapeEvents = b.answer.read ? b.answer.values.get(b.keys[0] ?? "") : undefined;
+  if (!(tapeEvents instanceof Uint8Array) || createHash("sha256").update(tapeEvents).digest("hex") !== sent.events_sha256 || tapeEvents.length !== sent.events_length) return {};
   const p = pinBlock(b.answer, b.keys[0], b.keys[1], metadata);
   if (p.state === "not read") return {};
   if (p.state === "events not decoded") return { last_runtime_upgrade_spec: p.spec };

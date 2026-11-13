@@ -134,5 +134,13 @@
     "replace": "balances_source: \"decoder\",",
     "test": "test/encoder-results.test.ts",
     "why": "the final record says record final (C2)"
+  },
+  {
+    "id": "r32-events-not-the-runners",
+    "file": "test/helpers/encoder-fill.ts",
+    "find": "  if (!(tapeEvents instanceof Uint8Array) || createHash(\"sha256\").update(tapeEvents).digest(\"hex\") !== sent.events_sha256 || tapeEvents.length !== sent.events_length) return {};\n",
+    "replace": "",
+    "test": "test/encoder-results.test.ts",
+    "why": "a block whose System.Events on the tape are not the sha256 and length the runner relayed is refused before any read is decoded (review round 32, finding 5)"
   }
 ]

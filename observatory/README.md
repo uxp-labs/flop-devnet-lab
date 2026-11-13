@@ -320,10 +320,14 @@ building and testing decoders against real data. It is evidence, never proof of 
   the run time record, which it never writes, through `src/scale/block.ts`
   (`test/helpers/encoder-fill.ts`, reading the fixture through `test/helpers/recorded-encoder.ts`);
   `test/encoder-results.test.ts` holds the committed file to that fill byte for byte and holds its
-  balances, its words for a read the node holds nothing for, and its refusals. The verdict of the
-  encoder folder's `check.mjs` on it is held by that folder's own `final-record.test.mjs`: the
-  observatory depends on nothing of imd-flop, which that checker needs, so no observatory test or
-  script runs it.
+  balances, its words for a read the node holds nothing for, and its refusals: the fill gives a
+  step no chain field when its block is not the one the run time record names finalized (the
+  number and the hash), when the sha256 or the length of the block's `System.Events` value on the
+  tape is not the `events_sha256` or `events_length` the runner relayed, when its batch answer was
+  not read, its runtime is not reviewed, or it does not hold the signed extrinsic exactly once. The
+  verdict of the encoder folder's `check.mjs` on it is held by that folder's own
+  `final-record.test.mjs`: the observatory depends on nothing of imd-flop, which that checker
+  needs, so no observatory test or script runs it.
 - What both fills share (a block pinned to its runtime, the events of one extrinsic with its result
   and fee, one storage read through the door, the error rows) is `test/helpers/block-fill.ts`.
 - The fourth list read the lab's session rerun at spec 1014020
