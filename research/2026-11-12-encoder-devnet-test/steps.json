@@ -7,7 +7,8 @@
   "escrow": "research/2026-11-11-session-escrow/results.json",
   "deny": "research/2026-11-11-session-deny-list/results.json",
   "upgrade": "research/2026-11-12-runtime-upgrade/results.json",
-  "facts": "research/2026-11-12-session-rerun-1014020/facts-1014020.json"
+  "facts": "research/2026-11-12-session-rerun-1014020/facts-1014020.json",
+  "signer": "research/2026-11-11-session-deny-list/flop-sign.mjs"
  },
  "values": {
   "OWNER": { "value": "0xe462d014cab1239a123233647052f4e3b572322e982441d6b7a5c1694d8419e2", "from": { "file": "rerun", "path": "accounts.owner.public_key" }, "same_as": { "file": "deny", "path": "owner.public_key" } },
@@ -20,6 +21,8 @@
   "RPC": { "value": "wss://rpc.devnet.flop.network", "from": { "file": "upgrade", "path": "rpc" } },
   "EXPLORER": { "value": "https://explorer.devnet.flop.network", "decided": "FLOP's explorer, read by explorer-reader.js in a tab on its own origin: the lead read the rerun's A6 and A5 there and both agree with the committed record (lead-measurements-2026-11-13.json measurements.explorer and measurements.explorer_answer_shape)" },
   "EVENTS_KEY": { "value": "0x26aa394eea5630e07c48ae0c9558cef780d41e5e16056765bc8461851072c9d7", "from": { "file": "upgrade", "path": "keys[\"System.Events\"]" } },
+  "TWOX_FLOP_SESSION_KEYS": { "value": "26d6680094539fc341d5ea8ffc79d76f", "from": { "file": "signer", "re": "FlopSessionKeys: \"([0-9a-f]{32})\"" } },
+  "TWOX_SESSION_NONCES": { "value": "a8bf8c9b4fb4963e0d891d0ea6eb7b2c", "from": { "file": "signer", "re": "SessionNonces: \"([0-9a-f]{32})\"" } },
   "OWNER_NONCE_AFTER_RERUN": { "value": "14", "from": { "file": "run_log", "path": "next_nonce.owner" } },
   "MAX_FEE": { "value": "10558485985000000", "from": { "file": "rerun", "path": "steps[2].fee_raw" } },
   "FUND": { "value": "150000000000000000", "from": { "file": "escrow", "path": "steps[0].what", "re": "send (\\d+) raw" } },

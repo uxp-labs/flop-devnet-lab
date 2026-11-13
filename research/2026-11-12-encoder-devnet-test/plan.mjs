@@ -3,15 +3,17 @@
 //   node plan.mjs table       the steps as the table of plan.md
 //   node plan.mjs costs       the fee of each step and the escrows, as the tables of plan.md
 //   node plan.mjs stops       what the lead does on each stop, and what is left, as the table of plan.md
-//   node plan.mjs commands [--results <results.json>]
-//        the command lines of every step: the research signer's for the owner's calls and the sweep,
-//        sign-device.mjs and the pane for the device's calls. With a results file, the device's
-//        account and the owner's nonce are put in; without, they stay $NAMES.
+//   node plan.mjs commands    the reader's list: the command lines of every step, values as $NAMES
+//   node plan.mjs next --run <run folder>
+//        only what the lead does next, by the record: the pane and PC lines of the next step with
+//        every value filled, or the stop row, or the wait (R4)
 //   node plan.mjs template    the empty results form (results.template.json is its output)
 //   node plan.mjs md          rewrites each printed block of plan.md (between its markers) from steps.json
 import { readFileSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
-import { HERE, RERUN, loadPlan, readJson, substitute, rerunFee, flopText, RAW } from "./lib.mjs";
+import { join, resolve } from "node:path";
+import { HERE, RERUN, loadPlan, readJson, substitute, rerunFee, flopText, RAW, sessionNonceKey } from "./lib.mjs";
+import { planStepOf, recordedIds, viewOf, deviceIncluded, afterBlockOf, loadRecord, signedFile } from "./record.mjs";
+import { nextOf } from "./judge.mjs";
 
 const SIGNER = "\"$LAB/research/2026-11-11-session-deny-list/flop-sign.mjs\"";
 const SIGN_DEVICE = "\"$LAB/research/2026-11-12-encoder-devnet-test/sign-device.mjs\"";
@@ -79,41 +81,118 @@ export function stopsText(plan) {
   return ["| Stop | The lead | Then sends | Left on chain, and how it comes back |", "|---|---|---|---|", ...rows].join("\n");
 }
 
-/** The command lines of one step. */
-export function commandsOf(plan, st, results) {
-  const q = (a) => (/^[A-Za-z0-9_:.,\/=$-]+$/.test(a) ? a : `'${a.replace(/'/g, "'\\''")}'`);
-  const head = `# ${st.id}: ${st.signer} signs with the ${st.tool}; expect ${st.expect === "success" ? "success" : "the outcome to be recorded"}${st.only_if ? `; only if ${condText(st.only_if)}` : ""}${st.after_block ? `; ${afterText(plan, st.after_block)}` : ""}`;
-  const pane = `#    in the pane: await lab.send(<text of signed/${st.id}.json>, "<its sha256, printed above>")`;
-  if (st.tool === "encoder") {
-    const chan = /\$T\d/.test(JSON.stringify(st.inner)) ? "; the channel id is taken from results.json" : "";
-    return [head,
-      `#    in the pane, moments before: copy(JSON.stringify(await lab.deviceReads("$DEVICE", "<session_nonce key of flop-sign.mjs keys>")))`,
-      `node ${SIGN_DEVICE} ${st.id} --key ${KEY.device} --results results.json --reads '<what deviceReads printed>'${chan ? `  ${chan}` : ""}`,
-      pane].join("\n");
-  }
-  const args = st.call.map((a) => substitute(a, plan, results));
-  let nonce;
-  if (st.signer === "owner") {
-    const start = results?.owner_account_nonce_at_start;
-    nonce = RAW.test(start ?? "") ? String(BigInt(start) + BigInt(st.nonce)) : `$((OWNER_NONCE+${st.nonce}))`;
-  } else nonce = "$DEVICE_NONCE";
-  return [head,
-    `node ${SIGNER} call ${args.map(q).join(" ")} > calls/${st.id}.json`,
-    `node ${SIGNER} sign --key ${KEY[st.signer]} --call "$(node -p 'require("./calls/${st.id}.json").call')" --nonce ${nonce} --out signed/${st.id}.json --spec ${plan.values.SPEC.value} --txv ${plan.values.TXV.value} --genesis ${plan.values.GENESIS.value}`,
-    `sha256sum signed/${st.id}.json`,
-    pane].join("\n");
+const RECORD = "\"$LAB/research/2026-11-12-encoder-devnet-test/record-step.mjs\"";
+const NODE_TAB = "https://rpc.devnet.flop.network/", EXPLORER_TAB = "https://explorer.devnet.flop.network/";
+const q = (a) => (/^[A-Za-z0-9_:.,\/=$-]+$/.test(a) ? a : `'${a.replace(/'/g, "'\\''")}'`);
+
+/**
+ * The values the lines of a step need. Without a record they stay placeholders for the reader's
+ * list (plan.mjs commands). With a run folder and its record every value is filled (plan.mjs next).
+ */
+export function lineValues(plan, run, results) {
+  if (!results) return { run: "$RUN", device_ss58: "$DEVICE_SS58", device: "$DEVICE", session_key: "<session_nonce of flop-sign.mjs keys --owner $OWNER --delegate $DEVICE>", owner_nonce: (st) => `$((OWNER_NONCE+${st.nonce}))`, device_nonce: "$DEVICE_NONCE", filled: false };
+  const device = results.accounts.device.public_key;
+  const ownerIncluded = recordedIds(plan, results).filter((id) => planStepOf(plan, id).signer === "owner" && viewOf(results, id).final).length;
+  return {
+    run, device_ss58: results.accounts.device.ss58, device, session_key: sessionNonceKey(plan, plan.values.OWNER.value, device),
+    owner_nonce: () => String(BigInt(results.owner_account_nonce_at_start) + BigInt(ownerIncluded)), device_nonce: String(deviceIncluded(plan, results)), filled: true,
+  };
 }
 
-/** Every step's command lines, with the header that says how to run them. */
+/** The pane and PC lines that send a signed bundle and record it, for an id. */
+function sendAndRecord(id, v, bundle, sha, how = "send") {
+  return [
+    `#  pane, tab on the node (${NODE_TAB}):`,
+    `window.__s = lab.${how}('${bundle}', "${sha}")`,
+    "await window.__s   (its relay and relay_sha256)",
+    "#  PC:",
+    `node ${RECORD} step ${id} --run "${v.run}" --sent '<relay>' --sent-sha256 <relay_sha256>`,
+    `#  pane, tab on the explorer (${EXPLORER_TAB}):`,
+    `window.__e = explorer.read("<extrinsic_hash of signed/${id}.json>")`,
+    "await window.__e   (its relay and relay_sha256)",
+    "#  PC:",
+    `node ${RECORD} step ${id} --run "${v.run}" --explorer '<relay>' --explorer-sha256 <relay_sha256>`,
+  ];
+}
+
+/** The command lines of one id of a step (an attempt of a cleanup step is signed like the step). */
+export function commandsOf(plan, st, results, v = lineValues(plan, null, null), id = st.id, again = false) {
+  const head = `# ${id}: ${st.signer} signs with the ${st.tool}; expect ${st.expect === "success" ? "success" : "the outcome to be recorded"}${st.only_if ? `; only if ${condText(st.only_if)}` : ""}${st.after_block ? `; ${afterText(plan, st.after_block)}` : ""}`;
+  if (st.tool === "encoder") {
+    return [head,
+      "#  mortal, 64 blocks: read, sign and send it within a minute",
+      `#  pane, tab on the node (${NODE_TAB}):`,
+      `window.__r = lab.deviceReads("${v.device_ss58}", "${v.session_key}")`,
+      "await window.__r   (its relay and relay_sha256)",
+      "#  PC:",
+      `node ${SIGN_DEVICE} ${id} --run "${v.run}" --key "$KEY_DEVICE" --reads '<relay>' --reads-sha256 <relay_sha256>${again ? " --again" : ""}`,
+      ...sendAndRecord(id, v, "<the second line sign-device printed: the text of signed/" + id + ".send.json>", "<its send_sha256>"),
+    ].join("\n");
+  }
+  const args = st.call.map((a) => (a === "$DEVICE" ? v.device : substitute(a, plan, results)));
+  const nonce = st.signer === "owner" ? v.owner_nonce(st) : v.device_nonce;
+  return [head,
+    "#  immortal: never signed to different bytes",
+    "#  PC:",
+    `mkdir -p "${v.run}/calls" "${v.run}/signed"`,
+    `node ${SIGNER} call ${args.map(q).join(" ")} > "${v.run}/calls/${id}.json"`,
+    `node ${SIGNER} sign --key "${KEY[st.signer]}" --call "$(node -p 'require(process.argv[1]).call' "${v.run}/calls/${id}.json")" --nonce ${nonce} --out "${v.run}/signed/${id}.json" --spec ${plan.values.SPEC.value} --txv ${plan.values.TXV.value} --genesis ${plan.values.GENESIS.value}`,
+    `node ${RECORD} send-file ${id} --run "${v.run}"`,
+    ...sendAndRecord(id, v, `<the second line send-file printed: the text of signed/${id}.send.json>`, "<its send_sha256>"),
+  ].join("\n");
+}
+
+/** Every step's command lines, with the header that says how to run them: the reader's list. */
 export function commandsText(plan, results) {
   const head = [
-    "# run in a working folder outside the repo, after: mkdir calls signed",
-    "# LAB is the repo checkout; KEY_OWNER and KEY_DEVICE name the key files; FLOP_SIGN_LIBS names the libraries (LAB/imd-flop)",
-    "# OWNER_NONCE is the owner's account nonce read before T1; DEVICE_NONCE the device's, read before T9",
-    `# the pane: paste pane-runner.js, then: const lab = paneRunner.createRunner({ transport: paneRunner.wsTransport("${plan.values.RPC.value}"), eventsKey: "${plan.values.EVENTS_KEY.value}" })`,
-    "# the research signer signs immortal; sign-device.mjs signs mortal, 64 blocks: read, sign and send it within a minute",
+    "# RUN is the run folder on the PC (record-step.mjs start makes its results.json); LAB is the repo checkout",
+    "# KEY_OWNER and KEY_DEVICE name the key files; FLOP_SIGN_LIBS names the libraries (LAB/imd-flop)",
+    "# OWNER_NONCE is the owner's next nonce at the start; DEVICE_NONCE the device's transactions included before T9",
+    `# the node's tab: paste pane-runner.js, check its sha256, then: const lab = paneRunner.createRunner()`,
+    `# the explorer's tab: paste explorer-reader.js, check its sha256, then: const explorer = explorerReader.createReader()`,
+    "# a pane call ends after 45 s: keep each promise on window and read it in a second call",
+    "# plan.mjs next --run \"$RUN\" prints the lines of the next step only, with every value filled",
     "", ""].join("\n");
   return head + plan.steps.map((st) => commandsOf(plan, st, results) + "\n\n").join("");
+}
+
+/** The send_outcomes row of a runner outcome, or null. */
+export const outcomeRow = (plan, status, word = null) => (plan.send_outcomes ?? []).find((r) => r.outcome === status && (r.node_word ?? null) === (status === "ended" ? word : null)) ?? null;
+
+/** What the lead does next, by the record of a run folder (R4): the next lines with every value filled, the stop row, or the wait. */
+export function nextText(plan, run, results) {
+  const n = nextOf(plan, results);
+  const v = lineValues(plan, run, results);
+  const out = [];
+  if (n.word === "stop") out.push(`# stop at ${n.stopped_at}: ${n.row}`, `# cleanup steps that apply: ${n.cleanup.join(", ") || "none"}`);
+  for (const f of n.findings) out.push(`# finding: ${f}`);
+  for (const l of n.left) out.push(`# left: ${l}`);
+  if (!n.step) { out.push(`# ${n.word === "stop" ? "the cleanup is done" : "go on"}: ${n.why}`); return out.join("\n") + "\n"; }
+  const st = planStepOf(plan, n.step);
+  if (n.word === "wait" && n.waiting === "outcome" && viewOf(results, n.step)) {
+    const rt = viewOf(results, n.step).entry.run_time;
+    out.push(`# wait: ${n.why}`, `#  pane, tab on the explorer (${EXPLORER_TAB}):`, `window.__e = explorer.read("${rt.extrinsic_hash}")`, "await window.__e   (its relay and relay_sha256)", "#  PC:",
+      `node ${RECORD} step ${n.step} --run "${run}" --explorer '<relay>' --explorer-sha256 <relay_sha256>`);
+    return out.join("\n") + "\n";
+  }
+  if (n.word === "wait" && n.waiting === "outcome") { out.push(`# wait: ${n.why}`); return out.join("\n") + "\n"; }
+  if (n.word === "wait") {
+    const rt = viewOf(results, n.step).entry.run_time;
+    const row = outcomeRow(plan, rt.sent.status, rt.sent.node_status ?? null);
+    const signed = readJson(signedFile(run, n.step));
+    out.push(`# wait: ${n.why}`);
+    if (row) out.push(`# known: ${row.known}`, `# the lead: ${row.lead}`, `# a second copy: ${row.second_copy}`);
+    const from = signed.era?.birth_number ?? results.start.finalized.number;
+    out.push(`#  pane, tab on the node (${NODE_TAB}): look for it in finalized blocks from ${signed.era ? "its birth block" : "the start of the run"}`, `window.__f = lab.find("${signed.extrinsic}", ${from})`, "await window.__f   (its relay and relay_sha256)", "#  PC, if it says finalized:",
+      `node ${RECORD} step ${n.step} --run "${run}" --sent '<relay>' --sent-sha256 <relay_sha256>`);
+    if (st.tool === "encoder") out.push(`#  if not found and the finalized head is above ${signed.era.last_valid_block}, its era is over: a second copy (S4)`, commandsOf(plan, st, results, v, n.step, true));
+    else out.push("#  if not found: the same bytes again, never other bytes", ...sendAndRecord(n.step, v, `<the text of signed/${n.step}.send.json>`, "<its sha256>", "sendSame"));
+    return out.join("\n") + "\n";
+  }
+  const after = afterBlockOf(plan, st, results);
+  if (after !== null && typeof after === "number") out.push(`# ${n.step} is signed only from a birth block above ${after}`);
+  out.push(commandsOf(plan, st, results, v, n.step));
+  return out.join("\n") + "\n";
 }
 
 /** The empty results form. */
@@ -168,9 +247,10 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   if (cmd === "table") console.log(table(plan));
   else if (cmd === "costs") console.log(costsText(plan));
   else if (cmd === "stops") console.log(stopsText(plan));
-  else if (cmd === "commands") process.stdout.write(commandsText(plan, flag("results") ? readJson(flag("results")) : null));
+  else if (cmd === "commands") process.stdout.write(commandsText(plan, null));
+  else if (cmd === "next") { const run = resolve(flag("run") ?? (process.stderr.write("plan.mjs next --run <run folder>\n"), process.exit(2))); const r = loadRecord(run); if (!r) { process.stderr.write("the run folder has no results.json: make it with record-step.mjs start\n"); process.exit(2); } process.stdout.write(nextText(plan, run, r)); }
   else if (cmd === "template") console.log(JSON.stringify(template(plan), null, 1));
   else if (cmd === "md") { const f = join(HERE, "plan.md"); writeFileSync(f, renderMd(readFileSync(f, "utf8"), plan)); }
-  else { process.stderr.write("commands: table, costs, stops, commands, template, md\n"); process.exit(2); }
+  else { process.stderr.write("commands: table, costs, stops, commands, next, template, md\n"); process.exit(2); }
 }
 export const errorsOf = () => readJson(join(RERUN, "errors-1014020.json"));

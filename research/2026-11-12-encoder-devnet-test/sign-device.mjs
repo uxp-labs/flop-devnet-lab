@@ -38,7 +38,7 @@ import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { REPO, HASH, RAW, loadPlan, readJson, substitute, sha256Text, ss58 } from "./lib.mjs";
 import { DeviceKeyError, loadDeviceSigner } from "./device-key.mjs";
-import { planStepOf, loadRecord, viewOf, deviceIncluded, sessionSucceeded, afterBlockOf, signedFile, sendFile, runFiles } from "./record.mjs";
+import { sendText as sendTextOf, planStepOf, loadRecord, viewOf, deviceIncluded, sessionSucceeded, afterBlockOf, signedFile, sendFile, runFiles } from "./record.mjs";
 import { nextOf } from "./judge.mjs";
 
 const chain = (f) => import(pathToFileURL(join(REPO, "imd-flop", "dist", "chain", f)).href);
@@ -166,7 +166,7 @@ export function signStep({ plan, id, step, reads, results, signer }) {
 }
 
 /** The send file's text of a record: exactly {"step","extrinsic"} on one line, no line end (S3). */
-export const sendText = (record) => JSON.stringify({ step: record.step, extrinsic: record.extrinsic });
+export const sendText = (record) => sendTextOf(record.step, record.extrinsic);
 
 /** For --again: moves the earlier copy's two files to dead-<n> and returns what the new record lists (S4). */
 function retire(run, id, earlier) {

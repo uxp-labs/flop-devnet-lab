@@ -38,9 +38,16 @@ in this folder. `imd-flop/dist` must be built.
   checks the extrinsic's sha256 (extrinsic_sha256, given by every runner result) against the
   signed file's extrinsic. A channelId that is not the derived one is refused, not recorded.
 
+- R4: plan.mjs next --run (only the next lines, every value filled), commandsOf/commandsText on
+  the new interface (the reader's list), record-step.mjs send-file (a short send file for the
+  research signer's steps too, so no multi line JSON is typed into the pane). The session nonce
+  key is made by lib.mjs sessionNonceKey from the research signer's twox128 table (steps.json
+  TWOX_*, read from flop-sign.mjs text), tested equal to flop-sign.mjs keys. plan-next.test.mjs.
+  Known failing until P6: plan.test.mjs "R12: the README says ..." (README lines are old).
+
 ## Next
 
-- R4 plan.mjs next --run, then C1 to C7.
+- C1 to C7 (judge.mjs and check.mjs, check.test.mjs, review-check.test.mjs).
 
 ## Decisions (fix round) and why
 

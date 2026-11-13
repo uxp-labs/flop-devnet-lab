@@ -162,59 +162,174 @@ batch stands:
 
 <!-- printed by plan.mjs: commands -->
 ```
-# run in a working folder outside the repo, after: mkdir calls signed
-# LAB is the repo checkout; KEY_OWNER and KEY_DEVICE name the key files; FLOP_SIGN_LIBS names the libraries (LAB/imd-flop)
-# OWNER_NONCE is the owner's account nonce read before T1; DEVICE_NONCE the device's, read before T9
-# the pane: paste pane-runner.js, then: const lab = paneRunner.createRunner({ transport: paneRunner.wsTransport("wss://rpc.devnet.flop.network"), eventsKey: "0x26aa394eea5630e07c48ae0c9558cef780d41e5e16056765bc8461851072c9d7" })
-# the research signer signs immortal; sign-device.mjs signs mortal, 64 blocks: read, sign and send it within a minute
+# RUN is the run folder on the PC (record-step.mjs start makes its results.json); LAB is the repo checkout
+# KEY_OWNER and KEY_DEVICE name the key files; FLOP_SIGN_LIBS names the libraries (LAB/imd-flop)
+# OWNER_NONCE is the owner's next nonce at the start; DEVICE_NONCE the device's transactions included before T9
+# the node's tab: paste pane-runner.js, check its sha256, then: const lab = paneRunner.createRunner()
+# the explorer's tab: paste explorer-reader.js, check its sha256, then: const explorer = explorerReader.createReader()
+# a pane call ends after 45 s: keep each promise on window and read it in a second call
+# plan.mjs next --run "$RUN" prints the lines of the next step only, with every value filled
 
 # T1: owner signs with the research-signer; expect success
-node "$LAB/research/2026-11-11-session-deny-list/flop-sign.mjs" call transfer --to $DEVICE --amount 150000000000000000 > calls/T1.json
-node "$LAB/research/2026-11-11-session-deny-list/flop-sign.mjs" sign --key $KEY_OWNER --call "$(node -p 'require("./calls/T1.json").call')" --nonce $((OWNER_NONCE+0)) --out signed/T1.json --spec 1014020 --txv 2 --genesis 0x99c172c095340ace980631f9123544c6bebd4839f3437e463533422d8be2d631
-sha256sum signed/T1.json
-#    in the pane: await lab.send(<text of signed/T1.json>, "<its sha256, printed above>")
+#  immortal: never signed to different bytes
+#  PC:
+mkdir -p "$RUN/calls" "$RUN/signed"
+node "$LAB/research/2026-11-11-session-deny-list/flop-sign.mjs" call transfer --to $DEVICE --amount 150000000000000000 > "$RUN/calls/T1.json"
+node "$LAB/research/2026-11-11-session-deny-list/flop-sign.mjs" sign --key "$KEY_OWNER" --call "$(node -p 'require(process.argv[1]).call' "$RUN/calls/T1.json")" --nonce $((OWNER_NONCE+0)) --out "$RUN/signed/T1.json" --spec 1014020 --txv 2 --genesis 0x99c172c095340ace980631f9123544c6bebd4839f3437e463533422d8be2d631
+node "$LAB/research/2026-11-12-encoder-devnet-test/record-step.mjs" send-file T1 --run "$RUN"
+#  pane, tab on the node (https://rpc.devnet.flop.network/):
+window.__s = lab.send('<the second line send-file printed: the text of signed/T1.send.json>', "<its send_sha256>")
+await window.__s   (its relay and relay_sha256)
+#  PC:
+node "$LAB/research/2026-11-12-encoder-devnet-test/record-step.mjs" step T1 --run "$RUN" --sent '<relay>' --sent-sha256 <relay_sha256>
+#  pane, tab on the explorer (https://explorer.devnet.flop.network/):
+window.__e = explorer.read("<extrinsic_hash of signed/T1.json>")
+await window.__e   (its relay and relay_sha256)
+#  PC:
+node "$LAB/research/2026-11-12-encoder-devnet-test/record-step.mjs" step T1 --run "$RUN" --explorer '<relay>' --explorer-sha256 <relay_sha256>
 
 # T2: owner signs with the research-signer; expect success
-node "$LAB/research/2026-11-11-session-deny-list/flop-sign.mjs" call create-session --delegate $DEVICE --cap 50000000000000000 --per-tx 20000000000000000 --daily 25000000000000000 --blocks 7200 --allow ComputeChannel > calls/T2.json
-node "$LAB/research/2026-11-11-session-deny-list/flop-sign.mjs" sign --key $KEY_OWNER --call "$(node -p 'require("./calls/T2.json").call')" --nonce $((OWNER_NONCE+1)) --out signed/T2.json --spec 1014020 --txv 2 --genesis 0x99c172c095340ace980631f9123544c6bebd4839f3437e463533422d8be2d631
-sha256sum signed/T2.json
-#    in the pane: await lab.send(<text of signed/T2.json>, "<its sha256, printed above>")
+#  immortal: never signed to different bytes
+#  PC:
+mkdir -p "$RUN/calls" "$RUN/signed"
+node "$LAB/research/2026-11-11-session-deny-list/flop-sign.mjs" call create-session --delegate $DEVICE --cap 50000000000000000 --per-tx 20000000000000000 --daily 25000000000000000 --blocks 7200 --allow ComputeChannel > "$RUN/calls/T2.json"
+node "$LAB/research/2026-11-11-session-deny-list/flop-sign.mjs" sign --key "$KEY_OWNER" --call "$(node -p 'require(process.argv[1]).call' "$RUN/calls/T2.json")" --nonce $((OWNER_NONCE+1)) --out "$RUN/signed/T2.json" --spec 1014020 --txv 2 --genesis 0x99c172c095340ace980631f9123544c6bebd4839f3437e463533422d8be2d631
+node "$LAB/research/2026-11-12-encoder-devnet-test/record-step.mjs" send-file T2 --run "$RUN"
+#  pane, tab on the node (https://rpc.devnet.flop.network/):
+window.__s = lab.send('<the second line send-file printed: the text of signed/T2.send.json>', "<its send_sha256>")
+await window.__s   (its relay and relay_sha256)
+#  PC:
+node "$LAB/research/2026-11-12-encoder-devnet-test/record-step.mjs" step T2 --run "$RUN" --sent '<relay>' --sent-sha256 <relay_sha256>
+#  pane, tab on the explorer (https://explorer.devnet.flop.network/):
+window.__e = explorer.read("<extrinsic_hash of signed/T2.json>")
+await window.__e   (its relay and relay_sha256)
+#  PC:
+node "$LAB/research/2026-11-12-encoder-devnet-test/record-step.mjs" step T2 --run "$RUN" --explorer '<relay>' --explorer-sha256 <relay_sha256>
 
 # T3: device signs with the encoder; expect success
-#    in the pane, moments before: copy(JSON.stringify(await lab.deviceReads("$DEVICE", "<session_nonce key of flop-sign.mjs keys>")))
-node "$LAB/research/2026-11-12-encoder-devnet-test/sign-device.mjs" T3 --key $KEY_DEVICE --results results.json --reads '<what deviceReads printed>'
-#    in the pane: await lab.send(<text of signed/T3.json>, "<its sha256, printed above>")
+#  mortal, 64 blocks: read, sign and send it within a minute
+#  pane, tab on the node (https://rpc.devnet.flop.network/):
+window.__r = lab.deviceReads("$DEVICE_SS58", "<session_nonce of flop-sign.mjs keys --owner $OWNER --delegate $DEVICE>")
+await window.__r   (its relay and relay_sha256)
+#  PC:
+node "$LAB/research/2026-11-12-encoder-devnet-test/sign-device.mjs" T3 --run "$RUN" --key "$KEY_DEVICE" --reads '<relay>' --reads-sha256 <relay_sha256>
+#  pane, tab on the node (https://rpc.devnet.flop.network/):
+window.__s = lab.send('<the second line sign-device printed: the text of signed/T3.send.json>', "<its send_sha256>")
+await window.__s   (its relay and relay_sha256)
+#  PC:
+node "$LAB/research/2026-11-12-encoder-devnet-test/record-step.mjs" step T3 --run "$RUN" --sent '<relay>' --sent-sha256 <relay_sha256>
+#  pane, tab on the explorer (https://explorer.devnet.flop.network/):
+window.__e = explorer.read("<extrinsic_hash of signed/T3.json>")
+await window.__e   (its relay and relay_sha256)
+#  PC:
+node "$LAB/research/2026-11-12-encoder-devnet-test/record-step.mjs" step T3 --run "$RUN" --explorer '<relay>' --explorer-sha256 <relay_sha256>
 
 # T4: device signs with the encoder; expect the outcome to be recorded
-#    in the pane, moments before: copy(JSON.stringify(await lab.deviceReads("$DEVICE", "<session_nonce key of flop-sign.mjs keys>")))
-node "$LAB/research/2026-11-12-encoder-devnet-test/sign-device.mjs" T4 --key $KEY_DEVICE --results results.json --reads '<what deviceReads printed>'
-#    in the pane: await lab.send(<text of signed/T4.json>, "<its sha256, printed above>")
+#  mortal, 64 blocks: read, sign and send it within a minute
+#  pane, tab on the node (https://rpc.devnet.flop.network/):
+window.__r = lab.deviceReads("$DEVICE_SS58", "<session_nonce of flop-sign.mjs keys --owner $OWNER --delegate $DEVICE>")
+await window.__r   (its relay and relay_sha256)
+#  PC:
+node "$LAB/research/2026-11-12-encoder-devnet-test/sign-device.mjs" T4 --run "$RUN" --key "$KEY_DEVICE" --reads '<relay>' --reads-sha256 <relay_sha256>
+#  pane, tab on the node (https://rpc.devnet.flop.network/):
+window.__s = lab.send('<the second line sign-device printed: the text of signed/T4.send.json>', "<its send_sha256>")
+await window.__s   (its relay and relay_sha256)
+#  PC:
+node "$LAB/research/2026-11-12-encoder-devnet-test/record-step.mjs" step T4 --run "$RUN" --sent '<relay>' --sent-sha256 <relay_sha256>
+#  pane, tab on the explorer (https://explorer.devnet.flop.network/):
+window.__e = explorer.read("<extrinsic_hash of signed/T4.json>")
+await window.__e   (its relay and relay_sha256)
+#  PC:
+node "$LAB/research/2026-11-12-encoder-devnet-test/record-step.mjs" step T4 --run "$RUN" --explorer '<relay>' --explorer-sha256 <relay_sha256>
 
 # T5: device signs with the encoder; expect the outcome to be recorded
-#    in the pane, moments before: copy(JSON.stringify(await lab.deviceReads("$DEVICE", "<session_nonce key of flop-sign.mjs keys>")))
-node "$LAB/research/2026-11-12-encoder-devnet-test/sign-device.mjs" T5 --key $KEY_DEVICE --results results.json --reads '<what deviceReads printed>'
-#    in the pane: await lab.send(<text of signed/T5.json>, "<its sha256, printed above>")
+#  mortal, 64 blocks: read, sign and send it within a minute
+#  pane, tab on the node (https://rpc.devnet.flop.network/):
+window.__r = lab.deviceReads("$DEVICE_SS58", "<session_nonce of flop-sign.mjs keys --owner $OWNER --delegate $DEVICE>")
+await window.__r   (its relay and relay_sha256)
+#  PC:
+node "$LAB/research/2026-11-12-encoder-devnet-test/sign-device.mjs" T5 --run "$RUN" --key "$KEY_DEVICE" --reads '<relay>' --reads-sha256 <relay_sha256>
+#  pane, tab on the node (https://rpc.devnet.flop.network/):
+window.__s = lab.send('<the second line sign-device printed: the text of signed/T5.send.json>', "<its send_sha256>")
+await window.__s   (its relay and relay_sha256)
+#  PC:
+node "$LAB/research/2026-11-12-encoder-devnet-test/record-step.mjs" step T5 --run "$RUN" --sent '<relay>' --sent-sha256 <relay_sha256>
+#  pane, tab on the explorer (https://explorer.devnet.flop.network/):
+window.__e = explorer.read("<extrinsic_hash of signed/T5.json>")
+await window.__e   (its relay and relay_sha256)
+#  PC:
+node "$LAB/research/2026-11-12-encoder-devnet-test/record-step.mjs" step T5 --run "$RUN" --explorer '<relay>' --explorer-sha256 <relay_sha256>
 
 # T6: device signs with the encoder; expect success; only if T3 recorded ComputeChannel.ForceOpenRequested; after the greatest of: the block of T3 plus 600 blocks and block $T3.ComputeChannel.ForceOpenRequested.ack_deadline
-#    in the pane, moments before: copy(JSON.stringify(await lab.deviceReads("$DEVICE", "<session_nonce key of flop-sign.mjs keys>")))
-node "$LAB/research/2026-11-12-encoder-devnet-test/sign-device.mjs" T6 --key $KEY_DEVICE --results results.json --reads '<what deviceReads printed>'
-#    in the pane: await lab.send(<text of signed/T6.json>, "<its sha256, printed above>")
+#  mortal, 64 blocks: read, sign and send it within a minute
+#  pane, tab on the node (https://rpc.devnet.flop.network/):
+window.__r = lab.deviceReads("$DEVICE_SS58", "<session_nonce of flop-sign.mjs keys --owner $OWNER --delegate $DEVICE>")
+await window.__r   (its relay and relay_sha256)
+#  PC:
+node "$LAB/research/2026-11-12-encoder-devnet-test/sign-device.mjs" T6 --run "$RUN" --key "$KEY_DEVICE" --reads '<relay>' --reads-sha256 <relay_sha256>
+#  pane, tab on the node (https://rpc.devnet.flop.network/):
+window.__s = lab.send('<the second line sign-device printed: the text of signed/T6.send.json>', "<its send_sha256>")
+await window.__s   (its relay and relay_sha256)
+#  PC:
+node "$LAB/research/2026-11-12-encoder-devnet-test/record-step.mjs" step T6 --run "$RUN" --sent '<relay>' --sent-sha256 <relay_sha256>
+#  pane, tab on the explorer (https://explorer.devnet.flop.network/):
+window.__e = explorer.read("<extrinsic_hash of signed/T6.json>")
+await window.__e   (its relay and relay_sha256)
+#  PC:
+node "$LAB/research/2026-11-12-encoder-devnet-test/record-step.mjs" step T6 --run "$RUN" --explorer '<relay>' --explorer-sha256 <relay_sha256>
 
 # T7: device signs with the encoder; expect success; only if T5 recorded ComputeChannel.ChannelOpened; after the block of T5 plus 120 blocks
-#    in the pane, moments before: copy(JSON.stringify(await lab.deviceReads("$DEVICE", "<session_nonce key of flop-sign.mjs keys>")))
-node "$LAB/research/2026-11-12-encoder-devnet-test/sign-device.mjs" T7 --key $KEY_DEVICE --results results.json --reads '<what deviceReads printed>'
-#    in the pane: await lab.send(<text of signed/T7.json>, "<its sha256, printed above>")
+#  mortal, 64 blocks: read, sign and send it within a minute
+#  pane, tab on the node (https://rpc.devnet.flop.network/):
+window.__r = lab.deviceReads("$DEVICE_SS58", "<session_nonce of flop-sign.mjs keys --owner $OWNER --delegate $DEVICE>")
+await window.__r   (its relay and relay_sha256)
+#  PC:
+node "$LAB/research/2026-11-12-encoder-devnet-test/sign-device.mjs" T7 --run "$RUN" --key "$KEY_DEVICE" --reads '<relay>' --reads-sha256 <relay_sha256>
+#  pane, tab on the node (https://rpc.devnet.flop.network/):
+window.__s = lab.send('<the second line sign-device printed: the text of signed/T7.send.json>', "<its send_sha256>")
+await window.__s   (its relay and relay_sha256)
+#  PC:
+node "$LAB/research/2026-11-12-encoder-devnet-test/record-step.mjs" step T7 --run "$RUN" --sent '<relay>' --sent-sha256 <relay_sha256>
+#  pane, tab on the explorer (https://explorer.devnet.flop.network/):
+window.__e = explorer.read("<extrinsic_hash of signed/T7.json>")
+await window.__e   (its relay and relay_sha256)
+#  PC:
+node "$LAB/research/2026-11-12-encoder-devnet-test/record-step.mjs" step T7 --run "$RUN" --explorer '<relay>' --explorer-sha256 <relay_sha256>
 
 # T8: owner signs with the research-signer; expect success; only if T2 succeeded
-node "$LAB/research/2026-11-11-session-deny-list/flop-sign.mjs" call revoke --delegate $DEVICE > calls/T8.json
-node "$LAB/research/2026-11-11-session-deny-list/flop-sign.mjs" sign --key $KEY_OWNER --call "$(node -p 'require("./calls/T8.json").call')" --nonce $((OWNER_NONCE+2)) --out signed/T8.json --spec 1014020 --txv 2 --genesis 0x99c172c095340ace980631f9123544c6bebd4839f3437e463533422d8be2d631
-sha256sum signed/T8.json
-#    in the pane: await lab.send(<text of signed/T8.json>, "<its sha256, printed above>")
+#  immortal: never signed to different bytes
+#  PC:
+mkdir -p "$RUN/calls" "$RUN/signed"
+node "$LAB/research/2026-11-11-session-deny-list/flop-sign.mjs" call revoke --delegate $DEVICE > "$RUN/calls/T8.json"
+node "$LAB/research/2026-11-11-session-deny-list/flop-sign.mjs" sign --key "$KEY_OWNER" --call "$(node -p 'require(process.argv[1]).call' "$RUN/calls/T8.json")" --nonce $((OWNER_NONCE+2)) --out "$RUN/signed/T8.json" --spec 1014020 --txv 2 --genesis 0x99c172c095340ace980631f9123544c6bebd4839f3437e463533422d8be2d631
+node "$LAB/research/2026-11-12-encoder-devnet-test/record-step.mjs" send-file T8 --run "$RUN"
+#  pane, tab on the node (https://rpc.devnet.flop.network/):
+window.__s = lab.send('<the second line send-file printed: the text of signed/T8.send.json>', "<its send_sha256>")
+await window.__s   (its relay and relay_sha256)
+#  PC:
+node "$LAB/research/2026-11-12-encoder-devnet-test/record-step.mjs" step T8 --run "$RUN" --sent '<relay>' --sent-sha256 <relay_sha256>
+#  pane, tab on the explorer (https://explorer.devnet.flop.network/):
+window.__e = explorer.read("<extrinsic_hash of signed/T8.json>")
+await window.__e   (its relay and relay_sha256)
+#  PC:
+node "$LAB/research/2026-11-12-encoder-devnet-test/record-step.mjs" step T8 --run "$RUN" --explorer '<relay>' --explorer-sha256 <relay_sha256>
 
 # T9: device signs with the research-signer; expect success; only if T1 succeeded
-node "$LAB/research/2026-11-11-session-deny-list/flop-sign.mjs" call sweep --to 0xe462d014cab1239a123233647052f4e3b572322e982441d6b7a5c1694d8419e2 > calls/T9.json
-node "$LAB/research/2026-11-11-session-deny-list/flop-sign.mjs" sign --key $KEY_DEVICE --call "$(node -p 'require("./calls/T9.json").call')" --nonce $DEVICE_NONCE --out signed/T9.json --spec 1014020 --txv 2 --genesis 0x99c172c095340ace980631f9123544c6bebd4839f3437e463533422d8be2d631
-sha256sum signed/T9.json
-#    in the pane: await lab.send(<text of signed/T9.json>, "<its sha256, printed above>")
+#  immortal: never signed to different bytes
+#  PC:
+mkdir -p "$RUN/calls" "$RUN/signed"
+node "$LAB/research/2026-11-11-session-deny-list/flop-sign.mjs" call sweep --to 0xe462d014cab1239a123233647052f4e3b572322e982441d6b7a5c1694d8419e2 > "$RUN/calls/T9.json"
+node "$LAB/research/2026-11-11-session-deny-list/flop-sign.mjs" sign --key "$KEY_DEVICE" --call "$(node -p 'require(process.argv[1]).call' "$RUN/calls/T9.json")" --nonce $DEVICE_NONCE --out "$RUN/signed/T9.json" --spec 1014020 --txv 2 --genesis 0x99c172c095340ace980631f9123544c6bebd4839f3437e463533422d8be2d631
+node "$LAB/research/2026-11-12-encoder-devnet-test/record-step.mjs" send-file T9 --run "$RUN"
+#  pane, tab on the node (https://rpc.devnet.flop.network/):
+window.__s = lab.send('<the second line send-file printed: the text of signed/T9.send.json>', "<its send_sha256>")
+await window.__s   (its relay and relay_sha256)
+#  PC:
+node "$LAB/research/2026-11-12-encoder-devnet-test/record-step.mjs" step T9 --run "$RUN" --sent '<relay>' --sent-sha256 <relay_sha256>
+#  pane, tab on the explorer (https://explorer.devnet.flop.network/):
+window.__e = explorer.read("<extrinsic_hash of signed/T9.json>")
+await window.__e   (its relay and relay_sha256)
+#  PC:
+node "$LAB/research/2026-11-12-encoder-devnet-test/record-step.mjs" step T9 --run "$RUN" --explorer '<relay>' --explorer-sha256 <relay_sha256>
 ```
 <!-- end of printed -->

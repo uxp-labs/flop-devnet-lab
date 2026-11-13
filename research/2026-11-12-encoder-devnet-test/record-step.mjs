@@ -9,6 +9,11 @@
 //        the device's public key through the loader of sign-device.mjs (device-key.mjs) and prints
 //        only the public key and the SS58 address. It never writes over a results.json.
 //
+//   node record-step.mjs send-file <id> --run <folder>
+//        makes signed/<id>.send.json from the research signer's signed/<id>.json of an owner step or
+//        the sweep: exactly {"step","extrinsic"} on one line, as sign-device.mjs writes for the
+//        device's steps (S3), so what the lead types into the pane is short. Prints its sha256.
+//
 //   node record-step.mjs step <id> --run <folder> [--sent '<text>' --sent-sha256 <sha>] [--explorer '<text>' --explorer-sha256 <sha>]
 //        writes the run_time of a step or an attempt (R2): the runner's reading (lab.send,
 //        lab.sendSame or lab.find) and, then or later, the explorer's (explorer.read). It never
@@ -22,7 +27,7 @@ import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "
 import { join, resolve } from "node:path";
 import { HASH, RAW, RERUN, loadPlan, readJson, sha256Text, ss58, fromSs58, substitute } from "./lib.mjs";
 import { DeviceKeyError, loadDeviceSigner } from "./device-key.mjs";
-import { planStepOf, loadRecord, entryOf, viewOf, signedFile, sendFile, runFiles } from "./record.mjs";
+import { planStepOf, loadRecord, entryOf, viewOf, signedFile, sendFile, runFiles, sendText } from "./record.mjs";
 import { nextOf } from "./judge.mjs";
 import { template } from "./plan.mjs";
 
@@ -128,8 +133,8 @@ export function recordReading({ plan, run, results, id, sent, sentSha256, explor
     const file = signedFile(run, id);
     if (!existsSync(file)) no(`signed/${id}.json is not in the run folder`);
     const signed = readJson(file);
-    const bundle = step.tool === "encoder" ? sendFile(run, id) : file;
-    if (!existsSync(bundle)) no(`${bundle} is not in the run folder`);
+    const bundle = sendFile(run, id);
+    if (!existsSync(bundle)) no(`signed/${id}.send.json is not in the run folder`);
     const bundleSha = sha256Text(readFileSync(bundle, "utf8"));
     if (sent.bundle_sha256 !== null && sent.bundle_sha256 !== undefined && sent.bundle_sha256 !== bundleSha) no(`the bundle the runner sent has sha256 ${sent.bundle_sha256}, the step's file in signed/ has ${bundleSha}`);
     if (sent.extrinsic_sha256 !== sha256Text(signed.extrinsic ?? "")) no(`the extrinsic the runner sent or found is not the one of signed/${id}.json`);
@@ -191,6 +196,20 @@ function main(argv) {
     if (r.owner_account_nonce_at_start !== plan.values.OWNER_NONCE_AFTER_RERUN.value) console.log(`notice: the owner's next nonce at the start is ${r.owner_account_nonce_at_start}, not OWNER_NONCE_AFTER_RERUN ${plan.values.OWNER_NONCE_AFTER_RERUN.value}: something was sent from the owner since the rerun. It is recorded as read.`);
     return;
   }
+  if (argv[0] === "send-file") {
+    const id = argv[1] && !argv[1].startsWith("--") ? argv[1] : no("usage: node record-step.mjs send-file <id> --run <folder>");
+    const f = flags(argv.slice(2), ["run"]);
+    const run = resolve(f.run ?? no("--run <run folder> is required"));
+    const step = planStepOf(plan, id) ?? no(`steps.json has no step ${id}, and ${id} is not an attempt S5 allows`);
+    if (step.tool !== "research-signer") no(`${id} is signed by sign-device.mjs, which writes its own send file`);
+    const signed = readJson(signedFile(run, id));
+    if (typeof signed.extrinsic !== "string" || !/^0x([0-9a-f]{2})+$/.test(signed.extrinsic)) no(`signed/${id}.json has no extrinsic`);
+    const text = sendText(id, signed.extrinsic);
+    writeFileSync(sendFile(run, id), text, { flag: "wx" });
+    console.log(JSON.stringify({ send_file: sendFile(run, id), send_sha256: sha256Text(text) }));
+    console.log(text);
+    return;
+  }
   if (argv[0] === "step") {
     const id = argv[1] && !argv[1].startsWith("--") ? argv[1] : no("usage: node record-step.mjs step <id> --run <folder> [--sent '<text>' --sent-sha256 <sha>] [--explorer '<text>' --explorer-sha256 <sha>]");
     const f = flags(argv.slice(2), ["run", "sent", "sent-sha256", "explorer", "explorer-sha256"]);
@@ -205,7 +224,7 @@ function main(argv) {
     console.log(wordOf(plan, r));
     return;
   }
-  no("commands: start, step (see the head of this file)");
+  no("commands: start, send-file, step (see the head of this file)");
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === resolve(new URL(import.meta.url).pathname)) {

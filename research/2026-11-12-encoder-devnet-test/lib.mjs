@@ -43,6 +43,16 @@ export function channelId(genesis, agent, miner, nonce) {
 const B58 = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
 const SS58_PREFIX = 42; // every account of the earlier records starts with 5: the generic prefix 42
 const ss58Sum = (body) => Buffer.from(blake2b(Buffer.concat([Buffer.from("SS58PRE", "ascii"), body]), { dkLen: 64 })).subarray(0, 2);
+/**
+ * The storage key of FlopSessionKeys.SessionNonces(owner, delegate): the twox128 prefixes of steps.json
+ * (TWOX_FLOP_SESSION_KEYS, TWOX_SESSION_NONCES, from the research signer's table) and blake2_128
+ * concat of each key, as the research signer's keys command makes it.
+ */
+export function sessionNonceKey(plan, owner, delegate) {
+  const b2concat = (h) => Buffer.from(blake2b(unhex(h, 32), { dkLen: 16 })).toString("hex") + h.slice(2);
+  return "0x" + plan.values.TWOX_FLOP_SESSION_KEYS.value + plan.values.TWOX_SESSION_NONCES.value + b2concat(owner) + b2concat(delegate);
+}
+
 /** The SS58 text of a 32 byte account, prefix 42. */
 export function ss58(publicKey) {
   const body = Buffer.concat([Buffer.of(SS58_PREFIX), unhex(publicKey, 32)]);
@@ -85,7 +95,8 @@ export function atPath(obj, path) {
 
 /** The value a values entry names in its source file: the field, or the regex group in it. Arrays are joined with commas. */
 export function fromSource(plan, from, repo = REPO) {
-  let v = atPath(readJson(join(repo, plan.files[from.file])), from.path);
+  const file = join(repo, plan.files[from.file]);
+  let v = from.path === undefined ? readFileSync(file, "utf8") : atPath(readJson(file), from.path);
   if (Array.isArray(v)) v = v.join(",");
   v = String(v);
   if (from.re) {

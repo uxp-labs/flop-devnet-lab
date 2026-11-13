@@ -29,6 +29,9 @@ export const runFiles = (run) => ({ results: join(run, "results.json"), signed: 
 export const signedFile = (run, id) => join(run, "signed", `${id}.json`);
 export const sendFile = (run, id) => join(run, "signed", `${id}.send.json`);
 
+/** The send file's text of a signed record: exactly {"step","extrinsic"} on one line, no line end (S3). */
+export const sendText = (id, extrinsic) => JSON.stringify({ step: id, extrinsic });
+
 /** The record of a run folder, or null when there is none. */
 export const loadRecord = (run) => (existsSync(runFiles(run).results) ? readJson(runFiles(run).results) : null);
 

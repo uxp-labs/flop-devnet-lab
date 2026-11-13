@@ -125,31 +125,25 @@ test("R1: a change to steps.json shows in the printed table", () => {
   assert.notEqual(table(changed), table(plan));
 });
 
-test("R5: the owner's calls and the sweep are research signer command lines, immortal, with the spec, version and genesis of steps.json", () => {
+test("R5: the owner's calls and the sweep are research signer command lines, immortal, with the spec, version and genesis of steps.json, and a short send file", () => {
   const text = commandsText(plan, null);
   for (const st of plan.steps.filter((s) => s.tool === "research-signer")) {
     const block = text.split("\n\n").find((b) => b.startsWith(`# ${st.id}:`));
     assert.ok(block.includes(`flop-sign.mjs" call ${st.call[0]}`), st.id);
     assert.ok(block.includes(`--spec ${plan.values.SPEC.value} --txv ${plan.values.TXV.value} --genesis ${plan.values.GENESIS.value}`), st.id);
+    assert.ok(block.includes(`record-step.mjs" send-file ${st.id} --run "$RUN"`), st.id);
+    assert.ok(block.includes("immortal"), st.id);
     assert.ok(!block.includes("sign-device.mjs"), st.id);
   }
-  assert.match(text, /research signer signs immortal/);
 });
 
-test("R2: the device's session calls are command lines for sign-device.mjs only", () => {
+test("R2 S1: the device's session calls are command lines for sign-device.mjs only, in the run folder", () => {
   const text = commandsText(plan, null);
   for (const st of plan.steps.filter((s) => s.tool === "encoder")) {
     const block = text.split("\n\n").find((b) => b.startsWith(`# ${st.id}:`));
-    assert.ok(block.includes(`sign-device.mjs" ${st.id} --key $KEY_DEVICE`), st.id);
+    assert.ok(block.includes(`sign-device.mjs" ${st.id} --run "$RUN" --key "$KEY_DEVICE" --reads '<relay>' --reads-sha256 <relay_sha256>`), st.id);
     assert.ok(!block.split("\n").some((l) => l.startsWith(`node ${"\""}$LAB/research/2026-11-11`)), st.id);
   }
-});
-
-test("the owner's nonces are put in from a filled results file", () => {
-  const text = commandsText(plan, { owner_account_nonce_at_start: "14", accounts: { device: { public_key: "0x" + "ab".repeat(32) } } });
-  assert.match(text, /--nonce 14 --out signed\/T1\.json/);
-  assert.match(text, /--nonce 16 --out signed\/T8\.json/);
-  assert.match(text, new RegExp(`--to 0x${"ab".repeat(32)} --amount ${plan.values.FUND.value}`));
 });
 
 test("R8: a stop sends the cleanup steps whose condition stands before it, never a later test step", () => {

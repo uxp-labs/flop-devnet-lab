@@ -33,12 +33,12 @@ function ownerSigned(run, id) {
   const xt = "0x" + sha256Text(`owner ${id} ${run}`).repeat(3);
   const file = { what: `stand in for ${id}`, extrinsic: xt, extrinsic_hash: "0x" + sha256Text(xt) };
   writeFileSync(join(run, "signed", `${id}.json`), JSON.stringify(file, null, 2) + "\n");
+  ok(node(SCRIPT, ["send-file", id, "--run", run]));
   return file;
 }
 /** The runner's relay of a send of a file in signed/. */
 function sentRelay(run, id, { status = "finalized", block = 3600000, index = 2, bundle } = {}) {
-  const sendPath = existsSync(join(run, "signed", `${id}.send.json`)) ? join(run, "signed", `${id}.send.json`) : join(run, "signed", `${id}.json`);
-  const text = bundle ?? readFileSync(sendPath, "utf8");
+  const text = bundle ?? readFileSync(join(run, "signed", `${id}.send.json`), "utf8");
   const xt = JSON.parse(readFileSync(join(run, "signed", `${id}.json`), "utf8")).extrinsic;
   const v = { step: id.startsWith("T1") || id.startsWith("T2") || id.startsWith("T8") || id.startsWith("T9") ? null : id, bundle_sha256: sha256Text(text), extrinsic_sha256: sha256Text(xt), extrinsic_hash: null, submitted_utc: "2026-11-13T02:00:00.000Z", statuses: ["ready", "inBlock", "finalized"], status };
   if (status === "finalized") Object.assign(v, { block_hash: H(block), block_number: block, extrinsic_index: index, events_sha256: "ab".repeat(32), events_length: 700, finalized_utc: "2026-11-13T02:00:09.000Z" });
