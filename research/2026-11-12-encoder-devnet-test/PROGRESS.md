@@ -55,9 +55,15 @@ Order of work (the brief's): H1 with H2, H3, H4; H5; H6 to H11; the words; the m
   sent_by; H9; H5), plan.md prose (the same, shorter), steps.json what. plan.mjs md rewrote the
   printed blocks. Test in plan.test.mjs ("the words of fix round 3"). 281 of 281 pass.
 
+- Mutants: mutants.json 211 (159 earlier, RV3 18, B3 34). The third reviewer's four equivalent
+  ones (RV3-L4, RV3-R3, RV3-R4, RV3-S2) listed with the reviewer's reasons. RV3-N2's find made
+  longer (judgeFinal holds the same line now). Seven earlier finds adapted to this round's code
+  (B-X4, RV2-X2, RV2-X4, B2-F3l, B2-G4a, B2-F3n, B2-F3o), each saying so. A first run of those 59
+  alone, in a scratch copy of the repo, under setpriv: running.
+
 ### Next
 
-The mutants: the third reviewer's 18 into mutants.json, fix round 3's own, then the full run.
+The 59 alone, then the report below, then the full run (node mutants.mjs <temp> --jobs 6).
 
 ### Decisions (fix round 3) and why
 
