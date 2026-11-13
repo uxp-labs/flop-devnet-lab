@@ -39,13 +39,13 @@ describe.each(RT.map((rt) => [rt.spec, rt] as const))("review shape 3: the door 
   const ACCOUNT = { nonce: 1, consumers: 0, providers: 1, sufficients: 0, data: { free: 5n, reserved: 0n, frozen: 0n, flags: 0n } };
   const kAcct = key(rt, "System", "Account", [OWNER]);
 
-  it("HOLDS: Balances.Account, the same entry name in another pallet, is refused by name; its key under System.Account is refused", () => {
+  it("Balances.Account, the same entry name in another pallet, is refused by name; its key under System.Account is refused", () => {
     const bk = key(rt, "Balances", "Account", [OWNER]);
     expect(out(door(rt, "Balances", "Account", [OWNER], bk, new Uint8Array(64)))).toMatch(/is not a storage entry the reviewed shape states$/);
     expect(out(door(rt, "System", "Account", [OWNER], bk, acct(ACCOUNT)))).toBe("System.Account: the key asked is not the key of this entry and these key parts");
   });
 
-  it("HOLDS: MeasuredRoots refuses its two parts swapped, one part missing, another precision, a key one byte longer", () => {
+  it("MeasuredRoots refuses its two parts swapped, one part missing, another precision, a key one byte longer", () => {
     const INT8 = new Uint8Array([3]);
     const FP16 = new Uint8Array([1]);
     const k = key(rt, "ModelRegistry", "MeasuredRoots", [OURS, INT8]);
@@ -58,7 +58,7 @@ describe.each(RT.map((rt) => [rt.spec, rt] as const))("review shape 3: the door 
     expect(out(door(rt, "ModelRegistry", "MeasuredRoots", [OURS, INT8], cat(k, new Uint8Array([0])), v))).toMatch(/the key asked is \d+ bytes, more than/);
   });
 
-  it("HOLDS: an answer with one more byte, an answer cut short, and empty bytes are refused for an Optional and a Default entry", () => {
+  it("an answer with one more byte, an answer cut short, and empty bytes are refused for an Optional and a Default entry", () => {
     const k = key(rt, "MinerStaking", "Miners", [OWNER]);
     const miner = rt.ref.buildStorage("MinerStaking", "Miners").value.enc({ self_stake: 1n, delegated_stake: 0n, commission_rate: 0, is_active: true, total_rewards_earned: 0n, registered_at: 1 });
     expect(out(door(rt, "MinerStaking", "Miners", [OWNER], k, cat(miner, new Uint8Array([0]))))).toMatch(/^MinerStaking\.Miners: /);
@@ -70,7 +70,7 @@ describe.each(RT.map((rt) => [rt.spec, rt] as const))("review shape 3: the door 
     expect(out(door(rt, "System", "Account", [OWNER], kAcct, acct(ACCOUNT).slice(0, -1)))).toMatch(/^System\.Account: /);
   });
 
-  it("HOLDS: System.Account: a u32 at its largest and an amount of 2^128 - 1 are exact; the default's flags against a stored 0", () => {
+  it("System.Account: a u32 at its largest and an amount of 2^128 - 1 are exact; the default's flags against a stored 0", () => {
     const max = 2n ** 128n - 1n;
     const v = door(rt, "System", "Account", [OWNER], kAcct, acct({ nonce: 0xffffffff, consumers: 0xffffffff, providers: 0, sufficients: 0, data: { free: max, reserved: max, frozen: max, flags: max } }));
     expect(out(v)).toEqual({ stored: true, value: { nonce: 4294967295, consumers: 4294967295, providers: 0, sufficients: 0, data: { free: max.toString(), reserved: max.toString(), frozen: max.toString(), flags: max.toString() } } });

@@ -111,7 +111,7 @@ describe("review shape 3: the ten new entries read a third way", () => {
   for (const spec of [1014014, 1014020]) {
     const { v14, shape } = load(spec);
     for (const [section, key, pallet, entry] of TEN) {
-      it(`HOLDS: spec ${spec} ${pallet}.${entry}: modifier, hashers, key, value and default are the metadata's`, () => {
+      it(`spec ${spec} ${pallet}.${entry}: modifier, hashers, key, value and default are the metadata's`, () => {
         const m = entryOf(v14, pallet, entry);
         const s = shape[section][key];
         expect(Object.keys(s).sort()).toEqual(["default", "hashers", "key", "modifier", "value"]);
@@ -130,7 +130,7 @@ describe("review shape 3: the ten new entries read a third way", () => {
       ["Models", "ModelRegistry", []],
       ["Miners", "MinerStaking", []],
     ] as [string, string, string[]][]) {
-      it(`HOLDS: spec ${spec} ${pallet}.${entry}: every field of the value, its name, order and type, is the metadata's`, () => {
+      it(`spec ${spec} ${pallet}.${entry}: every field of the value, its name, order and type, is the metadata's`, () => {
         const m = entryOf(v14, pallet, entry);
         const walk = (t: number, depth: number) => {
           const lt = v14.lookup[t];
@@ -150,7 +150,7 @@ describe("review shape 3: the ten new entries read a third way", () => {
         expect(depthNames.length).toBeGreaterThanOrEqual(0);
       });
     }
-    it(`HOLDS: spec ${spec} the types table is exactly the closure of the sixteen stated keys and values and Version`, () => {
+    it(`spec ${spec} the types table is exactly the closure of the sixteen stated keys and values and Version`, () => {
       const roots: number[] = [];
       for (const [, , p, e] of [...OLD_SIX, ...TEN]) {
         const m = entryOf(v14, p, e);

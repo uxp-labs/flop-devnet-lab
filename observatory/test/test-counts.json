@@ -139,9 +139,17 @@
     "tests": 2,
     "names": "db7cc5f5fc51f2f7ad3eacabb6a786a7a9e066f7f5623690d16d9bf798068a14"
   },
+  "review-shape3-door.test.ts": {
+    "tests": 8,
+    "names": "df2f4065abd41cd2883fa64079d4b1ecf4af56ed826e87577fca6d77c683ece4"
+  },
   "review-shape3-fill.test.ts": {
     "tests": 4,
     "names": "84f243e57fc405d9dc819cb347fb13757e4a5722c25a386bcb6aa011b9697828"
+  },
+  "review-shape3-metadata.test.ts": {
+    "tests": 28,
+    "names": "a299ac9fe39b1c1dfecadd5bb84ddce02f7e92b4ba97859dcc214409d52c638d"
   },
   "review-storage.test.ts": {
     "tests": 5,
