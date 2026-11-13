@@ -168,3 +168,29 @@ test("R9: the cost table sums the known fees and names the unknown ones", () => 
   assert.deepEqual(c.unknown, ["T4", "T5"]);
   assert.deepEqual(c.escrows.map((e) => [e.id, e.amount]), [["T3", plan.values.ESCROW_1.value], ["T4", plan.values.TOP_UP.value], ["T5", plan.values.ESCROW_1.value]]);
 });
+
+// ---- the words (R11, R12) -----------------------------------------------------------------------
+const prose = (text) => {
+  let code = false;
+  return text.split("\n").filter((l) => { if (l.startsWith("```")) { code = !code; return false; } return !code && !/^\|[-|]+\|$/.test(l); });
+};
+
+test("R12: the README says nothing was sent, how to run the tests, and the exact lines of one device and one owner step", () => {
+  const md = readFileSync(join(HERE, "README.md"), "utf8");
+  assert.match(md, /Nothing in this folder has been signed with a real key or sent to any network/);
+  assert.match(md, /`node --test` in this folder/);
+  const text = commandsText(plan, null);
+  const t2 = text.split("\n\n").find((b) => b.startsWith("# T2:")).split("\n").filter((l) => l.startsWith("node ") || l.startsWith("sha256sum"));
+  for (const l of t2) assert.ok(md.includes(l), `the README holds ${l}`);
+  const t3 = text.split("\n\n").find((b) => b.startsWith("# T3:")).split("\n").find((l) => l.startsWith("node "));
+  assert.ok(md.includes(t3), "the README holds the sign-device line of T3");
+});
+
+test("R12: no dashes in the prose of the README and plan.md", () => {
+  for (const f of ["README.md", "plan.md", "PROGRESS.md"]) {
+    for (const l of prose(readFileSync(join(HERE, f), "utf8"))) {
+      assert.doesNotMatch(l, /[–—]/, `${f}: ${l}`);
+      assert.doesNotMatch(l.replace(/^\s*- /, "").replace(/`[^`]*`/g, ""), / - | -- /, `${f}: ${l}`);
+    }
+  }
+});
