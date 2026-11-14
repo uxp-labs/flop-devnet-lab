@@ -1,6 +1,6 @@
 /**
  * Reading a caller's value once into plain data, shared by the modules that take named fields from a caller: the
- * chain encoder and the channel modules. A byte value is a Uint8Array copied by its internal state; an object is
+ * chain encoder and the channel modules. A byte value is a Uint8Array copied by its internal state (a detached one has 0 bytes); an object is
  * read field by field, each field once, through its own property descriptor; a u32 is a whole number in range; a
  * u64 or a u128 is a bigint in range.
  *
@@ -71,6 +71,8 @@ export function plainInput(refuse: PlainInputRefuse): PlainInput {
     if (kind !== "Uint8Array") fail("BAD_INPUT", `${what} must be a Uint8Array${n === null ? "" : ` of ${n} bytes`}`);
     const length = LENGTH.call(value) as number;
     if (n !== null && length !== n) fail("WRONG_LENGTH", `${what} has ${length} bytes, not ${n}`);
+    // A detached array reads as 0 bytes. No view is built on its buffer, which would throw.
+    if (length === 0) return new Uint8Array(0);
     const view = new Uint8Array(BUFFER.call(value) as ArrayBuffer, OFFSET.call(value) as number, length);
     const copy = new Uint8Array(length);
     copy.set(view);

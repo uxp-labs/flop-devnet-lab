@@ -276,3 +276,32 @@ describe("F1: a refuse that returns", () => {
     expect((got as TypeError).message).toBe("plain-input: the refuse function returned after WRONG_LENGTH");
   });
 });
+
+describe("F2: a detached array reads as 0 bytes", () => {
+  function detached(): Uint8Array {
+    const a = new Uint8Array(8);
+    structuredClone(a.buffer, { transfer: [a.buffer] });
+    return a;
+  }
+
+  it("is WRONG_LENGTH where a length above 0 is wanted", () => {
+    expect(refusal(() => P.bytesOf(detached(), 32, "x"))).toEqual({ code: "WRONG_LENGTH", message: "x has 0 bytes, not 32" });
+  });
+
+  it("is a fresh empty copy where any length is wanted, or 0", () => {
+    const a = detached();
+    for (const n of [null, 0]) {
+      const got = P.bytesOf(a, n, "x");
+      expect(got).toBeInstanceOf(Uint8Array);
+      expect(got.length).toBe(0);
+      expect(got.buffer.byteLength).toBe(0);
+    }
+    expect(P.bytesOf(a, null, "x")).not.toBe(P.bytesOf(a, null, "x"));
+  });
+
+  it("an empty array is an empty copy where any length or 0 is wanted", () => {
+    expect(P.bytesOf(new Uint8Array(0), null, "x").length).toBe(0);
+    expect(P.bytesOf(new Uint8Array(0), 0, "x").length).toBe(0);
+    expect(refusal(() => P.bytesOf(new Uint8Array(0), 32, "x")).code).toBe("WRONG_LENGTH");
+  });
+});
