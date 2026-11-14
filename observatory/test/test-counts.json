@@ -23,9 +23,17 @@
     "tests": 40,
     "names": "ccf91ffb198b753d6ede400557b6a2bd36da1afcc99552d21fafc9b2601db7c6"
   },
+  "encoder-recording.test.ts": {
+    "tests": 10,
+    "names": "aefae21286002160679cf6dcc0747d670903736fa59ddf746499ea12dbe20eef"
+  },
   "encoder-requests.test.ts": {
     "tests": 21,
     "names": "8c573cff065c6f8da3ed4b5dc7ab3ccaa6ca04252cfb5a8b7fb7898daab0a819"
+  },
+  "encoder-results.test.ts": {
+    "tests": 28,
+    "names": "1a5716c40565743343af28487a338d7cc7feff8547a82bc78cfd51938eca9c26"
   },
   "escrow.test.ts": {
     "tests": 180,
@@ -134,6 +142,14 @@
   "review-decoder.test.ts": {
     "tests": 37,
     "names": "e51a2679c107bfc51f2ebe6f7e5cd11ea1d6bf77f2ecebdbbe44e49c504e0736"
+  },
+  "review-final-mutants.test.ts": {
+    "tests": 3,
+    "names": "dd80010e74097ff6e6622bfcec4679d57f663eeaf135538f9f440da2d3bfbb65"
+  },
+  "review-final-thirdway.test.ts": {
+    "tests": 19,
+    "names": "d0afccd646f85ed44b1a94026311265126022eab5906ab6459a806d5404bbbd0"
   },
   "review-memory.test.ts": {
     "tests": 2,

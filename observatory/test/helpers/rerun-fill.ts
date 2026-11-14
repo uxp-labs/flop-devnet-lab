@@ -10,26 +10,14 @@
 // states FailedAcks and DelegateSessions, so both reads are decoded through the door. Unknown stays null, never 0. A value is filled only from a block
 // whose batch answer was read, whose LastRuntimeUpgrade names a reviewed runtime, and whose events
 // decoded; otherwise that step's fill fields stay null.
-import { readFileSync } from "node:fs";
-import { decodeBlockEvents, decodeStorageValue, runtimeOfBlock } from "../../src/scale/block.js";
 import { SHAPE_SCHEMA } from "../../src/scale/shape.js";
+import { ERRORS_FILE, type ErrorRow, type Rec, type Value, errorRows, extrinsicFill, hex, isRec, pinBlock, readThroughDoor, repoText, text } from "./block-fill.js";
 import { RERUN_RECORDING, RERUN_RESULTS, type RerunBlock, recordedRerun } from "./recorded-rerun.js";
 import { keyBytes } from "./requests/core.js";
 import type { Inputs, ReadField } from "./requests/list-4.js";
 import { ENTRY_OF } from "./requests/list-4.js";
 
-const REPO = new URL("../../../", import.meta.url);
-const repoText = (path: string) => readFileSync(new URL(path, REPO), "utf8");
-export const ERRORS_FILE = "research/2026-11-12-session-rerun-1014020/errors-1014020.json";
-
-type Value = null | boolean | number | string | Value[] | { [name: string]: Value };
-type Rec = Record<string, unknown>;
-interface ErrorRow {
-  pallet: string;
-  pallet_index: number;
-  error_index: number;
-  name: string;
-}
+export { ERRORS_FILE };
 
 /** Where each filled value came from: the one line results.json carries for all of them (M3). */
 export const FILLED_FROM = {
@@ -39,33 +27,6 @@ export const FILLED_FROM = {
   /** The format of the reviewed shape the door pinned when this fill ran: decoder-shape@3 since round 29. */
   shape: SHAPE_SCHEMA,
 };
-
-const isRec = (v: unknown): v is Rec => v !== null && typeof v === "object" && !Array.isArray(v);
-
-/** A decoded value in the results form: every enum value { variant, fields } written { type, value }, as events_form gives dispatch_error. */
-function resultsForm(v: Value): Value {
-  if (Array.isArray(v)) return v.map(resultsForm);
-  if (v !== null && typeof v === "object") {
-    const keys = Object.keys(v);
-    if (keys.length === 2 && keys.includes("variant") && keys.includes("fields") && typeof v.variant === "string") return { type: v.variant, value: resultsForm(v.fields as Value) };
-    return Object.fromEntries(keys.map((k) => [k, resultsForm(v[k] as Value)]));
-  }
-  return v;
-}
-
-/** The result of an extrinsic from its events: success, or the error by the 1014020 table; null when it cannot be named. */
-function resultOf(events: Rec[], errors: readonly ErrorRow[]): string | null {
-  const ok = events.filter((e) => e.pallet === "System" && e.name === "ExtrinsicSuccess");
-  const failed = events.filter((e) => e.pallet === "System" && e.name === "ExtrinsicFailed");
-  if (ok.length + failed.length !== 1) return null;
-  if (ok.length === 1) return "success";
-  const d = (failed[0]?.fields as Rec | undefined)?.dispatch_error as Rec | undefined;
-  const v = d?.value as Rec | undefined;
-  if (d?.type !== "Module" || !isRec(v) || !Number.isInteger(v.index) || typeof v.error !== "string" || !/^0x[0-9a-f]{8}$/.test(v.error)) return null;
-  const index = Number.parseInt(v.error.slice(2, 4), 16);
-  const row = errors.find((e) => e.pallet_index === v.index && e.error_index === index);
-  return row === undefined ? null : `failed: ${row.pallet}.${row.name} (pallet ${row.pallet_index}, error ${row.error_index})`;
-}
 
 /** What the fill gives for one step, every field null when the block could not be read. */
 export interface StepFill {
@@ -77,38 +38,21 @@ export interface StepFill {
   reads_not_decoded: Partial<Record<ReadField, { entry: string; bytes: string; why: string }>>;
 }
 
-const hex = (b: Uint8Array) => `0x${Buffer.from(b).toString("hex")}`;
-/** A decoded number, string or bool as text; anything else null. */
-const text = (x: unknown) => (typeof x === "string" || typeof x === "number" || typeof x === "boolean" ? String(x) : null);
-/** The bytes of a key the list asked, as 0x hex (the list writes only whole bytes, lower case). */
-const keyOf = (h: string) => new Uint8Array(Buffer.from(h.slice(2), "hex"));
-
 /** The fill of one step's block: its extrinsic at extrinsicIndex, and the reads its fields name. */
 export function fillStep(b: RerunBlock, inputs: Inputs, metadata: Uint8Array, extrinsicIndex: number, fields: readonly ReadField[], errors: readonly ErrorRow[]): StepFill {
   const empty: StepFill = { last_runtime_upgrade_spec: null, events: [], result: null, fee_raw: null, reads_after: Object.fromEntries(fields.map((f) => [f, null])), reads_not_decoded: {} };
-  if (!b.answer.read) return empty;
-  const values = b.answer.values;
-  const lru = values.get(b.keys[1] as string);
-  const events = values.get(b.keys[0] as string);
-  if (!(lru instanceof Uint8Array) || !(events instanceof Uint8Array)) return empty;
-  const rt = runtimeOfBlock(lru);
-  if (!rt.found) return empty;
-  const pin = { specName: rt.reviewed.specName, specVersion: rt.reviewed.specVersion, metadata, lastRuntimeUpgrade: lru, shapeText: readFileSync(new URL(`../../${rt.reviewed.shapeFile}`, import.meta.url), "utf8") };
-  const decoded = decodeBlockEvents({ ...pin, events });
-  if (!decoded.decoded) return { ...empty, last_runtime_upgrade_spec: rt.reviewed.specVersion };
-  const mine: Rec[] = decoded.events
-    .filter((e) => isRec(e.phase) && e.phase.variant === "ApplyExtrinsic" && e.phase.fields === extrinsicIndex)
-    .map((e) => ({ pallet: e.pallet, name: e.event, fields: resultsForm(e.fields as Value) }));
-  const fees = mine.filter((e) => e.pallet === "TransactionPayment" && e.name === "TransactionFeePaid");
-  const fee = fees.length === 1 ? (fees[0]?.fields as Rec).actual_fee : null;
-  const out: StepFill = { last_runtime_upgrade_spec: rt.reviewed.specVersion, events: mine, result: resultOf(mine, errors), fee_raw: typeof fee === "string" ? fee : null, reads_after: { ...empty.reads_after }, reads_not_decoded: {} };
+  const p = pinBlock(b.answer, b.keys[0], b.keys[1], metadata);
+  if (p.state === "not read") return empty;
+  if (p.state === "events not decoded") return { ...empty, last_runtime_upgrade_spec: p.spec };
+  const values = p.values;
+  const out: StepFill = { last_runtime_upgrade_spec: p.spec, ...extrinsicFill(p.events, extrinsicIndex, errors), reads_after: { ...empty.reads_after }, reads_not_decoded: {} };
   for (const f of fields) {
     const j = b.reads.findIndex((r) => r.entry === ENTRY_OF[f]);
     const r = b.reads[j];
     const key = b.keys[j];
     if (r === undefined || key === undefined || !values.has(key)) continue;
     const answer = values.get(key) ?? null;
-    const v = decodeStorageValue({ ...pin, pallet: r.pallet, entry: r.entry, keys: keyBytes(inputs, r), key: keyOf(key), answer });
+    const v = readThroughDoor(p.pin, r.pallet, r.entry, keyBytes(inputs, r), key, answer);
     if (!v.decoded) {
       // M2: the decoder refuses an entry its reviewed shape does not state; the bytes are kept, the value stays unknown.
       if (answer !== null && v.refused.includes("is not a storage entry the reviewed shape states")) out.reads_not_decoded[f] = { entry: `${r.pallet}.${r.entry}`, bytes: hex(answer), why: "the reviewed shape does not state this entry" };
@@ -152,7 +96,7 @@ export function clearFill(results: Rec): Rec {
 /** results.json filled from the recording: each step's fill fields replaced, in their place, reads_not_decoded after reads_after where there is one, and filled_from at the end. */
 export function fillResults(results: Rec): Rec {
   const R = recordedRerun();
-  const errors = (JSON.parse(repoText(ERRORS_FILE)) as { errors: ErrorRow[] }).errors;
+  const errors = errorRows();
   const steps = (results.steps as Rec[]).map((s) => {
     const b = R.blocks.find((x) => x.step.id === s.step);
     if (b === undefined) throw new Error(`the recording holds no block for step ${String(s.step)}`);

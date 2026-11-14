@@ -657,7 +657,7 @@
   },
   {
     "id": "fill-events-of-whole-block",
-    "file": "test/helpers/rerun-fill.ts",
+    "file": "test/helpers/block-fill.ts",
     "find": " && e.phase.fields === extrinsicIndex)",
     "replace": ")",
     "test": "test/rerun-results.test.ts",
@@ -681,7 +681,7 @@
   },
   {
     "id": "fill-error-index-from-wrong-byte",
-    "file": "test/helpers/rerun-fill.ts",
+    "file": "test/helpers/block-fill.ts",
     "find": "Number.parseInt(v.error.slice(2, 4), 16)",
     "replace": "Number.parseInt(v.error.slice(4, 6), 16)",
     "test": "test/rerun-results.test.ts",
@@ -689,7 +689,7 @@
   },
   {
     "id": "fill-variant-form-kept",
-    "file": "test/helpers/rerun-fill.ts",
+    "file": "test/helpers/block-fill.ts",
     "find": "return { type: v.variant, value: resultsForm(v.fields as Value) };",
     "replace": "return v;",
     "test": "test/rerun-results.test.ts",
@@ -705,8 +705,8 @@
   },
   {
     "id": "fill-refused-batch-read",
-    "file": "test/helpers/rerun-fill.ts",
-    "find": "  if (!b.answer.read) return empty;\n",
+    "file": "test/helpers/block-fill.ts",
+    "find": "  if (!answer.read) return { state: \"not read\" };\n",
     "replace": "",
     "test": "test/rerun-results.test.ts",
     "why": "a refused batch answer fills nothing (L4)"

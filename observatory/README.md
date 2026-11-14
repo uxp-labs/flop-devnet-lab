@@ -294,8 +294,9 @@ building and testing decoders against real data. It is evidence, never proof of 
   extrinsic. After that, for the four steps signed with a mortal era (T3 to T6), it asks the hash at
   the era's birth height, the hash the step's signature binds. By method: chain_getFinalizedHead 1,
   chain_getBlockHash 14, state_queryStorageAt 9, chain_getBlock 8. It is the first list to ask
-  `chain_getBlock`, which the read only guard already allowed. `System.Account` is not in the decoder's reviewed shape: the recorder asks
-  any key, and its decode is a later piece; nothing in src changed for it.
+  `chain_getBlock`, which the read only guard already allowed. When the list was made,
+  `System.Account` was not in the decoder's reviewed shape; `decoder-shape@3` (round 29) states it.
+  Nothing in src changed for the list.
 - Nothing in the fifth list is typed by hand: `test/helpers/requests/list-5.ts`, its plan, derives
   it from `recordings/requests-inputs.json` (the owner and the device from the test's `results.json`
   `accounts`, the named miner from the value `NAMED` of its `steps.json`, the channel from the
@@ -307,6 +308,28 @@ building and testing decoders against real data. It is evidence, never proof of 
   reference decoder, derives the channel id again from `steps.json`, and holds every input to the
   record it names. `node scripts/write-requests.mjs --out recordings/requests.json` writes the file
   through that same plan, and the check runs it and compares the bytes.
+- The fifth list's recording is `fixtures/recording-20261113182100-8769e8d2841bf49a` (round 32),
+  32 of 32 answered, which keeps that list and its inputs byte for byte; the tests of the fifth list
+  read those copies. `test/encoder-recording.test.ts` holds it to the encoder test's run time record
+  (`results.json`) and its signed files (`run-2026-11-13/signed/`): every block's hash by its height,
+  each step's signed extrinsic byte for byte at the index the record gives and its blake2b 256 equal
+  to `extrinsic_hash`, the hash at each mortal step's birth height equal to the birth hash it was
+  signed with, the sha256 and length of each step block's `System.Events` equal to what the runner
+  relayed, and every block's `LastRuntimeUpgrade` naming spec 1014020.
+  `scripts/fill-encoder-results.mjs --out <file>` fills the final record, `results.final.json` beside
+  the run time record, which it never writes, through `src/scale/block.ts`
+  (`test/helpers/encoder-fill.ts`, reading the fixture through `test/helpers/recorded-encoder.ts`);
+  `test/encoder-results.test.ts` holds the committed file to that fill byte for byte and holds its
+  balances, its words for a read the node holds nothing for, and its refusals: the fill gives a
+  step no chain field when its block is not the one the run time record names finalized (the
+  number and the hash), when the sha256 or the length of the block's `System.Events` value on the
+  tape is not the `events_sha256` or `events_length` the runner relayed, when its batch answer was
+  not read, its runtime is not reviewed, or it does not hold the signed extrinsic exactly once. The
+  verdict of the encoder folder's `check.mjs` on it is held by that folder's own
+  `final-record.test.mjs`: the observatory depends on nothing of imd-flop, which that checker
+  needs, so no observatory test or script runs it.
+- What both fills share (a block pinned to its runtime, the events of one extrinsic with its result
+  and fee, one storage read through the door, the error rows) is `test/helpers/block-fill.ts`.
 - The fourth list read the lab's session rerun at spec 1014020
   (`research/2026-11-12-session-rerun-1014020`), 23 transactions in blocks 3552721 to 3553566, 48
   calls. It asks the finalized head and the genesis hash, then for each step, in the order of the
@@ -697,6 +720,7 @@ The two interfaces other teams import are in [../interfaces](../interfaces).
 | `src/requests.ts`, `recordings/requests.json` | the request list's form, and the list to be recorded next |
 | `recordings/requests-inputs.json`, `test/helpers/requests/` | the inputs of the current list, each with the file and field it comes from; the core that turns a plan into calls (`core.ts`), and one plan module per list (`list-2.ts` to `list-5.ts`) |
 | `scripts/fill-rerun-results.mjs`, `test/helpers/rerun-fill.ts`, `test/helpers/batch-answer.ts` | the fill of the session rerun's `results.json` from the fourth recording (`--out <file>`), through `src/scale/block.ts` and the reader of a batch answer, which refuses and never guesses |
+| `scripts/fill-encoder-results.mjs`, `test/helpers/encoder-fill.ts`, `test/helpers/recorded-encoder.ts`, `test/helpers/block-fill.ts` | the fill of the encoder test's final record, `results.final.json`, from the fifth recording (`--out <file>`), through `src/scale/block.ts`; and what it shares with the rerun's fill |
 | `scripts/write-requests.mjs`, `scripts/ts-resolve.mjs`, `test/helpers/requests-list.ts` | the writer of `recordings/requests.json` (`--out <file>`), through the current list's plan, the same the tests use, run under Node's own type stripping with a hook that resolves a relative .js import from a .ts module to the .ts file |
 | `src/record-run.ts`, `src/record-bin.ts` | one record run and its files, and the command |
 | `src/recording.ts` | the reader contract for a recording |

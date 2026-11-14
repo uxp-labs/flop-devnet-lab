@@ -29,6 +29,7 @@ the layouts of `open_channel` (D2) and `top_up_escrow`. `plan.md` is the plan fo
 | `explorer-reader.js` | Pasted into a tab on the explorer's own origin: reads one extrinsic's outcome and events. |
 | `results.template.json` | The empty record, as `node plan.mjs template` prints it. |
 | `judge.mjs`, `check.mjs` | Judge a record against `steps.json`: a run time record by order and outcomes, a final record whole. |
+| `results.json`, `results.final.json` | The run time record of the run of 2026-11-13, and its final record filled from the observatory's fifth recording. |
 | `fixtures.mjs`, `*.test.mjs` | The offline tests and their fixtures. |
 | `review-*`, `review2-*` | The two reviewers' tests and mutants, and `REVIEW-PROGRESS.md`, `REVIEW2-PROGRESS.md`. |
 | `PROGRESS.md` | The builder's notes, for a successor. |
@@ -278,30 +279,128 @@ file: it is `owner_free_balance_raw.after` of `research/2026-11-12-session-rerun
 the owner's free balance at block 3553688 after that rerun (its `owner_free_balance_raw.read`), also
 read by position. The number after and the difference are in no other committed file.
 
-## Not done here: the final record
+## The final record
 
-The final record is not made in this folder and nothing here promises it. It needs a new
-observatory request list for the batch's blocks, its recording, a fill helper beside
-`observatory/test/helpers/rerun-fill.ts`, and `System.Account` read by position and marked so, or a
-new reviewed shape (the reviewed shape in `observatory/src/scale/shape.ts` does not state
-`System.Account`). That is a later piece of work with its own brief. `check.mjs` judges a final
-record when one exists: it requires `record: "final"` and `balances_source` (`decoder` or
-`by position`) and prints the verdict with it.
+`results.final.json` in this folder is the final record of the run (`record` is `final`,
+`balances_source` is `decoder`). It is the run time record, `results.json`, with its fill fields
+filled from the observatory's fifth recording, and `filled_from` at the end. `results.json` is not
+changed: a record of its day is not rewritten. The sha256 of `results.final.json` is
+496accd3c706d4c4f3b7d5a699a891dc91bfbdfe1b81ea13067c5a5cadc27573.
+`final-record.test.mjs` holds it and each claim below by its field. A field `steps.N` is the step at
+position N of `steps` in `results.final.json`, counted from 0.
 
-The fifth request list of the observatory records the run's blocks
-(`observatory/test/helpers/requests/list-5.ts`, branch `claude/observatory-list-5`).
+What it is filled from (`filled_from`):
+- The chain facts come from the recording `observatory/fixtures/recording-20261113182100-8769e8d2841bf49a`
+  (`filled_from.recording`), decoded through the lab's decoder's one door,
+  `observatory/src/scale/block.ts`, at the spec each block's `System.LastRuntimeUpgrade` names
+  (`filled_from.from_the_recording`), with the reviewed shape of format `flop-observatory/decoder-shape@3`
+  (`filled_from.shape`). The fill is `observatory/scripts/fill-encoder-results.mjs` (`filled_from.by`).
+- What the lab signed and sent (signer, account nonce, call, era, extrinsic hash, time of sending)
+  comes from the signed files of `run-2026-11-13/signed/` and from `results.json`
+  (`filled_from.from_the_run`).
+- The recording is one RPC endpoint's answers. It is evidence for the record, not proof of chain
+  state. The observatory's `test/encoder-recording.test.ts` holds it to `results.json` and the signed
+  files: each block's hash, each signed extrinsic byte for byte at its index, the birth hashes of T3
+  to T6, the events' sha256 and length the runner relayed, and spec 1014020 at every block.
+
+The verdict of `node check.mjs results.final.json`, exit 0:
+- `8 pass, 0 differ, 0 incomplete, 1 not needed, 0 not run`
+- `verdict: passed as planned (balances: decoder)`
+
+Each step's block is called finalized as the run time record reports it (`steps.N.run_time.sent.status`
+is `finalized`), with its hash beside it. The columns are `steps.N.finalized_in_block`,
+`steps.N.block_hash`, `steps.N.result`, `steps.N.fee_raw`, `steps.N.after.accounts.owner.free` and
+`steps.N.after.accounts.device.free`, or `absent` where `steps.N.after.accounts.device` is
+`{ "absent": true }`. The start row is `before`. T7 was not needed and has no block.
+
+| Step | Block | Block hash | Result | Fee raw | Owner free after | Device free after |
+|---|---|---|---|---|---|---|
+| start | 3654783 | 0xafded080999d0fc05b3c6f5d3f1579fd59b6cbe9829e1a9c52ff99a08a0d134d | | | 24708267321505000000 | absent |
+| T1 | 3654835 | 0x05a8b32e2f9ef401e147d7594e0f09348ba4a310568356edeb70c827e72853e0 | success | 2723545745000000 | 24555543775760000000 | 150000000000000000 |
+| T2 | 3654914 | 0xc36ced0ba0f84bbcafbe8a1a34508a32cd40e5b1849d737d9d8c81ff3cb197c8 | success | 6413391035000000 | 24549130384725000000 | 150000000000000000 |
+| T3 | 3655037 | 0x9045529eb1c4e8eaf063c9d1ca63702c26f6c434989408b0b04dc4933ecc3957 | success | 9422731815000000 | 24539130384725000000 | 140577268185000000 |
+| T4 | 3655115 | 0xb9b084f43fa77338fa9f329d5208551eb92d084004c56923997a986f358255ee | failed: ComputeChannel.BadState (pallet 103, error 11) | 5219861070000000 | 24539130384725000000 | 135357407115000000 |
+| T5 | 3655185 | 0xce1b29311dcb8eea6438d8d7972290967a20ec881970d1e111ab9a3856fcea85 | failed: ComputeChannel.CalibrationUnavailable (pallet 103, error 97) | 10295621980000000 | 24539130384725000000 | 125061785135000000 |
+| T6 | 3655678 | 0x8225561fd91aa365f80f81a3fde5f3ab9bab65a79e81aa87dc0345c983fc4a49 | success | 8639685990000000 | 24549130384725000000 | 116422099145000000 |
+| T8 | 3655735 | 0xebfabc3ede98df1965b89d9273c021e2c88708cf3ecef0c53744226b0eb68c41 | success | 3906000695000000 | 24545224384030000000 | 116422099145000000 |
+| T9 | 3655782 | 0xce99b03c34850c1ef31e8d9eb9c8cf9a2f58bc204f86cd98e40d791a180a9300 | success | 2770030705000000 | 24658876452470000000 | absent |
+
+The cost and the balances:
+- The cost is the sum of `steps.N.fee_raw` over the eight steps sent: 49390869035000000 raw.
+- The owner signed T1, T2 and T8 (`steps.N.signer` is `accounts.owner.public_key`) and paid their fees,
+  13042937475000000 raw.
+- The device signed T3, T4, T5, T6 and T9 (`steps.N.signer` is `accounts.device.public_key`) and paid
+  their fees, 36347931560000000 raw, from what T1 sent it: 150000000000000000 raw
+  (`steps.0.events.3.fields.amount`, `Balances.Transfer`).
+- The owner's free balance went from 24708267321505000000 raw (`before.accounts.owner.free`) to
+  24658876452470000000 raw (`steps.8.after.accounts.owner.free`): down by 49390869035000000 raw, the eight fees.
+  Nothing else was lost. These are the lead's two readings by position in the section above, now
+  read through the decoder.
+- The escrow of T3, 10000000000000000 raw (`steps.2.events.3.fields.escrow`, `ComputeChannel.ForceOpenRequested`),
+  left the owner at T3 and came back at T6 (`steps.5.events.1.fields.amount`, `Balances.Transfer`).
+- The device's account is absent at the start (`before.accounts.device`) and after T9
+  (`steps.8.after.accounts.device`): T9 sent all it held back to the owner, and the owner's free
+  balance rose at T9 by what T1 sent less the device's five fees.
+- At the start and after T1 the node holds no session, no session nonce and no breaker for the
+  device: `before.session` and `steps.0.after.session` are `{ "absent": true }`, and
+  `session_nonce` and `breaker_tx_count` are `"absent"` (`filled_from.words.absent`). From T2 on
+  they are stored.
+
+The channel of T3 (`after.channel`, the fill's own field, `filled_from.channel`):
+- absent at the start, after T1 and after T2 (`before.channel`, `steps.0.after.channel`,
+  `steps.1.after.channel`);
+- after T3, T4 and T5: waiting for its ack, `PendingAck` (`steps.2.after.channel.state.type`) with
+  ack deadline 3655633 (`steps.2.after.channel.state.value.ack_deadline`) and escrow 10000000000000000 raw
+  (`steps.2.after.channel.escrow`), the same in `steps.3` and `steps.4`;
+- after T6: `Closed` (`steps.5.after.channel.state.type`). The closed record stays stored after T6,
+  T8 and T9 (`steps.8.after.channel.state.type` is `Closed`), and it still says escrow 10000000000000000 raw
+  (`steps.8.after.channel.escrow`), though the owner's balance shows the escrow came back at T6.
+
+What the record shows: the eight transactions as the chain executed them, their events, results and
+fees, and the two accounts, the session and the channel after each, read through the lab's decoder.
+What it does not show:
+- proof of chain state: one endpoint answered, and nothing here checks it against another;
+- a judgment of every field: `check.mjs` gives the same verdict when one of these is changed: a
+  step's `result` text, T5's `dispatch_error`, a `block_hash`, an `extrinsic_index`, an
+  `events_value_sha256`, an `after.channel`, the amount of T6's refund transfer, the words for
+  nothing stored (`review5-words.test.mjs` shows each). Those fields are held by the
+  observatory's test that this file is byte for byte the fill
+  (`observatory/test/encoder-results.test.ts`) and by the sha256 above;
+- `epoch_spent_raw` and `breaker_tx_count` are recorded and not judged (see below);
+- a top up on an open channel, an `open_channel` that succeeds, and whether an expiry refunds a top up;
+- a like step in the session rerun for T4 and T5, so their fees are compared with nothing.
 
 ## What is not known
 
-- Whether `expire_force_open` refunds a top up. If it does not, the top up stays in the pallet
-  account under the channel of T3, and no step of this batch brings it back.
-- Whether T5's `opened_at` is T5's block, as T7's earliest block assumes.
-- The fees of T4 and T5: no like step was ever sent.
-- The channel id formula is shown for `force_open` only. T5 shows it for `open_channel` or refutes it.
-- What the chain answers to T4 and T5, and whether `top_up_escrow` is taken on a channel waiting
-  for an ack.
-- Whether an epoch boundary of the session falls inside the batch. So `epoch_spent` and the
-  breaker's `tx_count` are recorded and not judged.
+Written before the run and brought up to the final record. A field named here is a field of
+`results.final.json`.
+
+Answered by the run:
+
+- What the chain answers to T4: `failed: ComputeChannel.BadState (pallet 103, error 11)`
+  (`steps.3.result`), while the channel of T3 was waiting for its ack
+  (`steps.2.after.channel.state.type` is `PendingAck`). So `top_up_escrow` through a session was
+  not taken on a channel waiting for an ack.
+- What the chain answers to T5 (`steps.4.result`):
+  `failed: ComputeChannel.CalibrationUnavailable (pallet 103, error 97)`.
+- The fees of T4 and T5: 5219861070000000 raw and 10295621980000000 raw (`steps.3.fee_raw`,
+  `steps.4.fee_raw`), paid by the device though both calls were refused. No like step was sent
+  before, so they are compared with nothing.
+- The session nonce did not move at the two refused calls: it is 1 after T3, T4 and T5 and 2
+  after T6 (`steps.2.after.session_nonce` to `steps.5.after.session_nonce`).
+
+Still not known:
+
+- Whether `expire_force_open` refunds a top up. T4's top up was refused, so there was none to
+  refund.
+- Whether T5's `opened_at` is T5's block, as T7's earliest block assumes. T5 was refused, so no
+  channel was opened by it and T7 was not needed.
+- The channel id formula for `open_channel`. It is shown for `force_open` only: T5 was refused.
+- Whether an epoch boundary of the session or a new breaker period fell inside the batch.
+  `epoch_spent_raw` and `breaker_tx_count` are recorded and not judged. The record holds
+  `breaker_tx_count` 1 after T3 and 1 after T6, the second session call that was executed
+  (`steps.2.after.breaker_tx_count`, `steps.5.after.breaker_tx_count`). Why it is not 2 the
+  batch does not show.
 - The shapes of the node's transaction statuses: from the lead's and the reviewer's knowledge of
   Substrate, not from a committed file.
 - The encoder's table holds only spec 1014020. If the devnet upgrades first, `sign-device.mjs`

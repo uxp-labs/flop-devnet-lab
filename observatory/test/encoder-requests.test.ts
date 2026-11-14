@@ -4,7 +4,9 @@
 // metadata, and nothing in it is typed by hand. These tests hold the list to that function byte for
 // byte, read its design a second way from the encoder test's steps.json and results.json, derive
 // every storage key a second way with the reference decoder, and hold every input to the record it
-// names. Nothing here reads the network or runs a research script.
+// names. Since its recording became a fixture (fixtures/recording-20261113182100-8769e8d2841bf49a,
+// review round 32), they read the list and the inputs the fixture keeps. Nothing here reads the
+// network or runs a research script.
 import { getDynamicBuilder, getLookupFn } from "@polkadot-api/metadata-builders";
 import { decAnyMetadata, unifyMetadata } from "@polkadot-api/substrate-bindings";
 import { blake2b } from "@noble/hashes/blake2.js";
@@ -25,11 +27,15 @@ import { type Source, deriveCalls as coreDerive } from "./helpers/requests/core.
 import { readInputs as readList4Inputs } from "./helpers/requests/list-4.js";
 import { BIRTHS, BLOCKS, type Block, type Inputs, MORTAL_IDS, READS, type Read, START, STEPS, STEP_IDS, birthOf, blockOf, deriveCalls, deriveRequestsText, readInputs } from "./helpers/requests/list-5.js";
 import { ENCODER_RESULTS, ENCODER_SPEC_FIELD, listMetadata, requestsListText } from "./helpers/requests-list.js";
+import { ENCODER_INPUTS_TEXT, ENCODER_REQUESTS_TEXT } from "./helpers/recorded-encoder.js";
 
 const REPO = new URL("../../", import.meta.url);
 const repoText = (path: string) => readFileSync(new URL(path, REPO), "utf8");
-const LIST_TEXT = repoText("observatory/recordings/requests.json");
-const INPUTS_TEXT = repoText("observatory/recordings/requests-inputs.json");
+// The list and its inputs as the fifth recording's fixture keeps them, frozen with it (A2, RULES.md
+// section 8): the tests of the list read those copies. Today they are byte for byte the current list,
+// recordings/requests.json and recordings/requests-inputs.json, which the writer's test holds below.
+const LIST_TEXT = ENCODER_REQUESTS_TEXT;
+const INPUTS_TEXT = ENCODER_INPUTS_TEXT;
 const INPUTS = readInputs(INPUTS_TEXT);
 const META = listMetadata();
 const MD = parseMetadata(META);
@@ -123,6 +129,8 @@ describe("the fifth request list, recordings/requests.json", () => {
 
   it("is what the committed writer writes: scripts/write-requests.mjs writes requestsListText, the same derive function, and nothing of its own", () => {
     expect(requestsListText()).toBe(LIST_TEXT);
+    // The current list is still the fifth: the fixture's copies are the committed files byte for byte (A2).
+    expect([repoText("observatory/recordings/requests.json"), repoText("observatory/recordings/requests-inputs.json")]).toEqual([LIST_TEXT, INPUTS_TEXT]);
     const script = repoText("observatory/scripts/write-requests.mjs");
     expect(script).toContain('const { requestsListText } = await import("../test/helpers/requests-list.ts");');
     expect(script).toContain("writeFileSync(args[1], requestsListText());");

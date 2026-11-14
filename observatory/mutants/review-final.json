@@ -1,0 +1,42 @@
+[
+  {
+    "id": "r32rv-spent-epoch-swapped",
+    "file": "test/helpers/encoder-fill.ts",
+    "find": "spent_raw: text(v.spent), epoch_spent_raw: text(v.epoch_spent)",
+    "replace": "spent_raw: text(v.epoch_spent), epoch_spent_raw: text(v.spent)",
+    "why": "the session's spent_raw is the stored spent and epoch_spent_raw the stored epoch_spent; on the tape they are equal at every block, so only a made answer tells them apart",
+    "test": "test/review-final-mutants.test.ts"
+  },
+  {
+    "id": "r32rv-step-number-unchecked",
+    "file": "test/helpers/encoder-fill.ts",
+    "find": " || sent.block_number !== b.height || ",
+    "replace": " || ",
+    "why": "a step's chain fields are filled only from the block whose number the run time record names finalized (C7)",
+    "test": "test/review-final-mutants.test.ts"
+  },
+  {
+    "id": "r32rv-before-number-unchecked",
+    "file": "test/helpers/encoder-fill.ts",
+    "find": " || start?.number !== b.height || ",
+    "replace": " || ",
+    "why": "before is filled only from the start block whose number the run time record names (C4)",
+    "test": "test/review-final-mutants.test.ts"
+  },
+  {
+    "id": "r32rv-status-unchecked",
+    "file": "test/helpers/encoder-fill.ts",
+    "find": "if (sent?.status !== \"finalized\" || ",
+    "replace": "if (",
+    "why": "a step's chain fields are filled only where the run time record reports its block finalized (C7)",
+    "test": "test/encoder-results.test.ts"
+  },
+  {
+    "id": "r32rv-owner-device-swapped",
+    "file": "test/helpers/encoder-fill.ts",
+    "find": "owner: accountText(outcome((r) => entryIs(r, \"System\", \"Account\") && ofAccount(r, \"owner\"))),",
+    "replace": "owner: accountText(outcome((r) => entryIs(r, \"System\", \"Account\") && ofAccount(r, \"device\"))),",
+    "why": "the owner's account is the owner's System.Account read",
+    "test": "test/encoder-results.test.ts"
+  }
+]

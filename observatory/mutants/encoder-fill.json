@@ -1,0 +1,146 @@
+[
+  {
+    "id": "r32-account-absent-as-default",
+    "file": "test/helpers/encoder-fill.ts",
+    "find": "  if (!r.stored) return { absent: true };\n  const v = r.value as Rec;",
+    "replace": "  const v = r.value as Rec;",
+    "test": "test/encoder-results.test.ts",
+    "why": "an account the node holds nothing for is { absent: true }, never the default the metadata states (C5)"
+  },
+  {
+    "id": "r32-session-absent-as-unknown",
+    "file": "test/helpers/encoder-fill.ts",
+    "find": "  if (!r.stored) return { absent: true };\n  const v = isRec(r.value) ? r.value : {};",
+    "replace": "  const v = isRec(r.value) ? r.value : {};",
+    "test": "test/encoder-results.test.ts",
+    "why": "a session the node holds nothing for is { absent: true }, never the default (C5, the lead's word)"
+  },
+  {
+    "id": "r32-nonce-absent-as-default",
+    "file": "test/helpers/encoder-fill.ts",
+    "find": "r.stored ? text(r.value) : \"absent\"",
+    "replace": "text(r.value)",
+    "test": "test/encoder-results.test.ts",
+    "why": "a session nonce the node holds nothing for is \"absent\", never the default 0 (C5)"
+  },
+  {
+    "id": "r32-breaker-absent-as-null",
+    "file": "test/helpers/encoder-fill.ts",
+    "find": ": r.stored ? text(isRec(r.value) ? r.value.tx_count : undefined) : \"absent\"",
+    "replace": ": r.stored ? text(isRec(r.value) ? r.value.tx_count : undefined) : null",
+    "test": "test/encoder-results.test.ts",
+    "why": "a breaker the node holds nothing for is \"absent\", never null (C5)"
+  },
+  {
+    "id": "r32-channel-absent-as-null",
+    "file": "test/helpers/encoder-fill.ts",
+    "find": "r.stored ? resultsForm(r.value) : { absent: true }",
+    "replace": "r.stored ? resultsForm(r.value) : null",
+    "test": "test/encoder-results.test.ts",
+    "why": "a channel the node holds nothing for is { absent: true } (C6)"
+  },
+  {
+    "id": "r32-channel-enum-form-kept",
+    "file": "test/helpers/encoder-fill.ts",
+    "find": "r.stored ? resultsForm(r.value) :",
+    "replace": "r.stored ? r.value :",
+    "test": "test/encoder-results.test.ts",
+    "why": "the channel's enum values are written { type, value } (C6)"
+  },
+  {
+    "id": "r32-block-not-the-run-time-block",
+    "file": "test/helpers/encoder-fill.ts",
+    "find": " || sent.block_hash !== b.answeredHash) return {};",
+    "replace": ") return {};",
+    "test": "test/encoder-results.test.ts",
+    "why": "a step is filled only from the block the run time record names finalized, by the hash the tape answered (C4)"
+  },
+  {
+    "id": "r32-extrinsic-found-twice",
+    "file": "test/helpers/encoder-fill.ts",
+    "find": "  if (at.length !== 1) return {};",
+    "replace": "  if (at.length === 0) return {};",
+    "test": "test/encoder-results.test.ts",
+    "why": "a block that holds the signed extrinsic twice is not read (C7)"
+  },
+  {
+    "id": "r32-events-not-decoded-filled",
+    "file": "test/helpers/encoder-fill.ts",
+    "find": "  if (p.state === \"events not decoded\") return { last_runtime_upgrade_spec: p.spec };\n",
+    "replace": "",
+    "test": "test/encoder-results.test.ts",
+    "why": "a block whose events do not decode fills only its runtime (C7)"
+  },
+  {
+    "id": "r32-not-read-filled",
+    "file": "test/helpers/encoder-fill.ts",
+    "find": "  if (p.state === \"not read\") return {};\n  if (p.state === \"events not decoded\")",
+    "replace": "  if (p.state === \"events not decoded\")",
+    "test": "test/encoder-results.test.ts",
+    "why": "a block whose batch answer was not read fills nothing (C7)"
+  },
+  {
+    "id": "r32-events-sha-of-other-value",
+    "file": "test/helpers/encoder-fill.ts",
+    "find": ".update(events).digest(\"hex\")",
+    "replace": ".update(events.subarray(1)).digest(\"hex\")",
+    "test": "test/encoder-results.test.ts",
+    "why": "events_value_sha256 is of the whole System.Events value on the tape (C4)"
+  },
+  {
+    "id": "r32-raw-null-as-empty",
+    "file": "test/helpers/encoder-fill.ts",
+    "find": "raw[key] = a === null ? null : hex(a);",
+    "replace": "raw[key] = a === null ? \"0x\" : hex(a);",
+    "test": "test/encoder-results.test.ts",
+    "why": "raw_reads gives null where the node answered nothing (C4)"
+  },
+  {
+    "id": "r32-era-signed-form-kept",
+    "file": "test/helpers/encoder-fill.ts",
+    "find": "const era = signed.era === \"immortal\" ? \"immortal\" :",
+    "replace": "const era = signed.era === \"immortal\" ? \"immortal\" : signed.era ??",
+    "test": "test/encoder-results.test.ts",
+    "why": "the era is written in the template's form, from the signed file (C3)"
+  },
+  {
+    "id": "r32-before-start-hash-unchecked",
+    "file": "test/helpers/encoder-fill.ts",
+    "find": " || start.hash !== b.answeredHash) return null;",
+    "replace": ") return null;",
+    "test": "test/encoder-results.test.ts",
+    "why": "the before is filled only from the start block the run time record names (C4)"
+  },
+  {
+    "id": "r32-before-channel-dropped",
+    "file": "test/helpers/encoder-fill.ts",
+    "find": "{ breaker_tx_count: { channel: before.channel } }",
+    "replace": "{}",
+    "test": "test/encoder-results.test.ts",
+    "why": "before.channel is written after breaker_tx_count (C6)"
+  },
+  {
+    "id": "r32-filled-from-shape-unnamed",
+    "file": "test/helpers/encoder-fill.ts",
+    "find": "  shape: SHAPE_SCHEMA,\n};",
+    "replace": "};",
+    "test": "test/encoder-results.test.ts",
+    "why": "filled_from names the shape format the door pinned (C3)"
+  },
+  {
+    "id": "r32-record-kind-kept",
+    "file": "test/helpers/encoder-fill.ts",
+    "find": "record: \"final\", balances_source: \"decoder\",",
+    "replace": "balances_source: \"decoder\",",
+    "test": "test/encoder-results.test.ts",
+    "why": "the final record says record final (C2)"
+  },
+  {
+    "id": "r32-events-not-the-runners",
+    "file": "test/helpers/encoder-fill.ts",
+    "find": "  if (!(tapeEvents instanceof Uint8Array) || createHash(\"sha256\").update(tapeEvents).digest(\"hex\") !== sent.events_sha256 || tapeEvents.length !== sent.events_length) return {};\n",
+    "replace": "",
+    "test": "test/encoder-results.test.ts",
+    "why": "a block whose System.Events on the tape are not the sha256 and length the runner relayed is refused before any read is decoded (review round 32, finding 5)"
+  }
+]

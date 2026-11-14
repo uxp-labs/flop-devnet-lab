@@ -991,9 +991,12 @@ for everything it reads.
   each sent step, each hash by its height, and at each one `state_queryStorageAt` of the same eight
   keys in one fixed order, built from the 1014020 metadata; each step's block whole by
   `chain_getBlock` at its hash; and for each step signed with a mortal era the hash at the era's
-  birth height, which the step's signature binds. 32 calls. It reads `System.Account`, an entry the
-  reviewed shape does not state: the recorder asks any key, and until a reviewed shape states it,
-  the value it answers stays undecoded, kept apart, and unknown.
+  birth height, which the step's signature binds. 32 calls. It reads `System.Account`, which
+  `decoder-shape@3` states. Its recording is a fixture (round 32); the encoder test's final record is
+  filled from it through the door, beside the run time record, which is never rewritten. A read the
+  node holds nothing for is written as not stored, never as the entry's default: an account, the
+  session and the channel `{ "absent": true }`, the session nonce and the breaker `"absent"`; null is
+  unknown. No observatory test or script imports the research folders' checkers that need imd-flop.
 - Nothing is sent before the whole list is judged: a list not in that form is refused, and the run
   exits 1; a list that holds a method the read only guard refuses is refused, each refusal recorded
   as section 4 says, and the run exits 4. Either way nothing is read from the network. A method is

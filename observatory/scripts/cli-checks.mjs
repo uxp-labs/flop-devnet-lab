@@ -287,6 +287,22 @@ const cases = [
     ok: (r) => r.exit === 0 && r.same && r.bare === 2 && r.stderr === "usage: node scripts/fill-rerun-results.mjs --out <file>",
   },
   {
+    name: "the encoder test's fill writes research/2026-11-12-encoder-devnet-test/results.final.json byte for byte, and refuses a call without --out (round 32, D4)",
+    run: () => {
+      const out = join(work, "encoder-results.final.json");
+      const w = node([join(pkg, "scripts", "fill-encoder-results.mjs"), "--out", out]);
+      const bare = node([join(pkg, "scripts", "fill-encoder-results.mjs")]);
+      let same = false;
+      try {
+        same = readFileSync(out).equals(readFileSync(join(pkg, "..", "research", "2026-11-12-encoder-devnet-test", "results.final.json")));
+      } catch {
+        same = false;
+      }
+      return { exit: w.status, same, bare: bare.status, stderr: `${w.stderr ?? ""}${bare.stderr ?? ""}`.trim() };
+    },
+    ok: (r) => r.exit === 0 && r.same && r.bare === 2 && r.stderr === "usage: node scripts/fill-encoder-results.mjs --out <file>",
+  },
+  {
     name: "the shape writer: each reviewed line's committed shape file is the shape it derives, exit 0; a call it does not understand is exit 2",
     run: () => {
       const lines = [1014014, 1014020].map((spec) => node([join(pkg, "scripts", "write-shape.mjs"), "--spec", String(spec)]));
