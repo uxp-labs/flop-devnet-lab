@@ -207,6 +207,10 @@
     "tests": 7,
     "names": "89c685efbe74b5e4445ce449300f41cefa739a2172f7d52e5cb5ac6ad17094a9"
   },
+  "shape-pin-derived.test.ts": {
+    "tests": 4,
+    "names": "2ded76ffc116c4f0d58d4c3b633d462035d497c993cb3b2179371a65850eb209"
+  },
   "shape.test.ts": {
     "tests": 17,
     "names": "7444a6495cef435f98ffee9aac62a2a170d9c699fb78177472145d74010978bc"
