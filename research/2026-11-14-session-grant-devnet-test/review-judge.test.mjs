@@ -1,0 +1,72 @@
+// Review of G-19, attack 6 (G7): the judge over made results files. Each piece of evidence missing or
+// unknown in turn, each claim differing in turn, and records where the judge and plan.mjs next part.
+// No network, no key.
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import { plan, V } from "./fixtures.mjs";
+import { judge } from "./judge.mjs";
+import { nextOf } from "./next.mjs";
+import { asPlanned, step, started } from "./records.mjs";
+
+const at = (r, id) => r.steps.find((e) => e.step === id);
+const passed = (r) => judge(plan, r).exit === 0;
+
+test("HOLDS: both branches as planned pass; each piece of evidence missing or unknown in turn is never a pass", () => {
+  for (const branch of ["taken", "refused"]) {
+    assert.ok(passed(asPlanned(branch)), `${branch} as planned passes`);
+    const ids = asPlanned(branch).steps.map((e) => e.step);
+    const edits = [];
+    for (const id of ids) {
+      edits.push(
+        [`${id} no decoder`, (r) => { delete at(r, id).decoder; }],
+        [`${id} fee null`, (r) => { at(r, id).decoder.fee_raw = null; }],
+        [`${id} fee "unknown"`, (r) => { at(r, id).decoder.fee_raw = "unknown"; }],
+        [`${id} success null`, (r) => { at(r, id).decoder.success = null; }],
+        [`${id} no events`, (r) => { at(r, id).decoder.events = []; }],
+        [`${id} no after`, (r) => { delete at(r, id).after; }],
+        [`${id} after exit 1`, (r) => { at(r, id).after.exit = 1; }],
+        [`${id} after session null`, (r) => { at(r, id).after.session = null; }],
+        [`${id} after unknown`, (r) => { at(r, id).after.session = { state: "unknown", value: null }; }],
+        [`${id} no explorer`, (r) => { at(r, id).run_time.explorer = null; }],
+        [`${id} sources differ`, (r) => { at(r, id).sources_differ = ["made"]; }],
+        [`${id} block unknown`, (r) => { at(r, id).run_time.sent.block_number = null; }],
+      );
+      if (at(asPlanned(branch), id).decoder.success) {
+        const ev = at(asPlanned(branch), id).decoder.events[0];
+        for (const k of Object.keys(ev.fields)) edits.push([`${id} ${k} null`, (r) => { at(r, id).decoder.events[0].fields[k] = null; }], [`${id} ${k} other`, (r) => { at(r, id).decoder.events[0].fields[k] = "1"; }]);
+      }
+    }
+    edits.push(["no balances", (r) => { delete r.balances; }], ["after balance null", (r) => { r.balances.owner_free_after = null; }], ["balance one off", (r) => { r.balances.owner_free_after = (BigInt(r.balances.owner_free_after) - 1n).toString(); }], ["no device", (r) => { delete r.accounts.device.public_key; }]);
+    for (const [what, edit] of edits) { const r = asPlanned(branch); edit(r); assert.ok(!passed(r), `${branch}: ${what} passes`); }
+    assert.ok(edits.length >= 50, String(edits.length));
+  }
+});
+
+test("DEFECT RG19-10: a record at which plan.mjs next says stop never gets the verdict passed", () => {
+  const r = asPlanned("taken");
+  at(r, "R2").after.runtime = { specName: V("SPEC_NAME"), specVersion: Number(V("SPEC")) + 1 };
+  assert.equal(nextOf(plan, r).word, "stop");
+  const j = judge(plan, r);
+  assert.notEqual(j.exit, 0, `verdict: ${j.verdict}`);
+});
+
+test("DEFECT RG19-11: the owner's balance claim passes only when the record names the relayed reads its balances came from (the lead's L1)", () => {
+  const r = asPlanned("taken");
+  assert.equal(r.balances.source, "made");
+  const c = judge(plan, r).claims.find((x) => x.id === "batch");
+  assert.notEqual(c.status, "pass", "balances with no relay and no sha256 are judged pass");
+});
+
+test("DEFECT RG19-12: G2 refused with an error the 1014020 table does not name is not a pass of its outcome", () => {
+  const r = step(step(step(started(), "G1"), "R1"), "G2", { ok: false, error: null });
+  at(r, "G2").decoder.error = { pallet_index: 77, error_index: 3, name: null };
+  const c = judge(plan, r).claims.find((x) => x.id === "G2" && /outcome/.test(x.what));
+  assert.notEqual(c.status, "pass", c.why);
+});
+
+test("DEFECT RG19-13: the judge says differ where the record's explorer reading and decoder reading differ, whatever sources_differ says", () => {
+  const r = asPlanned("taken");
+  at(r, "G1").run_time.explorer.events[0].fields.daily_cap = "1";
+  const c = judge(plan, r).claims.find((x) => x.id === "G1" && /explorer/.test(x.what));
+  assert.equal(c.status, "differ");
+});
