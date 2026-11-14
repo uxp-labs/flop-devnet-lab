@@ -60,7 +60,7 @@ export function bigIn(kind: "u64" | "u128", value: unknown, what: string): bigin
 }
 freezeFunction(bigIn);
 
-/** A whole number from `min` to `max`, at most a u32. */
+/** A whole number at least min and at most max, and at most a u32. */
 export function wholeIn(value: unknown, min: number, max: number, what: string): number {
   if (typeof value !== "number" || !Number.isSafeInteger(value)) return bad(what, "must be a whole number");
   if (value < min || value > max || value > U32_MAX) bad(what, `must be from ${min} to ${max}`);
