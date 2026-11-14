@@ -239,6 +239,7 @@ describe("T5: no test of chain-read opens a socket", () => {
   // chain-read-unknown.test.ts, review-chain-read-lead.test.ts): that is how those tests work, and no real socket is
   // made. The list grows by the reviewer's six files and the fix round's (rule X7), and is held against the folder.
   const NAMES = [
+    "chain-read-block-arg.test.ts",
     "chain-read-frozen.test.ts",
     "chain-read-head.test.ts",
     "chain-read-keys.test.ts",

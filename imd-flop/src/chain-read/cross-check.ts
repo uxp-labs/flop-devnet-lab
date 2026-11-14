@@ -7,6 +7,8 @@
  * is unknown and names both values. So is a check that cannot be made: another block, another runtime, a session
  * that is not known, a session record of another owner or delegate than the state's own (rule X3), no such event
  * of the session at the block, or more than one. Pure.
+ * It takes the values the two reads returned (the known value of readSessionState and of readBlockEvents), plain
+ * data the reads made, and reads their fields as they are: it takes no copy of them.
  */
 import type { DoorValue } from "./door.js";
 import { lineOf } from "./keys.js";
