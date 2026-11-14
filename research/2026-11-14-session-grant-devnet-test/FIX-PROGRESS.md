@@ -26,4 +26,12 @@ Run tests under setpriv (CLAUDE.md rule 5). Push after every commit.
 
 ## Points where a rule cannot be met as written (stop, for the lead)
 
-- none yet
+- F7 (RG19-11, L1): not done. (1) lab.accountReads of pane-runner.js (the last batch's, byte for byte)
+  relays { account, runtime, finalized, account_nonce }: no free balance, so no balance can come from
+  the start read or an end read of it. (2) review-judge.test.mjs "HOLDS: both branches as planned
+  pass" needs judge(asPlanned(...)).exit 0, and "DEFECT RG19-11" needs the batch claim of the same
+  asPlanned("taken") (balances source "made") not to pass: under F6 (exit 0 only when every claim
+  passes) both cannot hold.
+- F10, the node error half: rehearsal.test.mjs "T1: session show at the revoked state (A10) ... so
+  exit 1" runs the tool over an A10 tape that holds the node's error for the nonce and the breaker and
+  asserts exit 1. A tape with a node error refused makes that assertion impossible.
