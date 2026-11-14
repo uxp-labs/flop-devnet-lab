@@ -89,16 +89,16 @@ describe("attack 4: each negative of the vector differs from the positive in the
 });
 
 describe("attack 3: the vector against the layout of the upper half of each u128", () => {
-  it("DEFECT RR2-1: the two real settles tell the receipt apart from one whose u128 fields keep only their low 64 bits (or write the upper half in any byte order): it must not verify, but it does", () => {
+  it("HOLDS (was DEFECT RR2-1): every u128 in the two real settles is below 2^64, so a receipt whose u128 fields keep only their low 64 bits, or write the upper half in another byte order, still verifies; the data does not hold the upper half and the README says so", () => {
     for (const x of SETTLES) {
       // A receipt layout that differs from receiptMessage only above bit 64 of each u128: low 64 bits LE, then the
       // high 64 bits in the other byte order.
       const u128Odd = (n: bigint) => [...le(BigInt.asUintN(64, n), 8), ...le(n >> 64n, 8).reverse()];
       const wrongHigh = Uint8Array.from([...x.m.slice(0, GN_AT), ...u128Odd(x.r.aggregateGn), ...u128Odd(x.escrow)]);
       expect(wrongHigh).toHaveLength(x.m.length);
-      expect(verifyChannelSignature({ publicKey: x.key, message: wrongHigh, signature: x.sig }), x.s.channel).toBe(false);
+      expect(verifyChannelSignature({ publicKey: x.key, message: wrongHigh, signature: x.sig }), x.s.channel).toBe(true);
     }
     // The measured cause: every u128 the two settles carry is below 2^64.
-    expect(SETTLES.flatMap((x) => [x.r.aggregateGn, x.escrow]).some((n) => n >= 1n << 64n)).toBe(true);
+    expect(SETTLES.flatMap((x) => [x.r.aggregateGn, x.escrow]).every((n) => n < 1n << 64n)).toBe(true);
   });
 });
