@@ -119,30 +119,29 @@ export async function readSessionState(t: Transport, owner: string, delegate: st
 }
 freezeFunction(readSessionState);
 
-/** What the shared input checks refuse a block argument with. It is thrown and caught in blockOf alone. */
-class BadBlock {
-  constructor(readonly reason: string) {}
-}
-freezeFunction(BadBlock);
-
-/** The shared input checks, refusing through chain-read's own refuse: a throw that blockOf turns into unknown. */
-const PLAIN = plainInput((_code, message) => {
-  throw new BadBlock(message);
-});
+/** What the refuse function of blockOf throws. Nobody reads it: the reason is kept by the call, not by this value. */
+const REFUSED = Object.freeze({});
 
 /**
  * A copy of the caller's block argument: an object with exactly the own fields number and hash, each read once
  * through its own descriptor, no accessor, a Proxy's get trap not used. Anything else is unknown with the reason
- * the check gave. A block whose own code throws while it is read (a Proxy trap) is unknown too, with a fixed
- * reason that holds nothing of what it threw. Never throws.
+ * the check gave. The checks are made per call, and the call itself keeps the reason of a refusal in a variable of
+ * its own, so two calls never share one. A block whose own code throws while it is read (a Proxy trap) is unknown
+ * too, with a fixed reason that holds nothing of what it threw: the catch binds nothing and touches nothing it
+ * caught. Never throws.
  */
 function blockOf(block: unknown): Got<{ readonly number: number; readonly hash: string }> {
+  let reason: string | null = null;
+  const plain = plainInput((_code, message) => {
+    reason = message;
+    throw REFUSED;
+  });
   try {
-    const f = PLAIN.takeFields(block, ["number", "hash"], "the block argument");
+    const f = plain.takeFields(block, ["number", "hash"], "the block argument");
     // The values are checked where they are used below, with their own reasons; only their shape is taken here.
     return known(Object.freeze({ number: f.number as number, hash: f.hash as string }));
-  } catch (e) {
-    return unknown(e instanceof BadBlock ? e.reason : "the block argument threw while it was read");
+  } catch {
+    return unknown(reason ?? "the block argument threw while it was read");
   }
 }
 

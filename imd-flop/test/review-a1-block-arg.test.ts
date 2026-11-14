@@ -75,6 +75,45 @@ describe("review A1, P7: a hostile block argument", () => {
     expect(ran.n).toBe(0);
   });
 
+  it("a trap of the block that calls readBlockEvents again with another bad block, inside the first call's read, leaves each call with its own reason", async () => {
+    const inner: any[] = [];
+    const innerCall = async () => {
+      inner.push(await readBlockEvents(transportOf(rerunScript(A6.block_hash), []), [1, 2] as never));
+    };
+    // The first call's trap runs the second call to its end, then throws: the first call's reason is the fixed one.
+    const pending: Promise<void>[] = [];
+    const throwing = new Proxy(
+      { number: AT.number, hash: AT.hash },
+      {
+        ownKeys() {
+          pending.push(innerCall());
+          throw new Error("x");
+        },
+      },
+    );
+    const a = await settle(throwing);
+    await Promise.all(pending);
+    expect(a.threw).toBe(false);
+    expect(a.answer).toEqual({ kind: "unknown", reason: "the block argument threw while it was read" });
+    expect(inner[0].kind).toBe("unknown");
+    expect(inner[0].reason).not.toBe(a.answer.reason);
+    // The same trap, but the first block is then refused by the check with a reason of its own: each call keeps its own.
+    const nested = new Proxy(
+      { number: AT.number, hash: AT.hash, extra: 1 },
+      {
+        ownKeys(t) {
+          pending.push(innerCall());
+          return Reflect.ownKeys(t);
+        },
+      },
+    );
+    const refused = (await settle(nested)).answer;
+    await Promise.all(pending);
+    expect(refused.kind).toBe("unknown");
+    expect(refused.reason).not.toBe(inner[1].reason);
+    expect(refused.reason).not.toBe("the block argument threw while it was read");
+  });
+
   it("HOLDS: a trap that throws a plain Error, a text or null gives the fixed reason and no node call", async () => {
     for (const thrown of [new Error("x"), "a text", null, 7]) {
       const block = new Proxy(
