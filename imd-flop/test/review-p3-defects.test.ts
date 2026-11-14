@@ -224,6 +224,7 @@ describe("P2, P8, P9: no exported function describes or reads as allowed what th
       "amountText(raw: bigint)",
       "describeCall(runtime: RuntimeId, callBytes: Uint8Array)",
       "describeExtrinsic(runtime: RuntimeId, extrinsic: Uint8Array, birth: { readonly number: number; readonly hash: Uint8Array })",
+      "describeOwnerCall(runtime: RuntimeId, callBytes: Uint8Array)",
     ]);
   });
 
