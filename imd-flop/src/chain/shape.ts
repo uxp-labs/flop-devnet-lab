@@ -65,6 +65,14 @@ function entryOf(rt: Runtime, pallet: string, name: string): CallEntry {
   return rt.calls.find((c) => c.pallet === pallet && c.name === name) ?? unknown(rt, `no ${pallet}.${name} in the table`);
 }
 
+/** Whether a type holds this kind anywhere: itself, inside a struct's fields, inside an option. */
+function holdsKind(ty: Ty, kind: Ty["kind"]): boolean {
+  if (ty.kind === kind) return true;
+  if (ty.kind === "struct") return ty.fields.some((f) => holdsKind(f.type, kind));
+  if (ty.kind === "option") return holdsKind(ty.of, kind);
+  return false;
+}
+
 /** Refuses a runtime this encoder cannot write. Not exported: only reviewedRuntime reaches it, with a table entry. */
 function checkShape(rt: Runtime): Reviewed {
   if (rt.extrinsicVersion !== EXTRINSIC_VERSION) unknown(rt, `extrinsic version ${rt.extrinsicVersion}, not ${EXTRINSIC_VERSION}`);
@@ -86,7 +94,7 @@ function checkShape(rt: Runtime): Reviewed {
       unknown(rt, `${INNER_PALLET}.${name} has no amount ${spendField}`);
     }
     if (entry.fields.some((f) => f.type.kind === "call")) unknown(rt, `${INNER_PALLET}.${name} carries a call`);
-    if (entry.fields.some((f) => f.type.kind === "bytesList")) unknown(rt, `${INNER_PALLET}.${name} carries a list of byte strings`);
+    if (entry.fields.some((f) => holdsKind(f.type, "bytesList"))) unknown(rt, `${INNER_PALLET}.${name} carries a list of byte strings`);
     inner[name] = entry;
   }
   const keys = [outer, ...Object.values(inner)].map((e) => `${e.palletIndex}/${e.callIndex}`);

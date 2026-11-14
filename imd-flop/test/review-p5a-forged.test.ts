@@ -34,7 +34,7 @@ describe("review P5a, attack 8: forged tables", () => {
     expect(r).toBe("refused RUNTIME_UNKNOWN");
   });
 
-  it("DEFECT RP5A-4: an inner call whose struct field holds a bytesList is not refused by the session path's shape check", async () => {
+  it("HOLDS (was DEFECT RP5A-4): an inner call whose struct field holds a bytesList is refused by the session path's shape check", async () => {
     const r = await withTable(
       (rt) => {
         const open = rt.calls.find((c) => c.name === "open_channel")!;
@@ -43,7 +43,22 @@ describe("review P5a, attack 8: forged tables", () => {
       },
       ({ shape }) => shape.reviewedRuntime(RUNTIME_ID),
     );
-    // Expected (README: "they refuse an inner call field of the allow list's kind"; O4): refused RUNTIME_UNKNOWN.
+    // README: "they refuse an inner call field of the allow list's kind"; O4: refused RUNTIME_UNKNOWN.
     expect(r).toBe("refused RUNTIME_UNKNOWN");
+  });
+
+  it("HOLDS: an inner call with a bytesList inside an option, at the top or inside a struct, is refused RUNTIME_UNKNOWN", async () => {
+    const top = await withTable(
+      (rt) => rt.calls.find((c) => c.name === "top_up_escrow")!.fields.push({ name: "l", type: { kind: "option", of: { kind: "bytesList" } } }),
+      ({ shape }) => shape.reviewedRuntime(RUNTIME_ID),
+    );
+    const deep = await withTable(
+      (rt) => {
+        const open = rt.calls.find((c) => c.name === "open_channel")!;
+        open.fields.find((f) => f.type.kind === "struct")!.type.fields!.push({ name: "l", type: { kind: "option", of: { kind: "bytesList" } } });
+      },
+      ({ shape }) => shape.reviewedRuntime(RUNTIME_ID),
+    );
+    expect({ top, deep }).toEqual({ top: "refused RUNTIME_UNKNOWN", deep: "refused RUNTIME_UNKNOWN" });
   });
 });
