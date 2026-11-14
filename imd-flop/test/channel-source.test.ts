@@ -6,7 +6,7 @@
  * sample first.
  */
 import { readdirSync, readFileSync, statSync } from "node:fs";
-import { dirname, join, relative } from "node:path";
+import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it, vi } from "vitest";
 
@@ -167,6 +167,131 @@ describe("A4, D8, T8: the sr25519 library, polkadot and the seeded key", () => {
     // This file is left out: it holds a planted sample of the scan, as text.
     const tests = files(join(PKG, "test")).filter((f) => !f.endsWith("channel-source.test.ts"));
     expect(tests.filter((f) => specifiers(text(f)).some((s) => s.startsWith("@polkadot/"))).map(rel)).toEqual(["test/lib/sr25519-reference.ts"]);
+  });
+});
+
+/** A text with its comments taken out. Strings and template texts are kept, and a comment mark inside one is not a comment. */
+function withoutComments(t: string): string {
+  let out = "";
+  let i = 0;
+  while (i < t.length) {
+    const c = t[i] as string;
+    const d = t[i + 1];
+    if (c === "/" && d === "/") {
+      while (i < t.length && t[i] !== "\n") i++;
+    } else if (c === "/" && d === "*") {
+      const end = t.indexOf("*/", i + 2);
+      i = end === -1 ? t.length : end + 2;
+    } else if (c === '"' || c === "'" || c === "`") {
+      let j = i + 1;
+      while (j < t.length && t[j] !== c) j += t[j] === "\\" ? 2 : 1;
+      out += t.slice(i, j + 1);
+      i = j + 1;
+    } else {
+      out += c;
+      i++;
+    }
+  }
+  return out;
+}
+
+/** S1 to S3, S6: what no file under src/channel holds in its code. The channel modules are synchronous and name no way to reach the world by text. */
+const BANNED_CODE: Record<string, RegExp> = {
+  "eval": /\beval\b/,
+  "a call of the Function constructor": /\bFunction\s*\(|\bnew\s+Function\b/,
+  "globalThis": /\bglobalThis\b/,
+  "Promise": /\bPromise\b/,
+  "async": /\basync\b/,
+  "await": /\bawait\b/,
+  "queueMicrotask": /\bqueueMicrotask\b/,
+};
+
+describe("S2, S3, S6, T8: the channel modules are synchronous and reach nothing by text, in their code", () => {
+  it("the comment stripper keeps code and strings and drops comments (control)", () => {
+    expect(withoutComments("a(); // Promise\nb(); /* eval\n globalThis */ c();")).toBe("a(); \nb();  c();");
+    expect(withoutComments('const u = "http://x"; // gone')).toBe('const u = "http://x"; ');
+    expect(withoutComments("const q = `a // b ${1}`; /* x */")).toBe("const q = `a // b ${1}`; ");
+  });
+
+  it("each banned form finds its planted sample in code, and not in a comment (control)", () => {
+    const samples: Record<string, string> = {
+      "eval": "(0, eval)(s);",
+      "a call of the Function constructor": "const f = Function('return 1');",
+      "globalThis": "const g = globalThis;",
+      "Promise": "const p = Promise.resolve(1);",
+      "async": "const f = async () => 1;",
+      "await": "const x = await y;",
+      "queueMicrotask": "queueMicrotask(f);",
+    };
+    expect(Object.keys(samples).sort()).toEqual(Object.keys(BANNED_CODE).sort());
+    for (const [name, re] of Object.entries(BANNED_CODE)) {
+      expect(re.test(withoutComments(samples[name] as string)), name).toBe(true);
+      expect(re.test(withoutComments(`// ${samples[name]}\n/* ${samples[name]} */`)), `${name} in a comment`).toBe(false);
+    }
+    expect(BANNED_CODE["a call of the Function constructor"]!.test("const f = new Function('x');")).toBe(true);
+    expect(BANNED_CODE["a call of the Function constructor"]!.test("<F extends Function>(f: F)")).toBe(false);
+  });
+
+  it("no file under src/channel holds any of them", () => {
+    const found = CHANNEL.flatMap((f) => Object.entries(BANNED_CODE).filter(([, re]) => re.test(withoutComments(text(f)))).map(([name]) => `${rel(f)}: ${name}`));
+    expect(found).toEqual([]);
+  });
+});
+
+/** S1: how a file under src may take what src/channel/key.ts exports. Outside key.ts: named imports of two functions, and types. */
+const KEY_PATH = join(DIR, "key.js");
+const KEY_VALUES = ["newChannelKey", "verifyChannelSignature"];
+
+function keyImportProblems(t: string, from: string): string[] {
+  const out: string[] = [];
+  const isKey = (spec: string) => spec.startsWith(".") && resolve(dirname(from), spec) === KEY_PATH;
+  for (const m of t.matchAll(/(?:^|[;{}\n])\s*(import|export)\s+(type\s+)?([^;"'`]*?)\s*from\s*["'`]([^"'`]+)["'`]/g)) {
+    const [, kind, isType, clause, spec] = m as unknown as [string, "import" | "export", string | undefined, string, string];
+    if (!isKey(spec)) continue;
+    if (kind === "export") out.push(`re-exports from key.js: ${clause.trim()}`);
+    else if (clause.includes("*")) out.push("imports key.js as a namespace");
+    else if (!clause.trim().startsWith("{")) out.push("imports a default or a bare name from key.js");
+    else if (!isType) {
+      for (const n of clause.replace(/[{}]/g, "").split(",")) {
+        const item = n.trim();
+        if (item === "" || item.startsWith("type ")) continue;
+        const name = item.split(/\s+as\s+/)[0] as string;
+        if (!KEY_VALUES.includes(name)) out.push(`imports ${name} from key.js`);
+      }
+    }
+  }
+  for (const m of t.matchAll(/\b(?:import|require)\s*\(\s*["'`]([^"'`]+)["'`]/g)) if (isKey(m[1] as string)) out.push("loads key.js by a call");
+  return out;
+}
+
+describe("S1, T8: outside key.ts, what is taken from key.js", () => {
+  const FROM = join(SRC, "provider-x.ts");
+
+  it("the scan finds each form (control)", () => {
+    expect(keyImportProblems('import * as k from "./channel/key.js";', FROM)).toEqual(["imports key.js as a namespace"]);
+    expect(keyImportProblems('export { newChannelKey } from "./channel/key.js";', FROM)).toEqual(["re-exports from key.js: { newChannelKey }"]);
+    expect(keyImportProblems('export * from "./channel/key.js";', FROM)).toEqual(["re-exports from key.js: *"]);
+    expect(keyImportProblems('import { channelKeyFromSeed } from "./channel/key.js";', FROM)).toEqual(["imports channelKeyFromSeed from key.js"]);
+    expect(keyImportProblems('import { newChannelKey, channelKeyFromSeed as c } from "./channel/key.js";', FROM)).toEqual(["imports channelKeyFromSeed from key.js"]);
+    expect(keyImportProblems('import k from "./channel/key.js";', FROM)).toEqual(["imports a default or a bare name from key.js"]);
+    expect(keyImportProblems('const k = await import("./channel/key.js");', FROM)).toEqual(["loads key.js by a call"]);
+    expect(keyImportProblems('import { newChannelKey } from "../channel/key.js";', join(SRC, "a", "b.ts"))).toEqual([]);
+    expect(keyImportProblems('import { x } from "./channel/key.js";', join(SRC, "a", "b.ts"))).toEqual([]);
+    expect(keyImportProblems('import { x } from "../channel/key.js";', join(SRC, "a", "b.ts"))).toEqual(["imports x from key.js"]);
+    expect(keyImportProblems('import * as k from "../channel/key.js";', join(SRC, "a", "b.ts"))).toEqual(["imports key.js as a namespace"]);
+    expect(keyImportProblems('import * as k from "./key.js";', join(DIR, "auth.ts"))).toEqual(["imports key.js as a namespace"]);
+  });
+
+  it("what is allowed: the two functions, and types", () => {
+    expect(keyImportProblems('import { newChannelKey, verifyChannelSignature } from "./channel/key.js";', FROM)).toEqual([]);
+    expect(keyImportProblems('import type { ChannelKey, Signed } from "./channel/key.js";', FROM)).toEqual([]);
+    expect(keyImportProblems('import { newChannelKey, type ChannelKey } from "./channel/key.js";', FROM)).toEqual([]);
+    expect(keyImportProblems('import * as k from "./other/key.js";', FROM)).toEqual([]);
+  });
+
+  it("no file under src but key.ts takes anything else from key.js", () => {
+    const found = ALL_SRC.filter((f) => f !== join(DIR, "key.ts")).flatMap((f) => keyImportProblems(withoutComments(text(f)), f).map((p) => `${rel(f)}: ${p}`));
+    expect(found).toEqual([]);
   });
 });
 
