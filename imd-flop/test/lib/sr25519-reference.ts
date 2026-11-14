@@ -6,7 +6,7 @@
  * Its keypair is 96 bytes: a 64 byte secret in schnorrkel's own form, then the 32 byte public key. Its sign and
  * verify use the substrate signing context, as the chain's sr25519_verify does.
  */
-import { sr25519KeypairFromSeed, sr25519Sign, sr25519Verify, waitReady } from "@polkadot/wasm-crypto";
+import { blake2b, sr25519KeypairFromSeed, sr25519Sign, sr25519Verify, waitReady } from "@polkadot/wasm-crypto";
 
 export interface ReferencePair {
   readonly publicKey: Uint8Array;
@@ -34,4 +34,12 @@ export function referenceSign(pair: ReferencePair, message: Uint8Array): Uint8Ar
 /** The reference's verdict on a signature. */
 export function referenceVerify(publicKey: Uint8Array, message: Uint8Array, signature: Uint8Array): boolean {
   return sr25519Verify(Uint8Array.from(signature), Uint8Array.from(message), Uint8Array.from(publicKey));
+}
+
+/**
+ * The reference's blake2b 256 (the same package's Rust blake2 in WASM), a second implementation beside
+ * @noble/hashes for the session commands' call hash (P5b, T6). Needs referenceReady to have resolved.
+ */
+export function referenceBlake2b256(data: Uint8Array): Uint8Array {
+  return blake2b(Uint8Array.from(data), new Uint8Array(), 32);
 }

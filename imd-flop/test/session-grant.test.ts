@@ -5,7 +5,6 @@
  * `finalized_in_block`) and the runtime's constants from its facts-1014020.json
  * (`constants.FlopSessionKeys.SessionEpochLength.value`, `MaxSessionDuration.value`).
  */
-import { blake2b as referenceBlake2b, waitReady } from "@polkadot/wasm-crypto";
 import { beforeAll, describe, expect, it } from "vitest";
 import { describeOwnerCall } from "../src/chain/describe.js";
 import { encodeOwnerCall } from "../src/chain/owner-calls.js";
@@ -17,6 +16,7 @@ import { MAX_DAYS } from "../src/session/caps.js";
 import { hex, readJson, ref, refCall, RERUN, RUNTIME_ID, unhex } from "./lib/chain-fixtures.js";
 import { copyScript, DEV1, DEV2, keysOf, OWNER, scriptAt, seatHome, SEAT, session, stepOf, transportOf, withField, withNone } from "./lib/session-fixtures.js";
 import type { Log } from "./lib/recorded-node.js";
+import { referenceBlake2b256, referenceReady } from "./lib/sr25519-reference.js";
 
 const facts = readJson(`${RERUN}/facts-1014020.json`).constants.FlopSessionKeys;
 const EPOCH = Number(facts.SessionEpochLength.value);
@@ -32,7 +32,7 @@ function rawOfText(t: string): bigint {
 const grantAt = (home: string, script: ReturnType<typeof scriptAt>, days: string, json = true, log?: Log) => session(home, ["grant", "--owner", OWNER.ss58, "--days", days, ...(json ? ["--json"] : [])], transportOf(script, log));
 
 beforeAll(async () => {
-  expect(await waitReady()).toBe(true);
+  await referenceReady();
 });
 
 describe("T5: the caps, derived exactly", () => {
@@ -124,7 +124,7 @@ describe("T6: the words and the hash are of the printed bytes", () => {
     const words = describeOwnerCall(RUNTIME_ID, unhex(callHex));
     expect(r.out.split("\n")).toContain(`  ${words}`);
     const hash = /^  blake2b 256 of the call  (0x[0-9a-f]{64})$/m.exec(r.out)![1];
-    expect(hash).toBe(hex(referenceBlake2b(unhex(callHex), new Uint8Array(), 32)));
+    expect(hash).toBe(hex(referenceBlake2b256(unhex(callHex))));
     const j = (await grantAt(seatHome(), scriptAt("A10"), "3")).json();
     expect([j.call_hex, j.words, j.call_blake2b_256]).toEqual([callHex, words, hash]);
   });
@@ -148,7 +148,7 @@ describe("T6: the words and the hash are of the printed bytes", () => {
       const j = r.json();
       expect(j.call_hex).toBe(stepOf(id).call);
       expect(j.words).toBe(describeOwnerCall(RUNTIME_ID, unhex(j.call_hex)));
-      expect(j.call_blake2b_256).toBe(hex(referenceBlake2b(unhex(j.call_hex), new Uint8Array(), 32)));
+      expect(j.call_blake2b_256).toBe(hex(referenceBlake2b256(unhex(j.call_hex))));
       expect(j.stored).toBe("a revoked session");
     }
   });
