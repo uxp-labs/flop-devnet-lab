@@ -81,7 +81,7 @@ const GENESIS = flag("genesis", "0x99c172c095340ace980631f9123544c6bebd4839f3437
 const FLOP = 10n ** 18n;
 const MAX_TRANSFER = FLOP; // this tool never signs a transfer above 1 FLOP
 const MAX_SESSION_CAP = FLOP; // nor a session whose lifetime cap is above 1 FLOP
-const MAX_SESSION_BLOCKS = 14400; // nor a session longer than about four hours
+const MAX_SESSION_BLOCKS = 86400; // nor a session longer than one SessionEpochLength of 1014020, the tool's shortest grant
 // The chain counts an unanswered force_open against the named miner (FailedAcks += 1) only when its
 // escrow is at least MinForceOpenEscrowForFailedAck, 0.05 FLOP at spec 1014014. This tool signs no
 // force_open at or above that amount, so a test can never leave a mark on a miner.
