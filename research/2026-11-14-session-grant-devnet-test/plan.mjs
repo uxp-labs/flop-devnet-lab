@@ -16,9 +16,9 @@ import { HERE, REPO, atPath, flopText, loadPlan, paneKeys, readJson, sha256Text,
 import { callFile, entryOf, loadRecord, MAX_ATTEMPTS, planStepOf, runFiles, sendFile, signedFile, toolFile, viewOf } from "./run.mjs";
 import { nextOf } from "./next.mjs";
 import { nonceOf } from "../2026-11-12-encoder-devnet-test/research-signed.mjs";
-import { outcomeRow, NODE_CODES } from "../2026-11-12-encoder-devnet-test/plan.mjs";
+import { immortalRows, NODE_CODES } from "./outcomes.mjs";
 
-export { NODE_CODES };
+export { NODE_CODES, immortalRows };
 const DIR = "\"$LAB/research/2026-11-14-session-grant-devnet-test";
 const TOOL_RUN = `node ${DIR}/tool-run.mjs"`, RECORD = `node ${DIR}/record-step.mjs"`;
 const SIGNER = "node \"$LAB/research/2026-11-11-session-deny-list/flop-sign.mjs\"";
@@ -30,15 +30,6 @@ const amt = (raw) => `${raw} (${flopText(raw)} FLOP)`;
 
 /** The sha256 of each file the lead pastes into the pane. */
 export const pastedSha256 = () => Object.fromEntries(Object.entries(PASTED).map(([f, p]) => [f, sha256Text(readFileSync(p, "utf8"))]));
-
-/** The immortal rows of the last batch's send_outcomes (H11), imported by steps.json send_outcomes_from. */
-export function immortalRows(plan) {
-  const rows = atPath(readJson(join(REPO, plan.files[plan.send_outcomes_from.file])), plan.send_outcomes_from.path);
-  return rows.map((r) => {
-    const m = /Immortal: (.*)$/.exec(r.second_copy);
-    return { ...r, second_copy: m ? m[1] : r.second_copy };
-  });
-}
 
 // ---- the fence (H12) ---------------------------------------------------------------------------
 
@@ -153,13 +144,7 @@ async function phaseLines(plan, run, results, n) {
     const text = readFileSync(sendFile(run, id), "utf8");
     return [head, ...paneAwait("__s", `lab.send('${text}', "${sha256Text(text)}")`), "#  PC:", `${RECORD} step ${id} --run "${run}" --sent '<relay>' --sent-sha256 <relay_sha256>`];
   }
-  if (n.phase === "wait") {
-    const row = outcomeRow({ send_outcomes: immortalRows(plan) }, n.sent);
-    const signed = readJson(signedFile(run, id)), text = readFileSync(sendFile(run, id), "utf8");
-    return [`# wait: ${id}: the runner said ${n.sent?.status}`, ...(row ? [`# known: ${row.known}`, `# the lead: ${row.lead}`, `# a second copy: ${row.second_copy}`] : ["# no row of send_outcomes names this outcome: the lead rules"]),
-      ...paneAwait("__f", `lab.find("${signed.extrinsic}", ${results.start.finalized.number})`), "#  PC, if it says finalized:", `${RECORD} step ${id} --run "${run}" --sent '<relay>' --sent-sha256 <relay_sha256>`,
-      "#  if not found: the same bytes again, never other bytes", ...paneAwait("__s", `lab.sendSame('${text}', "${sha256Text(text)}")`), "#  PC:", `${RECORD} step ${id} --run "${run}" --sent '<relay>' --sent-sha256 <relay_sha256>`];
-  }
+  if (n.phase === "wait") return waitLines(plan, run, results, n);
   if (n.phase === "block") {
     const v = viewOf(results, id);
     return [head, `#  the events and the fee of ${id} by the lab's own decoder, from a block tape of block ${v.block_number}`, ...paneAwait("__b", `reads.blockTape(${blockKeysArg(keys)}, ${v.block_number}, "${v.block_hash}")`), "#  PC:",
@@ -167,6 +152,34 @@ async function phaseLines(plan, run, results, n) {
   }
   if (n.phase === "after") return [head, `#  read after ${id}: a session tape at a head at or above its block; the tool's session show over it`, ...tapeAndTool(run, keys, id, "after"), `${RECORD} tool ${id} after --run "${run}"`];
   throw new Error(`no lines for the phase ${n.phase}`);
+}
+
+/**
+ * The lines of a sent id not in a finalized block (F1): made from its outcome row's action alone. A
+ * find prints the find line and no line that sends; the same bytes again prints that line and no
+ * other; the first send again prints the send line. The row's words are printed beside.
+ */
+function waitLines(plan, run, results, n) {
+  const id = n.step, a = n.action;
+  const rowLines = [`# the row: ${n.row.outcome}${n.row.node_code !== undefined ? ` (node code ${n.row.node_code})` : ""}${n.row.node_word ? ` (${n.row.node_word})` : ""}`, `# known: ${n.row.known}`, `# the lead: ${n.row.lead}`, `# a second copy: ${n.row.second_copy}`];
+  const head = [`# ${id}: wait: ${n.why}`, ...rowLines];
+  const record = ["#  PC:", `${RECORD} step ${id} --run "${run}" --sent '<relay>' --sent-sha256 <relay_sha256>`];
+  if (a.kind === "find") {
+    const signed = readJson(signedFile(run, id));
+    return [...head, `#  the action: find first, from the start of the run (immortal). No line that sends`, ...paneAwait("__f", `lab.find("${signed.extrinsic}", ${results.start.finalized.number})`), ...record];
+  }
+  const text = readFileSync(sendFile(run, id), "utf8");
+  if (a.kind === "sendSame") return [...head, "#  the action: the same bytes again, never other bytes", ...paneAwait("__s", `lab.sendSame('${text}', "${sha256Text(text)}")`), ...record];
+  if (a.kind === "send") return [...head, "#  the action: the same send file again (nothing was submitted)", ...paneAwait("__s", `lab.send('${text}', "${sha256Text(text)}")`), ...record];
+  throw new Error(`no lines for the action ${a.kind}`);
+}
+
+/** The lines of the lead's stop that an outcome row names (F1): the owner's reads, then record-step.mjs stop with the row's case. No line that sends. */
+function leadStopLines(plan, run, n) {
+  const id = n.step;
+  return [`# ${id}: the lead's stop, case ${n.action.case}: send nothing for ${id}`, `# the row: ${n.row.outcome}${n.row.node_code !== undefined ? ` (node code ${n.row.node_code})` : ""}`, `# the lead: ${n.row.lead}`,
+    `#  the owner's next nonce, which must equal the copy's (the last batch's README, "The lead's stop")`, ...paneAwait("__r", `lab.accountReads("${V(plan, "OWNER_SS58")}")`), "#  PC:",
+    `${RECORD} stop ${id} --run "${run}" --case ${n.action.case} --why ${q(`send_outcomes ${n.row.outcome}${n.row.node_code !== undefined ? ` ${n.row.node_code}` : ""}: the lead stops at the step (case ${n.action.case})`)} --reads '<relay>' --reads-sha256 <relay_sha256>`];
 }
 
 /** The lines of P0: the seat home first (init and cap set), then the reads and the start. */
@@ -195,6 +208,7 @@ export async function nextText(plan, run, results) {
   const out = [];
   for (const f of n.findings) out.push(`# finding: ${f}`);
   for (const l of n.left) out.push(`# left: ${l}`);
+  if (n.word === "stop" && n.phase === "lead-stop") { out.push(`# STOP at ${n.stopped_at}: ${n.why}`, ...leadStopLines(plan, run, n)); return out.join("\n") + "\n"; }
   if (n.word === "stop") { out.push(`# STOP at ${n.stopped_at}: ${n.why}`, "# send nothing more; the lead rules"); return out.join("\n") + "\n"; }
   if (n.word === "end") out.push(`# the end: ${n.why}`, `node ${DIR}/check.mjs" "${run}/results.json"`);
   else {

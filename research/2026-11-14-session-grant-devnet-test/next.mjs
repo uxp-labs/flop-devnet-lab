@@ -6,6 +6,7 @@
 import { RAW, V } from "./lib.mjs";
 import { entryOf, idsOf, planStepOf, viewOf, MAX_ATTEMPTS } from "./run.mjs";
 import { plannedCaps } from "./owner-call.mjs";
+import { sendOutcome } from "./outcomes.mjs";
 
 /** The phases of one id of an owner step, in order. */
 export const PHASES = ["call", "sign", "send", "wait", "block", "after", "done"];
@@ -90,6 +91,22 @@ export function p0Stops(plan, results) {
 
 const go = (step, phase, why, extra = {}) => ({ word: phase === "wait" ? "wait" : "go", step, phase, why, ...extra });
 const stop = (at, why, extra = {}) => ({ word: "stop", step: null, phase: null, stopped_at: at, why, ...extra });
+
+/**
+ * The next action of an id that is not done (F1). A sent id not in a finalized block follows the
+ * action its outcome row names, and nothing else: the lead's stop (word stop, phase lead-stop, with
+ * the case the row names), a find, the same bytes again, or the first send again. A reading no row
+ * names an action for is a stop.
+ */
+function actOf(plan, id, p) {
+  if (p.phase !== "wait") return go(id, p.phase, `${id} is at its ${p.phase}`);
+  const said = `the runner said ${p.sent?.status}${p.sent?.node?.code !== undefined ? ` with node code ${p.sent.node.code}` : ""}${p.sent?.node_status ? ` (${p.sent.node_status})` : ""}${p.sent?.sent_by ? ` to ${p.sent.sent_by}` : ""}`;
+  let o;
+  try { o = sendOutcome(plan, p.sent); } catch (e) { o = { row: null, action: null, reason: e.message }; }
+  if (!o.row || !o.action || o.action.kind === "record") return stop(id, `${id}: ${said}; no row of send_outcomes names an action for it here${o.reason ? `: ${o.reason}` : ""}. The lead rules`);
+  if (o.action.kind === "stop") return { word: "stop", step: id, phase: "lead-stop", stopped_at: id, why: `${id}: ${said}; send_outcomes says the lead stops at the step (case ${o.action.case}): ${o.action.words}`, sent: p.sent, row: o.row, action: o.action };
+  return go(id, "wait", `${id}: ${said}; send_outcomes says: ${o.action.words}`, { sent: p.sent, row: o.row, action: o.action });
+}
 const end = (why, extra = {}) => ({ word: "end", step: null, phase: null, why, ...extra });
 
 /** The left words of an active session that no revoke ended. */
@@ -108,7 +125,7 @@ function revokeChain(plan, results, base, findings) {
     const p = phaseOf(plan, results, id);
     if (p.stop) return { next: stop(id, p.stop) };
     if (p.phase === "stopped") { findings.push(`the lead stopped ${id} (case ${p.lead_stop.case}): a stopped cleanup try counts as not done, and the next try follows`); continue; }
-    if (p.phase !== "done") return { next: go(id, p.phase, `${id} is at its ${p.phase}`, p.sent ? { sent: p.sent } : {}) };
+    if (p.phase !== "done") return { next: actOf(plan, id, p) };
     const e = entryOf(results, id);
     if (e.decoder.success === false) { findings.push(`${id} failed in its block with ${e.decoder.error?.name ?? "an error the 1014020 table does not name"}: a cleanup try at the next nonce`); continue; }
     return { done: id, problems: problemsOf(plan, results, id) };
@@ -131,7 +148,7 @@ export function nextOf(plan, results) {
   const g1 = phaseOf(plan, results, "G1");
   if (g1.stop) return out(stop("G1", g1.stop));
   if (g1.phase === "stopped") return out(stop("G1", `the lead stopped G1 (case ${g1.lead_stop.case})`));
-  if (g1.phase !== "done") return out(go("G1", g1.phase, `G1 is at its ${g1.phase}`, g1.sent ? { sent: g1.sent } : {}));
+  if (g1.phase !== "done") return out(actOf(plan, "G1", g1));
   const g1e = entryOf(results, "G1");
   if (g1e.decoder.success === false) return out(stop("G1", `G1 failed in its block with ${g1e.decoder.error?.name ?? "an error the 1014020 table does not name"}: nothing is active, one fee is lost`));
   const g1p = problemsOf(plan, results, "G1");
@@ -146,7 +163,7 @@ export function nextOf(plan, results) {
   const g2 = phaseOf(plan, results, "G2");
   if (g2.stop) return out(stop("G2", g2.stop));
   if (g2.phase === "stopped") return out(stop("G2", `the lead stopped G2 (case ${g2.lead_stop.case})`));
-  if (g2.phase !== "done") return out(go("G2", g2.phase, `G2 is at its ${g2.phase}`, g2.sent ? { sent: g2.sent } : {}));
+  if (g2.phase !== "done") return out(actOf(plan, "G2", g2));
   const g2e = entryOf(results, "G2");
   if (g2e.decoder.success === false) {
     const name = g2e.decoder.error?.name;

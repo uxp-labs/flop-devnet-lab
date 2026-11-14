@@ -147,3 +147,16 @@ test("H14: an after reading whose tape's head is below the step's block is refus
     refused(() => recordTool(plan, w.run, w.results, "G1", "after", ERRORS), /the after tape's head 1 is below G1's block 3552729/);
   } finally { w.done(); }
 });
+
+test("F1: the lead's stop refuses a case the line names that the record does not give", async () => {
+  const w = await at("sign");
+  try {
+    const nonce = Number(w.results.owner_account_nonce_at_start);
+    const reads = relay({ account: V("OWNER_SS58"), runtime: { specName: V("SPEC_NAME"), specVersion: Number(V("SPEC")), transactionVersion: Number(V("TXV")), genesisHash: V("GENESIS") }, finalized: { number: 3552800, hash: "0x" + "ab".repeat(32) }, account_nonce: nonce });
+    const signed = readJson(signedFile(w.run, "G1"));
+    const { sha256Text } = await import("./lib.mjs");
+    const r = recordReading({ plan, run: w.run, results: w.results, id: "G1", sent: { step: "G1", extrinsic_sha256: sha256Text(signed.extrinsic), sent_by: "send", status: "refused-at-submission", node: { code: 1010, message: "Invalid" } }, sentSha256: "00", errors: ERRORS });
+    refused(() => leadStop({ plan, run: w.run, results: r, id: "G1", why: "x", kase: "d", readsText: reads.text, readsSha256: reads.sha }), /the line names case d, the record gives case c/);
+    assert.equal(leadStop({ plan, run: w.run, results: r, id: "G1", why: "x", kase: "c", readsText: reads.text, readsSha256: reads.sha }).steps[0].lead_stop.case, "c");
+  } finally { w.done(); }
+});

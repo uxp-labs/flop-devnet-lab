@@ -22,7 +22,7 @@
 //   tool <id> <block|after> --run <folder>
 //        the tool's reading of the step's block (readBlockEvents: the events, the outcome and the fee
 //        of the extrinsic at its index, the lab's own decoder) or of the session after it (show).
-//   stop <id> --run <folder> --why '<words>' [--reads '<text>' --reads-sha256 <sha>]
+//   stop <id> --run <folder> [--case <a|c|d>] --why '<words>' [--reads '<text>' --reads-sha256 <sha>]
 //        the lead's stop at an owner step whose copy cannot land without being sent again (cases a,
 //        c and d of the last batch's README, "The lead's stop"; lead-stop.mjs there).
 // After each it prints plan.mjs next's word.
@@ -215,7 +215,7 @@ export function recordTool(plan, run, results, id, purpose, errors) {
  * send with node code 1010; d, a signed copy and no runner reading, which the lead says was never
  * sent. For c and d the owner's next nonce by lab.accountReads must equal the copy's.
  */
-export function leadStop({ plan, run, results, id, why, readsText, readsSha256, nowIso = new Date().toISOString() }) {
+export function leadStop({ plan, run, results, id, why, kase: named = null, readsText, readsSha256, nowIso = new Date().toISOString() }) {
   if (!planStepOf(plan, id)) no(`steps.json has no step ${id}`);
   if (typeof why !== "string" || why.trim().length === 0) no("--why '<words>' is required");
   const n = nextOf(plan, results);
@@ -240,6 +240,7 @@ export function leadStop({ plan, run, results, id, why, readsText, readsSha256, 
     if (BigInt(reads.account_nonce) !== nonce) no(`no stop at ${id}: the owner's next nonce is ${reads.account_nonce}, not the copy's ${nonce}${BigInt(reads.account_nonce) > nonce ? ": the nonce is used, or a transaction with it is in the pool; use lab.find from the start of the run" : ": the record and the chain disagree; the lead rules"}`);
     evidence = { copy: `signed/${id}.json`, extrinsic_hash: signed.extrinsic_hash, signer: V(plan, "OWNER"), nonce: String(nonce), finalized_head: reads.finalized, signer_next_nonce: reads.account_nonce, reads_sha256: readsSha256 };
   }
+  if (named !== null && named !== undefined && named !== kase) no(`no stop at ${id}: the line names case ${named}, the record gives case ${kase}`);
   const { r, e: entry } = withEntry(results, id);
   entry.lead_stop = { case: kase, why, words: kase === "d" ? NEVER_SENT : null, evidence, recorded_utc: nowIso, unsent: kase === "a" ? [] : [`signed/${id}.json`, ...(existsSync(sendFile(run, id)) ? [`signed/${id}.send.json`] : [])] };
   return r;
@@ -328,9 +329,9 @@ async function main(argv) {
     return;
   }
   if (cmd === "stop") {
-    const id = idArg(); const f = flags(rest(2), ["run", "why", "reads", "reads-sha256"]);
+    const id = idArg(); const f = flags(rest(2), ["run", "case", "why", "reads", "reads-sha256"]);
     const run = resolve(f.run ?? no("--run is required"));
-    const r = leadStop({ plan, run, results: record(run), id, why: f.why, readsText: f.reads, readsSha256: f["reads-sha256"] });
+    const r = leadStop({ plan, run, results: record(run), id, why: f.why, kase: f.case ?? null, readsText: f.reads, readsSha256: f["reads-sha256"] });
     writeRecord(run, r);
     console.log(`recorded the lead's stop at ${id}, case ${entryOf(r, id).lead_stop.case}`);
     console.log(wordOf(plan, r));

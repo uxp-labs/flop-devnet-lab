@@ -85,7 +85,7 @@ test("DEFECT RG19-7: after G2 refused, or G1 failed, a show after that does not 
   assert.ok(!/nothing is active/.test(y.why), `the stop says "${y.why}" while show after G1 says active`);
 });
 
-test("DEFECT RG19-8: at a refusal with node code 1010 at a first send of an immortal step, plan.mjs next prints no sendSame line: the row says the lead stops", async () => {
+test("HOLDS: RG19-8: at a refusal with node code 1010 at a first send of an immortal step, plan.mjs next prints no sendSame line: the row says the lead stops", async () => {
   for (const code of [1010, 1014]) {
     const r = step(started(), "G1", { sent: { status: "refused-at-submission", sent_by: "send", node: { code, message: "made" } } });
     const x = n(r);
