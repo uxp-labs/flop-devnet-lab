@@ -1,7 +1,7 @@
 {
   "drift": null,
-  "observed_at": "2026-11-14T07:00:19.495Z",
+  "observed_at": "2026-11-14T08:04:27.395Z",
   "schema": "flop-observatory/feed-drift@0",
-  "snapshot_hash": "e1074263222bf2df85d7be9853ece2e8df4810a0cde3163f4f8446c23d0af940",
+  "snapshot_hash": "cf4ba422a60f9dc119ace6d35a0c8bae33052569e119a6eb07e479780e8730c9",
   "trust": "trusted RPC"
 }
