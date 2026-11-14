@@ -539,7 +539,14 @@ Tests fail if any attempt is left in the log.
     each file once, so a file that reached its final check in two runs is itself a failure.
 - No test may load a second copy of `src/guard.ts` (by reloading or mocking modules, or by
   importing it under a query string): a copy's attempts would reach neither the log nor the
-  journal. A test reads every test file for those forms.
+  journal. A test reads every test file for those forms. One exception, held part by part by that
+  same test: `test/shape-pin-derived.test.ts` may mock one module, `src/scale/metadata.js`, in
+  exactly one `vi.mock` call with that literal target, and takes the real module through the
+  factory's own argument. A module mock replaces that one module and nothing else, every other
+  module is still loaded once in the file, and `src/scale/metadata.ts` imports only
+  `src/scale/reader.ts`, which imports nothing, so no second copy of the guard can load by it.
+  Every other form stays banned in that file too. The pin's fourth refusal cannot fire by any input
+  while its two sha256 checks hold, so its test must change what the metadata parses to.
 - The harness canary proves that a test leaving any of these in the log fails: a fetch, an
   `node:https` request, a `node:net` connection, a child process, module hooks, a listening handle
   made under `listen`, a `dgram.Socket` made directly, a refused RPC write, a refused signature and

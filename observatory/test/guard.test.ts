@@ -302,12 +302,38 @@ describe("source scan", () => {
     // pattern is built from pieces so this file does not match itself.
     const ways = ["reset" + "Modules", "isolate" + "Modules", "vi" + "\\.mock", "vi" + "\\.doMock", "vi" + "\\.importActual", "vi" + "\\.importMock", "guard" + "\\.(?:js|ts)\\?"];
     const re = new RegExp(ways.join("|"));
+    // The one exception (RULES.md section 4): test/shape-pin-derived.test.ts may mock one module,
+    // src/scale/metadata.js, once, with that literal target. A module mock replaces that module
+    // alone and every other module is still evaluated once in the file, so no second copy of the
+    // guard loads by it; every other way stays banned there too.
+    const MOCK_FILE = "shape-pin-derived.test.ts";
+    const MOCK_CALL = "vi" + '.mock("../src/scale/metadata.js",';
+    const otherWays = new RegExp(ways.filter((w) => w !== "vi" + "\\.mock").join("|"));
+    const loadsSecondGuard = (file: string, text: string): boolean => {
+      if (file !== MOCK_FILE) return re.test(text);
+      if (otherWays.test(text)) return true;
+      if ((text.match(new RegExp("vi" + "\\.mock", "g")) ?? []).length !== 1) return true;
+      if (!text.includes(MOCK_CALL)) return true;
+      return false;
+    };
     const testDir = new URL("./", import.meta.url);
     const files = (readdirSync(testDir, { recursive: true }) as string[]).filter((f) => f.endsWith(".ts"));
     expect(files).toContain("guard.test.ts");
-    for (const f of files) expect(readFileSync(new URL(f, testDir), "utf8"), f).not.toMatch(re);
+    for (const f of files) expect(loadsSecondGuard(f, readFileSync(new URL(f, testDir), "utf8")), f).toBe(false);
     expect(re.test('await import("../src/guard' + '.js?fresh")')).toBe(true);
     expect(re.test("vi.reset" + "Modules()")).toBe(true);
+    // Planted samples: each must be caught.
+    const allowed = `${MOCK_CALL} async (importOriginal) => importOriginal());\n`;
+    expect(loadsSecondGuard(MOCK_FILE, allowed)).toBe(false);
+    expect(loadsSecondGuard(MOCK_FILE, allowed + allowed), "a second mock in the excepted file").toBe(true);
+    expect(loadsSecondGuard(MOCK_FILE, `${"vi" + '.mock("../src/scale/shape.js",'} async (importOriginal) => importOriginal());\n`), "a mock of another target there").toBe(true);
+    expect(loadsSecondGuard("shape.test.ts", allowed), "a mock in any other file").toBe(true);
+    expect(loadsSecondGuard(MOCK_FILE, `${allowed}${"vi" + ".importActual"}("../src/scale/metadata.js");\n`), "another way in the excepted file").toBe(true);
+    // The module that file mocks imports only ./reader.js, which imports nothing: neither is the guard.
+    const scaleText = (f: string) => readFileSync(new URL(`../src/scale/${f}`, import.meta.url), "utf8");
+    const importsOf = (f: string) => [...scaleText(f).matchAll(/^\s*(?:import|export)\b[^;]*?\bfrom\s*["']([^"']+)["']/gm)].map((m) => m[1]);
+    expect([importsOf("metadata.ts"), importsOf("reader.ts")]).toEqual([["./reader.js"], []]);
+    for (const f of ["metadata.ts", "reader.ts"]) expect(scaleText(f), f).not.toMatch(/\bimport\s*\(|\brequire\s*\(|guard/);
   });
 
   it("src holds nothing but regular .ts files, so the scans read every file tsc compiles (round 7 review M4)", () => {
