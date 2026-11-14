@@ -128,8 +128,13 @@ function takeSign(input: unknown): SignSnapshot {
   const accountNonce = takeValue({ kind: "u32" }, raw.accountNonce, "the account nonce") as number;
   const signer = raw.signer;
   if (signer === null || (typeof signer !== "object" && typeof signer !== "function")) refuse("BAD_INPUT", "the signer must be an object with a public key and a sign function");
-  const publicKey = bytesOf((signer as { publicKey?: unknown }).publicKey, 32, "the device public key");
-  const sign: unknown = (signer as { sign?: unknown }).sign;
+  // The signer's two fields are each read once as an own value (rule H1): an accessor on either is refused, and a
+  // Proxy's get trap is not used. A field the signer does not have reads as undefined. Its other fields are the
+  // caller's own state: allowed, and never read.
+  const keys = ownKeys(signer);
+  const field = (name: string): unknown => (keys.includes(name) ? ownValue(signer, name, "the signer") : undefined);
+  const publicKey = bytesOf(field("publicKey"), 32, "the device public key");
+  const sign = field("sign");
   if (typeof sign !== "function") refuse("BAD_INPUT", "the signer has no sign function");
   return { ...call, birth, accountNonce, publicKey, signer, sign: sign as SignSnapshot["sign"] };
 }
