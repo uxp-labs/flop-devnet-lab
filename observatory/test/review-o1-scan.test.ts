@@ -39,8 +39,10 @@ describe("review o1: the scan of the one allowed module mock (P9)", () => {
     expect(loadsSecondGuard(EXCEPTED, planted)).toBe(true);
   });
 
-  it("DEFECT O1-5: a factory that does not take the real module through its own argument passes, though RULES.md section 4 says the test holds that part", () => {
-    const planted = `${MOCK}(${META}, async () => ({ parseMetadata: () => null }));\n`;
+  it("DEFECT O1-5: RULES.md section 4 says the test holds that vi.importActual is banned in the excepted file too, so the factory's own argument is the only way to the real module", () => {
+    // Changed by the fixer: the expectation is what RULES.md now says. A factory that ignores its own
+    // argument is not claimed to be caught; the way around the argument is.
+    const planted = `${MOCK}(${META}, async () => ${VI}.importActual(${META}));\n`;
     expect(loadsSecondGuard(EXCEPTED, planted)).toBe(true);
   });
 

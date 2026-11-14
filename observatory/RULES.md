@@ -541,11 +541,14 @@ Tests fail if any attempt is left in the log.
   importing it under a query string): a copy's attempts would reach neither the log nor the
   journal. A test reads every test file for those forms. One exception, held part by part by that
   same test: `test/shape-pin-derived.test.ts` may mock one module, `src/scale/metadata.js`, in
-  exactly one `vi.mock` call with that literal target, and takes the real module through the
-  factory's own argument. A module mock replaces that one module and nothing else, every other
+  exactly one `vi.mock` call whose first argument, read from the call itself, is that literal
+  target. The test also holds that `vi.importActual` is banned in that file too, so the factory's
+  own argument is the only way to the real module. A module mock replaces that one module and nothing else, every other
   module is still loaded once in the file, and `src/scale/metadata.ts` imports only
   `src/scale/reader.ts`, which imports nothing, so no second copy of the guard can load by it.
-  Every other form stays banned in that file too. The pin's fourth refusal cannot fire by any input
+  Every other form stays banned in that file too. The scan reads code only: comments are taken
+  out, and the word `vi` may stand only directly before a dot and a member name. The scan catches
+  the plain spellings; a diff that hides one is for the review. The pin's fourth refusal cannot fire by any input
   while its two sha256 checks hold, so its test must change what the metadata parses to.
 - The harness canary proves that a test leaving any of these in the log fails: a fetch, an
   `node:https` request, a `node:net` connection, a child process, module hooks, a listening handle
