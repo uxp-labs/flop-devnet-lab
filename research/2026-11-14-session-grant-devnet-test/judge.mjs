@@ -1,6 +1,6 @@
 // The judge of a run time record (H15): each claim of the batch pass, differ, incomplete, not run
 // or not needed, and one verdict. Unknown stays unknown: a value the record does not hold is
-// incomplete, never a pass and never 0. The events and fees are the decoder's (the tool's
+// incomplete, never a pass and never 0. The owner's balance is not judged in this record. The events and fees are the decoder's (the tool's
 // readBlockEvents over the block tape); the explorer's reading is a second source, and where the two
 // differ the claim of the step's sources says differ. Pure. No network, no key.
 import { join } from "node:path";
@@ -11,7 +11,7 @@ import { plannedCaps } from "./owner-call.mjs";
 import { feeOf, outcomeOf } from "./events.mjs";
 import { sourcesDiffer } from "./record-step.mjs";
 
-export const STATUSES = ["pass", "differ", "incomplete", "not run", "not needed"];
+export const STATUSES = ["pass", "differ", "incomplete", "not run", "not needed", "not judged"];
 const big = (v) => (RAW.test(String(v ?? "")) ? BigInt(v) : null);
 const claim = (id, what, status, why = "") => ({ id, what, status, why });
 const eventOf = (e, name) => e?.decoder?.events?.find((x) => x.pallet === "FlopSessionKeys" && x.name === name) ?? null;
@@ -92,7 +92,8 @@ function revokedClaims(plan, results, base, errors) {
  * The claims of a record, in order, and its verdict (F6). Each claim is computed from the events and
  * the readings the record holds; a derived word of the record that is not what they give makes its
  * claim differ. passed, exit 0, only when plan.mjs next says the end for the record and every claim
- * passes or is not needed; otherwise exit 1 when a claim differs and 4 in every other case, and the
+ * this record judges passes or is not needed (the owner's balance is not judged here, and never
+ * counts as a pass or a differ); otherwise exit 1 when a claim differs and 4 in every other case, and the
  * verdict names what is missing or differing.
  */
 export function judge(plan, results, errors = readJson(join(REPO, plan.files.errors))) {
@@ -132,19 +133,15 @@ export function judge(plan, results, errors = readJson(join(REPO, plan.files.err
     if (x.srcWord) { claims.push(claim(e.step, "the explorer's reading agrees with the decoder's", "differ", x.srcWord)); continue; }
     claims.push(claim(e.step, "the explorer's reading agrees with the decoder's", x.differ.length ? "differ" : "pass", x.differ.join("; ")));
   }
-  // the owner's balance, only where the record holds it
-  const b = results.balances;
-  if (!b) claims.push(claim("batch", "the owner's free balance fell by the sum of the fees and nothing else", "not run", "the record holds no balances"));
-  else {
-    const before = big(b.owner_free_before), afterB = big(b.owner_free_after);
-    if (before === null || afterB === null || fees.some((f) => f === null)) claims.push(claim("batch", "the owner's free balance fell by the sum of the fees and nothing else", "incomplete", "a balance or a fee is unknown"));
-    else { const sum = fees.reduce((a, f) => a + f, 0n); claims.push(claim("batch", "the owner's free balance fell by the sum of the fees and nothing else", before - afterB === sum ? "pass" : "differ", `fell ${before - afterB}, fees ${sum}`)); }
-  }
+  // the owner's balance: not judged in this record (the lead's L1, ruled again). lab.accountReads
+  // gives no balance; the balance before and after comes with the public recording of the batch's
+  // blocks (stage 2), through the observatory's decoder. A balances field is reported, never judged.
+  claims.push(claim("batch", "the owner's balance before and after", "not judged", results.balances !== undefined ? `the record carries balances (source ${JSON.stringify(results.balances?.source ?? null)}): not judged in this record` : "not read in this batch: it comes with the public recording of the batch's blocks (stage 2)"));
   const n = nextOf(plan, results);
   const count = (s) => claims.filter((c) => c.status === s).length;
   const worst = count("differ") ? "differ" : count("incomplete") ? "incomplete" : count("not run") ? "not run" : n.word !== "end" ? "incomplete" : "pass";
   const state = n.word === "end" ? `the end: ${n.why}` : n.word === "stop" ? `stopped at ${n.stopped_at}: ${n.why}` : `not finished: next ${n.step} ${n.phase}`;
-  const missing = claims.filter((c) => !["pass", "not needed"].includes(c.status)).map((c) => `${c.id} ${c.what}: ${c.status}`);
+  const missing = claims.filter((c) => !["pass", "not needed", "not judged"].includes(c.status)).map((c) => `${c.id} ${c.what}: ${c.status}`);
   const verdict = `${worst === "pass" ? "passed" : worst === "differ" ? "differs" : worst}; ${state}${missing.length ? `; ${missing.join("; ")}` : ""}${n.left.length ? `; left: ${n.left.join("; ")}` : ""}`;
   const exit = worst === "pass" ? 0 : worst === "differ" ? 1 : 4;
   return { claims, verdict, exit, branch, next: n, counts: Object.fromEntries(STATUSES.map((s) => [s, count(s)])) };

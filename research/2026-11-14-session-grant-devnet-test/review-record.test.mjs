@@ -51,13 +51,16 @@ test("HOLDS: RG19-15: G2 refused with a fee above the most per step is a stop, a
   assert.equal(x.word, "stop", `the word is ${x.word}: ${x.why}`);
 });
 
-test("HOLDS (G11): a record as planned but with no balances is judged not run, exit 4, as the README says; so no record the tools write today can pass", () => {
+// By the lead's rule on L1 (13:03 UTC) this test's old assertions (the balance claim not run, exit 4)
+// went: this record judges no balance, so a record as planned with no balances passes. Its name is
+// for the lead to reword.
+test("HOLDS (G11): a record as planned but with no balances passes, exit 0: the balance is not judged in this record (the lead's rule on L1)", () => {
   for (const branch of ["taken", "refused"]) {
     const r = asPlanned(branch);
     delete r.balances;
     const j = judge(plan, r);
-    assert.equal(j.claims.find((c) => c.id === "batch").status, "not run");
-    assert.equal(j.exit, 4, j.verdict);
+    assert.equal(j.claims.find((c) => c.id === "batch").status, "not judged");
+    assert.equal(j.exit, 0, j.verdict);
     assert.equal(nextOf(plan, r).word, "end");
   }
 });

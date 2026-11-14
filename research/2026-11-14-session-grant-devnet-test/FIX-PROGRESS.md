@@ -23,8 +23,9 @@ Run tests under setpriv (CLAUDE.md rule 5). Push after every commit.
 
 ## Next
 
-- F7 as ruled again (no balance claim), F14, F16, words, the last steps.
+- F14, F16, words (README, plan.md: stop rule, after read, probe, relay files, balance not read, exit codes), rehearsal regen, undo by hand, the last steps.
 
+- F7 as ruled again (13:03 UTC): judge.mjs reports the balance as "not judged" (new status), never pass or differ; no record-step end. Assertions that went by the rule: review-judge HOLDS three balance edits; check.test T6 differing balance case and unknown balance case; T6 whole pass filters and the incomplete record (now "not judged"); review-record G11 rewritten (name for the lead to reword). judge-evidence.test.mjs L1 test; RG19-11 HOLDS with the lead's name.
 - F10 node error half (the lead's rule, 13:03 UTC): tape.mjs refuses a node error in the tape or the metadata. rehearsal T1 A10 show replaced (refusal, nothing written, fresh tape taken) plus the null case; A2 and A10 tapes elsewhere set null as the walk does (rehearsal T1 A2 grant, A10 grant, R1 call at A10 and A2; record-step H3).
 
 ## Points where a rule could not be met as written (both ruled by the lead at 13:03 UTC)

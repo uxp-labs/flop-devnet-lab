@@ -59,8 +59,21 @@ test("F6: every claim passing is not passed when plan.mjs next does not say the 
   at(r, "R2").after.runtime = { specName: V("SPEC_NAME"), specVersion: Number(V("SPEC")) + 1 };
   assert.equal(nextOf(plan, r).word, "stop");
   const j = judge(plan, r);
-  assert.deepEqual(j.claims.filter((c) => !["pass", "not needed"].includes(c.status)), []);
+  assert.deepEqual(j.claims.filter((c) => !["pass", "not needed", "not judged"].includes(c.status)), []);
   assert.equal(j.exit, 4);
   assert.match(j.verdict, /^incomplete; stopped at R2/);
   assert.equal(judge(plan, asPlanned("taken")).exit, 0);
+});
+
+test("L1 ruled again: a balances field, with any source, is not judged: never a pass, never a differ, and the verdict does not hang on it", () => {
+  for (const b of [undefined, { owner_free_before: "1", owner_free_after: "0", source: "made" }, { owner_free_before: "5", owner_free_after: "5", source: "lab.accountReads relays", start_sha256: "00".repeat(32) }, null]) {
+    const r = asPlanned("taken");
+    if (b === undefined) delete r.balances; else r.balances = b;
+    const j = judge(plan, r);
+    const c = claimOf(j, "batch", /balance/);
+    assert.equal(c.status, "not judged", JSON.stringify(b));
+    assert.ok(j.claims.filter((x) => /balance/.test(x.what)).every((x) => x.status === "not judged"));
+    assert.equal(j.exit, 0, j.verdict);
+    assert.equal(j.counts["not judged"], 1);
+  }
 });

@@ -18,7 +18,8 @@ const cli = (r) => { const f = join(DIR, `r-${Math.random().toString(16).slice(2
 
 test("T6: a whole pass with G2 taken: every claim passes, exit 0, and the verdict says the end", () => {
   const out = judge(plan, asPlanned("taken"));
-  assert.deepEqual(out.claims.filter((c) => c.status !== "pass").map((c) => `${c.id} ${c.what} ${c.status}`), []);
+  // every claim this record judges (the balance is not judged here, by the lead's rule on L1, 13:03 UTC)
+  assert.deepEqual(out.claims.filter((c) => !["pass", "not judged"].includes(c.status)).map((c) => `${c.id} ${c.what} ${c.status}`), []);
   assert.equal(out.branch, "taken");
   assert.equal(out.exit, 0);
   assert.match(out.verdict, /^passed; the end: U1: the chain took G2/);
@@ -33,7 +34,7 @@ test("T6: a whole pass with G2 refused with SessionAlreadyExists: R2 not needed,
   assert.equal(out.branch, "refused");
   assert.equal(statusOf(out, "R2", /SessionRevoked/), "not needed");
   assert.equal(statusOf(out, "G2", /outcome/), "pass");
-  assert.deepEqual(out.claims.filter((c) => !["pass", "not needed"].includes(c.status)).map((c) => c.what), []);
+  assert.deepEqual(out.claims.filter((c) => !["pass", "not needed", "not judged"].includes(c.status)).map((c) => c.what), []);
   assert.equal(out.exit, 0);
   assert.match(out.verdict, /^passed; the end: U1: the chain refused G2 with FlopSessionKeys.SessionAlreadyExists/);
 });
@@ -57,7 +58,7 @@ test("T6: each claim differing in turn says differ, exit 1", () => {
     ["R2", /SessionRevoked/, (r) => { r.steps[3].decoder.events[0].name = "SessionCreated"; }],
     ["G2", /its fee/, (r) => { r.steps[2].decoder.fee_raw = (BigInt(V("MAX_FEE")) + 1n).toString(); }],
     ["R1", /explorer's reading agrees/, (r) => { r.steps[1].sources_differ = ["success: the decoder says true, the explorer false"]; }],
-    ["batch", /free balance/, (r) => { r.balances.owner_free_after = "1"; }],
+    // the balance case went by the lead's rule on L1 (13:03 UTC): this record judges no balance, so a balance never differs
   ];
   for (const [id, re, change] of cases) {
     const r = asPlanned("taken");
@@ -69,26 +70,26 @@ test("T6: each claim differing in turn says differ, exit 1", () => {
   }
 });
 
-test("T6: an incomplete record: a step not run is not run, a missing explorer reading is incomplete, no balances is not run; exit 4", () => {
+test("T6: an incomplete record: a step not run is not run, a missing explorer reading is incomplete, the balance is not judged; exit 4", () => {
   const r = step(started(), "G1");
   const out = judge(plan, r);
   assert.equal(statusOf(out, "G1", /SessionCreated/), "pass");
   assert.equal(statusOf(out, "R1", /SessionRevoked/), "not run");
   assert.equal(statusOf(out, "G2", /outcome/), "not run");
   assert.equal(statusOf(out, "G1", /explorer/), "incomplete");
-  assert.equal(statusOf(out, "batch", /free balance/), "not run");
+  assert.equal(statusOf(out, "batch", /balance/), "not judged", "by the lead's rule on L1 (13:03 UTC), was not run");
   assert.equal(out.exit, 4);
   assert.match(out.verdict, /^incomplete; not finished: next R1 call/);
   assert.equal(cli(r).status, 4);
 });
 
-test("T6: unknown is never a pass: a fee not read, an outcome not read, a show that exited 1, an unknown balance", () => {
+test("T6: unknown is never a pass: a fee not read, an outcome not read, a show that exited 1", () => {
   const cases = [
     ["G1", /its fee/, (r) => { r.steps[0].decoder.fee_raw = null; }],
     ["G2", /outcome/, (r) => { r.steps[2].decoder.success = null; }],
     ["G1", /show after says active/, (r) => { r.steps[0].after = { exit: 1, session: { state: "unknown", value: null } }; }],
     ["G1", /SessionCreated/, (r) => { r.accounts.device.public_key = undefined; }],
-    ["batch", /free balance/, (r) => { r.balances.owner_free_before = null; }],
+    // the unknown balance case went by the lead's rule on L1 (13:03 UTC): a balance is not judged, so it cannot hold the exit
   ];
   for (const [id, re, change] of cases) {
     const r = asPlanned("taken");

@@ -35,7 +35,8 @@ test("HOLDS: both branches as planned pass; each piece of evidence missing or un
         for (const k of Object.keys(ev.fields)) edits.push([`${id} ${k} null`, (r) => { at(r, id).decoder.events[0].fields[k] = null; }], [`${id} ${k} other`, (r) => { at(r, id).decoder.events[0].fields[k] = "1"; }]);
       }
     }
-    edits.push(["no balances", (r) => { delete r.balances; }], ["after balance null", (r) => { r.balances.owner_free_after = null; }], ["balance one off", (r) => { r.balances.owner_free_after = (BigInt(r.balances.owner_free_after) - 1n).toString(); }], ["no device", (r) => { delete r.accounts.device.public_key; }]);
+    // the three balance edits (no balances, after balance null, balance one off) went by the lead's rule on L1 (13:03 UTC): this record judges no balance
+    edits.push(["no device", (r) => { delete r.accounts.device.public_key; }]);
     for (const [what, edit] of edits) {
       if (branch === "refused" && /^G2 (no after|after)/.test(what)) continue; // RG19-10
       const r = asPlanned(branch); edit(r); assert.ok(!passed(r), `${branch}: ${what} passes`); }
@@ -57,7 +58,7 @@ test("HOLDS: RG19-10: a record at which plan.mjs next does not say the end never
   }
 });
 
-test("DEFECT RG19-11: the owner's balance claim passes only when the record names the relayed reads its balances came from (the lead's L1)", () => {
+test("HOLDS: RG19-11: a balance in the record never passes a claim: this record judges no balance (the lead's L1, ruled again)", () => {
   const r = asPlanned("taken");
   assert.equal(r.balances.source, "made");
   const c = judge(plan, r).claims.find((x) => x.id === "batch");
