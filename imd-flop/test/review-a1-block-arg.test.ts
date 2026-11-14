@@ -41,7 +41,7 @@ function hostileThrown(ran: { n: number }): object {
 }
 
 describe("review A1, P7: a hostile block argument", () => {
-  it("DEFECT RA1-1: a block whose ownKeys trap throws a Proxy with a throwing getPrototypeOf trap makes readBlockEvents throw, and runs the thrown value's code", async () => {
+  it("HOLDS (was DEFECT RA1-1): a block whose ownKeys trap throws a Proxy with a throwing getPrototypeOf trap is unknown with the fixed reason, and none of the thrown value's code runs", async () => {
     const ran = { n: 0 };
     const block = new Proxy(
       { number: AT.number, hash: AT.hash },
@@ -59,7 +59,7 @@ describe("review A1, P7: a hostile block argument", () => {
     expect(ran.n).toBe(0);
   });
 
-  it("DEFECT RA1-1 (second form): a getOwnPropertyDescriptor trap that throws such a value also makes the read throw", async () => {
+  it("HOLDS (was DEFECT RA1-1, second form): a getOwnPropertyDescriptor trap that throws such a value is unknown with the fixed reason too", async () => {
     const ran = { n: 0 };
     const block = new Proxy(
       { number: AT.number, hash: AT.hash },
