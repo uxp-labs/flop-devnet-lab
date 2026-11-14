@@ -17,8 +17,10 @@ is changed. Mutants are run in copies under /tmp/rev-g19/.
 - Attack 6: review-judge.test.mjs (RG19-10 to RG19-13).
 - Attacks 7 and 9: review-scan.test.mjs (all HOLDS).
 
+- Attack 8: 38 mutants in /tmp/rev-g19/mut against the builder's 12 test files (review-mutants.json).
+  Alive: M2, M8 (equivalent for the bytes), M18, M19, M27, M38. review-mutants.test.mjs kills the five.
+- Whole folder: 117 tests, 104 pass, 13 fail (the 13 DEFECT tests).
+
 ## Next
 
-1. G9 mutants in /tmp/rev-g19/mut, against the builder's tests only
-2. G11 words and printed lines; attacks 11 and 12
-3. The report
+1. The report (G11 words, attacks 10 to 12 are read, not tested)

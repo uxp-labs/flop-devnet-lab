@@ -1,0 +1,382 @@
+[
+ {
+  "id": "M1",
+  "file": "tool-run.mjs",
+  "find": "if (g !== V(plan, \"GENESIS\"))",
+  "replace": "if (false)",
+  "why": "genesis of the tape",
+  "builder_tests": "# pass 78 # fail 1 ",
+  "killed_by_builder": true,
+  "review": null
+ },
+ {
+  "id": "M2",
+  "file": "tool-run.mjs",
+  "find": "t.head.number < last)",
+  "replace": "t.head.number < last - 1)",
+  "why": "stale tape by one block",
+  "builder_tests": "# pass 79 # fail 0 ",
+  "killed_by_builder": false,
+  "review": "review-mutants.test.mjs HOLDS (M2)"
+ },
+ {
+  "id": "M3",
+  "file": "tool-run.mjs",
+  "find": "if (!metadataIsCommitted(t, md)) no(",
+  "replace": "if (false) no(",
+  "why": "metadata sha256 in tool-run",
+  "builder_tests": "# pass 78 # fail 1 ",
+  "killed_by_builder": true,
+  "review": null
+ },
+ {
+  "id": "M4",
+  "file": "tool-run.mjs",
+  "find": "const earlier = toolOutputs(run).find(",
+  "replace": "const earlier = [].find(",
+  "why": "a tape used twice",
+  "builder_tests": "# pass 78 # fail 1 ",
+  "killed_by_builder": true,
+  "review": null
+ },
+ {
+  "id": "M5",
+  "file": "tool-run.mjs",
+  "find": "json.head.number !== t.head.number || ",
+  "replace": "",
+  "why": "the head number the tool printed",
+  "builder_tests": "# pass 78 # fail 1 ",
+  "killed_by_builder": true,
+  "review": null
+ },
+ {
+  "id": "M6",
+  "file": "tape.mjs",
+  "find": " && t.metadata.length === md.length",
+  "replace": "",
+  "why": "metadata length",
+  "builder_tests": "# pass 78 # fail 1 ",
+  "killed_by_builder": true,
+  "review": null
+ },
+ {
+  "id": "M7",
+  "file": "tool-run.mjs",
+  "find": "if (t.kind !== wantKind) no(",
+  "replace": "if (false) no(",
+  "why": "tape kind",
+  "builder_tests": "# pass 78 # fail 1 ",
+  "killed_by_builder": true,
+  "review": null
+ },
+ {
+  "id": "M8",
+  "file": "owner-call.mjs",
+  "find": "want(\"the device\", j.device, results.accounts.device.ss58);",
+  "replace": "",
+  "why": "the tool's device",
+  "builder_tests": "# pass 79 # fail 0 ",
+  "killed_by_builder": false,
+  "review": "equivalent for the bytes: the call hex encodes the device and is held equal to the second encoder fed with the record device; only the JSON field goes unchecked"
+ },
+ {
+  "id": "M9",
+  "file": "owner-call.mjs",
+  "find": "if (!ed25519.verify(",
+  "replace": "if (false && !ed25519.verify(",
+  "why": "signature over plan spec/txv/genesis",
+  "builder_tests": "# pass 78 # fail 1 ",
+  "killed_by_builder": true,
+  "review": null
+ },
+ {
+  "id": "M10",
+  "file": "owner-call.mjs",
+  "find": "want(\"the stored record line\"",
+  "replace": "(()=>0)(\"the stored record line\"",
+  "why": "stored record line",
+  "builder_tests": "# pass 78 # fail 1 ",
+  "killed_by_builder": true,
+  "review": null
+ },
+ {
+  "id": "M11",
+  "file": "owner-call.mjs",
+  "find": "if (o.exit !== 0) no(",
+  "replace": "if (false) no(",
+  "why": "tool exit 0",
+  "builder_tests": "# pass 78 # fail 1 ",
+  "killed_by_builder": true,
+  "review": null
+ },
+ {
+  "id": "M12",
+  "file": "record-step.mjs",
+  "find": "if (second.call !== tool.call_hex) {",
+  "replace": "if (false) {",
+  "why": "second encoder equal",
+  "builder_tests": "# pass 78 # fail 1 ",
+  "killed_by_builder": true,
+  "review": null
+ },
+ {
+  "id": "M13",
+  "file": "next.mjs",
+  "find": "n.value >= Number(V(plan, \"SESSION_COUNT_STOP\"))",
+  "replace": "n.value > Number(V(plan, \"SESSION_COUNT_STOP\"))",
+  "why": "SessionCount at 9",
+  "builder_tests": "# pass 77 # fail 2 ",
+  "killed_by_builder": true,
+  "review": null
+ },
+ {
+  "id": "M14",
+  "file": "next.mjs",
+  "find": "if (p.session?.state !== \"none\")",
+  "replace": "if (false)",
+  "why": "pair absent at P0",
+  "builder_tests": "# pass 78 # fail 1 ",
+  "killed_by_builder": true,
+  "review": null
+ },
+ {
+  "id": "M15",
+  "file": "next.mjs",
+  "find": "if (String(c.fields.expires_at) !== String(exp))",
+  "replace": "if (false)",
+  "why": "expiry",
+  "builder_tests": "# pass 77 # fail 2 ",
+  "killed_by_builder": true,
+  "review": null
+ },
+ {
+  "id": "M16",
+  "file": "next.mjs",
+  "find": "fee > BigInt(V(plan, \"MAX_FEE\"))",
+  "replace": "fee > BigInt(V(plan, \"MAX_FEE\")) + 1n",
+  "why": "fee one above the most",
+  "builder_tests": "# pass 76 # fail 3 ",
+  "killed_by_builder": true,
+  "review": null
+ },
+ {
+  "id": "M17",
+  "file": "next.mjs",
+  "find": "if (g1e.decoder.success === false)",
+  "replace": "if (false)",
+  "why": "G1 failed stop",
+  "builder_tests": "# pass 78 # fail 1 ",
+  "killed_by_builder": true,
+  "review": null
+ },
+ {
+  "id": "M18",
+  "file": "next.mjs",
+  "find": "if (e.after.runtime?.specVersion !== Number(V(plan, \"SPEC\")) || e.after.runtime?.specName !== V(plan, \"SPEC_NAME\"))",
+  "replace": "if (false)",
+  "why": "runtime after",
+  "builder_tests": "# pass 79 # fail 0 ",
+  "killed_by_builder": false,
+  "review": "review-mutants.test.mjs HOLDS (M18)"
+ },
+ {
+  "id": "M19",
+  "file": "next.mjs",
+  "find": "if (r2.problems.length)",
+  "replace": "if (false)",
+  "why": "R2 not the plan's",
+  "builder_tests": "# pass 79 # fail 0 ",
+  "killed_by_builder": false,
+  "review": "review-mutants.test.mjs HOLDS (M19)"
+ },
+ {
+  "id": "M20",
+  "file": "next.mjs",
+  "find": "if (c.transaction_version_at_start !== Number(V(plan, \"TXV\")))",
+  "replace": "if (false)",
+  "why": "txv at P0",
+  "builder_tests": "# pass 78 # fail 1 ",
+  "killed_by_builder": true,
+  "review": null
+ },
+ {
+  "id": "M21",
+  "file": "judge.mjs",
+  "find": "fee <= BigInt(V(plan, \"MAX_FEE\")) ? \"pass\"",
+  "replace": "true ? \"pass\"",
+  "why": "judge fee",
+  "builder_tests": "# pass 78 # fail 1 ",
+  "killed_by_builder": true,
+  "review": null
+ },
+ {
+  "id": "M22",
+  "file": "judge.mjs",
+  "find": "before - afterB === sum ? \"pass\"",
+  "replace": "true ? \"pass\"",
+  "why": "judge balance",
+  "builder_tests": "# pass 78 # fail 1 ",
+  "killed_by_builder": true,
+  "review": null
+ },
+ {
+  "id": "M23",
+  "file": "judge.mjs",
+  "find": "s.state === \"stored\" && s.value?.active === false ? \"pass\"",
+  "replace": "s.state === \"stored\" ? \"pass\"",
+  "why": "judge revoked show",
+  "builder_tests": "# pass 78 # fail 1 ",
+  "killed_by_builder": true,
+  "review": null
+ },
+ {
+  "id": "M24",
+  "file": "events.mjs",
+  "find": "paid[0].fields?.who !== payer || ",
+  "replace": "",
+  "why": "fee payer",
+  "builder_tests": "# pass 78 # fail 1 ",
+  "killed_by_builder": true,
+  "review": null
+ },
+ {
+  "id": "M25",
+  "file": "events.mjs",
+  "find": "if (ok.length + failed.length !== 1)",
+  "replace": "if (ok.length + failed.length === 0)",
+  "why": "one outcome event",
+  "builder_tests": "# pass 78 # fail 1 ",
+  "killed_by_builder": true,
+  "review": null
+ },
+ {
+  "id": "M26",
+  "file": "record-step.mjs",
+  "find": "if (!(o.tape_head?.number >= v.block_number)) no(",
+  "replace": "if (false) no(",
+  "why": "after tape head",
+  "builder_tests": "# pass 78 # fail 1 ",
+  "killed_by_builder": true,
+  "review": null
+ },
+ {
+  "id": "M27",
+  "file": "record-step.mjs",
+  "find": "/^0x[0-9a-f]{8}$/.test(read.result)",
+  "replace": "/^0x[0-9a-f]+$/.test(read.result)",
+  "why": "SessionCount u32",
+  "builder_tests": "# pass 79 # fail 0 ",
+  "killed_by_builder": false,
+  "review": "review-mutants.test.mjs HOLDS (M27)"
+ },
+ {
+  "id": "M28",
+  "file": "session-reads.js",
+  "find": "var KEY = /^0x([0-9a-f]{2}){32,}$/;",
+  "replace": "var KEY = /^0x([0-9a-f]{2}){1,}$/;",
+  "why": "key length in the pane",
+  "builder_tests": "# pass 78 # fail 1 ",
+  "killed_by_builder": true,
+  "review": null
+ },
+ {
+  "id": "M29",
+  "file": "session-reads.js",
+  "find": "if (!Number.isSafeInteger(back) || back < 1)",
+  "replace": "if (!Number.isSafeInteger(back) || back < 0)",
+  "why": "probe depth 0",
+  "builder_tests": "# pass 78 # fail 1 ",
+  "killed_by_builder": true,
+  "review": null
+ },
+ {
+  "id": "M30",
+  "file": "plan.mjs",
+  "find": "BigInt(s.cleanup ? MAX_ATTEMPTS : 1)",
+  "replace": "BigInt(s.cleanup ? MAX_ATTEMPTS - 1 : 1)",
+  "why": "fence tries",
+  "builder_tests": "# pass 76 # fail 3 ",
+  "killed_by_builder": true,
+  "review": null
+ },
+ {
+  "id": "M31",
+  "file": "record-step.mjs",
+  "find": "if (BigInt(reads.account_nonce) !== nonce) no(",
+  "replace": "if (false) no(",
+  "why": "lead stop nonce rule",
+  "builder_tests": "# pass 78 # fail 1 ",
+  "killed_by_builder": true,
+  "review": null
+ },
+ {
+  "id": "M32",
+  "file": "record-step.mjs",
+  "find": "if (sent.extrinsic_sha256 !== sha256Text(signed.extrinsic ?? \"\")) no(",
+  "replace": "if (false) no(",
+  "why": "runner sent the signed bytes",
+  "builder_tests": "# pass 78 # fail 1 ",
+  "killed_by_builder": true,
+  "review": null
+ },
+ {
+  "id": "M33",
+  "file": "record-step.mjs",
+  "find": "if (caps?.daily !== Number(V(plan, \"A_DAILY_FLOP\")) || caps?.perCall !== Number(V(plan, \"A_PER_TX_FLOP\"))) no(",
+  "replace": "if (false) no(",
+  "why": "seat caps at start",
+  "builder_tests": "# pass 78 # fail 1 ",
+  "killed_by_builder": true,
+  "review": null
+ },
+ {
+  "id": "M34",
+  "file": "judge.mjs",
+  "find": "String(exp) === String(v.block_number + Number(V(plan, \"DURATION\"))) ? \"pass\"",
+  "replace": "true ? \"pass\"",
+  "why": "judge expiry",
+  "builder_tests": "# pass 78 # fail 1 ",
+  "killed_by_builder": true,
+  "review": null
+ },
+ {
+  "id": "M35",
+  "file": "next.mjs",
+  "find": "if (r1.problems.length) {",
+  "replace": "if (false) {",
+  "why": "R1 not the plan's",
+  "builder_tests": "# pass 78 # fail 1 ",
+  "killed_by_builder": true,
+  "review": null
+ },
+ {
+  "id": "M36",
+  "file": "session-reads.js",
+  "find": "if (!canonical) return head;",
+  "replace": "return head;",
+  "why": "session tape asks canonical hash",
+  "builder_tests": "# pass 52 # fail 22 ",
+  "killed_by_builder": true,
+  "review": null
+ },
+ {
+  "id": "M37",
+  "file": "owner-call.mjs",
+  "find": "want(\"genesis\", signed.genesis, V(plan, \"GENESIS\"));",
+  "replace": "",
+  "why": "file's genesis field",
+  "builder_tests": "# pass 78 # fail 1 ",
+  "killed_by_builder": true,
+  "review": null
+ },
+ {
+  "id": "M38",
+  "file": "record-step.mjs",
+  "find": "if (reads.account !== owner && reads.account !== ss58(owner)) no(",
+  "replace": "if (false) no(",
+  "why": "start reads are the owner's",
+  "builder_tests": "# pass 79 # fail 0 ",
+  "killed_by_builder": false,
+  "review": "review-mutants.test.mjs HOLDS (M38)"
+ }
+]
