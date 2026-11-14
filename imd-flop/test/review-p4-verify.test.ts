@@ -154,7 +154,7 @@ describe("D7: verifyChannelSignature never throws on any bytes", () => {
   });
 
   for (const field of ["publicKey", "message", "signature"] as const) {
-    it(`DEFECT R4: a detached Uint8Array as ${field} gives false, not a TypeError`, () => {
+    it(`HOLDS (was DEFECT R4): a detached Uint8Array as ${field} gives false, not a TypeError`, () => {
       const input = { publicKey: new Uint8Array(32), message: new Uint8Array(3), signature: Uint8Array.from(ZERO_SIG), [field]: detached(field === "signature" ? 64 : 32) };
       let got: unknown;
       try {
@@ -169,7 +169,7 @@ describe("D7: verifyChannelSignature never throws on any bytes", () => {
 
 describe("A6, T3: signRequest refuses with a ChannelError, never a raw TypeError", () => {
   for (const field of ["channelId", "nonce"] as const) {
-    it(`DEFECT R5: a detached Uint8Array as ${field} is a ChannelError`, () => {
+    it(`HOLDS (was DEFECT R5): a detached Uint8Array as ${field} is a ChannelError`, () => {
       const key = channelKeyFromSeed({ seed: new Uint8Array(32).fill(3) });
       const input = { channelId: new Uint8Array(32), method: "GET", path: "/session/info", body: "", timestampMs: 1n, nonce: new Uint8Array(16), challenge: "a".repeat(64), [field]: detached(16) };
       let got: unknown;

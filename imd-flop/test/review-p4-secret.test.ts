@@ -51,7 +51,7 @@ describe("attack 6: SIGN_FAILED with a library that names what it was handed", (
     expect(holdsSecret(JSON.stringify(e))).toBe(false);
   });
 
-  it("DEFECT R6: util.inspect of the refusal, as Node prints an error it does not catch, holds none of the secret", async () => {
+  it("HOLDS (was DEFECT R6): util.inspect of the refusal, as Node prints an error it does not catch, holds none of the secret", async () => {
     const key = await keyWith((secret) => {
       throw new RangeError(`bad secret ${hex(secret)}`);
     });
@@ -59,7 +59,7 @@ describe("attack 6: SIGN_FAILED with a library that names what it was handed", (
     expect(holdsSecret(inspect(e))).toBe(false);
   });
 
-  it("DEFECT R7: a thrown value whose class is named with 63 hex digits of the secret: the message holds none of them", async () => {
+  it("HOLDS (was DEFECT R7): a thrown value whose class is named with 63 hex digits of the secret: the message holds none of them", async () => {
     const key = await keyWith((secret) => {
       const name = `_${hex(secret.subarray(0, 32)).slice(0, 63)}`;
       const C = { [name]: class {} }[name]!;

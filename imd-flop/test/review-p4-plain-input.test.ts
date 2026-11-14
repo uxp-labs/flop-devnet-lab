@@ -40,7 +40,7 @@ describe("attack 2: a refuse that returns", () => {
     ["ownValue of an accessor", (p) => p.ownValue(Object.defineProperty({}, "a", { get: () => 1 }), "a", "x")],
   ];
   for (const [name, call] of cases) {
-    it(`DEFECT R1: ${name}: after refuse was called, the check hands back nothing`, () => {
+    it(`HOLDS (was DEFECT R1): ${name}: after refuse was called, the check hands back nothing`, () => {
       const { refuse, codes } = returning();
       const got = after(() => call(plainInput(refuse)));
       expect(codes.length).toBeGreaterThan(0); // control: the check did refuse
@@ -64,7 +64,7 @@ describe("attack 2: a refuse that returns", () => {
 });
 
 describe("P12: every exported object is frozen where it is defined, functions and classes included (the lead's rule)", () => {
-  it("DEFECT R2 (L3): ChannelError and its prototype are frozen", () => {
+  it("HOLDS (was DEFECT R2): (L3) ChannelError and its prototype are frozen", () => {
     expect({ class: Object.isFrozen(errors.ChannelError), prototype: Object.isFrozen(errors.ChannelError.prototype) }).toEqual({ class: true, prototype: true });
   });
 
@@ -77,7 +77,7 @@ describe("P12: every exported object is frozen where it is defined, functions an
 
   const modules: Record<string, Record<string, unknown>> = { errors, bytes, transcript, auth, key };
   for (const [name, mod] of Object.entries(modules)) {
-    it(`DEFECT R3: every function exported by src/channel/${name}.ts is frozen, and so is its prototype`, () => {
+    it(`HOLDS (was DEFECT R3): every function exported by src/channel/${name}.ts is frozen, and so is its prototype`, () => {
       const open: string[] = [];
       for (const [k, v] of Object.entries(mod)) {
         if (typeof v !== "function") continue;
@@ -89,12 +89,12 @@ describe("P12: every exported object is frozen where it is defined, functions an
     });
   }
 
-  it("DEFECT R3: the four functions of a channel key are frozen", () => {
+  it("HOLDS (was DEFECT R3): the four functions of a channel key are frozen", () => {
     const k = key.channelKeyFromSeed({ seed: new Uint8Array(32).fill(1) });
     expect(Object.entries(k).filter(([, f]) => !Object.isFrozen(f)).map(([n]) => n)).toEqual([]);
   });
 
-  it("DEFECT R3: the five functions plainInput returns, and plainInput itself, are frozen", () => {
+  it("HOLDS (was DEFECT R3): the five functions plainInput returns, and plainInput itself, are frozen", () => {
     const p = plainInput(errors.refuse);
     expect([...Object.entries(p).filter(([, f]) => !Object.isFrozen(f)).map(([n]) => n), ...(Object.isFrozen(plainInput) ? [] : ["plainInput"])]).toEqual([]);
   });
