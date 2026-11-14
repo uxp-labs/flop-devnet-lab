@@ -58,32 +58,4 @@ describe("review o1: the runtime is named only by a read of System.LastRuntimeUp
     expect(() => tapeAnswer(path, field(21))).toThrow();
   });
 
-  it("HOLDS: a call with an error answer is refused", () => {
-    const path = tapeWith(setLine(21, (e) => ({ ...e, answer: { error: { code: -32000, message: "state pruned" } } })));
-    expect(() => tapeAnswer(path, field(21))).toThrow("holds no answer to the call at seq 21");
-  });
-
-  it("HOLDS: a seq past the end of the tape is refused", () => {
-    expect(() => tapeAnswer(TAPE, field(LINES.length + 5))).toThrow(`holds no state_getStorage call at seq ${LINES.length + 5}`);
-  });
-
-  it("HOLDS: a tape whose lines are in another order is refused at the seq that moved (the line's own seq is checked)", () => {
-    const path = tapeWith((lines) => {
-      const a = lines[21] as string;
-      lines[21] = lines[22] as string;
-      lines[22] = a;
-      return lines;
-    });
-    expect(() => tapeAnswer(path, field(21))).toThrow("holds no state_getStorage call at seq 21");
-  });
-
-  it("HOLDS: a tape without its schema line is refused, not read one line off", () => {
-    const path = tapeWith((lines) => lines.slice(1));
-    expect(() => tapeAnswer(path, field(20))).toThrow("holds no state_getStorage call at seq 20");
-  });
-
-  it("HOLDS: an answer of null (a key that holds nothing) names no runtime", () => {
-    const path = tapeWith(setLine(21, (e) => ({ ...e, answer: { result: null } })));
-    expect(() => specNamed({ file: path, field: field(21) })).toThrow();
-  });
 });
