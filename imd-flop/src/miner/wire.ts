@@ -17,7 +17,7 @@ import { readOutsideJson } from "../outside-json.js";
 import { ss58Decode } from "../ss58.js";
 import { refuseMiner, refuseWire, type MinerAnswer } from "./errors.js";
 import type { ModelIdentity } from "./expected.js";
-import { decimalOf, hexBytes, LIMITS, textProblem, u128Max, u64Max, U32_MAX, U8_MAX, wholeOf } from "./forms.js";
+import { decimalOf, hexBytes, imageTextProblem, LIMITS, textProblem, u128Max, u64Max, U32_MAX, U8_MAX, wholeOf } from "./forms.js";
 
 export interface InfoProof {
   readonly genesis: Uint8Array;
@@ -25,6 +25,10 @@ export interface InfoProof {
   readonly enclaveKey: Uint8Array;
   readonly identity: ModelIdentity;
   readonly ready: boolean;
+  /**
+   * The image version and revision: the miner's own text, 0 to 256 bytes, control characters allowed. Shown only
+   * through `src/server-text.ts`, never printed or logged as they are.
+   */
   readonly version: string;
   readonly revision: string;
   /** 64 bytes. */
@@ -38,8 +42,6 @@ export interface SignedInfo {
   readonly modelHash: Uint8Array;
   readonly identity: ModelIdentity;
   readonly isReady: boolean;
-  /** Absent or null on the wire: null. */
-  readonly maxUnackedGn: bigint | null;
 }
 
 export type LeafVersion = "V0" | "V1" | "V2" | "V3";
@@ -59,7 +61,8 @@ export interface TurnReceipt {
   readonly runningRoot: Uint8Array;
   readonly decodePolicyHash: Uint8Array;
   readonly hIds: Uint8Array;
-  readonly toplocCommitmentHash: Uint8Array;
+  /** 32 bytes as stated, or null when the miner stated none (absent or JSON null on the wire). Never 32 zero bytes for none. */
+  readonly toplocCommitmentHash: Uint8Array | null;
   readonly promptTokens: bigint;
   readonly completionTokens: bigint;
   readonly finishReason: string;
@@ -109,6 +112,20 @@ function reader(answer: MinerAnswer) {
       if (b === null) fail(path, `must be ${prefixed ? "0x and " : "bare "}lower case hex of ${n} bytes`);
       return b as Uint8Array;
     },
+    /** Like `hex`, but a key that is absent or JSON null is null: the field is optional. Present, it is held to its form. */
+    hexOrNull(o: Obj, path: string, key: string, n: number, prefixed: boolean): Uint8Array | null {
+      const v = Object.prototype.hasOwnProperty.call(o, key) ? o[key] : undefined;
+      if (v === undefined || v === null) return null;
+      const b = hexBytes(v, n, prefixed);
+      if (b === null) fail(path, `must be ${prefixed ? "0x and " : "bare "}lower case hex of ${n} bytes`);
+      return b as Uint8Array;
+    },
+    /** A text that is one of `names`, read as an own field. */
+    oneOf(o: Obj, path: string, key: string, names: readonly string[]): string {
+      const v = get(o, path, key);
+      if (typeof v !== "string" || !names.includes(v)) fail(path, `must be one of ${names.join(", ")}`);
+      return v as string;
+    },
     decimal(o: Obj, path: string, key: string, kind: "u64" | "u128"): bigint {
       const n = decimalOf(get(o, path, key), kind === "u64" ? u64Max() : u128Max());
       if (n === null) fail(path, `must be a plain decimal text inside a ${kind}`);
@@ -123,6 +140,13 @@ function reader(answer: MinerAnswer) {
       const v = get(o, path, key);
       if (typeof v !== "boolean") fail(path, "must be a boolean");
       return v as boolean;
+    },
+    /** The image version or revision of the proof (M-19): 0 to 256 bytes, well formed, control characters allowed. */
+    imageText(o: Obj, path: string, key: string): string {
+      const v = get(o, path, key);
+      const problem = imageTextProblem(v);
+      if (problem !== null) fail(path, problem);
+      return v as string;
     },
     text(o: Obj, path: string, key: string, maxBytes?: number): string {
       const v = get(o, path, key);
@@ -162,7 +186,7 @@ const deepCopy = <T extends object>(v: T): T => {
 /**
  * The info proof (`POST /session/info-proof`), as `verifySessionInfoProof` reads it: `genesis_hash`, `account_id`,
  * `enclave_key` (bare hex of 32 bytes), `model_identity` in snake case with bare hex, `ready` (a boolean),
- * `image.version` and `image.revision` (bounded texts), `signature` (bare hex of 64 bytes).
+ * `image.version` and `image.revision` (image texts: 0 to 256 bytes, control characters allowed, M-19), `signature` (bare hex of 64 bytes).
  */
 export function parseInfoProof(text: string): InfoProof {
   const r = reader("proof");
@@ -185,8 +209,8 @@ export function parseInfoProof(text: string): InfoProof {
     enclaveKey: r.hex(b, "enclave_key", "enclave_key", 32, false),
     identity,
     ready: r.bool(b, "ready", "ready"),
-    version: r.text(image, "image.version", "version"),
-    revision: r.text(image, "image.revision", "revision"),
+    version: r.imageText(image, "image.version", "version"),
+    revision: r.imageText(image, "image.revision", "revision"),
     signature: r.hex(b, "signature", "signature", 64, false),
   });
   return handOut("proof", held, deepCopy(held));
@@ -211,8 +235,8 @@ function camelIdentity(r: ReturnType<typeof reader>, o: Obj, key: string): Model
 /**
  * The signed info (`GET /session/info`), as `fetchMinerSessionInfo` reads it: `minerAddress` (SS58 text, decoded
  * here to its 32 bytes; a text that is not an SS58 account address is refused), `enclaveKey` and `modelHash` (0x
- * hex of 32 bytes), `modelIdentity` (camel case, 0x hex), `is_ready` (a boolean), and `maxUnackedGn` (a plain
- * decimal text inside a u128, or absent or null, which is null). The SDK reads an absent one as 0; the lab does not.
+ * hex of 32 bytes), `modelIdentity` (camel case, 0x hex) and `is_ready` (a boolean). `maxUnackedGn` is not read, in
+ * any form or when absent (M-20): the lab makes no use of it with one turn and one ack.
  */
 export function parseInfo(text: string): SignedInfo {
   const r = reader("info");
@@ -224,15 +248,12 @@ export function parseInfo(text: string): SignedInfo {
   } catch {
     return r.fail("minerAddress", "must be an SS58 address of a 32 byte account with a good checksum");
   }
-  const raw = Object.prototype.hasOwnProperty.call(b, "maxUnackedGn") ? b.maxUnackedGn : undefined;
-  const maxUnackedGn = raw === undefined || raw === null ? null : r.decimal(b, "maxUnackedGn", "maxUnackedGn", "u128");
   const held: SignedInfo = Object.freeze({
     minerAccount: Uint8Array.from(minerAccount),
     enclaveKey: r.hex(b, "enclaveKey", "enclaveKey", 32, true),
     modelHash: r.hex(b, "modelHash", "modelHash", 32, true),
     identity: camelIdentity(r, b, "modelIdentity"),
     isReady: r.bool(b, "is_ready", "is_ready"),
-    maxUnackedGn,
   });
   return handOut("info", held, deepCopy(held));
 }
@@ -243,17 +264,17 @@ const LEAF_VERSIONS: readonly string[] = Object.freeze(["V0", "V1", "V2", "V3"])
 /**
  * The turn receipt (`POST /session/turn`, one JSON body), as `encodeTurnReceipt` writes it. Read: `leafVersion` (one
  * of V0 to V3; verifyTurn takes V3 alone), `turnIndex` (a safe integer inside a u32); `hIn`, `hOut`, `runningRoot`,
- * `decodePolicyHash`, `hIds`, `toplocCommitmentHash` (0x hex of 32 bytes); `enclaveSig` (0x hex of 64 bytes);
+ * `decodePolicyHash`, `hIds` (0x hex of 32 bytes); `toplocCommitmentHash` (0x hex of 32 bytes, or absent or null, which is null, M-18); `enclaveSig` (0x hex of 64 bytes);
  * `output` (0x hex of at most OUTPUT_MAX_BYTES bytes); `gN` (plain decimal inside a u128); `minerRecvMs`,
  * `minerDoneMs`, `latencyMs`, `promptTokens`, `completionTokens` (plain decimal inside a u64); `finishReason` (a
  * bounded text); `modelIdentity` (camel case, 0x hex). The provider fields and the version 3 fields must all be
- * present (W13, M-6): a receipt without them says nothing of the model or the tokens.
+ * present (W13, M-6): a receipt without them says nothing of the model or the tokens. The one exception is the
+ * sampling commitment hash, which FLOP's client leaves out when the miner has none (M-18).
  */
 export function parseTurnReceipt(text: string): TurnReceipt {
   const r = reader("turn");
   const b = bodyOf("turn", text);
-  const leafVersion = b.leafVersion;
-  if (typeof leafVersion !== "string" || !LEAF_VERSIONS.includes(leafVersion)) r.fail("leafVersion", "must be one of V0, V1, V2, V3");
+  const leafVersion = r.oneOf(b, "leafVersion", "leafVersion", LEAF_VERSIONS);
   const outputRaw = Object.prototype.hasOwnProperty.call(b, "output") ? b.output : undefined;
   if (typeof outputRaw === "string" && outputRaw.length > 2 + 2 * LIMITS.OUTPUT_MAX_BYTES) r.fail("output", `must be at most ${LIMITS.OUTPUT_MAX_BYTES} bytes`);
   const output = hexBytes(outputRaw, null, true, LIMITS.OUTPUT_MAX_BYTES);
@@ -272,7 +293,7 @@ export function parseTurnReceipt(text: string): TurnReceipt {
     runningRoot: r.hex(b, "runningRoot", "runningRoot", 32, true),
     decodePolicyHash: r.hex(b, "decodePolicyHash", "decodePolicyHash", 32, true),
     hIds: r.hex(b, "hIds", "hIds", 32, true),
-    toplocCommitmentHash: r.hex(b, "toplocCommitmentHash", "toplocCommitmentHash", 32, true),
+    toplocCommitmentHash: r.hexOrNull(b, "toplocCommitmentHash", "toplocCommitmentHash", 32, true),
     promptTokens: r.decimal(b, "promptTokens", "promptTokens", "u64"),
     completionTokens: r.decimal(b, "completionTokens", "completionTokens", "u64"),
     finishReason: r.text(b, "finishReason", "finishReason"),

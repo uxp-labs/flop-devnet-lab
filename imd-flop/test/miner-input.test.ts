@@ -151,7 +151,12 @@ describe("W3: the layouts refuse a field of another width", () => {
     const info = { challenge: s.challenge, genesis: s.genesis, account: s.account, enclaveKey: s.pair.publicKey, identity: s.identity, ready: true, version: s.version, revision: s.revision };
     for (const k of ["challenge", "genesis", "account", "enclaveKey"] as const) badInput(() => sessionInfoMessage({ ...info, [k]: filled(31, 1) }));
     for (const v of [1, "true", null]) badInput(() => sessionInfoMessage({ ...info, ready: v } as never));
-    for (const v of ["", "x".repeat(257), "a\u0007"]) badInput(() => sessionInfoMessage({ ...info, version: v }));
+    // F3 (M-19): the image version and revision may be empty and may hold control characters; 257 bytes and a lone surrogate are refused.
+    for (const k of ["version", "revision"] as const) {
+      for (const v of ["x".repeat(257), "é".repeat(128) + "x", "a\ud800"]) badInput(() => sessionInfoMessage({ ...info, [k]: v }));
+      for (const v of ["", "a\u0007\u0000b", "x".repeat(256)]) expect(sessionInfoMessage({ ...info, [k]: v }).length).toBeGreaterThan(0);
+    }
+    expect(sessionInfoMessage({ ...info, version: "", revision: "" }).length).toBe(20 + 32 * 5 + 1 + 4 + 4);
     const ev = { output: filled(3, 0x41), promptTokens: 1n, completionTokens: 1n, finishReason: "stop", identity: s.identity };
     badInput(() => turnEvidenceHash({ ...ev, output: filled(LIMITS.OUTPUT_MAX_BYTES + 1, 0x41) }));
     expect(turnEvidenceHash({ ...ev, output: filled(LIMITS.OUTPUT_MAX_BYTES, 0x41) }).length).toBe(32);

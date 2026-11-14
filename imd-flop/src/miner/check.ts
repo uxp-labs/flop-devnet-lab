@@ -7,7 +7,7 @@
 import { plainInput, type PlainInputCode } from "../plain-input.js";
 import { freezeFunction } from "../freeze.js";
 import { refuseMiner } from "./errors.js";
-import { textProblem, u128Max, u64Max, U32_MAX, U8_MAX } from "./forms.js";
+import { imageTextProblem, textProblem, u128Max, u64Max, U32_MAX, U8_MAX } from "./forms.js";
 
 /** plain-input's checks, each of its codes taken as the caller's input out of its form. */
 const PLAIN = plainInput((_code: PlainInputCode, message: string) => refuseMiner("BAD_INPUT", "input", message));
@@ -81,6 +81,14 @@ export function textIn(value: unknown, what: string): string {
   return value as string;
 }
 freezeFunction(textIn);
+
+/** An image text (the proof's image version or revision, M-19): 0 to 256 bytes, well formed, control characters allowed. */
+export function imageTextIn(value: unknown, what: string): string {
+  const problem = imageTextProblem(value);
+  if (problem !== null) bad(what, problem);
+  return value as string;
+}
+freezeFunction(imageTextIn);
 
 /** A boolean. */
 export function booleanIn(value: unknown, what: string): boolean {

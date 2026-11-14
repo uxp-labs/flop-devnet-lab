@@ -142,10 +142,10 @@ describe("T4: verifyInfoProof", () => {
 describe("T4: verifyInfo", () => {
   const run = (s: Scenario, info: Obj) => verifyInfo({ expected: minerExpected(expectedInputOf(s)), info: parseInfo(JSON.stringify(info)) });
 
-  it("accepts a whole info and returns maxUnackedGn", () => {
+  it("accepts a whole info and returns nothing (maxUnackedGn is not read, M-20)", () => {
     const s = scenario();
-    expect(run(s, infoObject(s))).toEqual({ maxUnackedGn: 0n });
-    expect(run(s, { ...infoObject(s), minerAddress: refSs58(s.account, 7) })).toEqual({ maxUnackedGn: 0n });
+    expect(run(s, infoObject(s))).toBeUndefined();
+    expect(run(s, { ...infoObject(s), minerAddress: refSs58(s.account, 7) })).toBeUndefined();
   });
 
   const rows: [string, (s: Scenario) => Obj][] = [
@@ -235,6 +235,38 @@ describe("T4: verifyTurn", () => {
       const { turn, messages, maxTokens } = make(s);
       const e = refusal(() => run(s, turn, { messages, maxTokens }), turn);
       expect([e.refusal, e.check, e.code]).toEqual(["TURN", `turn.${check}`, EXIT.ERROR]);
+    });
+  });
+
+  describe("F2 (M-18): the sampling commitment hash may be absent", () => {
+    const ver = (s: Scenario, turn: Obj) => run(s, turn);
+    const without = (s: Scenario): Obj => {
+      const t = turnObject(scenario({ ...s, toploc: filled(32, 0) }));
+      delete t.toplocCommitmentHash;
+      return t;
+    };
+
+    it("an absent hash gives the leaf of 32 zero bytes, and the verified turn carries null", () => {
+      const s = scenario();
+      const v = ver(s, without(s));
+      expect(v.toplocCommitmentHash).toBeNull();
+      expect(Buffer.from(v.leaf).toString("hex")).toBe(Buffer.from(refLeafV3(leafOf(scenario({ toploc: filled(32, 0) })))).toString("hex"));
+    });
+
+    it("a stated hash is carried as its bytes, and a stated 32 zero bytes are carried as 32 zero bytes, not null", () => {
+      const s = scenario();
+      expect(Buffer.from(ver(s, turnObject(s)).toplocCommitmentHash as Uint8Array).toString("hex")).toBe(Buffer.from(s.toploc).toString("hex"));
+      const z = scenario({ toploc: filled(32, 0) });
+      const v = ver(z, turnObject(z));
+      expect(Buffer.from(v.toplocCommitmentHash as Uint8Array).toString("hex")).toBe("00".repeat(32));
+      expect(Buffer.from(v.leaf).toString("hex")).toBe(Buffer.from(ver(z, without(z)).leaf).toString("hex"));
+    });
+
+    it("a hash stated as one thing and signed as another is refused at the root, and an absent one signed over a nonzero hash too", () => {
+      const s = scenario();
+      const t = turnObject(s);
+      delete t.toplocCommitmentHash;
+      expect(refusal(() => ver(s, t), t).check).toBe("turn.runningRoot");
     });
   });
 

@@ -7,7 +7,7 @@ import { freezeFunction } from "../freeze.js";
 
 /** The ranges and the hard maxima of this piece. Each is stated once, here. */
 export const LIMITS = Object.freeze({
-  /** The most UTF-8 bytes of one bounded text: a model name, a slug, a finish reason, an image version (W6). */
+  /** The most UTF-8 bytes of one bounded text: a model name, a slug, a finish reason, and an image version or revision (W6, M-19). */
   TEXT_MAX_BYTES: 256,
   /** The most decimal digits a wire decimal may have before its range is checked (W11). */
   DECIMAL_MAX_DIGITS: 39,
@@ -34,21 +34,37 @@ const LONE_SURROGATE = /\p{Cs}/u;
 /** A control character: C0, DEL and C1. U+2028 and U+2029 are not control characters and are allowed. */
 const CONTROL = /\p{Cc}/u;
 
+/** The reasons, and the two choices that tell a bounded text from an image text. Never quotes the value. */
+function textProblemOf(value: unknown, maxBytes: number, allowEmpty: boolean, allowControl: boolean): string | null {
+  if (typeof value !== "string") return "must be a string";
+  if (value.length === 0) return allowEmpty ? null : "must not be empty";
+  // A UTF-16 unit is at least one byte of UTF-8, so a longer text is over the bound before it is encoded.
+  if (value.length > maxBytes) return `must be at most ${maxBytes} bytes of UTF-8`;
+  if (LONE_SURROGATE.test(value)) return "must be well formed UTF-16 (it holds a lone surrogate)";
+  if (!allowControl && CONTROL.test(value)) return "must hold no control character";
+  if (utf8(value).length > maxBytes) return `must be at most ${maxBytes} bytes of UTF-8`;
+  return null;
+}
+
 /**
  * Why a value is not a bounded text, or null when it is one: a string, well formed UTF-16, with no control
  * character, of 1 to TEXT_MAX_BYTES bytes of UTF-8 (W6, W11). The reason never quotes the value.
  */
 export function textProblem(value: unknown, maxBytes: number = LIMITS.TEXT_MAX_BYTES): string | null {
-  if (typeof value !== "string") return "must be a string";
-  if (value.length === 0) return "must not be empty";
-  // A UTF-16 unit is at least one byte of UTF-8, so a longer text is over the bound before it is encoded.
-  if (value.length > maxBytes) return `must be at most ${maxBytes} bytes of UTF-8`;
-  if (LONE_SURROGATE.test(value)) return "must be well formed UTF-16 (it holds a lone surrogate)";
-  if (CONTROL.test(value)) return "must hold no control character";
-  if (utf8(value).length > maxBytes) return `must be at most ${maxBytes} bytes of UTF-8`;
-  return null;
+  return textProblemOf(value, maxBytes, false, false);
 }
 freezeFunction(textProblem);
+
+/**
+ * Why a value is not an image text (the proof's image version or revision), or null when it is one: a string, well
+ * formed UTF-16, of 0 to TEXT_MAX_BYTES bytes of UTF-8 (M-19). It may be empty and may hold control characters:
+ * the lab makes no rule on these two texts, which are the miner's own words inside signed bytes. This form is for
+ * those two fields alone; every other text goes through `textProblem`.
+ */
+export function imageTextProblem(value: unknown): string | null {
+  return textProblemOf(value, LIMITS.TEXT_MAX_BYTES, true, true);
+}
+freezeFunction(imageTextProblem);
 
 /** True when a string has no lone surrogate, so it has one exact UTF-8 form. */
 export function wellFormed(value: string): boolean {

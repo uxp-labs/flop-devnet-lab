@@ -9,7 +9,7 @@
 import { blake2b } from "@noble/hashes/blake2.js";
 import { concat, uintLE } from "../channel/bytes.js";
 import { freezeFunction } from "../freeze.js";
-import { bigIn, booleanIn, bytesIn, fieldsOf, textIn } from "./check.js";
+import { bigIn, booleanIn, bytesIn, fieldsOf, imageTextIn, textIn } from "./check.js";
 import { refuseMiner } from "./errors.js";
 import { identityIn, type ModelIdentity } from "./expected.js";
 import { LIMITS, utf8 } from "./forms.js";
@@ -51,7 +51,7 @@ export interface SessionInfoInput {
   readonly enclaveKey: Uint8Array;
   readonly identity: ModelIdentity;
   readonly ready: boolean;
-  /** The image's version and revision, bounded texts. */
+  /** The image's version and revision: image texts, 0 to 256 bytes, written with their lengths (an empty one is a zero length). */
   readonly version: string;
   readonly revision: string;
 }
@@ -70,8 +70,8 @@ export function sessionInfoMessage(input: SessionInfoInput): Uint8Array {
   const enclaveKey = bytesIn(f.enclaveKey, 32, "session info.enclaveKey");
   const identityHash = modelIdentityHash(f.identity as ModelIdentity);
   const ready = booleanIn(f.ready, "session info.ready");
-  const version = textIn(f.version, "session info.version");
-  const revision = textIn(f.revision, "session info.revision");
+  const version = imageTextIn(f.version, "session info.version");
+  const revision = imageTextIn(f.revision, "session info.revision");
   return concat(utf8(SESSION_INFO_DOMAIN), challenge, genesis, account, enclaveKey, identityHash, Uint8Array.of(ready ? 1 : 0), text(version), text(revision));
 }
 freezeFunction(sessionInfoMessage);

@@ -1,6 +1,7 @@
 /**
  * The checks of the miner's word against what the owner pinned and against hashes rebuilt here (W14 to W16). Each
- * takes a value `minerExpected` made and a value one of the parsers made, and nothing the miner says chooses a key:
+ * takes a value `minerExpected` made and a value one of the parsers made (`verifyTurn` also a value `turnInput` made),
+ * and nothing the miner says chooses a key:
  * every signature is verified under the pinned enclave key, through `verifyChannelSignature` of src/channel. The
  * first check that fails refuses, naming that check. Nothing here signs.
  */
@@ -66,16 +67,12 @@ export function verifyInfoProof(input: { readonly expected: Expected; readonly c
 }
 freezeFunction(verifyInfoProof);
 
-export interface InfoVerified {
-  /** The miner's stated fence, read only; null when the miner did not state one. */
-  readonly maxUnackedGn: bigint | null;
-}
-
 /**
  * The signed info (W15): the miner address's 32 bytes equal the pinned account; the enclave key, the model hash
  * and each field of the model identity equal the pinned ones; is_ready is true. Failure refuses with INFO.
+ * It returns nothing: the only answer it gives is that it did not refuse. The info holds no other field the lab reads (M-20).
  */
-export function verifyInfo(input: { readonly expected: Expected; readonly info: SignedInfo }): InfoVerified {
+export function verifyInfo(input: { readonly expected: Expected; readonly info: SignedInfo }): void {
   const f = fieldsOf(input, ["expected", "info"], "verifyInfo input");
   const e = pinnedOf(f.expected);
   const i = parsedOf("info", f.info);
@@ -86,7 +83,6 @@ export function verifyInfo(input: { readonly expected: Expected; readonly info: 
   const d = identityDiffers(i.identity, e.identity);
   if (d !== null) fail(`identity.${d}`, `the info's model identity field ${d} is not the pinned one`);
   if (i.isReady !== true) fail("is_ready", "the info does not say ready");
-  return Object.freeze({ maxUnackedGn: i.maxUnackedGn });
 }
 freezeFunction(verifyInfo);
 
@@ -96,6 +92,8 @@ export interface VerifiedTurn {
   readonly promptTokens: bigint;
   readonly completionTokens: bigint;
   readonly finishReason: string;
+  /** The sampling commitment hash as the receipt stated it, or null when it stated none. Null is never 32 zero bytes. */
+  readonly toplocCommitmentHash: Uint8Array | null;
   readonly output: Uint8Array;
   readonly text: string;
   readonly minerRecvMs: bigint;
@@ -123,7 +121,7 @@ const startsWith = (b: Uint8Array, p: Uint8Array): boolean => b.length >= p.leng
  *  1. leafVersion: V3;
  *  2. turnIndex: 0 (one turn per run, M-4);
  *  3. hIn: the h_in of the turn value (the blake2b 256 of our input bytes);
- *  4. decodePolicyHash: the pinned one; hIds: not all zero (V3 in `leafFieldsConsistent`; the TOPLOC hash may be anything);
+ *  4. decodePolicyHash: the pinned one; hIds: not all zero (V3 in `leafFieldsConsistent`; the TOPLOC hash may be anything, or absent: the leaf then takes 32 zero bytes, as the SDK's does, M-18);
  *  5. identity: each field the pinned one; finishReason: stop or length; completionTokens: at most the max_tokens of the turn value;
  *  6. output: UTF-8, decoded fatally, and not starting with the reserved framed prefix;
  *  7. hOut: the evidence hash rebuilt from the output, the tokens, the finish reason and the PINNED identity;
@@ -170,7 +168,7 @@ export function verifyTurn(value: VerifyTurnInput): VerifiedTurn {
     gN: r.gN,
     decodePolicyHash: Uint8Array.from(r.decodePolicyHash),
     hIds: Uint8Array.from(r.hIds),
-    toplocCommitmentHash: Uint8Array.from(r.toplocCommitmentHash),
+    toplocCommitmentHash: r.toplocCommitmentHash === null ? new Uint8Array(32) : Uint8Array.from(r.toplocCommitmentHash),
     minerRecvMs: r.minerRecvMs,
     minerDoneMs: r.minerDoneMs,
     latencyMs: r.latencyMs,
@@ -183,6 +181,7 @@ export function verifyTurn(value: VerifyTurnInput): VerifiedTurn {
     promptTokens: r.promptTokens,
     completionTokens: r.completionTokens,
     finishReason: r.finishReason,
+    toplocCommitmentHash: r.toplocCommitmentHash === null ? null : Uint8Array.from(r.toplocCommitmentHash),
     output: Uint8Array.from(r.output),
     text,
     minerRecvMs: r.minerRecvMs,

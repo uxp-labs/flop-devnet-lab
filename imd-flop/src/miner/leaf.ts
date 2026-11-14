@@ -28,6 +28,7 @@ export interface LeafV3Input {
   readonly gN: bigint;
   readonly decodePolicyHash: Uint8Array;
   readonly hIds: Uint8Array;
+  /** 32 bytes. A receipt that states none takes 32 zero bytes here, as the SDK's leaf does (M-18); that is verifyTurn's choice, not this function's. */
   readonly toplocCommitmentHash: Uint8Array;
   /** u64, milliseconds of the miner's clock. */
   readonly minerRecvMs: bigint;

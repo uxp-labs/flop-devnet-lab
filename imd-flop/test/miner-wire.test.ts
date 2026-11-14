@@ -4,7 +4,7 @@
  * 0x where bare is wanted and the reverse, a decimal with a sign, a space, a leading zero, an exponent, 40 digits; a
  * number that is not a safe integer; a string of 257 bytes, with a control character, empty, or with a lone
  * surrogate; a missing field; a field of another type. A body that is not JSON, an array, null. An output above the
- * maximum. An extra key is ignored. An absent maxUnackedGn or settled is null. No message holds a run of 16 hex
+ * maximum. An extra key is ignored. An absent settled is null. maxUnackedGn is not read. No message holds a run of 16 hex
  * digits or a text of the answer.
  */
 import { beforeAll, describe, expect, it } from "vitest";
@@ -13,12 +13,12 @@ import { MinerError } from "../src/miner/errors.js";
 import { LIMITS } from "../src/miner/forms.js";
 import { parseCloseAnswer, parseInfo, parseInfoProof, parseTurnReceipt } from "../src/miner/wire.js";
 import { referenceReady } from "./lib/sr25519-reference.js";
-import { closeObject, filled, hex, HEX_RUN, infoObject, proofObject, refSs58, scenario, turnObject } from "./lib/miner-answers.js";
+import { closeObject, filled, hex, hex0x, HEX_RUN, infoObject, proofObject, refSs58, scenario, turnObject } from "./lib/miner-answers.js";
 
 beforeAll(referenceReady);
 
 type Obj = Record<string, unknown>;
-type Kind = "bare32" | "bare64" | "hex32" | "hex64" | "u64" | "u128" | "u8" | "u32" | "bool" | "text" | "obj";
+type Kind = "bare32" | "bare64" | "hex32" | "hex32opt" | "hex64" | "image" | "u64" | "u128" | "u8" | "u32" | "bool" | "text" | "obj";
 
 const PARSERS = { proof: parseInfoProof, info: parseInfo, turn: parseTurnReceipt, close: parseCloseAnswer } as const;
 type Answer = keyof typeof PARSERS;
@@ -70,6 +70,10 @@ function badForms(kind: Kind, good: unknown): { name: string; value?: unknown; r
     case "hex64":
       hexForms(kind === "hex32" ? 32 : 64, true);
       break;
+    case "hex32opt":
+      // An optional field (M-18): missing and JSON null are not bad forms, they are null.
+      hexForms(32, true);
+      return forms.filter((f) => f.value !== DELETE && f.value !== null);
     case "u64":
     case "u128": {
       const width = kind === "u64" ? 64n : 128n;
@@ -116,6 +120,16 @@ function badForms(kind: Kind, good: unknown): { name: string; value?: unknown; r
         { name: "a number", value: 1 },
       );
       break;
+    case "image":
+      // The proof's image version and revision (M-19): empty and control characters are allowed, so not bad forms.
+      forms.push(
+        { name: "257 bytes", value: "x".repeat(257) },
+        { name: "257 bytes of two byte characters", value: "é".repeat(128) + "x" },
+        { name: "a lone surrogate", value: "a\ud800b" },
+        { name: "a number", value: 1 },
+        { name: "null", value: null },
+      );
+      break;
     case "obj":
       forms.push({ name: "an array", value: [] }, { name: "a string", value: "x" }, { name: "null", value: null });
       break;
@@ -145,11 +159,11 @@ const identityCamel = (key: string): [string, Kind][] => [
 ];
 
 const FIELDS: Record<Answer, [string, Kind][]> = {
-  proof: [["genesis_hash", "bare32"], ["account_id", "bare32"], ["enclave_key", "bare32"], ["model_identity", "obj"], ...identitySnake, ["ready", "bool"], ["image", "obj"], ["image.version", "text"], ["image.revision", "text"], ["signature", "bare64"]],
+  proof: [["genesis_hash", "bare32"], ["account_id", "bare32"], ["enclave_key", "bare32"], ["model_identity", "obj"], ...identitySnake, ["ready", "bool"], ["image", "obj"], ["image.version", "image"], ["image.revision", "image"], ["signature", "bare64"]],
   info: [["enclaveKey", "hex32"], ["modelHash", "hex32"], ["modelIdentity", "obj"], ...identityCamel("modelIdentity"), ["is_ready", "bool"]],
   turn: [
     ["turnIndex", "u32"], ["hIn", "hex32"], ["hOut", "hex32"], ["gN", "u128"], ["minerRecvMs", "u64"], ["minerDoneMs", "u64"], ["latencyMs", "u64"],
-    ["enclaveSig", "hex64"], ["runningRoot", "hex32"], ["decodePolicyHash", "hex32"], ["hIds", "hex32"], ["toplocCommitmentHash", "hex32"],
+    ["enclaveSig", "hex64"], ["runningRoot", "hex32"], ["decodePolicyHash", "hex32"], ["hIds", "hex32"], ["toplocCommitmentHash", "hex32opt"],
     ["promptTokens", "u64"], ["completionTokens", "u64"], ["finishReason", "text"], ["modelIdentity", "obj"], ...identityCamel("modelIdentity"),
   ],
   close: [["settled", "obj"], ["settled.channelId", "hex32"], ["settled.txHash", "hex32"]],
@@ -195,7 +209,7 @@ describe("T5: each parser accepts its whole answer", () => {
     const p = parseInfoProof(JSON.stringify(proofObject(s)));
     expect([hex(p.genesis), p.ready, p.version, p.identity.precision]).toEqual([hex(s.genesis), true, s.version, s.identity.precision]);
     const i = parseInfo(JSON.stringify(infoObject(s)));
-    expect([hex(i.minerAccount), i.isReady, i.maxUnackedGn]).toEqual([hex(s.account), true, 0n]);
+    expect([hex(i.minerAccount), i.isReady]).toEqual([hex(s.account), true]);
     const t = parseTurnReceipt(JSON.stringify(turnObject(s)));
     expect([t.leafVersion, t.turnIndex, t.gN, t.finishReason]).toEqual(["V3", 0, s.gN, "stop"]);
     const c = parseCloseAnswer(JSON.stringify(closeObject(filled(32, 1), filled(32, 2))));
@@ -256,17 +270,48 @@ describe("T5: the bodies", () => {
   }
 });
 
+describe("F2 (M-18): the sampling commitment hash may be absent", () => {
+  const withToploc = (v: unknown) => parseTurnReceipt(JSON.stringify(setPath(turnObject(scenario()), "toplocCommitmentHash", v)));
+  it("absent and JSON null parse to null, never 32 zero bytes", () => {
+    expect(withToploc(DELETE).toplocCommitmentHash).toBeNull();
+    expect(withToploc(null).toplocCommitmentHash).toBeNull();
+  });
+  it("a stated value is taken as its bytes, and 32 zero bytes stated stay 32 zero bytes", () => {
+    const s = scenario();
+    expect(hex(withToploc(hex0x(s.toploc)).toplocCommitmentHash as Uint8Array)).toBe(hex(s.toploc));
+    expect(hex(withToploc(hex0x(filled(32, 0))).toplocCommitmentHash as Uint8Array)).toBe(hex(filled(32, 0)));
+  });
+  it("the decode policy hash and h_ids stay required", () => {
+    for (const k of ["decodePolicyHash", "hIds"]) wireRefusal("turn", JSON.stringify(setPath(turnObject(scenario()), k, DELETE)), `turn.${k}`);
+  });
+});
+
+describe("F3 (M-19): the proof's image version and revision", () => {
+  const proofWith = (path: string, v: string) => parseInfoProof(JSON.stringify(setPath(proofObject(scenario()), path, v)));
+  it("each may be empty, 256 bytes, or hold control characters, and is carried as stated", () => {
+    for (const [path, key] of [["image.version", "version"], ["image.revision", "revision"]] as const)
+      for (const v of ["", "x".repeat(256), "é".repeat(128), "a\u0000b\u0007\u007f\u0085c\n"]) expect(proofWith(path, v)[key]).toBe(v);
+  });
+  it("a lone surrogate and 257 bytes are still refused, and the other texts still refuse an empty text and a control character", () => {
+    for (const path of ["image.version", "image.revision"]) {
+      wireRefusal("proof", JSON.stringify(setPath(proofObject(scenario()), path, "a\ud800b")), `proof.${path}`);
+      wireRefusal("proof", JSON.stringify(setPath(proofObject(scenario()), path, "x".repeat(257))), `proof.${path}`);
+    }
+    for (const v of ["", "a\u0001b"]) wireRefusal("proof", JSON.stringify(setPath(proofObject(scenario()), "model_identity.backend_model_name", v)), "proof.model_identity.backend_model_name");
+  });
+});
+
 describe("T5: the info's address and absences", () => {
   const s = () => scenario();
-  it("an absent or null maxUnackedGn is null, never 0", () => {
-    expect(parseInfo(JSON.stringify(setPath(infoObject(s()), "maxUnackedGn", DELETE))).maxUnackedGn).toBeNull();
-    expect(parseInfo(JSON.stringify(setPath(infoObject(s()), "maxUnackedGn", null))).maxUnackedGn).toBeNull();
-    expect(parseInfo(JSON.stringify(setPath(infoObject(s()), "maxUnackedGn", "12"))).maxUnackedGn).toBe(12n);
-  });
-  it("a present maxUnackedGn of a bad form is refused", () => {
-    for (const f of badForms("u128", "0").filter((f) => f.value !== DELETE && f.value !== null)) {
+  it("maxUnackedGn is not read (M-20): any form of it, or none, parses, and the parsed info has no such field", () => {
+    for (const v of [DELETE, null, "12", "0", 5, "", "x", -1, [], {}, "1".repeat(60)]) {
+      const i = parseInfo(JSON.stringify(setPath(infoObject(s()), "maxUnackedGn", v)));
+      expect("maxUnackedGn" in i).toBe(false);
+      expect(i.isReady).toBe(true);
+    }
+    for (const f of badForms("u128", "0")) {
       const body = f.raw !== undefined ? rawAt(infoObject(s()), "maxUnackedGn", f.raw) : JSON.stringify(setPath(infoObject(s()), "maxUnackedGn", f.value));
-      wireRefusal("info", body, "info.maxUnackedGn");
+      expect(() => parseInfo(body)).not.toThrow();
     }
   });
   it("the minerAddress: a bad checksum, not base58, too short, too long, empty, missing or a number are refused", () => {

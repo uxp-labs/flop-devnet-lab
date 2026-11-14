@@ -1,7 +1,8 @@
 /**
  * Review of P6a, attacks 3 to 7 and 8 (Q3, Q4, Q5, Q6, Q9, Q7). Every answer is the reviewer's own synthetic one
  * (test/lib/review-p6a-miner.ts), signed by a test enclave key from the reference sr25519. Offline.
- * A test named DEFECT RP6A-n fails on the reviewed commit by design; its name says what should hold.
+ * Six tests were named DEFECT RP6A-1 to RP6A-4 and failed on the reviewed commit by design (RP6A-1 one, RP6A-2 two,
+ * RP6A-3 two, RP6A-4 one). Each fix holds, so each is named HOLDS and its name still says what holds.
  */
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { MinerError } from "../src/miner/errors.js";
@@ -89,13 +90,13 @@ describe("Q3: the info proof", () => {
     expect(run({}, CHALLENGE, e).version).toBe("flop-miner 0.9.1");
   });
 
-  it("DEFECT RP6A-3: an info proof whose image version or revision is empty parses and verifies, its empty texts carried in the signed bytes with their lengths (M-19)", () => {
+  it("HOLDS: an info proof whose image version or revision is empty parses and verifies, its empty texts carried in the signed bytes with their lengths (M-19)", () => {
     for (const [version, revision] of [["", "abc123"], ["1", ""], ["", ""]] as const) {
       expect(run({ version, revision })).toEqual({ version, revision });
     }
   });
 
-  it("DEFECT RP6A-3: sessionInfoMessage takes an empty version or revision and writes it as the SDK does, a zero u32 length", () => {
+  it("HOLDS: sessionInfoMessage takes an empty version or revision and writes it as the SDK does, a zero u32 length", () => {
     const m = { challenge: CHALLENGE, genesis: counting(32, 4), account: counting(32, 5), enclaveKey: ENCLAVE.publicKey, identity: idCopy(), ready: true, version: "", revision: "" };
     expect(hx(sessionInfoMessage(m))).toBe(hx(thirdSessionInfoMessage({ ...m, genesisHash: m.genesis })));
   });
@@ -182,7 +183,7 @@ describe("Q4: the turn", () => {
     expect(run({ output: new Uint8Array(0) }).text).toBe("");
   });
 
-  it("DEFECT RP6A-1: verifyTurn holds completion tokens to the max_tokens inside the input we sent, whatever maxTokens it is handed", () => {
+  it("HOLDS: verifyTurn holds completion tokens to the max_tokens inside the input we sent, whatever maxTokens it is handed", () => {
     // The input we sent asks for at most 10 tokens; the caller hands maxTokens 100; the miner states 50, signed.
     // There is no second number to hand: the turn value holds the max_tokens of 10 and nothing else is taken.
     const input = inputOf(10);
@@ -193,14 +194,14 @@ describe("Q4: the turn", () => {
     expect(refusal(() => verifyTurn(handed)).check).toBe("turn.completionTokens");
   });
 
-  it("DEFECT RP6A-2: a receipt with no toplocCommitmentHash parses, and verifies over a leaf with 32 zero bytes for it (M-18)", () => {
+  it("HOLDS: a receipt with no toplocCommitmentHash parses, and verifies over a leaf with 32 zero bytes for it (M-18)", () => {
     const p = turnParts({ toploc: null });
     expect("toplocCommitmentHash" in p.wire).toBe(false);
     const t = verifyTurn({ expected: expected(), channelId: CHANNEL, turn: turnOf(), receipt: parseTurnReceipt(J(p.wire)) });
     expect(hx(t.leaf)).toBe(hx(p.leaf));
   });
 
-  it("DEFECT RP6A-2: the parsed receipt holds null for an absent toplocCommitmentHash, never 32 zero bytes", () => {
+  it("HOLDS: the parsed receipt holds null for an absent toplocCommitmentHash, never 32 zero bytes", () => {
     const r = parseTurnReceipt(J(turnParts({ toploc: null }).wire)) as unknown as Record<string, unknown>;
     expect(r.toplocCommitmentHash).toBeNull();
   });
@@ -227,6 +228,12 @@ describe("Q5: the parsers", () => {
       for (const v of badHex(String(turnWire()[k]))) {
         const w = turnWire();
         w[k] = v;
+        if (k === "toplocCommitmentHash" && v === null) {
+          // RP6A-2 (M-18): a JSON null is absence for this one field, and parses to null.
+          expect(parseTurn(w).toplocCommitmentHash).toBeNull();
+          n++;
+          continue;
+        }
         let c = "accepted";
         try { c = refusal(() => parseTurn(w)).check; } catch { c = `accepted ${k} ${JSON.stringify(v)}`; }
         expect(c).toBe(`turn.${k}`);
@@ -308,7 +315,7 @@ describe("Q5: the parsers", () => {
     expect(refusal(() => parseTurnReceipt(proto)).check).toBe("turn.leafVersion");
   });
 
-  it("DEFECT RP6A-4: the leaf version is read only as an own field of the body, never from the object's prototype", () => {
+  it("HOLDS: the leaf version is read only as an own field of the body, never from the object's prototype", () => {
     const w = turnWire();
     delete w.leafVersion;
     const proto = Object.prototype as Record<string, unknown>;
@@ -359,13 +366,13 @@ describe("Q5: the parsers", () => {
     expect(refusal(() => parseInfoProof(J(q))).check).toBe("proof.ready");
   });
 
-  it("HOLDS: the info: an absent or null maxUnackedGn is null, never 0; a bad address is refused; verifyInfo passes the whole answer", () => {
+  it("HOLDS: the info: maxUnackedGn is not read in any form (M-20); a bad address is refused; verifyInfo passes the whole answer", () => {
     const i = infoObject();
-    expect(verifyInfo({ expected: expected(), info: parseInfo(J(i)) })).toEqual({ maxUnackedGn: 1000n });
+    expect(() => verifyInfo({ expected: expected(), info: parseInfo(J(i)) })).not.toThrow();
     delete i.maxUnackedGn;
-    expect(parseInfo(J(i)).maxUnackedGn).toBeNull();
-    i.maxUnackedGn = null;
-    expect(parseInfo(J(i)).maxUnackedGn).toBeNull();
+    expect("maxUnackedGn" in parseInfo(J(i))).toBe(false);
+    for (const form of [null, 5, "", "x", [], {}, "1000", -1])
+      expect("maxUnackedGn" in parseInfo(J({ ...i, maxUnackedGn: form }))).toBe(false);
     for (const v of ["", "5abc", 5, "x".repeat(65)]) {
       const j = infoObject();
       j.minerAddress = v;
