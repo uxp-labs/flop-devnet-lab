@@ -79,7 +79,7 @@ describe("E11: the reference encoder is a pinned dev dependency, never imported 
     }
   });
 
-  it("the runtime dependencies are the five there were before P3, and the lab's own decoder package added by P2 (S5) as file:../observatory", () => {
+  it("the runtime dependencies are the five there were before P3, and the lab's own decoder package added by P2 (S5) as file:../observatory, and the sr25519 library added by P4 (S1)", () => {
     expect(Object.keys(pkg.dependencies).sort()).toEqual(["@flop-labs/client", "@noble/curves", "@noble/hashes", "@scure/base", "@scure/sr25519", "flop-observatory", "viem"]);
     expect(pkg.dependencies["flop-observatory"]).toBe("file:../observatory");
   });

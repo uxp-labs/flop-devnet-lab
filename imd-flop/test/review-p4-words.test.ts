@@ -16,8 +16,8 @@ describe("P14: the words are true", () => {
     const listed = m![1]!.split(",").filter((s) => s.trim() !== "").length;
     const pkg = JSON.parse(readFileSync(join(PKG, "package.json"), "utf8"));
     expect(listed).toBe(Object.keys(pkg.dependencies).length);
-    // "the five there were before P3, and the lab's own decoder package": six names.
-    expect(listed).toBe(6);
+    // The five there were before P3, the lab's own decoder package and the sr25519 library: seven names.
+    expect(listed).toBe(7);
   });
 
   it("HOLDS: the README's count of seeds in the cross vectors is the count the test pins", () => {
