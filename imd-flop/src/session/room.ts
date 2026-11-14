@@ -11,6 +11,8 @@
  *
  * A known reason for none wins over an unknown value: whatever the unknown value is, a call cannot be made. An empty
  * allow list means every pallet, so the room is computed (show says that is not a grant this tool writes).
+ * A known room does not count the breaker's limits per period; show says so (BREAKER_NOT_COUNTED). No arithmetic on
+ * the breaker's counters is done here.
  */
 import type { CircuitBreakerRecord, SessionRecord } from "../chain-read/session-state.js";
 import type { Got, Stored } from "../chain-read/result.js";
@@ -39,6 +41,13 @@ export type Room =
   | { readonly kind: "known"; readonly raw: bigint; readonly bounds: Bounds }
   | { readonly kind: "none"; readonly reason: string }
   | { readonly kind: "unknown"; readonly reason: string };
+
+/**
+ * What a known room leaves out: the breaker's limits per period. The tool does not hold them (they are not in the
+ * encoder's table), and the lab shows no test of how a period resets, so no number of them is typed here.
+ */
+export const BREAKER_NOT_COUNTED =
+  "the breaker's limits per period are not counted: the chain's CircuitBreakerMaxSpend and CircuitBreakerMaxTxs per CircuitBreakerPeriod, which this tool does not hold";
 
 /** The bytes of 0x hex. */
 const bytesOf = (h: string): Uint8Array => Uint8Array.from(Buffer.from(h.slice(2), "hex"));

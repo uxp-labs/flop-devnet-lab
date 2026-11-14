@@ -9,21 +9,23 @@ import { encodeOwnerCall } from "../chain/owner-calls.js";
 import type { SessionRecord } from "../chain-read/session-state.js";
 import { CliError, EXIT } from "../errors.js";
 import { deviceOf, ownerOf } from "./accounts.js";
-import { daysOf, grantCaps, localRaw, type GrantCaps } from "./caps.js";
+import { checkDaysAgainstRuntime, daysOf, grantCaps, localRaw, type GrantCaps } from "./caps.js";
 import { holdGenesis, requireEncoderRuntime, stateOf, transportOf } from "./chain.js";
 import type { SessionContext } from "./context.js";
 import { CHANNEL_PALLET } from "./room.js";
+import { storedName } from "./stored.js";
 import { amountText, callHash, headOf, hexOf, SIGNING_LINE, type Output } from "./words.js";
 
 /** The line of C10: a stored record that does not stop the grant. */
 export const STORED_RECORD_LINE = "Whether the chain takes a new grant over a stored record for this owner and device is not shown yet.";
 
-/** What a stored record means for a new grant (C10): active refuses; revoked or past its expiry is a line. */
+/** What a stored record means for a new grant (C10): active refuses; revoked or past its expiry is a line. The name is stored.ts's. */
 function storedNote(s: SessionRecord, head: number): string | null {
-  if (s.active && head < s.expires_at) {
+  const name = storedName(s, head);
+  if (name === "an active session") {
     throw new CliError(`a session for this owner and device is stored and active until block ${s.expires_at}: the chain would refuse a second one (SessionAlreadyExists). Revoke it first with \`imd-flop session revoke --owner <ss58>\`. No call printed`, EXIT.REFUSED_RULE);
   }
-  return `A record is stored for this pair, ${s.active ? `past its expiry at block ${s.expires_at}` : "revoked"}. ${STORED_RECORD_LINE}`;
+  return `A record is stored for this pair, ${name === "a session past its expiry" ? `past its expiry at block ${s.expires_at}` : "revoked"}. ${STORED_RECORD_LINE}`;
 }
 
 /** The one plain sentence of what the grant allows in all (C11). Blocks and epochs, never hours: the tool holds no block time. */
@@ -44,6 +46,7 @@ export async function grant(ctx: SessionContext): Promise<Output> {
   await holdGenesis(t, ctx.net);
   const state = await stateOf(t, owner, device);
   const rt = requireEncoderRuntime(state, ctx.net);
+  checkDaysAgainstRuntime(days, rt.constants.sessionEpochLength, rt.constants.maxSessionDuration);
   if (state.session.kind === "unknown") throw new CliError(`the stored session is unknown, so whether a grant can land is not known: ${state.session.reason}. No call printed`, EXIT.ERROR);
   const note = state.session.kind === "known" ? storedNote(state.session.value, state.number) : null;
   const epochLength = rt.constants.sessionEpochLength;

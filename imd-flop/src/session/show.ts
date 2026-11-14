@@ -2,8 +2,8 @@
  * `session show` (P5b, rules C13 to C16): the session as the chain stores it at the finalized head, the seat's local
  * caps beside the chain's, and the room left for one call. It reads; it signs, sends and writes nothing.
  *
- * Exit 0 only when everything it shows is known (rule C17): the read, the session, the nonce, the breaker and the
- * room. Anything unknown is exit 1, with the words `unknown (<reason>)` where the value would be, and in JSON a
+ * Exit 0 only when everything it shows is known (rule C17): the read, the session, the nonce, the breaker, the local
+ * caps and the room. Anything unknown is exit 1, with the words `unknown (<reason>)` where the value would be, and in JSON a
  * null value with its reason. A known room of none is exit 0.
  */
 import { ERA_PERIOD } from "../chain/era.js";
@@ -16,7 +16,7 @@ import { deviceOf, ownerOf } from "./accounts.js";
 import { localRaw, type LocalRaw } from "./caps.js";
 import { encoderRuntime, holdGenesis, stateOf, transportOf, type EncoderRuntime } from "./chain.js";
 import type { SessionContext } from "./context.js";
-import { CHANNEL_PALLET, roomOf, type Room } from "./room.js";
+import { BREAKER_NOT_COUNTED, CHANNEL_PALLET, roomOf, type Room } from "./room.js";
 import { amountText, headOf, palletName, ss58Of, storedJson, unknownWords, type Output } from "./words.js";
 
 /** The seat's local caps as show reads them: a cap `run` would refuse, or one off the grid, is unknown with the reason. */
@@ -101,13 +101,13 @@ function roomLine(r: Room): string {
   if (r.kind === "unknown") return `  room for one call  ${unknownWords(r.reason)}`;
   if (r.kind === "none") return `  room for one call  none (${r.reason})`;
   const b = r.bounds;
-  return `  room for one call  ${amountText(r.raw)}: the least of per_tx_limit ${amountText(b.per_tx_limit)}, daily_cap less epoch_spent ${amountText(b.epoch_left)}, spending_cap less spent ${amountText(b.lifetime_left)}`;
+  return `  room for one call  ${amountText(r.raw)}: the least of per_tx_limit ${amountText(b.per_tx_limit)}, daily_cap less epoch_spent ${amountText(b.epoch_left)}, spending_cap less spent ${amountText(b.lifetime_left)}; ${BREAKER_NOT_COUNTED}`;
 }
 
 function roomJson(r: Room): Record<string, unknown> {
   if (r.kind === "unknown") return { state: "unknown", value: null, reason: r.reason };
   if (r.kind === "none") return { state: "none", value: null, reason: r.reason };
-  return { state: "known", value: String(r.raw), bounds: { per_tx_limit: String(r.bounds.per_tx_limit), epoch_left: String(r.bounds.epoch_left), lifetime_left: String(r.bounds.lifetime_left) } };
+  return { state: "known", value: String(r.raw), bounds: { per_tx_limit: String(r.bounds.per_tx_limit), epoch_left: String(r.bounds.epoch_left), lifetime_left: String(r.bounds.lifetime_left) }, not_counted: BREAKER_NOT_COUNTED };
 }
 
 function runtimeLine(rt: Got<EncoderRuntime>): string {
@@ -134,7 +134,7 @@ export async function show(ctx: SessionContext): Promise<Output> {
   const notes = notesOf(state, local, rt);
   const head = headOf(ctx.seat, ctx.net, owner, device, state);
   const lines = [...head.lines, runtimeLine(rt), ...sessionLines(state.session), nonceLine(state.sessionNonce), breakerLine(state.circuitBreaker), localLine(local), ...notes.map((n) => `  ${n}`), roomLine(room)];
-  const anyUnknown = [state.session, state.sessionNonce, state.circuitBreaker, room].some((x) => x.kind === "unknown");
+  const anyUnknown = [state.session, state.sessionNonce, state.circuitBreaker, local, room].some((x) => x.kind === "unknown");
   const json = {
     ...head.json,
     encoder: rt.kind === "known" ? { state: "known", value: { transactionVersion: rt.value.id.transactionVersion, sessionEpochLength: rt.value.constants.sessionEpochLength, maxSessionDuration: rt.value.constants.maxSessionDuration, eraPeriod: ERA_PERIOD } } : { state: "unknown", value: null, reason: rt.reason },

@@ -9,10 +9,8 @@ import { CliError, EXIT } from "../errors.js";
 import { deviceOf, ownerOf } from "./accounts.js";
 import { holdGenesis, requireEncoderRuntime, stateOf, transportOf } from "./chain.js";
 import type { SessionContext } from "./context.js";
+import { storedName } from "./stored.js";
 import { callHash, headOf, hexOf, SIGNING_LINE, type Output } from "./words.js";
-
-/** What is stored for the pair, in the words of C12. */
-export type StoredKind = "no session" | "an active session" | "a revoked session";
 
 export async function revoke(ctx: SessionContext): Promise<Output> {
   if (ctx.days !== undefined) throw new CliError("--days is for `session grant` only", EXIT.USAGE);
@@ -23,7 +21,7 @@ export async function revoke(ctx: SessionContext): Promise<Output> {
   const state = await stateOf(t, owner, device);
   const rt = requireEncoderRuntime(state, ctx.net);
   if (state.session.kind === "unknown") throw new CliError(`the stored session is unknown: ${state.session.reason}. No call printed`, EXIT.ERROR);
-  const stored: StoredKind = state.session.kind === "absent" ? "no session" : state.session.value.active ? "an active session" : "a revoked session";
+  const stored = storedName(state.session.kind === "known" ? state.session.value : null, state.number);
   const bytes = encodeOwnerCall({ runtime: rt.id, call: "revoke_session", delegate: device.pub });
   const callHex = hexOf(bytes);
   const hash = callHash(bytes);
