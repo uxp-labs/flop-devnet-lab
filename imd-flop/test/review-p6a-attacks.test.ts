@@ -2,7 +2,7 @@
  * Review of P6a, attacks 3 to 7 and 8 (Q3, Q4, Q5, Q6, Q9, Q7). Every answer is the reviewer's own synthetic one
  * (test/lib/review-p6a-miner.ts), signed by a test enclave key from the reference sr25519. Offline.
  * Six tests were named DEFECT RP6A-1 to RP6A-4 and failed on the reviewed commit by design (RP6A-1 one, RP6A-2 two,
- * RP6A-3 two, RP6A-4 one). Each fix holds, so each is named HOLDS and its name still says what holds.
+ * RP6A-3 two, RP6A-4 one). Each fix holds, so each is named HOLDS with its id, and its name says what holds.
  */
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { MinerError } from "../src/miner/errors.js";
@@ -90,13 +90,13 @@ describe("Q3: the info proof", () => {
     expect(run({}, CHALLENGE, e).version).toBe("flop-miner 0.9.1");
   });
 
-  it("HOLDS: an info proof whose image version or revision is empty parses and verifies, its empty texts carried in the signed bytes with their lengths (M-19)", () => {
+  it("HOLDS: RP6A-3: an info proof whose image version or revision is empty parses and verifies, its empty texts carried in the signed bytes with their lengths (M-19)", () => {
     for (const [version, revision] of [["", "abc123"], ["1", ""], ["", ""]] as const) {
       expect(run({ version, revision })).toEqual({ version, revision });
     }
   });
 
-  it("HOLDS: sessionInfoMessage takes an empty version or revision and writes it as the SDK does, a zero u32 length", () => {
+  it("HOLDS: RP6A-3: sessionInfoMessage takes an empty version or revision and writes it as the SDK does, a zero u32 length", () => {
     const m = { challenge: CHALLENGE, genesis: counting(32, 4), account: counting(32, 5), enclaveKey: ENCLAVE.publicKey, identity: idCopy(), ready: true, version: "", revision: "" };
     expect(hx(sessionInfoMessage(m))).toBe(hx(thirdSessionInfoMessage({ ...m, genesisHash: m.genesis })));
   });
@@ -183,9 +183,9 @@ describe("Q4: the turn", () => {
     expect(run({ output: new Uint8Array(0) }).text).toBe("");
   });
 
-  it("HOLDS: verifyTurn holds completion tokens to the max_tokens inside the input we sent, whatever maxTokens it is handed", () => {
-    // The input we sent asks for at most 10 tokens; the caller hands maxTokens 100; the miner states 50, signed.
-    // There is no second number to hand: the turn value holds the max_tokens of 10 and nothing else is taken.
+  it("HOLDS: RP6A-1: verifyTurn holds completion tokens to the max_tokens inside the input we sent, and takes no other max_tokens", () => {
+    // The input we sent asks for at most 10 tokens and the miner states 50, signed: refused. There is no second
+    // number to hand: the turn value holds the max_tokens of 10, and a maxTokens field beside it is itself refused.
     const input = inputOf(10);
     expect(() => run({ input, completionTokens: 50n }, { maxTokens: 10 })).toThrow(MinerError);
     const p = turnParts({ input, completionTokens: 50n });
@@ -194,14 +194,14 @@ describe("Q4: the turn", () => {
     expect(refusal(() => verifyTurn(handed)).check).toBe("turn.completionTokens");
   });
 
-  it("HOLDS: a receipt with no toplocCommitmentHash parses, and verifies over a leaf with 32 zero bytes for it (M-18)", () => {
+  it("HOLDS: RP6A-2: a receipt with no toplocCommitmentHash parses, and verifies over a leaf with 32 zero bytes for it (M-18)", () => {
     const p = turnParts({ toploc: null });
     expect("toplocCommitmentHash" in p.wire).toBe(false);
     const t = verifyTurn({ expected: expected(), channelId: CHANNEL, turn: turnOf(), receipt: parseTurnReceipt(J(p.wire)) });
     expect(hx(t.leaf)).toBe(hx(p.leaf));
   });
 
-  it("HOLDS: the parsed receipt holds null for an absent toplocCommitmentHash, never 32 zero bytes", () => {
+  it("HOLDS: RP6A-2: the parsed receipt holds null for an absent toplocCommitmentHash, never 32 zero bytes", () => {
     const r = parseTurnReceipt(J(turnParts({ toploc: null }).wire)) as unknown as Record<string, unknown>;
     expect(r.toplocCommitmentHash).toBeNull();
   });
@@ -315,7 +315,7 @@ describe("Q5: the parsers", () => {
     expect(refusal(() => parseTurnReceipt(proto)).check).toBe("turn.leafVersion");
   });
 
-  it("HOLDS: the leaf version is read only as an own field of the body, never from the object's prototype", () => {
+  it("HOLDS: RP6A-4: the leaf version is read only as an own field of the body, never from the object's prototype", () => {
     const w = turnWire();
     delete w.leafVersion;
     const proto = Object.prototype as Record<string, unknown>;
