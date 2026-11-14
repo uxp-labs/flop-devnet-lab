@@ -15,10 +15,11 @@ Run tests under setpriv (CLAUDE.md rule 5). Push after every commit.
 - F3: record-step recordSigned keeps send_sha256; plan.mjs checkedSend and FileStop (STOP, no send line). send-guard.test.mjs; RG19-4 HOLDS.
 - F4: next.mjs entriesStops and planIds, before P0. entries.test.mjs; RG19-9 HOLDS.
 - F5 and F12: next.mjs showSays and activeAfter (cleanup revoke at a stop), G2 refused fee is a stop; plan.mjs prints the cleanup lines at such a stop. end-words.test.mjs; RG19-7 and RG19-15 HOLDS.
+- F9: owner-call.mjs SIGNED_FIELDS, held in checkOwnerSigned. send-guard.test.mjs; RG19-2 HOLDS.
 
 ## Next
 
-- F9, F8, F11, F6, F7, F10, F15, F14, F16, words.
+- F8, F11, F6, F7, F10, F15, F14, F16, words.
 
 ## Points where a rule cannot be met as written (stop, for the lead)
 

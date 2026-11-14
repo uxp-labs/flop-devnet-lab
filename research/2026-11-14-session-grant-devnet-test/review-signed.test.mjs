@@ -100,7 +100,7 @@ test("HOLDS: every wrong signed file the review made is refused", () => {
   assert.equal(cases.length, 20);
 });
 
-test("DEFECT RG19-2: a signed file with a field more than flop-sign.mjs sign writes is refused", () => {
+test("HOLDS: RG19-2: a signed file with a field more than flop-sign.mjs sign writes is refused", () => {
   const s = { ...signed(), extrinsic_2: signed({ nonce: "6" }).extrinsic };
   assert.throws(() => checkOwnerSigned(plan, results, "G1", s, CALL), OwnerCallError);
 });

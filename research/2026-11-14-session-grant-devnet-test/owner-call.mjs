@@ -72,6 +72,9 @@ export function secondEncoder(plan, results, step) {
   return { call, what };
 }
 
+/** The fields of the file flop-sign.mjs sign writes (research/2026-11-11-session-deny-list/flop-sign.mjs, its record), no more and no fewer (F9). */
+export const SIGNED_FIELDS = ["what", "signer", "signer_ss58", "account_nonce", "tip", "era", "spec_version", "transaction_version", "genesis", "call", "extrinsic", "extrinsic_hash"];
+
 const u32 = (n) => { const b = Buffer.alloc(4); b.writeUInt32LE(n); return b; };
 
 /** The payload flop-sign.mjs sign signs, for the plan's spec, transaction version and genesis (its head: the signed extensions). */
@@ -88,6 +91,9 @@ export function signedPayload(plan, call, nonce) {
  * the nonce by the record, the plan's spec, transaction version and genesis. Returns { extrinsic_hash, nonce }.
  */
 export function checkOwnerSigned(plan, results, id, signed, call) {
+  const keys = signed && typeof signed === "object" ? Object.keys(signed).sort() : [];
+  const fields = [...SIGNED_FIELDS].sort();
+  if (JSON.stringify(keys) !== JSON.stringify(fields)) no(`signed/${id}.json is not the plan's ${id}, refused: its fields are ${keys.join(", ") || "none"}, not exactly those flop-sign.mjs sign writes (${SIGNED_FIELDS.join(", ")})`);
   const nonce = nonceOf(plan, results, id);
   const expected = { signer: V(plan, "OWNER"), nonce, call };
   try { checkResearchSigned(plan, results, id, signed, expected); } catch (e) { if (e instanceof ResearchSignedError) no(e.message); throw e; }

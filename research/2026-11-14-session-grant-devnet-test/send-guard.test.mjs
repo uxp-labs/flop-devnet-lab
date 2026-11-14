@@ -85,3 +85,16 @@ test("F3: send-file keeps the sha256 of the send text and the extrinsic's hash; 
   rmSync(sendFile(run, "G1"));
   assert.match((await nextOutput(plan, run, s.results)).text, /signed\/G1\.send\.json is not in the run folder/);
 });
+
+test("F9: the signed file has exactly the fields flop-sign.mjs sign writes: one more or one less is refused", async () => {
+  const { checkOwnerSigned, OwnerCallError, SIGNED_FIELDS } = await import("./owner-call.mjs");
+  const good = JSON.parse(signed());
+  assert.deepEqual(Object.keys(good).sort(), [...SIGNED_FIELDS].sort(), "the list is what the signer writes today");
+  const results = { record: "run-time", owner_account_nonce_at_start: "5", accounts: { owner: { public_key: owner.public_key }, device: { public_key: DEV1 } }, steps: [] };
+  assert.equal(checkOwnerSigned(plan, results, "G1", good, CALL).nonce, "5");
+  for (const f of SIGNED_FIELDS) {
+    const less = { ...good }; delete less[f];
+    assert.throws(() => checkOwnerSigned(plan, results, "G1", less, CALL), (e) => e instanceof OwnerCallError && /not exactly those flop-sign\.mjs sign writes/.test(e.message), f);
+  }
+  assert.throws(() => checkOwnerSigned(plan, results, "G1", { ...good, note: "x" }, CALL), /its fields are .*note/);
+});
