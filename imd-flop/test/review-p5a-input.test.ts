@@ -188,7 +188,7 @@ describe("review P5a, attack 5 (P6, P7): the input is read once, as own fields",
     expect(codeOf(() => enc({ ...grant(), delegate: d }))).toBe("WRONG_LENGTH");
   });
 
-  it("DEFECT RP5A-2: a call name that is not a string is turned to text by the caller's own code: a toString runs, and an object without one throws a raw TypeError", () => {
+  it("HOLDS (was DEFECT RP5A-2): a call name that is not a string is refused by its type: no method of the caller's value runs and no raw TypeError comes out", () => {
     let ran = 0;
     const cases: [string, unknown][] = [
       ["an object with a toString", { toString: () => (ran++, "create_session") }],

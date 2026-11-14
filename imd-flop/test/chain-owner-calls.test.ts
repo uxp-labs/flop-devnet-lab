@@ -162,6 +162,9 @@ describe("T4, O8: refused before any byte is returned, each with a code and its 
     ["a delegate as hex", { delegate: hex(GRANT.delegate) }, "BAD_INPUT", "delegate"],
     ["a call that is not one of the two", { call: "update_session_limits" }, "CALL_NOT_ALLOWED", "update_session_limits is not one of create_session, revoke_session"],
     ["a session call's name", { call: "execute_via_session" }, "CALL_NOT_ALLOWED", "is not one of"],
+    ["a call name that is a number", { call: 0 }, "CALL_NOT_ALLOWED", "a call name of type number is not one of create_session, revoke_session"],
+    ["a call name that is null", { call: null }, "CALL_NOT_ALLOWED", "a call name of type null is not one of create_session, revoke_session"],
+    ["a call name that is an object without a prototype", { call: Object.create(null) }, "CALL_NOT_ALLOWED", "a call name of type object is not one of create_session, revoke_session"],
     ["a runtime not in the table", { runtime: { ...RUNTIME_ID, specVersion: 1014014 } }, "RUNTIME_UNKNOWN", "no reviewed runtime"],
   ];
   for (const [label, change, code, words] of cases) {

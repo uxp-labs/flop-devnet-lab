@@ -62,7 +62,9 @@ function takeOwner(input: unknown): OwnerSnapshot {
   const keys = ownKeys(input);
   if (!keys.includes("call")) refuse("CALL_NOT_ALLOWED", `an owner call without a name is not one of ${OWNER_NAMES.join(", ")}`);
   const name: unknown = ownValue(input, "call", "the owner call input");
-  if (!isOwnerName(name)) refuse("CALL_NOT_ALLOWED", `${String(name)} is not one of ${OWNER_NAMES.join(", ")}`);
+  // A name that is not a string is worded by its type alone: no method of the caller's value is called.
+  if (typeof name !== "string") refuse("CALL_NOT_ALLOWED", `a call name of type ${name === null ? "null" : typeof name} is not one of ${OWNER_NAMES.join(", ")}`);
+  if (!isOwnerName(name)) refuse("CALL_NOT_ALLOWED", `${name} is not one of ${OWNER_NAMES.join(", ")}`);
   if (!keys.includes("runtime")) refuse("BAD_INPUT", "the owner call input lacks the field runtime");
   const reviewed = reviewedOwnerRuntime(ownValue(input, "runtime", "the owner call input") as RuntimeId);
   const entry = reviewed.calls[name];
