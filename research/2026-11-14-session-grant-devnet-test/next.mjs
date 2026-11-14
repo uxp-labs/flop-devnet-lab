@@ -72,6 +72,28 @@ export function problemsOf(plan, results, id) {
   return out;
 }
 
+/** Every id of an owner step the plan has, tries included, in the plan's order. */
+export const planIds = (plan) => plan.steps.filter((s) => s.signer === "owner").flatMap((s) => idsOf(s));
+
+/**
+ * The record's entries held to the plan (F4): an id twice, an id the plan does not have, or ids out
+ * of the plan's order, each with words that name the entry. Empty when the entries are the plan's.
+ */
+export function entriesStops(plan, results) {
+  const ids = planIds(plan), out = [], seen = new Set();
+  let last = -1;
+  (Array.isArray(results.steps) ? results.steps : [null]).forEach((e, i) => {
+    const id = e?.step;
+    const at = typeof id === "string" ? id : `entry ${i}`;
+    if (!ids.includes(id)) { out.push({ at, why: `entry ${i} is of ${JSON.stringify(id ?? null)}, an id the plan does not have (${ids.join(", ")})` }); return; }
+    if (seen.has(id)) { out.push({ at, why: `entry ${i} is of ${id}, which an earlier entry holds: an id twice` }); return; }
+    seen.add(id);
+    if (ids.indexOf(id) < last) out.push({ at, why: `entry ${i} is of ${id}, after ${ids[last]}: out of the plan's order` });
+    last = Math.max(last, ids.indexOf(id));
+  });
+  return out;
+}
+
 /** The stops of P0, as words; empty when P0 holds. */
 export function p0Stops(plan, results) {
   const out = [];
@@ -142,6 +164,8 @@ export function nextOf(plan, results) {
   const findings = [], left = [];
   const out = (r) => ({ cleanup: [], ...r, findings, left });
   if (!results) return out(go("P0", "start", "no record yet: P0"));
+  const broken = entriesStops(plan, results);
+  if (broken.length) return out(stop(broken[0].at, `the record is not the plan's: ${broken.map((b) => b.why).join("; ")}. No nonce is counted from it`));
   const p0 = p0Stops(plan, results);
   if (p0.length) return out(stop("P0", p0.join("; ")));
   // G1

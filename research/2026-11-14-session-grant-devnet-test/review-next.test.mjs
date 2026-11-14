@@ -94,7 +94,7 @@ test("HOLDS: RG19-8: at a refusal with node code 1010 at a first send of an immo
   }
 });
 
-test("DEFECT RG19-9: a record that holds an id twice, or an id the plan does not have, is a stop, not a nonce counted from it", () => {
+test("HOLDS: RG19-9: a record that holds an id twice, or an id the plan does not have, is a stop, not a nonce counted from it", () => {
   const twice = step(started(), "G1");
   twice.steps.push(structuredClone(twice.steps[0]));
   assert.equal(nonceOf(plan, twice, "R1"), 22n, "R1's nonce counts G1 twice");

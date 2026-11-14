@@ -13,10 +13,11 @@ Run tests under setpriv (CLAUDE.md rule 5). Push after every commit.
 - F13: plan.mjs nextOutput and the CLI exit. word.test.mjs.
 - F2: record-step.mjs recordSigned holds to the record call_hex and the call file; plan.mjs sign line names the record call. send-guard.test.mjs; RG19-3 HOLDS.
 - F3: record-step recordSigned keeps send_sha256; plan.mjs checkedSend and FileStop (STOP, no send line). send-guard.test.mjs; RG19-4 HOLDS.
+- F4: next.mjs entriesStops and planIds, before P0. entries.test.mjs; RG19-9 HOLDS.
 
 ## Next
 
-- F4, F5, then the rest.
+- F5, then the rest.
 
 ## Points where a rule cannot be met as written (stop, for the lead)
 
