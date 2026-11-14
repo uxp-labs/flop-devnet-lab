@@ -12,8 +12,10 @@ Built: observatory and imd-flop (npm ci and npm run build, under setpriv).
 - README read against the code (attack 10); P14 holds (diff list, encoder importers).
 - Mutants: /tmp/rev-p5b/mutants.json, runner /tmp/rev-p5b/run-mutants.mjs, copy /tmp/rev-p5b/base (git archive). Results in /tmp/rev-p5b/builder-run.txt.
 
+- Mutants: 38 plus 3 restated; 7 alive under the builder's tests (M18, M26, M27, M28, M30, M34, M36), all killed by review HOLDS tests (test/review-p5b-fields.test.ts added for four).
+- L2: test/review-p5b-days-table.test.ts (a mocked table, half the MaxSessionDuration): RP5B-7.
+- Whole npm test at f17f996: 114 files, 2878 tests, 21 failed (all DEFECT RP5B), 2856 passed, 1 skipped.
+
 ## Next
 
-1. Read the mutant results; run the alive ones against the review tests.
-2. L2 in a copy with a shorter MaxSessionDuration (/tmp/rev-p5b/l2).
-3. Whole npm test once, push, read the checks, report.
+1. Read the GitHub checks of the last commit and hand back the report.
