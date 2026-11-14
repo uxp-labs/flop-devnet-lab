@@ -4,6 +4,7 @@
 # The folders are listed by name below:
 #   research/2026-11-12-encoder-devnet-test     (needs imd-flop/dist, built first, after observatory/dist)
 #   research/2026-11-12-session-rerun-1014020
+#   research/2026-11-14-session-grant-devnet-test   (needs imd-flop/dist, built first, after observatory/dist)
 # No other research folder holds tests.
 
 name: research offline
@@ -71,4 +72,8 @@ jobs:
 
       - name: research/2026-11-12-session-rerun-1014020
         working-directory: research/2026-11-12-session-rerun-1014020
+        run: node --test
+
+      - name: research/2026-11-14-session-grant-devnet-test
+        working-directory: research/2026-11-14-session-grant-devnet-test
         run: node --test
