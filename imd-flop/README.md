@@ -216,7 +216,7 @@ The reference sr25519 for the tests is `@polkadot/wasm-crypto` 7.5.4 (Rust schno
 ```
 (cd ../observatory && npm ci && npm run build)   # first: imd-flop imports its decoder (file:../observatory); npm run build and npm test say so and stop when it is not built (scripts/need-observatory.mjs)
 npm ci            # npm install would rewrite the lock file
-npm test          # tsc + vitest, no network (fetch and WebSocket are disabled in tests)
+npm test          # vitest; its global setup builds dist/ once first (test/global-setup.ts), no network (fetch and WebSocket are disabled in tests)
 npm run check     # same command CI runs: the observatory's build, then clean install, clean build, npm test
 ./demo.sh         # init, link, cap, run (mock), status, receipt in a temp IMD_FLOP_HOME
 ```
