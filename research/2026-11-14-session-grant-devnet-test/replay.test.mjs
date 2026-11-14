@@ -6,6 +6,7 @@ import assert from "node:assert/strict";
 import { cpSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { plan, tempDir } from "./fixtures.mjs";
+import { sha256Text } from "./lib.mjs";
 import { COMMITTED, committedFolder, isCommitted, replay } from "./replay.mjs";
 
 const copies = [];
@@ -43,4 +44,19 @@ test("H16: a changed value of the record, a changed tape, a changed output and a
   const r = await replay(plan, d);
   assert.deepEqual(r.problems, ["seat/seats/unassigned/flop.key is not a file a committed run folder holds (only results.json, the seat's config.json and identity.json, tapes and tool outputs)"]);
   assert.equal(r.checked, 0);
+});
+
+test("F11: replay holds each runner reading to its sent_sha256 and each block tape to the record's block", async () => {
+  const cases = [
+    [(v) => { v.steps[0].run_time.sent.extrinsic_index = 7; }, /G1 runner reading 0: its text has sha256/],
+    [(v) => { v.steps[1].run_time.sent.block_hash = "0x" + "77".repeat(32); }, /R1 runner reading 0|R1: its block tape is of block/],
+    [(v) => { const s = v.steps[1].run_time; s.sent.block_number += 1; s.sent_sha256 = sha256Text(JSON.stringify(s.sent)); }, /R1: its block tape is of block \d+ 0x[0-9a-f]{64} \(read \d+ 0x[0-9a-f]{64}\), not the record's block/],
+    [(v) => { v.steps[0].run_time.earlier_readings = [{ sent: { status: "deadline" }, sent_sha256: "00".repeat(32) }]; }, /G1 runner reading 0: its text has sha256/],
+  ];
+  for (const [change, re] of cases) {
+    const d = copyOf("rehearsal-run");
+    edit(d, "results.json", change);
+    const r = await replay(plan, d);
+    assert.ok(r.problems.some((p) => re.test(p)), `${re}: ${r.problems.join(" | ")}`);
+  }
 });

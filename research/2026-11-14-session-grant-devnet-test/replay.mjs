@@ -67,6 +67,16 @@ export async function replay(plan, folder) {
   }
   for (const e of results.steps ?? []) {
     const id = e.step;
+    // F11: each runner reading is the relay its sha256 names, and each block tape is of the step's block
+    const readings = e.run_time ? [...(e.run_time.earlier_readings ?? []), { sent: e.run_time.sent, sent_sha256: e.run_time.sent_sha256 }] : [];
+    for (const [i, x] of readings.entries()) if (x.sent && sha256Text(JSON.stringify(x.sent)) !== x.sent_sha256) problems.push(`results.json ${id} runner reading ${i}: its text has sha256 ${sha256Text(JSON.stringify(x.sent))}, not its sent_sha256 ${x.sent_sha256}`);
+    const ob = outputs[`${id}.block`];
+    if (ob) {
+      const s = e.run_time?.sent;
+      const want = { number: s?.block_number ?? null, hash: s?.block_hash ?? null };
+      const t = JSON.parse(readFileSync(join(folder, "tapes", `${id}.block.json`), "utf8"));
+      if (!same(t.block, want) || ob.argv[1] !== want.number || ob.argv[2] !== want.hash) problems.push(`results.json ${id}: its block tape is of block ${t.block?.number} ${t.block?.hash} (read ${ob.argv[1]} ${ob.argv[2]}), not the record's block ${want.number} ${want.hash}`);
+    }
     if (e.call && !e.call.refused) {
       const o = outputs[`${id}.call`];
       if (!o || o.json?.call_hex !== e.call.call_hex || o.tape_sha256 !== e.call.tape_sha256) problems.push(`results.json ${id} call is not the tool's printed call over its committed tape`);

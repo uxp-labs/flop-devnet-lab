@@ -31,7 +31,7 @@ const copyWith = (change) => {
   return d;
 };
 
-test("DEFECT RG19-14: replay finds a committed record whose runner reading is not the relay its sent_sha256 names, or whose block is not its block tape's", async () => {
+test("HOLDS: RG19-14: replay finds a committed record whose runner reading is not the relay its sent_sha256 names, or whose block is not its block tape's", async () => {
   const r0 = JSON.parse(readFileSync(join(committedFolder("rehearsal-run"), "results.json"), "utf8"));
   for (const e of r0.steps) assert.equal(sha256Text(JSON.stringify(e.run_time.sent)), e.run_time.sent_sha256, `${e.step}: the record's own sent_sha256 names its reading today`);
   const edits = [
