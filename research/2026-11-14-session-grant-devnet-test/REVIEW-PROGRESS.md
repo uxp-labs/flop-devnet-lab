@@ -21,6 +21,19 @@ is changed. Mutants are run in copies under /tmp/rev-g19/.
   Alive: M2, M8 (equivalent for the bytes), M18, M19, M27, M38. review-mutants.test.mjs kills the five.
 - Whole folder: 117 tests, 104 pass, 13 fail (the 13 DEFECT tests).
 
+## Second reviewer (Opus, from 2026-11-14 after the first stopped)
+
+- Built trees found in place. Reran the whole folder: 117 tests, 104 pass, 13 fail, the 13 DEFECT tests.
+- Read each DEFECT test and the source it names.
+- Attack 4, the hand edited record: review-record.test.mjs RG19-14 (replay holds no runner reading
+  to its sent_sha256 and no block to its block tape).
+- Attack 10: plan.mjs next over every state of the rehearsal's walk (driver in /tmp/rev-g19/att10)
+  and over the committed rehearsal-run and an empty run folder. RG19-15 (G2 refused with a fee above
+  the most is the end, not a stop). HOLDS: no balances is "not run", exit 4; the printed lines name
+  only $LAB and $KEY_OWNER and files that exist.
+- Attacks 11 and 12: read, in the report.
+- Whole folder: 121 tests, 106 pass, 15 fail (the 15 DEFECT tests).
+
 ## Next
 
-1. The report (G11 words, attacks 10 to 12 are read, not tested)
+1. Nothing. The report is handed back.
