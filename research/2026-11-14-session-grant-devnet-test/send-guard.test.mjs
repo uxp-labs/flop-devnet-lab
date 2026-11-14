@@ -57,3 +57,31 @@ test("F2: the sign line names the call the record holds, and send-file refuses w
   writeFileSync(signedFile(same.run, "G1"), signed());
   assert.ok(recordSigned(plan, same.run, same.r, "G1").sendText, "the record's call in both places: the send file is written");
 });
+
+test("F3: send-file keeps the sha256 of the send text and the extrinsic's hash; plan.mjs next prints a send line only while the send file still has that sha256", async () => {
+  const { run, r } = atSign();
+  writeFileSync(signedFile(run, "G1"), signed());
+  const s = recordSigned(plan, run, r, "G1");
+  writeFileSync(sendFile(run, "G1"), s.sendText);
+  const c = s.results.steps[0].signed_check;
+  assert.equal(c.send_sha256, sha256Text(s.sendText));
+  assert.equal(c.extrinsic_hash, JSON.parse(readFileSync(signedFile(run, "G1"), "utf8")).extrinsic_hash);
+  const { nextOutput } = await import("./plan.mjs");
+  const ok = await nextOutput(plan, run, s.results);
+  assert.equal(ok.word, "NEXT");
+  assert.match(ok.text, /lab\.send\(/);
+  // the send file changed after the check: a stop, and no line that sends, at the send and at a wait
+  writeFileSync(sendFile(run, "G1"), s.sendText.replace(/"\}/, "00\"}"));
+  const bad = await nextOutput(plan, run, s.results);
+  assert.equal(bad.word, "STOP");
+  assert.equal(bad.exit, 3);
+  assert.match(bad.text, /signed\/G1\.send\.json has sha256 [0-9a-f]{64}, not the send text the check took/);
+  assert.doesNotMatch(bad.text, /lab\.send(Same)?\(|lab\.find\(/);
+  const waiting = structuredClone(s.results);
+  waiting.steps[0].run_time = { sent: { status: "not-found", sent_by: "find" }, sent_sha256: "00", earlier_readings: [] };
+  const w = await nextOutput(plan, run, waiting);
+  assert.equal(w.word, "STOP");
+  assert.doesNotMatch(w.text, /lab\.send(Same)?\(/);
+  rmSync(sendFile(run, "G1"));
+  assert.match((await nextOutput(plan, run, s.results)).text, /signed\/G1\.send\.json is not in the run folder/);
+});

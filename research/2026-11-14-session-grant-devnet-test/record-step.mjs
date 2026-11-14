@@ -140,7 +140,9 @@ export function recordSigned(plan, run, results, id) {
     e.signed_check = { refused: err.message };
     return { results: r, sendText: null };
   }
-  return { results: r, sendText: sendText(id, signed.extrinsic) };
+  const text = sendText(id, signed.extrinsic);
+  e.signed_check.send_sha256 = sha256Text(text);
+  return { results: r, sendText: text };
 }
 
 /** The record with a runner reading or an explorer reading of an id (the last batch's form of run_time). */

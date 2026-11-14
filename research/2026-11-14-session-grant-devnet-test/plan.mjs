@@ -142,7 +142,7 @@ async function phaseLines(plan, run, results, n) {
       `${RECORD} send-file ${id} --run "${run}"`];
   }
   if (n.phase === "send") {
-    const text = readFileSync(sendFile(run, id), "utf8");
+    const { text } = checkedSend(run, results, id);
     return [head, ...paneAwait("__s", `lab.send('${text}', "${sha256Text(text)}")`), "#  PC:", `${RECORD} step ${id} --run "${run}" --sent '<relay>' --sent-sha256 <relay_sha256>`];
   }
   if (n.phase === "wait") return waitLines(plan, run, results, n);
@@ -166,10 +166,10 @@ function waitLines(plan, run, results, n) {
   const head = [`# ${id}: wait: ${n.why}`, ...rowLines];
   const record = ["#  PC:", `${RECORD} step ${id} --run "${run}" --sent '<relay>' --sent-sha256 <relay_sha256>`];
   if (a.kind === "find") {
-    const signed = readJson(signedFile(run, id));
-    return [...head, `#  the action: find first, from the start of the run (immortal). No line that sends`, ...paneAwait("__f", `lab.find("${signed.extrinsic}", ${results.start.finalized.number})`), ...record];
+    const { extrinsic } = checkedSend(run, results, id);
+    return [...head, `#  the action: find first, from the start of the run (immortal). No line that sends`, ...paneAwait("__f", `lab.find("${extrinsic}", ${results.start.finalized.number})`), ...record];
   }
-  const text = readFileSync(sendFile(run, id), "utf8");
+  const { text } = checkedSend(run, results, id);
   if (a.kind === "sendSame") return [...head, "#  the action: the same bytes again, never other bytes", ...paneAwait("__s", `lab.sendSame('${text}', "${sha256Text(text)}")`), ...record];
   if (a.kind === "send") return [...head, "#  the action: the same send file again (nothing was submitted)", ...paneAwait("__s", `lab.send('${text}', "${sha256Text(text)}")`), ...record];
   throw new Error(`no lines for the action ${a.kind}`);
@@ -202,33 +202,52 @@ async function p0Lines(plan, run) {
   return lines;
 }
 
-/** What the lead does next, by the run folder (H10): the lines, or the stop and why, or the end. */
-export async function nextText(plan, run, results) {
-  if (!results) return (await p0Lines(plan, run)).join("\n") + "\n";
+/** A line these tools cannot print because a file of the run folder is not what the record checked: a stop. */
+class FileStop extends Error {}
+
+/**
+ * The send text of an id (F3), only while signed/<id>.send.json is still the text send-file checked:
+ * its sha256 is the one the record keeps. Otherwise a FileStop, and no line that sends is printed.
+ */
+function checkedSend(run, results, id) {
+  const want = entryOf(results, id)?.signed_check?.send_sha256 ?? null;
+  const f = sendFile(run, id);
+  const text = existsSync(f) ? readFileSync(f, "utf8") : null;
+  const got = text === null ? null : sha256Text(text);
+  if (want === null || got !== want) throw new FileStop(`signed/${id}.send.json ${text === null ? "is not in the run folder" : `has sha256 ${got}`}, not the send text the check took (${want ?? "none recorded"}): send nothing for ${id}`);
+  return { text, extrinsic: JSON.parse(text).extrinsic };
+}
+
+/** What the lead does next, by the run folder (H10): { word, what, lines }. word is NEXT, END or STOP. */
+async function nextLines(plan, run, results) {
+  if (!results) return { word: "NEXT", what: "P0 start", lines: await p0Lines(plan, run) };
   const n = nextOf(plan, results);
   const out = [];
   for (const f of n.findings) out.push(`# finding: ${f}`);
   for (const l of n.left) out.push(`# left: ${l}`);
-  if (n.word === "stop" && n.phase === "lead-stop") { out.push(`# STOP at ${n.stopped_at}: ${n.why}`, ...leadStopLines(plan, run, n)); return out.join("\n") + "\n"; }
-  if (n.word === "stop") { out.push(`# STOP at ${n.stopped_at}: ${n.why}`, "# send nothing more; the lead rules"); return out.join("\n") + "\n"; }
-  if (n.word === "end") out.push(`# the end: ${n.why}`, `node ${DIR}/check.mjs" "${run}/results.json"`);
+  const stopped = (at, why, more = ["# send nothing more; the lead rules"]) => ({ word: "STOP", what: `at ${at}`, lines: [...out, `# STOP at ${at}: ${why}`, ...more] });
+  if (n.word === "stop" && n.phase === "lead-stop") return stopped(n.stopped_at, n.why, leadStopLines(plan, run, n));
+  if (n.word === "stop") return stopped(n.stopped_at, n.why);
+  let word = "NEXT", what = `${n.step} ${n.phase}`;
+  if (n.word === "end") { word = "END"; what = ""; out.push(`# the end: ${n.why}`, `node ${DIR}/check.mjs" "${run}/results.json"`); }
   else {
     if (n.cleanup.length) out.push(`# cleanup steps that apply: ${n.cleanup.join(", ")}`);
-    out.push(...(await phaseLines(plan, run, results, n)));
+    try { out.push(...(await phaseLines(plan, run, results, n))); } catch (e) { if (e instanceof FileStop) return stopped(n.step, e.message); throw e; }
   }
   for (const e of results.steps) if (viewOf(results, e.step)?.final && !e.run_time.explorer) out.push(...explorerLines(run, e.step, results));
-  return out.join("\n") + "\n";
+  return { word, what, lines: out };
 }
+
+/** The lines of plan.mjs next, without its first word. */
+export async function nextText(plan, run, results) { return (await nextLines(plan, run, results)).lines.join("\n") + "\n"; }
 
 /**
  * What plan.mjs next prints and its exit (F13): the first word is NEXT (a next action), END (the end)
  * or STOP (these tools say stop); then the lines of nextText. Exit 0 for NEXT and END, 3 for STOP.
  */
 export async function nextOutput(plan, run, results) {
-  const n = results ? nextOf(plan, results) : { word: "go", step: "P0", phase: "start" };
-  const word = n.word === "stop" ? "STOP" : n.word === "end" ? "END" : "NEXT";
-  const what = word === "STOP" ? `at ${n.stopped_at}` : word === "END" ? "" : `${n.step} ${n.phase}`;
-  return { word, exit: word === "STOP" ? 3 : 0, text: `${word}${what ? ` ${what}` : ""}\n${await nextText(plan, run, results)}` };
+  const o = await nextLines(plan, run, results);
+  return { word: o.word, exit: o.word === "STOP" ? 3 : 0, text: `${o.word}${o.what ? ` ${o.what}` : ""}\n${o.lines.join("\n")}\n` };
 }
 
 // ---- plan.md -------------------------------------------------------------------------------------

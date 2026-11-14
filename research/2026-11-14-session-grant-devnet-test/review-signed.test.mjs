@@ -144,7 +144,7 @@ test("HOLDS: RG19-3: send-file holds the signed file to the tool's call the reco
   assert.equal(out.sendText, null, `a send file was made for a call that is not the tool's: ${out.results.steps[0].signed_check.refused ?? "accepted"}`);
 });
 
-test("DEFECT RG19-4: plan.mjs next prints no send line for a send file whose extrinsic is not the one send-file checked", async () => {
+test("HOLDS: RG19-4: plan.mjs next prints no send line for a send file whose extrinsic is not the one send-file checked", async () => {
   const { run, r } = atSign(CALL);
   writeFileSync(signedFile(run, "G1"), JSON.stringify(signed()));
   const s = recordSigned(plan, run, r, "G1");
