@@ -461,7 +461,7 @@ describe("the hold floor", () => {
   it("sequences of three steps over every trusted read, one untrusted read of each kind and every report: the same", () => {
     expect(SHORT.length).toBe(31);
     expect(walkSequences(SHORT, 3)).toEqual({ walked: 224 * 31 * 31 * 31, failures: [], failed: 0 });
-  });
+  }, 120_000); // alone it takes seconds; under the whole suite on two cores it has passed 20 seconds
 
   it("on every row imd-flop writes for a sent call, no read takes the charge below the padded quote", () => {
     // The floor itself, read directly: the rows charged at least their hold (not the older rows, not a

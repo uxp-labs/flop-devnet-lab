@@ -4,7 +4,9 @@
  * A runtime is found only by all four of its names: spec name, spec version, transaction version and genesis.
  */
 import { refuse } from "./errors.js";
+import { ownKeys, ownValue } from "./fields.js";
 import { RUNTIMES } from "./runtimes.js";
+import { freezeFunction } from "../freeze.js";
 
 /** A type as the encoder writes it, reduced from the metadata's type registry by the script. */
 export type Ty =
@@ -67,16 +69,22 @@ export interface RuntimeId {
 const TABLE: readonly Runtime[] = RUNTIMES;
 
 /**
- * The table's runtime with exactly these four names, or a RUNTIME_UNKNOWN refusal. Each name is read once.
- * The entry returned is the frozen one of runtimes.ts, never an object of the caller's.
+ * The table's runtime with exactly these four names, or a RUNTIME_UNKNOWN refusal. Each name is read once as an
+ * own value: an accessor on one is refused (BAD_INPUT), and a Proxy's get trap is not used. A name the id does not
+ * have as an own field reads as undefined, so no runtime is found. Other fields of the id are allowed and never
+ * read, so a whole entry of the table is an id too. The entry returned is the frozen one of runtimes.ts, never an
+ * object of the caller's.
  */
 export function runtimeFor(id: RuntimeId): Runtime {
   const ok = id !== null && typeof id === "object";
-  const specName: unknown = ok ? id.specName : undefined;
-  const specVersion: unknown = ok ? id.specVersion : undefined;
-  const transactionVersion: unknown = ok ? id.transactionVersion : undefined;
-  const genesisHash: unknown = ok ? id.genesisHash : undefined;
+  const keys = ok ? ownKeys(id) : [];
+  const name = (n: string): unknown => (keys.includes(n) ? ownValue(id, n, "the runtime id") : undefined);
+  const specName = name("specName");
+  const specVersion = name("specVersion");
+  const transactionVersion = name("transactionVersion");
+  const genesisHash = name("genesisHash");
   const found = TABLE.find((r) => r.specName === specName && r.specVersion === specVersion && r.transactionVersion === transactionVersion && r.genesisHash === genesisHash);
   if (!found) refuse("RUNTIME_UNKNOWN", `no reviewed runtime is ${JSON.stringify({ specName, specVersion, transactionVersion, genesisHash }, (_k, v) => (typeof v === "bigint" ? `${v}n` : v))}`);
   return found;
 }
+freezeFunction(runtimeFor);

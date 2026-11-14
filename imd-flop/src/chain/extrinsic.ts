@@ -17,7 +17,7 @@
 import { blake2b } from "@noble/hashes/blake2.js";
 import { INNER_CALLS, INNER_NAMES, isInnerName, type Bytes32, type InnerCall, type InnerName } from "./calls.js";
 import { describeExtrinsic } from "./describe.js";
-import { ChainEncodeError, refuse } from "./errors.js";
+import { refuse } from "./errors.js";
 import { lastValidBlock, mortalEra } from "./era.js";
 import { bytesOf, ownKeys, ownValue, takeFields, takeValue, writeValue, type FieldValue } from "./fields.js";
 import { signingPayload, type SignedPath } from "./payload.js";
@@ -25,6 +25,7 @@ import { readCall, readExtrinsic, type SessionCallData } from "./reader.js";
 import { compact, concat } from "./scale.js";
 import { reviewedRuntime, type Reviewed } from "./shape.js";
 import type { RuntimeId } from "./table.js";
+import { freezeFunction } from "../freeze.js";
 
 export interface SessionCallInput {
   /** The runtime the call is for, by the four names read from the chain. */
@@ -127,9 +128,14 @@ function takeSign(input: unknown): SignSnapshot {
   const accountNonce = takeValue({ kind: "u32" }, raw.accountNonce, "the account nonce") as number;
   const signer = raw.signer;
   if (signer === null || (typeof signer !== "object" && typeof signer !== "function")) refuse("BAD_INPUT", "the signer must be an object with a public key and a sign function");
-  const publicKey = bytesOf((signer as { publicKey?: unknown }).publicKey, 32, "the device public key");
-  const sign: unknown = (signer as { sign?: unknown }).sign;
-  if (typeof sign !== "function") refuse("BAD_INPUT", "the signer has no sign function");
+  // The signer's two fields are each read once as an own value (rule H1): an accessor on either is refused, and a
+  // Proxy's get trap is not used. A field the signer does not have reads as undefined. Its other fields are the
+  // caller's own state: allowed, and never read.
+  const keys = ownKeys(signer);
+  const field = (name: string): unknown => (keys.includes(name) ? ownValue(signer, name, "the signer") : undefined);
+  const publicKey = bytesOf(field("publicKey"), 32, "the device public key");
+  const sign = field("sign");
+  if (typeof sign !== "function") refuse("BAD_INPUT", "the signer has no own sign function: one inherited from a class or a prototype is not read");
   return { ...call, birth, accountNonce, publicKey, signer, sign: sign as SignSnapshot["sign"] };
 }
 
@@ -180,6 +186,7 @@ export function encodeSessionCall(input: SessionCallInput): Uint8Array {
   const s = takeCall(takeFields(input, CALL_KEYS, "the session call input"));
   return checkedCallBytes(s);
 }
+freezeFunction(encodeSessionCall);
 
 /** The extra of each signed extension, in the table's order. */
 function extensionExtra(s: SignSnapshot): Uint8Array {
@@ -194,30 +201,14 @@ function extensionExtra(s: SignSnapshot): Uint8Array {
 }
 
 /**
- * The name of a thrown value's class, read without running any of its code a caller could define: no
- * getter, no toString. Only a plain identifier is given; anything else is "object".
+ * Calls the signer. If it throws, the refusal says only that it threw (rule H4): nothing of the thrown value is
+ * kept, not its text, not its class and not the value as a cause, and none of its code is run.
  */
-function className(e: unknown): string {
-  if (e === null) return "null";
-  if (typeof e !== "object" && typeof e !== "function") return typeof e;
-  try {
-    const proto: unknown = Object.getPrototypeOf(e);
-    const ctor = proto === null || typeof proto !== "object" ? undefined : Object.getOwnPropertyDescriptor(proto, "constructor");
-    const fn: unknown = ctor && "value" in ctor ? ctor.value : undefined;
-    const nameD = typeof fn === "function" ? Object.getOwnPropertyDescriptor(fn, "name") : undefined;
-    const name: unknown = nameD && "value" in nameD ? nameD.value : undefined;
-    return typeof name === "string" && /^[A-Za-z_$][A-Za-z0-9_$]{0,63}$/.test(name) ? name : "object";
-  } catch {
-    return "object";
-  }
-}
-
-/** Calls the signer. If it throws, the refusal says so and names the class only; the thrown value is its cause (rule H4). */
 function callSigner(s: SignSnapshot, message: Uint8Array): unknown {
   try {
     return Reflect.apply(s.sign, s.signer, [Uint8Array.from(message)]);
-  } catch (e) {
-    throw new ChainEncodeError("SIGNER_THREW", `the signer threw (${className(e)})`, e);
+  } catch {
+    return refuse("SIGNER_THREW", "the sign function threw");
   }
 }
 
@@ -254,3 +245,4 @@ export function signSessionCall(input: ExtrinsicInput): SignedSessionCall {
     description: describeExtrinsic(rt, extrinsic, s.birth),
   };
 }
+freezeFunction(signSessionCall);

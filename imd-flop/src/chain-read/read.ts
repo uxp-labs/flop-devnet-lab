@@ -11,6 +11,8 @@
  * encoding of the runtime that executed it), the value of each entry at the block, and System.Events at the block.
  * The runtime must be on the decoder's reviewed list (C7); the encoder's table is not consulted here. Unknown is a
  * value: nothing here throws for what a chain or a node said, and nothing here can send.
+ * The caller's block argument of readBlockEvents is read once, before the first node call, into a copy (piece A1,
+ * audit finding 1): a bad one is unknown with its reason, and every later line uses the copy.
  */
 import { type DoorEvent, type Pin, type Runtime, eventsOf, provenPin, runtimeOf, valueOf } from "./door.js";
 import { KEY_TABLE } from "./key-table.js";
@@ -19,6 +21,8 @@ import { type Transport, blockHash, finalizedHead, header, metadata, storage } f
 import { type Got, type Stored, absent, known, knownEntry, unknown, within } from "./result.js";
 import { type CircuitBreakerRecord, type SessionRecord, circuitBreakerOf, ofThePair, sessionNonceOf, sessionOf } from "./session-state.js";
 import { shapeFileText } from "./shape-file.js";
+import { freezeFunction } from "../freeze.js";
+import { plainInput } from "../plain-input.js";
 
 /** The block a read was made at, and the runtime the door pinned for it. */
 export interface At {
@@ -113,26 +117,60 @@ export async function readSessionState(t: Transport, owner: string, delegate: st
   const circuitBreaker = await entryAt(t, pin.value, head.value, "circuitBreaker", { ...L.entries.circuit_breakers, ...k.circuitBreakers }, (v) => circuitBreakerOf(L, v));
   return known({ ...atOf(h.value.number, head.value, pin.value.runtime), owner, delegate, session, sessionNonce, circuitBreaker });
 }
+freezeFunction(readSessionState);
 
-/** The events of a named block, read only when the node reports it finalized and canonical. */
+/** What the refuse function of blockOf throws. Nobody reads it: the reason is kept by the call, not by this value. */
+const REFUSED = Object.freeze({});
+
+/**
+ * A copy of the caller's block argument: an object with exactly the own fields number and hash, each read once
+ * through its own descriptor, no accessor, a Proxy's get trap not used. Anything else is unknown with the reason
+ * the check gave. The checks are made per call, and the call itself keeps the reason of a refusal in a variable of
+ * its own, so two calls never share one. A block whose own code throws while it is read (a Proxy trap) is unknown
+ * too, with a fixed reason that holds nothing of what it threw: the catch binds nothing and touches nothing it
+ * caught. Never throws.
+ */
+function blockOf(block: unknown): Got<{ readonly number: number; readonly hash: string }> {
+  let reason: string | null = null;
+  const plain = plainInput((_code, message) => {
+    reason = message;
+    throw REFUSED;
+  });
+  try {
+    const f = plain.takeFields(block, ["number", "hash"], "the block argument");
+    // The values are checked where they are used below, with their own reasons; only their shape is taken here.
+    return known(Object.freeze({ number: f.number as number, hash: f.hash as string }));
+  } catch {
+    return unknown(reason ?? "the block argument threw while it was read");
+  }
+}
+
+/**
+ * The events of a named block, read only when the node reports it finalized and canonical. The block argument is
+ * read once, before any node call, into a copy that every later line uses.
+ */
 export async function readBlockEvents(t: Transport, block: { number: number; hash: string }): Promise<Got<BlockEventsAt>> {
+  const arg = blockOf(block);
+  if (arg.kind === "unknown") return arg;
+  const b = arg.value;
   const head = await finalizedHead(t);
   if (head.kind === "unknown") return within("the finalized head", head);
   const hh = await header(t, head.value);
   if (hh.kind === "unknown") return within("the finalized head's header", hh);
-  if (!Number.isSafeInteger(block.number) || block.number > hh.value.number) return unknown(`block ${block.number} is not at or below the finalized head ${hh.value.number}`);
-  const canonical = await blockHash(t, block.number);
+  if (!Number.isSafeInteger(b.number) || b.number > hh.value.number) return unknown(`block ${b.number} is not at or below the finalized head ${hh.value.number}`);
+  const canonical = await blockHash(t, b.number);
   if (canonical.kind === "unknown") return within("the canonical hash", canonical);
-  if (canonical.value !== block.hash) return unknown(`block ${block.number} ${block.hash} is not canonical: the node's hash at ${block.number} is ${canonical.value}`);
-  const h = await header(t, block.hash);
+  if (canonical.value !== b.hash) return unknown(`block ${b.number} ${b.hash} is not canonical: the node's hash at ${b.number} is ${canonical.value}`);
+  const h = await header(t, b.hash);
   if (h.kind === "unknown") return within("the block's header", h);
-  if (h.value.number !== block.number) return unknown(`the header of ${block.hash} names block ${h.value.number}, not ${block.number}`);
-  const pin = await pinAt(t, block.hash, h.value.parentHash);
+  if (h.value.number !== b.number) return unknown(`the header of ${b.hash} names block ${h.value.number}, not ${b.number}`);
+  const pin = await pinAt(t, b.hash, h.value.parentHash);
   if (pin.kind === "unknown") return pin;
-  const ev = await storage(t, "events", eventsKey(), block.hash);
+  const ev = await storage(t, "events", eventsKey(), b.hash);
   if (ev.kind === "unknown") return within("System.Events", ev);
-  if (ev.value === null) return unknown(`System.Events: the node holds no value at ${block.hash}, where one must be`);
+  if (ev.value === null) return unknown(`System.Events: the node holds no value at ${b.hash}, where one must be`);
   const events = eventsOf(pin.value, ev.value);
   if (events.kind === "unknown") return within("System.Events", events);
-  return known({ ...atOf(block.number, block.hash, pin.value.runtime), events: events.value });
+  return known({ ...atOf(b.number, b.hash, pin.value.runtime), events: events.value });
 }
+freezeFunction(readBlockEvents);

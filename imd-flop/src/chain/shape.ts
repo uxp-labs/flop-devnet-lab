@@ -5,7 +5,7 @@
  * is not an amount, an extrinsic version other than 4.
  */
 import { refuse } from "./errors.js";
-import { deepFreeze } from "./freeze.js";
+import { deepFreeze, freezeFunction } from "../freeze.js";
 import { INNER_CALLS, INNER_NAMES, INNER_PALLET, OUTER, type InnerName } from "./calls.js";
 import { runtimeFor, type CallEntry, type Runtime, type RuntimeId, type Ty } from "./table.js";
 
@@ -100,3 +100,4 @@ function checkShape(rt: Runtime): Reviewed {
 export function reviewedRuntime(id: RuntimeId): Reviewed {
   return checkShape(runtimeFor(id));
 }
+freezeFunction(reviewedRuntime);

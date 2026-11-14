@@ -133,6 +133,12 @@ export function normalizeGenesis(v: unknown): string | null {
 }
 
 /**
+ * The limits of the genesis check's one rpc call: the 15 seconds it has always waited, and a frame cap of 64 KiB of
+ * characters. Its answer is one 66 character hash in a frame of a few dozen more.
+ */
+export const GENESIS_RPC_LIMITS = Object.freeze({ timeoutMs: 15000, maxFrameChars: 65536 });
+
+/**
  * Docs: "compare live RPC and faucet genesis before use" (devnet can reset).
  * ok is true only when the pinned hash, the faucet's /chain hash, and RPC block 0
  * are the same full hash. Faucet and RPC agreeing on a different hash is a reset
@@ -164,7 +170,7 @@ export async function checkGenesis(net: NetworkInfo, f: Fetch = globalThis.fetch
   }
 
   try {
-    const raw = await rpcCall(net.rpc, "chain_getBlockHash", [0]);
+    const raw = await rpcCall(net.rpc, "chain_getBlockHash", [0], GENESIS_RPC_LIMITS);
     rpcGenesis = normalizeGenesis(raw);
     if (!rpcGenesis) errors.push("rpc genesis malformed");
   } catch (e) {

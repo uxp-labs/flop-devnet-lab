@@ -13,6 +13,7 @@ import { rpcCall } from "../node-rpc.js";
 import { serverText } from "../server-text.js";
 import { bytesOf, hexOf, isHex } from "./bytes.js";
 import { type Got, known, unknown } from "./result.js";
+import { freezeFunction } from "../freeze.js";
 
 /** The five methods a chain read calls, frozen at their definition (the P2 fix round, rule X6). */
 export const READ_METHODS = Object.freeze(["chain_getFinalizedHead", "chain_getHeader", "chain_getBlockHash", "state_getStorage", "state_getMetadata"] as const);
@@ -25,16 +26,21 @@ const isReadMethod = (m: unknown): m is ReadMethod => typeof m === "string" && (
 export type Transport = (method: ReadMethod, params: readonly unknown[]) => Promise<unknown>;
 
 /**
- * The transport to a node at a WebSocket URL, through node-rpc.ts rpcCall. timeoutMs is rpcCall's own. It refuses,
- * at run time and before rpcCall is called, any method that is not one of the five (rule X2), so a cast cannot put
- * another method on the wire; call turns the refusal into unknown.
+ * The transport to a node at a WebSocket URL, through node-rpc.ts rpcCall, with the node's limits: timeoutMs
+ * (NODE_TIMEOUT_MS when none is given) and FRAME_CAP_CHARS. It refuses, at run time and before rpcCall is called,
+ * any method that is not one of the five (rule X2), so a cast cannot put another method on the wire; call turns the
+ * refusal into unknown.
  */
-export function nodeTransport(url: string, timeoutMs?: number): Transport {
+export function nodeTransport(url: string, timeoutMs: number = NODE_TIMEOUT_MS): Transport {
   return async (method, params) => {
     if (!isReadMethod(method)) throw new Error("the method is not one of the five a chain read calls; nothing was sent");
-    return rpcCall(url, method, [...params], timeoutMs);
+    return rpcCall(url, method, [...params], { timeoutMs, maxFrameChars: FRAME_CAP_CHARS });
   };
 }
+freezeFunction(nodeTransport);
+
+/** How long a read waits for each answer when its caller names no time: 15 seconds, rpcCall's default before it took limits. */
+export const NODE_TIMEOUT_MS = 15000;
 
 const MiB = 1024 * 1024;
 
@@ -59,6 +65,21 @@ export const CAPS = Object.freeze({
   header: 64 * 1024,
 });
 export type StorageKind = Exclude<keyof typeof CAPS, "metadata" | "header">;
+
+/**
+ * The characters the node's cap allows for a frame around an answer of the largest size. The compact frame
+ * `{"jsonrpc":"2.0","id":1,"result":""}` is 36 characters; the cap allows 256. A node that writes more than that
+ * around an answer of the largest size (white space between tokens, say) is refused in the cap's words, and the
+ * read is unknown. No finite cap takes every legal frame: this one refuses some, and never answers wrongly.
+ */
+export const FRAME_WRAPPER_CHARS = 256;
+
+/**
+ * The frame cap the node's transport hands rpcCall, in characters. A frame is capped as the node wrote it: the cap
+ * is the largest answer any read accepts (0x and two hex digits for each byte of the largest of CAPS) plus
+ * FRAME_WRAPPER_CHARS for the frame. Computed from CAPS, not typed.
+ */
+export const FRAME_CAP_CHARS = 2 + 2 * Math.max(...Object.values(CAPS)) + FRAME_WRAPPER_CHARS;
 
 /** A block hash: 0x and 64 lower case hex digits. */
 const HASH = /^0x[0-9a-f]{64}$/;
@@ -117,6 +138,7 @@ export async function finalizedHead(t: Transport): Promise<Got<string>> {
   const a = await call(t, "chain_getFinalizedHead", []);
   return a.kind === "unknown" ? a : hashOf("chain_getFinalizedHead", a.value);
 }
+freezeFunction(finalizedHead);
 
 /** What a read takes from a header: its number and its parent's hash. */
 export interface Header {
@@ -139,6 +161,7 @@ export async function header(t: Transport, hash: string): Promise<Got<Header>> {
   if (typeof parentHash !== "string" || !HASH.test(parentHash)) return unknown("chain_getHeader: the header's parentHash is not a 32 byte hash");
   return known({ number: Number.parseInt(number.slice(2), 16), parentHash });
 }
+freezeFunction(header);
 
 /** The canonical hash at a height. A node that holds no block there answers null: unknown. */
 export async function blockHash(t: Transport, number: number): Promise<Got<string>> {
@@ -148,6 +171,7 @@ export async function blockHash(t: Transport, number: number): Promise<Got<strin
   if (a.value === null) return unknown(`chain_getBlockHash: the node holds no block at ${number}`);
   return hashOf("chain_getBlockHash", a.value);
 }
+freezeFunction(blockHash);
 
 /** The value under a storage key at a block: its bytes, or null when the node holds none there. */
 export async function storage(t: Transport, kind: StorageKind, key: Uint8Array, at: string): Promise<Got<Uint8Array | null>> {
@@ -156,9 +180,11 @@ export async function storage(t: Transport, kind: StorageKind, key: Uint8Array, 
   if (a.value === null) return known(null);
   return bytesWithin("state_getStorage", kind, a.value, CAPS[kind]);
 }
+freezeFunction(storage);
 
 /** The metadata at a block. */
 export async function metadata(t: Transport, at: string): Promise<Got<Uint8Array>> {
   const a = await call(t, "state_getMetadata", [at]);
   return a.kind === "unknown" ? a : bytesWithin("state_getMetadata", "the metadata", a.value, CAPS.metadata);
 }
+freezeFunction(metadata);

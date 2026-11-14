@@ -100,7 +100,6 @@ describe("A1, T5: the files of src/chain-read", () => {
       "bytes.ts",
       "cross-check.ts",
       "door.ts",
-      "freeze.ts",
       "key-table-types.ts",
       "key-table.ts",
       "keys.ts",
@@ -232,6 +231,11 @@ describe("B1: one place opens a socket to a node", () => {
     expect(text(join(SRC, "gateway.ts"))).not.toMatch(/function rpcCall\b/);
     expect(specifiers(text(join(DIR, "node.ts")))).toContain("../node-rpc.js");
   });
+
+  it("node-rpc.ts imports nothing from src/chain-read (piece A1, C5): the cap is handed in by its caller", () => {
+    expect(specifiers(text(join(SRC, "node-rpc.ts"))).filter((s) => /(^|\/)chain-read\//.test(s))).toEqual([]);
+    expect(specifiers('import { CAPS } from "./chain-read/node.js";').filter((s) => /(^|\/)chain-read\//.test(s))).toEqual(["./chain-read/node.js"]);
+  });
 });
 
 describe("T5: no test of chain-read opens a socket", () => {
@@ -240,6 +244,8 @@ describe("T5: no test of chain-read opens a socket", () => {
   // chain-read-unknown.test.ts, review-chain-read-lead.test.ts): that is how those tests work, and no real socket is
   // made. The list grows by the reviewer's six files and the fix round's (rule X7), and is held against the folder.
   const NAMES = [
+    "chain-read-block-arg.test.ts",
+    "chain-read-frozen.test.ts",
     "chain-read-head.test.ts",
     "chain-read-keys.test.ts",
     "chain-read-node.test.ts",

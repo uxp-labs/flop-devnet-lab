@@ -4,6 +4,7 @@
  * SIGNER_THREW (rule H4). Nothing is returned then.
  */
 import { CliError, EXIT } from "../errors.js";
+import { freezeFunction } from "../freeze.js";
 
 export const CHAIN_REFUSAL = Object.freeze({
   /** The runtime named is not in the reviewed table, or its table entry has a shape this encoder does not write. */
@@ -26,7 +27,7 @@ export const CHAIN_REFUSAL = Object.freeze({
   READ_BACK: "READ_BACK",
   /** The signature the sign function gave does not verify against the public key and the payload. */
   SIGNATURE_INVALID: "SIGNATURE_INVALID",
-  /** The sign function threw. The thrown value is kept as the refusal's cause; none of its text is in the message. */
+  /** The sign function threw. Nothing of the thrown value is kept: not its text, not its class, not the value as a cause. */
   SIGNER_THREW: "SIGNER_THREW",
 } as const);
 
@@ -36,13 +37,13 @@ export class ChainEncodeError extends CliError {
   constructor(
     readonly refusal: ChainRefusalCode,
     message: string,
-    cause?: unknown,
   ) {
     super(`chain encoder refused (${refusal}): ${message}`, EXIT.REFUSED_RULE);
-    if (arguments.length > 2) Object.defineProperty(this, "cause", { value: cause, writable: false, enumerable: false, configurable: false });
   }
 }
+freezeFunction(ChainEncodeError);
 
 export function refuse(refusal: ChainRefusalCode, message: string): never {
   throw new ChainEncodeError(refusal, message);
 }
+freezeFunction(refuse);

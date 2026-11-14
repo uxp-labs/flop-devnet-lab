@@ -48,11 +48,11 @@ function namesFrom(t: string, spec: string): string[] {
 
 /** What A2 allows each file to import, and nothing else. */
 const ALLOWED: Record<string, string[]> = {
-  "errors.ts": ["../errors.js", "./freeze.js"],
-  "bytes.ts": ["../plain-input.js", "./errors.js", "./freeze.js"],
-  "transcript.ts": ["@noble/hashes/blake2.js", "./bytes.js", "./errors.js", "./freeze.js"],
-  "auth.ts": ["@noble/hashes/blake2.js", "./bytes.js", "./errors.js", "./freeze.js"],
-  "key.ts": ["@scure/sr25519", "@noble/hashes/utils.js", "../secrets.js", "./transcript.js", "./auth.js", "./bytes.js", "./errors.js", "./freeze.js"],
+  "errors.ts": ["../errors.js", "../freeze.js"],
+  "bytes.ts": ["../plain-input.js", "./errors.js", "../freeze.js"],
+  "transcript.ts": ["@noble/hashes/blake2.js", "./bytes.js", "./errors.js", "../freeze.js"],
+  "auth.ts": ["@noble/hashes/blake2.js", "./bytes.js", "./errors.js", "../freeze.js"],
+  "key.ts": ["@scure/sr25519", "@noble/hashes/utils.js", "../secrets.js", "./transcript.js", "./auth.js", "./bytes.js", "./errors.js", "../freeze.js"],
 };
 
 /** A3: what no file under src/channel may hold, comments included. */
@@ -77,8 +77,8 @@ const BANNED: Record<string, RegExp> = {
 };
 
 describe("A1, T8: the files of src/channel", () => {
-  it("are exactly the six, with no barrel file", () => {
-    expect(CHANNEL.map((f) => relative(DIR, f)).sort()).toEqual(["auth.ts", "bytes.ts", "errors.ts", "freeze.ts", "key.ts", "transcript.ts"]);
+  it("are exactly the five, with no barrel file", () => {
+    expect(CHANNEL.map((f) => relative(DIR, f)).sort()).toEqual(["auth.ts", "bytes.ts", "errors.ts", "key.ts", "transcript.ts"]);
   });
 });
 
@@ -97,7 +97,7 @@ describe("A2, T8: what each file imports", () => {
   }
 
   it("freeze.ts imports nothing", () => {
-    expect(specifiers(text(join(DIR, "freeze.ts")))).toEqual([]);
+    expect(specifiers(text(join(SRC, "freeze.ts")))).toEqual([]);
   });
 
   it("key.ts takes randomBytes alone from @noble/hashes/utils.js, and registerSecret alone from ../secrets.js", () => {
@@ -350,7 +350,7 @@ describe("A5, T9: every export of src/channel is a function, a text, a number or
     expect(found.filter(([, o]) => !Object.isFrozen(o) || ArrayBuffer.isView(o)).map(([p]) => p)).toEqual(["x", "x.a", "x.a.b"]);
   });
 
-  for (const file of ["freeze.ts", "errors.ts", "bytes.ts", "transcript.ts", "auth.ts", "key.ts"]) {
+  for (const file of ["errors.ts", "bytes.ts", "transcript.ts", "auth.ts", "key.ts"]) {
     it(`${file}, imported first and alone`, async () => {
       vi.resetModules();
       const mod = (await import(join(DIR, file.replace(/\.ts$/, ".js")))) as Record<string, unknown>;

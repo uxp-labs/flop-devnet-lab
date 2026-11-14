@@ -4,6 +4,7 @@
  * encoder and the strict reader both stand on this list; nothing else is written or read.
  */
 import { refuse } from "./errors.js";
+import { freezeFunction } from "../freeze.js";
 
 export const OUTER = Object.freeze({ pallet: "FlopSessionKeys", name: "execute_via_session" } as const);
 export const INNER_PALLET = "ComputeChannel";
@@ -27,6 +28,7 @@ export const INNER_NAMES = Object.freeze(Object.keys(INNER_CALLS)) as readonly I
 export function isInnerName(name: unknown): name is InnerName {
   return typeof name === "string" && Object.hasOwn(INNER_CALLS, name);
 }
+freezeFunction(isInnerName);
 
 /** Exactly 32 bytes: an account, a hash, a key. */
 export type Bytes32 = Uint8Array;
@@ -81,3 +83,4 @@ export function spendOf(inner: InnerCall): bigint {
   if (typeof amount !== "bigint") refuse("BAD_INPUT", `${inner.call}.${field} must be a bigint amount`);
   return amount;
 }
+freezeFunction(spendOf);

@@ -7,7 +7,7 @@
  */
 import { blake2b } from "@noble/hashes/blake2.js";
 import { asciiOf, bytesOf, concat, takeFields, uintLE, uintOf } from "./bytes.js";
-import { freezeFunction } from "./freeze.js";
+import { freezeFunction } from "../freeze.js";
 
 /** The domain text of the channel id, 23 ASCII bytes. */
 export const CHANNEL_ID_DOMAIN = "FLOP/COMPUTE_CHANNEL/ID";

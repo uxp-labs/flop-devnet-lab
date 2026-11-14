@@ -263,5 +263,5 @@ describe("H (P8): the words", () => {
       if (prev !== undefined) expect(prev).toBe(hex(out.call) + "/" + out.fields.accountNonce);
       seen.set(words, hex(out.call) + "/" + out.fields.accountNonce);
     }
-  });
+  }, 120_000); // alone it takes seconds; under the whole suite on two cores it has passed 20 seconds
 });

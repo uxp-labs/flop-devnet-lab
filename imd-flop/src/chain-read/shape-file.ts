@@ -7,6 +7,7 @@
 import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { type Got, known, unknown } from "./result.js";
+import { freezeFunction } from "../freeze.js";
 
 /** A shape file's path in the observatory package, as the reviewed line names it. */
 const SHAPE_FILE = /^shapes\/[a-z0-9][a-z0-9.-]*\.json$/;
@@ -28,3 +29,4 @@ export function shapeFileText(shapeFile: string): Got<string> {
     return unknown(`${shapeFile} could not be read`);
   }
 }
+freezeFunction(shapeFileText);

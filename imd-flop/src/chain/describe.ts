@@ -10,6 +10,7 @@ import { readCall, readExtrinsic, type ExtrinsicData, type SessionCallData } fro
 import { toHex } from "./scale.js";
 import { reviewedRuntime, type Reviewed } from "./shape.js";
 import type { Field, RuntimeId } from "./table.js";
+import { freezeFunction } from "../freeze.js";
 
 /** Base units per FLOP are 10^18. contract/rules.json FLOP_DECIMALS (test/chain-words.test.ts holds it). */
 export const FLOP_DECIMALS = 18;
@@ -21,6 +22,7 @@ export function amountText(raw: bigint): string {
   const frac = (raw % UNIT).toString().padStart(FLOP_DECIMALS, "0").replace(/0+$/, "");
   return `${raw} raw (${whole}${frac ? "." + frac : ""} FLOP)`;
 }
+freezeFunction(amountText);
 
 function valueText(field: Field, value: FieldValue): string {
   const t = field.type;
@@ -70,6 +72,7 @@ export function describeCall(runtime: RuntimeId, callBytes: Uint8Array): string 
   const data = readCall(runtime, callBytes);
   return callWords(reviewedRuntime(runtime), data);
 }
+freezeFunction(describeCall);
 
 /**
  * The words of a signed extrinsic. The birth block is checked against the bytes: its phase against the era
@@ -79,3 +82,4 @@ export function describeExtrinsic(runtime: RuntimeId, extrinsic: Uint8Array, bir
   const x = readExtrinsic(runtime, extrinsic, birth);
   return extrinsicWords(reviewedRuntime(runtime), x);
 }
+freezeFunction(describeExtrinsic);

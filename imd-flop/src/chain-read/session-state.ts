@@ -6,7 +6,7 @@
  * below are what this reader turns them into, and a runtime whose shape states them otherwise is unknown. Pure.
  */
 import { isHex } from "./bytes.js";
-import { deepFreeze } from "./freeze.js";
+import { deepFreeze, freezeFunction } from "../freeze.js";
 import type { DoorValue } from "./door.js";
 import type { FieldType, RecordField, RuntimeLine } from "./key-table-types.js";
 import { type Got, known, unknown } from "./result.js";
@@ -131,6 +131,7 @@ export function sessionOf(line: RuntimeLine, v: DoorValue): Got<SessionRecord> {
   if (s.kind === "unknown") return s;
   return recordOf(SESSION_FIELDS, v, "the session") as Got<SessionRecord>;
 }
+freezeFunction(sessionOf);
 
 /**
  * The session record, only when it names this owner and this delegate (the P2 fix round, rule X3): a stored record
@@ -141,6 +142,7 @@ export function ofThePair(record: SessionRecord, owner: string, delegate: string
   if (record.delegate !== delegate) return unknown(`the stored record names another delegate, ${record.delegate}, than ${delegate}`);
   return known(record);
 }
+freezeFunction(ofThePair);
 
 /** The session nonce from the door's value of FlopSessionKeys.SessionNonces. */
 export function sessionNonceOf(line: RuntimeLine, v: DoorValue): Got<bigint> {
@@ -148,6 +150,7 @@ export function sessionNonceOf(line: RuntimeLine, v: DoorValue): Got<bigint> {
   if (s.kind === "unknown") return s;
   return valueOf(SESSION_NONCE_TYPE, v, "the session nonce") as Got<bigint>;
 }
+freezeFunction(sessionNonceOf);
 
 /** The circuit breaker's state from the door's value of FlopSessionKeys.CircuitBreakers. */
 export function circuitBreakerOf(line: RuntimeLine, v: DoorValue): Got<CircuitBreakerRecord> {
@@ -155,3 +158,4 @@ export function circuitBreakerOf(line: RuntimeLine, v: DoorValue): Got<CircuitBr
   if (s.kind === "unknown") return s;
   return recordOf(CIRCUIT_BREAKER_FIELDS, v, "the circuit breaker") as Got<CircuitBreakerRecord>;
 }
+freezeFunction(circuitBreakerOf);

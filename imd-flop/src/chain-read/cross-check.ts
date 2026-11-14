@@ -7,12 +7,15 @@
  * is unknown and names both values. So is a check that cannot be made: another block, another runtime, a session
  * that is not known, a session record of another owner or delegate than the state's own (rule X3), no such event
  * of the session at the block, or more than one. Pure.
+ * It takes the values the two reads returned (the known value of readSessionState and of readBlockEvents), plain
+ * data the reads made, and reads their fields as they are: it takes no copy of them.
  */
 import type { DoorValue } from "./door.js";
 import { lineOf } from "./keys.js";
 import type { BlockEventsAt, SessionState } from "./read.js";
 import { type Got, known, unknown, within } from "./result.js";
 import { ofThePair } from "./session-state.js";
+import { freezeFunction } from "../freeze.js";
 
 /** The totals that agree, by the stored field's name. */
 export interface Agreement {
@@ -54,3 +57,4 @@ export function crossCheck(state: SessionState, events: BlockEventsAt): Got<Agre
   }
   return known({ number: state.number, hash: state.hash, totals });
 }
+freezeFunction(crossCheck);

@@ -6,6 +6,7 @@
  */
 import { type BlockEvents, type StorageValue, decodeBlockEvents, decodeStorageValue, runtimeOfBlock } from "flop-observatory/scale/block";
 import { type Got, known, unknown } from "./result.js";
+import { freezeFunction } from "../freeze.js";
 
 /** A runtime on the decoder's reviewed list, as the door names it (C7). */
 export interface Runtime {
@@ -35,6 +36,7 @@ export function runtimeOf(lastRuntimeUpgrade: Uint8Array): Got<Runtime> {
   if (!r.found) return unknown(`the decoder: ${r.refused}`);
   return known({ specName: r.reviewed.specName, specVersion: r.reviewed.specVersion, shapeFile: r.reviewed.shapeFile });
 }
+freezeFunction(runtimeOf);
 
 const pinInput = (p: Pin) => ({ specName: p.runtime.specName, specVersion: p.runtime.specVersion, metadata: p.metadata, lastRuntimeUpgrade: p.lastRuntimeUpgrade, shapeText: p.shapeText });
 
@@ -44,6 +46,7 @@ export function eventsOf(pin: Pin, events: Uint8Array): Got<readonly DoorEvent[]
   if (!d.decoded) return unknown(`the decoder: ${d.refused}`);
   return known(d.events);
 }
+freezeFunction(eventsOf);
 
 /** One storage read at a block: the entry, the SCALE bytes of each key part, the key asked and what the node answered. */
 export interface EntryRead {
@@ -66,6 +69,7 @@ export function valueOf(pin: Pin, read: EntryRead): Got<DoorEntry> {
   if (!v.decoded) return unknown(`the decoder: ${v.refused}`);
   return known({ stored: v.stored, value: v.value });
 }
+freezeFunction(valueOf);
 
 /** Where System.LastRuntimeUpgrade is stored: its pallet and entry, and its key from the key table. */
 export interface LastRuntimeUpgradeAt {
@@ -92,3 +96,4 @@ export function provenPin(pin: Pin, at: LastRuntimeUpgradeAt): Got<Pin> {
   }
   return known(pin);
 }
+freezeFunction(provenPin);

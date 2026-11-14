@@ -6,7 +6,7 @@
  * research/2026-11-12-session-rerun-1014020/results.json (fields named where used).
  */
 import { afterEach, describe, expect, it } from "vitest";
-import { CAPS, header, metadata, nodeTransport, READ_METHODS, storage, type StorageKind } from "../src/chain-read/node.js";
+import { CAPS, FRAME_CAP_CHARS, FRAME_WRAPPER_CHARS, header, metadata, nodeTransport, READ_METHODS, storage, type StorageKind } from "../src/chain-read/node.js";
 import { readSessionState } from "../src/chain-read/read.js";
 import { RERUN_RESULTS, repoJson, rerunScript } from "./lib/recorded-node.js";
 
@@ -150,5 +150,32 @@ describe("X8: the caps, each a number with its reason, and held at its edge", ()
     expect((await header(answering(edge), AT)).kind).toBe("known");
     const over = { ...base, pad: "x".repeat(pad + 1) };
     expect(await header(answering(over), AT)).toEqual({ kind: "unknown", reason: `chain_getHeader: the answer is more than its cap of ${CAPS.header} characters` });
+  });
+});
+
+describe("C4: the frame cap the node's transport hands rpcCall", () => {
+  it("is the largest answer any read accepts plus FRAME_WRAPPER_CHARS for the frame around it, computed from CAPS", () => {
+    const largest = 2 + 2 * Math.max(...Object.values(CAPS));
+    const wrapper = JSON.stringify({ jsonrpc: "2.0", id: 1, result: "" }).length;
+    expect(wrapper).toBe(36);
+    expect(FRAME_WRAPPER_CHARS).toBeGreaterThanOrEqual(wrapper);
+    expect(FRAME_CAP_CHARS).toBe(largest + FRAME_WRAPPER_CHARS);
+    expect(FRAME_CAP_CHARS).toBeGreaterThanOrEqual(2 + 2 * CAPS.metadata + wrapper);
+  });
+
+  it("is the cap nodeTransport passes: a frame one character over it is refused with that cap", async () => {
+    const over = "x".repeat(FRAME_CAP_CHARS + 1);
+    (globalThis as { WebSocket: unknown }).WebSocket = class {
+      onopen?: () => void;
+      onmessage?: (ev: { data: string }) => void;
+      constructor() {
+        setTimeout(() => this.onopen?.(), 0);
+      }
+      send() {
+        setTimeout(() => this.onmessage?.({ data: over }), 0);
+      }
+      close() {}
+    };
+    await expect(nodeTransport("ws://scripted.invalid", 2000)("chain_getFinalizedHead", [])).rejects.toThrow(`rpc frame of ${FRAME_CAP_CHARS + 1} characters is over its cap of ${FRAME_CAP_CHARS}`);
   });
 });

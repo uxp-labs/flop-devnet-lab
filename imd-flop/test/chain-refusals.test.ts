@@ -14,7 +14,8 @@ import { INNER_NAMES, type InnerCall } from "../src/chain/calls.js";
 import { ChainEncodeError } from "../src/chain/errors.js";
 import { encodeSessionCall, signSessionCall, type ExtrinsicInput } from "../src/chain/extrinsic.js";
 import { readCall, readExtrinsic } from "../src/chain/reader.js";
-import { compact, concat } from "../src/chain/scale.js";
+import { readEra } from "../src/chain/era.js";
+import { ByteReader, compact, concat } from "../src/chain/scale.js";
 import type { Runtime } from "../src/chain/table.js";
 import { EXIT } from "../src/errors.js";
 import { filled, OWNER, PKG, RT, RUNTIME_ID, sampleInner, testDevice, U128_MAX, U32_MAX, U64_MAX, unhex } from "./lib/chain-fixtures.js";
@@ -257,8 +258,28 @@ describe("the strict reader refuses bytes it does not know", () => {
     expect(codeOf(() => readExtrinsic(RT, rebuild({ era: Uint8Array.of(0) }), BIRTH))).toBe("BAD_BYTES");
     expect(codeOf(() => readExtrinsic(RT, rebuild({ era: Uint8Array.of(0x04, 0x00) }), BIRTH))).toBe("BAD_BYTES"); // period 32
     expect(codeOf(() => readExtrinsic(RT, rebuild({ era: Uint8Array.of(0x06, 0x00) }), BIRTH))).toBe("BAD_BYTES"); // period 128
-    expect(codeOf(() => readExtrinsic(RT, rebuild({ era: Uint8Array.of(0x05, 0x04) }), BIRTH))).toBe("BAD_BYTES"); // phase 64
+    const phase64 = () => readExtrinsic(RT, rebuild({ era: Uint8Array.of(0x05, 0x04) }), BIRTH);
+    expect(codeOf(phase64)).toBe("BAD_BYTES"); // phase 64
+    expect(phase64).toThrow("an era phase 64 not below its period"); // the phase rule's own words, not the birth's (piece A1 part 7)
     expect(codeOf(() => readExtrinsic(RT, rebuild({ era: Uint8Array.of(0xf5, 0x03) }), BIRTH))).toBe("BAD_BYTES"); // phase 63, not the birth's
+  });
+
+  it("readEra, directly: a phase at or above its period is refused with the phase rule's words; phase 63 is read", () => {
+    // From era.ts: encoded = b0 | b1 << 8, period = 2 << (encoded % 16), phase = encoded >> 4.
+    // 0x05 0x04: encoded 0x0405 = 1029; 1029 % 16 = 5, period 2 << 5 = 64; 1029 >> 4 = 64. Phase 64, not below 64.
+    // 0xF5 0xFF: encoded 0xFFF5 = 65525; 65525 % 16 = 5, period 64; 65525 >> 4 = 4095. The largest phase.
+    // 0xF5 0x03: encoded 0x03F5 = 1013; 1013 % 16 = 5, period 64; 1013 >> 4 = 63. The largest phase below 64.
+    for (const [b0, b1, phase] of [
+      [0x05, 0x04, 64],
+      [0xf5, 0xff, 4095],
+    ] as const) {
+      const read = () => readEra(new ByteReader(Uint8Array.of(b0, b1)));
+      expect(codeOf(read)).toBe("BAD_BYTES");
+      expect(read).toThrow(`an era phase ${phase} not below its period`);
+    }
+    const r = new ByteReader(Uint8Array.of(0xf5, 0x03));
+    expect(readEra(r)).toEqual({ period: 64, phase: 63 });
+    r.done("the era");
   });
 
   it("extrinsic bytes: a birth whose phase is not the era's, or whose hash was not signed, is refused", () => {
@@ -390,7 +411,6 @@ describe("E1 and E13: the encoder is pure and not wired", () => {
       "errors.ts",
       "extrinsic.ts",
       "fields.ts",
-      "freeze.ts",
       "payload.ts",
       "reader.ts",
       "runtimes.ts",
