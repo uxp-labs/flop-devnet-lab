@@ -108,8 +108,30 @@ export const OWNER_ALLOWED_PALLET = INNER_PALLET;
 /** The two constants of the owner's pallet the grant is bounded by (P5a, O3, O13), by their metadata names. */
 export const OWNER_CONSTANTS = Object.freeze({ maxSessionDuration: "MaxSessionDuration", sessionEpochLength: "SessionEpochLength" } as const);
 
-/** The allow list of a grant as bytes (P5a, O7): the UTF-8 bytes of OWNER_ALLOWED_PALLET, alone, in a fresh list each time. */
+/**
+ * The bytes of OWNER_ALLOWED_PALLET, made once when the module loads from the name's own characters, with no
+ * encoder looked up later. The name is ASCII: a character of 128 or above throws here. Not exported.
+ */
+const ALLOWED_BYTES: Uint8Array = Uint8Array.from(
+  Array.from(OWNER_ALLOWED_PALLET, (ch) => {
+    const code = ch.charCodeAt(0);
+    if (code >= 128) throw new Error(`OWNER_ALLOWED_PALLET must be ASCII: ${JSON.stringify(ch)} is not`);
+    return code;
+  }),
+);
+
+/** The allow list of a grant as bytes (P5a, O7): a fresh list holding a fresh copy of the fixed bytes of OWNER_ALLOWED_PALLET, alone. */
 export function allowedPallets(): Uint8Array[] {
-  return [new TextEncoder().encode(OWNER_ALLOWED_PALLET)];
+  return [Uint8Array.from(ALLOWED_BYTES)];
 }
 freezeFunction(allowedPallets);
+
+/** Whether a list read is exactly the one allow list: one name, the same length, each byte equal by index. */
+export function isAllowedPalletList(list: readonly Uint8Array[]): boolean {
+  if (list.length !== 1) return false;
+  const only = list[0];
+  if (only.length !== ALLOWED_BYTES.length) return false;
+  for (let i = 0; i < ALLOWED_BYTES.length; i++) if (only[i] !== ALLOWED_BYTES[i]) return false;
+  return true;
+}
+freezeFunction(isAllowedPalletList);

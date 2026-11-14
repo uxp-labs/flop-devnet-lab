@@ -243,12 +243,13 @@ describe("review P5a, attack 4 (P2): the allow list is exactly ComputeChannel", 
     expect(hex(encodeOwnerCall({ ...base, [Symbol("allowed_pallets")]: L } as never))).toBe(A2.call);
   });
 
-  it("DEFECT RP5A-1: the one allow list is built by the global TextEncoder at each call, so one change of it makes the encoder write another list and the reader accept it", () => {
+  it("HOLDS (was DEFECT RP5A-1): the allow list's bytes are fixed when the module loads, so a change of the global TextEncoder after load changes neither what the encoder writes nor what the reader accepts", () => {
     const proto = TextEncoder.prototype;
     const real = proto.encode;
     let bytes: Uint8Array | null = null;
     let readBack: string | null = null;
     let readsWritten: string | null = "not run";
+    let readsOther: string | null = "not run";
     try {
       Object.defineProperty(proto, "encode", {
         configurable: true,
@@ -262,16 +263,17 @@ describe("review P5a, attack 4 (P2): the allow list is exactly ComputeChannel", 
         readBack = codeOf(() => readOwnerCall(RUNTIME_ID, unhex(A2.call)));
         const w = bytes;
         readsWritten = codeOf(() => readOwnerCall(RUNTIME_ID, w));
+        const other = mine("create_session", G, [new TextEncoder().encode("Balances")]);
+        readsOther = codeOf(() => readOwnerCall(RUNTIME_ID, other));
       } catch {
         bytes = null;
       }
     } finally {
       Object.defineProperty(proto, "encode", { configurable: true, writable: true, value: real });
     }
-    // Expected: the grant written is A2's (ComputeChannel), or the call is refused; the real A2 grant still reads,
-    // and a grant of another list is refused by the reader. Actual: the encoder writes [Balances], the reader reads
-    // it (null, no refusal), and refuses the real A2 grant.
-    expect({ bytes: bytes === null ? null : hex(bytes), readBack, readsWritten }).toEqual({ bytes: A2.call, readBack: null, readsWritten: "CALL_NOT_ALLOWED" });
+    // The bytes are fixed at load: the encoder writes A2's bytes under the patched encoder, the real A2 grant still
+    // reads, the grant it wrote reads (null, no refusal), and a grant whose list is [Balances] is refused.
+    expect({ bytes: bytes === null ? null : hex(bytes), readBack, readsWritten, readsOther }).toEqual({ bytes: A2.call, readBack: null, readsWritten: null, readsOther: "CALL_NOT_ALLOWED" });
   });
 });
 

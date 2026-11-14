@@ -14,7 +14,7 @@
  * duration of 0 or above the runtime's longest.
  */
 import { ed25519 } from "@noble/curves/ed25519.js";
-import { allowedPallets, INNER_PALLET, OWNER_ALLOWED_PALLET, OWNER_NAMES, OWNER_PALLET, spendOf, type Bytes32, type InnerCall, type InnerName, type OwnerName } from "./calls.js";
+import { INNER_PALLET, isAllowedPalletList, OWNER_ALLOWED_PALLET, OWNER_NAMES, OWNER_PALLET, spendOf, type Bytes32, type InnerCall, type InnerName, type OwnerName } from "./calls.js";
 import { refuse } from "./errors.js";
 import { lastValidBlock, readEra } from "./era.js";
 import { bytesOf, readBytesList, readValue } from "./fields.js";
@@ -169,11 +169,9 @@ export type OwnerCallData =
     }
   | { readonly call: "revoke_session"; readonly delegate: Bytes32 };
 
-const sameList = (a: readonly Uint8Array[], b: readonly Uint8Array[]) => a.length === b.length && a.every((x, i) => x.length === b[i].length && x.every((y, j) => y === b[i][j]));
-
 /** The rules of a grant (P5a, O8, O9), on what was read. What the encoder refuses to write, the reader refuses to read. */
 function checkGrant(data: Extract<OwnerCallData, { call: "create_session" }>, reviewed: ReviewedOwner): void {
-  if (!sameList(data.allowed_pallets, allowedPallets())) {
+  if (!isAllowedPalletList(data.allowed_pallets)) {
     refuse("CALL_NOT_ALLOWED", `create_session.allowed_pallets holds ${data.allowed_pallets.length} names: a grant allows exactly ${OWNER_ALLOWED_PALLET}, written in that case, and nothing else`);
   }
   for (const cap of ["spending_cap", "per_tx_limit", "daily_cap"] as const) {
