@@ -5,6 +5,8 @@
  */
 import { blake2b } from "@noble/hashes/blake2.js";
 import { describe, expect, it } from "vitest";
+import { asciiOf } from "../src/channel/bytes.js";
+import { ChannelError } from "../src/channel/errors.js";
 import { REQUEST_DOMAIN, requestHeaders, sessionRequestMessage } from "../src/channel/auth.js";
 import { RECEIPT_DOMAIN, RECEIPT_VERSION, receiptMessage, turnAckMessage } from "../src/channel/transcript.js";
 
@@ -125,5 +127,27 @@ describe("C2, T2: the five headers", () => {
     });
     expect(h["x-flop-signature"]).toMatch(/^0x[0-9a-f]{128}$/);
     expect(Object.isFrozen(h)).toBe(true);
+  });
+});
+
+describe("B4: asciiOf refuses a text that holds a character above 0x7f", () => {
+  function refusalOf(f: () => unknown): ChannelError {
+    try {
+      f();
+    } catch (e) {
+      if (e instanceof ChannelError) return e;
+      throw e;
+    }
+    throw new Error("did not refuse");
+  }
+
+  it("0x7f is taken and 0x80 is not; the message names the place and never the character", () => {
+    expect([...asciiOf("a\u007f", "the domain")]).toEqual([0x61, 0x7f]);
+    for (const text of ["ab\u0080", "ab\u00e9", "ab\u20ac", "ab\ud83d\ude00"]) {
+      const e = refusalOf(() => asciiOf(text, "the domain"));
+      expect(e.refusal).toBe("BAD_INPUT");
+      expect(e.message).toBe("channel key refused (BAD_INPUT): the domain is not ASCII at character 2");
+      expect(e.message).not.toMatch(/[^\x00-\x7f]/);
+    }
   });
 });
