@@ -437,6 +437,7 @@ describe("source scan", () => {
       ["another target written with a space, the right one named only in a comment", MOCK_FILE, `// ${MOCK_CALL}\n${other}`],
       ["another target, the right one named only in a block comment", MOCK_FILE, `/* ${MOCK_CALL} */\n${other}`],
       ["a second call in the excepted file", MOCK_FILE, `${allowed}${VI} .mock("../src/scale/metadata.js", () => ({}));\n`],
+      ["a second call of another target after the allowed one", MOCK_FILE, `${allowed}${other}`],
       ["a call whose first argument is not the literal", MOCK_FILE, `${VI}.mock(target, async (importOriginal) => importOriginal());\n`],
     ];
     for (const [what, file, text] of plants) expect(loadsSecondGuard(file, text), what).toBe(true);

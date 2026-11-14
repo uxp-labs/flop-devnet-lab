@@ -297,7 +297,10 @@ building and testing decoders against real data. It is evidence, never proof of 
   one, the one derived number, which its field says in those words. The keys are built from the
   reviewed metadata of the runtime the plan names by a file and a field (its `RUNTIME`): the
   `System.LastRuntimeUpgrade` the first recording read at block 3479299 (seq 21), whose spec
-  `runtimeOfBlock` names; the same read at 3479277 names the same spec. `test/settle-requests.test.ts`
+  `runtimeOfBlock` names. A field passes as the runtime only when its tape line is an `rpc` call of
+  `state_getStorage` with exactly two params: the `System.LastRuntimeUpgrade` key, built from the
+  reviewed metadata of the spec the answer names, and the hash the inputs give for the plan's named
+  block. The same read at 3479277 names the same spec, through the same function. `test/settle-requests.test.ts`
   holds the file to that plan byte for byte, builds every key again with the reference decoder, and
   holds every input to the tape: the channel ids through the decoder's door.
   `node scripts/write-requests.mjs --out recordings/requests.json` writes the file through that same

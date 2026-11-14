@@ -34,19 +34,19 @@ describe("review o1: the scan of the one allowed module mock (P9)", () => {
     expect(loadsSecondGuard(EXCEPTED, `${ALLOWED}const c = ${VI}.hoisted(() => ({ on: false }));\nimport { guardRpc } from "../src/guard.js";\n`)).toBe(false);
   });
 
-  it("DEFECT O1-4: in the excepted file the target is checked as text anywhere, so a comment meets it while the one call, written with a space, mocks another module", () => {
+  it("HOLDS (was DEFECT O1-4): in the excepted file the target is checked as text anywhere, so a comment meets it while the one call, written with a space, mocks another module", () => {
     const planted = `// ${MOCK}(${META}, is the one allowed form\n${VI} .mock("../src/scale/shape.js", async (importOriginal) => importOriginal());\n`;
     expect(loadsSecondGuard(EXCEPTED, planted)).toBe(true);
   });
 
-  it("DEFECT O1-5: RULES.md section 4 says the test holds that the import-actual helper is banned in the excepted file too, so the factory's own argument is the only way to the real module", () => {
+  it("HOLDS (was DEFECT O1-5): RULES.md section 4 says the test holds that the import-actual helper is banned in the excepted file too, so the factory's own argument is the only way to the real module", () => {
     // Changed by the fixer: the expectation is what RULES.md now says. A factory that ignores its own
     // argument is not claimed to be caught; the way around the argument is.
     const planted = `${MOCK}(${META}, async () => ${VI}.importActual(${META}));\n`;
     expect(loadsSecondGuard(EXCEPTED, planted)).toBe(true);
   });
 
-  it("DEFECT O1-6 (on main too): an alias of vi, vi[\"mock\"], a line break inside the mock call, or the guard's query string built in two pieces passes in every file", () => {
+  it("HOLDS (was DEFECT O1-6): an alias of vi, vi[\"mock\"], a line break inside the mock call, or the guard's query string built in two pieces passes in every file", () => {
     const plants = [
       `const v = ${VI};\nv.mock("../src/${"guard"}.js", () => ({}));\n`,
       `${VI}["mock"]("../src/${"guard"}.js", () => ({}));\n`,
@@ -57,7 +57,7 @@ describe("review o1: the scan of the one allowed module mock (P9)", () => {
   });
 
   it("HOLDS: the guard's query string built in two pieces in a dynamic import is not caught by a text scan; RULES.md section 4 says the scan catches the plain spellings and a diff that hides one is for the review", () => {
-    // Changed by the fixer: this plant was the fourth of the DEFECT O1-6 list; no text scan can hold it.
+    // Changed by the fixer: this plant was the fourth of the O1-6 list; no text scan can hold it.
     const plant = `await import("../src/${"guard"}" + ".js?again");\n`;
     expect(loadsSecondGuard("shape.test.ts", plant)).toBe(false);
   });

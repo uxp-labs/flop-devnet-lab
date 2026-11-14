@@ -155,6 +155,26 @@
     "tests": 2,
     "names": "db7cc5f5fc51f2f7ad3eacabb6a786a7a9e066f7f5623690d16d9bf798068a14"
   },
+  "review-o1-list.test.ts": {
+    "tests": 6,
+    "names": "955f1dcdd5ce58a807e3686ca943c3397d3af08ca7f37ad86c47d09082a2787b"
+  },
+  "review-o1-runtime.test.ts": {
+    "tests": 4,
+    "names": "f0c0d25cf5ce208c21efcc26761faa06382c9a14d8cc2567d4941a53a2c243c1"
+  },
+  "review-o1-scan.test.ts": {
+    "tests": 6,
+    "names": "bc65eb0bd22f6444f4d766a62c7c433f081d7269929c97e99c47597f53fef2f7"
+  },
+  "review-o1-tape.test.ts": {
+    "tests": 5,
+    "names": "03e84ace9ecead518325d22465a91618bef218fef79897ab1bc63a641a8dc18d"
+  },
+  "review-o1-whys.test.ts": {
+    "tests": 2,
+    "names": "27801715933d0d4137108d4b7697544e206b78f832025b28d41cf425045b9ef0"
+  },
   "review-shape3-door.test.ts": {
     "tests": 8,
     "names": "df2f4065abd41cd2883fa64079d4b1ecf4af56ed826e87577fca6d77c683ece4"
@@ -204,8 +224,8 @@
     "names": "4b98619494eda10d49445cfa214bb48e907573f165e7b8135f0449ab7c6e8aef"
   },
   "settle-requests.test.ts": {
-    "tests": 17,
-    "names": "10c1805253048ea3293a38572497b0f9a46f32d9ad2e44063c35b3044ab37cce"
+    "tests": 24,
+    "names": "97ce82f478560fcc2bad26adcba6837d0683f4590ec72c2a90b3cc9d8ea3a0b6"
   },
   "shape-at-2.test.ts": {
     "tests": 7,

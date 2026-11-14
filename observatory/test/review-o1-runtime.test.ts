@@ -40,20 +40,20 @@ describe("review o1: the runtime is named only by a read of System.LastRuntimeUp
     expect(entryAt(18).request.params).toEqual([3479299]);
   });
 
-  it("DEFECT O1-1: specNamed takes a System.LastRuntimeUpgrade read at another block (seq 5, block 3479238) as the runtime of the list", () => {
+  it("HOLDS (was DEFECT O1-1): specNamed takes a System.LastRuntimeUpgrade read at another block (seq 5, block 3479238) as the runtime of the list", () => {
     // seq 5 reads the same key at the hash of 3479238, which is not a settled block.
     expect(entryAt(5).request.params[0]).toBe(LAST_RUNTIME_UPGRADE_KEY);
     expect(entryAt(5).request.params[1]).not.toBe(GATEWAY_SETTLED_HASH);
     expect(() => specNamed({ file: TAPE, field: field(5), block: RUNTIME.block })).toThrow();
   });
 
-  it("DEFECT O1-2: specNamed takes a state_getStorage of another key (System.Events at seq 20) whose answer is LastRuntimeUpgrade bytes", () => {
+  it("HOLDS (was DEFECT O1-2): specNamed takes a state_getStorage of another key (System.Events at seq 20) whose answer is LastRuntimeUpgrade bytes", () => {
     const path = tapeWith(setLine(20, (e) => ({ ...e, answer: { result: entryAt(21).answer.result } })));
     expect(JSON.parse(readFileSync(path, "utf8").split("\n")[21] ?? "null").request.params[0]).toBe(EVENTS_KEY);
     expect(() => specNamed({ file: path, field: field(20), block: RUNTIME.block })).toThrow();
   });
 
-  it("DEFECT O1-3: tapeAnswer takes a call whose request is not an rpc request (kind changed), since only the method is checked", () => {
+  it("HOLDS (was DEFECT O1-3): tapeAnswer takes a call whose request is not an rpc request (kind changed), since only the method is checked", () => {
     const path = tapeWith(setLine(21, (e) => ({ ...e, request: { ...e.request, kind: "not-rpc" } })));
     expect(() => tapeAnswer(path, field(21))).toThrow();
   });

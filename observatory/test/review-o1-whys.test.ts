@@ -22,12 +22,13 @@ function eventsOf(height: number) {
 const phaseName = (p: unknown): string => (typeof p === "object" && p !== null ? String((p as Record<string, unknown>).name ?? (p as Record<string, unknown>).variant ?? Object.keys(p)[0]) : String(p));
 
 describe("review o1: the whys of the sixth list (attack 5)", () => {
-  it("DEFECT O1-8: the settled block's why says System.Events holds the events of every extrinsic of the block, but the block's events hold phases that are not an extrinsic", () => {
+  it("HOLDS (was DEFECT O1-8): the settled block's why says System.Events, every event of the block, since the block's events hold phases that are not an extrinsic", () => {
     const why = LIST.calls[4]?.why ?? "";
-    expect(why).toContain("System.Events, the events of every extrinsic of the block");
+    expect(why).toContain("System.Events, every event of the block,");
+    expect(why).not.toContain("the events of every extrinsic of the block");
+    // Not every event of a block is an extrinsic's: the phases hold more than ApplyExtrinsic.
     const phases = [3479299, 3479277].flatMap((h) => eventsOf(h).map((e) => phaseName(e.phase)));
-    // Every event of the block would be an extrinsic's only if no phase were Initialization or Finalization.
-    expect(phases.filter((p) => !/ApplyExtrinsic/.test(p))).toEqual([]);
+    expect(phases.filter((p) => !/ApplyExtrinsic/.test(p)).length).toBeGreaterThan(0);
   });
 
   it("HOLDS: each settled block's why names the channel the block's one Settled event names, by its first ten characters", () => {

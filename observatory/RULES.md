@@ -1003,7 +1003,9 @@ for everything it reads.
   `System.LastRuntimeUpgrade` and the channel's `ComputeChannel.Channels` record; then the parent's
   hash by its height and one `state_queryStorageAt` at the parent of the last two. 12 calls. Its
   keys are built from the reviewed metadata of the spec a recorded `System.LastRuntimeUpgrade` names
-  through `runtimeOfBlock`, named by a file and a field, never typed. A parent's height is its
+  through `runtimeOfBlock`, named by a file, a field and a block of the plan, never typed: the
+  field passes only when its tape line is an `rpc` call of `state_getStorage` with exactly two
+  params, the `System.LastRuntimeUpgrade` key and the hash of that block. A parent's height is its
   child's recorded header's number less one, and its field says so.
 - The fifth list read the encoder's devnet test at spec 1014020: the start block and the block of
   each sent step, each hash by its height, and at each one `state_queryStorageAt` of the same eight

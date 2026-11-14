@@ -1,5 +1,5 @@
 // Review o1 (round 33), attack 3, the part that holds: tapeAnswer refuses a tape it cannot read
-// as written. Kept apart from review-o1-runtime.test.ts, whose DEFECT tests fail by design, so the
+// as written. Kept apart from review-o1-runtime.test.ts (once its DEFECT tests failed by design), so the
 // mutation runner's control passes on this file (promise P4).
 // tapeAnswer and specNamed must refuse every field that does not name a read of
 // System.LastRuntimeUpgrade at the gateway's settled block. Each tape these tests hand in is the

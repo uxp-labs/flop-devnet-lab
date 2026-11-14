@@ -107,7 +107,7 @@ describe("review o1: the sixth list derived a third way from the first tape (att
     expect(second.calls[50]).toMatchObject({ method: "state_getStorage", params: [channelKey(id), g.hash] });
   });
 
-  it("HOLDS: the committed list's sha256 is the one the builder quotes for the record job on the branch", () => {
-    expect(createHash("sha256").update(LIST_TEXT).digest("hex")).toBe("51b9075b8182536647fdcd9e5b512ebeadb25f9678ebc8bb566741f9e5914b54");
+  it("HOLDS: the committed list's sha256 is the one of the list with the two whys of round 33 mended (the builder's was 51b9075b, before them)", () => {
+    expect(createHash("sha256").update(LIST_TEXT).digest("hex")).toBe("9afba293ba8d1b2f4b2f35ee8b8fe54e7f215800b19a07b9a7a2d695b8ac8483");
   });
 });

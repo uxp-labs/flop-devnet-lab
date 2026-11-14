@@ -538,17 +538,33 @@
   {
     "id": "scan-mock-exception-any-target",
     "file": "test/guard.test.ts",
-    "find": "      if (!text.includes(MOCK_CALL)) return true;\n",
+    "find": "      if ((code.match(MOCK_TARGET) ?? []).length !== 1) return true;\n",
     "replace": "",
     "test": "test/guard.test.ts",
-    "why": "the one file allowed a module mock may mock only src/scale/metadata.js: a mock of another target there must fail the scan"
+    "why": "the one file allowed a module mock may mock only src/scale/metadata.js, read from the call itself: a mock of another target there, the right one named in a comment, must fail the scan"
   },
   {
     "id": "scan-mock-exception-any-count",
     "file": "test/guard.test.ts",
-    "find": "      if ((text.match(new RegExp(\"vi\" + \"\\\\.mock\", \"g\")) ?? []).length !== 1) return true;\n",
+    "find": "      if ((code.match(MOCK_ANY) ?? []).length !== 1) return true;\n",
     "replace": "",
     "test": "test/guard.test.ts",
-    "why": "the one file allowed a module mock may hold one vi.mock call: a second must fail the scan"
+    "why": "the one file allowed a module mock may hold one vi.mock call in its code: a second must fail the scan"
+  },
+  {
+    "id": "scan-vi-word-rule-removed",
+    "file": "test/guard.test.ts",
+    "find": "      if (VI_NOT_BEFORE_MEMBER(withoutComments(code, true))) return true;\n",
+    "replace": "",
+    "test": "test/guard.test.ts",
+    "why": "the word for vitest's object may stand only before a dot and a member name: an alias, a computed member or the object passed on must fail the scan (round 33, O1-6)"
+  },
+  {
+    "id": "ro1-scan-other-ways-dropped",
+    "file": "test/guard.test.ts",
+    "find": "      if (otherWays.test(text)) return true;\n",
+    "replace": "",
+    "test": "test/guard.test.ts",
+    "why": "every other banned way stays banned in the excepted file (round 33 review)"
   }
 ]
