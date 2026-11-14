@@ -24,18 +24,22 @@ export function takeTape(text, sha256) {
   if (!KINDS.includes(t.kind)) no(`the relay is not a tape of session-reads.js: its kind is ${JSON.stringify(t.kind ?? null)}`);
   if (!Array.isArray(t.tape) || !t.tape.every((c) => c && typeof c.method === "string" && Array.isArray(c.params) && ("result" in c || "error" in c || "no_answer" in c))) no("the tape is not a list of { method, params, result or error }");
   if (!t.head || !Number.isSafeInteger(t.head.number) || !HASH.test(t.head.hash ?? "")) no("the tape names no finalized head (number and hash)");
-  // F10: a read the node did not answer, or answered twice in two ways, is refused before it is
-  // used or counted as used: reads are free, and a fresh tape can be read for the same step
+  // F10: a read the node answered with an error or not at all, or answered twice in two ways, is
+  // refused before it is used or counted as used: reads are free, and a fresh tape can be read for
+  // the same step
   const fresh = "nothing is written and the tape is not counted as used: read a fresh tape for the same step";
   if (t.deadline !== undefined) no(`the tape says ${JSON.stringify(t.deadline)}: ${fresh}`);
-  const silent = t.tape.find((c) => "no_answer" in c);
-  if (silent) no(`the node gave no answer to ${silent.method} ${JSON.stringify(silent.params)} (${silent.no_answer}): ${fresh}`);
-  if (t.metadata && "no_answer" in t.metadata) no(`the node gave no answer to state_getMetadata at ${t.metadata.at} (${t.metadata.no_answer}): ${fresh}`);
   const answer = (c) => JSON.stringify("result" in c ? { result: c.result } : "error" in c ? { error: c.error } : { no_answer: c.no_answer });
   for (const [i, c] of t.tape.entries()) {
     const other = t.tape.slice(i + 1).find((d) => d.method === c.method && same(d.params, c.params) && answer(d) !== answer(c));
     if (other) no(`the tape holds two different answers to ${c.method} ${JSON.stringify(c.params)}: ${fresh}`);
   }
+  const failed = t.tape.find((c) => "error" in c);
+  if (failed) no(`the node answered ${failed.method} ${JSON.stringify(failed.params)} with an error (${failed.error?.message ?? "no words"}): ${fresh}`);
+  if (t.metadata && "node" in t.metadata) no(`the node answered state_getMetadata at ${t.metadata.at} with an error (${t.metadata.node?.message ?? "no words"}): ${fresh}`);
+  const silent = t.tape.find((c) => "no_answer" in c);
+  if (silent) no(`the node gave no answer to ${silent.method} ${JSON.stringify(silent.params)} (${silent.no_answer}): ${fresh}`);
+  if (t.metadata && "no_answer" in t.metadata) no(`the node gave no answer to state_getMetadata at ${t.metadata.at} (${t.metadata.no_answer}): ${fresh}`);
   return t;
 }
 

@@ -23,9 +23,11 @@ Run tests under setpriv (CLAUDE.md rule 5). Push after every commit.
 
 ## Next
 
-- F7, F10, F14, F16, words.
+- F7 as ruled again (no balance claim), F14, F16, words, the last steps.
 
-## Points where a rule cannot be met as written (stop, for the lead)
+- F10 node error half (the lead's rule, 13:03 UTC): tape.mjs refuses a node error in the tape or the metadata. rehearsal T1 A10 show replaced (refusal, nothing written, fresh tape taken) plus the null case; A2 and A10 tapes elsewhere set null as the walk does (rehearsal T1 A2 grant, A10 grant, R1 call at A10 and A2; record-step H3).
+
+## Points where a rule could not be met as written (both ruled by the lead at 13:03 UTC)
 
 - F7 (RG19-11, L1): not done. (1) lab.accountReads of pane-runner.js (the last batch's, byte for byte)
   relays { account, runtime, finalized, account_nonce }: no free balance, so no balance can come from

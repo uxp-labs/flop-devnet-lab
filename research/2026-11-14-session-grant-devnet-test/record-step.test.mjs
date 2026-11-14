@@ -29,7 +29,8 @@ async function at(phase) {
 test("H3: a grant the tool refused (exit 5, the session active at A2) is kept as a refusal, no call file, and next says stop", async () => {
   const w = await at("p0");
   try {
-    await w.use("G1", "call", await w.tape(rerunNode("A2")));
+    // the breaker of dev1 at A2 is answered as nothing stored, set here as the walk sets it: tool-run refuses a tape with a node error (F10)
+    await w.use("G1", "call", await w.tape(w.node("A2", ["breakers"])));
     const c = recordCall(plan, w.run, w.results, "G1");
     assert.equal(c.callText, null);
     assert.match(c.results.steps[0].call.refused, /the tool exited 5 for G1, not 0: imd-flop: a session for this owner and device is stored and active/);

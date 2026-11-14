@@ -64,3 +64,11 @@ test("F10: an after read at its phase is refused over a tape whose head is below
     else await refused(r, A6, new RegExp(`the tape's head ${head} is below block ${head + 1}, the last finalized step of the record: a stale tape`), "G1", "after");
   }
 });
+
+test("F10: a question the node answered with an error, or a metadata it answered with an error, is refused with words to read a fresh tape, before it is counted as used", async () => {
+  const r = folder(atR1Call(DEV1, A1_BLOCK));
+  const t = changed((v) => { const i = at(v, K.breakers); v.tape[i] = { method: v.tape[i].method, params: v.tape[i].params, error: { code: -32000, message: "made" } }; });
+  await refused(r, t, /answered state_getStorage .* with an error \(made\).*read a fresh tape for the same step/);
+  await refused(r, changed((v) => { v.metadata = { at: v.metadata.at, sha256: null, length: null, node: { code: -32000, message: "made" } }; }), /answered state_getMetadata at .* with an error/);
+  assert.equal((await go(r, A6)).output.exit, 0, "a fresh tape is taken");
+});

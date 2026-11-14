@@ -51,6 +51,17 @@ async function absentAtA1() {
   for (const key of [k.sessions, k.nonces, k.breakers]) node.set(key, null); // set by this test: the recording holds no session key at A1
   return node;
 }
+/**
+ * A node at a rerun step whose reads the recording does not hold are answered as nothing stored
+ * (null): set by the tests that use it, as walk.mjs sets them, because tool-run refuses a tape that
+ * holds a node error (F10). At A2 the recording reads no breaker of dev1; at A10 no nonce and no breaker.
+ */
+async function nullAt(at, names) {
+  const node = rerunNode(at);
+  const k = await keysFor(DEV1);
+  for (const n of names) node.set(k[n], null);
+  return node;
+}
 const created = (id) => rerunStep(id).events.find((e) => e.name === "SessionCreated").fields;
 
 test("T1: the local caps of the rehearsal's seat are the rerun's A2 grant's per_tx_limit and daily_cap", () => {
@@ -69,18 +80,18 @@ test("T1: at A1, the pair absent: session grant prints, and its hex is flop-sign
 });
 
 test("T1: at A2, the session active: session grant refuses with exit 5 and prints no call", async () => {
-  const o = await over(rerunNode("A2"), "G1", "call");
+  const o = await over(await nullAt("A2", ["breakers"]), "G1", "call");
   assert.equal(o.exit, 5);
   assert.equal(o.json, null);
   assert.match(o.stderr.join("\n"), /SessionAlreadyExists/);
 });
 
 test("T1: at A10, the session revoked: grant prints with the stored record line; revoke's hex is the rerun's recorded revoke call", async () => {
-  const g = await over(rerunNode("A10"), "G2", "call");
+  const g = await over(await nullAt("A10", ["nonces", "breakers"]), "G2", "call");
   assert.equal(g.exit, 0, g.stderr.join("\n"));
   assert.equal(g.json.stored_record, `A record is stored for this pair, revoked. ${V("STORED_RECORD_LINE")}`);
   for (const at of ["A10", "A2"]) {
-    const r = await over(rerunNode(at), "R1", "call");
+    const r = await over(await nullAt(at, at === "A10" ? ["nonces", "breakers"] : ["breakers"]), "R1", "call");
     assert.equal(r.exit, 0, r.stderr.join("\n"));
     assert.equal(r.json.call_hex, rerunStep("A10").call, at);
     assert.equal(r.json.call_hex, flopSign("call", "revoke", "--delegate", DEV1), at);
@@ -100,12 +111,29 @@ test("T1: session show at the active state (A6) gives the recorded values", asyn
   assert.equal(String(o.json.circuit_breaker.value.tx_count), ra.breaker_tx_count);
 });
 
-test("T1: session show at the revoked state (A10) gives active false, as recorded; the nonce and the breaker are unknown there (the recording does not read them at A10), so exit 1", async () => {
-  const o = await over(rerunNode("A10"), "R1", "after");
-  assert.equal(o.exit, 1);
+// This test replaces, by the lead's rule on F10 (13:03 UTC, Nov 14), its old assertion that the
+// tool exits 1 over this tape: the tape is the same, and tool-run now refuses it.
+test("T1: at the revoked state (A10) the tape holds the node's error for the nonce and the breaker: tool-run refuses it with words to read a fresh tape, writes nothing, and a second tape for the same step is taken", async () => {
+  const r = run("R1 after");
+  const bad = await sessionTapeOf(rerunNode("A10"), DEV1);
+  assert.ok(bad.value.tape.some((c) => "error" in c), "the recording holds no nonce and no breaker of dev1 at A10");
+  const { ToolRunError } = await import("./tool-run.mjs");
+  await assert.rejects(runTool({ plan, run: r, id: "R1", purpose: "after", tapeText: bad.text, tapeSha256: bad.sha }), (e) => e instanceof ToolRunError && /with an error .*read a fresh tape for the same step/.test(e.message));
+  const { existsSync } = await import("node:fs");
+  assert.ok(!existsSync(join(r, "tool")) && !existsSync(join(r, "tapes")), "nothing is written");
+  const good = await sessionTapeOf(await nullAt("A10", ["nonces", "breakers"]), DEV1);
+  const o = (await runTool({ plan, run: r, id: "R1", purpose: "after", tapeText: good.text, tapeSha256: good.sha })).output;
+  assert.equal(o.tape_sha256, good.sha, "the refused tape was not counted as used: the second is taken for the same step");
+});
+
+test("T1: session show at the revoked state (A10), the nonce and the breaker answered as nothing stored (set by this test, as the walk sets them): active false, as recorded, and exit 0", async () => {
+  const o = await over(await nullAt("A10", ["nonces", "breakers"]), "R1", "after");
+  assert.equal(o.exit, 0, o.stderr.join("\n"));
   assert.equal(String(o.json.session.value.active), rerunStep("A10").reads_after.session_active);
-  assert.equal(o.json.session_nonce.state, "unknown");
-  assert.equal(o.json.circuit_breaker.state, "unknown");
+  assert.equal(o.json.session.value.active, false);
+  for (const f of ["spending_cap", "per_tx_limit", "daily_cap"]) assert.equal(o.json.session.value[f], created("A2")[f], f);
+  assert.notEqual(o.json.session_nonce.state, "unknown");
+  assert.notEqual(o.json.circuit_breaker.state, "unknown");
 });
 
 test("T1: readBlockEvents over a block tape of A2 gives the recorded SessionCreated fields and fee", async () => {
