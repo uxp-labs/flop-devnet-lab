@@ -94,10 +94,14 @@ test("T2: a relay whose sha256 is not its text's, a block tape for a call, and a
   nothingWritten(r); nothingWritten(rb);
 });
 
-test("T2: the command line refuses with exit 2 and its words, and prints no tape", () => {
+test("T2: the command line refuses with exit 2 and its words, and prints no tape", async () => {
   const r = run();
   const bad = relay({ kind: "session" });
-  const p = spawnSync(process.execPath, [join(HERE, "tool-run.mjs"), "R1", "call", "--run", r, "--tape", bad.text, "--tape-sha256", bad.sha], { encoding: "utf8" });
+  // F14: the relay comes from a file
+  const { writeFileSync } = await import("node:fs");
+  const file = join(r, "bad.tape.txt");
+  writeFileSync(file, bad.text + "\n");
+  const p = spawnSync(process.execPath, [join(HERE, "tool-run.mjs"), "R1", "call", "--run", r, "--tape-file", file, "--tape-sha256", bad.sha], { encoding: "utf8" });
   assert.equal(p.status, 2);
   assert.equal(p.stderr, "tool-run: the tape is not a list of { method, params, result or error }\n");
   assert.equal(p.stdout, "");

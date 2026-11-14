@@ -16,6 +16,7 @@ import { join, resolve } from "node:path";
 import { HERE, REPO, atPath, flopText, loadPlan, paneKeys, readJson, sha256Text, substitute, V } from "./lib.mjs";
 import { callFile, entryOf, loadRecord, MAX_ATTEMPTS, planStepOf, runFiles, sendFile, signedFile, toolFile, viewOf } from "./run.mjs";
 import { nextOf } from "./next.mjs";
+import { DELIMITER, relayFile } from "./relay.mjs";
 import { nonceOf } from "../2026-11-12-encoder-devnet-test/research-signed.mjs";
 import { immortalRows, NODE_CODES } from "./outcomes.mjs";
 
@@ -112,20 +113,34 @@ export function paneSetup() {
   ];
 }
 
-const paneAwait = (name, call) => [`#  pane, tab on the node (${NODE_TAB}):`, `window.${name} = ${call}`, `await window.${name}   (its relay and relay_sha256)`];
+const RELAY = `node ${DIR}/relay.mjs"`;
+const SHOWN = "<the relay_sha256 the pane showed>";
+
+/**
+ * The lines of one relay (F14), in this order: the pane line; the line that shows the relay's sha256
+ * in the pane; the line that writes the relay into "<run>/relays/<step>.<name>.txt" from a here
+ * document with a quoted delimiter (relay.mjs write). The command that reads the file follows, with
+ * relayArgs. tab names the pane's tab.
+ */
+function relayLines(run, step, name, win, call, tab = `the node (${NODE_TAB})`) {
+  return [`#  pane, tab on ${tab}:`, `window.${win} = ${call}`, `(await window.${win}).relay_sha256`,
+    `#  PC: write the relay: paste (await window.${win}).relay whole on the line between, then run the lines`,
+    `${RELAY} write "${relayFile(run, step, name)}" <<'${DELIMITER}'`, `<the relay of window.${win}>`, DELIMITER];
+}
+/** The arguments that read a relay's file, with the sha256 the pane showed. */
+const relayArgs = (run, step, name, flag = name) => `--${flag}-file "${relayFile(run, step, name)}" --${flag}-sha256 ${SHOWN}`;
 const sessionKeysArg = (k) => JSON.stringify({ lru: k.lru, sessions: k.sessions, nonces: k.nonces, breakers: k.breakers, session_count: k.session_count, rotation_history: k.rotation_history });
 const blockKeysArg = (k) => JSON.stringify({ lru: k.lru, events: k.events });
 
 /** The lines of a session tape and the tool over it. */
 const tapeAndTool = (run, keys, id, purpose) => [
-  ...paneAwait("__t", `reads.sessionTape(${sessionKeysArg(keys)})`),
-  "#  PC:",
-  `${TOOL_RUN} ${id} ${purpose} --run "${run}" --tape '<relay>' --tape-sha256 <relay_sha256>`,
+  ...relayLines(run, id, `${purpose}-tape`, "__t", `reads.sessionTape(${sessionKeysArg(keys)})`),
+  `${TOOL_RUN} ${id} ${purpose} --run "${run}" ${relayArgs(run, id, `${purpose}-tape`, "tape")}`,
 ];
 
 function explorerLines(run, id, results) {
   const rt = entryOf(results, id).run_time;
-  return [`#  ${id}, the explorer's reading (a second, weaker source), pane, tab on the explorer (${EXPLORER_TAB}):`, `window.__e = explorer.read("${rt.extrinsic_hash}")`, "await window.__e   (its relay and relay_sha256)", "#  PC:", `${RECORD} step ${id} --run "${run}" --explorer '<relay>' --explorer-sha256 <relay_sha256>`];
+  return [`#  ${id}, the explorer's reading (a second, weaker source)`, ...relayLines(run, id, "explorer", "__e", `explorer.read("${rt.extrinsic_hash}")`, `the explorer (${EXPLORER_TAB})`), `${RECORD} step ${id} --run "${run}" ${relayArgs(run, id, "explorer")}`];
 }
 
 /** The lines of one phase of one id, with every value filled from the plan, the run folder and the record. */
@@ -143,13 +158,13 @@ async function phaseLines(plan, run, results, n) {
   }
   if (n.phase === "send") {
     const { text } = checkedSend(run, results, id);
-    return [head, ...paneAwait("__s", `lab.send('${text}', "${sha256Text(text)}")`), "#  PC:", `${RECORD} step ${id} --run "${run}" --sent '<relay>' --sent-sha256 <relay_sha256>`];
+    return [head, ...relayLines(run, id, "sent", "__s", `lab.send('${text}', "${sha256Text(text)}")`), `${RECORD} step ${id} --run "${run}" ${relayArgs(run, id, "sent")}`];
   }
   if (n.phase === "wait") return waitLines(plan, run, results, n);
   if (n.phase === "block") {
     const v = viewOf(results, id);
-    return [head, `#  the events and the fee of ${id} by the lab's own decoder, from a block tape of block ${v.block_number}`, ...paneAwait("__b", `reads.blockTape(${blockKeysArg(keys)}, ${v.block_number}, "${v.block_hash}")`), "#  PC:",
-      `${TOOL_RUN} ${id} block --run "${run}" --tape '<relay>' --tape-sha256 <relay_sha256>`, `${RECORD} tool ${id} block --run "${run}"`];
+    return [head, `#  the events and the fee of ${id} by the lab's own decoder, from a block tape of block ${v.block_number}`, ...relayLines(run, id, "block-tape", "__b", `reads.blockTape(${blockKeysArg(keys)}, ${v.block_number}, "${v.block_hash}")`),
+      `${TOOL_RUN} ${id} block --run "${run}" ${relayArgs(run, id, "block-tape", "tape")}`, `${RECORD} tool ${id} block --run "${run}"`];
   }
   if (n.phase === "after") return [head, `#  read after ${id}: a session tape at a head at or above its block; the tool's session show over it`, ...tapeAndTool(run, keys, id, "after"), `${RECORD} tool ${id} after --run "${run}"`];
   throw new Error(`no lines for the phase ${n.phase}`);
@@ -164,14 +179,14 @@ function waitLines(plan, run, results, n) {
   const id = n.step, a = n.action;
   const rowLines = [`# the row: ${n.row.outcome}${n.row.node_code !== undefined ? ` (node code ${n.row.node_code})` : ""}${n.row.node_word ? ` (${n.row.node_word})` : ""}`, `# known: ${n.row.known}`, `# the lead: ${n.row.lead}`, `# a second copy: ${n.row.second_copy}`];
   const head = [`# ${id}: wait: ${n.why}`, ...rowLines];
-  const record = ["#  PC:", `${RECORD} step ${id} --run "${run}" --sent '<relay>' --sent-sha256 <relay_sha256>`];
+  const record = `${RECORD} step ${id} --run "${run}" ${relayArgs(run, id, "sent")}`;
   if (a.kind === "find") {
     const { extrinsic } = checkedSend(run, results, id);
-    return [...head, `#  the action: find first, from the start of the run (immortal). No line that sends`, ...paneAwait("__f", `lab.find("${extrinsic}", ${results.start.finalized.number})`), ...record];
+    return [...head, `#  the action: find first, from the start of the run (immortal). No line that sends`, ...relayLines(run, id, "sent", "__f", `lab.find("${extrinsic}", ${results.start.finalized.number})`), record];
   }
   const { text } = checkedSend(run, results, id);
-  if (a.kind === "sendSame") return [...head, "#  the action: the same bytes again, never other bytes", ...paneAwait("__s", `lab.sendSame('${text}', "${sha256Text(text)}")`), ...record];
-  if (a.kind === "send") return [...head, "#  the action: the same send file again (nothing was submitted)", ...paneAwait("__s", `lab.send('${text}', "${sha256Text(text)}")`), ...record];
+  if (a.kind === "sendSame") return [...head, "#  the action: the same bytes again, never other bytes", ...relayLines(run, id, "sent", "__s", `lab.sendSame('${text}', "${sha256Text(text)}")`), record];
+  if (a.kind === "send") return [...head, "#  the action: the same send file again (nothing was submitted)", ...relayLines(run, id, "sent", "__s", `lab.send('${text}', "${sha256Text(text)}")`), record];
   throw new Error(`no lines for the action ${a.kind}`);
 }
 
@@ -179,8 +194,8 @@ function waitLines(plan, run, results, n) {
 function leadStopLines(plan, run, n) {
   const id = n.step;
   return [`# ${id}: the lead's stop, case ${n.action.case}: send nothing for ${id}`, `# the row: ${n.row.outcome}${n.row.node_code !== undefined ? ` (node code ${n.row.node_code})` : ""}`, `# the lead: ${n.row.lead}`,
-    `#  the owner's next nonce, which must equal the copy's (the last batch's README, "The lead's stop")`, ...paneAwait("__r", `lab.accountReads("${V(plan, "OWNER_SS58")}")`), "#  PC:",
-    `${RECORD} stop ${id} --run "${run}" --case ${n.action.case} --why ${q(`send_outcomes ${n.row.outcome}${n.row.node_code !== undefined ? ` ${n.row.node_code}` : ""}: the lead stops at the step (case ${n.action.case})`)} --reads '<relay>' --reads-sha256 <relay_sha256>`];
+    `#  the owner's next nonce, which must equal the copy's (the last batch's README, "The lead's stop")`, ...relayLines(run, id, "reads", "__r", `lab.accountReads("${V(plan, "OWNER_SS58")}")`),
+    `${RECORD} stop ${id} --run "${run}" --case ${n.action.case} --why ${q(`send_outcomes ${n.row.outcome}${n.row.node_code !== undefined ? ` ${n.row.node_code}` : ""}: the lead stops at the step (case ${n.action.case})`)} ${relayArgs(run, id, "reads")}`];
 }
 
 /** The lines of P0: the seat home first (init and cap set), then the reads and the start. */
@@ -196,9 +211,9 @@ async function p0Lines(plan, run) {
   const device = await deviceOfSeat(runFiles(run).seat, seat);
   const keys = await paneKeys(plan, V(plan, "OWNER"), device);
   const lines = ["# P0: reads only. The owner's reads, the free read of H7, and one session tape; then the tool's session show over it", ...paneSetup()];
-  lines.push(...paneAwait("__r", `lab.accountReads("${V(plan, "OWNER_SS58")}")`), ...paneAwait("__p", `reads.probe(${V(plan, "PROBE_BACK")})`));
+  lines.push(...relayLines(run, "P0", "reads", "__r", `lab.accountReads("${V(plan, "OWNER_SS58")}")`), ...relayLines(run, "P0", "probe", "__p", `reads.probe(${V(plan, "PROBE_BACK")})`));
   if (!existsSync(toolFile(run, "P0", "show"))) lines.push(...tapeAndTool(run, keys, "P0", "show"));
-  lines.push("#  PC:", `${RECORD} start --run "${run}" --reads '<relay of __r>' --reads-sha256 <its relay_sha256> --probe '<relay of __p>' --probe-sha256 <its relay_sha256>`);
+  lines.push("#  PC: the start, from the two relay files above (each sha256 as the pane showed it)", `${RECORD} start --run "${run}" ${relayArgs(run, "P0", "reads")} ${relayArgs(run, "P0", "probe")}`);
   return lines;
 }
 

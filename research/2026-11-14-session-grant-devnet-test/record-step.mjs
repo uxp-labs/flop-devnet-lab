@@ -3,7 +3,8 @@
 // relays from the pane (each text with the sha256 the pane gave beside it) and from the files the
 // lab's tools wrote in the run folder. No network. It signs nothing and reads no key file.
 //
-//   start --run <folder> --reads '<text>' --reads-sha256 <sha> --probe '<text>' --probe-sha256 <sha>
+// Each relay is a file of the run folder (F14, relay.mjs): --<name>-file <path> and --<name>-sha256 <sha>.
+//   start --run <folder> --reads-file <path> --reads-sha256 <sha> --probe-file <path> --probe-sha256 <sha>
 //        makes results.json: lab.accountReads of the owner (the runtime, the genesis, the head, the
 //        owner's next nonce), the free read of H7, the device from the seat's identity.json did, the
 //        seat's caps from its config.json, and P0's session show (tool/P0.show.json) with SessionCount(S)
@@ -16,13 +17,13 @@
 //        holds signed/<id>.json to the tool's call for the plan's owner, nonce, runtime and chain
 //        (owner-call.mjs checkOwnerSigned). When it holds it writes signed/<id>.send.json, exactly
 //        {"step","extrinsic"} on one line, and prints its sha256 and its text. The record keeps it.
-//   step <id> --run <folder> [--sent '<text>' --sent-sha256 <sha>] [--explorer '<text>' --explorer-sha256 <sha>]
+//   step <id> --run <folder> [--sent-file <path> --sent-sha256 <sha>] [--explorer-file <path> --explorer-sha256 <sha>]
 //        the runner's reading (lab.send, lab.sendSame or lab.find of pane-runner.js), and the
 //        explorer's (explorer-reader.js), a second and weaker source, marked as such.
 //   tool <id> <block|after> --run <folder>
 //        the tool's reading of the step's block (readBlockEvents: the events, the outcome and the fee
 //        of the extrinsic at its index, the lab's own decoder) or of the session after it (show).
-//   stop <id> --run <folder> [--case <a|c|d>] --why '<words>' [--reads '<text>' --reads-sha256 <sha>]
+//   stop <id> --run <folder> [--case <a|c|d>] --why '<words>' [--reads-file <path> --reads-sha256 <sha>]
 //        the lead's stop at an owner step whose copy cannot land without being sent again (cases a,
 //        c and d of the last batch's README, "The lead's stop"; lead-stop.mjs there).
 // After each it prints plan.mjs next's word.
@@ -37,13 +38,15 @@ import { callFile, entryOf, loadRecord, planStepOf, runFiles, sendFile, sendText
 import { checkOwnerSigned, OwnerCallError, secondEncoder, toolCall } from "./owner-call.mjs";
 import { decoderReading } from "./events.mjs";
 import { nextOf } from "./next.mjs";
-import { explorerReading, NOTHING_SUBMITTED, takeRelay, RecordStepError as LastRecordStepError } from "../2026-11-12-encoder-devnet-test/record-step.mjs";
+import { explorerReading, NOTHING_SUBMITTED, RecordStepError as LastRecordStepError } from "../2026-11-12-encoder-devnet-test/record-step.mjs";
+import { readRelay, RelayError } from "./relay.mjs";
 import { takeSignerReads, LeadStopError } from "../2026-11-12-encoder-devnet-test/lead-stop.mjs";
 import { NEVER_SENT, readingsOf } from "../2026-11-12-encoder-devnet-test/record.mjs";
 
 export class RecordStepError extends Error {}
 const no = (m) => { throw new RecordStepError(m); };
-const relayed = (text, sha, what) => { try { return takeRelay(text, sha, what); } catch (e) { if (e instanceof LastRecordStepError) no(e.message); throw e; } };
+/** A relay from its file (F14): { value, text }, or a refusal. */
+const relayed = (file, sha, what) => { try { return readRelay(file === undefined ? undefined : resolve(file), sha, what); } catch (e) { if (e instanceof RelayError) no(e.message); throw e; } };
 
 export const SCHEMA = "g19-run-time-1";
 export const RECORD_WORDS = "a run time record: one node, read by the lead through the browser pane; each step's events and fee decoded by the lab's own decoder (the tool's readBlockEvents over a block tape); the session after each step by the tool's session show over a tape; the explorer's reading beside them as a second, weaker source. A public recording of its blocks is not part of it.";
@@ -286,11 +289,11 @@ async function main(argv) {
   const rest = (n) => argv.slice(n);
   const record = (run) => loadRecord(run) ?? no("the run folder has no results.json: make it with record-step.mjs start");
   if (cmd === "start") {
-    const f = flags(rest(1), ["run", "reads", "reads-sha256", "probe", "probe-sha256"]);
+    const f = flags(rest(1), ["run", "reads-file", "reads-sha256", "probe-file", "probe-sha256"]);
     const run = resolve(f.run ?? no("--run <run folder> is required"));
     if (existsSync(runFiles(run).results)) no(`${runFiles(run).results} exists: start never writes over a record`);
-    const reads = relayed(f.reads, f["reads-sha256"], "reads");
-    const probe = relayed(f.probe, f["probe-sha256"], "probe");
+    const reads = relayed(f["reads-file"], f["reads-sha256"], "reads").value;
+    const probe = relayed(f["probe-file"], f["probe-sha256"], "probe").value;
     const r = await startRecord({ plan, run, reads, readsSha256: f["reads-sha256"], probe, probeSha256: f["probe-sha256"] });
     writeFileSync(runFiles(run).results, JSON.stringify(r, null, 1) + "\n", { flag: "wx" });
     console.log(`recorded the start: owner next nonce ${r.owner_account_nonce_at_start}, device ${r.accounts.device.ss58}, SessionCount(S) ${r.p0.session_count.value ?? "unknown"}, probe ${r.probe.answered ? `answered, ${r.probe.length} bytes` : "not answered"}`);
@@ -317,10 +320,10 @@ async function main(argv) {
     return;
   }
   if (cmd === "step") {
-    const id = idArg(); const f = flags(rest(2), ["run", "sent", "sent-sha256", "explorer", "explorer-sha256"]);
+    const id = idArg(); const f = flags(rest(2), ["run", "sent-file", "sent-sha256", "explorer-file", "explorer-sha256"]);
     const run = resolve(f.run ?? no("--run is required"));
-    const sent = f.sent !== undefined || f["sent-sha256"] !== undefined ? relayed(f.sent, f["sent-sha256"], "sent") : null;
-    const explorer = f.explorer !== undefined || f["explorer-sha256"] !== undefined ? relayed(f.explorer, f["explorer-sha256"], "explorer") : null;
+    const sent = f["sent-file"] !== undefined || f["sent-sha256"] !== undefined ? relayed(f["sent-file"], f["sent-sha256"], "sent").value : null;
+    const explorer = f["explorer-file"] !== undefined || f["explorer-sha256"] !== undefined ? relayed(f["explorer-file"], f["explorer-sha256"], "explorer").value : null;
     const r = recordReading({ plan, run, results: record(run), id, sent, sentSha256: f["sent-sha256"], explorer, explorerSha256: f["explorer-sha256"], errors });
     writeRecord(run, r);
     const v = viewOf(r, id);
@@ -338,9 +341,10 @@ async function main(argv) {
     return;
   }
   if (cmd === "stop") {
-    const id = idArg(); const f = flags(rest(2), ["run", "case", "why", "reads", "reads-sha256"]);
+    const id = idArg(); const f = flags(rest(2), ["run", "case", "why", "reads-file", "reads-sha256"]);
     const run = resolve(f.run ?? no("--run is required"));
-    const r = leadStop({ plan, run, results: record(run), id, why: f.why, kase: f.case ?? null, readsText: f.reads, readsSha256: f["reads-sha256"] });
+    const readsText = f["reads-file"] !== undefined ? relayed(f["reads-file"], f["reads-sha256"], "reads").text : undefined;
+    const r = leadStop({ plan, run, results: record(run), id, why: f.why, kase: f.case ?? null, readsText, readsSha256: f["reads-sha256"] });
     writeRecord(run, r);
     console.log(`recorded the lead's stop at ${id}, case ${entryOf(r, id).lead_stop.case}`);
     console.log(wordOf(plan, r));

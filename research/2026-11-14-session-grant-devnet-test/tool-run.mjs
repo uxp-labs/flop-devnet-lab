@@ -1,7 +1,10 @@
 #!/usr/bin/env node
 // tool-run: runs the tool's own code once over one relayed tape, on the PC, and writes one file (H5).
 //
-//   node tool-run.mjs <id> <purpose> --run <folder> --tape '<relay>' --tape-sha256 <sha>
+//   node tool-run.mjs <id> <purpose> --run <folder> --tape-file <path> --tape-sha256 <sha>
+//
+// The tape is a relay from a file (relay.mjs readRelay, F14): its content, one trailing newline
+// removed, must have that sha256.
 //
 //   purpose show   P0 only: imd-flop session show
 //           call   the step's own command, session grant or session revoke (steps.json command)
@@ -28,6 +31,7 @@ import { loadPlan, loadTool, stepOf, substitute, V } from "./lib.mjs";
 import { committedMetadata, genesisOf, metadataIsCommitted, takeTape, tapeTransport, TapeError } from "./tape.mjs";
 import { lastFinalizedBlock, loadRecord, planStepOf, runFiles, tapeFile, toolFile, toolOutputs, viewOf } from "./run.mjs";
 import { nextOf } from "./next.mjs";
+import { readRelay, RelayError } from "./relay.mjs";
 
 export class ToolRunError extends Error {}
 const no = (m) => { throw new ToolRunError(m); };
@@ -145,9 +149,11 @@ function flags(argv, names) {
 if (process.argv[1] && resolve(process.argv[1]) === resolve(new URL(import.meta.url).pathname)) {
   try {
     const [id, purpose, ...rest] = process.argv.slice(2);
-    if (!id || !purpose || id.startsWith("--") || purpose.startsWith("--")) no("usage: node tool-run.mjs <id> <show|call|after|block> --run <folder> --tape '<relay>' --tape-sha256 <sha>");
-    const f = flags(rest, ["run", "tape", "tape-sha256"]);
-    const r = await runTool({ plan: loadPlan(), run: resolve(f.run ?? no("--run <run folder> is required")), id, purpose, tapeText: f.tape, tapeSha256: f["tape-sha256"] });
+    if (!id || !purpose || id.startsWith("--") || purpose.startsWith("--")) no("usage: node tool-run.mjs <id> <show|call|after|block> --run <folder> --tape-file <path> --tape-sha256 <sha>");
+    const f = flags(rest, ["run", "tape-file", "tape-sha256"]);
+    let tape;
+    try { tape = readRelay(f["tape-file"] && resolve(f["tape-file"]), f["tape-sha256"], "tape"); } catch (e) { if (e instanceof RelayError) no(e.message); throw e; }
+    const r = await runTool({ plan: loadPlan(), run: resolve(f.run ?? no("--run <run folder> is required")), id, purpose, tapeText: tape.text, tapeSha256: f["tape-sha256"] });
     console.log(JSON.stringify({ wrote: r.file, exit: r.output.exit, tape_sha256: r.output.tape_sha256 }));
   } catch (e) {
     process.stderr.write(`tool-run: ${e instanceof ToolRunError ? e.message : `failed (${e?.constructor?.name ?? typeof e})`}\n`);
