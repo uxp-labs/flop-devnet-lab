@@ -79,6 +79,13 @@ for (const x of SETTLES) {
         expect(hexOf(byShape.fields.get("claimed_measured_root") as Uint8Array)).toBe(hexOf(refBytes(args.claimed_measured_root)));
         expect(hexOf(byShape.fields.get("agent_receipt_sig") as Uint8Array)).toBe(hexOf(refBytes(args.agent_receipt_sig)));
       });
+
+      it("the call is found exactly once at a byte boundary: a block holding it twice, a block without it and a match shifted by one hex digit are refused", () => {
+        const head = byShape.extrinsic.slice(byShape.extrinsic.indexOf(s.channelId.slice(2)) - 4, byShape.extrinsic.indexOf(s.channelId.slice(2)) + 64);
+        expect(() => settleByShape({ ...s, extrinsics: [...s.extrinsics, byShape.extrinsic] })).toThrow("is found 2 times in the block");
+        expect(() => settleByShape({ ...s, extrinsics: s.extrinsics.filter((e) => e !== byShape.extrinsic) })).toThrow("is found 0 times in the block");
+        expect(() => settleByShape({ ...s, extrinsics: [`0x0${head}0`] })).toThrow("is found 0 times in the block");
+      });
     });
 
     describe("the channel's record and the block's event, through the lab's door", () => {
