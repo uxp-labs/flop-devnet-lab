@@ -69,7 +69,7 @@ describe("T7: on the file system, nothing the key gives holds the seed, the secr
       public_key_bytes: bytes(key.publicKey()),
       receipt: { message: bytes(receipt.message), signature: hex(receipt.signature) },
       ack: { message: bytes(ack.message), signature: hex(ack.signature) },
-      request: { message: bytes(request.message), signature: hex(request.signature), headers: Object.entries(request.headers).map(([k, v]) => [k, Array.from(v, (c) => c.charCodeAt(0))]) },
+      request: { message: bytes(request.message), signature: hex(request.signature), headers: Object.entries(request.headers).map(([k, v]) => [k, Array.from(v as string, (c: string) => c.charCodeAt(0))]) },
     };
     writeJsonSafe(join(home, "channel", "run.json"), row);
     appendJsonlSafe(join(home, "channel", "rows.jsonl"), row);
