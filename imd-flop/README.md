@@ -140,6 +140,7 @@ Not built: when FLOP ships proxies or escrow pools and a call is funded by anoth
 - What can fail after the sign function is called comes only from the signer: a sign function that throws (`SIGNER_THREW`, naming only the class of what it threw), and a signature that is not 64 bytes or does not verify over the payload (`SIGNATURE_INVALID`).
 - The result's fields and words are read back from the final bytes, and the signature is verified there. The exported words functions (`src/chain/describe.ts`) take only bytes and a runtime's four names, so the words cannot differ from the bytes. No exported function takes a runtime object: a runtime is found by its four names in the frozen table. Everything `src/chain` exports is frozen where it is defined.
 - Its table, `src/chain/runtimes.ts`, is written by `node scripts/chain-table.mjs` from the 1014020 metadata held by the observatory recording `recording-20261112080132-05842a6db1e9c890`, picked by the sha256 in `research/2026-11-12-session-rerun-1014020/facts-1014020.json`. Nothing in it is typed by hand. `test/chain-table.test.ts` derives it again and compares byte for byte.
+- Its input checks (`bytesOf`, `takeFields`, `ownKeys`, `ownValue` and the integer check) live in `src/plain-input.ts`, shared with the channel modules. That module imports nothing and refuses through the encoder's own `refuse`, with the encoder's codes.
 - The reference encoder for the tests and the script is `@polkadot-api/substrate-bindings` and `@polkadot-api/metadata-builders`, dev dependencies only. Nothing under `src` imports them.
 
 ## Chain reads (not used by any command yet)
@@ -154,6 +155,44 @@ Not built: when FLOP ships proxies or escrow pools and a call is funded by anoth
 - The cross check (`cross-check.ts`). A state whose known session record names another owner or delegate than the state's own is unknown, before any event is looked at. The totals of the session's `SessionCallExecuted` event at a block must equal the stored session at that block; a disagreement is unknown and names both values.
 - Only the five, at run time. `READ_METHODS` (`node.ts`) is frozen, and the transport `nodeTransport` returns refuses any other method before `rpcCall` is called, so a cast puts nothing on the wire; the read turns the refusal into unknown. Nothing a transport throws or answers makes a read throw.
 - One socket. `src/node-rpc.ts` `rpcCall` is the one place imd-flop opens a socket to a node; the genesis check and the reads both use it. It takes a frame as the call's answer only when the frame is an object that is not a list, its `jsonrpc` is exactly `"2.0"`, its `id` is exactly the id sent (`CALL_ID`, 1), it has no own `error` key and it has an own `result` key; the result is then the frame's `result` as it is, so null only when the node wrote null. A frame with an own `error` key, whatever its value, is a failed call: an error object with a text `message` is quoted through `server-text.ts`, any other gives "rpc error". Every other frame is a failed call whose words say it is not an answer to the call, and the frame is never quoted. Tests give a scripted transport that answers from the observatory's committed recordings (`test/lib/recorded-node.ts`), and no test opens a socket.
+
+## Channel key (not used by any command yet)
+
+`src/channel/` holds the channel key C and the exact bytes it signs, for the channel provider to come. No command uses it. It opens no socket, writes no file and sends nothing.
+
+What the modules are:
+- `errors.ts`: the refusal codes (`WRONG_LENGTH`, `OUT_OF_RANGE`, `BAD_INPUT`, `SELF_CHECK`, `SIGN_FAILED`) and `ChannelError`, exit 5. A message names the field and the length or range. It never carries bytes or hex of an input.
+- `bytes.ts`: the shared input checks of `src/plain-input.ts` bound to the channel's refuse, fixed width little endian integers, ASCII and UTF-8 text, and lower case hex.
+- `transcript.ts`: the channel id, the receipt and the turn ack, as bytes. No hex, no signing.
+- `auth.ts`: the request message and its five headers. No signing. The time, the nonce and the challenge are handed in.
+- `key.ts`: the key itself. It is the only file under `src` that names the sr25519 library.
+
+The layouts, each read from FLOP's SDK 0.6.0 (`dist/compute-channel/`), read and not imported. All integers are little endian.
+- Channel id (`transcript.js`, `channelIdV1`): blake2b 256 of the 23 ASCII bytes `FLOP/COMPUTE_CHANNEL/ID`, the byte 1, the genesis hash, the agent, the miner (32 bytes each) and the nonce as a u64. The agent is the account that opens the channel: the session owner when the open goes through a session. It is not C.
+- Receipt (`transcript.js`, `receiptMessage`): the 28 ASCII bytes `FLOP/COMPUTE_CHANNEL/RECEIPT`, the byte 1, the channel id, the final root, the aggregate G_n as a u128 and the payable as a u128. 125 bytes, not hashed. There is one receipt function and no rule on what payable is. The older form without the domain and the version byte is not written.
+- Turn ack (`transcript.js`, `turnAckMessage`): the channel id, the turn index as a u32, the leaf hash, the agent's send time and receive time in milliseconds as u64. 84 bytes, not hashed. No rule on the order of the two times.
+- Request (`session-auth.js`, `sessionRequestMessage` and `signSessionRequest`): the UTF-8 bytes of the compact JSON text of eight strings: `flop-session-request-v1`, the channel id as 0x hex, the method (`GET` or `POST`), the path, 0x hex of the blake2b 256 of the body's UTF-8 bytes, the time in milliseconds as decimal text, the 16 byte nonce as 0x hex, and the miner's challenge (64 lower case hex digits, no 0x). The path is one or more segments of a slash and letters, digits, `_` or `-`. A GET has the empty body. A body with a lone surrogate is refused. The headers are `x-flop-channel`, `x-flop-timestamp`, `x-flop-nonce`, `x-flop-challenge` and `x-flop-signature` (0x hex of the 64 byte signature).
+
+What the chain has shown, and what it has not:
+- Shown: the channel id for `force_open`, on three of the lab's records. `research/2026-11-11-session-escrow/results.json` (spec 1014014), the rerun's step A6 in `research/2026-11-12-session-rerun-1014020/results.json`, and step T3 in `research/2026-11-12-encoder-devnet-test/results.final.json`. `test/channel-id.test.ts` reads every input and every id from those files.
+- Not shown: the id for `open_channel` (inferred to be the same formula); the receipt against the chain's check at settle; the ack and the request against a miner. Those three are as the SDK describes them.
+- No rule is built on the miner's time window, its nonce rule or the life of a challenge. No source shows them.
+
+The key:
+- The library is `@scure/sr25519` at exactly 2.4.0. It signs under the substrate signing context, as FLOP's SDK does. Its signatures are randomized.
+- `newChannelKey()` takes 32 bytes from the system's random source, makes the secret and the public key, and registers the seed, the secret and each half of the secret with the secret guard. The secret stays in a closure.
+- The key is a frozen object of four functions: `publicKey()`, `signReceipt`, `signTurnAck` and `signRequest`. `JSON.stringify` of it is `{}`. It holds no channel id: each call names its channel.
+- C signs those three layouts and nothing else. No function signs bytes it is handed, and none gives out the secret or the seed.
+- Each signature is checked to be 64 bytes and to verify under the key's own public key before it is returned (`SELF_CHECK`). If the library throws, the refusal names only the class of what it threw (`SIGN_FAILED`).
+- `verifyChannelSignature` answers true only when the library's verify does. It answers false for a public key not 32 bytes, a signature not 64 bytes, or bytes the library throws on. It never throws on bytes.
+- `channelKeyFromSeed` makes the same key from a given seed. It is for tests alone: no file under `src` but `key.ts` names it, and a source scan holds that.
+
+C is never written. Tests that hold it:
+- `test/channel-key.test.ts`: no view of the key (its keys, `JSON.stringify`, a spread, `util.inspect`) and nothing it returns holds the seed, the secret or a half of it in hex, base64, base64url or base58.
+- `test/channel-secret.test.ts`: the secret guard flags them once a key exists; what the key returned, written through `writeJsonSafe` and `appendJsonlSafe`, leaves no copy of them in any file; and the secret itself is refused by both writers.
+- `test/channel-source.test.ts`: no file under `src/channel` imports a file, socket, clock, environment, timer or store module, and none has a dynamic import.
+
+The reference sr25519 for the tests is `@polkadot/wasm-crypto` 7.5.4 (Rust schnorrkel in WASM), with `@polkadot/util` and `@polkadot/x-randomvalues` 14.0.3, dev dependencies only (`test/lib/sr25519-reference.ts`). Nothing under `src` imports a package under `@polkadot/`. `test/channel-cross.test.ts` holds the lab's public keys equal to the reference's over 34 seeds, and each side's signatures verifying under the other.
 
 ## Known gaps
 
