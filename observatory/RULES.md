@@ -1007,6 +1007,8 @@ for everything it reads.
   field passes only when its tape line is an `rpc` call of `state_getStorage` with exactly two
   params, the `System.LastRuntimeUpgrade` key and the hash of that block. A parent's height is its
   child's recorded header's number less one, and its field says so.
+  It is recorded: `fixtures/recording-20261114071524-9afba293ba8d1b2f` (round 34), 12 of 12
+  answered, held by `test/settle-recording.test.ts`.
 - The fifth list read the encoder's devnet test at spec 1014020: the start block and the block of
   each sent step, each hash by its height, and at each one `state_queryStorageAt` of the same eight
   keys in one fixed order, built from the 1014020 metadata; each step's block whole by

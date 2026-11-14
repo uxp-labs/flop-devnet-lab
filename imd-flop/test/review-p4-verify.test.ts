@@ -2,7 +2,7 @@
  * Review of P4 (reviewer, not the builder): verifyChannelSignature against the reference sr25519 in bulk (attack 7),
  * bytes that make it throw, and the real cooperative settle of block 3479299 as a third voice (the brief's HOLDS).
  */
-import { existsSync, readFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { beforeAll, describe, expect, it } from "vitest";
@@ -184,15 +184,21 @@ describe("A6, T3: signRequest refuses with a ChannelError, never a raw TypeError
   }
 });
 
-/** The lead's saved copy of the fourth extrinsic of block 3479299; it is not in the repo. */
-const SETTLE_HEX = "/home/claude/lead-logs/r1/settle-3479299-x3.hex";
 const REPO = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const TAPE = join(REPO, "observatory/fixtures/recording-20261112004113-0b2b505d2d4b703b/tape.jsonl");
 const SHAPE = join(REPO, "observatory/shapes/tzkv-runtime-1014014.json");
+/** The sixth recording, which holds block 3479299 whole: its chain_getBlock answer gives the settle's extrinsic (piece R, B2). */
+const SETTLE_TAPE = join(REPO, "observatory/fixtures/recording-20261114071524-9afba293ba8d1b2f/tape.jsonl");
+/** The extrinsics of a block, from the sixth recording's one chain_getBlock answer at its hash. */
+const extrinsicsAt = (blockHash: string): string[] => {
+  const found = readFileSync(SETTLE_TAPE, "utf8").trim().split("\n").slice(1).map((l) => JSON.parse(l)).filter((x) => x.request.method === "chain_getBlock" && x.request.params[0] === blockHash);
+  expect(found.length).toBe(1);
+  return found[0].answer.result.block.extrinsics as string[];
+};
 /** The block hash of 3479299: the tape's own answer to chain_getBlockHash(3479299). */
 const tape = () => readFileSync(TAPE, "utf8").trim().split("\n").slice(1).map((l) => JSON.parse(l) as { request: { method: string; params: unknown[] }; answer: { result: string } });
 
-describe.skipIf(!existsSync(SETTLE_HEX))(`the real cooperative settle of block 3479299 (needs ${SETTLE_HEX}, which is not in the repo)`, () => {
+describe("the real cooperative settle of block 3479299 (its extrinsic from the sixth recording's fixture)", () => {
   it("HOLDS: receiptMessage with payable = the stored escrow, and verifyChannelSignature under the stored agent_key, say true; other payables and the older form say false; the reference agrees", () => {
     const lines = tape();
     const hashAnswer = lines.filter((x) => x.request.method === "chain_getBlockHash" && x.request.params[0] === 3479299);
@@ -222,8 +228,10 @@ describe.skipIf(!existsSync(SETTLE_HEX))(`the real cooperative settle of block 3
     const agentKey = at.agent_key!;
     const escrow = fromLe(at.escrow!);
     // The extrinsic: call index 103, 2 (ComputeChannel.settle) followed by the channel id, found once.
-    const x = unhex(readFileSync(SETTLE_HEX, "utf8").trim());
     const callHead = hex(Uint8Array.of(103, 2, ...channel));
+    const holding = extrinsicsAt(blockHash).filter((e) => e.includes(callHead));
+    expect(holding.length).toBe(1);
+    const x = unhex(holding[0]!);
     const parts = hex(x).split(callHead);
     expect(parts.length).toBe(2);
     let p = parts[0]!.length / 2 + 2 + 32;
