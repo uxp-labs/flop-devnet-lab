@@ -35,10 +35,12 @@ export const NAMES: core.Names<Account, Channel, Block, Mentioned> = { accounts:
 /** The tape every input and the runtime are taken from: the first recording's. */
 export const TAPE = "observatory/fixtures/recording-20261111160917-3c228907aa129a01/tape.jsonl";
 /**
- * The runtime every key is built for, named by a file and a field: the System.LastRuntimeUpgrade the
- * first recording read at the gateway's settled block, whose spec runtimeOfBlock names.
+ * The runtime every key is built for, named by a file, a field and a block of this plan: the
+ * System.LastRuntimeUpgrade the first recording read at the gateway's settled block, whose spec
+ * runtimeOfBlock names. The field passes only when its tape line is that read at that block
+ * (specNamed in test/helpers/requests-list.ts).
  */
-export const RUNTIME = { file: TAPE, field: "the answer to the state_getStorage call at seq 21" } as const;
+export const RUNTIME = { file: TAPE, field: "the answer to the state_getStorage call at seq 21", block: settledOf("gateway") } as const;
 
 export type Inputs = core.Inputs<Account, Channel, Block, Mentioned>;
 export type Read = core.Read<Account, Channel>;

@@ -10,8 +10,10 @@
 import { getDynamicBuilder, getLookupFn } from "@polkadot-api/metadata-builders";
 import { decAnyMetadata, unifyMetadata } from "@polkadot-api/substrate-bindings";
 import { createHash } from "node:crypto";
-import { readFileSync } from "node:fs";
-import { describe, expect, it } from "vitest";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { afterAll, describe, expect, it } from "vitest";
 import { feedText } from "../src/feed.js";
 import { READ_ONLY_RPC_METHODS, guardRpc } from "../src/guard.js";
 import { MAX_CALLS, readRequests } from "../src/requests.js";
@@ -174,7 +176,7 @@ describe("the sixth request list, recordings/requests.json", () => {
 describe("the runtime the sixth list's keys are built for", () => {
   it("is named by a file and a field: the System.LastRuntimeUpgrade the first recording read at the gateway's settled block, through runtimeOfBlock", () => {
     expect(LIST_RUNTIME).toBe(RUNTIME);
-    expect(RUNTIME).toEqual({ file: TAPE, field: "the answer to the state_getStorage call at seq 21" });
+    expect(RUNTIME).toEqual({ file: TAPE, field: "the answer to the state_getStorage call at seq 21", block: "gateway/settled" });
     expect(entryAt(21).request).toEqual({ kind: "rpc", method: "state_getStorage", params: [LAST_RUNTIME_UPGRADE_KEY, INPUTS.blocks["gateway/settled"].hash.value] });
     const named = runtimeOfBlock(hexBytes(String(tapeAnswer(RUNTIME.file, RUNTIME.field))));
     expect(named.found).toBe(true);
@@ -185,7 +187,7 @@ describe("the runtime the sixth list's keys are built for", () => {
     const seq = hashSeq(INPUTS.blocks["second/settled"].height.value) + 3;
     expect(entryAt(seq).request).toEqual({ kind: "rpc", method: "state_getStorage", params: [LAST_RUNTIME_UPGRADE_KEY, INPUTS.blocks["second/settled"].hash.value] });
     const spec = specNamed(RUNTIME);
-    expect(specNamed({ file: TAPE, field: `the answer to the state_getStorage call at seq ${seq}` })).toBe(spec);
+    expect(specNamed({ file: TAPE, field: `the answer to the state_getStorage call at seq ${seq}`, block: "second/settled" })).toBe(spec);
     const line = REVIEWED.find((r) => r.specVersion === spec);
     expect(line).toBeDefined();
     expect([META.length, sha256(META)]).toEqual([line?.metadataBytes, line?.metadataSha256]);
@@ -198,7 +200,58 @@ describe("the runtime the sixth list's keys are built for", () => {
     expect(() => tapeAnswer(TAPE, "the answer to the state_getStorage call at seq 20")).not.toThrow();
     expect(() => tapeAnswer(TAPE, "the answer to the state_getStorage call at seq 19")).toThrow(`${TAPE} holds no state_getStorage call at seq 19`);
     // seq 20 is System.Events: bytes, but no LastRuntimeUpgrade record.
-    expect(() => specNamed({ file: TAPE, field: "the answer to the state_getStorage call at seq 20" })).toThrow("no reviewed runtime");
+    expect(() => specNamed({ file: TAPE, field: "the answer to the state_getStorage call at seq 20", block: "gateway/settled" })).toThrow("no reviewed runtime");
+  });
+
+  describe("refuses a read that is not the System.LastRuntimeUpgrade key at the plan's block, each in its own words", () => {
+    const DIR = mkdtempSync(join(tmpdir(), "settle-requests-"));
+    afterAll(() => rmSync(DIR, { recursive: true, force: true }));
+    let n = 0;
+    /** A copy of the first tape with the line at seq 21 changed, written to a temporary folder; its absolute path. */
+    const tapeWith = (change: (e: ReturnType<typeof entryAt> & { request: { kind: string } }) => unknown): string => {
+      const lines = [...TAPE_LINES];
+      lines[22] = JSON.stringify(change(entryAt(21) as Parameters<typeof change>[0]));
+      const path = join(DIR, `tape-${n++}.jsonl`);
+      writeFileSync(path, lines.join("\n"));
+      return path;
+    };
+    const FIELD_21 = "the answer to the state_getStorage call at seq 21";
+    const gateway = (file: string) => ({ file, field: FIELD_21, block: settledOf("gateway") });
+
+    it("takes the unchanged line at the gateway's settled block, and refuses the same line for the other settled block", () => {
+      expect(specNamed(gateway(tapeWith((e) => e)))).toBe(specNamed(RUNTIME));
+      expect(() => specNamed({ ...gateway(TAPE), block: settledOf("second") })).toThrow("not at the hash");
+    });
+
+    it("refuses a call of three params", () => {
+      const file = tapeWith((e) => ({ ...e, request: { ...e.request, params: [...e.request.params, INPUTS.blocks["gateway/settled"].hash.value] } }));
+      expect(() => specNamed(gateway(file))).toThrow("the call has 3 params, not exactly two");
+    });
+
+    it("refuses a call with no params list", () => {
+      const file = tapeWith((e) => ({ ...e, request: { kind: e.request.kind, method: e.request.method } }));
+      expect(() => specNamed(gateway(file))).toThrow("the call has no params, not exactly two");
+    });
+
+    it("refuses a read at the hash of another block of the plan, the parent's", () => {
+      const file = tapeWith((e) => ({ ...e, request: { ...e.request, params: [LAST_RUNTIME_UPGRADE_KEY, INPUTS.blocks["gateway/settled-parent"].hash.value] } }));
+      expect(() => specNamed(gateway(file))).toThrow(`the call reads at ${INPUTS.blocks["gateway/settled-parent"].hash.value}, not at the hash ${INPUTS.blocks["gateway/settled"].hash.value}`);
+    });
+
+    it("refuses a read of another key whose answer is the same bytes", () => {
+      const file = tapeWith((e) => ({ ...e, request: { ...e.request, params: [EVENTS_KEY, e.request.params[1]] } }));
+      expect(() => specNamed(gateway(file))).toThrow(`the call reads ${EVENTS_KEY}, not the System.LastRuntimeUpgrade key ${LAST_RUNTIME_UPGRADE_KEY}`);
+    });
+
+    it("refuses a call whose kind is not rpc", () => {
+      const file = tapeWith((e) => ({ ...e, request: { ...e.request, kind: "not-rpc" } }));
+      expect(() => specNamed(gateway(file))).toThrow("is not an rpc call");
+    });
+
+    it("refuses a call of another method", () => {
+      const file = tapeWith((e) => ({ ...e, request: { ...e.request, method: "state_queryStorageAt" } }));
+      expect(() => specNamed(gateway(file))).toThrow("holds no state_getStorage call at seq 21");
+    });
   });
 });
 

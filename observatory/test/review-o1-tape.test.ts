@@ -62,6 +62,6 @@ describe("review o1: tapeAnswer reads a call only where the tape holds it as wri
 
   it("HOLDS: an answer of null (a key that holds nothing) names no runtime", () => {
     const path = tapeWith(setLine(21, (e) => ({ ...e, answer: { result: null } })));
-    expect(() => specNamed({ file: path, field: field(21) })).toThrow();
+    expect(() => specNamed({ file: path, field: field(21), block: "gateway/settled" })).toThrow();
   });
 });
