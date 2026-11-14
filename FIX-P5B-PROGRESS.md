@@ -1,1 +1,0 @@
-done: F1..F8 source and tests written (not pushed before this); stop point: review-p5b-guard control test (both non canonical texts decode) cannot hold under F5; next: README, undo by hand, remove REVIEW-P5B-PROGRESS.md, merge main, check, push, read checks
