@@ -3,7 +3,9 @@
 // Every value is the plan's or a block number made here: a made record is said to be made. Not a
 // test file. No network, no key.
 import { plan, V, publicOf } from "./fixtures.mjs";
-import { ss58 } from "./lib.mjs";
+import { join } from "node:path";
+import { REPO, readJson, ss58 } from "./lib.mjs";
+import { outcomeOf } from "./events.mjs";
 import { idsOf, planStepOf } from "./run.mjs";
 
 export const DEVICE = publicOf("records-device");
@@ -28,6 +30,9 @@ export function started({ nonce = "20", count = { raw: null, value: 0, stored: f
 const created = (block, o = {}) => ({ pallet: "FlopSessionKeys", name: "SessionCreated", fields: { owner: OWNER, delegate: DEVICE, spending_cap: V("SPENDING_CAP"), per_tx_limit: V("A_PER_TX"), daily_cap: V("A_DAILY"), expires_at: block + Number(V("DURATION")), ...o } });
 const revoked = () => ({ pallet: "FlopSessionKeys", name: "SessionRevoked", fields: { owner: OWNER, delegate: DEVICE } });
 const paid = (fee) => ({ pallet: "TransactionPayment", name: "TransactionFeePaid", fields: { who: OWNER, actual_fee: fee, tip: "0" } });
+const ERRORS = readJson(join(REPO, plan.files.errors));
+/** The dispatch error of a module error by its name in the 1014020 table; a name the table has not is pallet 94, error 255, which the table does not name. */
+const moduleError = (name) => { const e = ERRORS.errors.find((x) => `${x.pallet}.${x.name}` === name); return { index: e ? e.pallet_index : 94, error: `0x${(e ? e.error_index : 255).toString(16).padStart(2, "0")}000000` }; };
 const outcome = (ok, error) => (ok ? { pallet: "System", name: "ExtrinsicSuccess", fields: {} } : { pallet: "System", name: "ExtrinsicFailed", fields: { dispatch_error: { type: "Module", value: error } } });
 
 /**
@@ -48,10 +53,10 @@ export function step(r, id, { upTo = "after", ok = true, error = null, fee = nul
   e.run_time = { extrinsic_hash: H(0xe000 + n), bundle_sha256: "00".repeat(32), sent: sent ?? { status: "finalized", sent_by: "send", block_number: b, block_hash: H(b), extrinsic_index: 1 }, sent_sha256: "11".repeat(32), explorer, earlier_readings: [], earlier_copies: [] };
   if (upTo === "send" || (sent && sent.status !== "finalized")) return r;
   if (upTo === "final") return r;
-  const err = error ? { index: 94, error: "0x00000000" } : null;
+  const err = ok ? null : moduleError(error);
   const events = [paid(fee ?? (st.command === "grant" ? V("FEE_GRANT") : V("FEE_REVOKE"))), outcome(ok, err)];
   if (ok) events.unshift(st.command === "grant" ? created(b, fields) : revoked());
-  e.decoder = { exit: 0, block: { number: b, hash: H(b) }, extrinsic_index: 1, events, names: events.map((x) => `${x.pallet}.${x.name}`), success: ok, error: ok ? null : { pallet_index: 94, error_index: 0, name: error }, fee_raw: fee ?? (st.command === "grant" ? V("FEE_GRANT") : V("FEE_REVOKE")) };
+  e.decoder = { exit: 0, block: { number: b, hash: H(b) }, extrinsic_index: 1, events, names: events.map((x) => `${x.pallet}.${x.name}`), success: ok, error: outcomeOf(events, ERRORS).error, fee_raw: fee ?? (st.command === "grant" ? V("FEE_GRANT") : V("FEE_REVOKE")) };
   if (upTo === "block") return r;
   const active = after ?? (st.command === "grant" ? (ok ? "active" : "revoked") : ok ? "revoked" : "active");
   e.after = active === "exit"
@@ -68,12 +73,12 @@ export function agreeingExplorer(e) {
   return e;
 }
 
-/** The whole batch as planned: G2 taken (then R2) or refused with SessionAlreadyExists, each step with an agreeing explorer reading, and the owner's balances. */
-export function asPlanned(branch = "taken") {
+/** The whole batch as planned (G2's error may be named for a test of another error): G2 taken (then R2) or refused with SessionAlreadyExists, each step with an agreeing explorer reading, and the owner's balances. */
+export function asPlanned(branch = "taken", g2Error = `FlopSessionKeys.${V("ALREADY_EXISTS")}`) {
   const r = started();
   step(r, "G1"); step(r, "R1");
   if (branch === "taken") { step(r, "G2"); step(r, "R2"); }
-  else step(r, "G2", { ok: false, error: `FlopSessionKeys.${V("ALREADY_EXISTS")}`, fee: V("MAX_FEE") });
+  else step(r, "G2", { ok: false, error: g2Error, fee: V("MAX_FEE") });
   for (const e of r.steps) agreeingExplorer(e);
   const fees = r.steps.reduce((a, e) => a + BigInt(e.decoder.fee_raw), 0n);
   r.balances = { owner_free_before: "24000000000000000000", owner_free_after: (24000000000000000000n - fees).toString(), source: "made" };

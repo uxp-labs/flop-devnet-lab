@@ -43,7 +43,7 @@ test("HOLDS: both branches as planned pass; each piece of evidence missing or un
   }
 });
 
-test("DEFECT RG19-10: a record at which plan.mjs next does not say the end never gets the verdict passed", () => {
+test("HOLDS: RG19-10: a record at which plan.mjs next does not say the end never gets the verdict passed", () => {
   const cases = [
     ["R2's runtime after is not the plan's", "taken", (r) => { at(r, "R2").after.runtime = { specName: V("SPEC_NAME"), specVersion: Number(V("SPEC")) + 1 }; }],
     ["G2 refused, no show after it", "refused", (r) => { delete at(r, "G2").after; }],
@@ -64,14 +64,14 @@ test("DEFECT RG19-11: the owner's balance claim passes only when the record name
   assert.notEqual(c.status, "pass", "balances with no relay and no sha256 are judged pass");
 });
 
-test("DEFECT RG19-12: G2 refused with an error the 1014020 table does not name is not a pass of its outcome", () => {
+test("HOLDS: RG19-12: G2 refused with an error the 1014020 table does not name is not a pass of its outcome", () => {
   const r = step(step(step(started(), "G1"), "R1"), "G2", { ok: false, error: null });
   at(r, "G2").decoder.error = { pallet_index: 77, error_index: 3, name: null };
   const c = judge(plan, r).claims.find((x) => x.id === "G2" && /outcome/.test(x.what));
   assert.notEqual(c.status, "pass", c.why);
 });
 
-test("DEFECT RG19-13: the judge reads each claim from the evidence the record holds, not from the record's own derived words (sources_differ, success, error)", () => {
+test("HOLDS: RG19-13: the judge reads each claim from the evidence the record holds, not from the record's own derived words (sources_differ, success, error)", () => {
   const r = asPlanned("taken");
   at(r, "G1").run_time.explorer.events[0].fields.daily_cap = "1";
   const c = judge(plan, r).claims.find((x) => x.id === "G1" && /explorer/.test(x.what));

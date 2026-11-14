@@ -2,8 +2,10 @@
 // check: judges a run time record of the batch (judge.mjs, H15). It prints each claim pass, differ,
 // incomplete, not run or not needed, the counts, and one verdict line. It never says verified.
 // Usage: node check.mjs <results.json>
-// Exit codes: 0 every claim passes (or is not needed); 1 a claim differs; 4 a claim is incomplete or
-// not run; 2 this script's own refusals (no file, a file that is not JSON). No network, no key.
+// Exit codes: 0 passed: every claim passes (or is not needed) and plan.mjs next says the end for the
+// record; 1 a claim differs; 4 every other case (a claim incomplete or not run, or a record that is
+// not at the end); 2 this script's own refusals (no file, a file that is not JSON). Each claim is
+// computed from the record's events and readings (judge.mjs, F6). No network, no key.
 import { loadPlan, readJson } from "./lib.mjs";
 import { judge } from "./judge.mjs";
 

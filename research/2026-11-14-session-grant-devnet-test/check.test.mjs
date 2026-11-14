@@ -39,9 +39,7 @@ test("T6: a whole pass with G2 refused with SessionAlreadyExists: R2 not needed,
 });
 
 test("T6: G2 refused with another error: U1 stays open, said in the claim", () => {
-  const r = asPlanned("refused");
-  r.steps[2].decoder.error.name = "FlopSessionKeys.TooManySessions";
-  r.steps[2].run_time.explorer.error.name = "FlopSessionKeys.TooManySessions";
+  const r = asPlanned("refused", "FlopSessionKeys.TooManySessions");
   const out = judge(plan, r);
   assert.equal(out.branch, "other");
   assert.match(out.claims.find((c) => c.id === "G2").why, /U1 stays open/);
