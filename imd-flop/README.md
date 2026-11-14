@@ -183,7 +183,8 @@ The layouts, each read from FLOP's SDK 0.6.0 (`dist/compute-channel/`), read and
 
 What the chain has shown, and what it has not:
 - Shown: the channel id for `force_open`, on three of the lab's records. `research/2026-11-11-session-escrow/results.json` (spec 1014014), the rerun's step A6 in `research/2026-11-12-session-rerun-1014020/results.json`, and step T3 in `research/2026-11-12-encoder-devnet-test/results.final.json`. `test/channel-id.test.ts` reads every input and every id from those files.
-- Not shown: the id for `open_channel` (inferred to be the same formula); the receipt against the chain's check at settle; the ack and the request against a miner. Those three are as the SDK describes them.
+- Shown: the receipt, for two cooperative settles at spec 1014014 (`tzkv-runtime`): block 3479299 on channel `0x9f81f65b...` (the gateway's) and block 3479277 on channel `0x1fcd12cb...`. In each, the payable is the channel's escrow as stored at the parent block, before the settle, and the settle call's `agent_receipt_sig` verifies over that receipt under the `agent_key` the channel's record stores. Payable 0, the aggregate G_n, the escrow plus or less 1, the `miner_paid` of the `Settled` event, the older form without the domain and the version byte, one flipped bit and the other settle's signature do not verify. The fixture is the observatory's sixth recording, `observatory/fixtures/recording-20261114071524-9afba293ba8d1b2f/`, and the test is `test/channel-receipt-vector.test.ts`.
+- Not shown: anything at spec 1014020 for the receipt; the payable of a settle that is not cooperative; the id for `open_channel` (inferred to be the same formula); the ack and the request against a miner. The id for `open_channel`, the ack and the request are as the SDK describes them.
 - No rule is built on the miner's time window, its nonce rule or the life of a challenge. No source shows them.
 
 The key:
