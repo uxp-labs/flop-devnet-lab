@@ -124,7 +124,9 @@ const isFunction = (v: unknown): v is (...a: unknown[]) => unknown => typeof v =
  */
 export function minerRun(input: MinerRunInput): MinerRun {
   const f = fieldsOf(input, RUN_FIELDS, "miner run");
-  const expected = pinnedOf(f.expected);
+  // The value handed in goes to P6a's functions, which take only a value minerExpected made; the held copy is read here.
+  const expected = f.expected as Expected;
+  const pinned = pinnedOf(expected);
   originOf(f.endpoint);
   const transport = f.transport;
   if (!isFunction(transport)) refuseClient("REQUEST", "run.transport", "the transport must be a function", EXIT.ERROR);
@@ -306,7 +308,7 @@ export function minerRun(input: MinerRunInput): MinerRun {
     // From here nothing throws: the signed receipt is handed back whatever the miner answers.
     const unknown = (reason: string): CloseResult => Object.freeze({ receipt, answer: Object.freeze({ state: "unknown" as const, reason, exit: EXIT.TIMEOUT_UNKNOWN }) });
     try {
-      const body = closeBody({ channelId: Uint8Array.from(id), finalRoot: Uint8Array.from(v.leaf), aggregateGn: v.gN, payable, agentReceiptSig: Uint8Array.from(signed.signature), claimedMeasuredRoot: Uint8Array.from(expected.identity.measuredRoot) });
+      const body = closeBody({ channelId: Uint8Array.from(id), finalRoot: Uint8Array.from(v.leaf), aggregateGn: v.gN, payable, agentReceiptSig: Uint8Array.from(signed.signature), claimedMeasuredRoot: Uint8Array.from(pinned.identity.measuredRoot) });
       const answer = await call("close", body, signedFor("close", body, "close"));
       if (answer.status !== 200) return unknown(`the close call answered status ${answer.status}, not 200`);
       if (answer.body === null) return unknown("the close call gave no body");
