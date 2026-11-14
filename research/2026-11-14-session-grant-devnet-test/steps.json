@@ -25,7 +25,7 @@
   "RPC": { "value": "wss://rpc.devnet.flop.network", "from": { "file": "upgrade", "path": "rpc" } },
   "EXPLORER": { "value": "https://explorer.devnet.flop.network", "from": { "file": "encoder_steps", "path": "values.EXPLORER.value" } },
   "EVENTS_KEY": { "value": "0x26aa394eea5630e07c48ae0c9558cef780d41e5e16056765bc8461851072c9d7", "from": { "file": "upgrade", "path": "keys[\"System.Events\"]" } },
-  "METADATA_SHA256": { "value": "91294eb6ab60d18f0a2fc2b0873da5b9da9fd8ff1e5f49c4bc5a11b4a72c8238", "from": { "file": "facts", "path": "metadata_sha256" } },
+  "METADATA_SHA256": { "value": "91294eb61225c4de7459e6a8fed3c37169a2c8a1b1906b46a5890d5e0d328238", "from": { "file": "facts", "path": "metadata_sha256" } },
   "METADATA_BYTES": { "value": "487100", "from": { "file": "facts", "path": "metadata_bytes" } },
   "A_DAILY": { "value": "25000000000000000", "from": { "file": "escrow", "path": "session.daily_cap_raw" } },
   "A_PER_TX": { "value": "20000000000000000", "from": { "file": "escrow", "path": "session.per_tx_limit_raw" } },
