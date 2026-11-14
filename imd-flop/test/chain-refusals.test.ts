@@ -411,6 +411,7 @@ describe("E1 and E13: the encoder is pure and not wired", () => {
       "errors.ts",
       "extrinsic.ts",
       "fields.ts",
+      "owner-calls.ts",
       "payload.ts",
       "reader.ts",
       "runtimes.ts",

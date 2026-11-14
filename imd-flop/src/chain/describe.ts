@@ -3,12 +3,14 @@
  * takes bytes and the four names of a runtime, reads the bytes with the strict reader, and words only what
  * it read, field by field in the table's order. No exported function takes a caller's data to word, so the
  * words cannot differ from the bytes. Every amount is given in raw units and in FLOP.
+ *
+ * describeOwnerCall words the owner's two calls (P5a, O10) the same way, from their bytes alone.
  */
-import { INNER_PALLET, OUTER } from "./calls.js";
+import { INNER_PALLET, OUTER, OWNER_PALLET } from "./calls.js";
 import type { FieldValue } from "./fields.js";
-import { readCall, readExtrinsic, type ExtrinsicData, type SessionCallData } from "./reader.js";
+import { readCall, readExtrinsic, readOwnerCall, type ExtrinsicData, type OwnerCallData, type SessionCallData } from "./reader.js";
 import { toHex } from "./scale.js";
-import { reviewedRuntime, type Reviewed } from "./shape.js";
+import { reviewedOwnerRuntime, reviewedRuntime, type Reviewed, type ReviewedOwner } from "./shape.js";
 import type { Field, RuntimeId } from "./table.js";
 import { freezeFunction } from "../freeze.js";
 
@@ -83,3 +85,26 @@ export function describeExtrinsic(runtime: RuntimeId, extrinsic: Uint8Array, bir
   return extrinsicWords(reviewedRuntime(runtime), x);
 }
 freezeFunction(describeExtrinsic);
+
+/** The names of an allow list, from its bytes: each read as UTF-8, a string that is not UTF-8 refused by the decoder. */
+const UTF8 = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true });
+
+/** Words of what the strict reader read of an owner's call. Not exported: it is reached only from bytes. */
+function ownerWords({ calls }: ReviewedOwner, data: OwnerCallData): string {
+  const entry = calls[data.call];
+  const values = data as unknown as Record<string, FieldValue | readonly Uint8Array[]>;
+  const fields = entry.fields.map((f) => {
+    const v = values[f.name];
+    if (f.type.kind === "bytesList") return `${f.name} [${(v as readonly Uint8Array[]).map((b) => UTF8.decode(b)).join(", ")}]`;
+    if (f.type.kind === "u32") return `${f.name} ${String(v)} blocks`;
+    return `${f.name} ${valueText(f, v as FieldValue)}`;
+  });
+  return `${OWNER_PALLET}.${data.call}, a call of the session's owner, call bytes only and not signed here: ${fields.join(", ")}`;
+}
+
+/** The words of an owner's call bytes (P5a, O10): the call, the delegate, each cap in raw and FLOP, the duration in blocks, the allow list. */
+export function describeOwnerCall(runtime: RuntimeId, callBytes: Uint8Array): string {
+  const data = readOwnerCall(runtime, callBytes);
+  return ownerWords(reviewedOwnerRuntime(runtime), data);
+}
+freezeFunction(describeOwnerCall);

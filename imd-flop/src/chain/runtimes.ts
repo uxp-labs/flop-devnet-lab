@@ -444,6 +444,82 @@ export const RUNTIMES: readonly Runtime[] = deepFreeze([
             }
           }
         ]
+      },
+      {
+        "pallet": "FlopSessionKeys",
+        "name": "create_session",
+        "palletIndex": 94,
+        "callIndex": 0,
+        "fields": [
+          {
+            "name": "delegate",
+            "type": {
+              "kind": "bytes32"
+            }
+          },
+          {
+            "name": "spending_cap",
+            "type": {
+              "kind": "u128"
+            }
+          },
+          {
+            "name": "per_tx_limit",
+            "type": {
+              "kind": "u128"
+            }
+          },
+          {
+            "name": "daily_cap",
+            "type": {
+              "kind": "u128"
+            }
+          },
+          {
+            "name": "duration_blocks",
+            "type": {
+              "kind": "u32"
+            }
+          },
+          {
+            "name": "allowed_pallets",
+            "type": {
+              "kind": "bytesList"
+            }
+          }
+        ]
+      },
+      {
+        "pallet": "FlopSessionKeys",
+        "name": "revoke_session",
+        "palletIndex": 94,
+        "callIndex": 1,
+        "fields": [
+          {
+            "name": "delegate",
+            "type": {
+              "kind": "bytes32"
+            }
+          }
+        ]
+      }
+    ],
+    "constants": [
+      {
+        "pallet": "FlopSessionKeys",
+        "name": "MaxSessionDuration",
+        "type": {
+          "kind": "u32"
+        },
+        "value": 864000
+      },
+      {
+        "pallet": "FlopSessionKeys",
+        "name": "SessionEpochLength",
+        "type": {
+          "kind": "u32"
+        },
+        "value": 86400
       }
     ]
   }

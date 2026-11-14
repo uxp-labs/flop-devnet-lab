@@ -30,7 +30,10 @@ export const SOURCES = [
   },
 ];
 
-/** The calls the encoder writes: the outer call, then the inner calls it may carry (rule E3). */
+/**
+ * The calls the encoder writes: the outer call, then the inner calls it may carry (rule E3), then the two
+ * calls of the session's owner (P5a, O1), written as call bytes only.
+ */
 export const CALLS = [
   ["FlopSessionKeys", "execute_via_session"],
   ["ComputeChannel", "open_channel"],
@@ -38,6 +41,14 @@ export const CALLS = [
   ["ComputeChannel", "timeout"],
   ["ComputeChannel", "force_open"],
   ["ComputeChannel", "expire_force_open"],
+  ["FlopSessionKeys", "create_session"],
+  ["FlopSessionKeys", "revoke_session"],
+];
+
+/** The pallet constants the owner calls are bounded by (P5a, O3): each a u32 of the metadata's constants. */
+export const CONSTANTS = [
+  ["FlopSessionKeys", "MaxSessionDuration"],
+  ["FlopSessionKeys", "SessionEpochLength"],
 ];
 
 function fail(msg) {
@@ -66,6 +77,8 @@ export function readSource(src) {
 }
 
 const isU8 = (m, id) => m.lookup[id].def.tag === "primitive" && m.lookup[id].def.value.tag === "u8";
+/** A Vec<u8>: a sequence of u8, with no wrapper. */
+const isBytes = (m, id) => m.lookup[id].def.tag === "sequence" && isU8(m, m.lookup[id].def.value);
 
 /** A type of the registry reduced to what the encoder writes. A type it does not know is refused. */
 function reduce(m, id, callType) {
@@ -85,6 +98,11 @@ function reduce(m, id, callType) {
     const inner = reduce(m, def.value, callType);
     if (["u32", "u64", "u128"].includes(inner.kind)) return { kind: "compact", of: inner.kind };
     fail(`type ${id}: a compact of ${inner.kind}`);
+  }
+  if (def.tag === "sequence") {
+    // A list of byte strings, Vec<Vec<u8>> (P5a, O4): the allow list of create_session. Nothing else.
+    if (isBytes(m, def.value)) return { kind: "bytesList" };
+    fail(`type ${id}: a sequence that is not a list of byte strings is not written by the encoder`);
   }
   if (def.tag === "tuple" && def.value.length === 0) return { kind: "unit" };
   if (def.tag === "composite") {
@@ -180,6 +198,16 @@ export function deriveRuntime({ metadata, genesisHash, metadataSha256 }) {
     };
   });
 
+  const constants = CONSTANTS.map(([pallet, name]) => {
+    const c = m.pallets.find((x) => x.name === pallet)?.constants.find((x) => x.name === name);
+    if (!c) fail(`no constant ${pallet}.${name}`);
+    const type = reduce(m, c.type, callType);
+    if (type.kind !== "u32") fail(`${pallet}.${name} is a ${type.kind}, not a u32`);
+    const value = builder.buildConstant(pallet, name).dec(c.value);
+    if (!Number.isSafeInteger(value) || value < 0 || value > 0xffffffff) fail(`${pallet}.${name} does not read as a u32`);
+    return { pallet, name, type, value };
+  });
+
   return {
     specName: version.spec_name,
     specVersion: version.spec_version,
@@ -191,6 +219,7 @@ export function deriveRuntime({ metadata, genesisHash, metadataSha256 }) {
     signature: variantOf(m, param("Signature"), "Ed25519", is64),
     signedExtensions,
     calls,
+    constants,
   };
 }
 
