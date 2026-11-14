@@ -13,6 +13,8 @@ Done:
 - attack 7: P3 no literal where a file gives it (folder names, 125, field names only); P10 file list clean, no push path.
 - attack 8: SDK leaf and fold layout same (source only). 12 mutants of the turn test's lines (/tmp/rev-r2/tools/p8.json): 8 killed, 4 alive (turn index byte order, g_n upper half, fold side, no fold). RR2-3, RR2-4 in imd-flop/test/review-r2-turn-vector.test.ts.
 - attack 9: P7 holds (review-p4-verify 9 passed, none skipped). RR2-5 (L1) and RR2-1 words in imd-flop/test/review-r2-words.test.ts, 3 DEFECT. Note RR2-6: escrow before equals escrow at the block, so 'before' is not told apart (held by settle-recording.test.ts line 266).
+- attack 10: imd-flop whole run 100 files, 2502 passed, 6 failed (the six DEFECT), 1 skipped. Observatory whole run 85 files, 2449 passed; test-report-check --expect-files 85 exit 0, 13 of 13 pass.
+- mutant list: imd-flop/test/review-r2-mutants.json (42, 20 alive with reasons).
 
 Next:
-- attack 10 (whole runs: imd-flop npx vitest run; observatory npx vitest run with json report + test-report-check), then GitHub checks and report.
+- the report (SubagentHandback).
