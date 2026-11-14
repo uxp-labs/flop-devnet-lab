@@ -123,6 +123,52 @@ describe("O5: a runtime is fit for owner calls by a check of its own", () => {
     await ownerRefused(rt);
   });
 
+  it("two entries of one owner call's name, in its own words", async () => {
+    for (const name of ["create_session", "revoke_session"]) {
+      const rt = copy();
+      rt.calls.push(structuredClone(entry(rt, name)));
+      const t = await withTable(rt);
+      try {
+        expect(t.code(() => t.o.encodeOwnerCall(GRANT))).toBe("RUNTIME_UNKNOWN");
+        expect(() => t.o.encodeOwnerCall(GRANT)).toThrow(`2 entries of FlopSessionKeys.`);
+      } finally {
+        done();
+      }
+    }
+  });
+
+  it("an entry of the owner's pallet with another pallet index, in its own words", async () => {
+    for (const name of ["create_session", "revoke_session"]) {
+      const rt = copy();
+      const other = structuredClone(entry(rt, name));
+      other.name = "forged_call";
+      other.callIndex = 200;
+      other.palletIndex = entry(rt, name).palletIndex + 1;
+      rt.calls.push(other);
+      const t = await withTable(rt);
+      try {
+        expect(t.code(() => t.o.encodeOwnerCall(GRANT))).toBe("RUNTIME_UNKNOWN");
+        expect(() => t.o.encodeOwnerCall(GRANT)).toThrow("has pallet index");
+      } finally {
+        done();
+      }
+    }
+  });
+
+  it("a table whose constants are not a list is refused, the table holds no constants", async () => {
+    for (const bad of [undefined, null, {}, "x"]) {
+      const rt = copy();
+      rt.constants = bad;
+      const t = await withTable(rt);
+      try {
+        expect(t.code(() => t.o.encodeOwnerCall(GRANT))).toBe("RUNTIME_UNKNOWN");
+        expect(() => t.o.encodeOwnerCall(GRANT)).toThrow("the table holds no constants");
+      } finally {
+        done();
+      }
+    }
+  });
+
   it("a constant missing, doubled, not a u32, not whole, 0, above u32, or the epoch above the longest duration", async () => {
     for (const name of ["MaxSessionDuration", "SessionEpochLength"]) {
       let rt = copy();

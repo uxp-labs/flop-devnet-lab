@@ -148,12 +148,17 @@ function checkOwnerShape(rt: Runtime): ReviewedOwner {
   const calls = {} as Record<OwnerName, CallEntry>;
   for (const name of OWNER_NAMES) {
     const entry = entryOf(rt, OWNER_PALLET, name);
+    const entries = rt.calls.filter((c) => c.pallet === OWNER_PALLET && c.name === name);
+    if (entries.length !== 1) unknown(rt, `${entries.length} entries of ${OWNER_PALLET}.${name} in the table, not exactly one`);
+    const elsewhere = rt.calls.find((c) => c.pallet === OWNER_PALLET && c.palletIndex !== entry.palletIndex);
+    if (elsewhere !== undefined) unknown(rt, `${OWNER_PALLET}.${elsewhere.name} has pallet index ${elsewhere.palletIndex}, not ${entry.palletIndex} as ${OWNER_PALLET}.${name}`);
     const names = entry.fields.map((f) => f.name);
     if (new Set(names).size !== names.length || !sameFieldSet(entry, OWNER_FIELDS[name])) unknown(rt, `${OWNER_PALLET}.${name} has fields this encoder does not fill`);
     const sharing = rt.calls.filter((c) => c.palletIndex === entry.palletIndex && c.callIndex === entry.callIndex);
     if (sharing.length !== 1) unknown(rt, `${OWNER_PALLET}.${name} shares its index ${entry.palletIndex}/${entry.callIndex} with another call`);
     calls[name] = entry;
   }
+  if (!Array.isArray(rt.constants)) unknown(rt, "the table holds no constants");
   const maxSessionDuration = constantOf(rt, OWNER_CONSTANTS.maxSessionDuration);
   const sessionEpochLength = constantOf(rt, OWNER_CONSTANTS.sessionEpochLength);
   if (sessionEpochLength > maxSessionDuration) unknown(rt, `the epoch of ${sessionEpochLength} blocks is above the longest session of ${maxSessionDuration} blocks`);
