@@ -254,6 +254,20 @@ describe("D5: the library's own failures", () => {
     expect(k.verifyChannelSignature({ publicKey: pub, message: new Uint8Array(1), signature: new Uint8Array(65) })).toBe(false);
   });
 
+  it("K3: a library whose verify gives a truthy value that is not true (1, \"true\", an object): verifyChannelSignature is false and a signing function refuses SELF_CHECK", async () => {
+    for (const truthy of [1, "true", {}]) {
+      vi.resetModules();
+      vi.doMock("@scure/sr25519", async (orig) => ({ ...(await orig<typeof import("@scure/sr25519")>()), verify: () => truthy, sign: () => new Uint8Array(64).fill(0x80) }));
+      const k = await import("../src/channel/key.js");
+      const e = await import("../src/channel/errors.js");
+      const pub = new Uint8Array(32).fill(1);
+      expect(k.verifyChannelSignature({ publicKey: pub, message: new Uint8Array(1), signature: new Uint8Array(64) }), String(truthy)).toBe(false);
+      const key = k.channelKeyFromSeed({ seed: SEED });
+      const got = refusal(() => key.signReceipt(RECEIPT()), e.ChannelError);
+      expect(got.refusal).toBe("SELF_CHECK");
+    }
+  });
+
   it("a library that throws a value that is not an Error: SIGN_FAILED, the same one message", async () => {
     const { key, ChannelErrorOf } = await keyWith(() => {
       throw "a text with ab".repeat(4);
