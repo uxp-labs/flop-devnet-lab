@@ -17,6 +17,8 @@ Done:
 - attack 12: scope holds (only imd-flop src, test, README, two script lines); src typechecks; changed and new tests typecheck but for errors that are on main too
 - attack 11 running: /tmp/rev-a1-scripts/mutate.mjs over 25 mutants, results in /tmp/rev-a1-scripts/results.jsonl
 - attack 11 done: 25 mutants; only M9f (FRAME_WRAPPER_CHARS 256 to 36) survives every test of the author and of the reviewer HOLDS
-- whole npm test: running at the end
-Next:
+- whole npm test: 2411 tests, 5 failed (the five DEFECT tests), 2405 passed, 1 skipped
+- GitHub checks of ac6cc08: build and offline tests red with the five DEFECT tests only (2403 passed, 3 skipped); viewer and spend-guard green
+- report sent to the lead
+Next: nothing; the report is done.
 - mutations (11), words and scope (12, 13)
