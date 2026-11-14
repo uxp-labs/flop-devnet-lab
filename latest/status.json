@@ -1,9 +1,9 @@
 {
-  "observed_at": "2026-11-14T01:43:43.376Z",
+  "observed_at": "2026-11-14T02:53:15.780Z",
   "schema": "flop-observatory/feed-status@0",
-  "snapshot_hash": "f2c96581d5adcca76b0584576c211bcfb6b1e4b596064d058b1848938673132c",
+  "snapshot_hash": "0cc252da7376de400cfe9d5dcbb5cc226a6d401fb57e922371d385b8aa421b70",
   "status": {
-    "best_height": 3690842,
+    "best_height": 3694871,
     "conflicts": [],
     "faucet": {
       "detail": null,
@@ -18,30 +18,30 @@
         "ipGrantsPerDay": 300,
         "ipPrefixGrantsPerDay": 10000
       },
-      "observed_at": "2026-11-14T01:43:36.803Z",
+      "observed_at": "2026-11-14T02:53:02.052Z",
       "ready": true
     },
-    "finality_lag": 5,
-    "finalized_hash": "0xd64904e966b81e26baa12eae0fb400c8405623477319ef2ad311da26f2178dc6",
-    "finalized_height": 3690837,
+    "finality_lag": 4,
+    "finalized_hash": "0xd088b66b9e11c0b1caee23f6a715b9c58da833db615dfc3d9daebeb69b71f6bc",
+    "finalized_height": 3694867,
     "gateway": {
       "detail": null,
       "health": "ok",
       "http": 200,
-      "observed_at": "2026-11-14T01:43:38.289Z"
+      "observed_at": "2026-11-14T02:53:03.669Z"
     },
     "genesis": {
       "faucet": "0x99c172c095340ace980631f9123544c6bebd4839f3437e463533422d8be2d631",
       "pinned": "0x99c172c095340ace980631f9123544c6bebd4839f3437e463533422d8be2d631",
       "rpc": "0x99c172c095340ace980631f9123544c6bebd4839f3437e463533422d8be2d631"
     },
-    "observed_at": "2026-11-14T01:43:43.376Z",
+    "observed_at": "2026-11-14T02:53:15.780Z",
     "reset_detected": false,
     "rpc": {
       "detail": null,
       "health": "ok",
       "http": null,
-      "observed_at": "2026-11-14T01:43:38.371Z",
+      "observed_at": "2026-11-14T02:53:03.738Z",
       "stale": false
     },
     "runtime_version": 1014020,
