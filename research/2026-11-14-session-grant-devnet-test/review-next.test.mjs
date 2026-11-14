@@ -76,7 +76,7 @@ test("HOLDS: a cleanup try after the lead stopped a revoke is signed at the same
   assert.equal(nonceOf(plan, r, "R1.2"), nonceOf(plan, r, "R1"));
 });
 
-test("DEFECT RG19-7: after G2 refused, or G1 failed, a show after that does not say what the end claims is a stop that says a session may be active", () => {
+test("HOLDS: RG19-7: after G2 refused, or G1 failed, a show after that does not say what the end claims is a stop that says a session may be active", () => {
   const g2 = step(step(step(started(), "G1"), "R1"), "G2", { ok: false, error: `FlopSessionKeys.${V("ALREADY_EXISTS")}`, after: "active" });
   const x = n(g2);
   assert.notEqual(x.word, "end", `the end says "${x.why}" while show after G2 says active`);

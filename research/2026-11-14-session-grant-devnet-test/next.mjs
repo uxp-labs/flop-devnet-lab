@@ -155,6 +155,34 @@ function revokeChain(plan, results, base, findings) {
   return { exhausted: true };
 }
 
+/** What the show after an id says of the pair: active, none (absent, or stored and not active) or unknown. */
+export function showSays(results, id) {
+  const s = entryOf(results, id)?.after?.session;
+  if (s?.state === "none" || (s?.state === "stored" && s.value?.active === false)) return "none";
+  if (s?.state === "stored" && s.value?.active === true) return "active";
+  return "unknown";
+}
+
+/**
+ * After a step that made no session by its events (G1 failed, G2 refused), the show after it says
+ * what is left (F5). null when it says no session is active. When it says active: a stop that names
+ * the active session, with the cleanup revoke's next action (a try of base, MAX_ATTEMPTS at most);
+ * when it says neither: a stop.
+ */
+function activeAfter(plan, results, id, base, words, findings, left) {
+  const says = showSays(results, id);
+  if (says === "none") return null;
+  if (says === "unknown") return stop(id, `${words}; the show after ${id} does not say that no session is active: the lead rules`);
+  const v = entryOf(results, id).after.session.value;
+  const active = `an active session of the owner for the device, by the show after ${id} (spending cap ${v.spending_cap ?? "unknown"}, expires at block ${v.expires_at ?? "unknown"})`;
+  const why = `${words}; the show after ${id} says a session is active: ${active}`;
+  const c = revokeChain(plan, results, base, findings);
+  if (c.next) return { ...c.next, word: "stop", stopped_at: id, why: `${why}; the cleanup revoke: ${c.next.why}`, cleanup: [base] };
+  if (c.exhausted) { left.push(`${active}, until its expiry (the device is unfunded and signs nothing)`); return stop(id, `${why}; every try of ${base} (${MAX_ATTEMPTS}) failed in its block`); }
+  if (c.problems.length) { findings.push(...c.problems.map((p) => `${c.done}: ${p}`)); return stop(c.done, `${why}; ${c.done} is not the plan's revoke`); }
+  return stop(id, `${why}; ${c.done} has ended it: the show after ${c.done} says no session is active`);
+}
+
 /**
  * The next action of the batch by the record (H10). word is go (a step's phase to do), wait (a sent
  * step not in a finalized block: follow the immortal rows of send_outcomes), stop (these tools go no
@@ -174,7 +202,11 @@ export function nextOf(plan, results) {
   if (g1.phase === "stopped") return out(stop("G1", `the lead stopped G1 (case ${g1.lead_stop.case})`));
   if (g1.phase !== "done") return out(actOf(plan, "G1", g1));
   const g1e = entryOf(results, "G1");
-  if (g1e.decoder.success === false) return out(stop("G1", `G1 failed in its block with ${g1e.decoder.error?.name ?? "an error the 1014020 table does not name"}: nothing is active, one fee is lost`));
+  if (g1e.decoder.success === false) {
+    const failed = `G1 failed in its block with ${g1e.decoder.error?.name ?? "an error the 1014020 table does not name"}`;
+    const a = activeAfter(plan, results, "G1", "R1", failed, findings, left);
+    return out(a ?? stop("G1", `${failed}: nothing is active (the show after G1 says so), one fee is lost`));
+  }
   const g1p = problemsOf(plan, results, "G1");
   if (g1p.length) findings.push(...g1p.map((p) => `G1: ${p}`));
   // R1, and its tries
@@ -193,8 +225,11 @@ export function nextOf(plan, results) {
     const name = g2e.decoder.error?.name;
     const fee = problemsOf(plan, results, "G2");
     findings.push(...fee.map((p) => `G2: ${p}`));
-    if (name === `FlopSessionKeys.${V(plan, "ALREADY_EXISTS")}`) return out(end(`U1: the chain refused G2 with ${name}; the pair stays revoked`));
-    return out(end(`U1 stays open: the chain refused G2 with ${name ?? "an error the 1014020 table does not name"}, not ${V(plan, "ALREADY_EXISTS")}; the pair stays revoked`));
+    const refused = name === `FlopSessionKeys.${V(plan, "ALREADY_EXISTS")}` ? `U1: the chain refused G2 with ${name}` : `U1 stays open: the chain refused G2 with ${name ?? "an error the 1014020 table does not name"}, not ${V(plan, "ALREADY_EXISTS")}`;
+    const a = activeAfter(plan, results, "G2", "R2", refused, findings, left);
+    if (a) return out(a);
+    if (fee.length) return out(stop("G2", `${refused}; ${fee.join("; ")}`));
+    return out(end(`${refused}; the pair stays revoked: the show after G2 says no session is active`));
   }
   const g2p = problemsOf(plan, results, "G2");
   if (g2p.length) findings.push(...g2p.map((p) => `G2: ${p}`));
@@ -203,5 +238,5 @@ export function nextOf(plan, results) {
   if (r2.exhausted) { left.push(activeLeft(results, "G2")); return out(stop("R2", `every try of R2 (${MAX_ATTEMPTS}) failed in its block`)); }
   if (r2.problems.length) { findings.push(...r2.problems.map((p) => `${r2.done}: ${p}`)); return out(stop(r2.done, `${r2.done} is not the plan's revoke`)); }
   if (g2p.length) return out(stop("G2", `U1: the chain took G2, which was not the plan's (${g2p.join("; ")}); R2 has ended its session`));
-  return out(end(`U1: the chain took G2 over the revoked record; R2 has ended its session`));
+  return out(end(`U1: the chain took G2 over the revoked record; R2 has ended its session: the show after ${r2.done} says no session is active`));
 }

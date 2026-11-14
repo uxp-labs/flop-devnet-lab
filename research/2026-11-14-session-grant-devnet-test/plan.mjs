@@ -227,6 +227,9 @@ async function nextLines(plan, run, results) {
   for (const l of n.left) out.push(`# left: ${l}`);
   const stopped = (at, why, more = ["# send nothing more; the lead rules"]) => ({ word: "STOP", what: `at ${at}`, lines: [...out, `# STOP at ${at}: ${why}`, ...more] });
   if (n.word === "stop" && n.phase === "lead-stop") return stopped(n.stopped_at, n.why, leadStopLines(plan, run, n));
+  if (n.word === "stop" && n.step) {
+    try { return stopped(n.stopped_at, n.why, [`# the cleanup revoke that applies: ${n.step} ${n.phase}`, ...(await phaseLines(plan, run, results, n))]); } catch (e) { if (e instanceof FileStop) return stopped(n.step, e.message); throw e; }
+  }
   if (n.word === "stop") return stopped(n.stopped_at, n.why);
   let word = "NEXT", what = `${n.step} ${n.phase}`;
   if (n.word === "end") { word = "END"; what = ""; out.push(`# the end: ${n.why}`, `node ${DIR}/check.mjs" "${run}/results.json"`); }

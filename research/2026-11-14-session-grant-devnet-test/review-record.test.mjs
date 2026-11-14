@@ -44,7 +44,7 @@ test("DEFECT RG19-14: replay finds a committed record whose runner reading is no
   }
 });
 
-test("DEFECT RG19-15: G2 refused with a fee above the most per step is a stop, as H10 and the printed stop rule say, not the end", () => {
+test("HOLDS: RG19-15: G2 refused with a fee above the most per step is a stop, as H10 and the printed stop rule say, not the end", () => {
   const r = step(step(step(started(), "G1"), "R1"), "G2", { ok: false, error: `FlopSessionKeys.${V("ALREADY_EXISTS")}`, fee: (BigInt(V("MAX_FEE")) + 1n).toString() });
   const x = nextOf(plan, r);
   assert.ok(x.findings.some((f) => /above the most/.test(f)), "the fee is a finding");
