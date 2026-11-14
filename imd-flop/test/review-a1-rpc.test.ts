@@ -4,7 +4,7 @@
  * in for the global one and is driven by hand. The hash is networks.ts NETWORKS.devnet.genesisHash.
  */
 import { afterEach, describe, expect, it } from "vitest";
-import { CAPS, FRAME_CAP_CHARS, nodeTransport } from "../src/chain-read/node.js";
+import { CAPS, FRAME_CAP_CHARS, FRAME_WRAPPER_CHARS, nodeTransport } from "../src/chain-read/node.js";
 import { NETWORKS } from "../src/networks.js";
 import { MAX_TIMEOUT_MS, rpcCall } from "../src/node-rpc.js";
 
@@ -178,13 +178,8 @@ describe("review A1, P9: what a frame is", () => {
     }
   });
 
-  it("DEFECT RA1-3: the node's cap refuses a frame that holds the largest answer a read accepts when the frame is written with whitespace", async () => {
-    // The largest answer any read accepts: 0x and two hex digits for each of CAPS.metadata bytes (bytesWithin).
-    const result = `0x${"00".repeat(CAPS.metadata)}`;
-    // Legal JSON: a node may write whitespace between tokens. 300 spaces is a pretty printed frame of a few lines.
-    const frame = `{"jsonrpc":"2.0","id":1,${" ".repeat(300)}"result":"${result}"}`;
-    expect(JSON.parse(frame).result).toBe(result);
-    expect(frame.length).toBeGreaterThan(FRAME_CAP_CHARS);
+  /** One node frame handed to the node's transport through a fake socket: the answer it gives, or the words it failed with. */
+  async function through(frame: string, result: string): Promise<string> {
     (globalThis as { WebSocket: unknown }).WebSocket = class {
       onopen?: () => void;
       onmessage?: (ev: { data: string }) => void;
@@ -196,10 +191,37 @@ describe("review A1, P9: what a frame is", () => {
       }
       close() {}
     };
-    const got = await nodeTransport("ws://scripted.invalid", 5000)("state_getMetadata", [HASH]).then(
+    return nodeTransport("ws://scripted.invalid", 5000)("state_getMetadata", [HASH]).then(
       (v) => (v === result ? "the answer" : "another value"),
       (e: Error) => e.message,
     );
-    expect(got).toBe("the answer");
+  }
+
+  // The largest answer any read accepts: 0x and two hex digits for each of CAPS.metadata bytes (bytesWithin).
+  const LARGEST = `0x${"00".repeat(CAPS.metadata)}`;
+  const COMPACT = `{"jsonrpc":"2.0","id":1,"result":"${LARGEST}"}`;
+
+  // The rule, in numbers of its own (not read from the code): a node's frame around the largest answer may be 256 characters.
+  const RULE_FRAME_CHARS = 256;
+
+  it("the compact frame around the largest answer is 36 characters; the cap is that answer plus 256, the rule's number", () => {
+    expect(COMPACT.length - LARGEST.length).toBe(36);
+    expect(FRAME_WRAPPER_CHARS).toBe(RULE_FRAME_CHARS);
+    expect(FRAME_CAP_CHARS).toBe(LARGEST.length + RULE_FRAME_CHARS);
+  });
+
+  it("the largest answer in a frame of exactly FRAME_CAP_CHARS characters (the compact frame padded with white space) is taken", async () => {
+    const frame = `{"jsonrpc":"2.0","id":1,${" ".repeat(LARGEST.length + RULE_FRAME_CHARS - COMPACT.length)}"result":"${LARGEST}"}`;
+    expect(frame.length).toBe(FRAME_CAP_CHARS);
+    expect(await through(frame, LARGEST)).toBe("the answer");
+  });
+
+  it("HOLDS (was DEFECT RA1-3): the same frame with one more space is refused in the cap's words, both numbers checked; so are 300 spaces", async () => {
+    const over = `{"jsonrpc":"2.0","id":1,${" ".repeat(FRAME_CAP_CHARS - COMPACT.length + 1)}"result":"${LARGEST}"}`;
+    expect(over.length).toBe(FRAME_CAP_CHARS + 1);
+    expect(await through(over, LARGEST)).toBe(`rpc frame of ${FRAME_CAP_CHARS + 1} characters is over its cap of ${FRAME_CAP_CHARS}`);
+    const wide = `{"jsonrpc":"2.0","id":1,${" ".repeat(300)}"result":"${LARGEST}"}`;
+    expect(JSON.parse(wide).result).toBe(LARGEST);
+    expect(await through(wide, LARGEST)).toBe(`rpc frame of ${wide.length} characters is over its cap of ${FRAME_CAP_CHARS}`);
   });
 });

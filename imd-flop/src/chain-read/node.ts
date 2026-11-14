@@ -67,14 +67,17 @@ export const CAPS = Object.freeze({
 export type StorageKind = Exclude<keyof typeof CAPS, "metadata" | "header">;
 
 /**
- * Room for the frame around a result, in characters: the frame `{"jsonrpc":"2.0","id":1,"result":""}` is 36, and
- * 256 leaves room for whitespace and field order.
+ * The characters the node's cap allows for a frame around an answer of the largest size. The compact frame
+ * `{"jsonrpc":"2.0","id":1,"result":""}` is 36 characters; the cap allows 256. A node that writes more than that
+ * around an answer of the largest size (white space between tokens, say) is refused in the cap's words, and the
+ * read is unknown. No finite cap takes every legal frame: this one refuses some, and never answers wrongly.
  */
 export const FRAME_WRAPPER_CHARS = 256;
 
 /**
- * The frame cap the node's transport hands rpcCall, in characters: the largest answer any read accepts (0x and two
- * hex digits for each byte of the largest of CAPS) plus the frame's wrapper. Computed from CAPS, not typed.
+ * The frame cap the node's transport hands rpcCall, in characters. A frame is capped as the node wrote it: the cap
+ * is the largest answer any read accepts (0x and two hex digits for each byte of the largest of CAPS) plus
+ * FRAME_WRAPPER_CHARS for the frame. Computed from CAPS, not typed.
  */
 export const FRAME_CAP_CHARS = 2 + 2 * Math.max(...Object.values(CAPS)) + FRAME_WRAPPER_CHARS;
 
