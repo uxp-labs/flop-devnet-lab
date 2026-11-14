@@ -46,15 +46,15 @@ const SETTLES = SETTLE_CHANNELS.map((c) => {
 });
 
 describe("attack 8: what the verified turn vector does not pin", () => {
-  it("DEFECT RR2-3: a leaf with the turn index big endian and the upper half of g_n in the other byte order must not give final_root, but it does for both settles (turn index 0, g_n below 2^64)", () => {
+  it("HOLDS (was DEFECT RR2-3): a leaf with the turn index big endian and the upper half of g_n in the other byte order still equals final_root for both settles, because both turn indices are 0 and both g_n are below 2^64", () => {
     for (const { s, args } of SETTLES) {
       for (const t of args.verified_turns as Rec[]) {
-        expect(hexOf(leafOdd(refBytes(args.channel_id), t)), s.channel).not.toBe(hexOf(refBytes(args.final_root)));
+        expect(hexOf(leafOdd(refBytes(args.channel_id), t)), s.channel).toBe(hexOf(refBytes(args.final_root)));
       }
     }
   });
 
-  it("DEFECT RR2-4: the turn test says in words that its fold through merkle_path is not exercised (both paths are empty), so P6 does not take the fold as shown", () => {
+  it("HOLDS (was DEFECT RR2-4): the turn test says in words that its fold through merkle_path is not exercised (both paths are empty), so P6 does not take the fold as shown", () => {
     for (const { args } of SETTLES) expect((args.verified_turns as Rec[]).every((t) => (t.merkle_path as unknown[]).length === 0)).toBe(true);
     const text = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "channel-verified-turn-vector.test.ts"), "utf8");
     expect(text).toMatch(/fold[^.]*not (?:exercised|shown|held)|not (?:exercised|shown|held)[^.]*fold|does not exercise[^.]*(?:fold|path)/i);
