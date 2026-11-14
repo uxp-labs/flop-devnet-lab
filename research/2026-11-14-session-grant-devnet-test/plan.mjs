@@ -8,7 +8,8 @@
 //   node plan.mjs stops          the stop rule (H10)
 //   node plan.mjs outcomes       the immortal rows of send_outcomes, imported from the last batch (H11)
 //   node plan.mjs sha256s        the sha256 of each file pasted into the pane
-//   node plan.mjs next --run <folder>   the one next action, with every value filled
+//   node plan.mjs next --run <folder>   the one next action, with every value filled; the first
+//                                word is NEXT, END or STOP; exit 0 for NEXT and END, 3 for STOP
 //   node plan.mjs md             writes the printed blocks of plan.md again
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
@@ -219,6 +220,17 @@ export async function nextText(plan, run, results) {
   return out.join("\n") + "\n";
 }
 
+/**
+ * What plan.mjs next prints and its exit (F13): the first word is NEXT (a next action), END (the end)
+ * or STOP (these tools say stop); then the lines of nextText. Exit 0 for NEXT and END, 3 for STOP.
+ */
+export async function nextOutput(plan, run, results) {
+  const n = results ? nextOf(plan, results) : { word: "go", step: "P0", phase: "start" };
+  const word = n.word === "stop" ? "STOP" : n.word === "end" ? "END" : "NEXT";
+  const what = word === "STOP" ? `at ${n.stopped_at}` : word === "END" ? "" : `${n.step} ${n.phase}`;
+  return { word, exit: word === "STOP" ? 3 : 0, text: `${word}${what ? ` ${what}` : ""}\n${await nextText(plan, run, results)}` };
+}
+
 // ---- plan.md -------------------------------------------------------------------------------------
 
 export const printedBlocks = (plan) => ({ table: table(plan), fence: fenceText(plan), stops: stopsText(plan), outcomes: outcomesText(plan), pane: paneSetup().join("\n") });
@@ -240,7 +252,9 @@ if (process.argv[1] && resolve(process.argv[1]) === resolve(new URL(import.meta.
     const f = flag("run");
     if (!f) { process.stderr.write("plan.mjs next --run <run folder>\n"); process.exit(2); }
     const run = resolve(f);
-    process.stdout.write(await nextText(plan, run, loadRecord(run)));
+    const o = await nextOutput(plan, run, loadRecord(run));
+    process.stdout.write(o.text);
+    process.exit(o.exit);
   } else if (cmd === "md") { const f = join(HERE, "plan.md"); writeFileSync(f, renderMd(readFileSync(f, "utf8"), plan)); }
   else { process.stderr.write("commands: table, fence, stops, outcomes, sha256s, next, md\n"); process.exit(2); }
 }

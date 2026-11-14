@@ -10,10 +10,11 @@ Run tests under setpriv (CLAUDE.md rule 5). Push after every commit.
 - Fast forward to the reviewers' bc97e1f. node --test: 121 tests, 106 pass, 15 fail, the 15 DEFECT tests.
 
 - F1: outcomes.mjs (rows and actionOf), next.mjs actOf, plan.mjs waitLines and leadStopLines, record-step stop --case. outcomes.test.mjs; RG19-8 HOLDS.
+- F13: plan.mjs nextOutput and the CLI exit. word.test.mjs.
 
 ## Next
 
-- F13 (the word and the exit), then F2 to F5, then the rest.
+- F2 to F5, then the rest.
 
 ## Points where a rule cannot be met as written (stop, for the lead)
 
