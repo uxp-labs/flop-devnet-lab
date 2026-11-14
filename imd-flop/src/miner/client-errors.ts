@@ -16,6 +16,8 @@ export const CLIENT_REFUSAL = Object.freeze({
   HTTP: "HTTP",
   /** An answer was read, and its status or its challenge header is not the one the step wants. */
   ANSWER: "ANSWER",
+  /** A request handed to the transport is not of its form (a call, a body, signed headers, limits). Nothing was sent. */
+  REQUEST: "REQUEST",
   /** A step out of its order, a step after a failure, or a step while another is running (R2). Nothing was sent. */
   ORDER: "ORDER",
   /** The channel key, the clock or the random source handed in failed. What it threw is not kept. */
@@ -42,6 +44,24 @@ export function refuseClient(refusal: ClientRefusalCode, check: string, message:
   throw new MinerClientError(refusal, check, message, code);
 }
 freezeFunction(refuseClient);
+
+/**
+ * The exit code of a call that gave no answer this client reads (R5, M-15): 11 (`NOT_SENT`) for the info proof,
+ * which comes before anything is funded; 1 for every other call, which comes after the channel was opened.
+ */
+export function httpExit(call: string): number {
+  return call === "proof" ? EXIT.NOT_SENT : EXIT.ERROR;
+}
+freezeFunction(httpExit);
+
+/**
+ * The exit code of an answer whose status or challenge is not the one its step wants (R5, and the lead's ruling of
+ * P6b): 5 (`REFUSED_RULE`) for the info proof, a refusal by rule before anything is funded; 1 for every other call.
+ */
+export function answerExit(call: string): number {
+  return call === "proof" ? EXIT.REFUSED_RULE : EXIT.ERROR;
+}
+freezeFunction(answerExit);
 
 /** Throws an endpoint refusal (E3: exit 5). */
 export function refuseEndpoint(check: string, message: string): never {
