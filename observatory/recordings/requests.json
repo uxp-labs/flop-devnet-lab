@@ -36,7 +36,7 @@
         ],
         "0xeba1182c9f2bbf5a8fd012afddc201c2ebed11b64f59b10c1d3c4fcc4b2ee18e"
       ],
-      "why": "at block 3479299, the block where the gateway's channel 0x9f81f65b... settled, by the ComputeChannel.Settled event of the first recording: System.Events, the events of every extrinsic of the block, System.LastRuntimeUpgrade, the runtime that executed it, and ComputeChannel.Channels of the gateway's channel 0x9f81f65b..., its stored record at the block; asked together in one call, answered as one set for the block, a key that holds nothing listed with null"
+      "why": "at block 3479299, the block where the gateway's channel 0x9f81f65b... settled, by the ComputeChannel.Settled event of the first recording: System.Events, every event of the block, System.LastRuntimeUpgrade, the runtime that executed it, and ComputeChannel.Channels of the gateway's channel 0x9f81f65b..., its stored record at the block; asked together in one call, answered as one set for the block, a key that holds nothing listed with null"
     },
     {
       "method": "chain_getBlockHash",
@@ -80,7 +80,7 @@
         ],
         "0xb85b24f4b0609839aea37d97ad1aa9f7ec7aba20348bca090ab31df471764aba"
       ],
-      "why": "at block 3479277, the block where the other channel 0x1fcd12cb... settled, by the ComputeChannel.Settled event of the first recording: System.Events, the events of every extrinsic of the block, System.LastRuntimeUpgrade, the runtime that executed it, and ComputeChannel.Channels of the other channel 0x1fcd12cb..., its stored record at the block; asked together in one call, answered as one set for the block, a key that holds nothing listed with null"
+      "why": "at block 3479277, the block where the other channel 0x1fcd12cb... settled, by the ComputeChannel.Settled event of the first recording: System.Events, every event of the block, System.LastRuntimeUpgrade, the runtime that executed it, and ComputeChannel.Channels of the other channel 0x1fcd12cb..., its stored record at the block; asked together in one call, answered as one set for the block, a key that holds nothing listed with null"
     },
     {
       "method": "chain_getBlockHash",
