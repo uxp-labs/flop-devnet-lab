@@ -16,5 +16,7 @@ Done:
 - attack 3 and 4: test/review-a1-signer.test.ts, 14 HOLDS
 - attack 12: scope holds (only imd-flop src, test, README, two script lines); src typechecks; changed and new tests typecheck but for errors that are on main too
 - attack 11 running: /tmp/rev-a1-scripts/mutate.mjs over 25 mutants, results in /tmp/rev-a1-scripts/results.jsonl
+- attack 11 done: 25 mutants; only M9f (FRAME_WRAPPER_CHARS 256 to 36) survives every test of the author and of the reviewer HOLDS
+- whole npm test: running at the end
 Next:
 - mutations (11), words and scope (12, 13)
