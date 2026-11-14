@@ -108,8 +108,8 @@
     "names": "fbb55db87c6aa5772251733c776a9ab07d30c43e3fb49956c14772490373a33c"
   },
   "record-run.test.ts": {
-    "tests": 25,
-    "names": "09c4eb6c58492706b14d2f2223d445acd84856ad8d0589291ad8a7432527fde1"
+    "tests": 26,
+    "names": "958cb24413c97a9cd882e5f016dc753d7a7daaf49a20b3cbb820eb5d7f8d8817"
   },
   "record-workflow.test.ts": {
     "tests": 19,
@@ -202,6 +202,10 @@
   "scale-reader.test.ts": {
     "tests": 42,
     "names": "4b98619494eda10d49445cfa214bb48e907573f165e7b8135f0449ab7c6e8aef"
+  },
+  "settle-requests.test.ts": {
+    "tests": 17,
+    "names": "10c1805253048ea3293a38572497b0f9a46f32d9ad2e44063c35b3044ab37cce"
   },
   "shape-at-2.test.ts": {
     "tests": 7,

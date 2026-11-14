@@ -17,6 +17,7 @@ import { type Reply, network } from "./helpers/answering.js";
 import { ENCODER_REQUESTS_TEXT } from "./helpers/recorded-encoder.js";
 import { RERUN_REQUESTS_TEXT } from "./helpers/recorded-rerun.js";
 import { UPGRADE_REQUESTS_TEXT } from "./helpers/recorded-upgrade.js";
+import { requestsListText } from "./helpers/requests-list.js";
 
 const CLOCK = () => "2026-11-11T12:00:00.000Z";
 const SHA = "0123456789abcdef0123456789abcdef01234567";
@@ -154,6 +155,11 @@ describe("runRecord", () => {
   it("sends the fifth list one call at a time too, its 9 state_queryStorageAt calls among them", async () => {
     const list = await oneAtATime(ENCODER_REQUESTS_TEXT);
     expect(list.filter((c) => c.method === "state_queryStorageAt").length).toBe(9);
+  });
+
+  it("sends the current list one call at a time too, its 4 state_queryStorageAt and 2 chain_getBlock calls among them", async () => {
+    const list = await oneAtATime(requestsListText());
+    expect([list.filter((c) => c.method === "state_queryStorageAt").length, list.filter((c) => c.method === "chain_getBlock").length]).toEqual([4, 2]);
   });
 
   it("gives one notice line with the counts, the list's hash, and the byte length and sha256 of each metadata answer's decoded bytes", async () => {
