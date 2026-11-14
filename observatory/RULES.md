@@ -1070,9 +1070,8 @@ below.
   with the hashers the metadata states for it, each map key one whole value of its key type; a
   block's System.Events, by the type the metadata gives that entry; and the value of a storage
   entry the reviewed shape states, at a pinned block. Each event gets its pallet name and index,
-  its name and variant index, its fields and its phase. The storage it reads today: System.Events
-  and System.LastRuntimeUpgrade, ComputeChannel.Channels, and FlopSessionKeys Sessions,
-  SessionNonces and CircuitBreakers (`STATED_ENTRIES`).
+  its name and variant index, its fields and its phase. The storage it reads: the 16 stated
+  entries listed below (`STATED_ENTRIES`).
 - Absent is an answer. A storage read whose answer is null is never an error and never a zero the
   chain did not send. For an Optional entry its value is null; for a Default entry its value is the
   default bytes the metadata states for that entry, decoded by its type; and either way it is
