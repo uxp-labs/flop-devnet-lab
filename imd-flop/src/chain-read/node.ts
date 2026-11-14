@@ -26,17 +26,21 @@ const isReadMethod = (m: unknown): m is ReadMethod => typeof m === "string" && (
 export type Transport = (method: ReadMethod, params: readonly unknown[]) => Promise<unknown>;
 
 /**
- * The transport to a node at a WebSocket URL, through node-rpc.ts rpcCall. timeoutMs is rpcCall's own. It refuses,
- * at run time and before rpcCall is called, any method that is not one of the five (rule X2), so a cast cannot put
- * another method on the wire; call turns the refusal into unknown.
+ * The transport to a node at a WebSocket URL, through node-rpc.ts rpcCall, with the node's limits: timeoutMs
+ * (NODE_TIMEOUT_MS when none is given) and FRAME_CAP_CHARS. It refuses, at run time and before rpcCall is called,
+ * any method that is not one of the five (rule X2), so a cast cannot put another method on the wire; call turns the
+ * refusal into unknown.
  */
-export function nodeTransport(url: string, timeoutMs?: number): Transport {
+export function nodeTransport(url: string, timeoutMs: number = NODE_TIMEOUT_MS): Transport {
   return async (method, params) => {
     if (!isReadMethod(method)) throw new Error("the method is not one of the five a chain read calls; nothing was sent");
-    return rpcCall(url, method, [...params], timeoutMs);
+    return rpcCall(url, method, [...params], { timeoutMs, maxFrameChars: FRAME_CAP_CHARS });
   };
 }
 freezeFunction(nodeTransport);
+
+/** How long a read waits for each answer when its caller names no time: 15 seconds, rpcCall's default before it took limits. */
+export const NODE_TIMEOUT_MS = 15000;
 
 const MiB = 1024 * 1024;
 
@@ -61,6 +65,18 @@ export const CAPS = Object.freeze({
   header: 64 * 1024,
 });
 export type StorageKind = Exclude<keyof typeof CAPS, "metadata" | "header">;
+
+/**
+ * Room for the frame around a result, in characters: the frame `{"jsonrpc":"2.0","id":1,"result":""}` is 36, and
+ * 256 leaves room for whitespace and field order.
+ */
+export const FRAME_WRAPPER_CHARS = 256;
+
+/**
+ * The frame cap the node's transport hands rpcCall, in characters: the largest answer any read accepts (0x and two
+ * hex digits for each byte of the largest of CAPS) plus the frame's wrapper. Computed from CAPS, not typed.
+ */
+export const FRAME_CAP_CHARS = 2 + 2 * Math.max(...Object.values(CAPS)) + FRAME_WRAPPER_CHARS;
 
 /** A block hash: 0x and 64 lower case hex digits. */
 const HASH = /^0x[0-9a-f]{64}$/;

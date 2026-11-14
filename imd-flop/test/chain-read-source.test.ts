@@ -231,6 +231,11 @@ describe("B1: one place opens a socket to a node", () => {
     expect(text(join(SRC, "gateway.ts"))).not.toMatch(/function rpcCall\b/);
     expect(specifiers(text(join(DIR, "node.ts")))).toContain("../node-rpc.js");
   });
+
+  it("node-rpc.ts imports nothing from src/chain-read (piece A1, C5): the cap is handed in by its caller", () => {
+    expect(specifiers(text(join(SRC, "node-rpc.ts"))).filter((s) => /(^|\/)chain-read\//.test(s))).toEqual([]);
+    expect(specifiers('import { CAPS } from "./chain-read/node.js";').filter((s) => /(^|\/)chain-read\//.test(s))).toEqual(["./chain-read/node.js"]);
+  });
 });
 
 describe("T5: no test of chain-read opens a socket", () => {

@@ -5,7 +5,7 @@
  */
 import { afterEach, describe, expect, it } from "vitest";
 import type { Fetch } from "../src/gateway.js";
-import { checkGenesis } from "../src/gateway.js";
+import { checkGenesis, GENESIS_RPC_LIMITS } from "../src/gateway.js";
 import { NETWORKS } from "../src/networks.js";
 import { CALL_ID, NOT_AN_ANSWER, rpcCall } from "../src/node-rpc.js";
 
@@ -34,20 +34,21 @@ function answering(frame: string, sent: unknown[] = []): void {
 /** What rpcCall does with one frame: its result, or the words it fails with. */
 async function outcome(frame: string): Promise<{ result: unknown } | { error: string }> {
   answering(frame);
-  return rpcCall("ws://scripted.invalid", "chain_getBlockHash", [0], 2000).then(
+  return rpcCall("ws://scripted.invalid", "chain_getBlockHash", [0], LIMITS).then(
     (result) => ({ result }),
     (e: Error) => ({ error: e.message }),
   );
 }
 
 const HASH = `0x${"ab".repeat(32)}`;
+const LIMITS = { timeoutMs: 2000, maxFrameChars: 65536 };
 const frame = (o: Record<string, unknown>) => JSON.stringify(o);
 
 describe("X1: the frame of an answer", () => {
   it("the request carries CALL_ID, the number 1, and jsonrpc 2.0", async () => {
     const sent: any[] = [];
     answering(frame({ jsonrpc: "2.0", id: 1, result: HASH }), sent);
-    await rpcCall("ws://scripted.invalid", "chain_getBlockHash", [0], 2000);
+    await rpcCall("ws://scripted.invalid", "chain_getBlockHash", [0], LIMITS);
     expect(CALL_ID).toBe(1);
     expect(sent).toEqual([{ id: 1, jsonrpc: "2.0", method: "chain_getBlockHash", params: [0] }]);
   });
@@ -178,5 +179,91 @@ describe("N2: answerOf is rpcCall's own and never throws for plain data", () => 
       if ("result" in o) expect([text, o.result]).toEqual([text, result]);
       else expect([text, REASONS(o.error)]).toEqual([text, true]);
     }
+  });
+});
+
+/** A fake socket that plays a script: each step is a frame's data to hand over, or "close". It records the sockets it made. */
+function scripted(steps: readonly unknown[], made: { sockets: number } = { sockets: 0 }): { sockets: number } {
+  (globalThis as { WebSocket: unknown }).WebSocket = class {
+    onopen?: () => void;
+    onmessage?: (ev: { data: unknown }) => void;
+    onerror?: () => void;
+    onclose?: () => void;
+    constructor() {
+      made.sockets++;
+      setTimeout(() => this.onopen?.(), 0);
+    }
+    send() {
+      let at = 0;
+      for (const step of steps) setTimeout(() => (step === "close" ? this.onclose?.() : this.onmessage?.({ data: step })), at++);
+    }
+    close() {}
+  };
+  return made;
+}
+
+/** What rpcCall does with these limits: its result, or the words it fails with, and how long it took. */
+async function settle(limits: unknown): Promise<{ o: { result: unknown } | { error: string }; ms: number }> {
+  const start = Date.now();
+  const o = await rpcCall("ws://scripted.invalid", "chain_getBlockHash", [0], limits as never).then(
+    (result) => ({ result }),
+    (e: Error) => ({ error: e.message }),
+  );
+  return { o, ms: Date.now() - start };
+}
+
+describe("C1 to C3: the caller's limits, the frame cap and the close", () => {
+  const FRAME = frame({ jsonrpc: "2.0", id: 1, result: HASH });
+
+  it("a frame at its cap is read; one character over is refused before it is parsed, with both numbers", async () => {
+    scripted([FRAME]);
+    expect((await settle({ timeoutMs: 2000, maxFrameChars: FRAME.length })).o).toEqual({ result: HASH });
+    scripted([FRAME]);
+    expect((await settle({ timeoutMs: 2000, maxFrameChars: FRAME.length - 1 })).o).toEqual({ error: `rpc frame of ${FRAME.length} characters is over its cap of ${FRAME.length - 1}` });
+  });
+
+  it("a frame over its cap is refused even when it is not JSON: it is never parsed", async () => {
+    scripted(["{" + "x".repeat(100)]);
+    expect((await settle({ timeoutMs: 2000, maxFrameChars: 50 })).o).toEqual({ error: "rpc frame of 101 characters is over its cap of 50" });
+  });
+
+  it("a frame that is not text (an ArrayBuffer, a Blob shaped object with a size, a byte array) is refused with its own reason", async () => {
+    for (const data of [new TextEncoder().encode(FRAME).buffer, { size: FRAME.length }, new TextEncoder().encode(FRAME)]) {
+      scripted([data]);
+      expect((await settle({ timeoutMs: 2000, maxFrameChars: 65536 })).o).toEqual({ error: "rpc frame is not text" });
+    }
+  });
+
+  it("a close before any message settles at once with its reason, well inside the timeout", async () => {
+    scripted(["close"]);
+    const { o, ms } = await settle({ timeoutMs: 10_000, maxFrameChars: 65536 });
+    expect(o).toEqual({ error: "rpc socket closed before an answer" });
+    expect(ms).toBeLessThan(5_000);
+  });
+
+  it("a close after an answer changes nothing", async () => {
+    scripted([FRAME, "close"]);
+    expect((await settle({ timeoutMs: 2000, maxFrameChars: 65536 })).o).toEqual({ result: HASH });
+  });
+
+  it("limits that are not exactly two whole numbers above 0 are refused, and no socket is made", async () => {
+    for (const limits of [undefined, null, 2000, {}, { timeoutMs: 2000 }, { maxFrameChars: 10 }, { timeoutMs: 2000, maxFrameChars: 10, extra: 1 }, { timeoutMs: 0, maxFrameChars: 10 }, { timeoutMs: 2000, maxFrameChars: 0 }, { timeoutMs: 1.5, maxFrameChars: 10 }, { timeoutMs: 2000, maxFrameChars: "10" }, { timeoutMs: -1, maxFrameChars: 10 }]) {
+      const made = scripted([FRAME]);
+      const { o } = await settle(limits);
+      expect([JSON.stringify(limits), "error" in o && o.error.startsWith("rpc limits refused: ")]).toEqual([JSON.stringify(limits), true]);
+      expect(made.sockets).toBe(0);
+    }
+  });
+
+  it("the genesis check hands its own limits: 15 seconds and a frame cap of 65536 characters", async () => {
+    expect(GENESIS_RPC_LIMITS).toEqual({ timeoutMs: 15000, maxFrameChars: 65536 });
+    expect(Object.isFrozen(GENESIS_RPC_LIMITS)).toBe(true);
+    const pin = NETWORKS.devnet.genesisHash;
+    const faucet = (async () => new Response(JSON.stringify({ genesisHash: pin }))) as Fetch;
+    const padded = JSON.stringify({ jsonrpc: "2.0", id: 1, result: pin }).padEnd(65537, " ");
+    scripted([padded]);
+    expect((await checkGenesis(NETWORKS.devnet, faucet)).error).toContain("rpc unavailable: rpc frame of 65537 characters is over its cap of 65536");
+    scripted([padded.slice(0, 65536)]);
+    expect((await checkGenesis(NETWORKS.devnet, faucet)).ok).toBe(true);
   });
 });
