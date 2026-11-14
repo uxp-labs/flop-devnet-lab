@@ -1,13 +1,14 @@
 # P6b progress (builder; removed in the last commit)
 
 Done:
-- read the brief, the facts file, src/miner, src/channel, the SDK files named.
+- read the brief, the facts file, src/miner, src/channel, the SDK files named (first builder, then the second).
+- second builder: read the five drafts against the SDK source; committed them (calls, client-errors, endpoint, requests, timing). They typecheck.
 
 Next:
-- src/miner: client-errors.ts, calls.ts, endpoint.ts, requests.ts, timing.ts, http.ts, client.ts
+- src/miner: http.ts, client.ts
 - test/lib/scripted-miner.ts; tests miner-endpoint, miner-http-*, miner-client-*
-- update the two P6a source tests' file lists (miner-source, review-p6a-source)
+- the two P6a source tests: file lists gain the new files; their content scans held to the ten P6a files; a P6b source test holds S1 for all
 - README "Miner client" section
 
 Open questions:
-- exit code of a prove status other than 200: taken as 5 (refusal by rule); transport failures of prove 11.
+- none open. Lead ruled: a prove status other than 200 is exit 5; a transport failure of prove is 11.
