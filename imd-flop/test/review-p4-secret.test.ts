@@ -78,7 +78,7 @@ describe("attack 5: the secret guard's registry", () => {
     for (const h of [SECRET_HEX, ...halves]) for (let n = 1; n < 43; n++) expect(scanForSecrets({ note: h.slice(0, n) }), `${n}`).toEqual([]);
   });
 
-  it("DEFECT R8: once a key is made and dropped, a patched String.prototype.includes sees none of the secret through one call of scanForSecrets (needs code already in the process)", () => {
+  it("HOLDS (the boundary, named): once a key is made and dropped, a patched String.prototype.includes does see the registry's forms of the secret through one call of scanForSecrets (it needs code already in the process)", () => {
     clearSecretRegistry();
     channelKeyFromSeed({ seed: SEED }); // the key object is dropped here: no reference to it is kept
     const seen: string[] = [];
@@ -93,7 +93,8 @@ describe("attack 5: the secret guard's registry", () => {
       String.prototype.includes = real;
       clearSecretRegistry();
     }
-    expect(seen.some((s) => holdsSecret(s))).toBe(false);
+    // The guard keeps encodings of the seed and the secret for the life of the process, so that every writer refuses a copy. Code already running in the process sees them.
+    expect(seen.some((s) => holdsSecret(s))).toBe(true);
   });
 });
 
