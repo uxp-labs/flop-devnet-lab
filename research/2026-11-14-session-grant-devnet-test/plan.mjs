@@ -18,7 +18,7 @@ import { callFile, entryOf, loadRecord, MAX_ATTEMPTS, planStepOf, runFiles, send
 import { nextOf } from "./next.mjs";
 import { DELIMITER, relayFile } from "./relay.mjs";
 import { nonceOf } from "../2026-11-12-encoder-devnet-test/research-signed.mjs";
-import { immortalRows, NODE_CODES } from "./outcomes.mjs";
+import { actionOf, immortalRows, NODE_CODES } from "./outcomes.mjs";
 
 export { NODE_CODES, immortalRows };
 const DIR = "\"$LAB/research/2026-11-14-session-grant-devnet-test";
@@ -74,24 +74,30 @@ export function table(plan) {
 
 /** The stop rule, as the lead reads it (H10). */
 export const STOPS = [
+  "the record: an id twice, an id the plan does not have, or ids out of the plan's order: stop before anything else, and no nonce is counted from it",
   "P0: the runtime, the genesis or the transaction version at the start is not the plan's",
   "P0: SessionCount(S) is SESSION_COUNT_STOP or more, or cannot be read",
   "P0: the pair (S, D) is not absent",
   "P0, and every call, block and after reading: the tool exits other than 0",
+  "a tape that holds a node error, a question with no answer, two different answers to one question, or a read the time ended: tool-run refuses it and writes nothing; read a fresh tape for the same step",
   "before a signature: the tool's call is not the plan's (owner, device, runtime, caps, stored record line), or its hex differs from the second encoder's",
-  "the signed file check refuses: nothing is sent",
-  "a send outcome that is not a clean inclusion: the immortal rows of send_outcomes (plan.mjs outcomes)",
-  "G1 failed in its block: stop, nothing is active, one fee is lost",
+  "the signed file check refuses (a signed file that is not the call the record holds, or calls/<id>.json no longer that call, or fields that are not the signer's): nothing is sent",
+  "a send file that is not the text the check took (its sha256 in the record): stop, and no line that sends",
+  "a send outcome that is not a clean inclusion: the action its immortal row of send_outcomes names, and nothing else (plan.mjs outcomes): the lead's stop with the row's case, a find, or the same bytes again; a reading no row names an action for: stop",
+  "G1 failed in its block: the show after G1 says what is left. No session active: stop, one fee is lost. Active: stop, with the tries of R1 as the cleanup",
   "G1 succeeded but its SessionCreated fields are not the derived caps, owner and delegate, or its expires_at is not its block plus DURATION, or show after G1 does not say active with those caps: R1, then stop",
-  "a step's fee above MAX_FEE: stop after the cleanups that apply",
+  "a step's fee above MAX_FEE: stop in every branch, the refused G2 included, after the cleanups that apply",
   "a revoke failed in its block: a cleanup try at the next nonce, MAX_ATTEMPTS tries at most; then stop, and an active session is left until its expiry",
   "a revoke that succeeded but is not the plan's (no SessionRevoked of the pair, or show after it does not say revoked): stop",
-  "G2 refused with FlopSessionKeys.ALREADY_EXISTS: the end, U1 answered. Another error: the end, U1 stays open. Taken: R2",
+  "G2 refused with FlopSessionKeys.ALREADY_EXISTS: the end, U1 answered. Another error: the end, U1 stays open. Either only when the show after G2 says no session is active; a show that says active is a stop, with the tries of R2 as the cleanup. Taken: R2",
+  "the end says no session is active only when a show after the last step says so",
   "an outcome that cannot be read from the block's events: stop",
 ];
 export const stopsText = (plan) => STOPS.map((s) => `- ${s.replace(/\b(SESSION_COUNT_STOP|MAX_FEE|MAX_ATTEMPTS|ALREADY_EXISTS|DURATION)\b/g, (w) => (w === "MAX_ATTEMPTS" ? String(MAX_ATTEMPTS) : V(plan, w)))}`).join("\n");
 
-export const outcomesText = (plan) => immortalRows(plan).map((r) => `- ${r.outcome}${r.node_code !== undefined ? ` (node code ${r.node_code})` : ""}${r.node_word ? ` (${r.node_word})` : ""}: ${r.known}. The lead: ${r.lead}. A second copy: ${r.second_copy}`).join("\n");
+const actionWords = (a) => (a.kind === "stop" ? `the lead's stop, case ${a.case}` : a.kind === "sendSame" ? "the same bytes again" : a.kind === "find" ? "find first" : a.kind === "send" ? "the first send again" : "record the reading");
+/** The immortal rows, each with the action it names for an immortal step (F1), after a first send and after a sendSame. */
+export const outcomesText = (plan) => { const rows = immortalRows(plan); return rows.map((r) => { const a = actionOf(rows, r, "send"), b = actionOf(rows, r, "sendSame"); return `- ${r.outcome}${r.node_code !== undefined ? ` (node code ${r.node_code})` : ""}${r.node_word ? ` (${r.node_word})` : ""}: ${r.known}. The lead: ${r.lead}. A second copy: ${r.second_copy}. The action here: ${a.kind === b.kind ? actionWords(a) : `after a first send, ${actionWords(a)}; after a sendSame, ${actionWords(b)}`}`; }).join("\n"); };
 
 // ---- the lines the lead runs ---------------------------------------------------------------------
 

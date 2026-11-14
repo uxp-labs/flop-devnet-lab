@@ -42,29 +42,59 @@ Each owner step has these phases, in order, and `plan.mjs next` prints the lines
    send-file` checks the signed file (the last batch's `checkResearchSigned` with its `expected`
    parameter, then the spec, the transaction version and the genesis by the signature) and writes
    the send file only when it holds.
-3. send: `lab.send` of `pane-runner.js`; `record-step.mjs step --sent`.
+3. send: `lab.send` of `pane-runner.js`, only while the send file still has the sha256 the check
+   kept in the record; `record-step.mjs step --sent-file`.
 4. block: a block tape of the step's block; `tool-run.mjs <id> block` runs the tool's
    `readBlockEvents` over it; `record-step.mjs tool <id> block` keeps the extrinsic's events, its
    outcome and its fee, as the lab's own decoder reads them.
 5. after: a session tape at a head at or above the step's block; the tool's `session show` over it.
+   `tool-run.mjs` refuses a tape whose head is below the step's block (it is then below the last
+   finalized step of the record), and writes nothing.
 6. beside: the explorer's reading (`explorer-reader.js`), a second and weaker source.
+
+`tool-run.mjs` runs only at the id and the phase `plan.mjs next` names, and P0's show only before
+the start. Anything else is refused, and nothing is written.
+
+## Relays come from files
+
+Each text the pane gives (a tape, the owner's reads, the probe, a runner's or the explorer's
+reading) goes to the PC as a file of the run folder, `<run>/relays/<step>.<name>.txt`. For each
+relay `plan.mjs next` prints, in this order: the pane line; the line that shows the relay's sha256
+in the pane; the line that writes the relay into its file (`relay.mjs write`, fed by a here
+document with the quoted delimiter `RELAY_END`, so the shell changes nothing in it); and the
+command that reads the file, with `--<name>-file` and `--<name>-sha256`. The lead pastes the
+relay whole on the line between and the sha256 the pane showed. The file, less one trailing
+newline, must have that sha256. A relay is one line of JSON. The write refuses an empty relay (a
+relay line equal to `RELAY_END` ends the here document before it), a line equal to `RELAY_END`
+and a relay of more than one line, and then writes nothing.
+
+## The words of `plan.mjs next`
+
+Its first word is `NEXT` (the next action), `END` (the end) or `STOP` (these tools go no further,
+with why). It exits 0 for `NEXT` and `END` and 3 for `STOP`. At some stops it still prints lines:
+the lead's stop that a send outcome's row names, and the cleanup revoke of a session the show says
+is active.
 
 ## The stop rule
 
 <!-- printed by plan.mjs: stops -->
+- the record: an id twice, an id the plan does not have, or ids out of the plan's order: stop before anything else, and no nonce is counted from it
 - P0: the runtime, the genesis or the transaction version at the start is not the plan's
 - P0: SessionCount(S) is 9 or more, or cannot be read
 - P0: the pair (S, D) is not absent
 - P0, and every call, block and after reading: the tool exits other than 0
+- a tape that holds a node error, a question with no answer, two different answers to one question, or a read the time ended: tool-run refuses it and writes nothing; read a fresh tape for the same step
 - before a signature: the tool's call is not the plan's (owner, device, runtime, caps, stored record line), or its hex differs from the second encoder's
-- the signed file check refuses: nothing is sent
-- a send outcome that is not a clean inclusion: the immortal rows of send_outcomes (plan.mjs outcomes)
-- G1 failed in its block: stop, nothing is active, one fee is lost
+- the signed file check refuses (a signed file that is not the call the record holds, or calls/<id>.json no longer that call, or fields that are not the signer's): nothing is sent
+- a send file that is not the text the check took (its sha256 in the record): stop, and no line that sends
+- a send outcome that is not a clean inclusion: the action its immortal row of send_outcomes names, and nothing else (plan.mjs outcomes): the lead's stop with the row's case, a find, or the same bytes again; a reading no row names an action for: stop
+- G1 failed in its block: the show after G1 says what is left. No session active: stop, one fee is lost. Active: stop, with the tries of R1 as the cleanup
 - G1 succeeded but its SessionCreated fields are not the derived caps, owner and delegate, or its expires_at is not its block plus 86400, or show after G1 does not say active with those caps: R1, then stop
-- a step's fee above 10558485985000000: stop after the cleanups that apply
+- a step's fee above 10558485985000000: stop in every branch, the refused G2 included, after the cleanups that apply
 - a revoke failed in its block: a cleanup try at the next nonce, 3 tries at most; then stop, and an active session is left until its expiry
 - a revoke that succeeded but is not the plan's (no SessionRevoked of the pair, or show after it does not say revoked): stop
-- G2 refused with FlopSessionKeys.SessionAlreadyExists: the end, U1 answered. Another error: the end, U1 stays open. Taken: R2
+- G2 refused with FlopSessionKeys.SessionAlreadyExists: the end, U1 answered. Another error: the end, U1 stays open. Either only when the show after G2 says no session is active; a show that says active is a stop, with the tries of R2 as the cleanup. Taken: R2
+- the end says no session is active only when a show after the last step says so
 - an outcome that cannot be read from the block's events: stop
 <!-- end of printed -->
 
@@ -72,26 +102,26 @@ A send outcome that is not a clean inclusion follows the immortal rows of the la
 `send_outcomes`, imported, not written again:
 
 <!-- printed by plan.mjs: outcomes -->
-- finalized: the extrinsic is in a block the node reported finalized, with the block's hash, number and the extrinsic's index, and the sha256 and length of that block's System.Events. The lead: record-step.mjs step --sent; then explorer.read and record-step.mjs step --explorer. plan.mjs next says what follows. A second copy: never
-- finalized-not-found: the node said finalized for a block that does not hold the extrinsic. Not known whether another block holds it. The lead: record nothing as included. lab.find from the birth block (mortal) or from the start of the run (immortal), and record what it returns. A second copy: never; lab.sendSame
-- finalized-not-canonical: the finalized block's hash is not the block at its height. Not known where the extrinsic is. The lead: as finalized-not-found: lab.find, and record what it returns. A second copy: never; lab.sendSame
-- finalized-unread: the node said finalized, with the block's hash, but reading that block failed. The lead: lab.find from the birth block (mortal) or the start of the run (immortal): it reads the block again. A second copy: never; lab.sendSame
-- refused-bundle: nothing was sent: the text or its sha256 changed on its way, or it holds no extrinsic. The lead: relay the send file and its sha256 again, exactly. A second copy: not needed: the same copy is sent
-- already-sent: nothing was submitted by this call, but this page's sent list holds these bytes: they were written to a socket before (H2). It is a reading: record-step.mjs step records it, and nextOf takes the step as sent and not in a finalized block. It may be in the pool or in a block. With it in the record the lead's stop has neither case c nor case d. The lead: record it. Then lab.find from the birth block (mortal) or the start of the run (immortal), and record what it returns; if not found, lab.sendSame (immortal) or S4 (mortal). A second copy: never
-- not-in-sent-list: nothing was sent: sendSame sends only bytes send sent before. The lead: use lab.send. A second copy: not needed
-- not-sent: nothing was written: the connection was not open. Nothing is marked as sent. The lead: paste the runner again in a fresh tab on the node, check its sha256, and lab.send the same send file. A second copy: not needed: the same copy is sent
-- refused-at-submission (node code 1010): on a first send: the node judged the extrinsic invalid (a bad signature, a used or future nonce it will not keep, a mortal copy whose era is over, or a fee it cannot pay): it is not in the pool and cannot be included as it is, and nothing moved. On a sendSame after an outcome that may still land (deadline, connection-lost, ended), 1010 can mean the first copy is already in a block (its nonce is used). The lead: record it. After a sendSame that followed a deadline, connection-lost or ended: lab.find before anything else, from the block before the first send. After a first send: for an immortal step this is case c of record-step.mjs stop, and the cleanup steps that apply follow; for a mortal step, once the finalized head is above its last valid block, case b, or a second copy by S4. A second copy: never; the lead stops at the step instead
-- refused-at-submission (node code 1013): already imported: the node holds these bytes in its pool. It IS in the pool and may be included. The lead: treat it as sent: record it, then lab.find from the birth block (mortal) or the start of the run (immortal). No stop by the lead: the copy can land. A second copy: never
-- refused-at-submission (node code 1014): the priority is too low: another transaction of the same signer and nonce is in the pool. A copy the record does not hold exists. The lead: stop signing and find out which transaction it is (lab.find from the birth block or the start of the run). S2e refuses every device step until the record holds what is on chain. No stop by the lead. A second copy: never while the other is in the pool; the lead rules
-- refused-at-submission (node code other): any other code: not in the pool, by the node's word. The lead: record it and read the node's words. lab.sendSame of the same bytes later; no stop by the lead (record-step.mjs stop allows case c only with 1010). A second copy: never; lab.sendSame
-- deadline: no final status before the runner's deadline of 120 s. It may be in the pool, or in a block that is not final (in_block names it). The lead: record it. lab.find from the birth block until the finalized head is above the last valid block (mortal), or until found (immortal). Sign no later step meanwhile. A second copy: never; lab.sendSame
-- connection-lost: the extrinsic was written, then the connection was lost. It may be in the pool or in a block. The lead: paste the runner again in a fresh tab, then as deadline. A second copy: never; lab.sendSame
-- ended (usurped): another transaction with the same nonce took its place in the pool: a copy the record does not hold exists. The lead: stop signing. lab.find from the birth block for this copy; S2e refuses every device step until the record holds what is on chain. A second copy: never: the nonce is used
-- ended (finalityTimeout): it was in a block that did not become final in time. It may still be finalized. The lead: lab.find from the birth block, as deadline. A second copy: never; lab.sendSame
-- ended (dropped): the pool dropped it. Not in a block, as far as the node knows. The lead: lab.find from the birth block, as deadline. A second copy: never; lab.sendSame
-- ended (invalid): the pool found it invalid (for example its nonce was used or its era is over). The lead: lab.find from the birth block; read the record's nonce rule. A second copy: never
-- not-found: find read the finalized blocks of the range it names and the extrinsic is not in them. Above the range, not known. The lead: mortal: find again from the end of the range until the finalized head is above the last valid block. Immortal: lab.sendSame, then find again. A second copy: never
-- find-deadline: find did not finish before the runner's deadline (H10): it read the finalized blocks from its start to the block it names in to (none when to is null) and the extrinsic is not in them. Above that, not known. The lead: record it. lab.find again from the block after to (from the same start when to is null), and record what it returns. A second copy: never
+- finalized: the extrinsic is in a block the node reported finalized, with the block's hash, number and the extrinsic's index, and the sha256 and length of that block's System.Events. The lead: record-step.mjs step --sent; then explorer.read and record-step.mjs step --explorer. plan.mjs next says what follows. A second copy: never. The action here: record the reading
+- finalized-not-found: the node said finalized for a block that does not hold the extrinsic. Not known whether another block holds it. The lead: record nothing as included. lab.find from the birth block (mortal) or from the start of the run (immortal), and record what it returns. A second copy: never; lab.sendSame. The action here: find first
+- finalized-not-canonical: the finalized block's hash is not the block at its height. Not known where the extrinsic is. The lead: as finalized-not-found: lab.find, and record what it returns. A second copy: never; lab.sendSame. The action here: find first
+- finalized-unread: the node said finalized, with the block's hash, but reading that block failed. The lead: lab.find from the birth block (mortal) or the start of the run (immortal): it reads the block again. A second copy: never; lab.sendSame. The action here: find first
+- refused-bundle: nothing was sent: the text or its sha256 changed on its way, or it holds no extrinsic. The lead: relay the send file and its sha256 again, exactly. A second copy: not needed: the same copy is sent. The action here: the first send again
+- already-sent: nothing was submitted by this call, but this page's sent list holds these bytes: they were written to a socket before (H2). It is a reading: record-step.mjs step records it, and nextOf takes the step as sent and not in a finalized block. It may be in the pool or in a block. With it in the record the lead's stop has neither case c nor case d. The lead: record it. Then lab.find from the birth block (mortal) or the start of the run (immortal), and record what it returns; if not found, lab.sendSame (immortal) or S4 (mortal). A second copy: never. The action here: find first
+- not-in-sent-list: nothing was sent: sendSame sends only bytes send sent before. The lead: use lab.send. A second copy: not needed. The action here: the first send again
+- not-sent: nothing was written: the connection was not open. Nothing is marked as sent. The lead: paste the runner again in a fresh tab on the node, check its sha256, and lab.send the same send file. A second copy: not needed: the same copy is sent. The action here: the first send again
+- refused-at-submission (node code 1010): on a first send: the node judged the extrinsic invalid (a bad signature, a used or future nonce it will not keep, a mortal copy whose era is over, or a fee it cannot pay): it is not in the pool and cannot be included as it is, and nothing moved. On a sendSame after an outcome that may still land (deadline, connection-lost, ended), 1010 can mean the first copy is already in a block (its nonce is used). The lead: record it. After a sendSame that followed a deadline, connection-lost or ended: lab.find before anything else, from the block before the first send. After a first send: for an immortal step this is case c of record-step.mjs stop, and the cleanup steps that apply follow; for a mortal step, once the finalized head is above its last valid block, case b, or a second copy by S4. A second copy: never; the lead stops at the step instead. The action here: after a first send, the lead's stop, case c; after a sendSame, find first
+- refused-at-submission (node code 1013): already imported: the node holds these bytes in its pool. It IS in the pool and may be included. The lead: treat it as sent: record it, then lab.find from the birth block (mortal) or the start of the run (immortal). No stop by the lead: the copy can land. A second copy: never. The action here: find first
+- refused-at-submission (node code 1014): the priority is too low: another transaction of the same signer and nonce is in the pool. A copy the record does not hold exists. The lead: stop signing and find out which transaction it is (lab.find from the birth block or the start of the run). S2e refuses every device step until the record holds what is on chain. No stop by the lead. A second copy: never while the other is in the pool; the lead rules. The action here: find first
+- refused-at-submission (node code other): any other code: not in the pool, by the node's word. The lead: record it and read the node's words. lab.sendSame of the same bytes later; no stop by the lead (record-step.mjs stop allows case c only with 1010). A second copy: never; lab.sendSame. The action here: the same bytes again
+- deadline: no final status before the runner's deadline of 120 s. It may be in the pool, or in a block that is not final (in_block names it). The lead: record it. lab.find from the birth block until the finalized head is above the last valid block (mortal), or until found (immortal). Sign no later step meanwhile. A second copy: never; lab.sendSame. The action here: find first
+- connection-lost: the extrinsic was written, then the connection was lost. It may be in the pool or in a block. The lead: paste the runner again in a fresh tab, then as deadline. A second copy: never; lab.sendSame. The action here: find first
+- ended (usurped): another transaction with the same nonce took its place in the pool: a copy the record does not hold exists. The lead: stop signing. lab.find from the birth block for this copy; S2e refuses every device step until the record holds what is on chain. A second copy: never: the nonce is used. The action here: find first
+- ended (finalityTimeout): it was in a block that did not become final in time. It may still be finalized. The lead: lab.find from the birth block, as deadline. A second copy: never; lab.sendSame. The action here: find first
+- ended (dropped): the pool dropped it. Not in a block, as far as the node knows. The lead: lab.find from the birth block, as deadline. A second copy: never; lab.sendSame. The action here: find first
+- ended (invalid): the pool found it invalid (for example its nonce was used or its era is over). The lead: lab.find from the birth block; read the record's nonce rule. A second copy: never. The action here: find first
+- not-found: find read the finalized blocks of the range it names and the extrinsic is not in them. Above the range, not known. The lead: mortal: find again from the end of the range until the finalized head is above the last valid block. Immortal: lab.sendSame, then find again. A second copy: never. The action here: the same bytes again
+- find-deadline: find did not finish before the runner's deadline (H10): it read the finalized blocks from its start to the block it names in to (none when to is null) and the extrinsic is not in them. Above that, not known. The lead: record it. lab.find again from the block after to (from the same start when to is null), and record what it returns. A second copy: never. The action here: find first
 <!-- end of printed -->
 
 ## The fence
@@ -121,5 +151,13 @@ A send outcome that is not a clean inclusion follows the immortal rows of the la
 ## Out of this batch
 
 U2, the expiry's edge, is out (B-4). P0 makes only the free read of `state_call` `Core_version` at
-a block about 1000 below the head, and the record keeps whether the node answered. Nothing in the
-batch depends on it.
+the block 1000 below the finalized head. The probe sends that call only at a 32 byte hash the node
+gave for that block; otherwise it records the refusal and sends nothing. The record keeps the head,
+the block it meant (number and hash), whether the node answered that call and the answer's length,
+or the refusal. Nothing in the batch depends on it.
+
+The owner's balance before and after is not read in this batch: `lab.accountReads` gives the
+nonce and no balance. It comes with the public recording of the batch's blocks (stage 2), through
+the observatory's decoder. What holds the money side here: each step's fee and its payer are read
+from the step's own events, each fee is at or under the most per step, and no step of the plan
+moves funds. `check.mjs` reports a balance in a record as not judged, never as a pass or a differ.
