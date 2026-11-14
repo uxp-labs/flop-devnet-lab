@@ -146,3 +146,37 @@ describe("X1: the frame of an answer", () => {
     expect((await checkGenesis(NETWORKS.devnet, faucet)).ok).toBe(true);
   });
 });
+
+/**
+ * Piece A1 part 8 (audit note 7): answerOf is rpcCall's own. It is not exported, and it is handed only what
+ * readOutsideJson returned for a text frame: plain data. Through rpcCall, a frame of every JSON kind settles the call
+ * with an answer or one of the frame rule's own reasons, and nothing else is thrown. A throw inside answerOf would
+ * show here as "rpc returned malformed JSON", which no valid JSON text may give.
+ */
+describe("N2: answerOf is rpcCall's own and never throws for plain data", () => {
+  const KINDS: readonly unknown[] = [null, true, false, 0, -1.5, 1e300, "", "x", [], [1, [2, [null]]], {}, { a: { b: { c: [{}] } } }, { message: "m" }, { message: 7 }, { message: null }, { __proto__: { message: "m" } }];
+  const REASONS = (e: string) => e === NOT_AN_ANSWER || e === "rpc error" || e.startsWith("rpc error: ");
+
+  it("answerOf is not exported", async () => {
+    const mod = (await import("../src/node-rpc.js")) as Record<string, unknown>;
+    expect(Object.keys(mod).sort()).toEqual(["CALL_ID", "NOT_AN_ANSWER", "rpcCall"]);
+  });
+
+  it("frames of every JSON kind, an error of every kind and a result of every kind: an answer or a reason, nothing else", async () => {
+    const frames: [string, unknown][] = [
+      ...KINDS.map((k): [string, unknown] => [JSON.stringify(k), undefined]),
+      ...KINDS.map((k): [string, unknown] => [frame({ jsonrpc: "2.0", id: 1, error: k }), undefined]),
+      ...KINDS.map((k): [string, unknown] => [frame({ jsonrpc: "2.0", id: 1, error: k, result: HASH }), undefined]),
+      ...KINDS.map((k): [string, unknown] => [frame({ jsonrpc: "2.0", id: 1, result: k }), k]),
+      ...KINDS.map((k): [string, unknown] => [frame({ jsonrpc: k, id: k, result: HASH }), undefined]),
+      ['{"jsonrpc":"2.0","id":1,"__proto__":{"result":1}}', undefined],
+      ['{"jsonrpc":"2.0","id":1,"error":{"__proto__":{"message":"m"}}}', undefined],
+    ];
+    expect(frames.length).toBe(5 * KINDS.length + 2);
+    for (const [text, result] of frames) {
+      const o = await outcome(text);
+      if ("result" in o) expect([text, o.result]).toEqual([text, result]);
+      else expect([text, REASONS(o.error)]).toEqual([text, true]);
+    }
+  });
+});

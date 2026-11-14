@@ -17,13 +17,16 @@ export const NOT_AN_ANSWER = "rpc returned a frame that is not an answer to the 
 const own = (o: object, k: string): boolean => Object.prototype.hasOwnProperty.call(o, k);
 
 /**
- * What a frame says of the call (rule X1). A frame with an own error key, whatever its value, is a failed call: an
- * error that is an object with a text message is quoted through server-text.ts, any other gives "rpc error". A frame
- * ends the call with its result only when it is an object that is not a list, its jsonrpc is exactly "2.0", its id is
- * exactly CALL_ID and it has an own result key; the result is then msg.result as it is, so null only when the node
- * wrote null. Every other frame is not an answer to the call. Never throws.
+ * What a frame says of the call (rule X1). rpcCall's own: not exported, and handed only what readOutsideJson
+ * returned for a text frame, which is plain data parsed from a JSON text (null, a boolean, a number, a text, a list or
+ * an object of those, with no accessor and no prototype of the node's choosing). It never throws for such a value.
+ * A frame with an own error key, whatever its value, is a failed call: an error that is an object with a text
+ * message is quoted through server-text.ts, any other gives "rpc error". A frame ends the call with its result only
+ * when it is an object that is not a list, its jsonrpc is exactly "2.0", its id is exactly CALL_ID and it has an own
+ * result key; the result is then msg.result as it is, so null only when the node wrote null. Every other frame is not
+ * an answer to the call.
  */
-export function answerOf(msg: unknown): { readonly ok: true; readonly result: unknown } | { readonly ok: false; readonly error: string } {
+function answerOf(msg: unknown): { readonly ok: true; readonly result: unknown } | { readonly ok: false; readonly error: string } {
   if (msg === null || typeof msg !== "object" || Array.isArray(msg)) return { ok: false, error: NOT_AN_ANSWER };
   const m = msg as Record<string, unknown>;
   if (own(m, "error")) {
