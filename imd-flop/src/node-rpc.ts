@@ -43,9 +43,15 @@ function answerOf(msg: unknown): { readonly ok: true; readonly result: unknown }
   return { ok: true, result: m.result };
 }
 
+/**
+ * The longest timeout rpcCall takes, in milliseconds. A timer holds at most this many milliseconds: a longer delay
+ * fires after 1 ms, which would end the call at once instead of after its time.
+ */
+export const MAX_TIMEOUT_MS = 2 ** 31 - 1;
+
 /** The limits a caller hands rpcCall. Both are required whole numbers above 0. There is no default. */
 export interface RpcLimits {
-  /** How long the call waits for an answer, in milliseconds. */
+  /** How long the call waits for an answer, in milliseconds: at most MAX_TIMEOUT_MS (2147483647). */
   readonly timeoutMs: number;
   /** The longest frame text the call parses, in characters. */
   readonly maxFrameChars: number;
@@ -62,6 +68,7 @@ function limitsOf(limits: unknown): RpcLimits {
   const timeoutMs = PLAIN.uintOf("u32", f.timeoutMs, "the rpc limits' timeoutMs");
   const maxFrameChars = PLAIN.uintOf("u32", f.maxFrameChars, "the rpc limits' maxFrameChars");
   if (timeoutMs === 0) throw new Error("rpc limits refused: the rpc limits' timeoutMs must be above 0");
+  if (timeoutMs > MAX_TIMEOUT_MS) throw new Error(`rpc limits refused: the rpc limits' timeoutMs must be at most ${MAX_TIMEOUT_MS}`);
   if (maxFrameChars === 0) throw new Error("rpc limits refused: the rpc limits' maxFrameChars must be above 0");
   return { timeoutMs, maxFrameChars };
 }

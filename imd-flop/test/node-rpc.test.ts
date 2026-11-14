@@ -160,7 +160,7 @@ describe("N2: answerOf is rpcCall's own and never throws for plain data", () => 
 
   it("answerOf is not exported", async () => {
     const mod = (await import("../src/node-rpc.js")) as Record<string, unknown>;
-    expect(Object.keys(mod).sort()).toEqual(["CALL_ID", "NOT_AN_ANSWER", "rpcCall"]);
+    expect(Object.keys(mod).sort()).toEqual(["CALL_ID", "MAX_TIMEOUT_MS", "NOT_AN_ANSWER", "rpcCall"]);
   });
 
   it("frames of every JSON kind, an error of every kind and a result of every kind: an answer or a reason, nothing else", async () => {

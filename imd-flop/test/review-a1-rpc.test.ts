@@ -6,7 +6,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { CAPS, FRAME_CAP_CHARS, nodeTransport } from "../src/chain-read/node.js";
 import { NETWORKS } from "../src/networks.js";
-import { rpcCall } from "../src/node-rpc.js";
+import { MAX_TIMEOUT_MS, rpcCall } from "../src/node-rpc.js";
 
 const real = globalThis.WebSocket;
 afterEach(() => {
@@ -58,11 +58,20 @@ async function state(p: Promise<unknown>, waitMs = 30): Promise<string> {
 const LIMITS = { timeoutMs: 5000, maxFrameChars: 65536 };
 
 describe("review A1, P9: the limits", () => {
-  it("DEFECT RA1-2: a timeoutMs the check accepts (a u32 of 2^31 ms) ends the call at once with rpc timeout, not after its time", async () => {
+  it("HOLDS (was DEFECT RA1-2): a timeoutMs above the longest a timer holds (2^31 ms) is refused in its own words, before any socket is made", async () => {
     const made = manual();
-    const p = rpcCall("ws://scripted.invalid", "chain_getBlockHash", [0], { timeoutMs: 2 ** 31, maxFrameChars: 65536 });
+    const words = "rpc limits refused: the rpc limits' timeoutMs must be at most 2147483647";
+    expect(MAX_TIMEOUT_MS).toBe(2147483647);
+    for (const timeoutMs of [2 ** 31, MAX_TIMEOUT_MS + 1]) {
+      await expect(rpcCall("ws://scripted.invalid", "chain_getBlockHash", [0], { timeoutMs, maxFrameChars: 65536 })).rejects.toThrow(words);
+    }
+    expect(made).toHaveLength(0);
+  });
+
+  it("MAX_TIMEOUT_MS is accepted: the call is still pending after a short wait, and a close ends it", async () => {
+    const made = manual();
+    const p = rpcCall("ws://scripted.invalid", "chain_getBlockHash", [0], { timeoutMs: MAX_TIMEOUT_MS, maxFrameChars: 65536 });
     expect(made).toHaveLength(1);
-    // setTimeout takes at most 2^31 - 1 ms; a longer delay becomes 1 ms. The call must still be waiting.
     const s = await state(p, 50);
     made[0].onclose?.();
     await p.catch(() => undefined);
