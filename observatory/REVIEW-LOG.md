@@ -18,11 +18,11 @@ Review: a reviewer who wrote none of it read the branch at `ccca328` (the review
 | # | Finding | Fix |
 |---|---|---|
 | RR2-1 | the two settles do not hold the upper 8 bytes of a u128: a receipt keeping only the low 64 bits verifies too | the test now states that limit (a HOLDS test); the README names what the two settles do not hold, and `receiptMessage`'s comment says every u128 in them is below 2^64 |
-| RR2-2 | the library's rules on the settle call (found twice, not at all, off a byte boundary) | held by the reviewer's `test/review-r2-library-rules.test.ts`, six refusals, passing as it came |
+| RR2-2 | six refusals of imd-flop's test library had no test: one record of the channel in a batch, one set for the block, one batch at a block, one answer per call | the reviewer's `test/review-r2-library-rules.test.ts` holds each, passing as it came |
 | RR2-3 | the turn index's byte order and the upper half of `g_n` are not held by the verified turn vector | the test now states that limit (a HOLDS test); the turn test's header says P6 holds those by its own tests |
 | RR2-4 | the turn test's fold through `merkle_path` is never exercised, both paths being empty | the fold is removed from the turn test, and its header says it is not exercised and that P6 writes it |
-| RR2-5 | the words claimed a little more than the tests show about the chain taking the signature | the README and the comment say the chain's check of that signature, and its refusal of a settle signed over other bytes, are not shown, and that the escrow is the same at the parent block and at the settled block |
-| RR2-6 | the words did not say the two settles hold every u128 below 2^64 | the README has a bullet for what those two settles do not hold |
+| RR2-5 | the comment said "what the chain accepted"; nothing shows that the chain checks the receipt's signature or refuses a settle signed over other bytes | the README and the comment claim only that, in two settles the chain took, the agent's signature verifies over these bytes, and say that the chain's own check is not shown |
+| RR2-6 | the escrow in the record at the settled block equals the one at the parent, so the data does not tell "before the settle" from "at the block" | the README says the stored escrow, the same at the parent block and at the settled block |
 
 The reviewer's tests are kept and renamed "HOLDS (was DEFECT RR2-n)". No file of the observatory but this log changed in this review round.
 
