@@ -140,6 +140,7 @@ Not built: when FLOP ships proxies or escrow pools and a call is funded by anoth
 - What can fail after the sign function is called comes only from the signer: a sign function that throws (`SIGNER_THREW`, naming only the class of what it threw), and a signature that is not 64 bytes or does not verify over the payload (`SIGNATURE_INVALID`).
 - The result's fields and words are read back from the final bytes, and the signature is verified there. The exported words functions (`src/chain/describe.ts`) take only bytes and a runtime's four names, so the words cannot differ from the bytes. No exported function takes a runtime object: a runtime is found by its four names in the frozen table. Everything `src/chain` exports is frozen where it is defined.
 - Its table, `src/chain/runtimes.ts`, is written by `node scripts/chain-table.mjs` from the 1014020 metadata held by the observatory recording `recording-20261112080132-05842a6db1e9c890`, picked by the sha256 in `research/2026-11-12-session-rerun-1014020/facts-1014020.json`. Nothing in it is typed by hand. `test/chain-table.test.ts` derives it again and compares byte for byte.
+- A detached array given to the strict reader is refused with a code (`BAD_BYTES`), since the shared check reads it as 0 bytes.
 - Its input checks (`bytesOf`, `takeFields`, `ownKeys`, `ownValue` and the integer check) live in `src/plain-input.ts`, shared with the channel modules. That module imports nothing and refuses through the encoder's own `refuse`, with the encoder's codes.
 - The reference encoder for the tests and the script is `@polkadot-api/substrate-bindings` and `@polkadot-api/metadata-builders`, dev dependencies only. Nothing under `src` imports them.
 
@@ -158,9 +159,10 @@ Not built: when FLOP ships proxies or escrow pools and a call is funded by anoth
 
 ## Channel key (not used by any command yet)
 
-`src/channel/` holds the channel key C and the exact bytes it signs, for the channel provider to come. No command uses it. It opens no socket, writes no file and sends nothing.
+`src/channel/` holds six files: the channel key C and the exact bytes it signs, for the channel provider to come. No command uses it. It opens no socket, writes no file and sends nothing.
 
 What the modules are:
+- `freeze.ts`: `freezeFunction`, which freezes a function or a class and its prototype object where it is defined. It imports nothing.
 - `errors.ts`: the refusal codes (`WRONG_LENGTH`, `OUT_OF_RANGE`, `BAD_INPUT`, `SELF_CHECK`, `SIGN_FAILED`) and `ChannelError`, exit 5. A message names the field and the length or range. It never carries bytes or hex of an input.
 - `bytes.ts`: the shared input checks of `src/plain-input.ts` bound to the channel's refuse, fixed width little endian integers, ASCII and UTF-8 text, and lower case hex.
 - `transcript.ts`: the channel id, the receipt and the turn ack, as bytes. No hex, no signing.
@@ -183,9 +185,13 @@ The key:
 - `newChannelKey()` takes 32 bytes from the system's random source, makes the secret and the public key, and registers the seed, the secret and each half of the secret with the secret guard. The secret stays in a closure.
 - The key is a frozen object of four functions: `publicKey()`, `signReceipt`, `signTurnAck` and `signRequest`. `JSON.stringify` of it is `{}`. It holds no channel id: each call names its channel.
 - C signs those three layouts and nothing else. No function signs bytes it is handed, and none gives out the secret or the seed.
-- Each signature is checked to be 64 bytes and to verify under the key's own public key before it is returned (`SELF_CHECK`). If the library throws, the refusal names only the class of what it threw (`SIGN_FAILED`).
-- `verifyChannelSignature` answers true only when the library's verify does. It answers false for a public key not 32 bytes, a signature not 64 bytes, or bytes the library throws on. It never throws on bytes.
+- Each signature is checked to be 64 bytes and to verify under the key's own public key before it is returned (`SELF_CHECK`). If the library throws while signing, the refusal says only that it threw (`SIGN_FAILED`). It carries no cause and no class name.
+- `verifyChannelSignature` answers true only when the library's verify does. It answers false for a public key not 32 bytes, a signature not 64 bytes, or bytes the library throws on. It never throws on bytes, a detached array included (a detached array has 0 bytes).
+- Everything `src/channel` and `src/plain-input.ts` export or return is frozen. Functions and classes are frozen with their prototypes, where they are defined.
+- The identity point: the lab's verify refuses the identity point as a public key. The reference sr25519 accepts it with a zero signature for every message. C is never that key.
 - `channelKeyFromSeed` makes the same key from a given seed. It is for tests alone: no file under `src` but `key.ts` names it, and a source scan holds that.
+
+The boundary: these modules promise nothing against code already running in the process, which could replace the random source or the library. The secret guard keeps encodings of the seed and the secret for the life of the process, so that every writer refuses a copy.
 
 C is never written. Tests that hold it:
 - `test/channel-key.test.ts`: no view of the key (its keys, `JSON.stringify`, a spread, `util.inspect`) and nothing it returns holds the seed, the secret or a half of it in hex, base64, base64url or base58.

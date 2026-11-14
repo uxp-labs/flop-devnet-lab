@@ -116,7 +116,8 @@ freezeFunction(channelKeyFromSeed);
 /**
  * True only when the library's verify returns true. False when the public key is not 32 bytes, the signature is
  * not 64 bytes, or the library throws on the bytes (it throws when bit 7 of byte 63 of the signature is not set).
- * BAD_INPUT only when a field is not a Uint8Array or the input object is not plain fields. It never throws on any bytes.
+ * BAD_INPUT only when a field is not a Uint8Array or the input object is not plain fields. It never throws on any bytes,
+ * a detached array included (it has 0 bytes).
  */
 export function verifyChannelSignature(input: VerifyInput): boolean {
   const f = takeFields(input, ["publicKey", "message", "signature"], "verify input");

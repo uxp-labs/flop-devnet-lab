@@ -19,7 +19,8 @@ export type UintKind = "u32" | "u64" | "u128";
 export interface PlainInput {
   /**
    * A fresh copy of the bytes of `value`, which must be a Uint8Array (a Node buffer is one) of exactly `n` bytes
-   * (any length when `n` is null) by its own internal state. Anything else is refused: another width, an array, a string.
+   * (any length when `n` is null) by its own internal state. A detached array has 0 bytes: it is refused where `n` is above 0 and is an empty copy otherwise.
+   * Anything else is refused: another width, an array, a string.
    */
   readonly bytesOf: (value: unknown, n: number | null, what: string) => Uint8Array;
   /**
