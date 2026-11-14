@@ -13,6 +13,7 @@ import { rpcCall } from "../node-rpc.js";
 import { serverText } from "../server-text.js";
 import { bytesOf, hexOf, isHex } from "./bytes.js";
 import { type Got, known, unknown } from "./result.js";
+import { freezeFunction } from "../freeze.js";
 
 /** The five methods a chain read calls, frozen at their definition (the P2 fix round, rule X6). */
 export const READ_METHODS = Object.freeze(["chain_getFinalizedHead", "chain_getHeader", "chain_getBlockHash", "state_getStorage", "state_getMetadata"] as const);
@@ -35,6 +36,7 @@ export function nodeTransport(url: string, timeoutMs?: number): Transport {
     return rpcCall(url, method, [...params], timeoutMs);
   };
 }
+freezeFunction(nodeTransport);
 
 const MiB = 1024 * 1024;
 
@@ -117,6 +119,7 @@ export async function finalizedHead(t: Transport): Promise<Got<string>> {
   const a = await call(t, "chain_getFinalizedHead", []);
   return a.kind === "unknown" ? a : hashOf("chain_getFinalizedHead", a.value);
 }
+freezeFunction(finalizedHead);
 
 /** What a read takes from a header: its number and its parent's hash. */
 export interface Header {
@@ -139,6 +142,7 @@ export async function header(t: Transport, hash: string): Promise<Got<Header>> {
   if (typeof parentHash !== "string" || !HASH.test(parentHash)) return unknown("chain_getHeader: the header's parentHash is not a 32 byte hash");
   return known({ number: Number.parseInt(number.slice(2), 16), parentHash });
 }
+freezeFunction(header);
 
 /** The canonical hash at a height. A node that holds no block there answers null: unknown. */
 export async function blockHash(t: Transport, number: number): Promise<Got<string>> {
@@ -148,6 +152,7 @@ export async function blockHash(t: Transport, number: number): Promise<Got<strin
   if (a.value === null) return unknown(`chain_getBlockHash: the node holds no block at ${number}`);
   return hashOf("chain_getBlockHash", a.value);
 }
+freezeFunction(blockHash);
 
 /** The value under a storage key at a block: its bytes, or null when the node holds none there. */
 export async function storage(t: Transport, kind: StorageKind, key: Uint8Array, at: string): Promise<Got<Uint8Array | null>> {
@@ -156,9 +161,11 @@ export async function storage(t: Transport, kind: StorageKind, key: Uint8Array, 
   if (a.value === null) return known(null);
   return bytesWithin("state_getStorage", kind, a.value, CAPS[kind]);
 }
+freezeFunction(storage);
 
 /** The metadata at a block. */
 export async function metadata(t: Transport, at: string): Promise<Got<Uint8Array>> {
   const a = await call(t, "state_getMetadata", [at]);
   return a.kind === "unknown" ? a : bytesWithin("state_getMetadata", "the metadata", a.value, CAPS.metadata);
 }
+freezeFunction(metadata);

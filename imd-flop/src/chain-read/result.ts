@@ -4,6 +4,8 @@
  * not unknown. Nothing in chain-read throws for what a chain or a node said. Pure.
  */
 
+import { freezeFunction } from "../freeze.js";
+
 export interface Known<T> {
   readonly kind: "known";
   readonly value: T;
@@ -33,9 +35,14 @@ export interface KnownEntry<T> extends Known<T> {
 export type Stored<T> = KnownEntry<T> | Absent | Unknown;
 
 export const known = <T>(value: T): Known<T> => ({ kind: "known", value });
+freezeFunction(known);
 export const unknown = (reason: string): Unknown => ({ kind: "unknown", reason });
+freezeFunction(unknown);
 export const absent = (): Absent => ({ kind: "absent" });
+freezeFunction(absent);
 export const knownEntry = <T>(value: T, stored: boolean): KnownEntry<T> => ({ kind: "known", value, stored });
+freezeFunction(knownEntry);
 
 /** An unknown with a step's name put before its reason. */
 export const within = (step: string, u: Unknown): Unknown => unknown(`${step}: ${u.reason}`);
+freezeFunction(within);

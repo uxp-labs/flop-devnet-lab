@@ -25,6 +25,7 @@ import { readCall, readExtrinsic, type SessionCallData } from "./reader.js";
 import { compact, concat } from "./scale.js";
 import { reviewedRuntime, type Reviewed } from "./shape.js";
 import type { RuntimeId } from "./table.js";
+import { freezeFunction } from "../freeze.js";
 
 export interface SessionCallInput {
   /** The runtime the call is for, by the four names read from the chain. */
@@ -180,6 +181,7 @@ export function encodeSessionCall(input: SessionCallInput): Uint8Array {
   const s = takeCall(takeFields(input, CALL_KEYS, "the session call input"));
   return checkedCallBytes(s);
 }
+freezeFunction(encodeSessionCall);
 
 /** The extra of each signed extension, in the table's order. */
 function extensionExtra(s: SignSnapshot): Uint8Array {
@@ -254,3 +256,4 @@ export function signSessionCall(input: ExtrinsicInput): SignedSessionCall {
     description: describeExtrinsic(rt, extrinsic, s.birth),
   };
 }
+freezeFunction(signSessionCall);

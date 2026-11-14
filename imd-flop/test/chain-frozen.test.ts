@@ -2,11 +2,15 @@
  * P3 fix round, rule H7: everything src/chain exports is frozen where it is defined. Each file is imported
  * first and alone, in a fresh module graph, and a write to each of its exported objects and arrays, at any
  * depth, throws: a change of a field, a new field and a delete.
+ * Piece A1, F2 (audit finding 3): functions and classes too. Every export is walked with the frozen walk of
+ * test/lib/frozen-walk.ts: a function and its prototype object are frozen, and a function has no own property
+ * beyond the ones it is born with.
  */
 import { readdirSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import { PKG } from "./lib/chain-fixtures.js";
+import { problems } from "./lib/frozen-walk.js";
 
 const DIR = join(PKG, "src", "chain");
 const FILES = readdirSync(DIR).filter((f) => f.endsWith(".ts")).sort();
@@ -41,18 +45,18 @@ function writable(o: object): string[] {
   return open;
 }
 
-describe("H7: every exported object of src/chain is frozen at its definition", () => {
+describe("H7: every export of src/chain is frozen at its definition, functions and classes with their prototypes", () => {
   it("the files of src/chain are the ones this test walks", () => {
     expect(FILES).toEqual(["calls.ts", "describe.ts", "era.ts", "errors.ts", "extrinsic.ts", "fields.ts", "payload.ts", "reader.ts", "runtimes.ts", "scale.ts", "shape.ts", "table.ts"]);
   });
 
   for (const file of FILES) {
-    it(`${file}, imported first and alone: a write to each exported object throws`, async () => {
+    it(`${file}, imported first and alone: every export is frozen, and a write to each exported object throws`, async () => {
       vi.resetModules();
       const mod = (await import(join(DIR, file.replace(/\.ts$/, ".js")))) as Record<string, unknown>;
       const open: string[] = [];
       for (const [name, value] of Object.entries(mod)) {
-        if (typeof value === "function") continue;
+        open.push(...problems(value, name));
         for (const [path, o] of objects(value, name)) for (const w of writable(o)) open.push(`${path}: ${w}`);
       }
       vi.resetModules();
@@ -71,5 +75,20 @@ describe("H7: every exported object of src/chain is frozen at its definition", (
       (INNER_CALLS as Record<string, unknown>).force_open = null;
     }).toThrow(TypeError);
     expect(INNER_CALLS.force_open).toBe("escrow");
+  });
+
+  it("audit finding 3: ByteReader.prototype cannot be patched, so the strict reader keeps its rules", async () => {
+    const { ByteReader } = await import("../src/chain/scale.js");
+    const { ChainEncodeError } = await import("../src/chain/errors.js");
+    for (const C of [ByteReader, ChainEncodeError]) {
+      expect(Object.isFrozen(C)).toBe(true);
+      expect(Object.isFrozen(C.prototype)).toBe(true);
+    }
+    const uint = ByteReader.prototype.uint;
+    expect(() => {
+      (ByteReader.prototype as unknown as { uint: unknown }).uint = () => 0n;
+    }).toThrow(TypeError);
+    expect(ByteReader.prototype.uint).toBe(uint);
+    expect(new ByteReader(Uint8Array.of(5, 0)).uint(2)).toBe(5n);
   });
 });

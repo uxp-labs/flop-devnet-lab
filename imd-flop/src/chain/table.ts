@@ -5,6 +5,7 @@
  */
 import { refuse } from "./errors.js";
 import { RUNTIMES } from "./runtimes.js";
+import { freezeFunction } from "../freeze.js";
 
 /** A type as the encoder writes it, reduced from the metadata's type registry by the script. */
 export type Ty =
@@ -80,3 +81,4 @@ export function runtimeFor(id: RuntimeId): Runtime {
   if (!found) refuse("RUNTIME_UNKNOWN", `no reviewed runtime is ${JSON.stringify({ specName, specVersion, transactionVersion, genesisHash }, (_k, v) => (typeof v === "bigint" ? `${v}n` : v))}`);
   return found;
 }
+freezeFunction(runtimeFor);

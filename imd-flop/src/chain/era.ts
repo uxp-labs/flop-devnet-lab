@@ -9,6 +9,7 @@
  */
 import { refuse } from "./errors.js";
 import { ByteReader, uintLE } from "./scale.js";
+import { freezeFunction } from "../freeze.js";
 
 export const ERA_PERIOD = 64;
 const LOG2_PERIOD = 6;
@@ -24,6 +25,7 @@ export function lastValidBlock(birth: number): number {
   checkBirth(birth);
   return birth + ERA_PERIOD - 1;
 }
+freezeFunction(lastValidBlock);
 
 /** The two era bytes of a transaction born at block `birth`. */
 export function mortalEra(birth: number): Uint8Array {
@@ -31,6 +33,7 @@ export function mortalEra(birth: number): Uint8Array {
   const phase = birth % ERA_PERIOD;
   return uintLE(BigInt((LOG2_PERIOD - 1) | (phase << 4)), 2);
 }
+freezeFunction(mortalEra);
 
 /** Reads an era and refuses any but a mortal one of period 64. Returns its phase. */
 export function readEra(r: ByteReader): { period: number; phase: number } {
@@ -43,3 +46,4 @@ export function readEra(r: ByteReader): { period: number; phase: number } {
   if (phase >= period) refuse("BAD_BYTES", `an era phase ${phase} not below its period`);
   return { period, phase };
 }
+freezeFunction(readEra);

@@ -8,6 +8,7 @@ import { plainInput } from "../plain-input.js";
 import { refuse } from "./errors.js";
 import { ByteReader, uintLE } from "./scale.js";
 import type { Ty } from "./table.js";
+import { freezeFunction } from "../freeze.js";
 
 const WIDTH = Object.freeze({ u32: 4, u64: 8, u128: 16 } as const);
 
@@ -49,6 +50,7 @@ export function takeValue(ty: Ty, value: unknown, what: string): FieldValue {
       return refuse("RUNTIME_UNKNOWN", `${what} has a type (${ty.kind}) no inner call field may have`);
   }
 }
+freezeFunction(takeValue);
 
 /** The bytes of a value of type `ty`, as takeValue gave it. */
 export function writeValue(ty: Ty, value: FieldValue, what: string): Uint8Array {
@@ -80,6 +82,7 @@ export function writeValue(ty: Ty, value: FieldValue, what: string): Uint8Array 
       return refuse("RUNTIME_UNKNOWN", `${what} has a type (${ty.kind}) no inner call field may have`);
   }
 }
+freezeFunction(writeValue);
 
 /** Reads one field of type `ty`. Refuses an enum index the table does not have. */
 export function readValue(r: ByteReader, ty: Ty, what: string): FieldValue {
@@ -106,3 +109,4 @@ export function readValue(r: ByteReader, ty: Ty, what: string): FieldValue {
       return refuse("RUNTIME_UNKNOWN", `${what} has a type (${ty.kind}) no inner call field may have`);
   }
 }
+freezeFunction(readValue);

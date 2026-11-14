@@ -4,6 +4,7 @@
  * A value that does not fit is refused, never wrapped.
  */
 import { refuse } from "./errors.js";
+import { freezeFunction } from "../freeze.js";
 
 export function concat(...parts: Uint8Array[]): Uint8Array {
   const out = new Uint8Array(parts.reduce((n, p) => n + p.length, 0));
@@ -14,6 +15,7 @@ export function concat(...parts: Uint8Array[]): Uint8Array {
   }
   return out;
 }
+freezeFunction(concat);
 
 /** An unsigned integer in `bytes` bytes, little endian. */
 export function uintLE(value: bigint, bytes: number): Uint8Array {
@@ -26,6 +28,7 @@ export function uintLE(value: bigint, bytes: number): Uint8Array {
   }
   return out;
 }
+freezeFunction(uintLE);
 
 /** The SCALE compact integer, in its one canonical form. Values up to 2^536 - 1. */
 export function compact(value: bigint): Uint8Array {
@@ -38,12 +41,14 @@ export function compact(value: bigint): Uint8Array {
   if (len > 67) refuse("OUT_OF_RANGE", "a compact integer has at most 67 bytes");
   return concat(Uint8Array.of(((len - 4) << 2) | 3), uintLE(value, len));
 }
+freezeFunction(compact);
 
 export function toHex(bytes: Uint8Array): string {
   let s = "0x";
   for (const b of bytes) s += b.toString(16).padStart(2, "0");
   return s;
 }
+freezeFunction(toHex);
 
 /**
  * Reads bytes front to back. It refuses bytes that end early, a compact integer not in its canonical form,
@@ -97,3 +102,4 @@ export class ByteReader {
     if (this.offset !== this.bytes.length) refuse("BAD_BYTES", `${what} has ${this.bytes.length - this.offset} bytes left over`);
   }
 }
+freezeFunction(ByteReader);

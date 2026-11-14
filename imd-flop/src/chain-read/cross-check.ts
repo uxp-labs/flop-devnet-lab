@@ -13,6 +13,7 @@ import { lineOf } from "./keys.js";
 import type { BlockEventsAt, SessionState } from "./read.js";
 import { type Got, known, unknown, within } from "./result.js";
 import { ofThePair } from "./session-state.js";
+import { freezeFunction } from "../freeze.js";
 
 /** The totals that agree, by the stored field's name. */
 export interface Agreement {
@@ -54,3 +55,4 @@ export function crossCheck(state: SessionState, events: BlockEventsAt): Got<Agre
   }
   return known({ number: state.number, hash: state.hash, totals });
 }
+freezeFunction(crossCheck);

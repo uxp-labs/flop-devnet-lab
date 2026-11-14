@@ -4,6 +4,7 @@
  * SIGNER_THREW (rule H4). Nothing is returned then.
  */
 import { CliError, EXIT } from "../errors.js";
+import { freezeFunction } from "../freeze.js";
 
 export const CHAIN_REFUSAL = Object.freeze({
   /** The runtime named is not in the reviewed table, or its table entry has a shape this encoder does not write. */
@@ -42,7 +43,9 @@ export class ChainEncodeError extends CliError {
     if (arguments.length > 2) Object.defineProperty(this, "cause", { value: cause, writable: false, enumerable: false, configurable: false });
   }
 }
+freezeFunction(ChainEncodeError);
 
 export function refuse(refusal: ChainRefusalCode, message: string): never {
   throw new ChainEncodeError(refusal, message);
 }
+freezeFunction(refuse);

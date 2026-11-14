@@ -19,6 +19,7 @@ import { type Transport, blockHash, finalizedHead, header, metadata, storage } f
 import { type Got, type Stored, absent, known, knownEntry, unknown, within } from "./result.js";
 import { type CircuitBreakerRecord, type SessionRecord, circuitBreakerOf, ofThePair, sessionNonceOf, sessionOf } from "./session-state.js";
 import { shapeFileText } from "./shape-file.js";
+import { freezeFunction } from "../freeze.js";
 
 /** The block a read was made at, and the runtime the door pinned for it. */
 export interface At {
@@ -113,6 +114,7 @@ export async function readSessionState(t: Transport, owner: string, delegate: st
   const circuitBreaker = await entryAt(t, pin.value, head.value, "circuitBreaker", { ...L.entries.circuit_breakers, ...k.circuitBreakers }, (v) => circuitBreakerOf(L, v));
   return known({ ...atOf(h.value.number, head.value, pin.value.runtime), owner, delegate, session, sessionNonce, circuitBreaker });
 }
+freezeFunction(readSessionState);
 
 /** The events of a named block, read only when the node reports it finalized and canonical. */
 export async function readBlockEvents(t: Transport, block: { number: number; hash: string }): Promise<Got<BlockEventsAt>> {
@@ -136,3 +138,4 @@ export async function readBlockEvents(t: Transport, block: { number: number; has
   if (events.kind === "unknown") return within("System.Events", events);
   return known({ ...atOf(block.number, block.hash, pin.value.runtime), events: events.value });
 }
+freezeFunction(readBlockEvents);

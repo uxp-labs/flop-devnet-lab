@@ -18,6 +18,7 @@ import { signingPayload, type SignedPath } from "./payload.js";
 import { ByteReader } from "./scale.js";
 import { reviewedRuntime, type Reviewed } from "./shape.js";
 import type { CallEntry, RuntimeId } from "./table.js";
+import { freezeFunction } from "../freeze.js";
 
 /** What a session call holds. */
 export interface SessionCallData {
@@ -80,6 +81,7 @@ export function readCall(runtime: RuntimeId, bytes: Uint8Array): SessionCallData
   r.done("the call");
   return data;
 }
+freezeFunction(readCall);
 
 /** Reads the birth block a caller names: its number once, its hash once and by its internal state. */
 function birthOf(value: unknown): { number: number; hash: Bytes32 } {
@@ -148,3 +150,4 @@ export function readExtrinsic(runtime: RuntimeId, input: Uint8Array, birthBlock:
   if (!verifies) refuse("SIGNATURE_INVALID", "the signature does not verify against the signer and the payload with this birth hash");
   return { signer, signature, accountNonce, era, tip, metadataHashMode, birth, lastValidBlock: lastValidBlock(birth.number), signed, payloadLength: payload.length, call, callBytes };
 }
+freezeFunction(readExtrinsic);
