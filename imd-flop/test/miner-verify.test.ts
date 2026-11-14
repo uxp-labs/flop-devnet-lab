@@ -114,6 +114,20 @@ describe("T4: verifyInfoProof", () => {
     expect(refusal(() => verifyInfoProof({ expected, challenge: s.challenge, proof: { ...proof } }), {}).check).toBe("proof");
   });
 
+  it("a parsed answer of another kind is refused where a receipt, an info or a proof is wanted (BAD_INPUT)", () => {
+    const s = base();
+    const expected = minerExpected(expectedInputOf(s));
+    const proof = parseInfoProof(JSON.stringify(proofObject(s)));
+    const info = parseInfo(JSON.stringify(infoObject(s)));
+    const turn = parseTurnReceipt(JSON.stringify(turnObject(s)));
+    const asTurn = refusal(() => verifyTurn({ expected, channelId: s.channelId, input: s.input, maxTokens: s.maxTokens, receipt: proof as never }), {});
+    expect([asTurn.refusal, asTurn.check]).toEqual(["BAD_INPUT", "turn"]);
+    const asInfo = refusal(() => verifyInfo({ expected, info: turn as never }), {});
+    expect([asInfo.refusal, asInfo.check]).toEqual(["BAD_INPUT", "info"]);
+    const asProof = refusal(() => verifyInfoProof({ expected, challenge: s.challenge, proof: info as never }), {});
+    expect([asProof.refusal, asProof.check]).toEqual(["BAD_INPUT", "proof"]);
+  });
+
   it("a change to the arrays of the values handed out changes nothing that is checked", () => {
     const s = base();
     const expected = minerExpected(expectedInputOf(s));

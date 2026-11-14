@@ -231,6 +231,7 @@ for (const answer of Object.keys(FIELDS) as Answer[]) {
           if (answer === "close" && path === "settled" && (f.value === DELETE || f.value === null)) continue;
           const body = f.raw !== undefined ? rawAt(good, path, f.raw) : JSON.stringify(setPath(good, path, f.value));
           wireRefusal(answer, body, `${answer}.${path}`);
+          if (f.value === DELETE) expect(() => PARSERS[answer](body)).toThrow(/is missing/);
         }
       });
     }
