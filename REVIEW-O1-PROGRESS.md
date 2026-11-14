@@ -5,3 +5,4 @@ Next: build, then attacks 1 to 12.
 - 04:37 UTC: test/review-o1-runtime.test.ts (attack 3): DEFECT O1-1, O1-2, O1-3 fail by design; 6 HOLDS pass.
 Next: third way list (attack 1, 2), pin test and scan (7, 8), mutants (9), words, commits, typecheck.
 - 04:38 UTC: test/review-o1-list.test.ts (attacks 1, 2, 4): 6 HOLDS pass. List matches a third derivation.
+- 04:40 UTC: test/review-o1-scan.test.ts (attack 8): DEFECT O1-4, O1-5, O1-6 fail by design, 2 HOLDS. Plants via runner: /tmp/ro1-mut/review-scan.json, 7 of 8 survived (control killed). Pin mutant killed.
