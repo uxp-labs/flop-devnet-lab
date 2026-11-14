@@ -1,12 +1,12 @@
 {
-  "observed_at": "2026-11-14T03:54:29.142Z",
+  "observed_at": "2026-11-14T04:55:55.222Z",
   "schema": "flop-observatory/feed-upgrade@0",
-  "snapshot_hash": "721da51f8467f83262181ebc8f855048d95cbd36f2bfd20bca7860dfbd2fc8e9",
+  "snapshot_hash": "dd823d8a7b07c6a75faa2544fa8147a749a8ddddfd372f10e2eaa454356fdbe4",
   "trust": "trusted RPC",
   "upgrade": {
     "at": {
-      "hash": "0x349b48e53cd5e83472a07655c9e28f23f6f033ee377bad7a7371a0d59b842320",
-      "number": 3698418
+      "hash": "0xc1af24c9af075295451789a5eec922b38ed07eeed87274ee717bdbaa7b4f252d",
+      "number": 3702074
     },
     "authorization_appeared": false,
     "authorized": {
@@ -16,7 +16,7 @@
       "sha256": null,
       "state": "absent"
     },
-    "compared_with": 3694867,
+    "compared_with": 3698418,
     "executing": {
       "detail": null,
       "spec_name": "tzkv-runtime",
@@ -24,7 +24,7 @@
       "state": "reviewed"
     },
     "executing_changed": false,
-    "observed_at": "2026-11-14T03:54:29.142Z",
+    "observed_at": "2026-11-14T04:55:55.222Z",
     "schema": "flop-observatory/upgrade-watch@0",
     "trust": "trusted RPC"
   }
