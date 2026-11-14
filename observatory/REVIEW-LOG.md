@@ -2,6 +2,30 @@
 
 What each outside review and independent rerun of FLOP Observatory M0 found, and the fix and proof for each, newest first. Rounds 1 to 10 were first written in the PR #5 description and are kept here word for word, so the log travels with the code it describes: a reviewer reads the rounds at the commit under review. RULES.md holds the rules themselves; where a round and RULES.md differ, RULES.md is binding.
 
+## Round 34: the sixth recording brought in, and the receipt held to two real settles
+
+Built on 2026-11-14 from the lead's brief `2026-11-14-r2-settle-fixture-and-receipt-vector.md` (piece R, second branch) and the lead's decisions R-4, R-6 and R-7. The sixth list's recording was published as `recordings/20261114071524-9afba293ba8d1b2f/` on observatory-data at e18a5e6 (workflow run 43570221110), made from main c307d89, 12 of 12 calls answered. This round brings it in as a fixture and holds it to itself and to the earlier recordings; imd-flop holds its receipt bytes to both settles. No file under `src`, `recordings/` or `.github/workflows` of the observatory changed. No helper was added under `test/helpers/`, so no mutant was added.
+
+| # | What | Rule | Proof |
+|---|---|---|---|
+| A1, A2 | the fixture | `fixtures/recording-20261114071524-9afba293ba8d1b2f/`: `tape.jsonl`, `run.json` and `SHA256SUMS` byte for byte by `git show` from the data branch; `requests.json` and `requests-inputs.json` byte for byte as `recordings/` held them at c307d89; `meta.json` with the fifth's fields, each `_from` saying where its value comes from | `test/settle-recording.test.ts`: the exact file set, `SHA256SUMS`, 12 of 12 through `judgeRecording`, the list derived from the frozen inputs byte for byte, the meta fields, the id from `started_at` and the list's sha256 |
+| A4 | held to the earlier recordings | for each settle: the hash at the height is the first tape's; `System.Events` and `System.LastRuntimeUpgrade` at the block byte equal to the first tape's; the gateway's record byte equal to the second recording's call 50; the runtime at the block and the parent the first tape's reviewed spec; R-4, the parent's hash is the `parentHash` of both recorded headers, whose number is the height | the same file, 7 or 8 tests a settle |
+| A4 | held to itself | one `Settled` of the channel through the decoder's door; the settle call found once, in one extrinsic, by the pallet and call index of `ComputeChannel.settle` read from the reviewed shape, then the channel id; the record at the parent and at the block through the door the same but for its state, Open then Closed, and the escrow the event's `miner_paid`, `burned` and the block's `AuditFeeEarmarked` amount together | the same file; 21 tests in all |
+| R-6, R-7 | the receipt vector | in imd-flop, `test/channel-receipt-vector.test.ts`: the settle's arguments read by the reference decoder and by the shape's fixed width fields, agreeing; `receiptMessage` with payable the escrow at the parent verifies under the stored `agent_key` for both settles; the other payables and forms do not | imd-flop's own tests; the observatory decodes no extrinsic |
+
+Review: a reviewer who wrote none of it read the branch at `ccca328` (the reviewer's branch is `claude/review-settle-recording-receipt-vector`, commit e35c50b). A third reading of both settles, byte by byte, agrees with the vector. The fixture is byte equal to the data branch. 17 changes of the tape are each caught. Its six findings, none in the fixture or in the observatory's test, are all about what two settles with small numbers (every u128 below 2^64, both turn indices 0, both merkle paths empty) can and cannot show. What was done, in one line each:
+
+| # | Finding | Fix |
+|---|---|---|
+| RR2-1 | the two settles do not hold the upper 8 bytes of a u128: a receipt keeping only the low 64 bits verifies too | the test now states that limit (a HOLDS test); the README names what the two settles do not hold, and `receiptMessage`'s comment says every u128 in them is below 2^64 |
+| RR2-2 | six refusals of imd-flop's test library had no test: one record of the channel in a batch, one set for the block, one batch at a block, one answer per call | the reviewer's `test/review-r2-library-rules.test.ts` holds each, passing as it came |
+| RR2-3 | the turn index's byte order and the upper half of `g_n` are not held by the verified turn vector | the test now states that limit (a HOLDS test); the turn test's header says P6 holds those by its own tests |
+| RR2-4 | the turn test's fold through `merkle_path` is never exercised, both paths being empty | the fold is removed from the turn test, and its header says it is not exercised and that P6 writes it |
+| RR2-5 | the comment said "what the chain accepted"; nothing shows that the chain checks the receipt's signature or refuses a settle signed over other bytes | the README and the comment claim only that, in two settles the chain took, the agent's signature verifies over these bytes, and say that the chain's own check is not shown |
+| RR2-6 | the escrow in the record at the settled block equals the one at the parent, so the data does not tell "before the settle" from "at the block" | the README says the stored escrow, the same at the parent block and at the settled block |
+
+The reviewer's tests are kept and renamed "HOLDS (was DEFECT RR2-n)". No file of the observatory but this log changed in this review round.
+
 ## Round 33: the sixth request list, two real settles, and the audit's two observatory items
 
 Built on 2026-11-14 from the lead's brief `2026-11-14-o1-list6-settles-and-audit-observatory.md` (part R1, L1 to L13; part A2, Q1 and Q2) and the lead's decisions R-1 to R-10 and A-12. The builder stopped once, at X4: the package banned a module mock in every test file (RULES.md section 4 and its scan in `test/guard.test.ts`). The lead ruled G1 to G7 at 04:11 UTC: one named, checked exception. No file under `src` or `.github/workflows` changed. This round makes `recordings/requests.json` the sixth list, so the record workflow records the two settles once the lead merges it; the fixture and the receipt vector are a later branch.

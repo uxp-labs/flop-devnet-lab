@@ -343,6 +343,19 @@ building and testing decoders against real data. It is evidence, never proof of 
   to `extrinsic_hash`, the hash at each mortal step's birth height equal to the birth hash it was
   signed with, the sha256 and length of each step block's `System.Events` equal to what the runner
   relayed, and every block's `LastRuntimeUpgrade` naming spec 1014020.
+- The sixth list's recording is `fixtures/recording-20261114071524-9afba293ba8d1b2f` (round 34),
+  12 of 12 answered, which keeps that list and its inputs byte for byte. `test/settle-recording.test.ts`
+  holds it to itself and to the earlier recordings, for each of the two settles: the hash at the
+  settled height equal to the first recording's, `System.Events` and `System.LastRuntimeUpgrade` at
+  the block byte equal to the first recording's reads, the gateway's record at the block byte equal
+  to the second recording's call 50, `System.LastRuntimeUpgrade` at the block and at its parent
+  naming the first recording's reviewed spec, the hash at the parent's height equal to the
+  `parentHash` of both recorded headers of the block, one `Settled` event of the channel through the
+  decoder's door, the settle call found once in one extrinsic by the pallet and call index of the
+  reviewed shape followed by the channel id, and the channel's record at the parent and at the block,
+  through the door, the same but for its state (Open, then Closed). The observatory decodes no
+  extrinsic: the settle call's arguments and the receipt vector are read in imd-flop
+  (`test/channel-receipt-vector.test.ts`), which depends on the observatory and not the other way.
   `scripts/fill-encoder-results.mjs --out <file>` fills the final record, `results.final.json` beside
   the run time record, which it never writes, through `src/scale/block.ts`
   (`test/helpers/encoder-fill.ts`, reading the fixture through `test/helpers/recorded-encoder.ts`);

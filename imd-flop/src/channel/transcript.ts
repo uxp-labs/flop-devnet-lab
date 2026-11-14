@@ -79,7 +79,12 @@ freezeFunction(channelId);
  * There is no rule on what payable is: the cooperative receipt and the checkpoint are both this layout.
  *
  * Source: FLOP's SDK 0.6.0, `dist/compute-channel/transcript.js`, `receiptMessage`.
- * Status: as the SDK describes it. Not yet held to the chain's check at settle.
+ * Status: in two cooperative settles the chain took at spec 1014014 (blocks 3479299 and 3479277), the settle call's
+ * agent_receipt_sig verifies over these bytes under the stored agent_key, with payable equal to the channel's stored
+ * escrow (test/channel-receipt-vector.test.ts, on the observatory's sixth recording). Every u128 in those settles is
+ * below 2^64, so the upper 8 bytes of aggregateGn and of payable are as the SDK describes them. Not shown: that the
+ * chain checks that signature or refuses a settle signed over other bytes, anything at spec 1014020, a settle that is
+ * not cooperative.
  */
 export function receiptMessage(input: ReceiptInput): Uint8Array {
   const f = takeFields(input, RECEIPT_FIELDS, "receipt input");
