@@ -9,6 +9,7 @@ import { plan, V, runWithSeat, sessionTapeOf, writeRecord, relayOf } from "./fix
 import { rerunNode, rerunStep, RERUN } from "./rerun-node.mjs";
 import { runTool, ToolRunError } from "./tool-run.mjs";
 import { paneKeys } from "./lib.mjs";
+import { atR1Call } from "./records.mjs";
 
 const DEV1 = RERUN.accounts.dev1.public_key;
 const K = await paneKeys(plan, V("OWNER"), DEV1);
@@ -32,18 +33,20 @@ test("HOLDS: a head hash that is not the tape's own finalized head is refused; a
 });
 
 test("HOLDS: the tape's answers in another order give the same output; an answer more changes nothing", async () => {
-  const base = (await go(run(), A6)).output;
-  const reversed = (await go(run(), changed((v) => { v.tape.reverse(); }))).output;
-  const more = (await go(run(), changed((v) => { v.tape.push({ method: "state_getStorage", params: ["0x" + "ab".repeat(32), v.head.hash], result: "0x01" }); }))).output;
+  // each run folder's record is at R1's call (tool-run runs only there, F10), G1 in the block of A1
+  const atCall = () => { const r = run(); writeRecord(r, atR1Call(DEV1, rerunStep("A1").finalized_in_block)); return r; };
+  const base = (await go(atCall(), A6)).output;
+  const reversed = (await go(atCall(), changed((v) => { v.tape.reverse(); }))).output;
+  const more = (await go(atCall(), changed((v) => { v.tape.push({ method: "state_getStorage", params: ["0x" + "ab".repeat(32), v.head.hash], result: "0x01" }); }))).output;
   for (const o of [reversed, more]) assert.deepEqual(o.json, base.json);
 });
 
-test("DEFECT RG19-5: a tape with two different answers to one question is refused, so the answer the tool gets does not hang on their order", async () => {
+test("HOLDS: RG19-5: a tape with two different answers to one question is refused, so the answer the tool gets does not hang on their order", async () => {
   const twice = changed((v) => { const i = sessionsAt(v); v.tape.splice(i, 0, { ...v.tape[i], result: null }); });
   await assert.rejects(go(run(), twice), ToolRunError, "the first of two answers is used and the tape is taken");
 });
 
-test("DEFECT RG19-6: tool-run writes no output for a phase the record is not at, so an early run cannot block the step", async () => {
+test("HOLDS: RG19-6: tool-run writes no output for a phase the record is not at, so an early run cannot block the step", async () => {
   // G1 is sent but not in a finalized block: its after is not next, and a tape read now is before it
   const r = run([{ step: "G1", call: { refused: null }, signed_check: { refused: null }, run_time: { sent: { status: "deadline", sent_by: "send" } } }]);
   await assert.rejects(go(r, A6, "G1", "after"), ToolRunError, "the after of G1 is run over a tape before G1's block");

@@ -12,6 +12,7 @@ import { ss58 } from "./lib.mjs";
 import { rerunNode, RERUN } from "./rerun-node.mjs";
 import { runTool } from "./tool-run.mjs";
 import { checkOwnerSigned, OwnerCallError, secondEncoder, toolCall } from "./owner-call.mjs";
+import { forDevice, started } from "./records.mjs";
 
 const DIR = tempDir("g19-owner-signed");
 const DEV1 = RERUN.accounts.dev1.public_key;
@@ -21,7 +22,9 @@ plan.values.OWNER.value = owner.public_key;
 plan.values.OWNER_SS58.value = ss58(owner.public_key);
 const run = runWithSeat(DEV1);
 after(() => { rmSync(DIR, { recursive: true, force: true }); rmSync(run, { recursive: true, force: true }); });
-const results = { record: "run-time", owner_account_nonce_at_start: "5", accounts: { owner: { public_key: owner.public_key, ss58: ss58(owner.public_key) }, device: { public_key: DEV1, ss58: RERUN.accounts.dev1.ss58 } }, steps: [] };
+// a record at G1's call (tool-run runs only at the phase the record is at, F10), of the test owner and dev1
+const results = forDevice(started({ nonce: "5" }), DEV1);
+results.accounts.owner = { public_key: owner.public_key, ss58: ss58(owner.public_key) };
 writeRecord(run, results);
 
 // the tool's grant at A1, the pair absent there (set, as rehearsal.test.mjs sets it), for the test owner

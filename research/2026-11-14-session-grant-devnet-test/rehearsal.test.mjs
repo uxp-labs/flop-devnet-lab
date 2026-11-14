@@ -17,6 +17,7 @@ import { rerunNode, rerunStep, RERUN } from "./rerun-node.mjs";
 import { runTool } from "./tool-run.mjs";
 import { decoderReading } from "./events.mjs";
 import { readJson } from "./lib.mjs";
+import { forDevice, started, step } from "./records.mjs";
 
 const DEV1 = RERUN.accounts.dev1.public_key;
 const ERRORS = readJson(join(REPO, plan.files.errors));
@@ -24,14 +25,23 @@ const runs = [];
 after(() => { for (const r of runs) rmSync(r, { recursive: true, force: true }); });
 const flopSign = (...args) => JSON.parse(execFileSync(process.execPath, [join(REPO, plan.files.signer), ...args, "--libs", join(REPO, "imd-flop")], { encoding: "utf8" })).call;
 
-/** A run folder with the seat of dev1 and a run time record with no step yet, or with the steps given. */
-function run(steps = []) {
+/**
+ * A run folder with the seat of dev1 and a made run time record of dev1 at the phase a tool run is
+ * for (tool-run.mjs runs only there, F10): G1's call; or, with `upTo`, the steps before it done in
+ * the block of A1, the first block of the rerun, at or below the head of every tape here.
+ */
+const A1_BLOCK = rerunStep("A1").finalized_in_block;
+function run(at = "G1 call") {
   const r = runWithSeat(DEV1);
   runs.push(r);
-  writeRecord(r, { record: "run-time", accounts: { owner: { public_key: V("OWNER"), ss58: V("OWNER_SS58") }, device: { public_key: DEV1, ss58: RERUN.accounts.dev1.ss58 } }, steps });
+  const rec = forDevice(started(), DEV1);
+  if (at === "R1 call") step(rec, "G1", { block: A1_BLOCK });
+  if (at === "R1 after") { step(rec, "G1", { block: A1_BLOCK }); step(rec, "R1", { upTo: "block", block: A1_BLOCK }); }
+  if (at === "G2 call") { step(rec, "G1", { block: A1_BLOCK }); step(rec, "R1", { block: A1_BLOCK }); }
+  writeRecord(r, rec);
   return r;
 }
-async function over(node, id, purpose, r = run()) {
+async function over(node, id, purpose, r = run(`${id} ${purpose}`)) {
   const t = await sessionTapeOf(node, DEV1);
   return (await runTool({ plan, run: r, id, purpose, tapeText: t.text, tapeSha256: t.sha })).output;
 }
@@ -100,7 +110,9 @@ test("T1: session show at the revoked state (A10) gives active false, as recorde
 
 test("T1: readBlockEvents over a block tape of A2 gives the recorded SessionCreated fields and fee", async () => {
   const a2 = rerunStep("A2");
-  const r = run([{ step: "G1", run_time: { sent: { status: "finalized", block_number: a2.finalized_in_block, block_hash: a2.block_hash, extrinsic_index: a2.extrinsic_index } } }]);
+  const r = runWithSeat(DEV1);
+  runs.push(r);
+  writeRecord(r, step(forDevice(started(), DEV1), "G1", { upTo: "final", sent: { status: "finalized", sent_by: "send", block_number: a2.finalized_in_block, block_hash: a2.block_hash, extrinsic_index: a2.extrinsic_index } }));
   const node = rerunNode("A6");
   const t = await blockTapeOf(node, DEV1, node.blockOf("A2"));
   const o = (await runTool({ plan, run: r, id: "G1", purpose: "block", tapeText: t.text, tapeSha256: t.sha })).output;

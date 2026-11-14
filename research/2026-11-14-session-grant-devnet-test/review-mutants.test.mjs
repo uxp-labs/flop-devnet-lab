@@ -9,7 +9,7 @@ import { rerunNode, rerunStep, RERUN } from "./rerun-node.mjs";
 import { runTool, ToolRunError } from "./tool-run.mjs";
 import { nextOf } from "./next.mjs";
 import { sessionCountOf, startRecord, RecordStepError } from "./record-step.mjs";
-import { started, step } from "./records.mjs";
+import { atR1Call, started, step } from "./records.mjs";
 import { sha256Text } from "./lib.mjs";
 
 const DEV1 = RERUN.accounts.dev1.public_key;
@@ -22,7 +22,8 @@ test("HOLDS (M2): a tape whose head is one block below the last finalized step i
   for (const [block, ok] of [[head + 1, false], [head, true]]) {
     const r = runWithSeat(DEV1);
     runs.push(r);
-    writeRecord(r, { record: "run-time", accounts: { owner: { public_key: V("OWNER") }, device: { public_key: DEV1 } }, steps: [{ step: "G1", run_time: { sent: { status: "finalized", block_number: block, block_hash: "0x" + "12".repeat(32), extrinsic_index: 1 } } }] });
+    // a record at R1's call, G1 in the block of the case (tool-run runs only at the record's phase, F10)
+    writeRecord(r, atR1Call(DEV1, block));
     const p = runTool({ plan, run: r, id: "R1", purpose: "call", tapeText: A6.text, tapeSha256: A6.sha });
     if (ok) await p; else await assert.rejects(p, (e) => e instanceof ToolRunError && /stale/.test(e.message));
   }

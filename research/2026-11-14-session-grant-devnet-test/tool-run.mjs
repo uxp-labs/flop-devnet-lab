@@ -17,13 +17,17 @@
 // It refuses, and writes nothing (H6), when: the tape's block 0 hash is not the plan's genesis; the
 // tape's head is below the block of the last finalized step of the record; the metadata's sha256 is
 // not the committed one; the tape is named by an earlier output (a tape is used for one command);
-// the tool asked a question the tape does not hold; the head the tool printed is not the tape's.
+// the tool asked a question the tape does not hold; the head the tool printed is not the tape's; the
+// tape holds a question with no answer, or two different answers to one question (tape.mjs takeTape,
+// F10); the id and the purpose are not what the record is at (atPhase, F10). An after tape's head
+// below the step's block is the stale tape above, as the step's block is the record's last. The tape's own refusals come first, so their words name the tape.
 // No network: the transport answers only from the tape. It signs nothing and reads no key file.
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { loadPlan, loadTool, stepOf, substitute, V } from "./lib.mjs";
 import { committedMetadata, genesisOf, metadataIsCommitted, takeTape, tapeTransport, TapeError } from "./tape.mjs";
 import { lastFinalizedBlock, loadRecord, planStepOf, runFiles, tapeFile, toolFile, toolOutputs, viewOf } from "./run.mjs";
+import { nextOf } from "./next.mjs";
 
 export class ToolRunError extends Error {}
 const no = (m) => { throw new ToolRunError(m); };
@@ -72,6 +76,18 @@ export async function runOver({ t, md, argv, block, home }) {
   return { output, asked };
 }
 
+/**
+ * The record is at this id and purpose (F10): P0's show only before the record is started; any other
+ * id only when plan.mjs next names that id and that phase. Throws a refusal otherwise. An after read
+ * is at the id's phase only once the id is in a finalized block, which is then the record's last, so
+ * the stale check of runTool holds its tape's head at or above the id's block.
+ */
+export function atPhase(plan, results, id, purpose) {
+  if (id === "P0") { if (results) no("P0's show is read before the start, and the record is started: P0 is not what the record is at"); return; }
+  const n = nextOf(plan, results);
+  if (n.step !== id || n.phase !== purpose) no(`${id} ${purpose} is not what the record is at: ${n.word}${n.step ? ` ${n.step} ${n.phase}` : ""}: ${n.why}. Nothing is written`);
+}
+
 /** Runs the tool once over a tape. Returns { file, output } or throws ToolRunError; writes nothing on a refusal. */
 export async function runTool({ plan, run, id, purpose, tapeText, tapeSha256, nowIso = new Date().toISOString() }) {
   const results = loadRecord(run);
@@ -102,6 +118,7 @@ export async function runTool({ plan, run, id, purpose, tapeText, tapeSha256, no
   const home = runFiles(run).seat;
   if (purpose !== "block" && !existsSync(home)) no(`the seat home ${home} is not in the run folder: make it with imd-flop init and cap set`);
   const { output, asked } = await runOver({ t, md, argv, block, home });
+  atPhase(plan, results, id, purpose);
   const record = {
     id, purpose, argv: argv ?? ["readBlockEvents", block.number, block.hash], tape_sha256: tapeSha256, tape_file: `tapes/${id}.${purpose}.json`,
     tape_head: t.head, tape_read_utc: t.read_utc ?? null, metadata: { at: t.metadata.at, sha256: t.metadata.sha256, length: t.metadata.length, answered_with: "the committed bytes of that sha256 (imd-flop/scripts/chain-table.mjs readSource)" },

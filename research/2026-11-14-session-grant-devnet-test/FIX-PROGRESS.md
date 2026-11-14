@@ -19,6 +19,7 @@ Run tests under setpriv (CLAUDE.md rule 5). Push after every commit.
 - F8 and F15: session-reads.js timed, whole, probe at a 32 byte hash only (new sha256 0e637aa57e603faf8d250d478e7efad877e8af36b6e90cfe5ef75fcb86a285f9; steps.json does not hold it, plan.md does). tape.mjs takes no_answer entries as unknown. pane-timers.test.mjs; RG19-1 HOLDS. session-reads.test T3 probe: its node is given a hash for the old block (setup only).
 - F11: replay.mjs holds readings to sent_sha256 and block tapes to the record block. replay.test.mjs; RG19-14 HOLDS.
 - F6: judge.mjs evidenceOf (outcome, error, fee, sources from events and readings; a derived word not theirs differs), G2 other error differs, passed only at the end. check.mjs exit words. records.mjs: a made failed step's error bytes are its named error (the form record-step writes); asPlanned takes G2's error. check.test T6 "G2 refused with another error": setup now asPlanned("refused", TooManySessions) (it edited only the derived word). judge-evidence.test.mjs; RG19-10, 12, 13 HOLDS.
+- F10 (part): tape.mjs takeTape refuses two different answers, no answer, a read the time ended; tool-run.mjs atPhase. Setups given records at their phase (records.mjs forDevice, atR1Call; the delegate of made events is the record device): owner-signed, rehearsal T1, tool-run T2 passes and used twice, review-tape order, review-mutants M2, review-pane lying. tape-fresh.test.mjs; RG19-5, RG19-6 HOLDS.
 
 ## Next
 

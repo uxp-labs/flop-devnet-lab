@@ -10,6 +10,7 @@ import { HERE } from "./lib.mjs";
 import { plan, V, runWithSeat, sessionTapeOf, blockTapeOf, writeRecord, relayOf, relay } from "./fixtures.mjs";
 import { rerunNode, rerunStep, RERUN } from "./rerun-node.mjs";
 import { runTool, ToolRunError } from "./tool-run.mjs";
+import { atR1Call } from "./records.mjs";
 
 const DEV1 = RERUN.accounts.dev1.public_key;
 const runs = [];
@@ -25,10 +26,17 @@ const nothingWritten = (r) => { for (const d of ["tool", "tapes"]) assert.ok(!ex
 async function refused(r, t, re, id = "R1", purpose = "call") {
   await assert.rejects(runTool({ plan, run: r, id, purpose, tapeText: t.text, tapeSha256: t.sha }), (e) => e instanceof ToolRunError && re.test(e.message), re.toString());
 }
+/** A run folder whose record is at R1's call (F10), G1 in the block of A1, below every tape's head here. */
+function atCall() {
+  const r = runWithSeat(DEV1);
+  runs.push(r);
+  writeRecord(r, atR1Call(DEV1, rerunStep("A1").finalized_in_block));
+  return r;
+}
 const changed = (t, change) => { const v = structuredClone(t.value); change(v); return relayOf(v); };
 
 test("T2: the tape as made passes, and writes one output and the tape", async () => {
-  const r = run();
+  const r = atCall();
   const o = await runTool({ plan, run: r, id: "R1", purpose: "call", tapeText: A6.text, tapeSha256: A6.sha });
   assert.equal(o.output.exit, 0);
   assert.deepEqual(readdirSync(join(r, "tool")), ["R1.call.json"]);
@@ -62,7 +70,7 @@ test("T2 H6: a metadata sha256 that is not the committed one is refused, and so 
 });
 
 test("T2 H6: a tape used a second time, for another command, is refused", async () => {
-  const r = run();
+  const r = atCall();
   await runTool({ plan, run: r, id: "R1", purpose: "call", tapeText: A6.text, tapeSha256: A6.sha });
   await refused(r, A6, /was used already, for R1\.call\.json/, "R1", "after");
   assert.deepEqual(readdirSync(join(r, "tool")), ["R1.call.json"]);

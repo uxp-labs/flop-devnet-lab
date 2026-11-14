@@ -27,8 +27,8 @@ export function started({ nonce = "20", count = { raw: null, value: 0, stored: f
   };
 }
 
-const created = (block, o = {}) => ({ pallet: "FlopSessionKeys", name: "SessionCreated", fields: { owner: OWNER, delegate: DEVICE, spending_cap: V("SPENDING_CAP"), per_tx_limit: V("A_PER_TX"), daily_cap: V("A_DAILY"), expires_at: block + Number(V("DURATION")), ...o } });
-const revoked = () => ({ pallet: "FlopSessionKeys", name: "SessionRevoked", fields: { owner: OWNER, delegate: DEVICE } });
+const created = (block, o = {}, device = DEVICE) => ({ pallet: "FlopSessionKeys", name: "SessionCreated", fields: { owner: OWNER, delegate: device, spending_cap: V("SPENDING_CAP"), per_tx_limit: V("A_PER_TX"), daily_cap: V("A_DAILY"), expires_at: block + Number(V("DURATION")), ...o } });
+const revoked = (device = DEVICE) => ({ pallet: "FlopSessionKeys", name: "SessionRevoked", fields: { owner: OWNER, delegate: device } });
 const paid = (fee) => ({ pallet: "TransactionPayment", name: "TransactionFeePaid", fields: { who: OWNER, actual_fee: fee, tip: "0" } });
 const ERRORS = readJson(join(REPO, plan.files.errors));
 /** The dispatch error of a module error by its name in the 1014020 table; a name the table has not is pallet 94, error 255, which the table does not name. */
@@ -55,7 +55,8 @@ export function step(r, id, { upTo = "after", ok = true, error = null, fee = nul
   if (upTo === "final") return r;
   const err = ok ? null : moduleError(error);
   const events = [paid(fee ?? (st.command === "grant" ? V("FEE_GRANT") : V("FEE_REVOKE"))), outcome(ok, err)];
-  if (ok) events.unshift(st.command === "grant" ? created(b, fields) : revoked());
+  const device = r.accounts?.device?.public_key ?? DEVICE;
+  if (ok) events.unshift(st.command === "grant" ? created(b, fields, device) : revoked(device));
   e.decoder = { exit: 0, block: { number: b, hash: H(b) }, extrinsic_index: 1, events, names: events.map((x) => `${x.pallet}.${x.name}`), success: ok, error: outcomeOf(events, ERRORS).error, fee_raw: fee ?? (st.command === "grant" ? V("FEE_GRANT") : V("FEE_REVOKE")) };
   if (upTo === "block") return r;
   const active = after ?? (st.command === "grant" ? (ok ? "active" : "revoked") : ok ? "revoked" : "active");
@@ -86,3 +87,15 @@ export function asPlanned(branch = "taken", g2Error = `FlopSessionKeys.${V("ALRE
 }
 
 export { idsOf };
+
+/**
+ * A made record whose device is the given one (a device of a recording, for the tests that run the
+ * tool through tool-run.mjs, which runs only at the phase the record is at, F10). Changes the record.
+ */
+export function forDevice(r, device) {
+  r.accounts.device = { public_key: device, ss58: ss58(device) };
+  return r;
+}
+
+/** A made record of a device at R1's call: P0 good, G1 done in the block given (F10: tool-run runs only at the record's phase). */
+export const atR1Call = (device, block) => step(forDevice(started(), device), "G1", { block });

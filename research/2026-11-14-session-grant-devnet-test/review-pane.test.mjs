@@ -7,7 +7,8 @@ import { rmSync } from "node:fs";
 import { paneKeys } from "./lib.mjs";
 import { plan, V, runWithSeat, writeRecord, relayOf } from "./fixtures.mjs";
 import { readerOver, plain } from "./pane.mjs";
-import { rerunNode, RERUN } from "./rerun-node.mjs";
+import { rerunNode, rerunStep, RERUN } from "./rerun-node.mjs";
+import { atR1Call } from "./records.mjs";
 import { runTool, ToolRunError } from "./tool-run.mjs";
 
 const DEV1 = RERUN.accounts.dev1.public_key;
@@ -96,13 +97,14 @@ test("HOLDS: a node that lies makes session-reads.js send no other method, and t
     onlyReads(node, what);
     const run = runWithSeat(DEV1);
     runs.push(run);
-    writeRecord(run, { record: "run-time", accounts: { owner: { public_key: V("OWNER") }, device: { public_key: DEV1 } }, steps: [] });
+    // a record at R1's call, so the refusal is the tape's or the tool's and not the phase's (F10)
+    writeRecord(run, atR1Call(DEV1, rerunStep("A1").finalized_in_block));
     const t = relayOf(r);
     let refused = false;
     try {
       const o = await runTool({ plan, run, id: "R1", purpose: "call", tapeText: t.text, tapeSha256: t.sha });
       refused = o.output.exit !== 0;
-    } catch (e) { refused = e instanceof ToolRunError || /tape/.test(String(e?.message)); }
+    } catch (e) { refused = (e instanceof ToolRunError && !/is not what the record is at/.test(e.message)) || /tape/.test(String(e?.message)); }
     assert.ok(refused, `${what}: the tool or tool-run refuses`);
   }
 });
