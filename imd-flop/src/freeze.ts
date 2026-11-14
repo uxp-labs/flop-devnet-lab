@@ -16,13 +16,30 @@ export function deepFreeze<T>(value: T): T {
   return value;
 }
 
+/** Freezes the function that is the own value of `o` under `key`, and the get and set functions of an own accessor. */
+function freezeMemberOf(o: object, key: PropertyKey): void {
+  const d = Object.getOwnPropertyDescriptor(o, key);
+  if (d === undefined) return;
+  if ("value" in d) {
+    if (typeof d.value === "function") Object.freeze(d.value);
+  } else {
+    if (typeof d.get === "function") Object.freeze(d.get);
+    if (typeof d.set === "function") Object.freeze(d.set);
+  }
+}
+
 /**
- * Freezes `f` and, when `f` has an own `prototype` that is an object, that object too. Returns `f`. It is applied to
- * itself and to deepFreeze below.
+ * Freezes `f`, and when `f` has an own `prototype` that is an object, that object too. Then it freezes the methods:
+ * for each own property of `f` (text and symbol keys) and of its prototype, the value when it is a function, and the
+ * get and set functions of an own accessor. One level, own properties only: it does not walk into what those
+ * functions hold. Returns `f`. It is applied to itself and to deepFreeze below.
  */
 export function freezeFunction<F extends Function>(f: F): F {
   const d = Object.getOwnPropertyDescriptor(f, "prototype");
-  if (d !== undefined && "value" in d && typeof d.value === "object" && d.value !== null) Object.freeze(d.value);
+  const proto = d !== undefined && "value" in d && typeof d.value === "object" && d.value !== null ? (d.value as object) : null;
+  if (proto !== null) Object.freeze(proto);
+  for (const key of Reflect.ownKeys(f)) freezeMemberOf(f, key);
+  if (proto !== null) for (const key of Reflect.ownKeys(proto)) freezeMemberOf(proto, key);
   return Object.freeze(f);
 }
 freezeFunction(freezeFunction);

@@ -71,16 +71,37 @@ describe("review A1, P2: the reviewer's own walk of every export", () => {
 });
 
 describe("review A1, P2 and P14: the methods of an exported class", () => {
-  it("DEFECT RA1-4 (info): the methods of ByteReader are functions reachable from an export and are not frozen; a property can be hung on one", async () => {
+  it("HOLDS (was DEFECT RA1-4): the methods of ByteReader are frozen: no property can be hung on one", async () => {
     const { ByteReader } = await import("../src/chain/scale.js");
     const methods = Object.getOwnPropertyNames(ByteReader.prototype).filter((k) => {
       const d = Object.getOwnPropertyDescriptor(ByteReader.prototype, k)!;
       return k !== "constructor" && typeof d.value === "function";
     });
     expect(methods.length).toBeGreaterThan(0);
-    // README "Chain encoder": everything src/chain exports is frozen, functions and classes with their prototypes.
-    // What a fix must guarantee, if the lead rules it in: each method is frozen too, or the words say methods are not.
+    // README "Chain encoder": everything src/chain exports is frozen, functions and classes with their prototypes and their methods.
     const openMethods = methods.filter((k) => !Object.isFrozen((ByteReader.prototype as unknown as Record<string, object>)[k]));
     expect(openMethods).toEqual([]);
   });
+
+  for (const file of FILES) {
+    it(`for every exported class of ${file}, each method and accessor function on the class and on its prototype is frozen`, async () => {
+      const mod = (await import(join(SRC, file.replace(/\.ts$/, ".js")))) as Record<string, unknown>;
+      const out: string[] = [];
+      for (const k of Object.keys(mod)) {
+        const v = mod[k];
+        // A class: a function whose source starts with "class".
+        if (typeof v !== "function" || !/^class\b/.test(Function.prototype.toString.call(v))) continue;
+        const proto = Object.getOwnPropertyDescriptor(v, "prototype")?.value as object | undefined;
+        for (const [where, o] of [[k, v], [`${k}.prototype`, proto]] as const) {
+          if (o === undefined) continue;
+          for (const key of Reflect.ownKeys(o)) {
+            const d = Object.getOwnPropertyDescriptor(o, key)!;
+            const fns = "value" in d ? [d.value] : [d.get, d.set];
+            for (const fn of fns) if (typeof fn === "function" && !Object.isFrozen(fn)) out.push(`${file}:${where}.${String(key)} is a function that is not frozen`);
+          }
+        }
+      }
+      expect(out).toEqual([]);
+    });
+  }
 });

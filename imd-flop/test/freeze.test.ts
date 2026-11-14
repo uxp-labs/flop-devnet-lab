@@ -1,7 +1,7 @@
 /**
  * Piece A1, M5: the one shared freeze helper, src/freeze.ts. It imports nothing; deepFreeze freezes every object and
- * array it reaches and leaves byte arrays as they are; freezeFunction freezes a function and its own prototype
- * object; and both are frozen.
+ * array it reaches and leaves byte arrays as they are; freezeFunction freezes a function, its own prototype
+ * object and the methods and accessors on both; and both are frozen.
  */
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -57,6 +57,51 @@ describe("M5: src/freeze.ts", () => {
     const arrow = () => 1;
     expect(freezeFunction(arrow)).toBe(arrow);
     expect(Object.isFrozen(arrow)).toBe(true);
+  });
+
+  it("freezeFunction also freezes a class's method, static method, getter, setter and symbol keyed method, and nothing deeper", () => {
+    const sym = Symbol("m");
+    const held = () => 2;
+    class C {
+      static s() {
+        return 1;
+      }
+      static get sg() {
+        return 1;
+      }
+      static helper = held;
+      m() {
+        return 1;
+      }
+      get g() {
+        return 1;
+      }
+      set g(_v: number) {}
+      [sym]() {
+        return 1;
+      }
+    }
+    freezeFunction(C);
+    const proto = C.prototype as unknown as Record<PropertyKey, unknown>;
+    const acc = Object.getOwnPropertyDescriptor(C.prototype, "g")!;
+    const staticAcc = Object.getOwnPropertyDescriptor(C, "sg")!;
+    const fns: [string, unknown][] = [
+      ["method", proto.m],
+      ["static method", C.s],
+      ["symbol keyed method", proto[sym]],
+      ["getter", acc.get],
+      ["setter", acc.set],
+      ["static getter", staticAcc.get],
+      ["static field holding a function", C.helper],
+    ];
+    for (const [what, fn] of fns) expect([what, Object.isFrozen(fn)]).toEqual([what, true]);
+    // One level: a property hung on a frozen method is refused, and what the functions hold is not walked into.
+    expect(() => Object.defineProperty(proto.m, "x", { value: 1 })).toThrow();
+    const inner = { k: 1 };
+    function holder() {}
+    holder.inner = inner;
+    freezeFunction(holder);
+    expect(Object.isFrozen(inner)).toBe(false);
   });
 
   it("both are frozen, and so are their prototype objects", () => {
