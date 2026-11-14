@@ -1,0 +1,346 @@
+{
+ "id": "R1",
+ "purpose": "block",
+ "argv": [
+  "readBlockEvents",
+  3553465,
+  "0xd6cdb2ce876c2d672db366dfd01d6fb3138b2fdd2a7e2d0920a5e19aae92f81b"
+ ],
+ "tape_sha256": "3011fd7248bd1c291762ec4676cecba3a9ac53ce2bef390694af706321049074",
+ "tape_file": "tapes/R1.block.json",
+ "tape_head": {
+  "number": 3553465,
+  "hash": "0xd6cdb2ce876c2d672db366dfd01d6fb3138b2fdd2a7e2d0920a5e19aae92f81b"
+ },
+ "tape_read_utc": "2026-11-14T00:00:00.000Z",
+ "metadata": {
+  "at": "0x90f25c9e232f0b1f31021b875160bcd6aedd65785d16c3d54a3f28e440bb3522",
+  "sha256": "91294eb61225c4de7459e6a8fed3c37169a2c8a1b1906b46a5890d5e0d328238",
+  "length": 487100,
+  "answered_with": "the committed bytes of that sha256 (imd-flop/scripts/chain-table.mjs readSource)"
+ },
+ "owner_reads": null,
+ "asked": 7,
+ "exit": 0,
+ "json": {
+  "number": 3553465,
+  "hash": "0xd6cdb2ce876c2d672db366dfd01d6fb3138b2fdd2a7e2d0920a5e19aae92f81b",
+  "runtime": {
+   "specName": "tzkv-runtime",
+   "specVersion": 1014020,
+   "shapeFile": "shapes/tzkv-runtime-1014020.json"
+  },
+  "events": [
+   {
+    "index": 0,
+    "phase": {
+     "variant": "Initialization",
+     "fields": null
+    },
+    "pallet": "Balances",
+    "palletIndex": 4,
+    "event": "Minted",
+    "eventIndex": 10,
+    "fields": {
+     "who": "0x5ee9847faff6769c4f8306415059f009def33903e1123c07dcb2fb31a3814c51",
+     "amount": "8000000000000000000"
+    },
+    "topics": []
+   },
+   {
+    "index": 1,
+    "phase": {
+     "variant": "Initialization",
+     "fields": null
+    },
+    "pallet": "Balances",
+    "palletIndex": 4,
+    "event": "Minted",
+    "eventIndex": 10,
+    "fields": {
+     "who": "0x72cc67e20c6de28e2daa037b56a04256fccb29020a0bb4ebf1ee8ab534bc3b19",
+     "amount": "8000000000000000000"
+    },
+    "topics": []
+   },
+   {
+    "index": 2,
+    "phase": {
+     "variant": "Initialization",
+     "fields": null
+    },
+    "pallet": "FlopSubsidy",
+    "palletIndex": 93,
+    "event": "SubsidyPaid",
+    "eventIndex": 0,
+    "fields": {
+     "block_number": 3553465,
+     "labs_amount": "8000000000000000000",
+     "foundation_amount": "8000000000000000000"
+    },
+    "topics": []
+   },
+   {
+    "index": 3,
+    "phase": {
+     "variant": "ApplyExtrinsic",
+     "fields": 0
+    },
+    "pallet": "System",
+    "palletIndex": 0,
+    "event": "ExtrinsicSuccess",
+    "eventIndex": 0,
+    "fields": {
+     "dispatch_info": {
+      "weight": {
+       "ref_time": "295676000",
+       "proof_size": "5589"
+      },
+      "class": {
+       "variant": "Mandatory",
+       "fields": null
+      },
+      "pays_fee": {
+       "variant": "Yes",
+       "fields": null
+      }
+     }
+    },
+    "topics": []
+   },
+   {
+    "index": 4,
+    "phase": {
+     "variant": "ApplyExtrinsic",
+     "fields": 1
+    },
+    "pallet": "Aleph",
+    "palletIndex": 104,
+    "event": "FinalizedReported",
+    "eventIndex": 1,
+    "fields": {
+     "number": 3553460
+    },
+    "topics": []
+   },
+   {
+    "index": 5,
+    "phase": {
+     "variant": "ApplyExtrinsic",
+     "fields": 1
+    },
+    "pallet": "System",
+    "palletIndex": 0,
+    "event": "ExtrinsicSuccess",
+    "eventIndex": 0,
+    "fields": {
+     "dispatch_info": {
+      "weight": {
+       "ref_time": "194864000",
+       "proof_size": "0"
+      },
+      "class": {
+       "variant": "Normal",
+       "fields": null
+      },
+      "pays_fee": {
+       "variant": "Yes",
+       "fields": null
+      }
+     }
+    },
+    "topics": []
+   },
+   {
+    "index": 6,
+    "phase": {
+     "variant": "ApplyExtrinsic",
+     "fields": 2
+    },
+    "pallet": "Balances",
+    "palletIndex": 4,
+    "event": "Withdraw",
+    "eventIndex": 8,
+    "fields": {
+     "who": "0x385a91c1bea9691761060704a229795ac0b577f34b94e10574e6369089b79d0a",
+     "amount": "3490035865000000"
+    },
+    "topics": []
+   },
+   {
+    "index": 7,
+    "phase": {
+     "variant": "ApplyExtrinsic",
+     "fields": 2
+    },
+    "pallet": "AgentWallet",
+    "palletIndex": 95,
+    "event": "WalletCreated",
+    "eventIndex": 0,
+    "fields": {
+     "owner": "0x385a91c1bea9691761060704a229795ac0b577f34b94e10574e6369089b79d0a",
+     "agent": "0x14a37d3e1e50977865b504f0e3ee2590b68487a4724eee882933e1ec84e4474b",
+     "per_tx_limit": "187370000000000000",
+     "daily_cap": "1103080000000000000"
+    },
+    "topics": []
+   },
+   {
+    "index": 8,
+    "phase": {
+     "variant": "ApplyExtrinsic",
+     "fields": 2
+    },
+    "pallet": "Balances",
+    "palletIndex": 4,
+    "event": "Deposit",
+    "eventIndex": 7,
+    "fields": {
+     "who": "0xc84e82febb99234aad033eb1d8bd817728b3f1e29c3aa91ac1c701f32573230e",
+     "amount": "3490035865000000"
+    },
+    "topics": []
+   },
+   {
+    "index": 9,
+    "phase": {
+     "variant": "ApplyExtrinsic",
+     "fields": 2
+    },
+    "pallet": "TransactionPayment",
+    "palletIndex": 5,
+    "event": "TransactionFeePaid",
+    "eventIndex": 0,
+    "fields": {
+     "who": "0x385a91c1bea9691761060704a229795ac0b577f34b94e10574e6369089b79d0a",
+     "actual_fee": "3490035865000000",
+     "tip": "0"
+    },
+    "topics": []
+   },
+   {
+    "index": 10,
+    "phase": {
+     "variant": "ApplyExtrinsic",
+     "fields": 2
+    },
+    "pallet": "System",
+    "palletIndex": 0,
+    "event": "ExtrinsicSuccess",
+    "eventIndex": 0,
+    "fields": {
+     "dispatch_info": {
+      "weight": {
+       "ref_time": "698007000",
+       "proof_size": "15985"
+      },
+      "class": {
+       "variant": "Normal",
+       "fields": null
+      },
+      "pays_fee": {
+       "variant": "Yes",
+       "fields": null
+      }
+     }
+    },
+    "topics": []
+   },
+   {
+    "index": 11,
+    "phase": {
+     "variant": "ApplyExtrinsic",
+     "fields": 3
+    },
+    "pallet": "Balances",
+    "palletIndex": 4,
+    "event": "Withdraw",
+    "eventIndex": 8,
+    "fields": {
+     "who": "0xe462d014cab1239a123233647052f4e3b572322e982441d6b7a5c1694d8419e2",
+     "amount": "3906000695000000"
+    },
+    "topics": []
+   },
+   {
+    "index": 12,
+    "phase": {
+     "variant": "ApplyExtrinsic",
+     "fields": 3
+    },
+    "pallet": "FlopSessionKeys",
+    "palletIndex": 94,
+    "event": "SessionRevoked",
+    "eventIndex": 1,
+    "fields": {
+     "owner": "0xe462d014cab1239a123233647052f4e3b572322e982441d6b7a5c1694d8419e2",
+     "delegate": "0x9f749b7b18453ef9b4c3307f7b70376ce3abb033e31ae8cac77d3ab42c82062c"
+    },
+    "topics": []
+   },
+   {
+    "index": 13,
+    "phase": {
+     "variant": "ApplyExtrinsic",
+     "fields": 3
+    },
+    "pallet": "Balances",
+    "palletIndex": 4,
+    "event": "Deposit",
+    "eventIndex": 7,
+    "fields": {
+     "who": "0xc84e82febb99234aad033eb1d8bd817728b3f1e29c3aa91ac1c701f32573230e",
+     "amount": "3906000695000000"
+    },
+    "topics": []
+   },
+   {
+    "index": 14,
+    "phase": {
+     "variant": "ApplyExtrinsic",
+     "fields": 3
+    },
+    "pallet": "TransactionPayment",
+    "palletIndex": 5,
+    "event": "TransactionFeePaid",
+    "eventIndex": 0,
+    "fields": {
+     "who": "0xe462d014cab1239a123233647052f4e3b572322e982441d6b7a5c1694d8419e2",
+     "actual_fee": "3906000695000000",
+     "tip": "0"
+    },
+    "topics": []
+   },
+   {
+    "index": 15,
+    "phase": {
+     "variant": "ApplyExtrinsic",
+     "fields": 3
+    },
+    "pallet": "System",
+    "palletIndex": 0,
+    "event": "ExtrinsicSuccess",
+    "eventIndex": 0,
+    "fields": {
+     "dispatch_info": {
+      "weight": {
+       "ref_time": "781200000",
+       "proof_size": "15985"
+      },
+      "class": {
+       "variant": "Normal",
+       "fields": null
+      },
+      "pays_fee": {
+       "variant": "Yes",
+       "fields": null
+      }
+     }
+    },
+    "topics": []
+   }
+  ]
+ },
+ "stderr": [],
+ "run_utc": "2026-11-14T00:00:00.000Z"
+}

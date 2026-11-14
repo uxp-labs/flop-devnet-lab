@@ -45,6 +45,33 @@ export function argvOf(plan, results, id, purpose) {
   return { step, argv: plan.commands[cmd].map((a) => substitute(a, plan, results, true)) };
 }
 
+/**
+ * The tool's own code once over a taken tape, with no file read or written but the seat home's: main
+ * of cli.js for argv, or readBlockEvents of block. Refuses a question the tape does not hold, a head
+ * the tool printed that is not the tape's, and a block read that is not the block named. Used by
+ * runTool and, over committed tapes, by replay.mjs (H16). Returns { output: { exit, json, stderr }, asked }.
+ */
+export async function runOver({ t, md, argv, block, home }) {
+  const asked = [], missed = [];
+  const transport = tapeTransport(t, md, { asked, missed });
+  const tool = await loadTool();
+  let output;
+  if (block) {
+    const r = await tool.readBlockEvents(transport, block);
+    output = { exit: r.kind === "known" ? 0 : 1, json: r.kind === "known" ? r.value : { unknown: r.reason }, stderr: [] };
+    if (r.kind === "known" && (r.value.number !== block.number || r.value.hash !== block.hash)) no(`readBlockEvents read block ${r.value.number} ${r.value.hash}, not ${block.number} ${block.hash}`);
+  } else {
+    const lines = [], errs = [];
+    const exit = await tool.main(argv, { out: (s) => lines.push(s), err: (s) => errs.push(s), env: { IMD_FLOP_HOME: home }, transport });
+    let json = null;
+    if (lines.length) { try { json = JSON.parse(lines.join("\n")); } catch { no("the tool printed something that is not JSON with --json"); } }
+    output = { exit, json, stderr: errs };
+    if (json && json.head && (json.head.number !== t.head.number || json.head.hash !== t.head.hash)) no(`the tool printed the head ${json.head.number} ${json.head.hash}, not the tape's ${t.head.number} ${t.head.hash}`);
+  }
+  if (missed.length) no(`the tool asked what the tape does not answer: ${missed.map((m) => `${m.method} ${JSON.stringify(m.params)} (${m.why})`).join("; ")}`);
+  return { output, asked };
+}
+
 /** Runs the tool once over a tape. Returns { file, output } or throws ToolRunError; writes nothing on a refusal. */
 export async function runTool({ plan, run, id, purpose, tapeText, tapeSha256, nowIso = new Date().toISOString() }) {
   const results = loadRecord(run);
@@ -72,25 +99,9 @@ export async function runTool({ plan, run, id, purpose, tapeText, tapeSha256, no
     block = { number: v.block_number, hash: v.block_hash };
     if (t.block?.number !== block.number || t.block?.hash !== block.hash) no(`the tape is of block ${t.block?.number} ${t.block?.hash}, not ${id}'s ${block.number} ${block.hash}`);
   }
-  const asked = [], missed = [];
-  const transport = tapeTransport(t, md, { asked, missed });
-  const tool = await loadTool();
-  let output;
-  if (purpose === "block") {
-    const r = await tool.readBlockEvents(transport, block);
-    output = { exit: r.kind === "known" ? 0 : 1, json: r.kind === "known" ? r.value : { unknown: r.reason }, stderr: [] };
-    if (r.kind === "known" && (r.value.number !== block.number || r.value.hash !== block.hash)) no(`readBlockEvents read block ${r.value.number} ${r.value.hash}, not ${block.number} ${block.hash}`);
-  } else {
-    const lines = [], errs = [];
-    const home = runFiles(run).seat;
-    if (!existsSync(home)) no(`the seat home ${home} is not in the run folder: make it with imd-flop init and cap set`);
-    const exit = await tool.main(argv, { out: (s) => lines.push(s), err: (s) => errs.push(s), env: { IMD_FLOP_HOME: home }, transport });
-    let json = null;
-    if (lines.length) { try { json = JSON.parse(lines.join("\n")); } catch { no("the tool printed something that is not JSON with --json"); } }
-    output = { exit, json, stderr: errs };
-    if (json && json.head && (json.head.number !== t.head.number || json.head.hash !== t.head.hash)) no(`the tool printed the head ${json.head.number} ${json.head.hash}, not the tape's ${t.head.number} ${t.head.hash}`);
-  }
-  if (missed.length) no(`the tool asked what the tape does not answer: ${missed.map((m) => `${m.method} ${JSON.stringify(m.params)} (${m.why})`).join("; ")}`);
+  const home = runFiles(run).seat;
+  if (purpose !== "block" && !existsSync(home)) no(`the seat home ${home} is not in the run folder: make it with imd-flop init and cap set`);
+  const { output, asked } = await runOver({ t, md, argv, block, home });
   const record = {
     id, purpose, argv: argv ?? ["readBlockEvents", block.number, block.hash], tape_sha256: tapeSha256, tape_file: `tapes/${id}.${purpose}.json`,
     tape_head: t.head, tape_read_utc: t.read_utc ?? null, metadata: { at: t.metadata.at, sha256: t.metadata.sha256, length: t.metadata.length, answered_with: "the committed bytes of that sha256 (imd-flop/scripts/chain-table.mjs readSource)" },

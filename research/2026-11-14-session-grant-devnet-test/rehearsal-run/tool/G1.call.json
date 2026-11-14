@@ -1,0 +1,85 @@
+{
+ "id": "G1",
+ "purpose": "call",
+ "argv": [
+  "session",
+  "grant",
+  "--owner",
+  "5HEA8QECFwBg1F9cxoXzvQzryu2d5qj5zASJS7owNW2zebBz",
+  "--days",
+  "1",
+  "--seat",
+  "unassigned",
+  "--json"
+ ],
+ "tape_sha256": "b12f3377e7ea13f05f80178a5c44e553e34b826b4610cf2d0cf7ac28c76691c6",
+ "tape_file": "tapes/G1.call.json",
+ "tape_head": {
+  "number": 3552721,
+  "hash": "0xdca00e6a7f02fe9236ed1dd16cb4225d57d238846fae860bc252198ae30b0cc4"
+ },
+ "tape_read_utc": "2026-11-14T00:00:01.000Z",
+ "metadata": {
+  "at": "0xec29af29636b64640e5310b54ff530651fa72ea0a8c5d00371b3444881dcf538",
+  "sha256": "91294eb61225c4de7459e6a8fed3c37169a2c8a1b1906b46a5890d5e0d328238",
+  "length": 487100,
+  "answered_with": "the committed bytes of that sha256 (imd-flop/scripts/chain-table.mjs readSource)"
+ },
+ "owner_reads": {
+  "session_count": {
+   "method": "state_getStorage",
+   "params": [
+    "0x26d6680094539fc341d5ea8ffc79d76f3f12a0368a9fb531f2aaa704a19baa26f9edc9e72d99b3c30da8e2d40b25bd41e462d014cab1239a123233647052f4e3b572322e982441d6b7a5c1694d8419e2",
+    "0xdca00e6a7f02fe9236ed1dd16cb4225d57d238846fae860bc252198ae30b0cc4"
+   ],
+   "error": {
+    "code": -32000,
+    "message": "the recording holds no answer for this key at this block"
+   }
+  },
+  "rotation_history": {
+   "method": "state_getStorage",
+   "params": [
+    "0x26d6680094539fc341d5ea8ffc79d76f414c1a2a80168699e867c42895354e2df9edc9e72d99b3c30da8e2d40b25bd41e462d014cab1239a123233647052f4e3b572322e982441d6b7a5c1694d8419e2",
+    "0xdca00e6a7f02fe9236ed1dd16cb4225d57d238846fae860bc252198ae30b0cc4"
+   ],
+   "error": {
+    "code": -32000,
+    "message": "the recording holds no answer for this key at this block"
+   }
+  }
+ },
+ "asked": 9,
+ "exit": 0,
+ "json": {
+  "seat": "unassigned",
+  "network": "devnet",
+  "owner": "5HEA8QECFwBg1F9cxoXzvQzryu2d5qj5zASJS7owNW2zebBz",
+  "device": "5Ffn7MnyvrJWZJGgqsfin6t69Ey9wF9g4p7uYwNtsYxgjCph",
+  "head": {
+   "number": 3552721,
+   "hash": "0xdca00e6a7f02fe9236ed1dd16cb4225d57d238846fae860bc252198ae30b0cc4"
+  },
+  "runtime": {
+   "specName": "tzkv-runtime",
+   "specVersion": 1014020
+  },
+  "call": "create_session",
+  "call_hex": "0x5e009f749b7b18453ef9b4c3307f7b70376ce3abb033e31ae8cac77d3ab42c82062c008062175ed158000000000000000000000082dfe40d47000000000000000000008062175ed158000000000000000000805101000438436f6d707574654368616e6e656c",
+  "call_blake2b_256": "0x8a0c4c9c8fa4bc142a1921b5298f8677ec6bbd13b3d31b92f244a7fa9de9af62",
+  "words": "FlopSessionKeys.create_session, a call of the session's owner, call bytes only and not signed here: delegate 0x9f749b7b18453ef9b4c3307f7b70376ce3abb033e31ae8cac77d3ab42c82062c, spending_cap 25000000000000000 raw (0.025 FLOP), per_tx_limit 20000000000000000 raw (0.02 FLOP), daily_cap 25000000000000000 raw (0.025 FLOP), duration_blocks 86400 blocks, allowed_pallets [ComputeChannel]",
+  "allows": "This grant lets the device spend at most 25000000000000000 raw (0.025 FLOP) over the whole session, at most 25000000000000000 raw (0.025 FLOP) per epoch, and at most 20000000000000000 raw (0.02 FLOP) per call, through ComputeChannel calls only, for 86400 blocks, which is 1 epoch of the runtime's epoch length of 86400 blocks.",
+  "caps": {
+   "spending_cap": "25000000000000000",
+   "per_tx_limit": "20000000000000000",
+   "daily_cap": "25000000000000000",
+   "duration_blocks": 86400,
+   "days": 1,
+   "epoch_length": 86400
+  },
+  "stored_record": null,
+  "signing": "The owner signs this call with his own wallet. This tool does not hold the owner's key and signs nothing."
+ },
+ "stderr": [],
+ "run_utc": "2026-11-14T00:00:00.000Z"
+}

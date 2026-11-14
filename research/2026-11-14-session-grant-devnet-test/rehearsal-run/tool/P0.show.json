@@ -1,0 +1,99 @@
+{
+ "id": "P0",
+ "purpose": "show",
+ "argv": [
+  "session",
+  "show",
+  "--owner",
+  "5HEA8QECFwBg1F9cxoXzvQzryu2d5qj5zASJS7owNW2zebBz",
+  "--seat",
+  "unassigned",
+  "--json"
+ ],
+ "tape_sha256": "45516cae8afcaef63f683b636309df6cffa5c491347d2e0143079827bf08804c",
+ "tape_file": "tapes/P0.show.json",
+ "tape_head": {
+  "number": 3552721,
+  "hash": "0xdca00e6a7f02fe9236ed1dd16cb4225d57d238846fae860bc252198ae30b0cc4"
+ },
+ "tape_read_utc": "2026-11-14T00:00:00.000Z",
+ "metadata": {
+  "at": "0xec29af29636b64640e5310b54ff530651fa72ea0a8c5d00371b3444881dcf538",
+  "sha256": "91294eb61225c4de7459e6a8fed3c37169a2c8a1b1906b46a5890d5e0d328238",
+  "length": 487100,
+  "answered_with": "the committed bytes of that sha256 (imd-flop/scripts/chain-table.mjs readSource)"
+ },
+ "owner_reads": {
+  "session_count": {
+   "method": "state_getStorage",
+   "params": [
+    "0x26d6680094539fc341d5ea8ffc79d76f3f12a0368a9fb531f2aaa704a19baa26f9edc9e72d99b3c30da8e2d40b25bd41e462d014cab1239a123233647052f4e3b572322e982441d6b7a5c1694d8419e2",
+    "0xdca00e6a7f02fe9236ed1dd16cb4225d57d238846fae860bc252198ae30b0cc4"
+   ],
+   "result": null
+  },
+  "rotation_history": {
+   "method": "state_getStorage",
+   "params": [
+    "0x26d6680094539fc341d5ea8ffc79d76f414c1a2a80168699e867c42895354e2df9edc9e72d99b3c30da8e2d40b25bd41e462d014cab1239a123233647052f4e3b572322e982441d6b7a5c1694d8419e2",
+    "0xdca00e6a7f02fe9236ed1dd16cb4225d57d238846fae860bc252198ae30b0cc4"
+   ],
+   "error": {
+    "code": -32000,
+    "message": "the recording holds no answer for this key at this block"
+   }
+  }
+ },
+ "asked": 9,
+ "exit": 0,
+ "json": {
+  "seat": "unassigned",
+  "network": "devnet",
+  "owner": "5HEA8QECFwBg1F9cxoXzvQzryu2d5qj5zASJS7owNW2zebBz",
+  "device": "5Ffn7MnyvrJWZJGgqsfin6t69Ey9wF9g4p7uYwNtsYxgjCph",
+  "head": {
+   "number": 3552721,
+   "hash": "0xdca00e6a7f02fe9236ed1dd16cb4225d57d238846fae860bc252198ae30b0cc4"
+  },
+  "runtime": {
+   "specName": "tzkv-runtime",
+   "specVersion": 1014020
+  },
+  "encoder": {
+   "state": "known",
+   "value": {
+    "transactionVersion": 2,
+    "sessionEpochLength": 86400,
+    "maxSessionDuration": 864000,
+    "eraPeriod": 64
+   }
+  },
+  "session": {
+   "state": "none",
+   "value": null
+  },
+  "session_nonce": {
+   "state": "default",
+   "value": "0"
+  },
+  "circuit_breaker": {
+   "state": "none",
+   "value": null
+  },
+  "local_caps": {
+   "state": "known",
+   "value": {
+    "per_call": "20000000000000000",
+    "daily": "25000000000000000"
+   }
+  },
+  "notes": [],
+  "room": {
+   "state": "none",
+   "value": null,
+   "reason": "no session is stored for this owner and device"
+  }
+ },
+ "stderr": [],
+ "run_utc": "2026-11-14T00:00:00.000Z"
+}

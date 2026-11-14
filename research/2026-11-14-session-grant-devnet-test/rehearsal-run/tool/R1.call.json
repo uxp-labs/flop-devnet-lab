@@ -1,0 +1,74 @@
+{
+ "id": "R1",
+ "purpose": "call",
+ "argv": [
+  "session",
+  "revoke",
+  "--owner",
+  "5HEA8QECFwBg1F9cxoXzvQzryu2d5qj5zASJS7owNW2zebBz",
+  "--seat",
+  "unassigned",
+  "--json"
+ ],
+ "tape_sha256": "d7d8bd3b425ca2cdf9c40a81c8479940ed9ff3d718ebaf1a7ce087866fa21257",
+ "tape_file": "tapes/R1.call.json",
+ "tape_head": {
+  "number": 3552854,
+  "hash": "0xb9b4b29bd62a6f541bb18836a3f2400979fa183efa55a6c4f180ffaca9299323"
+ },
+ "tape_read_utc": "2026-11-14T00:00:03.000Z",
+ "metadata": {
+  "at": "0x660ccb61a750d5a0942abb764168054c1d44c83eb56b89e8623502806532f796",
+  "sha256": "91294eb61225c4de7459e6a8fed3c37169a2c8a1b1906b46a5890d5e0d328238",
+  "length": 487100,
+  "answered_with": "the committed bytes of that sha256 (imd-flop/scripts/chain-table.mjs readSource)"
+ },
+ "owner_reads": {
+  "session_count": {
+   "method": "state_getStorage",
+   "params": [
+    "0x26d6680094539fc341d5ea8ffc79d76f3f12a0368a9fb531f2aaa704a19baa26f9edc9e72d99b3c30da8e2d40b25bd41e462d014cab1239a123233647052f4e3b572322e982441d6b7a5c1694d8419e2",
+    "0xb9b4b29bd62a6f541bb18836a3f2400979fa183efa55a6c4f180ffaca9299323"
+   ],
+   "error": {
+    "code": -32000,
+    "message": "the recording holds no answer for this key at this block"
+   }
+  },
+  "rotation_history": {
+   "method": "state_getStorage",
+   "params": [
+    "0x26d6680094539fc341d5ea8ffc79d76f414c1a2a80168699e867c42895354e2df9edc9e72d99b3c30da8e2d40b25bd41e462d014cab1239a123233647052f4e3b572322e982441d6b7a5c1694d8419e2",
+    "0xb9b4b29bd62a6f541bb18836a3f2400979fa183efa55a6c4f180ffaca9299323"
+   ],
+   "error": {
+    "code": -32000,
+    "message": "the recording holds no answer for this key at this block"
+   }
+  }
+ },
+ "asked": 9,
+ "exit": 0,
+ "json": {
+  "seat": "unassigned",
+  "network": "devnet",
+  "owner": "5HEA8QECFwBg1F9cxoXzvQzryu2d5qj5zASJS7owNW2zebBz",
+  "device": "5Ffn7MnyvrJWZJGgqsfin6t69Ey9wF9g4p7uYwNtsYxgjCph",
+  "head": {
+   "number": 3552854,
+   "hash": "0xb9b4b29bd62a6f541bb18836a3f2400979fa183efa55a6c4f180ffaca9299323"
+  },
+  "runtime": {
+   "specName": "tzkv-runtime",
+   "specVersion": 1014020
+  },
+  "call": "revoke_session",
+  "call_hex": "0x5e019f749b7b18453ef9b4c3307f7b70376ce3abb033e31ae8cac77d3ab42c82062c",
+  "call_blake2b_256": "0x6df5db7197cfa9b11bdd22016a7aa4a5395fb647088486b600734b050ff67cf4",
+  "words": "FlopSessionKeys.revoke_session, a call of the session's owner, call bytes only and not signed here: delegate 0x9f749b7b18453ef9b4c3307f7b70376ce3abb033e31ae8cac77d3ab42c82062c",
+  "stored": "an active session",
+  "signing": "The owner signs this call with his own wallet. This tool does not hold the owner's key and signs nothing."
+ },
+ "stderr": [],
+ "run_utc": "2026-11-14T00:00:00.000Z"
+}

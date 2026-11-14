@@ -1,0 +1,126 @@
+{
+ "id": "G1",
+ "purpose": "after",
+ "argv": [
+  "session",
+  "show",
+  "--owner",
+  "5HEA8QECFwBg1F9cxoXzvQzryu2d5qj5zASJS7owNW2zebBz",
+  "--seat",
+  "unassigned",
+  "--json"
+ ],
+ "tape_sha256": "30f4c7bede97aebe234de4071d785a230d047ad7e2b3ec943dfd50ac3982828e",
+ "tape_file": "tapes/G1.after.json",
+ "tape_head": {
+  "number": 3552838,
+  "hash": "0xdf4072c17441d728d2b424ea843142f462f532d86d3e9047f00726d91850a0df"
+ },
+ "tape_read_utc": "2026-11-14T00:00:02.000Z",
+ "metadata": {
+  "at": "0x2aea3308ab9b1c70ce69ba232cad5843717051b6ba3087c024d8c1113a3b044b",
+  "sha256": "91294eb61225c4de7459e6a8fed3c37169a2c8a1b1906b46a5890d5e0d328238",
+  "length": 487100,
+  "answered_with": "the committed bytes of that sha256 (imd-flop/scripts/chain-table.mjs readSource)"
+ },
+ "owner_reads": {
+  "session_count": {
+   "method": "state_getStorage",
+   "params": [
+    "0x26d6680094539fc341d5ea8ffc79d76f3f12a0368a9fb531f2aaa704a19baa26f9edc9e72d99b3c30da8e2d40b25bd41e462d014cab1239a123233647052f4e3b572322e982441d6b7a5c1694d8419e2",
+    "0xdf4072c17441d728d2b424ea843142f462f532d86d3e9047f00726d91850a0df"
+   ],
+   "error": {
+    "code": -32000,
+    "message": "the recording holds no answer for this key at this block"
+   }
+  },
+  "rotation_history": {
+   "method": "state_getStorage",
+   "params": [
+    "0x26d6680094539fc341d5ea8ffc79d76f414c1a2a80168699e867c42895354e2df9edc9e72d99b3c30da8e2d40b25bd41e462d014cab1239a123233647052f4e3b572322e982441d6b7a5c1694d8419e2",
+    "0xdf4072c17441d728d2b424ea843142f462f532d86d3e9047f00726d91850a0df"
+   ],
+   "error": {
+    "code": -32000,
+    "message": "the recording holds no answer for this key at this block"
+   }
+  }
+ },
+ "asked": 9,
+ "exit": 0,
+ "json": {
+  "seat": "unassigned",
+  "network": "devnet",
+  "owner": "5HEA8QECFwBg1F9cxoXzvQzryu2d5qj5zASJS7owNW2zebBz",
+  "device": "5Ffn7MnyvrJWZJGgqsfin6t69Ey9wF9g4p7uYwNtsYxgjCph",
+  "head": {
+   "number": 3552838,
+   "hash": "0xdf4072c17441d728d2b424ea843142f462f532d86d3e9047f00726d91850a0df"
+  },
+  "runtime": {
+   "specName": "tzkv-runtime",
+   "specVersion": 1014020
+  },
+  "encoder": {
+   "state": "known",
+   "value": {
+    "transactionVersion": 2,
+    "sessionEpochLength": 86400,
+    "maxSessionDuration": 864000,
+    "eraPeriod": 64
+   }
+  },
+  "session": {
+   "state": "stored",
+   "value": {
+    "owner": "5HEA8QECFwBg1F9cxoXzvQzryu2d5qj5zASJS7owNW2zebBz",
+    "delegate": "5Ffn7MnyvrJWZJGgqsfin6t69Ey9wF9g4p7uYwNtsYxgjCph",
+    "spending_cap": "50000000000000000",
+    "per_tx_limit": "20000000000000000",
+    "daily_cap": "25000000000000000",
+    "spent": "12000000000000000",
+    "epoch_spent": "12000000000000000",
+    "epoch_start": 3552729,
+    "expires_at": 3559929,
+    "allowed_pallets": [
+     "ComputeChannel"
+    ],
+    "active": true
+   }
+  },
+  "session_nonce": {
+   "state": "stored",
+   "value": "1"
+  },
+  "circuit_breaker": {
+   "state": "stored",
+   "value": {
+    "period_start": 3552838,
+    "tx_count": 1,
+    "total_spend": "12000000000000000",
+    "tripped": false
+   }
+  },
+  "local_caps": {
+   "state": "known",
+   "value": {
+    "per_call": "20000000000000000",
+    "daily": "25000000000000000"
+   }
+  },
+  "notes": [],
+  "room": {
+   "state": "known",
+   "value": "13000000000000000",
+   "bounds": {
+    "per_tx_limit": "20000000000000000",
+    "epoch_left": "13000000000000000",
+    "lifetime_left": "38000000000000000"
+   },
+   "not_counted": "the breaker's limits per period are not counted: the chain's CircuitBreakerMaxSpend and CircuitBreakerMaxTxs per CircuitBreakerPeriod, which this tool does not hold"
+  }
+ },
+ "stderr": [],
+ "run_utc": "2026-11-14T00:00:00.000Z"
+}

@@ -1,0 +1,116 @@
+{
+ "id": "R1",
+ "purpose": "after",
+ "argv": [
+  "session",
+  "show",
+  "--owner",
+  "5HEA8QECFwBg1F9cxoXzvQzryu2d5qj5zASJS7owNW2zebBz",
+  "--seat",
+  "unassigned",
+  "--json"
+ ],
+ "tape_sha256": "0227cc2541c8b2db2cc5a633c17681158fe5159ee8bab06d0c0f843f6fecab5f",
+ "tape_file": "tapes/R1.after.json",
+ "tape_head": {
+  "number": 3553465,
+  "hash": "0xd6cdb2ce876c2d672db366dfd01d6fb3138b2fdd2a7e2d0920a5e19aae92f81b"
+ },
+ "tape_read_utc": "2026-11-14T00:00:04.000Z",
+ "metadata": {
+  "at": "0x90f25c9e232f0b1f31021b875160bcd6aedd65785d16c3d54a3f28e440bb3522",
+  "sha256": "91294eb61225c4de7459e6a8fed3c37169a2c8a1b1906b46a5890d5e0d328238",
+  "length": 487100,
+  "answered_with": "the committed bytes of that sha256 (imd-flop/scripts/chain-table.mjs readSource)"
+ },
+ "owner_reads": {
+  "session_count": {
+   "method": "state_getStorage",
+   "params": [
+    "0x26d6680094539fc341d5ea8ffc79d76f3f12a0368a9fb531f2aaa704a19baa26f9edc9e72d99b3c30da8e2d40b25bd41e462d014cab1239a123233647052f4e3b572322e982441d6b7a5c1694d8419e2",
+    "0xd6cdb2ce876c2d672db366dfd01d6fb3138b2fdd2a7e2d0920a5e19aae92f81b"
+   ],
+   "error": {
+    "code": -32000,
+    "message": "the recording holds no answer for this key at this block"
+   }
+  },
+  "rotation_history": {
+   "method": "state_getStorage",
+   "params": [
+    "0x26d6680094539fc341d5ea8ffc79d76f414c1a2a80168699e867c42895354e2df9edc9e72d99b3c30da8e2d40b25bd41e462d014cab1239a123233647052f4e3b572322e982441d6b7a5c1694d8419e2",
+    "0xd6cdb2ce876c2d672db366dfd01d6fb3138b2fdd2a7e2d0920a5e19aae92f81b"
+   ],
+   "error": {
+    "code": -32000,
+    "message": "the recording holds no answer for this key at this block"
+   }
+  }
+ },
+ "asked": 9,
+ "exit": 0,
+ "json": {
+  "seat": "unassigned",
+  "network": "devnet",
+  "owner": "5HEA8QECFwBg1F9cxoXzvQzryu2d5qj5zASJS7owNW2zebBz",
+  "device": "5Ffn7MnyvrJWZJGgqsfin6t69Ey9wF9g4p7uYwNtsYxgjCph",
+  "head": {
+   "number": 3553465,
+   "hash": "0xd6cdb2ce876c2d672db366dfd01d6fb3138b2fdd2a7e2d0920a5e19aae92f81b"
+  },
+  "runtime": {
+   "specName": "tzkv-runtime",
+   "specVersion": 1014020
+  },
+  "encoder": {
+   "state": "known",
+   "value": {
+    "transactionVersion": 2,
+    "sessionEpochLength": 86400,
+    "maxSessionDuration": 864000,
+    "eraPeriod": 64
+   }
+  },
+  "session": {
+   "state": "stored",
+   "value": {
+    "owner": "5HEA8QECFwBg1F9cxoXzvQzryu2d5qj5zASJS7owNW2zebBz",
+    "delegate": "5Ffn7MnyvrJWZJGgqsfin6t69Ey9wF9g4p7uYwNtsYxgjCph",
+    "spending_cap": "50000000000000000",
+    "per_tx_limit": "20000000000000000",
+    "daily_cap": "25000000000000000",
+    "spent": "12000000000000000",
+    "epoch_spent": "12000000000000000",
+    "epoch_start": 3552729,
+    "expires_at": 3559929,
+    "allowed_pallets": [
+     "ComputeChannel"
+    ],
+    "active": false
+   }
+  },
+  "session_nonce": {
+   "state": "default",
+   "value": "0"
+  },
+  "circuit_breaker": {
+   "state": "none",
+   "value": null
+  },
+  "local_caps": {
+   "state": "known",
+   "value": {
+    "per_call": "20000000000000000",
+    "daily": "25000000000000000"
+   }
+  },
+  "notes": [],
+  "room": {
+   "state": "none",
+   "value": null,
+   "reason": "the session is not active (revoked)"
+  }
+ },
+ "stderr": [],
+ "run_utc": "2026-11-14T00:00:00.000Z"
+}
