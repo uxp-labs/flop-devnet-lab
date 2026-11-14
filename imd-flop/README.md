@@ -22,6 +22,7 @@ no network and no spend.
 | `quote --prompt <text> [--provider flop]` | Free cost estimate. With `--provider flop`, it calls the gateway's free `/models/estimate`. |
 | `faucet [--dry-run]` | Refuses with exit code 9, because our team doesn't use faucets. `--dry-run` prints the request it would have made. |
 | `enroll [--dry-run \| --live]` | Dry run by default: prints the challenge and enroll calls it would make. `--live` does real devnet enrollment and is meant for a human on the holder's machine. |
+| `session grant --owner <ss58> --days <1..10>`, `session revoke --owner <ss58>`, `session show --owner <ss58>` | Print the owner's grant or revoke as call bytes for him to sign in his own wallet, or read the session from the chain and say what room is left. They sign, send and write nothing. See "Session commands". |
 
 Data lives in `~/.imd-flop/`, or in `$IMD_FLOP_HOME` if that's set. The ledger must be readable and writable by the user who runs the tool. Exit codes are listed below.
 
@@ -36,7 +37,7 @@ The process exit code is the `EXIT` value in `src/errors.ts`. `src/bin.ts` assig
 | 2 | `USAGE` | Bad arguments, a missing seat or key, or a value the command will not accept. |
 | 3 | `REFUSED_CAP` | Refused locally, nothing sent. Used when there is no usable cap, the daily cap or the job budget is already used up (refused before the quote), the padded quote is over the per-call cap or over what is left of the daily cap or the job budget, a ledger `cap_charge` is unusable, a ledger line cannot be read or placed in a total, or a day or job total is above `AMOUNT_MAX`. The message names the line, and for a row that cannot be placed also the field. |
 | 4 | `REFUSED_LINK` | The seat-to-DID link is missing or does not verify, or `--no-link` was used with a non-mock provider. |
-| 5 | `REFUSED_RULE` | A section E rule (including a second key for a seat, a secret scan hit, a missing job id, or a live-run gate) or a paid-run chain/genesis refusal, at the first check and at the recheck before the child-key mint alike (`nothing sent`). |
+| 5 | `REFUSED_RULE` | A section E rule (including a second key for a seat, a secret scan hit, a missing job id, or a live-run gate) or a paid-run chain/genesis refusal, at the first check and at the recheck before the child-key mint alike (`nothing sent`). The session commands use it for a wrong genesis, a runtime the encoder does not know and an active session (see "Session commands"). |
 | 6 | `TIMEOUT_UNKNOWN` | The paid call timed out. Spend is recorded as unknown and is not retried. |
 | 7 | `ESTIMATE_FAILED` | The cost estimate failed or returned no usable cost. Nothing was sent. |
 | 8 | `VERIFY_FAILED` | `link verify` found a bad signature, a mismatch, or a failed owner check. |
@@ -125,9 +126,53 @@ Each ledger row records two running totals. `spent_before` is the seat's spend t
 
 Not built: when FLOP ships proxies or escrow pools and a call is funded by another account, that call will be bounded by that account's limit and will not count against the seat's cap.
 
-## Chain encoder (not used by any command yet)
+## Session commands
 
-`src/chain/extrinsic.ts` encodes and signs one kind of FLOP chain call for the planned session channel provider. No command, provider or network code uses it yet.
+A seat spends on FLOP through a session. The owner S of the seat grants the seat's device key D a session with caps. Three keys, three places: S is the owner's own wallet, and this tool never holds it or asks for it; D is the seat's device key, which this tool holds; C is a channel key made fresh for each run. The code is `src/session/`.
+
+What each command prints, to stdout only, in words or with `--json`:
+- `session grant --owner <ss58> --days <n>`: the seat, the network, S and D as SS58, the head it read at; the call `FlopSessionKeys.create_session` as 0x hex; the blake2b 256 of the call's bytes; the encoder's own words for those bytes (`describeOwnerCall`), unchanged; one sentence of what the grant allows in all; a last line that the owner signs it with his own wallet.
+- `session revoke --owner <ss58>`: the same for `FlopSessionKeys.revoke_session`, and one line of what is stored for the pair: no session, an active one, or a revoked one. It prints the call in each case.
+- `session show --owner <ss58>`: the head (number and hash) and the runtime; whether the runtime is in the encoder's table, with its two constants and the era period; the session as stored, each amount in raw and in FLOP, or `no session`; the session nonce, with `(not stored: the chain's default)` when the chain holds none; the breaker, or `none`; the seat's local caps; the notes below; and the room for one call.
+
+The caps of a grant come from the seat's own local caps, exactly:
+- `per_tx_limit` is the seat's per call cap, `daily_cap` its daily cap, `spending_cap` the daily cap times `--days`, and `duration_blocks` the runtime's `SessionEpochLength` times `--days`.
+- A raw amount is the cap's count of millionths times 10^12. Nothing else: a cap off the 6 decimal grid has no exact raw amount and refuses.
+- `--days` is required, a whole number from 1 to 10, with no default. A day of `--days` is one epoch of the chain's daily cap: 86400 blocks at 1014020, from the runtime's table, not typed. The tool holds no block time, so it says blocks and epochs, never hours. The local daily cap is per UTC day; the chain's is per epoch.
+- The allow list is always exactly `ComputeChannel`: the encoder writes no other.
+
+The room for one call is the least of `per_tx_limit`, `daily_cap` less `epoch_spent`, and `spending_cap` less `spent`, never below 0. It is `none`, with every reason that applies, when no session is stored, the session is not active, the head plus the encoder's era period of 64 blocks reaches `expires_at` (a call signed now may land up to that many blocks later), the allow list is neither empty nor holds `ComputeChannel` in any case of letters, or the breaker is tripped. It is unknown, with the reasons, when the runtime is not one the encoder knows, or when a value it needs is unknown and no known value already rules a call out. An empty allow list allows every pallet: the room is computed, and a note says it is not a grant this tool writes.
+
+The notes of `show`: a chain cap above its local cap; an allow list that is not exactly `ComputeChannel`; and, when the head is at or past `epoch_start` plus the epoch length, that the chain resets the epoch's spend at the next call, by the lab's reading of the runtime (inferred), so the room shown is a lower bound.
+
+What each reads:
+- The seat as the other commands find it, its local caps from `config.json`, and D from the seat's `identity.json` (its did:key).
+- The chain through `src/chain-read` only: first the hash at height 0, then `readSessionState` at the finalized head. One transport: the network's rpc, or the one the caller of `main` hands in (tests always do).
+
+What they never do: read a key file or call `loadSigner`; sign or send anything; write any file; store the owner.
+
+Unknown is never 0. In words it is `unknown (<reason>)`; in JSON a value of `null` with a `reason` beside it. Amounts in JSON are decimal strings of raw units.
+
+Refusals and exit codes:
+- 2: `--owner` missing, not SS58, a bad checksum, another prefix than the network's, or equal to D; `--days` missing or not 1 to 10, or given to `revoke` or `show`; a sub command that is not one of the three; no identity file for the seat. These come before any node call.
+- 3, `grant` only: no usable local cap (as `run` refuses it), or a cap off the 6 decimal grid. Before any node call.
+- 1: the hash at height 0 cannot be read; the read is unknown; for `grant` and `revoke` the stored session is unknown (a record of another pair is unknown); for `show` anything it shows is unknown (the session, the nonce, the breaker or the room). An identity whose did is not a did:key is 1 too.
+- 5: another hash at height 0 than the network's pinned genesis; for `grant` and `revoke`, a runtime at the head that is not in the encoder's table (the words name the spec); for `grant`, a session known and active for the pair (the chain would refuse a second one: revoke it first).
+- 0: otherwise. `show` exits 0 with a room of none when everything it shows is known.
+
+A stored record that is revoked, or whose `expires_at` is at or below the head, does not stop a grant: the call is printed with one line that says whether the chain takes a new grant over a stored record is not shown yet.
+
+Not shown yet (a devnet batch of the lead's, G-19):
+- a grant printed by this tool, signed by the owner and landing as `SessionCreated` with the derived caps;
+- whether the chain takes a second grant for the same pair after a revoke;
+- the expiry's edge: whether a call at exactly `expires_at` is taken;
+- whether a holder's own wallet signs a hex call on FLOP devnet.
+
+Today no recorded read names a runtime the encoder does not know: chain-read's key table has a line for 1014020 alone, as the encoder's table has. The tests make that case with a network whose pinned genesis is another hash.
+
+## Chain encoder
+
+`src/chain/extrinsic.ts` encodes and signs one kind of FLOP chain call for the planned session channel provider. No command, provider or network code uses it yet. The session commands use the owner's two calls below, the words, `runtimeIdOf` and the era period, and nothing that signs.
 
 - What it writes: a signed version 4 extrinsic of `FlopSessionKeys.execute_via_session` around exactly one inner call of `ComputeChannel`: `open_channel`, `top_up_escrow`, `timeout`, `force_open` or `expire_force_open`. The signer is the device key's account, with an ed25519 signature. The era is always mortal with a period of 64 blocks; the result names the last block at which the transaction is valid. The tip is always 0 and the metadata hash check is off. A payload longer than 256 bytes is signed as its blake2b 256 hash.
 - The declared spend is computed, never passed: the escrow of `open_channel` and `force_open`, the amount of `top_up_escrow`, 0 for `timeout` and `expire_force_open`. It is taken from the encoder's own copy of the input.
@@ -147,7 +192,7 @@ Not built: when FLOP ships proxies or escrow pools and a call is funded by anoth
 - Its input checks (`bytesOf`, `takeFields`, `ownKeys`, `ownValue` and the integer check) live in `src/plain-input.ts`, shared with the channel modules. That module imports nothing and refuses through the encoder's own `refuse`, with the encoder's codes.
 - The reference encoder for the tests and the script is `@polkadot-api/substrate-bindings` and `@polkadot-api/metadata-builders`, dev dependencies only. Nothing under `src` imports them.
 
-The owner's two calls (`src/chain/owner-calls.ts`). The session's owner grants the device key a session and ends it. The encoder writes those two calls too, for the owner to sign with his own tool. No command uses them yet.
+The owner's two calls (`src/chain/owner-calls.ts`). The session's owner grants the device key a session and ends it. The encoder writes those two calls too, for the owner to sign with his own tool. `session grant` and `session revoke` print them; nothing in this tool signs them.
 
 - What it writes: the call bytes of `FlopSessionKeys.create_session` or `FlopSessionKeys.revoke_session`, and nothing else: the pallet index, the call index and the arguments. It never signs one. It takes no signer, nonce, era or tip for it, and an input field that names one is refused like every extra field.
 - The input of `encodeOwnerCall`: the runtime's four names, the call's name, and the call's fields with the metadata's names. A grant takes `delegate` (32 bytes), `spending_cap`, `per_tx_limit` and `daily_cap` (each a `bigint` u128) and `duration_blocks` (a whole number). A revoke takes `delegate` alone. The input is read as the session input is: once, own fields, exactly these, an accessor refused, a Proxy's get trap not used.
@@ -161,9 +206,9 @@ The owner's two calls (`src/chain/owner-calls.ts`). The session's owner grants t
 - `runtimeIdOf` (`src/chain/table.ts`) gives the four names of the one table entry with a spec name, spec version and genesis, or `RUNTIME_UNKNOWN` when none or more than one has them. The three are read as `runtimeFor` reads its four.
 - The vectors: the encoder's grant equals the recorded calls of the rerun's A2 and the devnet test's T2, and its revoke those of A10, B11 and T8, byte for byte, with every value read from those records (`test/chain-owner-calls.test.ts`). The reference encoder agrees over a grid of delegates, caps and durations (`test/chain-owner-reference.test.ts`).
 
-## Chain reads (not used by any command yet)
+## Chain reads
 
-`src/chain-read/` reads a session's room from a FLOP node, for the channel provider to come. No command calls it, and nothing in it can send: it asks a node only `chain_getFinalizedHead`, `chain_getHeader`, `chain_getBlockHash`, `state_getStorage` and `state_getMetadata`, and a test fails if any other method name appears there.
+`src/chain-read/` reads a session's room from a FLOP node, for the channel provider to come. The session commands call `readSessionState` and `blockHash`, and nothing in it can send: it asks a node only `chain_getFinalizedHead`, `chain_getHeader`, `chain_getBlockHash`, `state_getStorage` and `state_getMetadata`, and a test fails if any other method name appears there.
 
 - What is read. Two entry points (`read.ts`). `readSessionState(transport, owner, delegate)` reads `FlopSessionKeys.Sessions(owner, delegate)`, `SessionNonces(owner, delegate)` and `CircuitBreakers(delegate)`. `readBlockEvents(transport, { number, hash })` reads `System.Events` of one block. Each answers the block's number and hash and the runtime the door pinned beside the values.
 - The block argument. `readBlockEvents` reads its block once, before the first node call, into a copy: an object with exactly the own fields `number` and `hash`, each read through its own descriptor. An accessor is refused and a Proxy's get trap is not used. Every later line uses the copy. Anything else is unknown with a reason that names what was wrong: not an object (null too), a missing field, an extra field, an accessor. A block whose own code throws while it is read is unknown with a fixed reason. It never throws and makes no node call then.
