@@ -834,7 +834,7 @@
   {
     "id": "list-runtime-seq-method-unchecked",
     "file": "test/helpers/requests-list.ts",
-    "find": " || entry.request?.method !== m[1]",
+    "find": " || entry.request === undefined || entry.request.method !== m[1]",
     "replace": "",
     "test": "test/settle-requests.test.ts",
     "why": "the call at the seq a field names must be of the method it names (list 6, L4)"
@@ -842,9 +842,33 @@
   {
     "id": "list-runtime-not-found-accepted",
     "file": "test/helpers/requests-list.ts",
-    "find": "  if (!r.found) throw new Error(`${source.file}, ${source.field}: ${r.refused}`);\n",
+    "find": "  if (!r.found) throw new Error(`${where}: ${r.refused}`);\n",
     "replace": "",
     "test": "test/settle-requests.test.ts",
     "why": "bytes that name no reviewed runtime name no spec (list 6, L4)"
+  },
+  {
+    "id": "tape-seq-unchecked-author",
+    "file": "test/helpers/requests-list.ts",
+    "find": "if (entry === null || entry.seq !== seq || entry.request === undefined",
+    "replace": "if (entry === null || entry.request === undefined",
+    "test": "test/review-o1-tape.test.ts",
+    "why": "a tape line is read by its place, its own seq checked (round 33, O1-7)"
+  },
+  {
+    "id": "tape-error-answer-accepted-author",
+    "file": "test/helpers/requests-list.ts",
+    "find": "  if (entry.answer === undefined || !(\"result\" in entry.answer)) throw new Error(`${file} holds no answer to the call at seq ${seq}`);\n",
+    "replace": "",
+    "test": "test/review-o1-tape.test.ts",
+    "why": "a call without a result (an error answer) is not read as a runtime (round 33, O1-7)"
+  },
+  {
+    "id": "list-runtime-key-unchecked",
+    "file": "test/helpers/requests-list.ts",
+    "find": "  if (params[0] !== key) throw new Error(`${where}: the call reads ${String(params[0])}, not the System.LastRuntimeUpgrade key ${key}`);\n",
+    "replace": "",
+    "test": "test/settle-requests.test.ts",
+    "why": "the call a runtime is named by reads the System.LastRuntimeUpgrade key, built from the reviewed metadata (round 33, O1-2)"
   }
 ]
