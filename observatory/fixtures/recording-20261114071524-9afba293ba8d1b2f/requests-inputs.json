@@ -1,0 +1,67 @@
+{
+  "accounts": {},
+  "blocks": {
+    "gateway/settled": {
+      "hash": {
+        "field": "the answer to the chain_getBlockHash call at seq 18",
+        "file": "observatory/fixtures/recording-20261111160917-3c228907aa129a01/tape.jsonl",
+        "value": "0xeba1182c9f2bbf5a8fd012afddc201c2ebed11b64f59b10c1d3c4fcc4b2ee18e"
+      },
+      "height": {
+        "field": "the params of the chain_getBlockHash call at seq 18",
+        "file": "observatory/fixtures/recording-20261111160917-3c228907aa129a01/tape.jsonl",
+        "value": 3479299
+      }
+    },
+    "gateway/settled-parent": {
+      "hash": {
+        "field": "the parentHash of the answer to the chain_getHeader call at seq 19",
+        "file": "observatory/fixtures/recording-20261111160917-3c228907aa129a01/tape.jsonl",
+        "value": "0xaad1d81c1d390358e8a60ca5ed26c46b80d17c71d5a2c187caee64d854711b10"
+      },
+      "height": {
+        "field": "the number of the answer to the chain_getHeader call at seq 19, less one",
+        "file": "observatory/fixtures/recording-20261111160917-3c228907aa129a01/tape.jsonl",
+        "value": 3479298
+      }
+    },
+    "second/settled": {
+      "hash": {
+        "field": "the answer to the chain_getBlockHash call at seq 10",
+        "file": "observatory/fixtures/recording-20261111160917-3c228907aa129a01/tape.jsonl",
+        "value": "0xb85b24f4b0609839aea37d97ad1aa9f7ec7aba20348bca090ab31df471764aba"
+      },
+      "height": {
+        "field": "the params of the chain_getBlockHash call at seq 10",
+        "file": "observatory/fixtures/recording-20261111160917-3c228907aa129a01/tape.jsonl",
+        "value": 3479277
+      }
+    },
+    "second/settled-parent": {
+      "hash": {
+        "field": "the parentHash of the answer to the chain_getHeader call at seq 11",
+        "file": "observatory/fixtures/recording-20261111160917-3c228907aa129a01/tape.jsonl",
+        "value": "0x9387453648c8ab3d245cbf999ab3b797c76b13de0e58d5cc213f402a10480df1"
+      },
+      "height": {
+        "field": "the number of the answer to the chain_getHeader call at seq 11, less one",
+        "file": "observatory/fixtures/recording-20261111160917-3c228907aa129a01/tape.jsonl",
+        "value": 3479276
+      }
+    }
+  },
+  "channels": {
+    "gateway": {
+      "field": "the channel_id of the one ComputeChannel.Settled event in System.Events at seq 20",
+      "file": "observatory/fixtures/recording-20261111160917-3c228907aa129a01/tape.jsonl",
+      "value": "0x9f81f65bc93855d394329e4996bc78d949bb786178f3471c13d3853f9813ddd7"
+    },
+    "second": {
+      "field": "the channel_id of the one ComputeChannel.Settled event in System.Events at seq 12",
+      "file": "observatory/fixtures/recording-20261111160917-3c228907aa129a01/tape.jsonl",
+      "value": "0x1fcd12cb38f0de5edc2cb4ac582784859663dd32d8519b04eff5a20be8312ae4"
+    }
+  },
+  "mentioned": {},
+  "schema": "flop-observatory/requests-inputs@0"
+}
