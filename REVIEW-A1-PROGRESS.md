@@ -13,5 +13,6 @@ Done:
 - attack 2: scratch probe, 4000 random and hostile inputs, 24 differences from main, all accessors on the signer or runtime id names (allowed by P4, P5)
 - attack 9: source read; research tests 328 and 44 pass
 - attack 10: test/review-a1-findings.test.ts, 6 HOLDS pass on branch, all 6 fail on main copy
+- attack 3 and 4: test/review-a1-signer.test.ts, 14 HOLDS
 Next:
 - mutations (11), words and scope (12, 13)
