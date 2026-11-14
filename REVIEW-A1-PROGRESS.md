@@ -10,5 +10,8 @@ Done:
 - attack 7: test/review-a1-rpc.test.ts (DEFECT RA1-2 timeout overflow, RA1-3 node cap with whitespace frame)
 - attack 5: test/review-a1-frozen.test.ts (own walk HOLDS over 30 files; DEFECT RA1-4 info, ByteReader methods open)
 - attack 8: scratch probe, 3000 generated frames, branch rpcCall equals main answerOf(readOutsideJson) in every case
+- attack 2: scratch probe, 4000 random and hostile inputs, 24 differences from main, all accessors on the signer or runtime id names (allowed by P4, P5)
+- attack 9: source read; research tests 328 and 44 pass
+- attack 10: test/review-a1-findings.test.ts, 6 HOLDS pass on branch, all 6 fail on main copy
 Next:
-- answerOf over generated JSON (attack 8), frozen walk (5), era (9), findings (10), mutations (11), words and scope (12, 13)
+- mutations (11), words and scope (12, 13)
