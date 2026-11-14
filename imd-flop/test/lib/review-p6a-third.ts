@@ -11,17 +11,87 @@
  *   h_in: dist/compute-channel/agent-client.js, validateReceipt (blake2_256 of the input bytes).
  * - leafV3: dist/compute-channel/transcript.js, transcriptLeafV3, u32le, u64le, u128le.
  *
- * It shares no code with src/miner or with the builder's second writing. Its hash is blake2b from
- * @polkadot/wasm-crypto (Rust built to WASM), not @noble/hashes. Its JSON string escaper is written by hand
+ * It shares no code with src/miner or with the builder's second writing. Its hash is the reviewer's own BLAKE2b
+ * written from RFC 7693 below (64 bit words as bigint), not @noble/hashes; a test holds it to the RFC's own
+ * "abc" vector and to @noble/hashes on a grid. Its JSON string escaper is written by hand
  * from the ECMAScript QuoteJSONString rule that JSON.stringify follows (well formed JSON.stringify, ES2019),
  * not by a call to JSON.stringify.
  */
-import { blake2b } from "@polkadot/wasm-crypto";
 
 const enc = new TextEncoder();
 
+const M64 = (1n << 64n) - 1n;
+const IV = [
+  0x6a09e667f3bcc908n, 0xbb67ae8584caa73bn, 0x3c6ef372fe94f82bn, 0xa54ff53a5f1d36f1n,
+  0x510e527fade682d1n, 0x9b05688c2b3e6c1fn, 0x1f83d9abfb41bd6bn, 0x5be0cd19137e2179n,
+];
+const SIGMA = [
+  [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+  [14, 10, 4, 8, 9, 15, 13, 6, 1, 12, 0, 2, 11, 7, 5, 3],
+  [11, 8, 12, 0, 5, 2, 15, 13, 10, 14, 3, 6, 7, 1, 9, 4],
+  [7, 9, 3, 1, 13, 12, 11, 14, 2, 6, 5, 10, 4, 0, 15, 8],
+  [9, 0, 5, 7, 2, 4, 10, 15, 14, 1, 11, 12, 6, 8, 3, 13],
+  [2, 12, 6, 10, 0, 11, 8, 3, 4, 13, 7, 5, 15, 14, 1, 9],
+  [12, 5, 1, 15, 14, 13, 4, 10, 0, 7, 6, 3, 9, 2, 8, 11],
+  [13, 11, 7, 14, 12, 1, 3, 9, 5, 0, 15, 4, 8, 6, 2, 10],
+  [6, 15, 14, 9, 11, 3, 0, 8, 12, 2, 13, 7, 1, 4, 10, 5],
+  [10, 2, 8, 4, 7, 6, 1, 5, 15, 11, 9, 14, 3, 12, 13, 0],
+];
+const rotr = (x: bigint, n: bigint): bigint => ((x >> n) | (x << (64n - n))) & M64;
+
+function compress(h: bigint[], block: Uint8Array, t: bigint, last: boolean): void {
+  const m: bigint[] = [];
+  const dv = new DataView(block.buffer, block.byteOffset, 128);
+  for (let i = 0; i < 16; i++) m.push(dv.getBigUint64(i * 8, true));
+  const v = [...h, ...IV];
+  v[12] = (v[12] as bigint) ^ (t & M64);
+  v[13] = (v[13] as bigint) ^ (t >> 64n);
+  if (last) v[14] = (v[14] as bigint) ^ M64;
+  const g = (a: number, b: number, c: number, d: number, x: bigint, y: bigint) => {
+    v[a] = ((v[a] as bigint) + (v[b] as bigint) + x) & M64;
+    v[d] = rotr((v[d] as bigint) ^ (v[a] as bigint), 32n);
+    v[c] = ((v[c] as bigint) + (v[d] as bigint)) & M64;
+    v[b] = rotr((v[b] as bigint) ^ (v[c] as bigint), 24n);
+    v[a] = ((v[a] as bigint) + (v[b] as bigint) + y) & M64;
+    v[d] = rotr((v[d] as bigint) ^ (v[a] as bigint), 16n);
+    v[c] = ((v[c] as bigint) + (v[d] as bigint)) & M64;
+    v[b] = rotr((v[b] as bigint) ^ (v[c] as bigint), 63n);
+  };
+  for (let r = 0; r < 12; r++) {
+    const s = SIGMA[r % 10] as number[];
+    const w = (k: number) => m[s[k] as number] as bigint;
+    g(0, 4, 8, 12, w(0), w(1));
+    g(1, 5, 9, 13, w(2), w(3));
+    g(2, 6, 10, 14, w(4), w(5));
+    g(3, 7, 11, 15, w(6), w(7));
+    g(0, 5, 10, 15, w(8), w(9));
+    g(1, 6, 11, 12, w(10), w(11));
+    g(2, 7, 8, 13, w(12), w(13));
+    g(3, 4, 9, 14, w(14), w(15));
+  }
+  for (let i = 0; i < 8; i++) h[i] = (h[i] as bigint) ^ (v[i] as bigint) ^ (v[i + 8] as bigint);
+}
+
+/** BLAKE2b with an `outLen` byte digest and no key, from RFC 7693 section 3. */
+export function blake2bRfc(data: Uint8Array, outLen: number): Uint8Array {
+  const h = [...IV];
+  h[0] = (h[0] as bigint) ^ BigInt(0x01010000 | outLen);
+  const blocks = Math.max(1, Math.ceil(data.length / 128));
+  for (let b = 0; b < blocks; b++) {
+    const block = new Uint8Array(128);
+    const chunk = data.subarray(b * 128, b * 128 + 128);
+    block.set(chunk);
+    const last = b === blocks - 1;
+    compress(h, block, BigInt(last ? data.length : (b + 1) * 128), last);
+  }
+  const out = new Uint8Array(64);
+  const dv = new DataView(out.buffer);
+  h.forEach((x, i) => dv.setBigUint64(i * 8, x, true));
+  return out.slice(0, outLen);
+}
+
 export function b256(data: Uint8Array): Uint8Array {
-  return blake2b(Uint8Array.from(data), new Uint8Array(0), 32);
+  return blake2bRfc(data, 32);
 }
 
 function cat(...parts: Uint8Array[]): Uint8Array {

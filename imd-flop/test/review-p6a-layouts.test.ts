@@ -10,9 +10,10 @@ import { minerExpected } from "../src/miner/expected.js";
 import { modelIdentityHash, sessionInfoMessage, turnEvidenceHash } from "../src/miner/identity.js";
 import { turnInput } from "../src/miner/input.js";
 import { leafV3 } from "../src/miner/leaf.js";
+import { blake2b } from "@noble/hashes/blake2.js";
 import { referenceReady, referenceVerify } from "./lib/sr25519-reference.js";
 import { SETTLE_CHANNELS, refBytes, refDecodeOf, settleByShape, settleOf } from "./lib/settle-recording.js";
-import { thirdChatInput, thirdHIn, thirdLeafV3, thirdModelIdentityHash, thirdSessionInfoMessage, thirdTurnEvidenceHash, type ThirdIdentity } from "./lib/review-p6a-third.js";
+import { b256, blake2bRfc, thirdChatInput, thirdHIn, thirdLeafV3, thirdModelIdentityHash, thirdSessionInfoMessage, thirdTurnEvidenceHash, type ThirdIdentity } from "./lib/review-p6a-third.js";
 
 beforeAll(referenceReady);
 
@@ -65,6 +66,20 @@ function identityGrid(): ThirdIdentity[] {
 
 const plainIdentity = (i: ThirdIdentity) => ({ ...i, modelHash: Uint8Array.from(i.modelHash), decodePolicyHash: Uint8Array.from(i.decodePolicyHash), measuredRoot: Uint8Array.from(i.measuredRoot) });
 
+describe("the third writing's own BLAKE2b", () => {
+  it("HOLDS: the reviewer's RFC 7693 BLAKE2b gives the RFC's BLAKE2b-512 vector of abc, and equals @noble/hashes at 256 bits on every length from 0 to 300 and at 1 MiB", () => {
+    expect(Array.from(blake2bRfc(new TextEncoder().encode("abc"), 64), (x) => x.toString(16).padStart(2, "0")).join("")).toBe(
+      "ba80a53f981c4d0d6a2797b69f12f6e94c212f14685ac4b74b12bb6fdbffa2d17d87c5392aab792dc252d5de4533cc9518d38aa8dbf1925ab92386edd4009923",
+    );
+    for (let n = 0; n <= 300; n++) {
+      const d = Uint8Array.from({ length: n }, (_, i) => (i * 131 + n) & 0xff);
+      expect(hexOf(b256(d))).toBe(hexOf(blake2b(d, { dkLen: 32 })));
+    }
+    const big = Uint8Array.from({ length: 1 << 20 }, (_, i) => (i * 7) & 0xff);
+    expect(hexOf(b256(big))).toBe(hexOf(blake2b(big, { dkLen: 32 })));
+  });
+});
+
 describe("Q1 by a third writing: the model identity hash", () => {
   it("HOLDS: src/miner's model identity hash equals the reviewer's reading of miner-admission.js modelIdentityHash on 48 identities", () => {
     const grid = identityGrid();
@@ -96,7 +111,7 @@ describe("Q1 by a third writing: the info proof's signed message", () => {
 describe("Q1 by a third writing: the turn evidence hash", () => {
   it("HOLDS: src/miner's turn evidence hash equals the reviewer's reading of transcript.js turnEvidenceHash on 577 inputs", () => {
     const enc = new TextEncoder();
-    const outputs = [new Uint8Array(0), Uint8Array.of(0), enc.encode("héllo   \"\\\" \u{1F600}"), counting(65537, 0), filled(2 * 1024 * 1024, 0x61)];
+    const outputs = [new Uint8Array(0), Uint8Array.of(0), enc.encode("héllo   \"\\\" \u{1F600}"), counting(1025, 0), filled(2 * 1024 * 1024, 0x61)];
     const ids = identityGrid().slice(0, 12);
     let n = 0;
     for (const output of outputs.slice(0, 4))
