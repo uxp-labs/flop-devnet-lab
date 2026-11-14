@@ -73,8 +73,8 @@ function takeOwner(input: unknown): OwnerSnapshot {
     if (list !== undefined && k === list.name) refuse("BAD_INPUT", `${name}.${k} is not an input: a grant allows exactly ${OWNER_ALLOWED_PALLET}`);
     if (!names.includes(k)) refuse("BAD_INPUT", `${name} has a field ${k} the table does not have: an owner call is call bytes only, with no signer, nonce, era or tip`);
   }
-  for (const n of names) if (!keys.includes(n)) refuse("BAD_INPUT", `${name} lacks the field ${n}`);
   const fields: Record<string, FieldValue | readonly Uint8Array[]> = {};
+  // A field the input lacks is refused by ownValue (BAD_INPUT, "lacks the field").
   for (const f of given) fields[f.name] = takeValue(f.type, ownValue(input, f.name, name), `${name}.${f.name}`);
   if (list !== undefined) fields[list.name] = allowedPallets();
   return { reviewed, call: name, fields };

@@ -128,9 +128,8 @@ export function readBytesList(r: ByteReader): Uint8Array[] {
   const count = r.compact();
   const out: Uint8Array[] = [];
   for (let i = 0n; i < count; i++) {
-    const length = r.compact();
-    if (length > BigInt(Number.MAX_SAFE_INTEGER)) refuse("BAD_BYTES", `a byte string of ${length} bytes: the bytes end early`);
-    out.push(r.take(Number(length)));
+    // A length past what the bytes hold is refused by take: no byte array is that long.
+    out.push(r.take(Number(r.compact())));
   }
   return out;
 }
