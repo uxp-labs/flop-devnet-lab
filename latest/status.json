@@ -1,9 +1,9 @@
 {
-  "observed_at": "2026-11-14T00:14:36.299Z",
+  "observed_at": "2026-11-14T01:43:43.376Z",
   "schema": "flop-observatory/feed-status@0",
-  "snapshot_hash": "a7a3312634c9791d508dbf0bbbb66d615202760d858f11ec4e9b3b78e08cce56",
+  "snapshot_hash": "f2c96581d5adcca76b0584576c211bcfb6b1e4b596064d058b1848938673132c",
   "status": {
-    "best_height": 3685560,
+    "best_height": 3690842,
     "conflicts": [],
     "faucet": {
       "detail": null,
@@ -18,30 +18,30 @@
         "ipGrantsPerDay": 300,
         "ipPrefixGrantsPerDay": 10000
       },
-      "observed_at": "2026-11-14T00:14:16.611Z",
+      "observed_at": "2026-11-14T01:43:36.803Z",
       "ready": true
     },
-    "finality_lag": 4,
-    "finalized_hash": "0x9eac6b67283f219a46dfb3f7f64862c6e32226da01010db16a63cb7291c2fa27",
-    "finalized_height": 3685556,
+    "finality_lag": 5,
+    "finalized_hash": "0xd64904e966b81e26baa12eae0fb400c8405623477319ef2ad311da26f2178dc6",
+    "finalized_height": 3690837,
     "gateway": {
-      "detail": "GET timed out after 15000 ms",
-      "health": "unknown",
-      "http": null,
-      "observed_at": null
+      "detail": null,
+      "health": "ok",
+      "http": 200,
+      "observed_at": "2026-11-14T01:43:38.289Z"
     },
     "genesis": {
       "faucet": "0x99c172c095340ace980631f9123544c6bebd4839f3437e463533422d8be2d631",
       "pinned": "0x99c172c095340ace980631f9123544c6bebd4839f3437e463533422d8be2d631",
       "rpc": "0x99c172c095340ace980631f9123544c6bebd4839f3437e463533422d8be2d631"
     },
-    "observed_at": "2026-11-14T00:14:36.299Z",
+    "observed_at": "2026-11-14T01:43:43.376Z",
     "reset_detected": false,
     "rpc": {
       "detail": null,
       "health": "ok",
       "http": null,
-      "observed_at": "2026-11-14T00:14:32.072Z",
+      "observed_at": "2026-11-14T01:43:38.371Z",
       "stale": false
     },
     "runtime_version": 1014020,
