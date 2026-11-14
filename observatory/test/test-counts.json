@@ -28,8 +28,8 @@
     "names": "aefae21286002160679cf6dcc0747d670903736fa59ddf746499ea12dbe20eef"
   },
   "encoder-requests.test.ts": {
-    "tests": 21,
-    "names": "8c573cff065c6f8da3ed4b5dc7ab3ccaa6ca04252cfb5a8b7fb7898daab0a819"
+    "tests": 20,
+    "names": "9b5b6d80de8cb0650c373aa4adace92d49da109bffee89f8517cca83a956090c"
   },
   "encoder-results.test.ts": {
     "tests": 28,
@@ -108,8 +108,8 @@
     "names": "fbb55db87c6aa5772251733c776a9ab07d30c43e3fb49956c14772490373a33c"
   },
   "record-run.test.ts": {
-    "tests": 25,
-    "names": "b9bb132472c198e0becd4ed92ee3c8d94904fe6324efadc0017d44bf5aa818f8"
+    "tests": 26,
+    "names": "958cb24413c97a9cd882e5f016dc753d7a7daaf49a20b3cbb820eb5d7f8d8817"
   },
   "record-workflow.test.ts": {
     "tests": 19,
@@ -154,6 +154,26 @@
   "review-memory.test.ts": {
     "tests": 2,
     "names": "db7cc5f5fc51f2f7ad3eacabb6a786a7a9e066f7f5623690d16d9bf798068a14"
+  },
+  "review-o1-list.test.ts": {
+    "tests": 6,
+    "names": "955f1dcdd5ce58a807e3686ca943c3397d3af08ca7f37ad86c47d09082a2787b"
+  },
+  "review-o1-runtime.test.ts": {
+    "tests": 4,
+    "names": "f0c0d25cf5ce208c21efcc26761faa06382c9a14d8cc2567d4941a53a2c243c1"
+  },
+  "review-o1-scan.test.ts": {
+    "tests": 6,
+    "names": "bc65eb0bd22f6444f4d766a62c7c433f081d7269929c97e99c47597f53fef2f7"
+  },
+  "review-o1-tape.test.ts": {
+    "tests": 5,
+    "names": "03e84ace9ecead518325d22465a91618bef218fef79897ab1bc63a641a8dc18d"
+  },
+  "review-o1-whys.test.ts": {
+    "tests": 2,
+    "names": "27801715933d0d4137108d4b7697544e206b78f832025b28d41cf425045b9ef0"
   },
   "review-shape3-door.test.ts": {
     "tests": 8,
@@ -203,9 +223,17 @@
     "tests": 42,
     "names": "4b98619494eda10d49445cfa214bb48e907573f165e7b8135f0449ab7c6e8aef"
   },
+  "settle-requests.test.ts": {
+    "tests": 24,
+    "names": "97ce82f478560fcc2bad26adcba6837d0683f4590ec72c2a90b3cc9d8ea3a0b6"
+  },
   "shape-at-2.test.ts": {
     "tests": 7,
     "names": "89c685efbe74b5e4445ce449300f41cefa739a2172f7d52e5cb5ac6ad17094a9"
+  },
+  "shape-pin-derived.test.ts": {
+    "tests": 4,
+    "names": "2ded76ffc116c4f0d58d4c3b633d462035d497c993cb3b2179371a65850eb209"
   },
   "shape.test.ts": {
     "tests": 17,

@@ -1630,5 +1630,13 @@
     "replace": "export const SHAPE_SCHEMA = \"flop-observatory/decoder-shape@2\";",
     "test": "test/shape-at-2.test.ts",
     "why": "the shape diff reads decoder-shape@3 and refuses @2 (round 29, A4)"
+  },
+  {
+    "id": "pin-derived-shape-unchecked",
+    "file": "src/scale/shape.ts",
+    "find": "    if (derived !== i.shapeText) return refuse(`the shape derived from the metadata differs from ${reviewed.shapeFile}`);\n",
+    "replace": "",
+    "test": "test/shape-pin-derived.test.ts",
+    "why": "the pin's fourth refusal: a shape derived again from the metadata that differs from the reviewed file is refused (audit 56b900b note 5)"
   }
 ]

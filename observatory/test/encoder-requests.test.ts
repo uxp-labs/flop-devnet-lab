@@ -1,7 +1,8 @@
-// The fifth request list, recordings/requests.json: the lab's devnet test of the chain encoder
-// (research/2026-11-12-encoder-devnet-test), run on 2026-11-13, its nine blocks. It is derived
-// (test/helpers/requests/list-5.ts) from recordings/requests-inputs.json and the recorded 1014020
-// metadata, and nothing in it is typed by hand. These tests hold the list to that function byte for
+// The fifth request list: the lab's devnet test of the chain encoder
+// (research/2026-11-12-encoder-devnet-test), run on 2026-11-13, its nine blocks. It was
+// recordings/requests.json until the sixth list replaced it, and its recording's fixture keeps it and
+// its inputs, frozen. It is derived (test/helpers/requests/list-5.ts) from those inputs and the
+// recorded 1014020 metadata, and nothing in it is typed by hand. These tests hold the list to that function byte for
 // byte, read its design a second way from the encoder test's steps.json and results.json, derive
 // every storage key a second way with the reference decoder, and hold every input to the record it
 // names. Since its recording became a fixture (fixtures/recording-20261113182100-8769e8d2841bf49a,
@@ -26,22 +27,20 @@ import { UPGRADE_REQUESTS_TEXT as LIST_3_TEXT } from "./helpers/recorded-upgrade
 import { type Source, deriveCalls as coreDerive } from "./helpers/requests/core.js";
 import { readInputs as readList4Inputs } from "./helpers/requests/list-4.js";
 import { BIRTHS, BLOCKS, type Block, type Inputs, MORTAL_IDS, READS, type Read, START, STEPS, STEP_IDS, birthOf, blockOf, deriveCalls, deriveRequestsText, readInputs } from "./helpers/requests/list-5.js";
-import { ENCODER_RESULTS, ENCODER_SPEC_FIELD, listMetadata, requestsListText } from "./helpers/requests-list.js";
-import { ENCODER_INPUTS_TEXT, ENCODER_REQUESTS_TEXT } from "./helpers/recorded-encoder.js";
+import { ENCODER_INPUTS_TEXT, ENCODER_REQUESTS_TEXT, ENCODER_RUN_TIME, ENCODER_SPEC_FIELD, encoderMetadata } from "./helpers/recorded-encoder.js";
 
 const REPO = new URL("../../", import.meta.url);
 const repoText = (path: string) => readFileSync(new URL(path, REPO), "utf8");
 // The list and its inputs as the fifth recording's fixture keeps them, frozen with it (A2, RULES.md
-// section 8): the tests of the list read those copies. Today they are byte for byte the current list,
-// recordings/requests.json and recordings/requests-inputs.json, which the writer's test holds below.
+// section 8): the tests of the list read those copies, and nothing of recordings/.
 const LIST_TEXT = ENCODER_REQUESTS_TEXT;
 const INPUTS_TEXT = ENCODER_INPUTS_TEXT;
 const INPUTS = readInputs(INPUTS_TEXT);
-const META = listMetadata();
+const META = encoderMetadata();
 const MD = parseMetadata(META);
 const DERIVED = deriveCalls(INPUTS, MD);
 const BUILDER = getDynamicBuilder(getLookupFn(unifyMetadata(decAnyMetadata(META))));
-const RESULTS_FILE = ENCODER_RESULTS;
+const RESULTS_FILE = ENCODER_RUN_TIME;
 const STEPS_FILE = "research/2026-11-12-encoder-devnet-test/steps.json";
 const UP_FILE = "research/2026-11-12-runtime-upgrade/results.json";
 /** The signed file of a step, as the lab's tools wrote it when the lead signed. */
@@ -96,7 +95,7 @@ const T3 = RESULTS.steps.findIndex((s) => s.step === "T3");
 /** Where the explorer's ForceOpenRequested of T3 is in results.json. */
 const FORCE_OPEN = (RESULTS.steps[T3]?.run_time?.explorer.events ?? []).findIndex((e) => e.pallet === "ComputeChannel" && e.name === "ForceOpenRequested");
 
-describe("the fifth request list, recordings/requests.json", () => {
+describe("the fifth request list, frozen in its recording's fixture", () => {
   const read = readRequests(new TextEncoder().encode(LIST_TEXT));
   const calls = typeof read === "string" ? [] : read.calls;
 
@@ -122,20 +121,9 @@ describe("the fifth request list, recordings/requests.json", () => {
     for (const d of DERIVED) if (d.call.method !== "chain_getBlock") expect(four.has(d.call.method), d.call.method).toBe(true);
   });
 
-  it("is, byte for byte, the list derived from recordings/requests-inputs.json and the recorded 1014020 metadata", () => {
+  it("is, byte for byte, the list derived from its frozen inputs and the recorded 1014020 metadata", () => {
     expect(LIST_TEXT).toBe(deriveRequestsText(INPUTS, MD));
     expect(calls).toEqual(DERIVED.map((d) => d.call));
-  });
-
-  it("is what the committed writer writes: scripts/write-requests.mjs writes requestsListText, the same derive function, and nothing of its own", () => {
-    expect(requestsListText()).toBe(LIST_TEXT);
-    // The current list is still the fifth: the fixture's copies are the committed files byte for byte (A2).
-    expect([repoText("observatory/recordings/requests.json"), repoText("observatory/recordings/requests-inputs.json")]).toEqual([LIST_TEXT, INPUTS_TEXT]);
-    const script = repoText("observatory/scripts/write-requests.mjs");
-    expect(script).toContain('const { requestsListText } = await import("../test/helpers/requests-list.ts");');
-    expect(script).toContain("writeFileSync(args[1], requestsListText());");
-    for (const name of ["deriveCalls", "deriveRequestsText", "storageKey", "feedText", "PLAN", "plan("]) expect(script, name).not.toContain(name);
-    expect(repoText("observatory/test/helpers/requests-list.ts")).toContain('from "./requests/list-5.js";');
   });
 
   it("builds its keys from the reviewed metadata of the spec the encoder test's results.json names, found on the third recording's tape by its sha256", () => {
@@ -256,7 +244,7 @@ describe("the fifth request list, recordings/requests.json", () => {
   });
 });
 
-describe("the inputs of the fifth list, recordings/requests-inputs.json", () => {
+describe("the inputs of the fifth list, frozen in its recording's fixture", () => {
   it("is in the written form, and refuses a file that is not or that lacks a name the plan uses; the fourth list's inputs are not the fifth's", () => {
     expect(() => readInputs(INPUTS_TEXT)).not.toThrow();
     expect(() => readInputs(JSON.stringify(JSON.parse(INPUTS_TEXT)))).toThrow("the inputs file is not in the written form");
