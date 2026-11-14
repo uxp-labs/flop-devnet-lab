@@ -223,6 +223,10 @@
     "tests": 42,
     "names": "4b98619494eda10d49445cfa214bb48e907573f165e7b8135f0449ab7c6e8aef"
   },
+  "settle-recording.test.ts": {
+    "tests": 21,
+    "names": "434f9455841d6b304e61cbaa4638cf4556f81f7489c1219d8532035047aba61f"
+  },
   "settle-requests.test.ts": {
     "tests": 24,
     "names": "97ce82f478560fcc2bad26adcba6837d0683f4590ec72c2a90b3cc9d8ea3a0b6"
