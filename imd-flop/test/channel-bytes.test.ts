@@ -95,6 +95,8 @@ describe("C1, T2: the request message", () => {
   it("a GET: the body is the empty text, whose blake2b-256 is in the fourth place after the domain", () => {
     const m = sessionRequestMessage({ channelId: CHANNEL, method: "GET", path: "/session/info", body: "", timestampMs: 0n, nonce: NONCE16, challenge: CHALLENGE });
     const empty = hex(blake2b(new Uint8Array(0), { dkLen: 32 }));
+    // The known answer of blake2b-256 over the empty input, typed here because no committed data file holds it.
+    // Its other copy stands in observatory/test/hash.test.ts.
     expect(empty).toBe("0e5751c026e543b2e8ab2eb06099daa1d1e5df47778f7787faab45cdf12fe3a8");
     expect(Buffer.from(m).toString("utf8")).toBe(`["flop-session-request-v1","0x${CHANNEL_HEX}","GET","/session/info","0x${empty}","0","0x${NONCE16_HEX}","${CHALLENGE}"]`);
   });
