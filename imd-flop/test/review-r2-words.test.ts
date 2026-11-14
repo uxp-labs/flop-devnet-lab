@@ -27,18 +27,18 @@ const channelKey = (() => {
 const notShownRefusal = /not shown[^.]*(?:refuses|rejects|checks|verifies)[^.]*(?:settle|signature)/i;
 
 describe("attack 9: the words of the receipt say what the tests hold and no more", () => {
-  it("DEFECT RR2-5: receiptMessage's comment does not say the chain accepted a payable, and says that a refusal of a wrong receipt is not shown", () => {
+  it("HOLDS (was DEFECT RR2-5): receiptMessage's comment does not say the chain accepted a payable, and says that a refusal of a wrong receipt is not shown", () => {
     expect(comment).toContain("receipt message");
     expect(comment).not.toMatch(/the[\s*]+chain[\s*]+accepted/i);
     expect(comment).toMatch(notShownRefusal);
   });
 
-  it("DEFECT RR2-5: the README's Channel key section says that the chain's refusal of a settle whose receipt signature is over other bytes is not shown", () => {
+  it("HOLDS (was DEFECT RR2-5): the README's Channel key section says that the chain's refusal of a settle whose receipt signature is over other bytes is not shown", () => {
     expect(channelKey).toContain("Shown: the receipt");
     expect(channelKey).toMatch(notShownRefusal);
   });
 
-  it("DEFECT RR2-1 (words): the README's Channel key section says the two settles hold every u128 below 2^64, so the upper half of each u128 is held by the SDK's layout and not by them", () => {
+  it("HOLDS (was DEFECT RR2-1 words): the README's Channel key section says the two settles hold every u128 below 2^64, so the upper half of each u128 is held by the SDK's layout and not by them", () => {
     expect(channelKey).toMatch(/2\^64|64 bits|upper (?:half|8 bytes)|high(?:er)? (?:half|bytes)/i);
   });
 });
