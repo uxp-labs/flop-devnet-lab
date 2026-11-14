@@ -15,7 +15,7 @@ import { getPublicKey, secretFromSeed, sign, verify } from "@scure/sr25519";
 import { registerSecret } from "../secrets.js";
 import { requestHeaders, REQUEST_FIELDS, sessionRequestMessage, type RequestHeaders, type RequestHeadersInput, type SessionRequestInput } from "./auth.js";
 import { bytesOf, snapshotOf, takeFields } from "./bytes.js";
-import { ChannelError, className, refuse } from "./errors.js";
+import { refuse } from "./errors.js";
 import { receiptMessage, turnAckMessage, type ReceiptInput, type TurnAckInput } from "./transcript.js";
 
 /** A message and the key's signature over it, both fresh. */
@@ -69,8 +69,8 @@ function keyFromSeed(seed: Uint8Array): ChannelKey {
     let signature: unknown;
     try {
       signature = sign(secret, message);
-    } catch (e) {
-      throw new ChannelError("SIGN_FAILED", `the sr25519 library threw (${className(e)}) while signing`, e);
+    } catch {
+      return refuse("SIGN_FAILED", "the sr25519 library threw while signing");
     }
     let own: Uint8Array;
     try {

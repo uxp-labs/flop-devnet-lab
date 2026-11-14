@@ -2,7 +2,7 @@
  * P4, rules D3 to D6, D9, D10, A5, A6, T5 and T9: what the channel key is and shows. Four functions and nothing
  * else, frozen; nothing of the seed, the secret or its halves in any view of it; one reading of each input; a fresh
  * copy of everything it returns; each signature checked under its own public key (SELF_CHECK), and a library that
- * throws named by its class only (SIGN_FAILED).
+ * throws named by nothing of what it threw (SIGN_FAILED).
  */
 import { inspect } from "node:util";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -225,17 +225,21 @@ describe("D5: the library's own failures", () => {
     }
   });
 
-  it("a library that throws: SIGN_FAILED, naming only the class, the thrown value kept as a cause that is not enumerable", async () => {
+  it("a library that throws: SIGN_FAILED, exactly the one message; no cause, no class name, nothing the thrown value chose", async () => {
     const thrown = new RangeError(`secret ${"ab".repeat(32)} leaked`);
     const { key, ChannelErrorOf } = await keyWith(() => {
       throw thrown;
     });
     const e = refusal(() => key.signReceipt(RECEIPT()), ChannelErrorOf);
     expect(e.refusal).toBe("SIGN_FAILED");
-    expect(e.message).toBe("channel key refused (SIGN_FAILED): the sr25519 library threw (RangeError) while signing");
-    expect(e.cause).toBe(thrown);
-    expect(Object.keys(e)).not.toContain("cause");
-    expect(JSON.stringify(e)).not.toContain("leaked");
+    expect(e.message).toBe("channel key refused (SIGN_FAILED): the sr25519 library threw while signing");
+    expect(e.cause).toBeUndefined();
+    expect(Object.getOwnPropertyNames(e)).not.toContain("cause");
+    for (const text of [inspect(e, { depth: 5, showHidden: true }), JSON.stringify(e), String(e.stack)]) {
+      expect(text).not.toContain("leaked");
+      expect(text).not.toContain("RangeError");
+      expect(text).not.toContain("ab".repeat(32));
+    }
   });
 
   it("D7: a library whose verify says true to anything still gives false for a key not 32 bytes or a signature not 64 bytes", async () => {
@@ -250,12 +254,13 @@ describe("D5: the library's own failures", () => {
     expect(k.verifyChannelSignature({ publicKey: pub, message: new Uint8Array(1), signature: new Uint8Array(65) })).toBe(false);
   });
 
-  it("a library that throws a value that is not an Error: SIGN_FAILED, naming its kind", async () => {
+  it("a library that throws a value that is not an Error: SIGN_FAILED, the same one message", async () => {
     const { key, ChannelErrorOf } = await keyWith(() => {
       throw "a text with ab".repeat(4);
     });
     const e = refusal(() => key.signRequest(REQUEST()), ChannelErrorOf);
     expect(e.refusal).toBe("SIGN_FAILED");
-    expect(e.message).toBe("channel key refused (SIGN_FAILED): the sr25519 library threw (string) while signing");
+    expect(e.message).toBe("channel key refused (SIGN_FAILED): the sr25519 library threw while signing");
+    expect(e.cause).toBeUndefined();
   });
 });
