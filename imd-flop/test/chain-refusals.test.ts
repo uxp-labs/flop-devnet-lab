@@ -400,7 +400,7 @@ function files(dir: string): string[] {
   });
 }
 
-describe("E1 and E13: the encoder is pure and not wired", () => {
+describe("E1 and E13: the encoder is pure, and wired to the session commands alone", () => {
   const chain = files(join(PKG, "src", "chain"));
 
   it("src/chain holds only the encoder and what it owns", () => {
@@ -432,9 +432,10 @@ describe("E1 and E13: the encoder is pure and not wired", () => {
     for (const s of [`import x from "node:fs"`, "readFileSync(p)", "await fetch(u)", "new WebSocket(u)", "Date.now()", "Math.random()", "process.env.X", "Buffer.from(x)"]) expect(banned.test(s)).toBe(true);
   });
 
-  it("no file outside src/chain imports it", () => {
-    const outside = files(join(PKG, "src")).filter((f) => !f.startsWith(join(PKG, "src", "chain")));
+  it("no file outside src/chain imports it but the session commands, the files under src/session (P5b, C2)", () => {
+    const outside = files(join(PKG, "src")).filter((f) => !f.startsWith(join(PKG, "src", "chain") + "/"));
     const found = outside.filter((f) => /["'`][^"'`]*chain\/[^"'`]*["'`]/.test(readFileSync(f, "utf8"))).map((f) => relative(PKG, f));
-    expect(found).toEqual([]);
+    expect(found.filter((f) => !f.startsWith("src/session/"))).toEqual([]);
+    expect(found.length).toBeGreaterThan(0);
   });
 });

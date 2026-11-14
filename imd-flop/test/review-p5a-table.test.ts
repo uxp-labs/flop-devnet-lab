@@ -111,10 +111,11 @@ describe("review P5a, attack 10 (P13)", () => {
     expect((reader.readOwnerCall(RUNTIME_ID, bytes) as { delegate: Uint8Array }).delegate[0]).toBe(0x9f);
   });
 
-  it("HOLDS: no file outside src/chain imports owner-calls.ts or the encoder; src/chain imports no file, network, clock, process or randomness", () => {
+  it("HOLDS: no file outside src/chain and src/session imports owner-calls.ts or the encoder; src/chain imports no file, network, clock, process or randomness", () => {
     const walk = (d: string): string[] => readdirSync(d, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? walk(join(d, e.name)) : e.name.endsWith(".ts") ? [join(d, e.name)] : []));
     const src = join(PKG, "src");
-    const outside = walk(src).filter((f) => !f.startsWith(join(src, "chain") + "/"));
+    // P5b, C2: the session commands under src/session are the one importer allowed.
+    const outside = walk(src).filter((f) => !f.startsWith(join(src, "chain") + "/") && !f.startsWith(join(src, "session") + "/"));
     for (const f of outside) expect(`${f}: ${/from\s+["'][^"']*chain\/(owner-calls|extrinsic|reader|describe|shape|table|fields|calls|runtimes|scale|payload|era|errors)(\.js)?["']/.test(readFileSync(f, "utf8"))}`).toBe(`${f}: false`);
     for (const f of walk(join(src, "chain"))) {
       const code = readFileSync(f, "utf8").replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "");
