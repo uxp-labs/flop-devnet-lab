@@ -12,34 +12,29 @@
  * This test does not exercise the fold through merkle_path: both paths are empty. P6 writes the fold and its tests.
  * These two settles do not hold the turn index's byte order or the upper half of `g_n`; P6 holds those by its own tests.
  */
-import { blake2b } from "@noble/hashes/blake2.js";
 import { describe, expect, it } from "vitest";
 import { bytesOf, hexOf } from "../src/chain-read/bytes.js";
 import { verifyChannelSignature } from "../src/channel/key.js";
+import { leafV3 as minerLeafV3 } from "../src/miner/leaf.js";
 import { SETTLE_CHANNELS, refBytes, refDecodeOf, settleByShape, settleOf } from "./lib/settle-recording.js";
 
 type Rec = Record<string, any>;
-const le = (n: bigint, w: number) => Uint8Array.from({ length: w }, (_, i) => Number((n >> BigInt(8 * i)) & 0xffn));
-const concat = (...parts: Uint8Array[]) => Uint8Array.from(parts.flatMap((p) => [...p]));
-const blake = (b: Uint8Array) => blake2b(b, { dkLen: 32 });
 
-/** The version 3 leaf of a turn, as the SDK describes it. P6 replaces this with its own function. */
+/** The version 3 leaf of a turn, through P6's own function (src/miner/leaf.ts). */
 function leafV3(channelId: Uint8Array, t: Rec): Uint8Array {
-  return blake(
-    concat(
-      channelId,
-      le(BigInt(t.turn_index), 4),
-      refBytes(t.h_in),
-      refBytes(t.h_out),
-      le(t.g_n, 16),
-      refBytes(t.decode_policy_hash),
-      refBytes(t.h_ids),
-      refBytes(t.toploc_commitment_hash),
-      le(t.miner_recv_ms, 8),
-      le(t.miner_done_ms, 8),
-      le(t.latency_ms, 8),
-    ),
-  );
+  return minerLeafV3({
+    channelId,
+    turnIndex: t.turn_index,
+    hIn: refBytes(t.h_in),
+    hOut: refBytes(t.h_out),
+    gN: t.g_n,
+    decodePolicyHash: refBytes(t.decode_policy_hash),
+    hIds: refBytes(t.h_ids),
+    toplocCommitmentHash: refBytes(t.toploc_commitment_hash),
+    minerRecvMs: t.miner_recv_ms,
+    minerDoneMs: t.miner_done_ms,
+    latencyMs: t.latency_ms,
+  });
 }
 
 const SETTLES = SETTLE_CHANNELS.map((c) => {
