@@ -1,0 +1,353 @@
+[
+ {
+  "id": "M1",
+  "file": "src/chain/reader.ts",
+  "find": "if (!sameList(data.allowed_pallets, allowedPallets())) {",
+  "replace": "if (false) {",
+  "why": "the reader takes any allow list",
+  "test": "the author's tests: test/chain-*.test.ts, test/review-a1-frozen.test.ts, test/review-p3-defects.test.ts",
+  "result": "killed by an author test"
+ },
+ {
+  "id": "M2",
+  "file": "src/chain/reader.ts",
+  "find": "x.length === b[i].length && x.every((y, j) => y === b[i][j])",
+  "replace": "x.length === b[i].length",
+  "why": "a name of 14 bytes of any content passes",
+  "test": "the author's tests: test/chain-*.test.ts, test/review-a1-frozen.test.ts, test/review-p3-defects.test.ts",
+  "result": "killed by an author test"
+ },
+ {
+  "id": "M3",
+  "file": "src/chain/reader.ts",
+  "find": "a.length === b.length && a.every((x, i) =>",
+  "replace": "a.length >= b.length && a.every((x, i) =>",
+  "why": "a list longer than one passes if it starts with the name",
+  "test": "the author's tests: test/chain-*.test.ts, test/review-a1-frozen.test.ts, test/review-p3-defects.test.ts",
+  "result": "killed by an author test"
+ },
+ {
+  "id": "M4",
+  "file": "src/chain/reader.ts",
+  "find": "if (data[cap] === 0n)",
+  "replace": "if (data[cap] === 0n && cap !== \"daily_cap\")",
+  "why": "a daily cap of 0 allowed",
+  "test": "the author's tests: test/chain-*.test.ts, test/review-a1-frozen.test.ts, test/review-p3-defects.test.ts",
+  "result": "ALIVE: equivalent in code: a daily cap of 0 is still refused OUT_OF_RANGE by the per_tx_limit 0 check or the order check; only the words change"
+ },
+ {
+  "id": "M5",
+  "file": "src/chain/reader.ts",
+  "find": "if (data.per_tx_limit > data.daily_cap)",
+  "replace": "if (data.per_tx_limit > data.daily_cap + 1n)",
+  "why": "per tx above daily by 1",
+  "test": "the author's tests: test/chain-*.test.ts, test/review-a1-frozen.test.ts, test/review-p3-defects.test.ts",
+  "result": "killed by an author test"
+ },
+ {
+  "id": "M6",
+  "file": "src/chain/reader.ts",
+  "find": "if (data.daily_cap > data.spending_cap)",
+  "replace": "if (data.daily_cap > data.spending_cap + 1n)",
+  "why": "daily above spending by 1",
+  "test": "the author's tests: test/chain-*.test.ts, test/review-a1-frozen.test.ts, test/review-p3-defects.test.ts",
+  "result": "killed by an author test"
+ },
+ {
+  "id": "M7",
+  "file": "src/chain/reader.ts",
+  "find": "data.duration_blocks < 1 ||",
+  "replace": "data.duration_blocks < 0 ||",
+  "why": "duration 0",
+  "test": "the author's tests: test/chain-*.test.ts, test/review-a1-frozen.test.ts, test/review-p3-defects.test.ts",
+  "result": "killed by an author test"
+ },
+ {
+  "id": "M8",
+  "file": "src/chain/reader.ts",
+  "find": "data.duration_blocks > reviewed.maxSessionDuration)",
+  "replace": "data.duration_blocks > reviewed.maxSessionDuration + 1)",
+  "why": "duration max + 1",
+  "test": "the author's tests: test/chain-*.test.ts, test/review-a1-frozen.test.ts, test/review-p3-defects.test.ts",
+  "result": "killed by an author test"
+ },
+ {
+  "id": "M9",
+  "file": "src/chain/reader.ts",
+  "find": "  const data = readOwner(r, reviewed);\n  r.done(\"the call\");",
+  "replace": "  const data = readOwner(r, reviewed);",
+  "why": "bytes left over after an owner call",
+  "test": "the author's tests: test/chain-*.test.ts, test/review-a1-frozen.test.ts, test/review-p3-defects.test.ts",
+  "result": "killed by an author test"
+ },
+ {
+  "id": "M10",
+  "file": "src/chain/reader.ts",
+  "find": "const entry = Object.values(reviewed.calls).find((e) => e.palletIndex === pallet && e.callIndex === index);",
+  "replace": "const entry = Object.values(reviewed.calls).find((e) => e.callIndex === index);",
+  "why": "any pallet byte",
+  "test": "the author's tests: test/chain-*.test.ts, test/review-a1-frozen.test.ts, test/review-p3-defects.test.ts",
+  "result": "killed by an author test"
+ },
+ {
+  "id": "M11",
+  "file": "src/chain/reader.ts",
+  "find": "if (data.call === \"create_session\") checkGrant(data, reviewed);",
+  "replace": "",
+  "why": "no grant rule on read",
+  "test": "the author's tests: test/chain-*.test.ts, test/review-a1-frozen.test.ts, test/review-p3-defects.test.ts",
+  "result": "killed by an author test"
+ },
+ {
+  "id": "M12",
+  "file": "src/chain/owner-calls.ts",
+  "find": "if (list !== undefined && k === list.name) refuse(\"BAD_INPUT\", `${name}.${k} is not an input: a grant allows exactly ${OWNER_ALLOWED_PALLET}`);",
+  "replace": "",
+  "why": "the list's own refusal words",
+  "test": "the author's tests: test/chain-*.test.ts, test/review-a1-frozen.test.ts, test/review-p3-defects.test.ts",
+  "result": "killed by an author test"
+ },
+ {
+  "id": "M13",
+  "file": "src/chain/owner-calls.ts",
+  "find": "if (!names.includes(k)) refuse(",
+  "replace": "if (false) refuse(",
+  "why": "extra fields accepted",
+  "test": "the author's tests: test/chain-*.test.ts, test/review-a1-frozen.test.ts, test/review-p3-defects.test.ts",
+  "result": "killed by an author test"
+ },
+ {
+  "id": "M14",
+  "file": "src/chain/owner-calls.ts",
+  "find": "if (!keys.includes(\"call\")) refuse(\"CALL_NOT_ALLOWED\"",
+  "replace": "if (!keys.includes(\"call\")) refuse(\"BAD_INPUT\"",
+  "why": "missing call code",
+  "test": "the author's tests: test/chain-*.test.ts, test/review-a1-frozen.test.ts, test/review-p3-defects.test.ts",
+  "result": "killed by an author test"
+ },
+ {
+  "id": "M15",
+  "file": "src/chain/owner-calls.ts",
+  "find": "for (const f of s.reviewed.calls[s.call].fields) if (!same(back[f.name], s.fields[f.name]))",
+  "replace": "for (const f of s.reviewed.calls[s.call].fields) if (false && !same(back[f.name], s.fields[f.name]))",
+  "why": "no field read back",
+  "test": "the author's tests: test/chain-*.test.ts, test/review-a1-frozen.test.ts, test/review-p3-defects.test.ts",
+  "result": "killed by an author test"
+ },
+ {
+  "id": "M16",
+  "file": "src/chain/owner-calls.ts",
+  "find": "if (back.call !== s.call) refuse(",
+  "replace": "if (false) refuse(",
+  "why": "no call name read back",
+  "test": "the author's tests: test/chain-*.test.ts, test/review-a1-frozen.test.ts, test/review-p3-defects.test.ts",
+  "result": "ALIVE: equivalent: the call is found by its two indices among the two owner calls, so the name read back is always the name written"
+ },
+ {
+  "id": "M17",
+  "file": "src/chain/owner-calls.ts",
+  "find": "return a.length === b.length && a.every((x, i) => x === b[i]);",
+  "replace": "return a.length === b.length;",
+  "why": "bytes compared by length only",
+  "test": "the author's tests: test/chain-*.test.ts, test/review-a1-frozen.test.ts, test/review-p3-defects.test.ts",
+  "result": "killed by an author test"
+ },
+ {
+  "id": "M18",
+  "file": "src/chain/owner-calls.ts",
+  "find": "if (list !== undefined) fields[list.name] = allowedPallets();",
+  "replace": "if (list !== undefined) fields[list.name] = [];",
+  "why": "empty list written (reader refuses)",
+  "test": "the author's tests: test/chain-*.test.ts, test/review-a1-frozen.test.ts, test/review-p3-defects.test.ts",
+  "result": "killed by an author test"
+ },
+ {
+  "id": "M19",
+  "file": "src/chain/owner-calls.ts",
+  "find": "return Object.freeze({ maxSessionDuration, sessionEpochLength });",
+  "replace": "return { maxSessionDuration, sessionEpochLength };",
+  "why": "constants not frozen",
+  "test": "the author's tests: test/chain-*.test.ts, test/review-a1-frozen.test.ts, test/review-p3-defects.test.ts",
+  "result": "killed by an author test"
+ },
+ {
+  "id": "M20",
+  "file": "src/chain/shape.ts",
+  "find": "if (new Set(names).size !== names.length || !sameFieldSet(",
+  "replace": "if (!sameFieldSet(",
+  "why": "a doubled field passes",
+  "test": "the author's tests: test/chain-*.test.ts, test/review-a1-frozen.test.ts, test/review-p3-defects.test.ts",
+  "result": "killed by an author test"
+ },
+ {
+  "id": "M21",
+  "file": "src/chain/shape.ts",
+  "find": "if (sharing.length !== 1)",
+  "replace": "if (sharing.length > 2)",
+  "why": "an index shared with one other call",
+  "test": "the author's tests: test/chain-*.test.ts, test/review-a1-frozen.test.ts, test/review-p3-defects.test.ts",
+  "result": "killed by an author test"
+ },
+ {
+  "id": "M22",
+  "file": "src/chain/shape.ts",
+  "find": "if (sessionEpochLength > maxSessionDuration)",
+  "replace": "if (false)",
+  "why": "epoch above max",
+  "test": "the author's tests: test/chain-*.test.ts, test/review-a1-frozen.test.ts, test/review-p3-defects.test.ts",
+  "result": "killed by an author test"
+ },
+ {
+  "id": "M23",
+  "file": "src/chain/shape.ts",
+  "find": "!Number.isSafeInteger(c.value) || c.value < 1 ||",
+  "replace": "!Number.isSafeInteger(c.value) ||",
+  "why": "a constant of 0",
+  "test": "the author's tests: test/chain-*.test.ts, test/review-a1-frozen.test.ts, test/review-p3-defects.test.ts",
+  "result": "killed by an author test"
+ },
+ {
+  "id": "M24",
+  "file": "src/chain/shape.ts",
+  "find": "if (found.length !== 1) unknown(",
+  "replace": "if (found.length === 0) unknown(",
+  "why": "a constant twice",
+  "test": "the author's tests: test/chain-*.test.ts, test/review-a1-frozen.test.ts, test/review-p3-defects.test.ts",
+  "result": "killed by an author test"
+ },
+ {
+  "id": "M25",
+  "file": "src/chain/shape.ts",
+  "find": "if (!same(c.type, U32)) unknown(",
+  "replace": "if (false) unknown(",
+  "why": "a constant not u32",
+  "test": "the author's tests: test/chain-*.test.ts, test/review-a1-frozen.test.ts, test/review-p3-defects.test.ts",
+  "result": "killed by an author test"
+ },
+ {
+  "id": "M26",
+  "file": "src/chain/shape.ts",
+  "find": "if (entry.fields.some((f) => f.type.kind === \"bytesList\")) unknown(",
+  "replace": "if (false) unknown(",
+  "why": "the session check's new line",
+  "test": "the author's tests: test/chain-*.test.ts, test/review-a1-frozen.test.ts, test/review-p3-defects.test.ts",
+  "result": "killed by an author test"
+ },
+ {
+  "id": "M27",
+  "file": "src/chain/shape.ts",
+  "find": "!Number.isSafeInteger(c.value) ||",
+  "replace": "",
+  "why": "a constant not whole",
+  "test": "the author's tests: test/chain-*.test.ts, test/review-a1-frozen.test.ts, test/review-p3-defects.test.ts",
+  "result": "killed by an author test"
+ },
+ {
+  "id": "M28",
+  "file": "src/chain/table.ts",
+  "find": "if (found.length > 1) refuse(",
+  "replace": "if (found.length > 2) refuse(",
+  "why": "two entries with three names",
+  "test": "the author's tests: test/chain-*.test.ts, test/review-a1-frozen.test.ts, test/review-p3-defects.test.ts",
+  "result": "killed by an author test"
+ },
+ {
+  "id": "M29",
+  "file": "src/chain/table.ts",
+  "find": "return Object.freeze({ specName: r.specName,",
+  "replace": "return ({ specName: r.specName,",
+  "why": "id not frozen",
+  "test": "the author's tests: test/chain-*.test.ts, test/review-a1-frozen.test.ts, test/review-p3-defects.test.ts",
+  "result": "killed by an author test"
+ },
+ {
+  "id": "M30",
+  "file": "src/chain/table.ts",
+  "find": "const found = TABLE.filter((r) => r.specName === specName && r.specVersion === specVersion && r.genesisHash === genesisHash);",
+  "replace": "const found = TABLE.filter((r) => r.specName === specName && r.genesisHash === genesisHash);",
+  "why": "spec version not matched",
+  "test": "the author's tests: test/chain-*.test.ts, test/review-a1-frozen.test.ts, test/review-p3-defects.test.ts",
+  "result": "killed by an author test"
+ },
+ {
+  "id": "M31",
+  "file": "src/chain/calls.ts",
+  "find": "return [new TextEncoder().encode(OWNER_ALLOWED_PALLET)];",
+  "replace": "return [new TextEncoder().encode(OWNER_ALLOWED_PALLET.toLowerCase())];",
+  "why": "the one list in lower case, writer and judge",
+  "test": "the author's tests: test/chain-*.test.ts, test/review-a1-frozen.test.ts, test/review-p3-defects.test.ts",
+  "result": "killed by an author test"
+ },
+ {
+  "id": "M32",
+  "file": "src/chain/describe.ts",
+  "find": "if (f.type.kind === \"u32\") return `${f.name} ${String(v)} blocks`;",
+  "replace": "",
+  "why": "duration words without blocks",
+  "test": "the author's tests: test/chain-*.test.ts, test/review-a1-frozen.test.ts, test/review-p3-defects.test.ts",
+  "result": "killed by an author test"
+ },
+ {
+  "id": "M33",
+  "file": "src/chain/describe.ts",
+  "find": "const UTF8 = new TextDecoder(\"utf-8\", { fatal: true, ignoreBOM: true });",
+  "replace": "const UTF8 = new TextDecoder(\"utf-8\", { fatal: false, ignoreBOM: false });",
+  "why": "words of a non UTF-8 name (unreachable behind the reader)",
+  "test": "the author's tests: test/chain-*.test.ts, test/review-a1-frozen.test.ts, test/review-p3-defects.test.ts",
+  "result": "ALIVE: equivalent: the reader refuses every list but the one name before the words decode it"
+ },
+ {
+  "id": "M34",
+  "file": "src/chain/fields.ts",
+  "find": "for (let i = 0n; i < count; i++) {",
+  "replace": "for (let i = 0n; i < count && i < 1n; i++) {",
+  "why": "only the first name read",
+  "test": "the author's tests: test/chain-*.test.ts, test/review-a1-frozen.test.ts, test/review-p3-defects.test.ts",
+  "result": "killed by an author test"
+ },
+ {
+  "id": "M35",
+  "file": "src/chain/fields.ts",
+  "find": "return concat(compact(BigInt(list.length)),",
+  "replace": "return concat(compact(BigInt(list.length + 0)), compact(0n).subarray(0, 0),",
+  "why": "no op (equivalent control)",
+  "test": "the author's tests: test/chain-*.test.ts, test/review-a1-frozen.test.ts, test/review-p3-defects.test.ts",
+  "result": "ALIVE: equivalent control: writes the same bytes"
+ },
+ {
+  "id": "M36",
+  "file": "scripts/chain-table.mjs",
+  "find": "if (isBytes(m, def.value)) return { kind: \"bytesList\" };",
+  "replace": "return { kind: \"bytesList\" };",
+  "why": "any sequence becomes a list of byte strings",
+  "test": "the author's tests: test/chain-*.test.ts, test/review-a1-frozen.test.ts, test/review-p3-defects.test.ts",
+  "result": "ALIVE: not killed by any author test; killed by test/review-p5a-script.test.ts (Vec<Vec<u32>> and others refused)"
+ },
+ {
+  "id": "M37",
+  "file": "scripts/chain-table.mjs",
+  "find": "if (type.kind !== \"u32\") fail(",
+  "replace": "if (false) fail(",
+  "why": "a constant of another type",
+  "test": "the author's tests: test/chain-*.test.ts, test/review-a1-frozen.test.ts, test/review-p3-defects.test.ts",
+  "result": "ALIVE: not killed; nearly equivalent: a constant of another type is refused later by reviewedOwnerRuntime (not a u32) or by the script's own u32 value check"
+ },
+ {
+  "id": "M38",
+  "file": "src/chain/calls.ts",
+  "find": "return typeof name === \"string\" && (OWNER_NAMES as readonly string[]).includes(name);",
+  "replace": "return (OWNER_NAMES as readonly unknown[]).includes(name);",
+  "why": "isOwnerName without the type test",
+  "test": "the author's tests: test/chain-*.test.ts, test/review-a1-frozen.test.ts, test/review-p3-defects.test.ts",
+  "result": "ALIVE: equivalent: includes never matches a value that is not a string"
+ },
+ {
+  "id": "M39",
+  "file": "src/chain/owner-calls.ts",
+  "find": "if (input === null || typeof input !== \"object\" || ArrayBuffer.isView(input) || Array.isArray(input)) refuse(",
+  "replace": "if (input === null || typeof input !== \"object\") refuse(",
+  "why": "an array or byte array as input",
+  "test": "the author's tests: test/chain-*.test.ts, test/review-a1-frozen.test.ts, test/review-p3-defects.test.ts",
+  "result": "killed by an author test"
+ }
+]
