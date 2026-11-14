@@ -8,5 +8,7 @@ Done:
 - attack 6: test/review-a1-block-arg.test.ts (DEFECT RA1-1, instanceof on a thrown Proxy); plain block log equal to main over 69 cases
 
 - attack 7: test/review-a1-rpc.test.ts (DEFECT RA1-2 timeout overflow, RA1-3 node cap with whitespace frame)
+- attack 5: test/review-a1-frozen.test.ts (own walk HOLDS over 30 files; DEFECT RA1-4 info, ByteReader methods open)
+- attack 8: scratch probe, 3000 generated frames, branch rpcCall equals main answerOf(readOutsideJson) in every case
 Next:
 - answerOf over generated JSON (attack 8), frozen walk (5), era (9), findings (10), mutations (11), words and scope (12, 13)
