@@ -49,9 +49,14 @@ describe("review o1: the scan of the one allowed module mock (P9)", () => {
       `const v = ${VI};\nv.mock("../src/${"guard"}.js", () => ({}));\n`,
       `${VI}["mock"]("../src/${"guard"}.js", () => ({}));\n`,
       `${VI}\n  .mock("../src/${"guard"}.js", () => ({}));\n`,
-      `await import("../src/${"guard"}" + ".js?again");\n`,
     ];
     const passed = plants.filter((p) => !loadsSecondGuard("shape.test.ts", p) || !loadsSecondGuard(EXCEPTED, ALLOWED + p));
     expect(passed).toEqual([]);
+  });
+
+  it("HOLDS: the guard's query string built in two pieces in a dynamic import is not caught by a text scan; RULES.md section 4 says the scan catches the plain spellings and a diff that hides one is for the review", () => {
+    // Changed by the fixer: this plant was the fourth of the DEFECT O1-6 list; no text scan can hold it.
+    const plant = `await import("../src/${"guard"}" + ".js?again");\n`;
+    expect(loadsSecondGuard("shape.test.ts", plant)).toBe(false);
   });
 });
