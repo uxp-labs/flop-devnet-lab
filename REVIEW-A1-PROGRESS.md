@@ -7,5 +7,6 @@ Done:
 - attack 3 and 4 probed (scratch, not committed): class instance signer and inherited runtime id now refused; SIGNER_THREW leaks nothing
 - attack 6: test/review-a1-block-arg.test.ts (DEFECT RA1-1, instanceof on a thrown Proxy); plain block log equal to main over 69 cases
 
+- attack 7: test/review-a1-rpc.test.ts (DEFECT RA1-2 timeout overflow, RA1-3 node cap with whitespace frame)
 Next:
-- rpcCall tests (attack 7, 8), frozen walk (5), era (9), findings (10), mutations (11), words and scope (12, 13)
+- answerOf over generated JSON (attack 8), frozen walk (5), era (9), findings (10), mutations (11), words and scope (12, 13)
