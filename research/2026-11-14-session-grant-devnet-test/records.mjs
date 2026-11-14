@@ -60,12 +60,23 @@ export function step(r, id, { upTo = "after", ok = true, error = null, fee = nul
   return r;
 }
 
-/** The whole batch as planned: G2 taken (then R2) or refused with SessionAlreadyExists. */
+/** An explorer reading that agrees with an entry's decoder reading, as record-step.mjs keeps it. */
+export function agreeingExplorer(e) {
+  const kept = e.decoder.events.filter((x) => x.pallet === "FlopSessionKeys" || x.pallet === "ComputeChannel");
+  e.run_time.explorer = { source: "made", success: e.decoder.success, error: e.decoder.error ? { ...e.decoder.error } : null, names: e.decoder.names, events: structuredClone(kept), channel_mismatch: [], source_kind: "second, weaker: FLOP's explorer API" };
+  e.sources_differ = [];
+  return e;
+}
+
+/** The whole batch as planned: G2 taken (then R2) or refused with SessionAlreadyExists, each step with an agreeing explorer reading, and the owner's balances. */
 export function asPlanned(branch = "taken") {
   const r = started();
   step(r, "G1"); step(r, "R1");
   if (branch === "taken") { step(r, "G2"); step(r, "R2"); }
   else step(r, "G2", { ok: false, error: `FlopSessionKeys.${V("ALREADY_EXISTS")}`, fee: V("MAX_FEE") });
+  for (const e of r.steps) agreeingExplorer(e);
+  const fees = r.steps.reduce((a, e) => a + BigInt(e.decoder.fee_raw), 0n);
+  r.balances = { owner_free_before: "24000000000000000000", owner_free_after: (24000000000000000000n - fees).toString(), source: "made" };
   return r;
 }
 
