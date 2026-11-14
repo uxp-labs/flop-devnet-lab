@@ -20,7 +20,7 @@ export function takeTape(text, sha256) {
   let t;
   try { t = takeRelay(text, sha256, "tape"); } catch (e) { no(e.message); }
   if (!KINDS.includes(t.kind)) no(`the relay is not a tape of session-reads.js: its kind is ${JSON.stringify(t.kind ?? null)}`);
-  if (!Array.isArray(t.tape) || !t.tape.every((c) => c && typeof c.method === "string" && Array.isArray(c.params) && ("result" in c || "error" in c))) no("the tape is not a list of { method, params, result or error }");
+  if (!Array.isArray(t.tape) || !t.tape.every((c) => c && typeof c.method === "string" && Array.isArray(c.params) && ("result" in c || "error" in c || "no_answer" in c))) no("the tape is not a list of { method, params, result or error }");
   if (!t.head || !Number.isSafeInteger(t.head.number) || !HASH.test(t.head.hash ?? "")) no("the tape names no finalized head (number and hash)");
   return t;
 }
@@ -69,6 +69,7 @@ export function tapeTransport(t, md, { asked = [], missed = [] } = {}) {
     const a = answerOf(t, method, params);
     if (!a) { missed.push({ method, params, why: "not in the tape" }); throw new Error(`the tape holds no answer to ${method}`); }
     if ("error" in a) throw new Error(`the node said: ${a.error?.message ?? "an error"}`);
+    if ("no_answer" in a) throw new Error(`the node gave ${a.no_answer}`);
     return a.result;
   };
 }

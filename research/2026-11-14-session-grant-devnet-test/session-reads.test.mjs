@@ -74,9 +74,13 @@ test("T3: a block tape of A2: exactly the questions of readBlockEvents, and the 
 });
 
 test("T3: the probe of H7 asks state_call Core_version 0x at the block PROBE_BACK below the head; a refusal is recorded, never a value", async () => {
-  const node = rerunNode("A6");
-  const { reader } = readerOver(node);
   const back = Number(V("PROBE_BACK"));
+  // set by this test: the recording holds no hash of the block PROBE_BACK below A6 (it answers null),
+  // and the probe sends state_call only at a 32 byte hash (F8)
+  const OLD = "0x" + "0b".repeat(32);
+  const withOld = (n) => { const base = n.answer, head = n.blockOf("A6").number; n.answer = (m, p) => (m === "chain_getBlockHash" && p[0] === head - back ? (n.log.push({ method: m, params: p }), OLD) : base(m, p)); return n; };
+  const node = withOld(rerunNode("A6"));
+  const { reader } = readerOver(node);
   const r = plain(await reader.probe(back));
   const call = node.log.find((c) => c.method === "state_call");
   assert.deepEqual(call.params.slice(0, 2), ["Core_version", "0x"]);
@@ -86,7 +90,7 @@ test("T3: the probe of H7 asks state_call Core_version 0x at the block PROBE_BAC
   assert.equal(r.answered, false);
   assert.equal(r.length, null);
   assert.match(r.refusal.message, /no state_call/);
-  const answering = rerunNode("A6");
+  const answering = withOld(rerunNode("A6"));
   const base = answering.answer;
   answering.answer = (m, p) => (m === "state_call" ? "0x" + "ab".repeat(70) : base(m, p));
   const ok = plain(await readerOver(answering).reader.probe(back));

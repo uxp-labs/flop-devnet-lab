@@ -16,10 +16,11 @@ Run tests under setpriv (CLAUDE.md rule 5). Push after every commit.
 - F4: next.mjs entriesStops and planIds, before P0. entries.test.mjs; RG19-9 HOLDS.
 - F5 and F12: next.mjs showSays and activeAfter (cleanup revoke at a stop), G2 refused fee is a stop; plan.mjs prints the cleanup lines at such a stop. end-words.test.mjs; RG19-7 and RG19-15 HOLDS.
 - F9: owner-call.mjs SIGNED_FIELDS, held in checkOwnerSigned. send-guard.test.mjs; RG19-2 HOLDS.
+- F8 and F15: session-reads.js timed, whole, probe at a 32 byte hash only (new sha256 0e637aa57e603faf8d250d478e7efad877e8af36b6e90cfe5ef75fcb86a285f9; steps.json does not hold it, plan.md does). tape.mjs takes no_answer entries as unknown. pane-timers.test.mjs; RG19-1 HOLDS. session-reads.test T3 probe: its node is given a hash for the old block (setup only).
 
 ## Next
 
-- F8, F11, F6, F7, F10, F15, F14, F16, words.
+- F11, F6, F7, F10, F14, F16, words.
 
 ## Points where a rule cannot be met as written (stop, for the lead)
 

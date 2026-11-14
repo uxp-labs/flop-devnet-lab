@@ -109,7 +109,7 @@ A send outcome that is not a clean inclusion follows the immortal rows of the la
 <!-- printed by plan.mjs: pane -->
 # the node's tab, https://rpc.devnet.flop.network/: put the text of pane-runner.js in window.__src, check its sha256 there, run it; then the same with session-reads.js
 #   sha256 of pane-runner.js: f034f6edc5d3a81218b67c3545bc5ba43d363ffd0fbd39a625c315cf235b5a78
-#   sha256 of session-reads.js: e29f4f45033ea517430603914b0ddbe8e0812e22fb64a658b1859f20410ff629
+#   sha256 of session-reads.js: 0e637aa57e603faf8d250d478e7efad877e8af36b6e90cfe5ef75fcb86a285f9
 #   [...new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(window.__src)))].map((b) => b.toString(16).padStart(2, "0")).join("")
 #   (0, eval)(window.__src)   once for each file, in that order; then: const lab = paneRunner.createRunner(); const reads = sessionReads.createReader()
 # the explorer's tab, https://explorer.devnet.flop.network/: the same with explorer-reader.js

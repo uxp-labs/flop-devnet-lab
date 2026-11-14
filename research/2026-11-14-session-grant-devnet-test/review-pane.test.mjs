@@ -114,7 +114,7 @@ test("HOLDS: a block tape over a lying node sends only the read set", async () =
   onlyReads(node, "a block tape");
 });
 
-test("DEFECT RG19-1: the probe sends state_call only at a 32 byte block hash, and says answered only for a call at the block PROBE_BACK below the head", async () => {
+test("HOLDS: RG19-1: the probe sends state_call only at a 32 byte block hash, and says answered only for a call at the block PROBE_BACK below the head", async () => {
   for (const at of [null, "0xdead", { hash: "x" }]) {
     const node = lying({ chain_getBlockHash: (p, base) => (p[0] === 0 ? base() : at), state_call: () => "0x" + "ab".repeat(70) });
     const r = plain(await readerOver(node).reader.probe(Number(V("PROBE_BACK"))));
