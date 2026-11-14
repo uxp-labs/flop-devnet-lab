@@ -238,6 +238,18 @@ describe("D5: the library's own failures", () => {
     expect(JSON.stringify(e)).not.toContain("leaked");
   });
 
+  it("D7: a library whose verify says true to anything still gives false for a key not 32 bytes or a signature not 64 bytes", async () => {
+    vi.resetModules();
+    vi.doMock("@scure/sr25519", async (orig) => ({ ...(await orig<typeof import("@scure/sr25519")>()), verify: () => true }));
+    const k = await import("../src/channel/key.js");
+    const pub = new Uint8Array(32).fill(1);
+    expect(k.verifyChannelSignature({ publicKey: pub, message: new Uint8Array(1), signature: new Uint8Array(64) })).toBe(true);
+    expect(k.verifyChannelSignature({ publicKey: pub.subarray(0, 31), message: new Uint8Array(1), signature: new Uint8Array(64) })).toBe(false);
+    expect(k.verifyChannelSignature({ publicKey: new Uint8Array(33), message: new Uint8Array(1), signature: new Uint8Array(64) })).toBe(false);
+    expect(k.verifyChannelSignature({ publicKey: pub, message: new Uint8Array(1), signature: new Uint8Array(63) })).toBe(false);
+    expect(k.verifyChannelSignature({ publicKey: pub, message: new Uint8Array(1), signature: new Uint8Array(65) })).toBe(false);
+  });
+
   it("a library that throws a value that is not an Error: SIGN_FAILED, naming its kind", async () => {
     const { key, ChannelErrorOf } = await keyWith(() => {
       throw "a text with ab".repeat(4);
