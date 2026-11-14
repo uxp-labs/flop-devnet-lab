@@ -14,5 +14,7 @@ Done:
 - attack 9: source read; research tests 328 and 44 pass
 - attack 10: test/review-a1-findings.test.ts, 6 HOLDS pass on branch, all 6 fail on main copy
 - attack 3 and 4: test/review-a1-signer.test.ts, 14 HOLDS
+- attack 12: scope holds (only imd-flop src, test, README, two script lines); src typechecks; changed and new tests typecheck but for errors that are on main too
+- attack 11 running: /tmp/rev-a1-scripts/mutate.mjs over 25 mutants, results in /tmp/rev-a1-scripts/results.jsonl
 Next:
 - mutations (11), words and scope (12, 13)
