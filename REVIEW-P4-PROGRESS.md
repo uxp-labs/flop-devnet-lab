@@ -9,6 +9,8 @@ Done:
 
 - test/review-p4-plain-input.test.ts (R1 returning refuse, R2 ChannelError open, R3 functions open)
 
+- test/review-p4-secret.test.ts (R6 inspect shows cause, R7 class name, R8 registry through a patched includes; HOLDS: no oracle, subarray and JSON.stringify patches shown)
+
 Next:
 - review-p4-plain-input (R1), review-p4-frozen (R2, R3), review-p4-secret (R6, R7, R8), review-p4-request, review-p4-layouts, review-p4-words (R9)
 - deps (attack 9), scans and mutants in /tmp/rv-mut (attacks 10 to 12), typecheck, full npm test
