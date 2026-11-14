@@ -19,7 +19,7 @@ function files(dir: string): string[] {
 }
 const text = (p: string) => readFileSync(p, "utf8");
 const rel = (p: string) => relative(PKG, p);
-const MINER = files(DIR);
+const ALL = files(DIR);
 
 function specifiers(t: string): string[] {
   const out: string[] = [];
@@ -33,11 +33,16 @@ const SHARED = ["../plain-input.js", "../freeze.js", "../outside-json.js", "../s
 const ALLOWED_OUTSIDE = new Set([...SHARED, "../channel/bytes.js", "../channel/key.js", "@noble/hashes/blake2.js"]);
 const isSibling = (s: string) => /^\.\/[a-z-]+\.js$/.test(s);
 
+/** The ten files of P6a, the miner's words with no I/O. The scans below hold these. */
 const FILES = ["check.ts", "errors.ts", "expected.ts", "forms.ts", "identity.ts", "input.ts", "leaf.ts", "money.ts", "verify.ts", "wire.ts"];
+/** The seven files of P6b, the client part that talks. test/miner-client-source.test.ts holds their scans (S1). */
+const CLIENT_FILES = ["calls.ts", "client-errors.ts", "client.ts", "endpoint.ts", "http.ts", "requests.ts", "timing.ts"];
+const MINER = ALL.filter((f) => FILES.includes(relative(DIR, f)));
 
 describe("W1: the files of src/miner", () => {
-  it(`are exactly ${FILES.length}, flat, with no barrel file`, () => {
-    expect(MINER.map((f) => relative(DIR, f)).sort()).toEqual(FILES);
+  it(`are exactly ${FILES.length + CLIENT_FILES.length}, flat, with no barrel file: P6a's ten and P6b's seven`, () => {
+    expect(ALL.map((f) => relative(DIR, f)).sort()).toEqual([...FILES, ...CLIENT_FILES].sort());
+    expect(MINER).toHaveLength(FILES.length);
   });
 });
 
@@ -52,7 +57,7 @@ describe("W2, T7: what each file imports", () => {
     expect(MINER.every((f) => specifiers(text(f)).length > 0)).toBe(true);
   });
 
-  it("each sibling it imports is a file of src/miner", () => {
+  it("each sibling it imports is a file of P6a: none of the client part", () => {
     for (const f of MINER) for (const s of specifiers(text(f)).filter(isSibling)) expect(FILES).toContain(s.slice(2).replace(/\.js$/, ".ts"));
   });
 
@@ -151,7 +156,7 @@ describe("W3: every export of src/miner is a function, a text, a number or a fro
     return out;
   }
 
-  for (const file of FILES) {
+  for (const file of [...FILES, ...CLIENT_FILES]) {
     it(`${file}, imported first and alone`, async () => {
       vi.resetModules();
       const mod = (await import(join(DIR, file.replace(/\.ts$/, ".js")))) as Record<string, unknown>;

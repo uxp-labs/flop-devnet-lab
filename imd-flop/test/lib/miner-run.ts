@@ -37,9 +37,9 @@ export function countedKey(seedByte = 3): Counted {
   return { key, signs };
 }
 
-/** The money of a turn that holds the scenario's G_n of 38 (a price of 3e15 per G_n and a base of 1, as R2's settles show). */
+/** Synthetic money bounds that hold the scenario's G_n of 38. No value here is a chain value. */
 export const MONEY: TurnMoney = Object.freeze({ gnCeiling: 1000n, pricePerGn: 3_000_000_000_000_000n, basePerTurn: 1n, floor: 1n, budget: 200_000_000_000_000_000n });
-/** The payable of the honest run: the scenario's G_n times the price plus 2, as R2's settles show. */
+/** A synthetic payable of the honest run, inside the budget and above the chain's tariff. */
 export const PAYABLE = 38n * 3_000_000_000_000_000n + 2n;
 
 export interface Rig {

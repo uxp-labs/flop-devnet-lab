@@ -8,7 +8,10 @@ import { describe, expect, it } from "vitest";
 
 const SRC = join(import.meta.dirname, "..", "src");
 const MINER = join(SRC, "miner");
-const files = readdirSync(MINER).filter((f) => f.endsWith(".ts")).sort();
+const all = readdirSync(MINER).filter((f) => f.endsWith(".ts")).sort();
+/** P6b's seven files, the client part that talks, are held by test/miner-client-source.test.ts (S1); these scans hold P6a's ten. */
+const CLIENT = ["calls.ts", "client-errors.ts", "client.ts", "endpoint.ts", "http.ts", "requests.ts", "timing.ts"];
+const files = all.filter((f) => !CLIENT.includes(f));
 const code = (f: string) =>
   readFileSync(f, "utf8")
     .replace(/\/\*[\s\S]*?\*\//g, "")
@@ -20,7 +23,8 @@ function walk(dir: string): string[] {
 }
 
 describe("Q8 by the reviewer's own scan", () => {
-  it("HOLDS: src/miner holds ten files, and each imports only its brief's list", () => {
+  it("HOLDS: src/miner holds P6a's ten files and P6b's seven, and each of the ten imports only its brief's list", () => {
+    expect(all).toEqual([...files, ...CLIENT].sort());
     expect(files).toEqual(["check.ts", "errors.ts", "expected.ts", "forms.ts", "identity.ts", "input.ts", "leaf.ts", "money.ts", "verify.ts", "wire.ts"]);
     const allowed = /^(\.\/[a-z-]+\.js|\.\.\/channel\/[a-z-]+\.js|\.\.\/(plain-input|freeze|outside-json|server-text|errors|ss58)\.js|@noble\/hashes\/[a-z0-9]+\.js)$/;
     for (const f of files) for (const s of specifiers(code(join(MINER, f)))) expect(s, `${f}: ${s}`).toMatch(allowed);
