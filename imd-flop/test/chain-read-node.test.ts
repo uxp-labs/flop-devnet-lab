@@ -154,7 +154,7 @@ describe("X8: the caps, each a number with its reason, and held at its edge", ()
 });
 
 describe("C4: the frame cap the node's transport hands rpcCall", () => {
-  it("is at least the largest answer any read accepts plus the frame around it, computed from CAPS", () => {
+  it("is the largest answer any read accepts plus FRAME_WRAPPER_CHARS for the frame around it, computed from CAPS", () => {
     const largest = 2 + 2 * Math.max(...Object.values(CAPS));
     const wrapper = JSON.stringify({ jsonrpc: "2.0", id: 1, result: "" }).length;
     expect(wrapper).toBe(36);
