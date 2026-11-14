@@ -178,9 +178,9 @@ describe("H1: the signer and the runtime id are read by their named own fields",
   it("a Proxy signer and a Proxy runtime id: the get trap is never called, and the call signs", () => {
     const device = testDevice();
     let gets = 0;
-    const trap = { get: (t: object, k: PropertyKey, r: unknown) => (gets++, Reflect.get(t, k, r)) };
-    const signer = new Proxy({ publicKey: device.publicKey, sign: device.sign }, trap);
-    const runtime = new Proxy({ ...RUNTIME_ID }, trap);
+    const trap = <T extends object>(): ProxyHandler<T> => ({ get: (t, k, r) => (gets++, Reflect.get(t, k, r)) });
+    const signer = new Proxy({ publicKey: device.publicKey, sign: device.sign }, trap());
+    const runtime = new Proxy({ ...RUNTIME_ID }, trap());
     const out = signSessionCall({ ...base(), runtime, signer });
     expect(gets).toBe(0);
     expect(device.calls).toHaveLength(1);
