@@ -9,7 +9,7 @@
 import { blake2b } from "@noble/hashes/blake2.js";
 import { bytesOf, hexOf, takeFields, uintOf, utf8Of } from "./bytes.js";
 import { refuse } from "./errors.js";
-import { freezeFunction } from "./freeze.js";
+import { freezeFunction } from "../freeze.js";
 
 /** The first text of the request message. */
 export const REQUEST_DOMAIN = "flop-session-request-v1";

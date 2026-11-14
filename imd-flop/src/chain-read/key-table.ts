@@ -1,6 +1,6 @@
 // Written by scripts/read-key-table.mjs from committed files. Do not edit: run the script again.
 // test/chain-read-keys.test.ts derives it again and compares byte for byte.
-import { deepFreeze } from "./freeze.js";
+import { deepFreeze } from "../freeze.js";
 import type { KeyTable } from "./key-table-types.js";
 
 export const SOURCES = deepFreeze([

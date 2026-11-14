@@ -16,7 +16,7 @@ import { registerSecret } from "../secrets.js";
 import { requestHeaders, REQUEST_FIELDS, sessionRequestMessage, type RequestHeaders, type RequestHeadersInput, type SessionRequestInput } from "./auth.js";
 import { bytesOf, snapshotOf, takeFields } from "./bytes.js";
 import { refuse } from "./errors.js";
-import { freezeFunction } from "./freeze.js";
+import { freezeFunction } from "../freeze.js";
 import { receiptMessage, turnAckMessage, type ReceiptInput, type TurnAckInput } from "./transcript.js";
 
 /** A message and the key's signature over it, both fresh. */

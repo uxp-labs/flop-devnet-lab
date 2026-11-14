@@ -203,7 +203,7 @@ export function renderRuntimes(runtimes) {
   return [
     "// Written by scripts/chain-table.mjs from recorded metadata (its SOURCES). Do not edit by hand:",
     "// test/chain-table.test.ts derives it again and compares with this file byte for byte.",
-    'import { deepFreeze } from "./freeze.js";',
+    'import { deepFreeze } from "../freeze.js";',
     'import type { Runtime } from "./table.js";',
     "",
     "/** Frozen here, where it is defined, so no module can change it before the encoder reads it. */",

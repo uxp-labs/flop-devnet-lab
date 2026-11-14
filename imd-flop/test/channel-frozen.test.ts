@@ -7,7 +7,7 @@ import { describe, expect, it } from "vitest";
 import * as auth from "../src/channel/auth.js";
 import * as bytes from "../src/channel/bytes.js";
 import * as errors from "../src/channel/errors.js";
-import * as freeze from "../src/channel/freeze.js";
+import * as freeze from "../src/freeze.js";
 import * as key from "../src/channel/key.js";
 import * as transcript from "../src/channel/transcript.js";
 import { plainInput } from "../src/plain-input.js";

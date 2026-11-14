@@ -5,7 +5,7 @@
  */
 import { plainInput } from "../plain-input.js";
 import { refuse } from "./errors.js";
-import { freezeFunction } from "./freeze.js";
+import { freezeFunction } from "../freeze.js";
 
 const PLAIN = plainInput(refuse);
 

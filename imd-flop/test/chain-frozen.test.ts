@@ -43,7 +43,7 @@ function writable(o: object): string[] {
 
 describe("H7: every exported object of src/chain is frozen at its definition", () => {
   it("the files of src/chain are the ones this test walks", () => {
-    expect(FILES).toEqual(["calls.ts", "describe.ts", "era.ts", "errors.ts", "extrinsic.ts", "fields.ts", "freeze.ts", "payload.ts", "reader.ts", "runtimes.ts", "scale.ts", "shape.ts", "table.ts"]);
+    expect(FILES).toEqual(["calls.ts", "describe.ts", "era.ts", "errors.ts", "extrinsic.ts", "fields.ts", "payload.ts", "reader.ts", "runtimes.ts", "scale.ts", "shape.ts", "table.ts"]);
   });
 
   for (const file of FILES) {

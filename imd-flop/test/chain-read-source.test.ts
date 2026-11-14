@@ -100,7 +100,6 @@ describe("A1, T5: the files of src/chain-read", () => {
       "bytes.ts",
       "cross-check.ts",
       "door.ts",
-      "freeze.ts",
       "key-table-types.ts",
       "key-table.ts",
       "keys.ts",

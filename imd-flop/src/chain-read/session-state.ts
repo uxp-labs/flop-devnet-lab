@@ -6,7 +6,7 @@
  * below are what this reader turns them into, and a runtime whose shape states them otherwise is unknown. Pure.
  */
 import { isHex } from "./bytes.js";
-import { deepFreeze } from "./freeze.js";
+import { deepFreeze } from "../freeze.js";
 import type { DoorValue } from "./door.js";
 import type { FieldType, RecordField, RuntimeLine } from "./key-table-types.js";
 import { type Got, known, unknown } from "./result.js";

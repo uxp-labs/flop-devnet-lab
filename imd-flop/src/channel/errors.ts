@@ -4,7 +4,7 @@
  * in part.
  */
 import { CliError, EXIT } from "../errors.js";
-import { freezeFunction } from "./freeze.js";
+import { freezeFunction } from "../freeze.js";
 
 export const CHANNEL_REFUSAL = Object.freeze({
   /** A byte value of the wrong length: a 32 byte id, key or hash, a 16 byte nonce, a 64 byte signature, a seed. */
