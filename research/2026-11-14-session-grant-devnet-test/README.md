@@ -87,7 +87,7 @@ on `window` and read in a second call, as in the last batch.
 | `judge.mjs`, `check.mjs` | Judge a results file: each claim pass, differ, incomplete, not run or not needed, and a verdict. |
 | `replay.mjs` | Runs the tool again over each committed tape of a committed run folder (H16). |
 | `walk.mjs`, `rehearsal-run/` | The rehearsal's walk of the record over the rerun's recording, and the run folder it wrote. |
-| `lib.mjs`, `run.mjs`, `fixtures.mjs`, `rerun-node.mjs`, `pane.mjs`, `records.mjs`, `*.test.mjs` | Helpers and the offline tests. |
+| `lib.mjs`, `fixtures.mjs`, `rerun-node.mjs`, `pane.mjs`, `records.mjs`, `*.test.mjs` | Helpers and the offline tests. |
 | `PROGRESS.md` | The builder's notes, for a successor. |
 
 What this folder imports from the last batch's folder, `research/2026-11-12-encoder-devnet-test/`,
