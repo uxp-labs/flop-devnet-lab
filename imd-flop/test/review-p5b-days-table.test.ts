@@ -39,7 +39,7 @@ describe("review P5b, L2: a runtime whose longest session is shorter than the da
     expect([r.code === 0, r.out]).toEqual([false, ""]);
   });
 
-  it("HOLDS: RP5B-7 (the lead's L2): the refusal's words do not name the days asked and the most days the runtime allows; they are the encoder's, in blocks", async () => {
+  it("HOLDS: RP5B-7 (the lead's L2): the refusal's words name the days asked and the most days the runtime allows (before the fix they were the encoder's, in blocks)", async () => {
     const r = await session(seatHome(), ["grant", "--owner", OWNER.ss58, "--days", String(most + 1)], transportOf(scriptAt("A10")));
     expect(r.err).toMatch(new RegExp(`--days ${most + 1}\\b`));
     expect(r.err).toMatch(new RegExp(`\\b${most} (days|epochs)\\b`));

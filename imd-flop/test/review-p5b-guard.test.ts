@@ -93,7 +93,7 @@ describe("review P5b, attack 4: every bad owner exits 2, prints nothing and asks
   });
   for (const [sub, extra] of SUBS) {
     for (const [name, owner] of [["a two byte encoding of prefix 42", twoByte42], ["a reserved first byte 0x8a that reads as prefix 42", reserved42]]) {
-      it(`HOLDS: RP5B-2: ${sub}: --owner as ${name}, not an SS58 address of prefix 42, is taken as the owner`, async () => {
+      it(`HOLDS: RP5B-2: ${sub}: --owner as ${name}, not a canonical SS58 address of prefix 42, is refused with exit 2 before any node call (before the fix it was taken as the owner)`, async () => {
         const log: Log = [];
         const r = await session(seatHome(), argsOf(sub, extra, owner), transportOf(scriptAt("A10"), log));
         expect({ code: r.code, out: r.out, calls: log.length }).toEqual({ code: 2, out: "", calls: 0 });
@@ -102,12 +102,12 @@ describe("review P5b, attack 4: every bad owner exits 2, prints nothing and asks
   }
 
   for (const [sub, extra] of SUBS) {
-    it(`HOLDS: RP5B-3: ${sub}: --owner given twice (a bad one, then the owner) is not refused: the last one is taken`, async () => {
+    it(`HOLDS: RP5B-3: ${sub}: --owner given twice (a bad one, then the owner) is refused with exit 2 before any node call (before the fix the last one was taken)`, async () => {
       const log: Log = [];
       const r = await session(seatHome(), [sub, "--owner", DEV2.ss58.slice(0, -2), "--owner", OWNER.ss58, ...extra], transportOf(scriptAt("A10"), log));
       expect({ code: r.code, out: r.out, calls: log.length }).toEqual({ code: 2, out: "", calls: 0 });
     });
-    it(`HOLDS: RP5B-3: ${sub}: --owner given twice (dev2, then the owner) is not refused: which owner the call is for is the last flag's`, async () => {
+    it(`HOLDS: RP5B-3: ${sub}: --owner given twice (dev2, then the owner) is refused with exit 2 before any node call (before the fix the call was for the last flag's owner)`, async () => {
       const log: Log = [];
       const r = await session(seatHome(), [sub, "--owner", DEV2.ss58, "--owner", OWNER.ss58, ...extra], transportOf(scriptAt("A10"), log));
       expect({ code: r.code, out: r.out, calls: log.length }).toEqual({ code: 2, out: "", calls: 0 });
@@ -149,7 +149,7 @@ describe("review P5b, attack 7: --days", () => {
       expect({ code: r.code, out: r.out, calls: log.length }).toEqual({ code: 2, out: "", calls: 0 });
     });
   }
-  it("HOLDS: RP5B-3: grant --days given twice (1, then 10) is not refused: the grant prints a call of the last value", async () => {
+  it("HOLDS: RP5B-3: grant --days given twice (1, then 10) is refused with exit 2 and prints no call (before the fix the grant printed a call of the last value)", async () => {
     const log: Log = [];
     const r = await session(seatHome(), ["grant", "--owner", OWNER.ss58, "--days", "1", "--days", "10", "--json"], transportOf(scriptAt("A10"), log));
     expect({ code: r.code, out: r.out, calls: log.length }).toEqual({ code: 2, out: "", calls: 0 });

@@ -79,7 +79,7 @@ describe("review P5b, attack 5: grant and revoke at each edge of the stored stat
     }
   });
 
-  it("HOLDS: RP5B-4 (the lead's L3): revoke over a session that is active but past its expiry (A6, expires_at set to the head minus 1) calls it an active session", async () => {
+  it("HOLDS: RP5B-4 (the lead's L3): revoke over a session that is active but past its expiry (A6, expires_at set to the head minus 1) does not call it an active session (before the fix it did)", async () => {
     const r = await run("revoke", withField(scriptAt("A6"), K1.sessions, "session", "expires_at", BigInt(headOf("A6") - 1)));
     expect(r.code).toBe(0);
     // grant, on the same state, says the record is past its expiry; revoke must not say less.
@@ -88,7 +88,7 @@ describe("review P5b, attack 5: grant and revoke at each edge of the stored stat
 });
 
 describe("review P5b, attack 6: show, unknown and the room", () => {
-  it("HOLDS: RP5B-5 (the lead's L1): show with the seat's local caps unknown (no cap) at A6, where all else is known, exits 0", async () => {
+  it("HOLDS: RP5B-5 (the lead's L1): show with the seat's local caps unknown (no cap) at A6, where all else is known, exits 1 (before the fix it exited 0)", async () => {
     const r = await session(seatHome(DEV1, null), ["show", "--owner", OWNER.ss58, "--json"], transportOf(scriptAt("A6")));
     expect(r.json().local_caps.state).toBe("unknown");
     expect(r.code).toBe(1);
@@ -160,7 +160,7 @@ describe("review P5b, attack 6: show, unknown and the room", () => {
     expect((await run("show", s, false)).out).toContain("allowed_pallets  [0xfffe43]");
   });
 
-  it("HOLDS: RP5B-6 (the lead's L4): the room is larger than the chain allows when the caps are above the breaker's spend per period (A6 with the three caps set to 4 times CircuitBreakerMaxSpend, nothing spent, no breaker stored), and the words do not say the breaker's limits are left out", async () => {
+  it("HOLDS: RP5B-6 (the lead's L4): when the caps are above the breaker's spend per period (A6 with the three caps set to 4 times CircuitBreakerMaxSpend, nothing spent, no breaker stored) the room is within that limit or its line says the breaker's limits are not counted (before the fix neither held)", async () => {
     let s = withNone(scriptAt("A6"), K1.breakers);
     for (const f of ["spending_cap", "per_tx_limit", "daily_cap"]) s = withField(s, K1.sessions, "session", f, 4n * MAX_SPEND);
     for (const f of ["spent", "epoch_spent"]) s = withField(s, K1.sessions, "session", f, 0n);
@@ -175,7 +175,7 @@ describe("review P5b, attack 6: show, unknown and the room", () => {
     expect({ bounded, said }).not.toEqual({ bounded: false, said: false });
   });
 
-  it("HOLDS: RP5B-6 (the lead's L4): a breaker at CircuitBreakerMaxTxs calls in the current period (A6, period_start at the head, tx_count at the max) leaves the room known and above 0", async () => {
+  it("HOLDS: RP5B-6 (the lead's L4): with a breaker at CircuitBreakerMaxTxs calls in the current period (A6, period_start at the head, tx_count at the max) the room is not shown as known and above 0 without a word of the breaker (before the fix it was)", async () => {
     const h = BigInt(headOf("A6"));
     const s = withField(withField(scriptAt("A6"), K1.breakers, "breaker", "period_start", h), K1.breakers, "breaker", "tx_count", MAX_TXS);
     const r = await run("show", s);
