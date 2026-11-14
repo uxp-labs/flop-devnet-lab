@@ -19,6 +19,8 @@ import { appendLedger, latestAttempts, latestLineOf, LedgerLockError, reportedSp
 import { listReceipts, readSavedReceipt, receiptVerdicts, refreshReceipt, type SavedReceipt } from "./receipt-store.js";
 import { blank, classifyReceipt, receiptLine } from "./receipts.js";
 import { outsideText, outsideValue, registerSecret } from "./secrets.js";
+import type { Transport } from "./chain-read/node.js";
+import { SESSION_USAGE, sessionCommand } from "./session/command.js";
 
 export interface IO {
   out: (s: string) => void;
@@ -27,6 +29,8 @@ export interface IO {
   fetch?: Fetch;
   /** Test hook: supply the provider instance (lets tests count calls). */
   provider?: Provider;
+  /** Test hook: the chain reads' transport for the session commands (P5b, rule C5). Else the network's node. */
+  transport?: Transport;
 }
 
 const HELP = `imd-flop: reference companion CLI for "FLOP, by choice" (devnet rehearsal)
@@ -44,6 +48,10 @@ const HELP = `imd-flop: reference companion CLI for "FLOP, by choice" (devnet re
       [--check-job] [--mock-scenario ok|timeout|settled|key_expired|estimate_error]
   status [--json]
   receipt <request_id> [--refresh] [--json]
+  session grant --owner <ss58> --days <1..10>   (prints the owner's create_session call; a day is one epoch of the chain's daily cap)
+  session revoke --owner <ss58>                 (prints the owner's revoke_session call)
+  session show --owner <ss58>                   (reads the session at the finalized head and the room left)
+      The owner signs the printed call in his own wallet. These commands sign, send and write nothing.
 
 Global: --seat <tokenId>, --json. Data: $IMD_FLOP_HOME or ~/.imd-flop. Provider defaults to mock.
 Paid run --provider flop needs ETH_RPC_URL reporting chain id 1 and a live devnet genesis equal to the pinned hash.
@@ -54,8 +62,18 @@ It refuses on a wrong chain, a reset, or an unreadable response, before any paid
 type Values = Record<string, any>;
 function parse(args: string[], options: ParseArgsConfig["options"]): { values: Values; positionals: string[] } {
   try {
-    return parseArgs({ args, options: { json: { type: "boolean" }, seat: { type: "string" }, ...options }, allowPositionals: true, strict: true });
+    const parsed = parseArgs({ args, options: { json: { type: "boolean" }, seat: { type: "string" }, ...options }, allowPositionals: true, strict: true, tokens: true });
+    // An option given more than once is a usage error for every command, boolean ones too. The count is of the
+    // parser's own option tokens, so an argument after `--` (a positional) is never counted. The tool does not guess which one was meant.
+    const seen = new Set<string>();
+    for (const tok of parsed.tokens ?? []) {
+      if (tok.kind !== "option") continue;
+      if (seen.has(tok.name)) throw new CliError(`--${tok.name} is given more than once: give each option once`, EXIT.USAGE);
+      seen.add(tok.name);
+    }
+    return { values: parsed.values, positionals: parsed.positionals };
   } catch (e) {
+    if (e instanceof CliError) throw e;
     throw new CliError((e as Error).message, EXIT.USAGE);
   }
 }
@@ -453,6 +471,14 @@ export async function main(argv: string[], io: IO): Promise<number> {
           if (ledgerRow) io.out(`  ledger: state ${ledgerRow.state}, spend ${blank(ledgerRow.spend)}${ledgerRow.state === "timeout_unknown" ? " (unknown: timed out, not retried)" : ""}`);
         }
         return EXIT.OK;
+      }
+
+      case "session": {
+        const { values, positionals } = parse(rest.slice(1), { owner: { type: "string" }, days: { type: "string" } });
+        if (positionals.length > 0) throw new CliError(SESSION_USAGE, EXIT.USAGE);
+        const cfg = loadConfig(h);
+        const ctx = { home: h, seat: activeSeat(h, values.seat), net: network(cfg.network), caps: cfg.caps, owner: values.owner, days: values.days, transport: io.transport };
+        return await sessionCommand(rest[0], ctx, io.out, values.json === true);
       }
 
       default:
