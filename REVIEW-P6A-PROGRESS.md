@@ -10,5 +10,7 @@ Done:
 - Q10: 81 own mutants in /tmp/rev-p6a (tools in /tmp/rev-p6a-tools), 73 killed by builder tests, 8 alive: v21 w4 w18 w22 equivalent; w10 i3 i5 w20 killed by test/review-p6a-edges.test.ts (4 HOLDS). Builder's 7 equivalents (F7 F10 C2 R3 R4 V23 V32) checked: hold.
 - Full npm test 1: 7 failed, of them channel-source's rule (only sr25519-reference.ts imports @polkadot): my third writing had used @polkadot/wasm-crypto blake2b. Fixed: own RFC 7693 BLAKE2b in the third writing, held to the RFC abc vector.
 
+- Full npm test 2 at 6461a6d: 122 files, 2943 passed, 6 failed (the six DEFECT tests only), 1 skipped.
+
 Next:
-- Q11 README and deviations are read (source only). Full npm test once, push, GitHub checks, report.
+- Report handed back. Nothing else is open.
