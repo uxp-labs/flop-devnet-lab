@@ -9,6 +9,7 @@
 import { blake2b } from "@noble/hashes/blake2.js";
 import { bytesOf, hexOf, takeFields, uintOf, utf8Of } from "./bytes.js";
 import { refuse } from "./errors.js";
+import { freezeFunction } from "./freeze.js";
 
 /** The first text of the request message. */
 export const REQUEST_DOMAIN = "flop-session-request-v1";
@@ -93,6 +94,7 @@ export function sessionRequestMessage(input: SessionRequestInput): Uint8Array {
   const bodyHash = hexOf(blake2b(body, { dkLen: 32 }));
   return utf8Of(JSON.stringify([REQUEST_DOMAIN, channel, method, path, bodyHash, timestamp, nonce, challenge]), "the request message");
 }
+freezeFunction(sessionRequestMessage);
 
 /** The five headers of a signed request, as texts, in a frozen object. */
 export function requestHeaders(input: RequestHeadersInput): RequestHeaders {
@@ -105,3 +107,4 @@ export function requestHeaders(input: RequestHeadersInput): RequestHeaders {
     "x-flop-signature": hexOf(bytesOf(f.signature, 64, "headers signature")),
   });
 }
+freezeFunction(requestHeaders);

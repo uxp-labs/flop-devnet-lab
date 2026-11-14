@@ -7,6 +7,7 @@
  */
 import { blake2b } from "@noble/hashes/blake2.js";
 import { asciiOf, bytesOf, concat, takeFields, uintLE, uintOf } from "./bytes.js";
+import { freezeFunction } from "./freeze.js";
 
 /** The domain text of the channel id, 23 ASCII bytes. */
 export const CHANNEL_ID_DOMAIN = "FLOP/COMPUTE_CHANNEL/ID";
@@ -70,6 +71,7 @@ export function channelId(input: ChannelIdInput): Uint8Array {
   const preimage = concat(asciiOf(CHANNEL_ID_DOMAIN, "the channel id domain"), Uint8Array.of(CHANNEL_ID_VERSION), genesis, agent, miner, uintLE(nonce, 8));
   return blake2b(preimage, { dkLen: 32 });
 }
+freezeFunction(channelId);
 
 /**
  * The receipt message, 125 bytes, not hashed:
@@ -87,6 +89,7 @@ export function receiptMessage(input: ReceiptInput): Uint8Array {
   const payable = uintOf("u128", f.payable, "receipt payable");
   return concat(asciiOf(RECEIPT_DOMAIN, "the receipt domain"), Uint8Array.of(RECEIPT_VERSION), id, root, uintLE(gn, 16), uintLE(payable, 16));
 }
+freezeFunction(receiptMessage);
 
 /**
  * The turn ack message, 84 bytes, not hashed, with no domain:
@@ -105,3 +108,4 @@ export function turnAckMessage(input: TurnAckInput): Uint8Array {
   const recv = uintOf("u64", f.agentRecvMs, "turn ack agentRecvMs");
   return concat(id, uintLE(BigInt(turn), 4), leaf, uintLE(send, 8), uintLE(recv, 8));
 }
+freezeFunction(turnAckMessage);

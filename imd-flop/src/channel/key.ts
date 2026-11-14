@@ -16,6 +16,7 @@ import { registerSecret } from "../secrets.js";
 import { requestHeaders, REQUEST_FIELDS, sessionRequestMessage, type RequestHeaders, type RequestHeadersInput, type SessionRequestInput } from "./auth.js";
 import { bytesOf, snapshotOf, takeFields } from "./bytes.js";
 import { refuse } from "./errors.js";
+import { freezeFunction } from "./freeze.js";
 import { receiptMessage, turnAckMessage, type ReceiptInput, type TurnAckInput } from "./transcript.js";
 
 /** A message and the key's signature over it, both fresh. */
@@ -83,16 +84,16 @@ function keyFromSeed(seed: Uint8Array): ChannelKey {
   };
 
   return Object.freeze({
-    publicKey: () => Uint8Array.from(publicKey),
-    signReceipt: (fields: ReceiptInput) => signed(receiptMessage(fields)),
-    signTurnAck: (fields: TurnAckInput) => signed(turnAckMessage(fields)),
-    signRequest: (fields: SessionRequestInput) => {
+    publicKey: freezeFunction(() => Uint8Array.from(publicKey)),
+    signReceipt: freezeFunction((fields: ReceiptInput) => signed(receiptMessage(fields))),
+    signTurnAck: freezeFunction((fields: TurnAckInput) => signed(turnAckMessage(fields))),
+    signRequest: freezeFunction((fields: SessionRequestInput) => {
       const f = snapshotOf(fields, REQUEST_FIELDS, "request input");
       // The snapshot's values are checked by the two functions it is handed to, as a caller's would be.
       const s = signed(sessionRequestMessage(f as unknown as SessionRequestInput));
       const headers = requestHeaders({ channelId: f.channelId, timestampMs: f.timestampMs, nonce: f.nonce, challenge: f.challenge, signature: s.signature } as unknown as RequestHeadersInput);
       return Object.freeze({ message: s.message, signature: Uint8Array.from(s.signature), headers });
-    },
+    }),
   });
 }
 
@@ -100,6 +101,7 @@ function keyFromSeed(seed: Uint8Array): ChannelKey {
 export function newChannelKey(): ChannelKey {
   return keyFromSeed(Uint8Array.from(randomBytes(SEED_BYTES)));
 }
+freezeFunction(newChannelKey);
 
 /**
  * The same key from a given 32 byte seed. For tests alone (S38): no file under src but this one names it, and a
@@ -109,6 +111,7 @@ export function channelKeyFromSeed(input: { readonly seed: Uint8Array }): Channe
   const f = takeFields(input, ["seed"], "channelKeyFromSeed input");
   return keyFromSeed(bytesOf(f.seed, SEED_BYTES, "channelKeyFromSeed seed"));
 }
+freezeFunction(channelKeyFromSeed);
 
 /**
  * True only when the library's verify returns true. False when the public key is not 32 bytes, the signature is
@@ -122,3 +125,4 @@ export function verifyChannelSignature(input: VerifyInput): boolean {
   const signature = bytesOf(f.signature, null, "verify signature");
   return verifies(publicKey, message, signature);
 }
+freezeFunction(verifyChannelSignature);

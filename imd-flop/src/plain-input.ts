@@ -58,7 +58,17 @@ const BUFFER = getter("buffer");
 const OFFSET = getter("byteOffset");
 const LENGTH = getter("byteLength");
 
-/** The checks of this module, refusing through `refuse`. The object returned is frozen. */
+/**
+ * Freezes a function and its prototype object, with plain Object.freeze: this module imports nothing. Not exported
+ * and not returned.
+ */
+const freezeFn = <F extends Function>(f: F): F => {
+  const d = Object.getOwnPropertyDescriptor(f, "prototype");
+  if (d !== undefined && "value" in d && typeof d.value === "object" && d.value !== null) Object.freeze(d.value);
+  return Object.freeze(f);
+};
+
+/** The checks of this module, refusing through `refuse`. The object returned is frozen, and so is each function in it. */
 export function plainInput(refuse: PlainInputRefuse): PlainInput {
   /** Refuses through the user's function. If that function returns, the check throws its own error: nothing is handed back. */
   function fail(code: PlainInputCode, message: string): never {
@@ -121,5 +131,6 @@ export function plainInput(refuse: PlainInputRefuse): PlainInput {
     }
   }
 
-  return Object.freeze({ bytesOf, takeFields, ownKeys, ownValue, uintOf });
+  return Object.freeze({ bytesOf: freezeFn(bytesOf), takeFields: freezeFn(takeFields), ownKeys: freezeFn(ownKeys), ownValue: freezeFn(ownValue), uintOf: freezeFn(uintOf) });
 }
+freezeFn(plainInput);

@@ -5,6 +5,7 @@
  */
 import { plainInput } from "../plain-input.js";
 import { refuse } from "./errors.js";
+import { freezeFunction } from "./freeze.js";
 
 const PLAIN = plainInput(refuse);
 
@@ -26,6 +27,7 @@ export function snapshotOf(value: unknown, names: readonly string[], what: strin
   for (const n of names) out[n] = ArrayBuffer.isView(raw[n]) ? bytesOf(raw[n], null, `${what}.${n}`) : raw[n];
   return out;
 }
+freezeFunction(snapshotOf);
 
 /** The little endian bytes of `value` in exactly `width` bytes. The caller has checked the range. */
 export function uintLE(value: bigint, width: number): Uint8Array {
@@ -37,6 +39,7 @@ export function uintLE(value: bigint, width: number): Uint8Array {
   }
   return out;
 }
+freezeFunction(uintLE);
 
 /** The parts one after another, in a fresh array. */
 export function concat(...parts: readonly Uint8Array[]): Uint8Array {
@@ -48,6 +51,7 @@ export function concat(...parts: readonly Uint8Array[]): Uint8Array {
   }
   return out;
 }
+freezeFunction(concat);
 
 /** The bytes of an ASCII text, fresh at each call. A domain text is kept as its text and made into bytes here (rule A5). */
 export function asciiOf(text: string, what: string): Uint8Array {
@@ -59,6 +63,7 @@ export function asciiOf(text: string, what: string): Uint8Array {
   }
   return out;
 }
+freezeFunction(asciiOf);
 
 /** A lone surrogate: with the u flag a well formed pair never matches. */
 const LONE_SURROGATE = /\p{Cs}/u;
@@ -69,6 +74,7 @@ export function utf8Of(text: unknown, what: string): Uint8Array {
   if (LONE_SURROGATE.test(text)) refuse("BAD_INPUT", `${what} holds a lone surrogate, so it has no exact UTF-8 form`);
   return new TextEncoder().encode(text);
 }
+freezeFunction(utf8Of);
 
 const DIGITS = "0123456789abcdef";
 
@@ -78,3 +84,4 @@ export function hexOf(bytes: Uint8Array): string {
   for (const b of bytes) s += DIGITS[b >> 4]! + DIGITS[b & 15]!;
   return s;
 }
+freezeFunction(hexOf);
