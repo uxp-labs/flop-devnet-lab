@@ -21,7 +21,7 @@ Reviewed head: d408cc8. Tests in imd-flop/test/review-p6b-*.test.ts, rig in imd-
 - mutants file /tmp/rev-p6b-tools/mutants.json present: 76 entries (progress said 77)
 
 ## Next
-- gaps test (attack 3 per fault URL/method/headers; attack 4 lone surrogate escape through the run)
+- gaps test done: review-p6b-gaps, 4 HOLDS pass (attack 3 per fault; attack 4 lone surrogate escape)
 - npm test whole, remove this file, push, gh checks, report
 
 ## Findings so far
