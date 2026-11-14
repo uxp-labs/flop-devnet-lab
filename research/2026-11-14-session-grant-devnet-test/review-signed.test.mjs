@@ -136,7 +136,7 @@ function atSign(callInFile) {
   return { run, r };
 }
 
-test("DEFECT RG19-3: send-file holds the signed file to the tool's call the record holds, not to whatever calls/<id>.json says when it is read", () => {
+test("HOLDS: RG19-3: send-file holds the signed file to the tool's call the record holds, not to whatever calls/<id>.json says when it is read", () => {
   const otherCall = second(["create-session", "--delegate", DEV1, "--cap", "1000000000000000000", "--per-tx", "1000000000000000000", "--daily", "1000000000000000000", "--blocks", "86400", "--allow", V("ALLOW")]);
   const { run, r } = atSign(otherCall);
   writeFileSync(signedFile(run, "G1"), JSON.stringify(signed({ call: otherCall })));

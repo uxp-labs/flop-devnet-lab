@@ -136,8 +136,8 @@ async function phaseLines(plan, run, results, n) {
   if (n.phase === "call") return [head, `#  read before ${id}: a session tape; the tool prints ${st.command === "grant" ? "the grant" : "the revoke"} over it`, ...tapeAndTool(run, keys, id, "call"), `${RECORD} call ${id} --run "${run}"`];
   if (n.phase === "sign") {
     const nonce = nonceOf(plan, results, id);
-    return [head, "#  immortal: never signed to different bytes. The call is the tool's, held equal to the second encoder's in calls/" + id + ".json", "#  PC:", `mkdir -p "${run}/signed"`,
-      `${SIGNER} sign --key "$KEY_OWNER" --call "$(node -p 'require(process.argv[1]).call' "${callFile(run, id)}")" --nonce ${nonce} --out "${signedFile(run, id)}" --spec ${V(plan, "SPEC")} --txv ${V(plan, "TXV")} --genesis ${V(plan, "GENESIS")} --libs "$LAB/imd-flop"`,
+    return [head, "#  immortal: never signed to different bytes. The call is the one the record holds for " + id + ": the tool's, held equal to the second encoder's (calls/" + id + ".json holds it too)", "#  PC:", `mkdir -p "${run}/signed"`,
+      `${SIGNER} sign --key "$KEY_OWNER" --call ${entryOf(results, id).call.call_hex} --nonce ${nonce} --out "${signedFile(run, id)}" --spec ${V(plan, "SPEC")} --txv ${V(plan, "TXV")} --genesis ${V(plan, "GENESIS")} --libs "$LAB/imd-flop"`,
       "#  send-file writes the send file only when the signed file is the tool's call for the owner, this nonce, the plan's runtime and chain (H3)",
       `${RECORD} send-file ${id} --run "${run}"`];
   }

@@ -119,13 +119,20 @@ export function recordCall(plan, run, results, id) {
   return { results: r, callText: JSON.stringify({ call: tool.call_hex, what: second.what, tool_file: `tool/${id}.call.json`, tape_sha256: tool.output.tape_sha256, second_encoder: "research/2026-11-11-session-deny-list/flop-sign.mjs call" }) + "\n" };
 }
 
-/** The record with a signed file of an id checked (H3), and the send file's text when it holds. */
+/**
+ * The record with a signed file of an id checked (H3), and the send file's text when it holds. The
+ * signed file is held to the call the record holds for the id (F2), and calls/<id>.json must still
+ * hold that call.
+ */
 export function recordSigned(plan, run, results, id) {
   mustBeNext(plan, results, id, ["sign"]);
   if (!existsSync(signedFile(run, id))) no(`signed/${id}.json is not in the run folder`);
-  const call = readJson(callFile(run, id)).call;
+  const call = entryOf(results, id)?.call?.call_hex;
+  if (typeof call !== "string" || entryOf(results, id).call.refused) no(`the record holds no call of ${id} that its tool printed and the second encoder gave`);
   const signed = readJson(signedFile(run, id));
   const { r, e } = withEntry(results, id);
+  const inFile = existsSync(callFile(run, id)) ? readJson(callFile(run, id)).call : null;
+  if (inFile !== call) { e.signed_check = { refused: `calls/${id}.json holds ${inFile ?? "no call"}, not the call the record holds, ${call}: nothing is sent` }; return { results: r, sendText: null }; }
   try {
     e.signed_check = { ...checkOwnerSigned(plan, results, id, signed, call), refused: null };
   } catch (err) {
