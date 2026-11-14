@@ -132,7 +132,7 @@ A seat spends on FLOP through a session. The owner S of the seat grants the seat
 
 What each command prints, to stdout only, in words or with `--json`:
 - `session grant --owner <ss58> --days <n>`: the seat, the network, S and D as SS58, the head it read at; the call `FlopSessionKeys.create_session` as 0x hex; the blake2b 256 of the call's bytes; the encoder's own words for those bytes (`describeOwnerCall`), unchanged; one sentence of what the grant allows in all; a last line that the owner signs it with his own wallet.
-- `session revoke --owner <ss58>`: the same for `FlopSessionKeys.revoke_session`, and one line of what is stored for the pair: no session, an active one, or a revoked one. It prints the call in each case.
+- `session revoke --owner <ss58>`: the same for `FlopSessionKeys.revoke_session`, and one line of what is stored for the pair, by one function that `grant` also uses to decide: `no session`, `an active session`, `a session past its expiry` (stored as active, with the head at or past `expires_at`), or `a revoked session`. The same name is in the JSON as `stored`. It prints the call in each case.
 - `session show --owner <ss58>`: the head (number and hash) and the runtime; whether the runtime is in the encoder's table, with its two constants and the era period; the session as stored, each amount in raw and in FLOP, or `no session`; the session nonce, with `(not stored: the chain's default)` when the chain holds none; the breaker, or `none`; the seat's local caps; the notes below; and the room for one call.
 
 The caps of a grant come from the seat's own local caps, exactly:
@@ -140,8 +140,12 @@ The caps of a grant come from the seat's own local caps, exactly:
 - A raw amount is the cap's count of millionths times 10^12. Nothing else: a cap off the 6 decimal grid has no exact raw amount and refuses.
 - `--days` is required, a whole number from 1 to 10, with no default. A day of `--days` is one epoch of the chain's daily cap: 86400 blocks at 1014020, from the runtime's table, not typed. The tool holds no block time, so it says blocks and epochs, never hours. The local daily cap is per UTC day; the chain's is per epoch.
 - The allow list is always exactly `ComputeChannel`: the encoder writes no other.
+- A cap is stored by `cap set` as the nearest number of its text. A text with more digits than a number holds (for example `0.99999999999999999`) is stored as the number nearest to it, so its own amount is lost before the grant. This is the contract's open question Q-AMOUNT-TEXT (`contract/rules.json`), shared by the three tools and not fixed here. The grant follows the stored cap exactly and prints each amount in raw and in FLOP, so the owner reads what is granted.
+- `--days` is also checked against the runtime read: `SessionEpochLength` times the days must not be above `MaxSessionDuration`. Above it, `grant` refuses with exit 5 and names the days asked, the most whole days that runtime allows, and both constants in blocks.
 
 The room for one call is the least of `per_tx_limit`, `daily_cap` less `epoch_spent`, and `spending_cap` less `spent`, never below 0. It is `none`, with every reason that applies, when no session is stored, the session is not active, the head plus the encoder's era period of 64 blocks reaches `expires_at` (a call signed now may land up to that many blocks later), the allow list is neither empty nor holds `ComputeChannel` in any case of letters, or the breaker is tripped. It is unknown, with the reasons, when the runtime is not one the encoder knows, or when a value it needs is unknown and no known value already rules a call out. An empty allow list allows every pallet: the room is computed, and a note says it is not a grant this tool writes.
+
+A known room does not count the breaker's limits per period: the chain's `CircuitBreakerMaxSpend` and `CircuitBreakerMaxTxs` per `CircuitBreakerPeriod`. This tool does not hold them, so the room line ends with a clause that says so, and the JSON room carries the same text as `not_counted`. A room of none or unknown does not carry it. The room is as of the finalized head it names: spends after that head are not in it.
 
 The notes of `show`: a chain cap above its local cap; an allow list that is not exactly `ComputeChannel`; and, when the head is at or past `epoch_start` plus the epoch length, that the chain resets the epoch's spend at the next call, by the lab's reading of the runtime (inferred), so the room shown is a lower bound.
 
@@ -154,13 +158,15 @@ What they never do: read a key file or call `loadSigner`; sign or send anything;
 Unknown is never 0. In words it is `unknown (<reason>)`; in JSON a value of `null` with a `reason` beside it. Amounts in JSON are decimal strings of raw units.
 
 Refusals and exit codes:
-- 2: `--owner` missing, not SS58, a bad checksum, another prefix than the network's, or equal to D; `--days` missing or not 1 to 10, or given to `revoke` or `show`; a sub command that is not one of the three; no identity file for the seat. These come before any node call.
+- 2: `--owner` missing, not SS58, a bad checksum, not in its canonical form (a reserved first byte, or a two byte form of a prefix below 64), another prefix than the network's, or equal to D; an option given more than once, on any command (the words name the option); `--days` missing or not 1 to 10, or given to `revoke` or `show`; a sub command that is not one of the three; no identity file for the seat. These come before any node call.
 - 3, `grant` only: no usable local cap (as `run` refuses it), or a cap off the 6 decimal grid. Before any node call.
-- 1: the hash at height 0 cannot be read; the read is unknown; for `grant` and `revoke` the stored session is unknown (a record of another pair is unknown); for `show` anything it shows is unknown (the session, the nonce, the breaker or the room). An identity whose did is not a did:key is 1 too.
-- 5: another hash at height 0 than the network's pinned genesis; for `grant` and `revoke`, a runtime at the head that is not in the encoder's table (the words name the spec); for `grant`, a session known and active for the pair (the chain would refuse a second one: revoke it first).
+- 1: the hash at height 0 cannot be read; the read is unknown; for `grant` and `revoke` the stored session is unknown (a record of another pair is unknown); for `show` anything it shows is unknown (the session, the nonce, the breaker, the local caps or the room). An identity whose did is not a did:key is 1 too.
+- 5: another hash at height 0 than the network's pinned genesis; for `grant` and `revoke`, a runtime at the head that is not in the encoder's table (the words name the spec); for `grant`, a session known and active for the pair (the chain would refuse a second one: revoke it first), or days above the runtime's longest session (`SessionEpochLength` times the days above `MaxSessionDuration`).
 - 0: otherwise. `show` exits 0 with a room of none when everything it shows is known.
 
 A stored record that is revoked, or whose `expires_at` is at or below the head, does not stop a grant: the call is printed with one line that says whether the chain takes a new grant over a stored record is not shown yet.
+
+Not checked by this tool: the chain's most sessions per owner and per delegate (`MaxSessionsPerOwner`, `MaxSessionsPerDelegate`). A grant it prints can still fail on chain for that reason.
 
 Not shown yet (a devnet batch of the lead's, G-19):
 - a grant printed by this tool, signed by the owner and landing as `SessionCreated` with the derived caps;
