@@ -1,10 +1,14 @@
-// Review 4 (list 5): every storage key of observatory/recordings/requests.json derived a third way,
+// Review 4 (list 5): every storage key of the fifth request list derived a third way,
 // with a twox128 written here from the xxHash64 specification and blake2b from @noble/hashes in
 // imd-flop/node_modules. No observatory code, no reference decoder. Nothing here reads the network.
 // After this review the list grew to 32 calls (chain_getBlock and the birth hashes, rule B10); the one
 // assertion that changed is the heights of the chain_getBlockHash calls, by the lead's rule.
+// The list is read from the fifth recording's fixture, its frozen copy of observatory/recordings/requests.json as
+// that file was when the recording was made: recordings/requests.json itself is the current list, and a later list
+// replaced the fifth (the sixth, 2026-11-14). A test holds the copy to the sha256 the recording's run.json names.
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 
 const REPO = new URL("../../", import.meta.url);
@@ -39,13 +43,20 @@ const hex = (u) => Buffer.from(u).toString("hex");
 const bytes = (h) => Uint8Array.from(Buffer.from(h.replace(/^0x/, ""), "hex"));
 const b128c = (h) => hex(blake2b(bytes(h), { dkLen: 16 })) + h.replace(/^0x/, "");
 
-const LIST = json("observatory/recordings/requests.json");
+const RECORDING = "observatory/fixtures/recording-20261113182100-8769e8d2841bf49a";
+const LIST_FILE = `${RECORDING}/requests.json`;
+const LIST = json(LIST_FILE);
 const RESULTS = json("research/2026-11-12-encoder-devnet-test/results.json");
 const STEPS = json("research/2026-11-12-encoder-devnet-test/steps.json");
 const owner = RESULTS.accounts.owner.public_key;
 const device = RESULTS.accounts.device.public_key;
 const t3 = RESULTS.steps.find((s) => s.step === "T3");
 const forceOpen = t3.run_time.explorer.events.find((e) => e.pallet === "ComputeChannel" && e.name === "ForceOpenRequested");
+
+test("the list read is the fifth recording's own: its sha256 is the one that recording's run.json names", () => {
+  const sha = createHash("sha256").update(readFileSync(new URL(LIST_FILE, REPO))).digest("hex");
+  assert.equal(sha, json(`${RECORDING}/run.json`).request_list_sha256);
+});
 
 test("the twox128 written here agrees with the prefixes the lab recorded (System.Events, FlopSessionKeys, SessionNonces)", () => {
   assert.equal(`0x${twox128("System")}${twox128("Events")}`, STEPS.values.EVENTS_KEY.value);
