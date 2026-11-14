@@ -80,7 +80,6 @@ export interface RuntimeId {
 
 const TABLE: readonly Runtime[] = RUNTIMES;
 
-
 /**
  * The table's runtime with exactly these four names, or a RUNTIME_UNKNOWN refusal. Each name is read once as an
  * own value: an accessor on one is refused (BAD_INPUT), and a Proxy's get trap is not used. A name the id does not
