@@ -39,7 +39,7 @@ export function deviceOf(home: string, seat: string, net: NetworkInfo): Account 
 }
 
 /**
- * S, from `--owner` (rule C3): an SS58 address of the network's prefix with a good checksum, and not D. Anything else
+ * S, from `--owner` (rule C3): an SS58 address in its canonical form, of the network's prefix, with a good checksum, and not D. Anything else
  * is a usage error, exit 2. The text given is not echoed.
  */
 export function ownerOf(text: string | undefined, net: NetworkInfo, device: Account): Account {
@@ -48,7 +48,9 @@ export function ownerOf(text: string | undefined, net: NetworkInfo, device: Acco
   try {
     decoded = ss58Decode(text);
   } catch (e) {
-    const why = e instanceof Error && /checksum|32-byte/.test(e.message) ? e.message.replace(/^ss58: /, "") : "not base58";
+    const m = e instanceof Error ? e.message : "";
+    if (/reserved first byte|not canonical/.test(m)) throw new CliError("--owner is not an SS58 account address in its canonical form", EXIT.USAGE);
+    const why = /checksum|32-byte/.test(m) ? m.replace(/^ss58: /, "") : "not base58";
     throw new CliError(`--owner is not an SS58 account address (${why})`, EXIT.USAGE);
   }
   if (decoded.prefix !== net.ss58Prefix) throw new CliError(`--owner has the SS58 prefix ${decoded.prefix}, not ${net.ss58Prefix} of ${net.name}`, EXIT.USAGE);

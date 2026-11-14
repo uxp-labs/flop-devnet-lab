@@ -50,6 +50,20 @@ export function daysOf(text: string | undefined): number {
   return Number(text);
 }
 
+/**
+ * The days asked against the runtime's own constants (RP5B-7): SessionEpochLength times the days must not be above
+ * MaxSessionDuration. Above it is exit 5, with words that name the days asked, the most whole days and both constants.
+ * The local rule of 1 to MAX_DAYS stays and comes first (daysOf). Pure.
+ */
+export function checkDaysAgainstRuntime(days: number, epochLength: number, maxSessionDuration: number): void {
+  if (epochLength * days <= maxSessionDuration) return;
+  const most = Math.floor(maxSessionDuration / epochLength);
+  throw new CliError(
+    `--days ${days} is more than this runtime allows: its SessionEpochLength is ${epochLength} blocks and its MaxSessionDuration is ${maxSessionDuration} blocks, so the most it allows is ${most} ${most === 1 ? "day" : "days"} (whole days only). No call printed`,
+    EXIT.REFUSED_RULE,
+  );
+}
+
 /** The values of a grant, with the metadata's field names. */
 export interface GrantCaps {
   readonly spending_cap: bigint;

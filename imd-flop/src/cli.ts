@@ -62,8 +62,18 @@ It refuses on a wrong chain, a reset, or an unreadable response, before any paid
 type Values = Record<string, any>;
 function parse(args: string[], options: ParseArgsConfig["options"]): { values: Values; positionals: string[] } {
   try {
-    return parseArgs({ args, options: { json: { type: "boolean" }, seat: { type: "string" }, ...options }, allowPositionals: true, strict: true });
+    const parsed = parseArgs({ args, options: { json: { type: "boolean" }, seat: { type: "string" }, ...options }, allowPositionals: true, strict: true, tokens: true });
+    // An option given more than once is a usage error for every command, boolean ones too. The count is of the
+    // parser's own option tokens, so an argument after `--` (a positional) is never counted. The tool does not guess which one was meant.
+    const seen = new Set<string>();
+    for (const tok of parsed.tokens ?? []) {
+      if (tok.kind !== "option") continue;
+      if (seen.has(tok.name)) throw new CliError(`--${tok.name} is given more than once: give each option once`, EXIT.USAGE);
+      seen.add(tok.name);
+    }
+    return { values: parsed.values, positionals: parsed.positionals };
   } catch (e) {
+    if (e instanceof CliError) throw e;
     throw new CliError((e as Error).message, EXIT.USAGE);
   }
 }
