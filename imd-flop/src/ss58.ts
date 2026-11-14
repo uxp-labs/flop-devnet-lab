@@ -20,12 +20,14 @@ export function ss58Encode(pub: Uint8Array, prefix = 42): string {
 
 export function ss58Decode(addr: string): { prefix: number; pub: Uint8Array } {
   const raw = base58.decode(addr);
+  if (raw[0] >= 128) throw new Error("ss58: reserved first byte");
   const plen = raw[0] < 64 ? 1 : 2;
   if (raw.length !== plen + 32 + 2) throw new Error("ss58: not a 32-byte account address");
   const body = raw.subarray(0, plen + 32);
   const sum = blake2b(concatBytes(SS58PRE, body), { dkLen: 64 }).subarray(0, 2);
   if (sum[0] !== raw[plen + 32] || sum[1] !== raw[plen + 33]) throw new Error("ss58: bad checksum");
   const prefix = plen === 1 ? raw[0] : ((raw[0] & 0x3f) << 2) | (raw[1] >> 6) | ((raw[1] & 0x3f) << 8);
+  if (plen === 2 && prefix < 64) throw new Error("ss58: two byte form of a prefix below 64, not canonical");
   return { prefix, pub: raw.slice(plen, plen + 32) };
 }
 
