@@ -176,6 +176,6 @@ describe("C2 and C1: the command's shape", () => {
   });
 
   it("the code is in src/session, in a file for each part", () => {
-    expect([...files].sort()).toEqual(["accounts.ts", "caps.ts", "chain.ts", "command.ts", "context.ts", "grant.ts", "revoke.ts", "room.ts", "show.ts", "words.ts"]);
+    expect([...files].sort()).toEqual(["accounts.ts", "caps.ts", "chain.ts", "command.ts", "context.ts", "grant.ts", "revoke.ts", "room.ts", "show.ts", "stored.ts", "words.ts"]);
   });
 });

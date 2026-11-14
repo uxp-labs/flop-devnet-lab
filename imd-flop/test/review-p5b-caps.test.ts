@@ -150,13 +150,22 @@ describe("review P5b, attack 1 and 2: the grant's caps and bytes by the reviewer
   });
 
   for (const text of ["0.99999999999999999", "999999999.99999899", "999999999.9999991"]) {
-    it(`DEFECT RP5B-1: cap set ${text}, a cap off the 6 decimal grid, is taken, and the grant prints a call whose caps are not the text's (above it for a text just below a grid value)`, async () => {
+    it(`HOLDS RP5B-1 (open question Q-AMOUNT-TEXT, contract/rules.json): cap set ${text} stores the nearest number, and the grant follows the stored cap exactly and prints it in raw and in FLOP, not the text's own amount`, async () => {
       const home = seatHome(DEV1, null);
       const set = await cli(home, ["cap", "set", text]);
-      if (set.code !== 0) return; // refused where the text is known: what a fix may do
+      // Today's behaviour: the text is read as a number, so a text with more digits than a number holds is stored as its nearest number.
+      expect([set.code, set.err]).toEqual([0, ""]);
+      const stored = rawOf(Number(text), "daily cap", "42");
+      expect(stored).not.toBe(rawOfText(text)); // the text's own amount is lost at cap set, before the grant
       const r = await grantJson(home, 1);
-      // P1: a cap off the 6 decimal grid prints no call and exits 3; no rounding anywhere.
-      expect({ code: r.code, out: r.out }).toEqual({ code: 3, out: "" });
+      expect(r.code).toBe(0);
+      const j = r.json();
+      expect(j.caps.daily_cap).toBe(String(stored));
+      expect(j.caps.spending_cap).toBe(String(stored));
+      const m = SENTENCE.exec(j.allows);
+      expect(m).not.toBeNull();
+      // The owner reads what is granted: the raw amount and its FLOP text, both the stored cap's.
+      expect([m![1], m![2], m![3], m![4]]).toEqual([String(stored), flopText(stored), String(stored), flopText(stored)]);
     });
   }
 });

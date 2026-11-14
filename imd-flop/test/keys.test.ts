@@ -5,6 +5,7 @@ import { ed25519 } from "@noble/curves/ed25519.js";
 import { base58, base64 } from "@scure/base";
 import { bytesToHex } from "@noble/hashes/utils.js";
 import { cli, readLines, tmpHome } from "./helpers.js";
+import { blake2b } from "@noble/hashes/blake2.js";
 import { didKeyFromPub, pubFromDidKey, ss58Decode, ss58Encode } from "../src/ss58.js";
 
 describe("init: one Ed25519 key per seat", () => {
@@ -88,5 +89,30 @@ describe("did:key and SS58", () => {
     const a = ss58Encode(new Uint8Array(32).fill(7), 42);
     const bad = a.slice(0, -1) + (a.endsWith("1") ? "2" : "1");
     expect(() => ss58Decode(bad)).toThrow();
+  });
+
+  // An address of the given prefix bytes, with a good checksum, built here by the SS58 rule (SS58PRE, blake2b 512, first 2 bytes).
+  const addrOf = (prefixBytes: number[], pub: Uint8Array): string => {
+    const body = Uint8Array.from([...prefixBytes, ...pub]);
+    const sum = blake2b(Uint8Array.from([...new TextEncoder().encode("SS58PRE"), ...body]), { dkLen: 64 }).subarray(0, 2);
+    return base58.encode(Uint8Array.from([...body, ...sum]));
+  };
+  const pub7 = new Uint8Array(32).fill(7);
+
+  it("refuses a reserved first byte (128 or more), with its own error, though the checksum is good (RP5B-2)", () => {
+    for (const first of [128, 0x8a, 255]) expect(() => ss58Decode(addrOf([first, 0x00], pub7))).toThrow(/reserved first byte/);
+  });
+  it("refuses a two byte form that carries a prefix below 64, with its own error (RP5B-2)", () => {
+    // 0x40 0x2a: the two byte layout of ss58Encode, applied to a prefix that ss58Encode would write as one byte.
+    const twoByte = (prefix: number) => [((prefix & 0xfc) >> 2) | 0x40, (prefix >> 8) | ((prefix & 0x03) << 6)];
+    for (const p of [0, 42, 63]) expect(() => ss58Decode(addrOf(twoByte(p), pub7))).toThrow(/two byte form of a prefix below 64, not canonical/);
+  });
+  it("decodes a canonical address of a one byte prefix and of a two byte prefix as before (RP5B-2)", () => {
+    for (const prefix of [0, 42, 63, 64, 252, 16383]) {
+      if (prefix === 46 || prefix === 47) continue;
+      const d = ss58Decode(ss58Encode(pub7, prefix));
+      expect(d.prefix).toBe(prefix);
+      expect(Buffer.from(d.pub)).toEqual(Buffer.from(pub7));
+    }
   });
 });
