@@ -10,7 +10,7 @@
 
 /** The codes this module refuses with. Each user maps them onto its own refusal of the same name. */
 export type PlainInputCode = "BAD_INPUT" | "WRONG_LENGTH" | "OUT_OF_RANGE";
-/** How a user refuses: it throws and never returns. */
+/** How a user refuses: it throws and never returns. If it does return, the module throws its own TypeError (naming the code only) and hands nothing back. */
 export type PlainInputRefuse = (code: PlainInputCode, message: string) => never;
 /** The integer kinds uintOf checks. */
 export type UintKind = "u32" | "u64" | "u128";
@@ -60,11 +60,17 @@ const LENGTH = getter("byteLength");
 
 /** The checks of this module, refusing through `refuse`. The object returned is frozen. */
 export function plainInput(refuse: PlainInputRefuse): PlainInput {
+  /** Refuses through the user's function. If that function returns, the check throws its own error: nothing is handed back. */
+  function fail(code: PlainInputCode, message: string): never {
+    refuse(code, message);
+    throw new TypeError("plain-input: the refuse function returned after " + code);
+  }
+
   function bytesOf(value: unknown, n: number | null, what: string): Uint8Array {
     const kind = ArrayBuffer.isView(value) ? KIND.call(value) : undefined;
-    if (kind !== "Uint8Array") refuse("BAD_INPUT", `${what} must be a Uint8Array${n === null ? "" : ` of ${n} bytes`}`);
+    if (kind !== "Uint8Array") fail("BAD_INPUT", `${what} must be a Uint8Array${n === null ? "" : ` of ${n} bytes`}`);
     const length = LENGTH.call(value) as number;
-    if (n !== null && length !== n) refuse("WRONG_LENGTH", `${what} has ${length} bytes, not ${n}`);
+    if (n !== null && length !== n) fail("WRONG_LENGTH", `${what} has ${length} bytes, not ${n}`);
     const view = new Uint8Array(BUFFER.call(value) as ArrayBuffer, OFFSET.call(value) as number, length);
     const copy = new Uint8Array(length);
     copy.set(view);
@@ -72,12 +78,12 @@ export function plainInput(refuse: PlainInputRefuse): PlainInput {
   }
 
   function takeFields(value: unknown, names: readonly string[], what: string): Record<string, unknown> {
-    if (!isObject(value)) refuse("BAD_INPUT", `${what} must be an object`);
+    if (!isObject(value)) fail("BAD_INPUT", `${what} must be an object`);
     const keys = ownKeys(value);
     const want = new Set(names);
-    for (const k of keys) if (!want.has(k)) refuse("BAD_INPUT", `${what} has a field ${k} that is not one of its fields`);
+    for (const k of keys) if (!want.has(k)) fail("BAD_INPUT", `${what} has a field ${k} that is not one of its fields`);
     const have = new Set(keys);
-    for (const n of names) if (!have.has(n)) refuse("BAD_INPUT", `${what} lacks the field ${n}`);
+    for (const n of names) if (!have.has(n)) fail("BAD_INPUT", `${what} lacks the field ${n}`);
     const out: Record<string, unknown> = Object.create(null);
     for (const n of names) out[n] = ownValue(value, n, what);
     return out;
@@ -89,8 +95,8 @@ export function plainInput(refuse: PlainInputRefuse): PlainInput {
 
   function ownValue(value: object, name: string, what: string): unknown {
     const d = Object.getOwnPropertyDescriptor(value, name);
-    if (d === undefined) refuse("BAD_INPUT", `${what} lacks the field ${name}`);
-    if (!("value" in d)) refuse("BAD_INPUT", `${what}.${name} is an accessor, not a value`);
+    if (d === undefined) fail("BAD_INPUT", `${what} lacks the field ${name}`);
+    if (!("value" in d)) fail("BAD_INPUT", `${what}.${name} is an accessor, not a value`);
     return d.value;
   }
 
@@ -100,16 +106,16 @@ export function plainInput(refuse: PlainInputRefuse): PlainInput {
   function uintOf(kind: UintKind, value: unknown, what: string): number | bigint {
     switch (kind) {
       case "u32":
-        if (typeof value !== "number" || !Number.isInteger(value)) refuse("BAD_INPUT", `${what} must be a whole number (u32)`);
-        if (value < 0 || value > 2 ** 32 - 1) refuse("OUT_OF_RANGE", `${what} ${value} is not a u32`);
+        if (typeof value !== "number" || !Number.isInteger(value)) fail("BAD_INPUT", `${what} must be a whole number (u32)`);
+        if (value < 0 || value > 2 ** 32 - 1) fail("OUT_OF_RANGE", `${what} ${value} is not a u32`);
         return value;
       case "u64":
       case "u128":
-        if (typeof value !== "bigint") refuse("BAD_INPUT", `${what} must be a bigint (${kind})`);
-        if (value < 0n || value >= 1n << BigInt(8 * WIDTH[kind])) refuse("OUT_OF_RANGE", `${what} ${value} is not a ${kind}`);
+        if (typeof value !== "bigint") fail("BAD_INPUT", `${what} must be a bigint (${kind})`);
+        if (value < 0n || value >= 1n << BigInt(8 * WIDTH[kind])) fail("OUT_OF_RANGE", `${what} ${value} is not a ${kind}`);
         return value;
       default:
-        return refuse("BAD_INPUT", `${what} has an integer kind this module does not check`);
+        return fail("BAD_INPUT", `${what} has an integer kind this module does not check`);
     }
   }
 

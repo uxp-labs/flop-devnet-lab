@@ -262,3 +262,17 @@ describe("M4, M5: the encoder builds its checks from the shared module, with its
     expect(t).not.toMatch(/getOwnPropertyDescriptor\(TYPED/);
   });
 });
+
+describe("F1: a refuse that returns", () => {
+  it("the module throws its own TypeError, which names the code and carries nothing of the input", () => {
+    const q = plainInput((() => undefined) as never);
+    let got: unknown;
+    try {
+      q.bytesOf(new Uint8Array([0xde, 0xad, 0xbe, 0xef]), 32, "secretish");
+    } catch (e) {
+      got = e;
+    }
+    expect(got).toBeInstanceOf(TypeError);
+    expect((got as TypeError).message).toBe("plain-input: the refuse function returned after WRONG_LENGTH");
+  });
+});
