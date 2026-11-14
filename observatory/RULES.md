@@ -994,7 +994,15 @@ for everything it reads.
   `test/helpers/batch-answer.ts`; it decodes nothing. What its values mean is the decoder's
   (section 9), and a value of an entry the reviewed shape does not state is not decoded: its bytes
   are kept apart and the value it answers stays unknown.
-- The fifth list reads the encoder's devnet test at spec 1014020: the start block and the block of
+- The sixth list reads the two blocks of the first recording where a compute channel settled, each
+  by the one `ComputeChannel.Settled` event of its block: each block's hash by its height, the block
+  whole by `chain_getBlock`, and one `state_queryStorageAt` at it of `System.Events`,
+  `System.LastRuntimeUpgrade` and the channel's `ComputeChannel.Channels` record; then the parent's
+  hash by its height and one `state_queryStorageAt` at the parent of the last two. 12 calls. Its
+  keys are built from the reviewed metadata of the spec a recorded `System.LastRuntimeUpgrade` names
+  through `runtimeOfBlock`, named by a file and a field, never typed. A parent's height is its
+  child's recorded header's number less one, and its field says so.
+- The fifth list read the encoder's devnet test at spec 1014020: the start block and the block of
   each sent step, each hash by its height, and at each one `state_queryStorageAt` of the same eight
   keys in one fixed order, built from the 1014020 metadata; each step's block whole by
   `chain_getBlock` at its hash; and for each step signed with a mortal era the hash at the era's
