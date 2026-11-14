@@ -9,7 +9,7 @@
  * readReceipt or complete runs `receipt <id> --refresh` first, as booking.test.ts does, or by real child
  * processes in the stress block.
  */
-import { execFileSync, spawn } from "node:child_process";
+import { spawn } from "node:child_process";
 import { appendFileSync, existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -639,7 +639,6 @@ process.stdout.write(JSON.stringify({ codes, damaged }));
 
   for (const mode of ["consistent", "erratic"] as const) {
     it(`${mode} gateway, ${PROCS} processes x ${OPS} operations x ${ROUNDS} rounds: no line breaks a rule and the day stays within the cap`, async () => {
-      execFileSync("npx", ["tsc", "-p", "tsconfig.json"], { cwd: root });
       const summary: { lines: number; sent: number; total: number }[] = [];
       const codes: Record<string, number> = {};
       let damaged = 0;

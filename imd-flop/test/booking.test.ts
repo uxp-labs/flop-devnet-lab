@@ -16,7 +16,7 @@
  * stub whose readReceipt runs the other reader before it answers, or by a child process that holds the real
  * ledger lock.
  */
-import { execFileSync, spawn } from "node:child_process";
+import { spawn } from "node:child_process";
 import { appendFileSync, chmodSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { hostname } from "node:os";
 import { join } from "node:path";
@@ -461,7 +461,6 @@ describe("a refresh racing a refresh", () => {
   /** A process that takes the real ledger lock, holds it, then books settled 0.07 for the request and lets go. */
   function holderThatBooks(home: string, rid: string, holdMs: number) {
     const root = join(import.meta.dirname, "..");
-    execFileSync("npx", ["tsc", "-p", "tsconfig.json"], { cwd: root });
     const script = join(home, "lock-holder.mjs");
     writeFileSync(script, `
 import { appendLedger, latestAttempts, withLedgerLock } from ${JSON.stringify(join(root, "dist", "ledger.js"))};

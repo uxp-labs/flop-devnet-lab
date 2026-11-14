@@ -3,7 +3,6 @@
  * Safe outcomes are asserted, so the current tree fails where the gap is real.
  */
 import { spawn } from "node:child_process";
-import { execFileSync } from "node:child_process";
 import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -232,7 +231,6 @@ describe("v3 ledger lock", () => {
     const home = tmpHome();
     await readySeat(home, SEAT, "0.186");
     const root = join(import.meta.dirname, "..");
-    execFileSync("npx", ["tsc", "-p", "tsconfig.json"], { cwd: root });
     const runner = join(home, "runner.mjs");
     writeFileSync(runner, `
 import { main } from ${JSON.stringify(join(root, "dist", "cli.js"))};
@@ -273,7 +271,6 @@ process.exit(code ?? 1);
     // IMD e99a2cf1 info #12: this used to pass two async bodies in one process, which never exercised the
     // lock (it was released when each body returned its promise). Now a second process holds the real lock
     // across a delay before it appends, and this process's cap check must wait for that append.
-    execFileSync("npx", ["tsc", "-p", "tsconfig.json"], { cwd: join(import.meta.dirname, "..") });
     const { withLedgerLock, spentToday } = await import("../src/ledger.js");
     const home = tmpHome();
     await readySeat(home, SEAT, "0.186");
