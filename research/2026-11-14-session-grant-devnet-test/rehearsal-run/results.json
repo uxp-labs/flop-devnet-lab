@@ -51,11 +51,11 @@
   "answered": false,
   "length": null,
   "refusal": {
-   "code": -32601,
-   "message": "the recording holds no state_call"
+   "code": null,
+   "message": "the node's hash of block 3551721 is not a 32 byte hash: no state_call is sent"
   },
   "read_utc": "2026-11-14T00:00:00.000Z",
-  "relay_sha256": "8fb6fae3c825692df67227a4cbb2de5f76538fc2047136ba9ee9ad0360b319ab"
+  "relay_sha256": "a5561ee7696cb849e2af6e922f65022b6a06fed5f95308314265f8f035577d41"
  },
  "p0": {
   "tool_file": "tool/P0.show.json",
@@ -185,7 +185,8 @@
    "signed_check": {
     "extrinsic_hash": "0x2e1992d1f684fda76f21e5bcded4fe6243e7753c287c440a3da501c71dbc3342",
     "nonce": "9",
-    "refused": null
+    "refused": null,
+    "send_sha256": "857214f32876438b883a726bcc18d9495bb3f99ec07a4617d556eed0a65895c8"
    },
    "decoder": {
     "tool_file": "tool/G1.block.json",
@@ -399,7 +400,8 @@
    "signed_check": {
     "extrinsic_hash": "0x90a034414b7f1904caf5e8f455d4705489eb3a39be21b93672ed3e63ef4662c2",
     "nonce": "10",
-    "refused": null
+    "refused": null,
+    "send_sha256": "2914d75cb63f09ec659583d136458c19a1feab150ac7d95d5c824485061cff47"
    },
    "decoder": {
     "tool_file": "tool/R1.block.json",
