@@ -50,7 +50,7 @@ function open(value: unknown, path: string, seen: Set<unknown>, out: string[], d
 
 describe("review A1, P2: the reviewer's own walk of every export", () => {
   it("HOLDS: the files walked are every .ts file of the three folders and the two root files", () => {
-    expect(FILES.length).toBe(12 + 11 + 5 + 2);
+    expect(FILES.length).toBe(13 + 11 + 5 + 2);
   });
 
   for (const file of FILES) {

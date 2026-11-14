@@ -1,7 +1,8 @@
 /**
  * The calls the chain encoder writes (rule E3) and what each one moves (rule E5). One outer call,
  * FlopSessionKeys.execute_via_session, around exactly one of five inner calls of ComputeChannel. The
- * encoder and the strict reader both stand on this list; nothing else is written or read.
+ * encoder and the strict reader both stand on this list; nothing else is written or read, but for the two
+ * calls of the session's owner below (P5a), which are call bytes only and never go inside a session call.
  */
 import { refuse } from "./errors.js";
 import { freezeFunction } from "../freeze.js";
@@ -84,3 +85,53 @@ export function spendOf(inner: InnerCall): bigint {
   return amount;
 }
 freezeFunction(spendOf);
+
+/**
+ * The two calls of the session's owner (P5a, O1): the grant and the revoke of FlopSessionKeys. The encoder writes
+ * them as call bytes only, for the owner to sign with his own tool: it never signs one (O2).
+ */
+export const OWNER_PALLET = OUTER.pallet;
+export const OWNER_NAMES = Object.freeze(["create_session", "revoke_session"] as const);
+export type OwnerName = (typeof OWNER_NAMES)[number];
+
+export function isOwnerName(name: unknown): name is OwnerName {
+  return typeof name === "string" && (OWNER_NAMES as readonly string[]).includes(name);
+}
+freezeFunction(isOwnerName);
+
+/**
+ * The one name a grant's allow list holds (P5a, O7): the pallet of the five inner calls, as its UTF-8 bytes. It is
+ * not an input: the encoder writes exactly this list and the strict reader reads no other.
+ */
+export const OWNER_ALLOWED_PALLET = INNER_PALLET;
+
+/** The two constants of the owner's pallet the grant is bounded by (P5a, O3, O13), by their metadata names. */
+export const OWNER_CONSTANTS = Object.freeze({ maxSessionDuration: "MaxSessionDuration", sessionEpochLength: "SessionEpochLength" } as const);
+
+/**
+ * The bytes of OWNER_ALLOWED_PALLET, made once when the module loads from the name's own characters, with no
+ * encoder looked up later. The name is ASCII: a character of 128 or above throws here. Not exported.
+ */
+const ALLOWED_BYTES: Uint8Array = Uint8Array.from(
+  Array.from(OWNER_ALLOWED_PALLET, (ch) => {
+    const code = ch.charCodeAt(0);
+    if (code >= 128) throw new Error(`OWNER_ALLOWED_PALLET must be ASCII: ${JSON.stringify(ch)} is not`);
+    return code;
+  }),
+);
+
+/** The allow list of a grant as bytes (P5a, O7): a fresh list holding a fresh copy of the fixed bytes of OWNER_ALLOWED_PALLET, alone. */
+export function allowedPallets(): Uint8Array[] {
+  return [Uint8Array.from(ALLOWED_BYTES)];
+}
+freezeFunction(allowedPallets);
+
+/** Whether a list read is exactly the one allow list: one name, the same length, each byte equal by index. */
+export function isAllowedPalletList(list: readonly Uint8Array[]): boolean {
+  if (list.length !== 1) return false;
+  const only = list[0];
+  if (only.length !== ALLOWED_BYTES.length) return false;
+  for (let i = 0; i < ALLOWED_BYTES.length; i++) if (only[i] !== ALLOWED_BYTES[i]) return false;
+  return true;
+}
+freezeFunction(isAllowedPalletList);

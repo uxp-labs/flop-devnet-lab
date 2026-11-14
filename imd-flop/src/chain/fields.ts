@@ -3,10 +3,13 @@
  * Uint8Array of exactly 32 bytes; a u32 is a whole number in range; a u64 or a u128 is a bigint in range; an
  * enum is a name looked up in the table; a struct is an object with exactly its fields. There are no free
  * bytes. A field of any other type is refused: the inner calls carry nothing else.
+ *
+ * The one other kind, a list of byte strings (bytesList, P5a, O4), is written and read here only, by its own two
+ * functions below, never by takeValue, writeValue or readValue: only an owner's grant carries one.
  */
 import { plainInput } from "../plain-input.js";
 import { refuse } from "./errors.js";
-import { ByteReader, uintLE } from "./scale.js";
+import { ByteReader, compact, concat, uintLE } from "./scale.js";
 import type { Ty } from "./table.js";
 import { freezeFunction } from "../freeze.js";
 
@@ -110,3 +113,24 @@ export function readValue(r: ByteReader, ty: Ty, what: string): FieldValue {
   }
 }
 freezeFunction(readValue);
+
+/** The bytes of a list of byte strings (bytesList): the compact count, then each string as its compact length and its bytes. */
+export function writeBytesList(list: readonly Uint8Array[]): Uint8Array {
+  return concat(compact(BigInt(list.length)), ...list.flatMap((b) => [compact(BigInt(b.length)), Uint8Array.from(b)]));
+}
+freezeFunction(writeBytesList);
+
+/**
+ * Reads a list of byte strings (bytesList). Each string costs at least its length byte, so bytes that claim more
+ * strings or a longer string than they hold end early and are refused (BAD_BYTES).
+ */
+export function readBytesList(r: ByteReader): Uint8Array[] {
+  const count = r.compact();
+  const out: Uint8Array[] = [];
+  for (let i = 0n; i < count; i++) {
+    // A length past what the bytes hold is refused by take: no byte array is that long.
+    out.push(r.take(Number(r.compact())));
+  }
+  return out;
+}
+freezeFunction(readBytesList);

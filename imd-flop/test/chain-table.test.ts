@@ -6,7 +6,7 @@
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
 import { describe, expect, it } from "vitest";
-import { INNER_NAMES, INNER_PALLET, OUTER } from "../src/chain/calls.js";
+import { INNER_NAMES, INNER_PALLET, OUTER, OWNER_NAMES, OWNER_PALLET } from "../src/chain/calls.js";
 import { RUNTIMES } from "../src/chain/runtimes.js";
 import { runtimeFor } from "../src/chain/table.js";
 import { NETWORKS } from "../src/networks.js";
@@ -36,9 +36,9 @@ describe("E2: the table is derived from the recorded metadata", () => {
     expect(String(RUNTIMES[0].transactionVersion)).toBe(steps.values.TXV.value);
   });
 
-  it("the table holds the outer call and exactly the five inner calls", () => {
+  it("the table holds the outer call, exactly the five inner calls and the owner's two calls (P5a, O1)", () => {
     const names = RUNTIMES[0].calls.map((c) => `${c.pallet}.${c.name}`);
-    expect(names).toEqual([`${OUTER.pallet}.${OUTER.name}`, ...INNER_NAMES.map((n) => `${INNER_PALLET}.${n}`)]);
+    expect(names).toEqual([`${OUTER.pallet}.${OUTER.name}`, ...INNER_NAMES.map((n) => `${INNER_PALLET}.${n}`), ...OWNER_NAMES.map((n) => `${OWNER_PALLET}.${n}`)]);
   });
 
   it("the table is frozen: the lookup's entry cannot be changed at run time", () => {

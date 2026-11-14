@@ -47,7 +47,7 @@ function writable(o: object): string[] {
 
 describe("H7: every export of src/chain is frozen at its definition, functions and classes with their prototypes", () => {
   it("the files of src/chain are the ones this test walks", () => {
-    expect(FILES).toEqual(["calls.ts", "describe.ts", "era.ts", "errors.ts", "extrinsic.ts", "fields.ts", "payload.ts", "reader.ts", "runtimes.ts", "scale.ts", "shape.ts", "table.ts"]);
+    expect(FILES).toEqual(["calls.ts", "describe.ts", "era.ts", "errors.ts", "extrinsic.ts", "fields.ts", "owner-calls.ts", "payload.ts", "reader.ts", "runtimes.ts", "scale.ts", "shape.ts", "table.ts"]);
   });
 
   for (const file of FILES) {

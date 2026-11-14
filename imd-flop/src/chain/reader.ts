@@ -8,15 +8,19 @@
  *
  * It takes the four names of a runtime, never a runtime (rule H6), and copies the bytes it is given by
  * their internal state before it reads them (rule H3).
+ *
+ * readOwnerCall reads the two calls of the session's owner (P5a, O9) by the same table, and refuses a grant the
+ * encoder would not write: an allow list other than exactly ComputeChannel, a cap of 0, caps out of order, a
+ * duration of 0 or above the runtime's longest.
  */
 import { ed25519 } from "@noble/curves/ed25519.js";
-import { INNER_PALLET, spendOf, type Bytes32, type InnerCall, type InnerName } from "./calls.js";
+import { INNER_PALLET, isAllowedPalletList, OWNER_ALLOWED_PALLET, OWNER_NAMES, OWNER_PALLET, spendOf, type Bytes32, type InnerCall, type InnerName, type OwnerName } from "./calls.js";
 import { refuse } from "./errors.js";
 import { lastValidBlock, readEra } from "./era.js";
-import { bytesOf, readValue } from "./fields.js";
+import { bytesOf, readBytesList, readValue } from "./fields.js";
 import { signingPayload, type SignedPath } from "./payload.js";
 import { ByteReader } from "./scale.js";
-import { reviewedRuntime, type Reviewed } from "./shape.js";
+import { reviewedOwnerRuntime, reviewedRuntime, type Reviewed, type ReviewedOwner } from "./shape.js";
 import type { CallEntry, RuntimeId } from "./table.js";
 import { freezeFunction } from "../freeze.js";
 
@@ -151,3 +155,53 @@ export function readExtrinsic(runtime: RuntimeId, input: Uint8Array, birthBlock:
   return { signer, signature, accountNonce, era, tip, metadataHashMode, birth, lastValidBlock: lastValidBlock(birth.number), signed, payloadLength: payload.length, call, callBytes };
 }
 freezeFunction(readExtrinsic);
+
+/** What an owner's call holds (P5a): the grant with its caps, duration and allow list, or the revoke. */
+export type OwnerCallData =
+  | {
+      readonly call: "create_session";
+      readonly delegate: Bytes32;
+      readonly spending_cap: bigint;
+      readonly per_tx_limit: bigint;
+      readonly daily_cap: bigint;
+      readonly duration_blocks: number;
+      readonly allowed_pallets: readonly Uint8Array[];
+    }
+  | { readonly call: "revoke_session"; readonly delegate: Bytes32 };
+
+/** The rules of a grant (P5a, O8, O9), on what was read. What the encoder refuses to write, the reader refuses to read. */
+function checkGrant(data: Extract<OwnerCallData, { call: "create_session" }>, reviewed: ReviewedOwner): void {
+  if (!isAllowedPalletList(data.allowed_pallets)) {
+    refuse("CALL_NOT_ALLOWED", `create_session.allowed_pallets holds ${data.allowed_pallets.length} names: a grant allows exactly ${OWNER_ALLOWED_PALLET}, written in that case, and nothing else`);
+  }
+  for (const cap of ["spending_cap", "per_tx_limit", "daily_cap"] as const) {
+    if (data[cap] === 0n) refuse("OUT_OF_RANGE", `create_session.${cap} is 0 raw: a grant that cannot be spent is not written`);
+  }
+  if (data.per_tx_limit > data.daily_cap) refuse("OUT_OF_RANGE", `create_session.per_tx_limit ${data.per_tx_limit} raw is above daily_cap ${data.daily_cap} raw: a grant's caps must be in order`);
+  if (data.daily_cap > data.spending_cap) refuse("OUT_OF_RANGE", `create_session.daily_cap ${data.daily_cap} raw is above spending_cap ${data.spending_cap} raw: a grant's caps must be in order`);
+  if (data.duration_blocks < 1 || data.duration_blocks > reviewed.maxSessionDuration) {
+    refuse("OUT_OF_RANGE", `create_session.duration_blocks ${data.duration_blocks} is not from 1 to MaxSessionDuration ${reviewed.maxSessionDuration} blocks`);
+  }
+}
+
+function readOwner(r: ByteReader, reviewed: ReviewedOwner): OwnerCallData {
+  const pallet = r.byte();
+  const index = r.byte();
+  const entry = Object.values(reviewed.calls).find((e) => e.palletIndex === pallet && e.callIndex === index);
+  if (!entry) refuse("CALL_NOT_ALLOWED", `call ${pallet}/${index} is not one of ${OWNER_NAMES.map((n) => `${OWNER_PALLET}.${n}`).join(", ")}`);
+  const out: Record<string, unknown> = { call: entry.name as OwnerName };
+  for (const f of entry.fields) out[f.name] = f.type.kind === "bytesList" ? readBytesList(r) : readValue(r, f.type, `${entry.name}.${f.name}`);
+  const data = out as unknown as OwnerCallData;
+  if (data.call === "create_session") checkGrant(data, reviewed);
+  return data;
+}
+
+/** Reads the call bytes of an owner's call: create_session or revoke_session, and nothing left over (P5a, O9). */
+export function readOwnerCall(runtime: RuntimeId, bytes: Uint8Array): OwnerCallData {
+  const reviewed = reviewedOwnerRuntime(runtime);
+  const r = new ByteReader(bytesOf(bytes, null, "the call bytes"));
+  const data = readOwner(r, reviewed);
+  r.done("the call");
+  return data;
+}
+freezeFunction(readOwnerCall);

@@ -11,11 +11,11 @@ export const CHAIN_REFUSAL = Object.freeze({
   RUNTIME_UNKNOWN: "RUNTIME_UNKNOWN",
   /** A byte value of the wrong length: a 32 byte field, a public key, a block hash, a signature. */
   WRONG_LENGTH: "WRONG_LENGTH",
-  /** A number out of the range of its type: u32, u64, u128, a block number. */
+  /** A number out of the range of its type: u32, u64, u128, a block number; or out of the range its call allows: a cap of 0, caps out of order, a session's duration. */
   OUT_OF_RANGE: "OUT_OF_RANGE",
   /** An enum given by a name its type in the table does not have. */
   ENUM_UNKNOWN: "ENUM_UNKNOWN",
-  /** An inner call that is not one of the five, or call bytes of a call the reader does not know. */
+  /** An inner call that is not one of the five, or call bytes of a call the reader does not know, or an owner's grant whose allow list is not exactly the one pallet. */
   CALL_NOT_ALLOWED: "CALL_NOT_ALLOWED",
   /** A value of the wrong kind or a field missing or extra: a number for an amount, free bytes, an unknown key. */
   BAD_INPUT: "BAD_INPUT",
