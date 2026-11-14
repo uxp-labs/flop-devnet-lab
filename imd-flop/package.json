@@ -14,7 +14,7 @@
     "prebuild": "node scripts/need-observatory.mjs",
     "build": "tsc -p tsconfig.json",
     "pretest": "node scripts/need-observatory.mjs",
-    "test": "tsc -p tsconfig.json && vitest run",
+    "test": "vitest run",
     "check": "bash ./scripts/offline-check.sh",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "demo": "bash ./demo.sh"

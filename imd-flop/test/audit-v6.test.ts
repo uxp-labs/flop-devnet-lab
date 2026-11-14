@@ -2,7 +2,7 @@
  * Fail-first probes for the v6 ledger lock: a lock whose holder is alive must never be stolen,
  * however old its mtime. Only a lock proven stale (its owner process is gone) may be reclaimed.
  */
-import { execFileSync, spawn, type ChildProcess } from "node:child_process";
+import { spawn, type ChildProcess } from "node:child_process";
 import { existsSync, readFileSync, unlinkSync, utimesSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -11,8 +11,6 @@ import { readLines, readySeat, tmpHome } from "./helpers.js";
 const SEAT = "9001";
 const root = join(import.meta.dirname, "..");
 const lockPath = (home: string) => `${join(home, "ledger.jsonl")}.lock`;
-
-function build() { execFileSync("npx", ["tsc", "-p", "tsconfig.json"], { cwd: root }); }
 
 function runnerFile(home: string): string {
   const runner = join(home, "runner.mjs");
@@ -70,7 +68,6 @@ const sentRows = (home: string) =>
 
 describe("v6 ledger lock liveness", () => {
   it("never steals a >30 s old lock while its holder is alive; the second call refuses and reserves nothing", async () => {
-    build();
     const home = tmpHome();
     await readySeat(home, SEAT, "0.186");
     const holder = await startHolder(home, 9_000);
@@ -87,7 +84,6 @@ describe("v6 ledger lock liveness", () => {
   }, 30_000);
 
   it("reclaims an old lock only when its recorded owner process is gone", async () => {
-    build();
     const home = tmpHome();
     await readySeat(home, SEAT, "0.186");
     const dead = spawn(process.execPath, ["-e", "0"]);
@@ -103,7 +99,6 @@ describe("v6 ledger lock liveness", () => {
 
   it("does not steal an old lock whose owner is on another host", async () => {
     // Moved (review fixes 4, item 5): this also held an empty and a "not json" lock. Those are in the next test.
-    build();
     for (const body of [JSON.stringify({ pid: 1, host: "some-other-host", token: "x" })]) {
       const home = tmpHome();
       await readySeat(home, SEAT, "0.186");
@@ -124,7 +119,6 @@ describe("v6 ledger lock liveness", () => {
   // its owner in it, so one is a leftover of an older version or damage, and it fails closed: the run
   // refuses, names the lock, says it has no readable owner and gives the way back. The way back works.
   it("never removes a lock with no readable owner (empty or not JSON), however old; removing it by hand lets the run go on", async () => {
-    build();
     for (const body of ["", "not json"]) {
       const home = tmpHome();
       await readySeat(home, SEAT, "0.186");

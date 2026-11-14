@@ -539,7 +539,17 @@ Tests fail if any attempt is left in the log.
     each file once, so a file that reached its final check in two runs is itself a failure.
 - No test may load a second copy of `src/guard.ts` (by reloading or mocking modules, or by
   importing it under a query string): a copy's attempts would reach neither the log nor the
-  journal. A test reads every test file for those forms.
+  journal. A test reads every test file for those forms. One exception, held part by part by that
+  same test: `test/shape-pin-derived.test.ts` may mock one module, `src/scale/metadata.js`, in
+  exactly one `vi.mock` call whose first argument, read from the call itself, is that literal
+  target. The test also holds that `vi.importActual` is banned in that file too, so the factory's
+  own argument is the only way to the real module. A module mock replaces that one module and nothing else, every other
+  module is still loaded once in the file, and `src/scale/metadata.ts` imports only
+  `src/scale/reader.ts`, which imports nothing, so no second copy of the guard can load by it.
+  Every other form stays banned in that file too. The scan reads code only: comments are taken
+  out, and the word `vi` may stand only directly before a dot and a member name. The scan catches
+  the plain spellings; a diff that hides one is for the review. The pin's fourth refusal cannot fire by any input
+  while its two sha256 checks hold, so its test must change what the metadata parses to.
 - The harness canary proves that a test leaving any of these in the log fails: a fetch, an
   `node:https` request, a `node:net` connection, a child process, module hooks, a listening handle
   made under `listen`, a `dgram.Socket` made directly, a refused RPC write, a refused signature and
@@ -987,7 +997,17 @@ for everything it reads.
   `test/helpers/batch-answer.ts`; it decodes nothing. What its values mean is the decoder's
   (section 9), and a value of an entry the reviewed shape does not state is not decoded: its bytes
   are kept apart and the value it answers stays unknown.
-- The fifth list reads the encoder's devnet test at spec 1014020: the start block and the block of
+- The sixth list reads the two blocks of the first recording where a compute channel settled, each
+  by the one `ComputeChannel.Settled` event of its block: each block's hash by its height, the block
+  whole by `chain_getBlock`, and one `state_queryStorageAt` at it of `System.Events`,
+  `System.LastRuntimeUpgrade` and the channel's `ComputeChannel.Channels` record; then the parent's
+  hash by its height and one `state_queryStorageAt` at the parent of the last two. 12 calls. Its
+  keys are built from the reviewed metadata of the spec a recorded `System.LastRuntimeUpgrade` names
+  through `runtimeOfBlock`, named by a file, a field and a block of the plan, never typed: the
+  field passes only when its tape line is an `rpc` call of `state_getStorage` with exactly two
+  params, the `System.LastRuntimeUpgrade` key and the hash of that block. A parent's height is its
+  child's recorded header's number less one, and its field says so.
+- The fifth list read the encoder's devnet test at spec 1014020: the start block and the block of
   each sent step, each hash by its height, and at each one `state_queryStorageAt` of the same eight
   keys in one fixed order, built from the 1014020 metadata; each step's block whole by
   `chain_getBlock` at its hash; and for each step signed with a mortal era the hash at the era's
@@ -1070,9 +1090,8 @@ below.
   with the hashers the metadata states for it, each map key one whole value of its key type; a
   block's System.Events, by the type the metadata gives that entry; and the value of a storage
   entry the reviewed shape states, at a pinned block. Each event gets its pallet name and index,
-  its name and variant index, its fields and its phase. The storage it reads today: System.Events
-  and System.LastRuntimeUpgrade, ComputeChannel.Channels, and FlopSessionKeys Sessions,
-  SessionNonces and CircuitBreakers (`STATED_ENTRIES`).
+  its name and variant index, its fields and its phase. The storage it reads: the 16 stated
+  entries listed below (`STATED_ENTRIES`).
 - Absent is an answer. A storage read whose answer is null is never an error and never a zero the
   chain did not send. For an Optional entry its value is null; for a Default entry its value is the
   default bytes the metadata states for that entry, decoded by its type; and either way it is

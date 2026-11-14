@@ -3,7 +3,7 @@
     {
       "method": "chain_getFinalizedHead",
       "params": [],
-      "why": "the finalized head when the run read it: every block below must be at or under it"
+      "why": "the finalized head when the list was read: every block below must be at or under it"
     },
     {
       "method": "chain_getBlockHash",
@@ -15,64 +15,16 @@
     {
       "method": "chain_getBlockHash",
       "params": [
-        3654783
+        3479299
       ],
-      "why": "the canonical hash at height 3654783, to compare with 0xafded080999d0fc05b3c6f5d3f1579fd59b6cbe9829e1a9c52ff99a08a0d134d, the hash the encoder test's results.json holds for the start of the run"
-    },
-    {
-      "method": "state_queryStorageAt",
-      "params": [
-        [
-          "0x26aa394eea5630e07c48ae0c9558cef780d41e5e16056765bc8461851072c9d7",
-          "0x26aa394eea5630e07c48ae0c9558cef7f9cce9c888469bb1a0dceaa129672ef8",
-          "0x26aa394eea5630e07c48ae0c9558cef7b99d880ec681799c0cf30e8886371da9f9edc9e72d99b3c30da8e2d40b25bd41e462d014cab1239a123233647052f4e3b572322e982441d6b7a5c1694d8419e2",
-          "0x26aa394eea5630e07c48ae0c9558cef7b99d880ec681799c0cf30e8886371da9567c4daccb3399aa9f2b1c65803dda183be70673710f6e0b4ac2f6e332ad017dd74cf218f7e401052c0ee25ed1662910",
-          "0x26d6680094539fc341d5ea8ffc79d76f028685274e698e781f7f2766cba0cc83f9edc9e72d99b3c30da8e2d40b25bd41e462d014cab1239a123233647052f4e3b572322e982441d6b7a5c1694d8419e2567c4daccb3399aa9f2b1c65803dda183be70673710f6e0b4ac2f6e332ad017dd74cf218f7e401052c0ee25ed1662910",
-          "0x26d6680094539fc341d5ea8ffc79d76fa8bf8c9b4fb4963e0d891d0ea6eb7b2cf9edc9e72d99b3c30da8e2d40b25bd41e462d014cab1239a123233647052f4e3b572322e982441d6b7a5c1694d8419e2567c4daccb3399aa9f2b1c65803dda183be70673710f6e0b4ac2f6e332ad017dd74cf218f7e401052c0ee25ed1662910",
-          "0x26d6680094539fc341d5ea8ffc79d76f8ab2f41796e7514fa8610f8d361c94e7567c4daccb3399aa9f2b1c65803dda183be70673710f6e0b4ac2f6e332ad017dd74cf218f7e401052c0ee25ed1662910",
-          "0x130ba67ef498736437f36679a246a7547759ccc18de172078306ca5973251a7b0fa4cc394f459db65c126704e57e55ddd8ae28f57ec645b73a4ea6deaa2d0b1f9228b93b08eb77779481898d371b8480"
-        ],
-        "0xafded080999d0fc05b3c6f5d3f1579fd59b6cbe9829e1a9c52ff99a08a0d134d"
-      ],
-      "why": "at block 3654783, the finalized block the run started from, before any step: System.Events, the events of every extrinsic of the block, and System.LastRuntimeUpgrade, the runtime that executed it, then the stored values at the block: System.Account of the owner 0xe462d014..., System.Account of the device 0x3be70673..., FlopSessionKeys.Sessions of the owner 0xe462d014... and the device 0x3be70673..., FlopSessionKeys.SessionNonces of the owner 0xe462d014... and the device 0x3be70673..., FlopSessionKeys.CircuitBreakers of the device 0x3be70673..., ComputeChannel.Channels of the channel of T3 0xd8ae28f5..., the force_open to the named miner 0x1ec8abdfa88707679f8a2fbfc0bcd80184e2f731d91bb9fa152b750210556c7f; asked together in one call, answered as one set for the block, a key that holds nothing listed with null"
-    },
-    {
-      "method": "chain_getBlockHash",
-      "params": [
-        3654835
-      ],
-      "why": "the canonical hash at height 3654835, to compare with 0x05a8b32e2f9ef401e147d7594e0f09348ba4a310568356edeb70c827e72853e0, the hash the encoder test's results.json holds for step T1"
-    },
-    {
-      "method": "state_queryStorageAt",
-      "params": [
-        [
-          "0x26aa394eea5630e07c48ae0c9558cef780d41e5e16056765bc8461851072c9d7",
-          "0x26aa394eea5630e07c48ae0c9558cef7f9cce9c888469bb1a0dceaa129672ef8",
-          "0x26aa394eea5630e07c48ae0c9558cef7b99d880ec681799c0cf30e8886371da9f9edc9e72d99b3c30da8e2d40b25bd41e462d014cab1239a123233647052f4e3b572322e982441d6b7a5c1694d8419e2",
-          "0x26aa394eea5630e07c48ae0c9558cef7b99d880ec681799c0cf30e8886371da9567c4daccb3399aa9f2b1c65803dda183be70673710f6e0b4ac2f6e332ad017dd74cf218f7e401052c0ee25ed1662910",
-          "0x26d6680094539fc341d5ea8ffc79d76f028685274e698e781f7f2766cba0cc83f9edc9e72d99b3c30da8e2d40b25bd41e462d014cab1239a123233647052f4e3b572322e982441d6b7a5c1694d8419e2567c4daccb3399aa9f2b1c65803dda183be70673710f6e0b4ac2f6e332ad017dd74cf218f7e401052c0ee25ed1662910",
-          "0x26d6680094539fc341d5ea8ffc79d76fa8bf8c9b4fb4963e0d891d0ea6eb7b2cf9edc9e72d99b3c30da8e2d40b25bd41e462d014cab1239a123233647052f4e3b572322e982441d6b7a5c1694d8419e2567c4daccb3399aa9f2b1c65803dda183be70673710f6e0b4ac2f6e332ad017dd74cf218f7e401052c0ee25ed1662910",
-          "0x26d6680094539fc341d5ea8ffc79d76f8ab2f41796e7514fa8610f8d361c94e7567c4daccb3399aa9f2b1c65803dda183be70673710f6e0b4ac2f6e332ad017dd74cf218f7e401052c0ee25ed1662910",
-          "0x130ba67ef498736437f36679a246a7547759ccc18de172078306ca5973251a7b0fa4cc394f459db65c126704e57e55ddd8ae28f57ec645b73a4ea6deaa2d0b1f9228b93b08eb77779481898d371b8480"
-        ],
-        "0x05a8b32e2f9ef401e147d7594e0f09348ba4a310568356edeb70c827e72853e0"
-      ],
-      "why": "at block 3654835, the block where the owner sends the device its fees (step T1; the run time record says success): System.Events, the events of every extrinsic of the block, and System.LastRuntimeUpgrade, the runtime that executed it, then the stored values at the block: System.Account of the owner 0xe462d014..., System.Account of the device 0x3be70673..., FlopSessionKeys.Sessions of the owner 0xe462d014... and the device 0x3be70673..., FlopSessionKeys.SessionNonces of the owner 0xe462d014... and the device 0x3be70673..., FlopSessionKeys.CircuitBreakers of the device 0x3be70673..., ComputeChannel.Channels of the channel of T3 0xd8ae28f5..., the force_open to the named miner 0x1ec8abdfa88707679f8a2fbfc0bcd80184e2f731d91bb9fa152b750210556c7f; asked together in one call, answered as one set for the block, a key that holds nothing listed with null"
+      "why": "the canonical hash at height 3479299, to compare with 0xeba1182c9f2bbf5a8fd012afddc201c2ebed11b64f59b10c1d3c4fcc4b2ee18e, the hash the first recording's tape answered for the block where the gateway's channel 0x9f81f65b... settled, by the ComputeChannel.Settled event of the first recording"
     },
     {
       "method": "chain_getBlock",
       "params": [
-        "0x05a8b32e2f9ef401e147d7594e0f09348ba4a310568356edeb70c827e72853e0"
+        "0xeba1182c9f2bbf5a8fd012afddc201c2ebed11b64f59b10c1d3c4fcc4b2ee18e"
       ],
-      "why": "the block 3654835 of step T1, its header and extrinsics: the extrinsic at the index the run time record names for step T1 must be byte for byte the signed extrinsic of step T1"
-    },
-    {
-      "method": "chain_getBlockHash",
-      "params": [
-        3654914
-      ],
-      "why": "the canonical hash at height 3654914, to compare with 0xc36ced0ba0f84bbcafbe8a1a34508a32cd40e5b1849d737d9d8c81ff3cb197c8, the hash the encoder test's results.json holds for step T2"
+      "why": "the block 3479299, the block where the gateway's channel 0x9f81f65b... settled, by the ComputeChannel.Settled event of the first recording: its header and extrinsics, so the recording holds the settle call's bytes as the block holds them"
     },
     {
       "method": "state_queryStorageAt",
@@ -80,30 +32,43 @@
         [
           "0x26aa394eea5630e07c48ae0c9558cef780d41e5e16056765bc8461851072c9d7",
           "0x26aa394eea5630e07c48ae0c9558cef7f9cce9c888469bb1a0dceaa129672ef8",
-          "0x26aa394eea5630e07c48ae0c9558cef7b99d880ec681799c0cf30e8886371da9f9edc9e72d99b3c30da8e2d40b25bd41e462d014cab1239a123233647052f4e3b572322e982441d6b7a5c1694d8419e2",
-          "0x26aa394eea5630e07c48ae0c9558cef7b99d880ec681799c0cf30e8886371da9567c4daccb3399aa9f2b1c65803dda183be70673710f6e0b4ac2f6e332ad017dd74cf218f7e401052c0ee25ed1662910",
-          "0x26d6680094539fc341d5ea8ffc79d76f028685274e698e781f7f2766cba0cc83f9edc9e72d99b3c30da8e2d40b25bd41e462d014cab1239a123233647052f4e3b572322e982441d6b7a5c1694d8419e2567c4daccb3399aa9f2b1c65803dda183be70673710f6e0b4ac2f6e332ad017dd74cf218f7e401052c0ee25ed1662910",
-          "0x26d6680094539fc341d5ea8ffc79d76fa8bf8c9b4fb4963e0d891d0ea6eb7b2cf9edc9e72d99b3c30da8e2d40b25bd41e462d014cab1239a123233647052f4e3b572322e982441d6b7a5c1694d8419e2567c4daccb3399aa9f2b1c65803dda183be70673710f6e0b4ac2f6e332ad017dd74cf218f7e401052c0ee25ed1662910",
-          "0x26d6680094539fc341d5ea8ffc79d76f8ab2f41796e7514fa8610f8d361c94e7567c4daccb3399aa9f2b1c65803dda183be70673710f6e0b4ac2f6e332ad017dd74cf218f7e401052c0ee25ed1662910",
-          "0x130ba67ef498736437f36679a246a7547759ccc18de172078306ca5973251a7b0fa4cc394f459db65c126704e57e55ddd8ae28f57ec645b73a4ea6deaa2d0b1f9228b93b08eb77779481898d371b8480"
+          "0x130ba67ef498736437f36679a246a7547759ccc18de172078306ca5973251a7b4cbe4c8d8d511e4fa7196fdba7c3819c9f81f65bc93855d394329e4996bc78d949bb786178f3471c13d3853f9813ddd7"
         ],
-        "0xc36ced0ba0f84bbcafbe8a1a34508a32cd40e5b1849d737d9d8c81ff3cb197c8"
+        "0xeba1182c9f2bbf5a8fd012afddc201c2ebed11b64f59b10c1d3c4fcc4b2ee18e"
       ],
-      "why": "at block 3654914, the block where the owner creates the session for the device (step T2; the run time record says success): System.Events, the events of every extrinsic of the block, and System.LastRuntimeUpgrade, the runtime that executed it, then the stored values at the block: System.Account of the owner 0xe462d014..., System.Account of the device 0x3be70673..., FlopSessionKeys.Sessions of the owner 0xe462d014... and the device 0x3be70673..., FlopSessionKeys.SessionNonces of the owner 0xe462d014... and the device 0x3be70673..., FlopSessionKeys.CircuitBreakers of the device 0x3be70673..., ComputeChannel.Channels of the channel of T3 0xd8ae28f5..., the force_open to the named miner 0x1ec8abdfa88707679f8a2fbfc0bcd80184e2f731d91bb9fa152b750210556c7f; asked together in one call, answered as one set for the block, a key that holds nothing listed with null"
-    },
-    {
-      "method": "chain_getBlock",
-      "params": [
-        "0xc36ced0ba0f84bbcafbe8a1a34508a32cd40e5b1849d737d9d8c81ff3cb197c8"
-      ],
-      "why": "the block 3654914 of step T2, its header and extrinsics: the extrinsic at the index the run time record names for step T2 must be byte for byte the signed extrinsic of step T2"
+      "why": "at block 3479299, the block where the gateway's channel 0x9f81f65b... settled, by the ComputeChannel.Settled event of the first recording: System.Events, every event of the block, System.LastRuntimeUpgrade, the runtime that executed it, and ComputeChannel.Channels of the gateway's channel 0x9f81f65b..., its stored record at the block; asked together in one call, answered as one set for the block, a key that holds nothing listed with null"
     },
     {
       "method": "chain_getBlockHash",
       "params": [
-        3655037
+        3479298
       ],
-      "why": "the canonical hash at height 3655037, to compare with 0x9045529eb1c4e8eaf063c9d1ca63702c26f6c434989408b0b04dc4933ecc3957, the hash the encoder test's results.json holds for step T3"
+      "why": "the canonical hash at height 3479298, to compare with 0xaad1d81c1d390358e8a60ca5ed26c46b80d17c71d5a2c187caee64d854711b10, the parentHash of the header the first recording's tape holds for block 3479299, the block where the gateway's channel 0x9f81f65b... settled, by the ComputeChannel.Settled event of the first recording"
+    },
+    {
+      "method": "state_queryStorageAt",
+      "params": [
+        [
+          "0x26aa394eea5630e07c48ae0c9558cef7f9cce9c888469bb1a0dceaa129672ef8",
+          "0x130ba67ef498736437f36679a246a7547759ccc18de172078306ca5973251a7b4cbe4c8d8d511e4fa7196fdba7c3819c9f81f65bc93855d394329e4996bc78d949bb786178f3471c13d3853f9813ddd7"
+        ],
+        "0xaad1d81c1d390358e8a60ca5ed26c46b80d17c71d5a2c187caee64d854711b10"
+      ],
+      "why": "at block 3479298, the parent of the block where the gateway's channel 0x9f81f65b... settled, by the ComputeChannel.Settled event of the first recording, read for the channel's record before the settle: System.LastRuntimeUpgrade, the runtime that executed it, and ComputeChannel.Channels of the gateway's channel 0x9f81f65b...; asked together in one call, answered as one set for the block, a key that holds nothing listed with null"
+    },
+    {
+      "method": "chain_getBlockHash",
+      "params": [
+        3479277
+      ],
+      "why": "the canonical hash at height 3479277, to compare with 0xb85b24f4b0609839aea37d97ad1aa9f7ec7aba20348bca090ab31df471764aba, the hash the first recording's tape answered for the block where the other channel 0x1fcd12cb... settled, by the ComputeChannel.Settled event of the first recording"
+    },
+    {
+      "method": "chain_getBlock",
+      "params": [
+        "0xb85b24f4b0609839aea37d97ad1aa9f7ec7aba20348bca090ab31df471764aba"
+      ],
+      "why": "the block 3479277, the block where the other channel 0x1fcd12cb... settled, by the ComputeChannel.Settled event of the first recording: its header and extrinsics, so the recording holds the settle call's bytes as the block holds them"
     },
     {
       "method": "state_queryStorageAt",
@@ -111,206 +76,29 @@
         [
           "0x26aa394eea5630e07c48ae0c9558cef780d41e5e16056765bc8461851072c9d7",
           "0x26aa394eea5630e07c48ae0c9558cef7f9cce9c888469bb1a0dceaa129672ef8",
-          "0x26aa394eea5630e07c48ae0c9558cef7b99d880ec681799c0cf30e8886371da9f9edc9e72d99b3c30da8e2d40b25bd41e462d014cab1239a123233647052f4e3b572322e982441d6b7a5c1694d8419e2",
-          "0x26aa394eea5630e07c48ae0c9558cef7b99d880ec681799c0cf30e8886371da9567c4daccb3399aa9f2b1c65803dda183be70673710f6e0b4ac2f6e332ad017dd74cf218f7e401052c0ee25ed1662910",
-          "0x26d6680094539fc341d5ea8ffc79d76f028685274e698e781f7f2766cba0cc83f9edc9e72d99b3c30da8e2d40b25bd41e462d014cab1239a123233647052f4e3b572322e982441d6b7a5c1694d8419e2567c4daccb3399aa9f2b1c65803dda183be70673710f6e0b4ac2f6e332ad017dd74cf218f7e401052c0ee25ed1662910",
-          "0x26d6680094539fc341d5ea8ffc79d76fa8bf8c9b4fb4963e0d891d0ea6eb7b2cf9edc9e72d99b3c30da8e2d40b25bd41e462d014cab1239a123233647052f4e3b572322e982441d6b7a5c1694d8419e2567c4daccb3399aa9f2b1c65803dda183be70673710f6e0b4ac2f6e332ad017dd74cf218f7e401052c0ee25ed1662910",
-          "0x26d6680094539fc341d5ea8ffc79d76f8ab2f41796e7514fa8610f8d361c94e7567c4daccb3399aa9f2b1c65803dda183be70673710f6e0b4ac2f6e332ad017dd74cf218f7e401052c0ee25ed1662910",
-          "0x130ba67ef498736437f36679a246a7547759ccc18de172078306ca5973251a7b0fa4cc394f459db65c126704e57e55ddd8ae28f57ec645b73a4ea6deaa2d0b1f9228b93b08eb77779481898d371b8480"
+          "0x130ba67ef498736437f36679a246a7547759ccc18de172078306ca5973251a7ba7b23cf314ae3c32b56a9a0215dd86fa1fcd12cb38f0de5edc2cb4ac582784859663dd32d8519b04eff5a20be8312ae4"
         ],
-        "0x9045529eb1c4e8eaf063c9d1ca63702c26f6c434989408b0b04dc4933ecc3957"
+        "0xb85b24f4b0609839aea37d97ad1aa9f7ec7aba20348bca090ab31df471764aba"
       ],
-      "why": "at block 3655037, the block where the device sends ComputeChannel.force_open through the session, signed through the lab's encoder with a mortal era and a declared spend equal to the escrow (step T3; the run time record says success): System.Events, the events of every extrinsic of the block, and System.LastRuntimeUpgrade, the runtime that executed it, then the stored values at the block: System.Account of the owner 0xe462d014..., System.Account of the device 0x3be70673..., FlopSessionKeys.Sessions of the owner 0xe462d014... and the device 0x3be70673..., FlopSessionKeys.SessionNonces of the owner 0xe462d014... and the device 0x3be70673..., FlopSessionKeys.CircuitBreakers of the device 0x3be70673..., ComputeChannel.Channels of the channel of T3 0xd8ae28f5..., the force_open to the named miner 0x1ec8abdfa88707679f8a2fbfc0bcd80184e2f731d91bb9fa152b750210556c7f; asked together in one call, answered as one set for the block, a key that holds nothing listed with null"
-    },
-    {
-      "method": "chain_getBlock",
-      "params": [
-        "0x9045529eb1c4e8eaf063c9d1ca63702c26f6c434989408b0b04dc4933ecc3957"
-      ],
-      "why": "the block 3655037 of step T3, its header and extrinsics: the extrinsic at the index the run time record names for step T3 must be byte for byte the signed extrinsic of step T3"
+      "why": "at block 3479277, the block where the other channel 0x1fcd12cb... settled, by the ComputeChannel.Settled event of the first recording: System.Events, every event of the block, System.LastRuntimeUpgrade, the runtime that executed it, and ComputeChannel.Channels of the other channel 0x1fcd12cb..., its stored record at the block; asked together in one call, answered as one set for the block, a key that holds nothing listed with null"
     },
     {
       "method": "chain_getBlockHash",
       "params": [
-        3654995
+        3479276
       ],
-      "why": "the canonical hash at height 3654995, to compare with 0x3467bbce5dc0eb5267fdf1c3abc12fd30f87e82a13bdaea77ec78ed4a106226f, the birth block of the mortal era step T3 was signed with: the signature of step T3 binds this block's hash"
-    },
-    {
-      "method": "chain_getBlockHash",
-      "params": [
-        3655115
-      ],
-      "why": "the canonical hash at height 3655115, to compare with 0xb9b084f43fa77338fa9f329d5208551eb92d084004c56923997a986f358255ee, the hash the encoder test's results.json holds for step T4"
+      "why": "the canonical hash at height 3479276, to compare with 0x9387453648c8ab3d245cbf999ab3b797c76b13de0e58d5cc213f402a10480df1, the parentHash of the header the first recording's tape holds for block 3479277, the block where the other channel 0x1fcd12cb... settled, by the ComputeChannel.Settled event of the first recording"
     },
     {
       "method": "state_queryStorageAt",
       "params": [
         [
-          "0x26aa394eea5630e07c48ae0c9558cef780d41e5e16056765bc8461851072c9d7",
           "0x26aa394eea5630e07c48ae0c9558cef7f9cce9c888469bb1a0dceaa129672ef8",
-          "0x26aa394eea5630e07c48ae0c9558cef7b99d880ec681799c0cf30e8886371da9f9edc9e72d99b3c30da8e2d40b25bd41e462d014cab1239a123233647052f4e3b572322e982441d6b7a5c1694d8419e2",
-          "0x26aa394eea5630e07c48ae0c9558cef7b99d880ec681799c0cf30e8886371da9567c4daccb3399aa9f2b1c65803dda183be70673710f6e0b4ac2f6e332ad017dd74cf218f7e401052c0ee25ed1662910",
-          "0x26d6680094539fc341d5ea8ffc79d76f028685274e698e781f7f2766cba0cc83f9edc9e72d99b3c30da8e2d40b25bd41e462d014cab1239a123233647052f4e3b572322e982441d6b7a5c1694d8419e2567c4daccb3399aa9f2b1c65803dda183be70673710f6e0b4ac2f6e332ad017dd74cf218f7e401052c0ee25ed1662910",
-          "0x26d6680094539fc341d5ea8ffc79d76fa8bf8c9b4fb4963e0d891d0ea6eb7b2cf9edc9e72d99b3c30da8e2d40b25bd41e462d014cab1239a123233647052f4e3b572322e982441d6b7a5c1694d8419e2567c4daccb3399aa9f2b1c65803dda183be70673710f6e0b4ac2f6e332ad017dd74cf218f7e401052c0ee25ed1662910",
-          "0x26d6680094539fc341d5ea8ffc79d76f8ab2f41796e7514fa8610f8d361c94e7567c4daccb3399aa9f2b1c65803dda183be70673710f6e0b4ac2f6e332ad017dd74cf218f7e401052c0ee25ed1662910",
-          "0x130ba67ef498736437f36679a246a7547759ccc18de172078306ca5973251a7b0fa4cc394f459db65c126704e57e55ddd8ae28f57ec645b73a4ea6deaa2d0b1f9228b93b08eb77779481898d371b8480"
+          "0x130ba67ef498736437f36679a246a7547759ccc18de172078306ca5973251a7ba7b23cf314ae3c32b56a9a0215dd86fa1fcd12cb38f0de5edc2cb4ac582784859663dd32d8519b04eff5a20be8312ae4"
         ],
-        "0xb9b084f43fa77338fa9f329d5208551eb92d084004c56923997a986f358255ee"
+        "0x9387453648c8ab3d245cbf999ab3b797c76b13de0e58d5cc213f402a10480df1"
       ],
-      "why": "at block 3655115, the block where the device sends ComputeChannel.top_up_escrow on the channel of T3 through the session, signed through the lab's encoder (step T4; the run time record says refused with ComputeChannel.BadState): System.Events, the events of every extrinsic of the block, and System.LastRuntimeUpgrade, the runtime that executed it, then the stored values at the block: System.Account of the owner 0xe462d014..., System.Account of the device 0x3be70673..., FlopSessionKeys.Sessions of the owner 0xe462d014... and the device 0x3be70673..., FlopSessionKeys.SessionNonces of the owner 0xe462d014... and the device 0x3be70673..., FlopSessionKeys.CircuitBreakers of the device 0x3be70673..., ComputeChannel.Channels of the channel of T3 0xd8ae28f5..., the force_open to the named miner 0x1ec8abdfa88707679f8a2fbfc0bcd80184e2f731d91bb9fa152b750210556c7f; asked together in one call, answered as one set for the block, a key that holds nothing listed with null"
-    },
-    {
-      "method": "chain_getBlock",
-      "params": [
-        "0xb9b084f43fa77338fa9f329d5208551eb92d084004c56923997a986f358255ee"
-      ],
-      "why": "the block 3655115 of step T4, its header and extrinsics: the extrinsic at the index the run time record names for step T4 must be byte for byte the signed extrinsic of step T4"
-    },
-    {
-      "method": "chain_getBlockHash",
-      "params": [
-        3655082
-      ],
-      "why": "the canonical hash at height 3655082, to compare with 0xf9c69a25c8cb4c8f61cfb8bdeb5d5eeb4827f24ba231c9d4a6dac74c7bbd430d, the birth block of the mortal era step T4 was signed with: the signature of step T4 binds this block's hash"
-    },
-    {
-      "method": "chain_getBlockHash",
-      "params": [
-        3655185
-      ],
-      "why": "the canonical hash at height 3655185, to compare with 0xce1b29311dcb8eea6438d8d7972290967a20ec881970d1e111ab9a3856fcea85, the hash the encoder test's results.json holds for step T5"
-    },
-    {
-      "method": "state_queryStorageAt",
-      "params": [
-        [
-          "0x26aa394eea5630e07c48ae0c9558cef780d41e5e16056765bc8461851072c9d7",
-          "0x26aa394eea5630e07c48ae0c9558cef7f9cce9c888469bb1a0dceaa129672ef8",
-          "0x26aa394eea5630e07c48ae0c9558cef7b99d880ec681799c0cf30e8886371da9f9edc9e72d99b3c30da8e2d40b25bd41e462d014cab1239a123233647052f4e3b572322e982441d6b7a5c1694d8419e2",
-          "0x26aa394eea5630e07c48ae0c9558cef7b99d880ec681799c0cf30e8886371da9567c4daccb3399aa9f2b1c65803dda183be70673710f6e0b4ac2f6e332ad017dd74cf218f7e401052c0ee25ed1662910",
-          "0x26d6680094539fc341d5ea8ffc79d76f028685274e698e781f7f2766cba0cc83f9edc9e72d99b3c30da8e2d40b25bd41e462d014cab1239a123233647052f4e3b572322e982441d6b7a5c1694d8419e2567c4daccb3399aa9f2b1c65803dda183be70673710f6e0b4ac2f6e332ad017dd74cf218f7e401052c0ee25ed1662910",
-          "0x26d6680094539fc341d5ea8ffc79d76fa8bf8c9b4fb4963e0d891d0ea6eb7b2cf9edc9e72d99b3c30da8e2d40b25bd41e462d014cab1239a123233647052f4e3b572322e982441d6b7a5c1694d8419e2567c4daccb3399aa9f2b1c65803dda183be70673710f6e0b4ac2f6e332ad017dd74cf218f7e401052c0ee25ed1662910",
-          "0x26d6680094539fc341d5ea8ffc79d76f8ab2f41796e7514fa8610f8d361c94e7567c4daccb3399aa9f2b1c65803dda183be70673710f6e0b4ac2f6e332ad017dd74cf218f7e401052c0ee25ed1662910",
-          "0x130ba67ef498736437f36679a246a7547759ccc18de172078306ca5973251a7b0fa4cc394f459db65c126704e57e55ddd8ae28f57ec645b73a4ea6deaa2d0b1f9228b93b08eb77779481898d371b8480"
-        ],
-        "0xce1b29311dcb8eea6438d8d7972290967a20ec881970d1e111ab9a3856fcea85"
-      ],
-      "why": "at block 3655185, the block where the device sends ComputeChannel.open_channel through the session, signed through the lab's encoder (step T5; the run time record says refused with ComputeChannel.CalibrationUnavailable): System.Events, the events of every extrinsic of the block, and System.LastRuntimeUpgrade, the runtime that executed it, then the stored values at the block: System.Account of the owner 0xe462d014..., System.Account of the device 0x3be70673..., FlopSessionKeys.Sessions of the owner 0xe462d014... and the device 0x3be70673..., FlopSessionKeys.SessionNonces of the owner 0xe462d014... and the device 0x3be70673..., FlopSessionKeys.CircuitBreakers of the device 0x3be70673..., ComputeChannel.Channels of the channel of T3 0xd8ae28f5..., the force_open to the named miner 0x1ec8abdfa88707679f8a2fbfc0bcd80184e2f731d91bb9fa152b750210556c7f; asked together in one call, answered as one set for the block, a key that holds nothing listed with null"
-    },
-    {
-      "method": "chain_getBlock",
-      "params": [
-        "0xce1b29311dcb8eea6438d8d7972290967a20ec881970d1e111ab9a3856fcea85"
-      ],
-      "why": "the block 3655185 of step T5, its header and extrinsics: the extrinsic at the index the run time record names for step T5 must be byte for byte the signed extrinsic of step T5"
-    },
-    {
-      "method": "chain_getBlockHash",
-      "params": [
-        3655152
-      ],
-      "why": "the canonical hash at height 3655152, to compare with 0x950061bf30acf44a910cf6f0565bfa135e5ac0e17676740d85ba0846a2fe1cef, the birth block of the mortal era step T5 was signed with: the signature of step T5 binds this block's hash"
-    },
-    {
-      "method": "chain_getBlockHash",
-      "params": [
-        3655678
-      ],
-      "why": "the canonical hash at height 3655678, to compare with 0x8225561fd91aa365f80f81a3fde5f3ab9bab65a79e81aa87dc0345c983fc4a49, the hash the encoder test's results.json holds for step T6"
-    },
-    {
-      "method": "state_queryStorageAt",
-      "params": [
-        [
-          "0x26aa394eea5630e07c48ae0c9558cef780d41e5e16056765bc8461851072c9d7",
-          "0x26aa394eea5630e07c48ae0c9558cef7f9cce9c888469bb1a0dceaa129672ef8",
-          "0x26aa394eea5630e07c48ae0c9558cef7b99d880ec681799c0cf30e8886371da9f9edc9e72d99b3c30da8e2d40b25bd41e462d014cab1239a123233647052f4e3b572322e982441d6b7a5c1694d8419e2",
-          "0x26aa394eea5630e07c48ae0c9558cef7b99d880ec681799c0cf30e8886371da9567c4daccb3399aa9f2b1c65803dda183be70673710f6e0b4ac2f6e332ad017dd74cf218f7e401052c0ee25ed1662910",
-          "0x26d6680094539fc341d5ea8ffc79d76f028685274e698e781f7f2766cba0cc83f9edc9e72d99b3c30da8e2d40b25bd41e462d014cab1239a123233647052f4e3b572322e982441d6b7a5c1694d8419e2567c4daccb3399aa9f2b1c65803dda183be70673710f6e0b4ac2f6e332ad017dd74cf218f7e401052c0ee25ed1662910",
-          "0x26d6680094539fc341d5ea8ffc79d76fa8bf8c9b4fb4963e0d891d0ea6eb7b2cf9edc9e72d99b3c30da8e2d40b25bd41e462d014cab1239a123233647052f4e3b572322e982441d6b7a5c1694d8419e2567c4daccb3399aa9f2b1c65803dda183be70673710f6e0b4ac2f6e332ad017dd74cf218f7e401052c0ee25ed1662910",
-          "0x26d6680094539fc341d5ea8ffc79d76f8ab2f41796e7514fa8610f8d361c94e7567c4daccb3399aa9f2b1c65803dda183be70673710f6e0b4ac2f6e332ad017dd74cf218f7e401052c0ee25ed1662910",
-          "0x130ba67ef498736437f36679a246a7547759ccc18de172078306ca5973251a7b0fa4cc394f459db65c126704e57e55ddd8ae28f57ec645b73a4ea6deaa2d0b1f9228b93b08eb77779481898d371b8480"
-        ],
-        "0x8225561fd91aa365f80f81a3fde5f3ab9bab65a79e81aa87dc0345c983fc4a49"
-      ],
-      "why": "at block 3655678, the block where the device sends ComputeChannel.expire_force_open for the channel of T3 through the session, signed through the lab's encoder (step T6; the run time record says success): System.Events, the events of every extrinsic of the block, and System.LastRuntimeUpgrade, the runtime that executed it, then the stored values at the block: System.Account of the owner 0xe462d014..., System.Account of the device 0x3be70673..., FlopSessionKeys.Sessions of the owner 0xe462d014... and the device 0x3be70673..., FlopSessionKeys.SessionNonces of the owner 0xe462d014... and the device 0x3be70673..., FlopSessionKeys.CircuitBreakers of the device 0x3be70673..., ComputeChannel.Channels of the channel of T3 0xd8ae28f5..., the force_open to the named miner 0x1ec8abdfa88707679f8a2fbfc0bcd80184e2f731d91bb9fa152b750210556c7f; asked together in one call, answered as one set for the block, a key that holds nothing listed with null"
-    },
-    {
-      "method": "chain_getBlock",
-      "params": [
-        "0x8225561fd91aa365f80f81a3fde5f3ab9bab65a79e81aa87dc0345c983fc4a49"
-      ],
-      "why": "the block 3655678 of step T6, its header and extrinsics: the extrinsic at the index the run time record names for step T6 must be byte for byte the signed extrinsic of step T6"
-    },
-    {
-      "method": "chain_getBlockHash",
-      "params": [
-        3655648
-      ],
-      "why": "the canonical hash at height 3655648, to compare with 0x227016243e02f2997d2074833e4a1de7a965cb7c8d4651b3cefcc660e2a9cbd9, the birth block of the mortal era step T6 was signed with: the signature of step T6 binds this block's hash"
-    },
-    {
-      "method": "chain_getBlockHash",
-      "params": [
-        3655735
-      ],
-      "why": "the canonical hash at height 3655735, to compare with 0xebfabc3ede98df1965b89d9273c021e2c88708cf3ecef0c53744226b0eb68c41, the hash the encoder test's results.json holds for step T8"
-    },
-    {
-      "method": "state_queryStorageAt",
-      "params": [
-        [
-          "0x26aa394eea5630e07c48ae0c9558cef780d41e5e16056765bc8461851072c9d7",
-          "0x26aa394eea5630e07c48ae0c9558cef7f9cce9c888469bb1a0dceaa129672ef8",
-          "0x26aa394eea5630e07c48ae0c9558cef7b99d880ec681799c0cf30e8886371da9f9edc9e72d99b3c30da8e2d40b25bd41e462d014cab1239a123233647052f4e3b572322e982441d6b7a5c1694d8419e2",
-          "0x26aa394eea5630e07c48ae0c9558cef7b99d880ec681799c0cf30e8886371da9567c4daccb3399aa9f2b1c65803dda183be70673710f6e0b4ac2f6e332ad017dd74cf218f7e401052c0ee25ed1662910",
-          "0x26d6680094539fc341d5ea8ffc79d76f028685274e698e781f7f2766cba0cc83f9edc9e72d99b3c30da8e2d40b25bd41e462d014cab1239a123233647052f4e3b572322e982441d6b7a5c1694d8419e2567c4daccb3399aa9f2b1c65803dda183be70673710f6e0b4ac2f6e332ad017dd74cf218f7e401052c0ee25ed1662910",
-          "0x26d6680094539fc341d5ea8ffc79d76fa8bf8c9b4fb4963e0d891d0ea6eb7b2cf9edc9e72d99b3c30da8e2d40b25bd41e462d014cab1239a123233647052f4e3b572322e982441d6b7a5c1694d8419e2567c4daccb3399aa9f2b1c65803dda183be70673710f6e0b4ac2f6e332ad017dd74cf218f7e401052c0ee25ed1662910",
-          "0x26d6680094539fc341d5ea8ffc79d76f8ab2f41796e7514fa8610f8d361c94e7567c4daccb3399aa9f2b1c65803dda183be70673710f6e0b4ac2f6e332ad017dd74cf218f7e401052c0ee25ed1662910",
-          "0x130ba67ef498736437f36679a246a7547759ccc18de172078306ca5973251a7b0fa4cc394f459db65c126704e57e55ddd8ae28f57ec645b73a4ea6deaa2d0b1f9228b93b08eb77779481898d371b8480"
-        ],
-        "0xebfabc3ede98df1965b89d9273c021e2c88708cf3ecef0c53744226b0eb68c41"
-      ],
-      "why": "at block 3655735, the block where the owner revokes the session of the device (step T8; the run time record says success): System.Events, the events of every extrinsic of the block, and System.LastRuntimeUpgrade, the runtime that executed it, then the stored values at the block: System.Account of the owner 0xe462d014..., System.Account of the device 0x3be70673..., FlopSessionKeys.Sessions of the owner 0xe462d014... and the device 0x3be70673..., FlopSessionKeys.SessionNonces of the owner 0xe462d014... and the device 0x3be70673..., FlopSessionKeys.CircuitBreakers of the device 0x3be70673..., ComputeChannel.Channels of the channel of T3 0xd8ae28f5..., the force_open to the named miner 0x1ec8abdfa88707679f8a2fbfc0bcd80184e2f731d91bb9fa152b750210556c7f; asked together in one call, answered as one set for the block, a key that holds nothing listed with null"
-    },
-    {
-      "method": "chain_getBlock",
-      "params": [
-        "0xebfabc3ede98df1965b89d9273c021e2c88708cf3ecef0c53744226b0eb68c41"
-      ],
-      "why": "the block 3655735 of step T8, its header and extrinsics: the extrinsic at the index the run time record names for step T8 must be byte for byte the signed extrinsic of step T8"
-    },
-    {
-      "method": "chain_getBlockHash",
-      "params": [
-        3655782
-      ],
-      "why": "the canonical hash at height 3655782, to compare with 0xce99b03c34850c1ef31e8d9eb9c8cf9a2f58bc204f86cd98e40d791a180a9300, the hash the encoder test's results.json holds for step T9"
-    },
-    {
-      "method": "state_queryStorageAt",
-      "params": [
-        [
-          "0x26aa394eea5630e07c48ae0c9558cef780d41e5e16056765bc8461851072c9d7",
-          "0x26aa394eea5630e07c48ae0c9558cef7f9cce9c888469bb1a0dceaa129672ef8",
-          "0x26aa394eea5630e07c48ae0c9558cef7b99d880ec681799c0cf30e8886371da9f9edc9e72d99b3c30da8e2d40b25bd41e462d014cab1239a123233647052f4e3b572322e982441d6b7a5c1694d8419e2",
-          "0x26aa394eea5630e07c48ae0c9558cef7b99d880ec681799c0cf30e8886371da9567c4daccb3399aa9f2b1c65803dda183be70673710f6e0b4ac2f6e332ad017dd74cf218f7e401052c0ee25ed1662910",
-          "0x26d6680094539fc341d5ea8ffc79d76f028685274e698e781f7f2766cba0cc83f9edc9e72d99b3c30da8e2d40b25bd41e462d014cab1239a123233647052f4e3b572322e982441d6b7a5c1694d8419e2567c4daccb3399aa9f2b1c65803dda183be70673710f6e0b4ac2f6e332ad017dd74cf218f7e401052c0ee25ed1662910",
-          "0x26d6680094539fc341d5ea8ffc79d76fa8bf8c9b4fb4963e0d891d0ea6eb7b2cf9edc9e72d99b3c30da8e2d40b25bd41e462d014cab1239a123233647052f4e3b572322e982441d6b7a5c1694d8419e2567c4daccb3399aa9f2b1c65803dda183be70673710f6e0b4ac2f6e332ad017dd74cf218f7e401052c0ee25ed1662910",
-          "0x26d6680094539fc341d5ea8ffc79d76f8ab2f41796e7514fa8610f8d361c94e7567c4daccb3399aa9f2b1c65803dda183be70673710f6e0b4ac2f6e332ad017dd74cf218f7e401052c0ee25ed1662910",
-          "0x130ba67ef498736437f36679a246a7547759ccc18de172078306ca5973251a7b0fa4cc394f459db65c126704e57e55ddd8ae28f57ec645b73a4ea6deaa2d0b1f9228b93b08eb77779481898d371b8480"
-        ],
-        "0xce99b03c34850c1ef31e8d9eb9c8cf9a2f58bc204f86cd98e40d791a180a9300"
-      ],
-      "why": "at block 3655782, the block where the device sends all it holds back to the owner (step T9; the run time record says success): System.Events, the events of every extrinsic of the block, and System.LastRuntimeUpgrade, the runtime that executed it, then the stored values at the block: System.Account of the owner 0xe462d014..., System.Account of the device 0x3be70673..., FlopSessionKeys.Sessions of the owner 0xe462d014... and the device 0x3be70673..., FlopSessionKeys.SessionNonces of the owner 0xe462d014... and the device 0x3be70673..., FlopSessionKeys.CircuitBreakers of the device 0x3be70673..., ComputeChannel.Channels of the channel of T3 0xd8ae28f5..., the force_open to the named miner 0x1ec8abdfa88707679f8a2fbfc0bcd80184e2f731d91bb9fa152b750210556c7f; asked together in one call, answered as one set for the block, a key that holds nothing listed with null"
-    },
-    {
-      "method": "chain_getBlock",
-      "params": [
-        "0xce99b03c34850c1ef31e8d9eb9c8cf9a2f58bc204f86cd98e40d791a180a9300"
-      ],
-      "why": "the block 3655782 of step T9, its header and extrinsics: the extrinsic at the index the run time record names for step T9 must be byte for byte the signed extrinsic of step T9"
+      "why": "at block 3479276, the parent of the block where the other channel 0x1fcd12cb... settled, by the ComputeChannel.Settled event of the first recording, read for the channel's record before the settle: System.LastRuntimeUpgrade, the runtime that executed it, and ComputeChannel.Channels of the other channel 0x1fcd12cb...; asked together in one call, answered as one set for the block, a key that holds nothing listed with null"
     }
   ],
   "schema": "flop-observatory/requests@0"

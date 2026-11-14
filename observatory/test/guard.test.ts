@@ -300,14 +300,155 @@ describe("source scan", () => {
     // mocks them, or imports the guard under a query string would get a copy of its own, and a
     // refused write there would reach neither the log nor the journal (Fable review I6). The
     // pattern is built from pieces so this file does not match itself.
-    const ways = ["reset" + "Modules", "isolate" + "Modules", "vi" + "\\.mock", "vi" + "\\.doMock", "vi" + "\\.importActual", "vi" + "\\.importMock", "guard" + "\\.(?:js|ts)\\?"];
+    const ways = ["reset" + "Modules", "isolate" + "Modules", "vi" + "\\s*\\.\\s*mock", "vi" + "\\s*\\.\\s*doMock", "vi" + "\\s*\\.\\s*importActual", "vi" + "\\s*\\.\\s*importMock", "guard" + "\\.(?:js|ts)\\?"];
     const re = new RegExp(ways.join("|"));
+    // The word rule reads code only: with its comments and its imports from vitest taken out, and
+    // the contents of its strings, templates and regular expressions blanked (a comment marker inside
+    // a string is not a comment, and a word inside a string is data; the ${...} parts of a template
+    // are code and stay), the word for vitest's object may appear only directly before a dot and a
+    // member name, white space allowed around the dot: an alias, a computed member, or the object
+    // handed on as a value is a finding. No file is set aside. The banned members and the guard under
+    // a query string are matched over the whole text, so a file that must hold such words builds them
+    // from pieces. The scan catches the plain spellings. A diff that hides one (a path built from
+    // pieces in a dynamic import, say) is for the review (RULES.md section 4).
+    const withoutComments = (text = "", blank = false) => {
+      let out = "";
+      let last = "";
+      let depth = 0;
+      let inTemplate = false;
+      const open = [];
+      let i = 0;
+      while (i < text.length) {
+        const c = text[i] ?? "";
+        const d = text[i + 1] ?? "";
+        if (inTemplate) {
+          if (c === "\\") {
+            if (!blank) out += c + d;
+            i += 2;
+          } else if (c === "`") {
+            inTemplate = false;
+            out += c;
+            last = c;
+            i++;
+          } else if (c === "$" && d === "{") {
+            open.push(depth);
+            depth = 0;
+            inTemplate = false;
+            out += "${";
+            last = "{";
+            i += 2;
+          } else {
+            if (!blank) out += c;
+            i++;
+          }
+          continue;
+        }
+        if (c === "/" && d === "/") {
+          while (i < text.length && text[i] !== "\n") i++;
+          continue;
+        }
+        if (c === "/" && d === "*") {
+          const end = text.indexOf("*/", i + 2);
+          i = end < 0 ? text.length : end + 2;
+          out += " ";
+          continue;
+        }
+        if (c === "`") {
+          inTemplate = true;
+          out += c;
+          i++;
+          continue;
+        }
+        if (c === "{") depth++;
+        if (c === "}") {
+          if (depth === 0 && open.length > 0) {
+            depth = open.pop() ?? 0;
+            inTemplate = true;
+            out += c;
+            i++;
+            continue;
+          }
+          depth--;
+        }
+        const regex = c === "/" && (last === "" || "(,=:[!&|?{};+-*%<>~^".includes(last));
+        if (c === '"' || c === "'" || regex) {
+          let j = i + 1;
+          let inClass = false;
+          while (j < text.length && (inClass || text[j] !== c) && text[j] !== "\n") {
+            if (text[j] === "\\") j++;
+            else if (regex && text[j] === "[") inClass = true;
+            else if (regex && text[j] === "]") inClass = false;
+            j++;
+          }
+          out += blank ? c + c : text.slice(i, j + 1);
+          last = c;
+          i = j + 1;
+          continue;
+        }
+        out += c;
+        if (!/\s/.test(c)) last = c;
+        i++;
+      }
+      return out;
+    };
+    const VITEST_IMPORT = /\bimport\s+(?:type\s+)?(?:[\w$]+\s*,\s*)?(?:\{[^}]*\}|\*\s+as\s+[\w$]+|[\w$]+)\s+from\s*["']vitest["']\s*;?/g;
+    const VI_NOT_BEFORE_MEMBER = (code = "") => !Array.from(code.matchAll(/\bvi\b/g)).every((m) => /^\s*\.\s*[A-Za-z_$]/.test(code.slice((m.index ?? 0) + 2)));
+    // The one exception (RULES.md section 4): test/shape-pin-derived.test.ts may mock one module,
+    // src/scale/metadata.js, once, with that literal target, read from the call itself. A module mock
+    // replaces that module alone and every other module is still evaluated once in the file, so no
+    // second copy of the guard loads by it; every other way stays banned there too.
+    const MOCK_FILE = "shape-pin-derived.test.ts";
+    const MOCK_CALL = "vi" + '.mock("../src/scale/metadata.js",';
+    const MOCK_ANY = new RegExp("vi" + "\\s*\\.\\s*mock", "g");
+    const MOCK_TARGET = new RegExp("\\bvi" + '\\s*\\.\\s*mock\\s*\\(\\s*"\\.\\./src/scale/metadata\\.js"\\s*,', "g");
+    const otherWays = new RegExp(ways.filter((w) => w !== "vi" + "\\s*\\.\\s*mock").join("|"));
+    const loadsSecondGuard = (file: string, text: string): boolean => {
+      const code = withoutComments(text, false).replace(VITEST_IMPORT, "");
+      if (VI_NOT_BEFORE_MEMBER(withoutComments(code, true))) return true;
+      if (file !== MOCK_FILE) return re.test(text);
+      if (otherWays.test(text)) return true;
+      if ((code.match(MOCK_ANY) ?? []).length !== 1) return true;
+      if ((code.match(MOCK_TARGET) ?? []).length !== 1) return true;
+      return false;
+    };
     const testDir = new URL("./", import.meta.url);
     const files = (readdirSync(testDir, { recursive: true }) as string[]).filter((f) => f.endsWith(".ts"));
     expect(files).toContain("guard.test.ts");
-    for (const f of files) expect(readFileSync(new URL(f, testDir), "utf8"), f).not.toMatch(re);
+    for (const f of files) expect(loadsSecondGuard(f, readFileSync(new URL(f, testDir), "utf8")), f).toBe(false);
     expect(re.test('await import("../src/guard' + '.js?fresh")')).toBe(true);
     expect(re.test("vi.reset" + "Modules()")).toBe(true);
+    // Planted samples: each must be caught.
+    const allowed = `${MOCK_CALL} async (importOriginal) => importOriginal());\n`;
+    expect(loadsSecondGuard(MOCK_FILE, allowed)).toBe(false);
+    expect(loadsSecondGuard(MOCK_FILE, allowed + allowed), "a second mock in the excepted file").toBe(true);
+    expect(loadsSecondGuard(MOCK_FILE, `${"vi" + '.mock("../src/scale/shape.js",'} async (importOriginal) => importOriginal());\n`), "a mock of another target there").toBe(true);
+    expect(loadsSecondGuard("shape.test.ts", allowed), "a mock in any other file").toBe(true);
+    expect(loadsSecondGuard(MOCK_FILE, `${allowed}${"vi" + ".importActual"}("../src/scale/metadata.js");\n`), "another way in the excepted file").toBe(true);
+    // The planted samples of the word rule and of the call's target, each built from pieces.
+    const VI = "v" + "i";
+    const other = `${VI} .mock("../src/scale/shape.js", async (importOriginal) => importOriginal());\n`;
+    const plants: [string, string, string][] = [
+      ["an alias", "shape.test.ts", `const v = ${VI};\n`],
+      ["a computed member", "shape.test.ts", `${VI}["mo" + "ck"]("x", () => ({}));\n`],
+      ["the object handed on as an argument", "shape.test.ts", `run(${VI});\n`],
+      ["a break before the dot", "shape.test.ts", `${VI}\n  .mock("x", () => ({}));\n`],
+      ["a space before the dot", "shape.test.ts", `${VI} .mock("x", () => ({}));\n`],
+      ["an alias in the excepted file", MOCK_FILE, `${allowed}const v = ${VI};\n`],
+      ["another target written with a space, the right one named only in a comment", MOCK_FILE, `// ${MOCK_CALL}\n${other}`],
+      ["another target, the right one named only in a block comment", MOCK_FILE, `/* ${MOCK_CALL} */\n${other}`],
+      ["a second call in the excepted file", MOCK_FILE, `${allowed}${VI} .mock("../src/scale/metadata.js", () => ({}));\n`],
+      ["a second call of another target after the allowed one", MOCK_FILE, `${allowed}${other}`],
+      ["a call whose first argument is not the literal", MOCK_FILE, `${VI}.mock(target, async (importOriginal) => importOriginal());\n`],
+    ];
+    for (const [what, file, text] of plants) expect(loadsSecondGuard(file, text), what).toBe(true);
+    // Not a use of the helper: the word in a comment, a string or a template, and the import from vitest.
+    const quiet = `import { ${VI} } from "vitest";\n// ${VI} is the helper\nconst a = "${VI}";\nconst b = \`${VI} \${1 + 1}\`;\n${VI}.hoisted(() => 1);\n`;
+    expect(loadsSecondGuard("shape.test.ts", quiet), "the word only where it is data").toBe(false);
+    // The module that file mocks imports only ./reader.js, which imports nothing: neither is the guard.
+    const scaleText = (f: string) => readFileSync(new URL(`../src/scale/${f}`, import.meta.url), "utf8");
+    const importsOf = (f: string) => [...scaleText(f).matchAll(/^\s*(?:import|export)\b[^;]*?\bfrom\s*["']([^"']+)["']/gm)].map((m) => m[1]);
+    expect([importsOf("metadata.ts"), importsOf("reader.ts")]).toEqual([["./reader.js"], []]);
+    for (const f of ["metadata.ts", "reader.ts"]) expect(scaleText(f), f).not.toMatch(/\bimport\s*\(|\brequire\s*\(|guard/);
   });
 
   it("src holds nothing but regular .ts files, so the scans read every file tsc compiles (round 7 review M4)", () => {

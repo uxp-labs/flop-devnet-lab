@@ -1,184 +1,65 @@
 {
-  "accounts": {
-    "device": {
-      "field": "accounts.device.public_key",
-      "file": "research/2026-11-12-encoder-devnet-test/results.json",
-      "value": "0x3be70673710f6e0b4ac2f6e332ad017dd74cf218f7e401052c0ee25ed1662910"
-    },
-    "named": {
-      "field": "values.NAMED.value",
-      "file": "research/2026-11-12-encoder-devnet-test/steps.json",
-      "value": "0x1ec8abdfa88707679f8a2fbfc0bcd80184e2f731d91bb9fa152b750210556c7f"
-    },
-    "owner": {
-      "field": "accounts.owner.public_key",
-      "file": "research/2026-11-12-encoder-devnet-test/results.json",
-      "value": "0xe462d014cab1239a123233647052f4e3b572322e982441d6b7a5c1694d8419e2"
-    }
-  },
+  "accounts": {},
   "blocks": {
-    "encoder-devnet-test/T1": {
+    "gateway/settled": {
       "hash": {
-        "field": "steps.0.run_time.sent.block_hash",
-        "file": "research/2026-11-12-encoder-devnet-test/results.json",
-        "value": "0x05a8b32e2f9ef401e147d7594e0f09348ba4a310568356edeb70c827e72853e0"
+        "field": "the answer to the chain_getBlockHash call at seq 18",
+        "file": "observatory/fixtures/recording-20261111160917-3c228907aa129a01/tape.jsonl",
+        "value": "0xeba1182c9f2bbf5a8fd012afddc201c2ebed11b64f59b10c1d3c4fcc4b2ee18e"
       },
       "height": {
-        "field": "steps.0.run_time.sent.block_number",
-        "file": "research/2026-11-12-encoder-devnet-test/results.json",
-        "value": 3654835
+        "field": "the params of the chain_getBlockHash call at seq 18",
+        "file": "observatory/fixtures/recording-20261111160917-3c228907aa129a01/tape.jsonl",
+        "value": 3479299
       }
     },
-    "encoder-devnet-test/T2": {
+    "gateway/settled-parent": {
       "hash": {
-        "field": "steps.1.run_time.sent.block_hash",
-        "file": "research/2026-11-12-encoder-devnet-test/results.json",
-        "value": "0xc36ced0ba0f84bbcafbe8a1a34508a32cd40e5b1849d737d9d8c81ff3cb197c8"
+        "field": "the parentHash of the answer to the chain_getHeader call at seq 19",
+        "file": "observatory/fixtures/recording-20261111160917-3c228907aa129a01/tape.jsonl",
+        "value": "0xaad1d81c1d390358e8a60ca5ed26c46b80d17c71d5a2c187caee64d854711b10"
       },
       "height": {
-        "field": "steps.1.run_time.sent.block_number",
-        "file": "research/2026-11-12-encoder-devnet-test/results.json",
-        "value": 3654914
+        "field": "the number of the answer to the chain_getHeader call at seq 19, less one",
+        "file": "observatory/fixtures/recording-20261111160917-3c228907aa129a01/tape.jsonl",
+        "value": 3479298
       }
     },
-    "encoder-devnet-test/T3": {
+    "second/settled": {
       "hash": {
-        "field": "steps.2.run_time.sent.block_hash",
-        "file": "research/2026-11-12-encoder-devnet-test/results.json",
-        "value": "0x9045529eb1c4e8eaf063c9d1ca63702c26f6c434989408b0b04dc4933ecc3957"
+        "field": "the answer to the chain_getBlockHash call at seq 10",
+        "file": "observatory/fixtures/recording-20261111160917-3c228907aa129a01/tape.jsonl",
+        "value": "0xb85b24f4b0609839aea37d97ad1aa9f7ec7aba20348bca090ab31df471764aba"
       },
       "height": {
-        "field": "steps.2.run_time.sent.block_number",
-        "file": "research/2026-11-12-encoder-devnet-test/results.json",
-        "value": 3655037
+        "field": "the params of the chain_getBlockHash call at seq 10",
+        "file": "observatory/fixtures/recording-20261111160917-3c228907aa129a01/tape.jsonl",
+        "value": 3479277
       }
     },
-    "encoder-devnet-test/T3-birth": {
+    "second/settled-parent": {
       "hash": {
-        "field": "era.birth_hash",
-        "file": "research/2026-11-12-encoder-devnet-test/run-2026-11-13/signed/T3.json",
-        "value": "0x3467bbce5dc0eb5267fdf1c3abc12fd30f87e82a13bdaea77ec78ed4a106226f"
+        "field": "the parentHash of the answer to the chain_getHeader call at seq 11",
+        "file": "observatory/fixtures/recording-20261111160917-3c228907aa129a01/tape.jsonl",
+        "value": "0x9387453648c8ab3d245cbf999ab3b797c76b13de0e58d5cc213f402a10480df1"
       },
       "height": {
-        "field": "era.birth_number",
-        "file": "research/2026-11-12-encoder-devnet-test/run-2026-11-13/signed/T3.json",
-        "value": 3654995
-      }
-    },
-    "encoder-devnet-test/T4": {
-      "hash": {
-        "field": "steps.3.run_time.sent.block_hash",
-        "file": "research/2026-11-12-encoder-devnet-test/results.json",
-        "value": "0xb9b084f43fa77338fa9f329d5208551eb92d084004c56923997a986f358255ee"
-      },
-      "height": {
-        "field": "steps.3.run_time.sent.block_number",
-        "file": "research/2026-11-12-encoder-devnet-test/results.json",
-        "value": 3655115
-      }
-    },
-    "encoder-devnet-test/T4-birth": {
-      "hash": {
-        "field": "era.birth_hash",
-        "file": "research/2026-11-12-encoder-devnet-test/run-2026-11-13/signed/T4.json",
-        "value": "0xf9c69a25c8cb4c8f61cfb8bdeb5d5eeb4827f24ba231c9d4a6dac74c7bbd430d"
-      },
-      "height": {
-        "field": "era.birth_number",
-        "file": "research/2026-11-12-encoder-devnet-test/run-2026-11-13/signed/T4.json",
-        "value": 3655082
-      }
-    },
-    "encoder-devnet-test/T5": {
-      "hash": {
-        "field": "steps.4.run_time.sent.block_hash",
-        "file": "research/2026-11-12-encoder-devnet-test/results.json",
-        "value": "0xce1b29311dcb8eea6438d8d7972290967a20ec881970d1e111ab9a3856fcea85"
-      },
-      "height": {
-        "field": "steps.4.run_time.sent.block_number",
-        "file": "research/2026-11-12-encoder-devnet-test/results.json",
-        "value": 3655185
-      }
-    },
-    "encoder-devnet-test/T5-birth": {
-      "hash": {
-        "field": "era.birth_hash",
-        "file": "research/2026-11-12-encoder-devnet-test/run-2026-11-13/signed/T5.json",
-        "value": "0x950061bf30acf44a910cf6f0565bfa135e5ac0e17676740d85ba0846a2fe1cef"
-      },
-      "height": {
-        "field": "era.birth_number",
-        "file": "research/2026-11-12-encoder-devnet-test/run-2026-11-13/signed/T5.json",
-        "value": 3655152
-      }
-    },
-    "encoder-devnet-test/T6": {
-      "hash": {
-        "field": "steps.5.run_time.sent.block_hash",
-        "file": "research/2026-11-12-encoder-devnet-test/results.json",
-        "value": "0x8225561fd91aa365f80f81a3fde5f3ab9bab65a79e81aa87dc0345c983fc4a49"
-      },
-      "height": {
-        "field": "steps.5.run_time.sent.block_number",
-        "file": "research/2026-11-12-encoder-devnet-test/results.json",
-        "value": 3655678
-      }
-    },
-    "encoder-devnet-test/T6-birth": {
-      "hash": {
-        "field": "era.birth_hash",
-        "file": "research/2026-11-12-encoder-devnet-test/run-2026-11-13/signed/T6.json",
-        "value": "0x227016243e02f2997d2074833e4a1de7a965cb7c8d4651b3cefcc660e2a9cbd9"
-      },
-      "height": {
-        "field": "era.birth_number",
-        "file": "research/2026-11-12-encoder-devnet-test/run-2026-11-13/signed/T6.json",
-        "value": 3655648
-      }
-    },
-    "encoder-devnet-test/T8": {
-      "hash": {
-        "field": "steps.7.run_time.sent.block_hash",
-        "file": "research/2026-11-12-encoder-devnet-test/results.json",
-        "value": "0xebfabc3ede98df1965b89d9273c021e2c88708cf3ecef0c53744226b0eb68c41"
-      },
-      "height": {
-        "field": "steps.7.run_time.sent.block_number",
-        "file": "research/2026-11-12-encoder-devnet-test/results.json",
-        "value": 3655735
-      }
-    },
-    "encoder-devnet-test/T9": {
-      "hash": {
-        "field": "steps.8.run_time.sent.block_hash",
-        "file": "research/2026-11-12-encoder-devnet-test/results.json",
-        "value": "0xce99b03c34850c1ef31e8d9eb9c8cf9a2f58bc204f86cd98e40d791a180a9300"
-      },
-      "height": {
-        "field": "steps.8.run_time.sent.block_number",
-        "file": "research/2026-11-12-encoder-devnet-test/results.json",
-        "value": 3655782
-      }
-    },
-    "encoder-devnet-test/start": {
-      "hash": {
-        "field": "start.finalized.hash",
-        "file": "research/2026-11-12-encoder-devnet-test/results.json",
-        "value": "0xafded080999d0fc05b3c6f5d3f1579fd59b6cbe9829e1a9c52ff99a08a0d134d"
-      },
-      "height": {
-        "field": "start.finalized.number",
-        "file": "research/2026-11-12-encoder-devnet-test/results.json",
-        "value": 3654783
+        "field": "the number of the answer to the chain_getHeader call at seq 11, less one",
+        "file": "observatory/fixtures/recording-20261111160917-3c228907aa129a01/tape.jsonl",
+        "value": 3479276
       }
     }
   },
   "channels": {
-    "t3": {
-      "field": "steps.2.run_time.explorer.events.1.fields.channel_id",
-      "file": "research/2026-11-12-encoder-devnet-test/results.json",
-      "value": "0xd8ae28f57ec645b73a4ea6deaa2d0b1f9228b93b08eb77779481898d371b8480"
+    "gateway": {
+      "field": "the channel_id of the one ComputeChannel.Settled event in System.Events at seq 20",
+      "file": "observatory/fixtures/recording-20261111160917-3c228907aa129a01/tape.jsonl",
+      "value": "0x9f81f65bc93855d394329e4996bc78d949bb786178f3471c13d3853f9813ddd7"
+    },
+    "second": {
+      "field": "the channel_id of the one ComputeChannel.Settled event in System.Events at seq 12",
+      "file": "observatory/fixtures/recording-20261111160917-3c228907aa129a01/tape.jsonl",
+      "value": "0x1fcd12cb38f0de5edc2cb4ac582784859663dd32d8519b04eff5a20be8312ae4"
     }
   },
   "mentioned": {},

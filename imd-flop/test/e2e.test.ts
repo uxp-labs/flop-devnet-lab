@@ -1,14 +1,14 @@
 // Runs the built CLI as a real process (catches event-loop issues the in-process tests cannot).
 import { describe, expect, it } from "vitest";
 import { spawnSync } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpHome } from "./helpers.js";
 
 const BIN = join(__dirname, "..", "dist", "bin.js");
 const run = (h: string, args: string[]) => spawnSync(process.execPath, [BIN, ...args], { env: { ...process.env, IMD_FLOP_HOME: h }, encoding: "utf8", timeout: 15000 });
 
-describe.skipIf(!existsSync(BIN))("built CLI process", () => {
+describe("built CLI process", () => {
   it("a timed-out mock run exits 6 and records timeout_unknown with null spend", () => {
     const h = tmpHome();
     expect(run(h, ["init", "--seat", "3"]).status).toBe(0);
