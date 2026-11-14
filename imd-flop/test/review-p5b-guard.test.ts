@@ -70,6 +70,15 @@ describe("review P5b, attack 4: every bad owner exits 2, prints nothing and asks
     expect(base58.decode(bad[4][1]).length).toBe(1 + 33 + 2);
     expect(base58.decode(bad[5][1]).length).toBe(1 + 31 + 2);
     expect(ss58Decode(ss58Encode(OPUB, 4242)).prefix).toBe(4242);
+    // The two non canonical forms, read without ss58Decode: the first bytes, the owner's 32 key bytes, and a good checksum by this test's own blake2b.
+    for (const [t, first] of [[twoByte42, [0x4a, 0x80]], [reserved42, [0x8a, 0x80]]] as const) {
+      const raw = base58.decode(t);
+      expect(Array.from(raw.subarray(0, 2))).toEqual(first);
+      expect(Buffer.from(raw.subarray(2, 34)).toString("hex")).toBe(OWNER.public_key.slice(2));
+      expect(raw.length).toBe(2 + 32 + 2);
+      const sum = blake2b(cat(SS58PRE, raw.subarray(0, 34)), { dkLen: 64 }).subarray(0, 2);
+      expect(Array.from(raw.subarray(34))).toEqual(Array.from(sum));
+    }
   });
 
   // The two byte form of prefix 42: bytes 0x4a 0x80 read as ((0x4a & 0x3f) << 2) | (0x80 >> 6) | ((0x80 & 0x3f) << 8) = 42.
@@ -77,12 +86,10 @@ describe("review P5b, attack 4: every bad owner exits 2, prints nothing and asks
   // more (0x8a here) is reserved by SS58 and is no address at all.
   const twoByte42 = withChecksum(cat(Uint8Array.of(0x4a, 0x80), OPUB));
   const reserved42 = withChecksum(cat(Uint8Array.of(0x8a, 0x80), OPUB));
-  it("control: both non canonical texts decode to prefix 42 and the owner's key by src/ss58.ts, and neither is the canonical text", () => {
-    for (const t of [twoByte42, reserved42]) {
-      const d = ss58Decode(t);
-      expect([d.prefix, Buffer.from(d.pub).toString("hex")]).toEqual([42, OWNER.public_key.slice(2)]);
-      expect(t).not.toBe(OWNER.ss58);
-    }
+  it("HOLDS: ss58Decode refuses both non canonical texts, each with its own error, and neither is the canonical text (before the fix both decoded to prefix 42 and the owner's key)", () => {
+    expect(() => ss58Decode(twoByte42)).toThrow(/two byte form of a prefix below 64, not canonical/);
+    expect(() => ss58Decode(reserved42)).toThrow(/reserved first byte/);
+    for (const t of [twoByte42, reserved42]) expect(t).not.toBe(OWNER.ss58);
   });
   for (const [sub, extra] of SUBS) {
     for (const [name, owner] of [["a two byte encoding of prefix 42", twoByte42], ["a reserved first byte 0x8a that reads as prefix 42", reserved42]]) {
