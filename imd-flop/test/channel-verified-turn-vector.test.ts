@@ -6,10 +6,11 @@
  * The layout is FLOP's SDK 0.6.0, `dist/compute-channel/transcript.js`, read and not imported (source only):
  *  - the version 3 leaf: blake2b 256 of `channel_id ‖ turn_index u32 LE ‖ h_in ‖ h_out ‖ g_n u128 LE ‖
  *    decode_policy_hash ‖ h_ids ‖ toploc_commitment_hash ‖ miner_recv_ms u64 LE ‖ miner_done_ms u64 LE ‖
- *    latency_ms u64 LE` (`transcriptLeafV3`);
- *  - the fold to the root through a turn's merkle_path: for each `(sibling, sibling_is_left)`, the node becomes
- *    blake2b 256 of `sibling ‖ node` when the sibling is on the left, else of `node ‖ sibling` (`merkleRootFromPath`).
+ *    latency_ms u64 LE` (`transcriptLeafV3`).
  * The turns are read through the reference decoder's verified_turns, not by offsets. Nothing here reads the network.
+ *
+ * This test does not exercise the fold through merkle_path: both paths are empty. P6 writes the fold and its tests.
+ * These two settles do not hold the turn index's byte order or the upper half of `g_n`; P6 holds those by its own tests.
  */
 import { blake2b } from "@noble/hashes/blake2.js";
 import { describe, expect, it } from "vitest";
@@ -40,8 +41,6 @@ function leafV3(channelId: Uint8Array, t: Rec): Uint8Array {
     ),
   );
 }
-/** A leaf folded through its merkle_path, as the SDK describes it. */
-const fold = (leaf: Uint8Array, path: [unknown, boolean][]) => path.reduce((node, [sibling, left]) => blake(left ? concat(refBytes(sibling), node) : concat(node, refBytes(sibling))), leaf);
 
 const SETTLES = SETTLE_CHANNELS.map((c) => {
   const s = settleOf(c);
@@ -65,9 +64,9 @@ describe("HOLDS, for P6 to replace with its own leaf function: the verified turn
         expect(turns.map((t) => [t.leaf_version.type, t.turn_index])).toEqual([["V3", 0]]);
       });
 
-      it("each turn's version 3 leaf, folded through its merkle_path, gives the call's final_root; with one turn and no path the leaf is the root", () => {
-        for (const t of turns) expect(hexOf(fold(leafV3(channelId, t), t.merkle_path))).toBe(hexOf(refBytes(args.final_root)));
+      it("each turn's merkle_path, read through the reference decoder, is empty, so its version 3 leaf itself equals the call's final_root", () => {
         expect(turns.map((t) => t.merkle_path)).toEqual([[]]);
+        for (const t of turns) expect(hexOf(leafV3(channelId, t))).toBe(hexOf(refBytes(args.final_root)));
       });
 
       it("each turn's enclave_sig over its leaf verifies under the record's enclave_key, and not under the agent_key nor over the leaf with one bit flipped", () => {
