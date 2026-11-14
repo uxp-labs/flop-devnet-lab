@@ -276,7 +276,7 @@ The reference sr25519 for the tests is `@polkadot/wasm-crypto` 7.5.4 (Rust schno
 
 ## Miner client: the miner's words (not used by any command yet)
 
-`src/miner/` holds the part of the miner client that has no I/O at all. It reads the miner's answers as text, rebuilds every hash those answers must match, verifies the signatures under a key the owner pinned, and holds the lab's own money bounds. No command uses it, and no file outside `src/miner` imports it yet. It opens no socket, reads no clock, no environment and no file, and signs nothing. No miner was reached in building it. The HTTP file and the order of the calls are the next piece (P6b).
+Ten files of `src/miner/` (P6a) hold the part of the miner client that has no I/O at all. It reads the miner's answers as text, rebuilds every hash those answers must match, verifies the signatures under a key the owner pinned, and holds the lab's own money bounds. No command uses it, and no file outside `src/miner` imports it yet. These ten files open no socket, read no clock, no environment and no file, and sign nothing. No miner was reached in building them. The HTTP file and the order of the calls are in the next section (P6b).
 
 Why it matters: the channel key C signs a receipt that pays the miner the whole escrow (a cooperative settle pays all of it, S3). Everything the miner sends is its own word. FLOP's own client checks little of it, and nothing in it ties the money to the work: G_n is a number the miner states. So every word is checked here before C signs anything.
 
@@ -321,6 +321,57 @@ What is shown by a committed file: the version 3 leaf and its enclave signature,
 What comes from FLOP's SDK 0.6.0 source only and is shown by no record (`dist/miner-admission.js`, `dist/compute-channel/transcript.js`, `protocol.js`, `transport-http.js`, `agent-client.js`, `chat-render.js`, read and not imported): the model identity hash, the info proof's message, the turn evidence hash, the canonical input and h_in, and every wire form of every answer. The layouts other than the leaf are held by three independent writings from the SDK's source: the code, the builder's test lib (`test/lib/miner-answers.ts`, `test/miner-cross.test.ts`) and the reviewer's test lib (`test/lib/review-p6a-*.ts`). That is still weaker than a real vector. The two real turns do not show the turn index's byte order, the upper bytes of G_n, h_in's or h_out's preimage, or any wire body.
 
 What is unknown (M-17): every rule a real miner applies (the life of a challenge, its time window, its nonce rule, whether it needs checkpoints, JSON or frames, its error answers, whether it sends the provider fields and all three version 3 fields); the preimage of h_in and h_out on a real turn; a fold past one leaf; whether a real miner's leaf is version 3 at spec 1014020; where a trusted enclave key and a price come from other than the owner's own config.
+
+## Miner client: the client that talks (not used by any command yet)
+
+The second part of `src/miner/` (P6b) is the client that talks to a miner: the rule for an endpoint, the one file that makes HTTP calls, and the order of a run. No command uses it, and no file outside `src/miner` imports it yet: the provider (P7) will. It was built and tested against a scripted miner (`test/lib/scripted-miner.ts`), offline. No miner was reached in building it, and no real miner's address is known to the lab.
+
+The files:
+- `endpoint.ts`: `minerEndpoint(text)` makes the origin the client speaks to, a frozen value only it makes.
+- `calls.ts`: the seven calls, each with its fixed method, path, time limit and byte limit, and `callLimits`.
+- `requests.ts`: the body text of each request, written from what FLOP's SDK 0.6.0 sends.
+- `timing.ts`: the two unsigned fields of the ack, as the SDK computes them.
+- `http.ts`: the one HTTP file.
+- `client.ts`: `minerRun`, the order of a run.
+- `client-errors.ts`: the refusals `ENDPOINT`, `HTTP`, `ANSWER`, `ORDER`, `REQUEST`, `FAILED` and `MinerClientError`.
+
+The endpoint (E1 to E3, M-11). Accepted: `https://host` or `https://host:port`, and `http://` only on the literal addresses `127.0.0.1` and `[::1]`, with or without a port, with or without one trailing `/`. `http://localhost` is refused with words that say to use 127.0.0.1: a name is resolved by the system and is no promise of loopback. `http://0.0.0.0` and `http://[::ffff:127.0.0.1]` are refused. Also refused: any other scheme, userinfo, a path, a query, a fragment, an empty host, a port out of 1 to 65535, a text over 2048 bytes, a control character or a space. The text is parsed with the platform's `URL`, and the origin rebuilt from the parts must equal the text but for one trailing `/`. So a host in another letter case, a default port written out, a dot segment, a percent escape or an IDN is refused, with words that ask for the plain form. Every endpoint refusal is exit 5. No refusal quotes the text.
+
+The one HTTP file (T1 to T8, M-12). `minerHttp(endpoint, fetch)` takes the fetch as a parameter and gives a transport: one function from a request (the call, the body or none, C's signed headers or none, the byte limit, the time limit) to an answer (the status, the body or null, and the session challenge header). It is the only file under `src/miner` that names `fetch`, `Request`, `Response`, `AbortSignal`, `AbortController` or a timer.
+- The URL is the origin and the call's fixed path: `/session/info-proof`, `/session/info`, `/session/open`, `/session/turn`, `/session/ack`, `/session/close`. No other path can be asked. `/session/checkpoint` and `/session/prepare-retirement` are not in the list (M-5, M-10).
+- The headers are `Accept: application/json`, `Content-Type: application/json` with a body, and the five signed headers of `src/channel`, and nothing else. There is no headers option, no cookie, no authorization. Nothing reads the environment. The turn asks for JSON: streamed answers are refused (M-10).
+- `redirect: "error"`, and a 3xx answer is refused. `credentials: "omit"`, `cache: "no-store"`, no referrer.
+- One time limit for the whole exchange, body included. Defaults: the proof and the probe 10 s, the info, the open and the ack 30 s, the turn and the close 60 s. The hard maximum of each is 4 times its default. A caller may lower a limit, never raise it past the maximum.
+- Byte limits: the proof 16 KiB, the info 64 KiB, the turn 8 MiB, the others 16 KiB. The bytes are counted while they stream, and the read stops and refuses past the limit. A Content-Length above the limit refuses before the body is read.
+- Where a body is wanted (a 200 answer to the proof, the info, the turn or the close), the content type must be `application/json`, with an optional `charset=utf-8`, and the bytes are decoded as UTF-8 fatally. Otherwise the body is read to its limit and dropped, never decoded or parsed.
+- No retry anywhere. A refusal names the call and what failed, the status as a number where there is one, never the body, a header value or the URL.
+
+The order of a run (R1 to R7, M-9). `minerRun` takes the pinned values, the endpoint, a transport, the channel key C (handed in: this code never makes one), a clock, a random source and the limits. It holds its state in memory and writes nothing. Its only members are five steps, each allowed once and only in this order:
+1. `prove()`, before anything is funded: a fresh 32 byte challenge, the info proof, a status of exactly 200, then P6a's parser and `verifyInfoProof`. It returns the image version and revision (the miner's own text: show it only through `src/server-text.ts`).
+2. `authenticate({channelId})`, after the provider opened the channel: the anonymous probe must answer 401 with a challenge of 64 lower case hex digits; then the info signed by C with that challenge, a status of 200, `verifyInfo`.
+3. `notifyOpen()`: the open notice, signed, with the channel id and C's public key. Any 2xx is taken.
+4. `turn({messages, maxTokens, money})`: the turn, signed; a status of 200; P6a's parser, `verifyTurn` and `turnCost` with the money bounds handed in. Only then C signs the turn ack, with the buyer's send and receive times taken just before the turn call and just after its answer, and the ack is posted with the SDK's two unsigned fields (below). Any 2xx is taken.
+5. `close({payable})`: only after the ack was taken. `receiptPayable` with the payable handed in (the escrow the provider read back from the chain), the budget, one turn and the turn's G_n. Only then C signs the one receipt of the run: the final root is the verified leaf, the aggregate G_n the turn's, the payable the one handed in. It is posted with the pinned measured root and a null transcript reference.
+
+A step out of order, a step while another runs, and any step after a failure refuse and send nothing. C signs the requests the steps need (five in a whole run), one turn ack and one receipt. The tests count them through a wrapped key.
+
+The ack's unsigned fields (R6). The SDK sends a timing status and a scored latency beside the signed ack (`transport-http.js`, `recordAck`), computed by `evaluateReceiptTiming` (`protocol.js`) with its defaults, a clock skew of 250 ms and a network pad of 100 ms. `timing.ts` computes them the same way from the times the run holds: Eligible with the smaller of the buyer's latency and the miner's latency plus 350 ms, or Ambiguous with the miner's latency when the buyer's latency plus 350 ms is below it. The SDK signs no ack whose timing is Invalid: the buyer's clock reversed, the miner's clock reversed, or a latency that is not done minus receive. Those refuse before C signs.
+
+What `close` returns (R3). Once C has signed the receipt, `close` does not throw: the signed receipt is public data the provider must keep whatever the miner answers. It returns the receipt (its fields and the signature) and the answer as one of three states:
+- a hint: the miner named our channel id and a transaction hash;
+- no hint: a 200 answer with no `settled`;
+- unknown, exit 6, with the reason: any failure of the call, a status other than 200, an answer not of its form, or a `settled` naming another channel.
+None of the three is read as settled or not settled. Only the chain decides.
+
+Exit codes (R5, M-15), none new:
+- 5: an endpoint refusal; a status other than 200 for the proof; a proof not of its form; a false proof.
+- 11: the proof call gave no answer (a transport failure, a time limit, a body over its limit, a redirect, a type or an encoding). Nothing is funded yet.
+- 1: any refusal or failure of steps 2 to 4, a step out of order, and a payable out of the bounds at step 5.
+- 6: the unknown of step 5.
+
+No refusal and no returned error holds a prompt, an output, a signature or a key. The values returned are the verified turn (its leaf, enclave signature, tokens, times and output), its cost, the signed ack and the signed receipt. C's secret is never reachable from them.
+
+What is not known (M-17): every rule a real miner applies (the life of a challenge, its time window and its nonce rule; whether it needs checkpoints; whether it answers JSON or streams frames; its statuses and error answers; whether it takes our ack and our signed requests); whether it serves a channel opened through a session; whether its close settles with a payable equal to the escrow. Every answer the tests use is synthetic.
 
 ## Known gaps
 
