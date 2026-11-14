@@ -14,9 +14,9 @@
  */
 import { blake2b } from "@noble/hashes/blake2.js";
 import { freezeFunction } from "../freeze.js";
-import { bytesIn, fieldsOf, itemsOf, wholeIn } from "./check.js";
+import { fieldsOf, itemsOf, wholeIn } from "./check.js";
 import { refuseMiner } from "./errors.js";
-import { pinnedOf, type Expected } from "./expected.js";
+import { pinnedOf, samePinned, type Expected } from "./expected.js";
 import { LIMITS, utf8, wellFormed } from "./forms.js";
 
 /** The version text of a plain chat turn. Version 2 (structured rendering) is refused (M-10). */
@@ -37,12 +37,30 @@ export interface TurnInputInput {
   readonly maxTokens: number;
 }
 
+/**
+ * One turn's input as one value: the bytes, their hash and the max_tokens inside them. `verifyTurn` takes this value
+ * and nothing else about the input, so the token bound it uses is the one of the request that was sent. The arrays
+ * are fresh copies; the copies the checks use are held apart, with the pinned values the value was made for.
+ */
 export interface TurnInput {
   /** The canonical bytes, fresh. */
   readonly input: Uint8Array;
   /** blake2b 256 of the input, fresh. */
   readonly hIn: Uint8Array;
+  /** The max_tokens written inside the input. */
+  readonly maxTokens: number;
 }
+
+interface HeldTurn {
+  readonly input: Uint8Array;
+  readonly hIn: Uint8Array;
+  readonly maxTokens: number;
+  /** The held copy of the pinned values this turn was made for. */
+  readonly pinned: Expected;
+}
+
+/** The held copies, by the value `turnInput` handed out. */
+const TURNS = new WeakMap<object, HeldTurn>();
 
 /** A JSON string as JSON.stringify writes it, for a string already found well formed. */
 const jsonString = (s: string): string => JSON.stringify(s);
@@ -72,13 +90,21 @@ export function turnInput(value: TurnInputInput): TurnInput {
   const text = `{"max_tokens":${String(maxTokens)},"messages":[${messages.join(",")}],"model":${jsonString(expected.identity.requestedSlug)},"version":${jsonString(CHAT_TURN_VERSION)}}`;
   const input = utf8(text);
   if (input.length > LIMITS.INPUT_MAX_BYTES) refuseMiner("BAD_INPUT", "turn input", `turn input must be at most ${LIMITS.INPUT_MAX_BYTES} bytes of UTF-8`);
-  return Object.freeze({ input, hIn: blake2b(input, { dkLen: 32 }) });
+  const hIn = blake2b(input, { dkLen: 32 });
+  const out: TurnInput = Object.freeze({ input: Uint8Array.from(input), hIn: Uint8Array.from(hIn), maxTokens });
+  TURNS.set(out, Object.freeze({ input, hIn, maxTokens, pinned: expected }));
+  return out;
 }
 freezeFunction(turnInput);
 
-/** h_in of input bytes: blake2b 256. */
-export function inputHash(value: { readonly input: Uint8Array }): Uint8Array {
-  const f = fieldsOf(value, ["input"], "input hash");
-  return blake2b(bytesIn(f.input, null, "input hash.input"), { dkLen: 32 });
+/**
+ * The held copy of a value `turnInput` made, for these pinned values. Refused (BAD_INPUT): anything `turnInput` did
+ * not make, and a turn made for other pinned values than `expected` (a different genesis, account, key or identity).
+ */
+export function heldTurn(value: unknown, expected: Expected): HeldTurn {
+  const held = typeof value === "object" && value !== null ? TURNS.get(value) : undefined;
+  if (held === undefined) return refuseMiner("BAD_INPUT", "turnInput", "the turn must be a value made by turnInput");
+  if (!samePinned(held.pinned, expected)) return refuseMiner("BAD_INPUT", "turnInput", "the turn was made for other pinned values than the expected ones");
+  return held;
 }
-freezeFunction(inputHash);
+freezeFunction(heldTurn);

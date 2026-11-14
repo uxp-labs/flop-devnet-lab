@@ -7,7 +7,7 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import { minerExpected } from "../src/miner/expected.js";
 import { modelIdentityHash, sessionInfoMessage, turnEvidenceHash } from "../src/miner/identity.js";
-import { inputHash, turnInput } from "../src/miner/input.js";
+import { turnInput } from "../src/miner/input.js";
 import { leafV3 } from "../src/miner/leaf.js";
 import { referenceReady } from "./lib/sr25519-reference.js";
 import { b256, enclavePair, filled, hex, refEvidenceHash, refIdentityHash, refJsonString, refLeafV3, refSessionInfoMessage, refTurnInput, type Identity } from "./lib/miner-answers.js";
@@ -107,7 +107,6 @@ describe("T3: the turn input and h_in", () => {
             const ref = refTurnInput(slug, messages, maxTokens);
             expect(hex(ours.input)).toBe(hex(ref));
             expect(hex(ours.hIn)).toBe(hex(b256(ref)));
-            expect(hex(inputHash({ input: ours.input }))).toBe(hex(b256(ref)));
           }
       const many = Array.from({ length: 256 }, (_, i) => ({ role: i % 2 === 0 ? ("system" as const) : ("user" as const), content: contents[i % contents.length]!.slice(0, 50) }));
       expect(hex(turnInput({ expected, messages: many, maxTokens: 77 }).input)).toBe(hex(refTurnInput(slug, many, 77)));

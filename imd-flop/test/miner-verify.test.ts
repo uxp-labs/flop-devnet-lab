@@ -9,6 +9,7 @@ import { channelKeyFromSeed } from "../src/channel/key.js";
 import { EXIT } from "../src/errors.js";
 import { MinerError } from "../src/miner/errors.js";
 import { minerExpected } from "../src/miner/expected.js";
+import { turnInput } from "../src/miner/input.js";
 import { verifyInfo, verifyInfoProof, verifyTurn } from "../src/miner/verify.js";
 import { parseInfo, parseInfoProof, parseTurnReceipt } from "../src/miner/wire.js";
 import { referenceReady, referenceSign } from "./lib/sr25519-reference.js";
@@ -120,7 +121,7 @@ describe("T4: verifyInfoProof", () => {
     const proof = parseInfoProof(JSON.stringify(proofObject(s)));
     const info = parseInfo(JSON.stringify(infoObject(s)));
     const turn = parseTurnReceipt(JSON.stringify(turnObject(s)));
-    const asTurn = refusal(() => verifyTurn({ expected, channelId: s.channelId, input: s.input, maxTokens: s.maxTokens, receipt: proof as never }), {});
+    const asTurn = refusal(() => verifyTurn({ expected, channelId: s.channelId, turn: turnInput({ expected, messages: s.messages, maxTokens: s.maxTokens }), receipt: proof as never }), {});
     expect([asTurn.refusal, asTurn.check]).toEqual(["BAD_INPUT", "turn"]);
     const asInfo = refusal(() => verifyInfo({ expected, info: turn as never }), {});
     expect([asInfo.refusal, asInfo.check]).toEqual(["BAD_INPUT", "info"]);
@@ -166,8 +167,11 @@ describe("T4: verifyInfo", () => {
 });
 
 describe("T4: verifyTurn", () => {
-  const run = (s: Scenario, turn: Obj, o: { input?: Uint8Array; maxTokens?: number } = {}) =>
-    verifyTurn({ expected: minerExpected(expectedInputOf(s)), channelId: s.channelId, input: o.input ?? s.input, maxTokens: o.maxTokens ?? s.maxTokens, receipt: parseTurnReceipt(JSON.stringify(turn)) });
+  /** `o` names the input we sent when it is not the scenario's: other messages or another max_tokens, made into a second turn value. */
+  const run = (s: Scenario, turn: Obj, o: { messages?: Scenario["messages"]; maxTokens?: number } = {}) => {
+    const expected = minerExpected(expectedInputOf(s));
+    return verifyTurn({ expected, channelId: s.channelId, turn: turnInput({ expected, messages: o.messages ?? s.messages, maxTokens: o.maxTokens ?? s.maxTokens }), receipt: parseTurnReceipt(JSON.stringify(turn)) });
+  };
 
   it("accepts a whole turn and returns the verified turn", () => {
     const s = scenario();
@@ -187,12 +191,12 @@ describe("T4: verifyTurn", () => {
 
   const enc = new TextEncoder();
   const flipFirst = (h: string) => `0x${h[2] === "0" ? "1" : "0"}${h.slice(3)}`;
-  type Row = [check: string, make: (s: Scenario) => { turn: Obj; input?: Uint8Array; maxTokens?: number }];
+  type Row = [check: string, make: (s: Scenario) => { turn: Obj; messages?: Scenario["messages"]; maxTokens?: number }];
   const rows: Row[] = [
     ["leafVersion", (s) => ({ turn: turnObject(s, { leafVersion: "V2" }) })],
     ["turnIndex", (s) => ({ turn: turnObject(s, { leaf: leafOf(s, { turnIndex: 1 }) }) })],
     ["hIn", (s) => ({ turn: turnObject(s, { leaf: leafOf(s, { hIn: b256(enc.encode("another input")) }) }) })],
-    ["hIn", (s) => ({ turn: turnObject(s), input: enc.encode("another input") })],
+    ["hIn", (s) => ({ turn: turnObject(s), messages: [{ role: "user", content: "another input" }] })],
     ["decodePolicyHash", (s) => ({ turn: turnObject(s, { leaf: { ...leafOf(s), decodePolicyHash: filled(32, 0x23) } }) })],
     ["hIds", (s) => ({ turn: turnObject({ ...s, hIds: filled(32, 0) }) })],
     ...IDENTITY_CHANGES.map(([name, change]): Row => [`identity.${name}`, (s) => {
@@ -202,7 +206,7 @@ describe("T4: verifyTurn", () => {
     ["finishReason", (s) => ({ turn: turnObject({ ...s, finishReason: "tool_calls" }) })],
     ["finishReason", (s) => ({ turn: turnObject({ ...s, finishReason: "Stop" }) })],
     ["completionTokens", (s) => ({ turn: turnObject({ ...s, completionTokens: 65n }) })],
-    ["completionTokens", (s) => ({ turn: turnObject(s), maxTokens: 2 })],
+    ["completionTokens", (s) => ({ turn: turnObject(scenario({ maxTokens: 2 })), maxTokens: 2 })],
     ["output", (s) => ({ turn: turnObject({ ...s, output: Uint8Array.of(0x48, 0xff, 0x49) }) })],
     ["output", (s) => ({ turn: turnObject({ ...s, output: Uint8Array.of(0xed, 0xa0, 0x80) }) })],
     ["output", (s) => ({ turn: turnObject({ ...s, output: enc.encode("FLOP-TURN-FRAMES-V1\u0000\u0000\u0000\u0000\u0000\u0002hi") }) })],
@@ -228,9 +232,80 @@ describe("T4: verifyTurn", () => {
   rows.forEach(([check, make], i) => {
     it(`row ${i}: refuses a change of ${check} with TURN, exit 1`, () => {
       const s = scenario();
-      const { turn, input, maxTokens } = make(s);
-      const e = refusal(() => run(s, turn, { input, maxTokens }), turn);
+      const { turn, messages, maxTokens } = make(s);
+      const e = refusal(() => run(s, turn, { messages, maxTokens }), turn);
       expect([e.refusal, e.check, e.code]).toEqual(["TURN", `turn.${check}`, EXIT.ERROR]);
+    });
+  });
+
+  describe("F1: the input of a turn is one value", () => {
+    const made = (s: Scenario) => {
+      const expected = minerExpected(expectedInputOf(s));
+      const turn = turnInput({ expected, messages: s.messages, maxTokens: s.maxTokens });
+      return { expected, turn, receipt: parseTurnReceipt(JSON.stringify(turnObject(s))) };
+    };
+
+    it("the turn value holds the input, h_in and max_tokens, frozen", () => {
+      const s = scenario();
+      const { turn } = made(s);
+      expect(Object.isFrozen(turn)).toBe(true);
+      expect(Object.keys(turn).sort()).toEqual(["hIn", "input", "maxTokens"]);
+      expect(turn.maxTokens).toBe(64);
+    });
+
+    it("takes no input field and no maxTokens field: each is an extra field (BAD_INPUT)", () => {
+      const s = scenario();
+      const { expected, turn, receipt } = made(s);
+      for (const extra of [{ input: s.input }, { maxTokens: 100 }, { input: s.input, maxTokens: s.maxTokens }]) {
+        const e = refusal(() => verifyTurn({ expected, channelId: s.channelId, turn, receipt, ...extra } as never), {});
+        expect([e.refusal, e.code]).toEqual(["BAD_INPUT", EXIT.ERROR]);
+      }
+      const noTurn = refusal(() => verifyTurn({ expected, channelId: s.channelId, input: s.input, maxTokens: s.maxTokens, receipt } as never), {});
+      expect(noTurn.refusal).toBe("BAD_INPUT");
+    });
+
+    it("the max_tokens of the request is the bound: an input that asked for 2 holds a receipt of 3 completion tokens", () => {
+      const s = scenario({ maxTokens: 2 });
+      const { expected, turn, receipt } = made(s);
+      const e = refusal(() => verifyTurn({ expected, channelId: s.channelId, turn, receipt }), {});
+      expect([e.refusal, e.check]).toEqual(["TURN", "turn.completionTokens"]);
+    });
+
+    it("refuses a turn that turnInput did not make: a copy, a frozen copy, a Proxy, an object with its prototype, a bare input", () => {
+      const s = scenario();
+      const { expected, turn, receipt } = made(s);
+      const forged: unknown[] = [{ ...turn }, Object.freeze({ ...turn }), new Proxy(turn, {}), Object.create(turn), s.input, null, "x"];
+      for (const t of forged) {
+        const e = refusal(() => verifyTurn({ expected, channelId: s.channelId, turn: t as never, receipt }), {});
+        expect([e.refusal, e.check]).toEqual(["BAD_INPUT", "turnInput"]);
+      }
+    });
+
+    it("refuses a turn made for other pinned values than the expected it is handed, and takes one made for equal values", () => {
+      const s = scenario();
+      const { turn, receipt } = made(s);
+      const others = [
+        minerExpected({ ...expectedInputOf(s), genesis: filled(32, 0x45) }),
+        minerExpected({ ...expectedInputOf(s), account: filled(32, 0x56) }),
+        minerExpected({ ...expectedInputOf(s), enclaveKey: enclavePair(9).publicKey }),
+        minerExpected({ ...expectedInputOf(s), identity: { ...s.identity, backendModelName: "other-backend" } }),
+        minerExpected({ ...expectedInputOf(s), identity: { ...s.identity, modelHash: filled(32, 0x12) } }),
+      ];
+      for (const other of others) {
+        const e = refusal(() => verifyTurn({ expected: other, channelId: s.channelId, turn, receipt }), {});
+        expect([e.refusal, e.check]).toEqual(["BAD_INPUT", "turnInput"]);
+      }
+      const same = minerExpected(expectedInputOf(s));
+      expect(verifyTurn({ expected: same, channelId: s.channelId, turn, receipt }).text).toBe("Hello.");
+    });
+
+    it("a change to the arrays or to a number of the value handed out changes nothing that is checked", () => {
+      const s = scenario();
+      const { expected, turn, receipt } = made(s);
+      turn.input.fill(0);
+      turn.hIn.fill(0);
+      expect(() => ((turn as { maxTokens: number }).maxTokens = 1)).toThrow();
+      expect(verifyTurn({ expected, channelId: s.channelId, turn, receipt }).text).toBe("Hello.");
     });
   });
 

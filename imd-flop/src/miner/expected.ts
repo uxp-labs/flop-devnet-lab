@@ -8,6 +8,7 @@
  * the copy held here, so a change to the arrays of the value handed out changes nothing that is checked.
  */
 import { freezeFunction } from "../freeze.js";
+import { bytesEqual } from "../ss58.js";
 import { bytesIn, fieldsOf, textIn, u8In } from "./check.js";
 import { refuseMiner } from "./errors.js";
 import { allZero } from "./forms.js";
@@ -96,3 +97,14 @@ export function pinnedOf(value: unknown): Expected {
   return held;
 }
 freezeFunction(pinnedOf);
+
+/** True when two held pinned values hold the same genesis, account, enclave key and model identity. */
+export function samePinned(a: Expected, b: Expected): boolean {
+  if (!bytesEqual(a.genesis, b.genesis) || !bytesEqual(a.account, b.account) || !bytesEqual(a.enclaveKey, b.enclaveKey)) return false;
+  return IDENTITY_FIELDS.every((k) => {
+    const x = a.identity[k];
+    const y = b.identity[k];
+    return x instanceof Uint8Array && y instanceof Uint8Array ? bytesEqual(x, y) : x === y;
+  });
+}
+freezeFunction(samePinned);

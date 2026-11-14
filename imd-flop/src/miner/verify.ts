@@ -7,12 +7,12 @@
 import { bytesEqual } from "../ss58.js";
 import { verifyChannelSignature } from "../channel/key.js";
 import { freezeFunction } from "../freeze.js";
-import { bytesIn, fieldsOf, wholeIn } from "./check.js";
+import { bytesIn, fieldsOf } from "./check.js";
 import { refuseMiner } from "./errors.js";
 import { IDENTITY_FIELDS, pinnedOf, type Expected, type ModelIdentity } from "./expected.js";
-import { allZero, LIMITS, u64Max } from "./forms.js";
+import { allZero, u64Max } from "./forms.js";
 import { sessionInfoMessage, turnEvidenceHash } from "./identity.js";
-import { inputHash } from "./input.js";
+import { heldTurn, type TurnInput } from "./input.js";
 import { leafV3 } from "./leaf.js";
 import { parsedOf, type InfoProof, type SignedInfo, type TurnReceipt } from "./wire.js";
 
@@ -107,10 +107,11 @@ export interface VerifiedTurn {
 export interface VerifyTurnInput {
   readonly expected: Expected;
   readonly channelId: Uint8Array;
-  /** The input bytes WE sent. */
-  readonly input: Uint8Array;
-  /** The request's max_tokens. */
-  readonly maxTokens: number;
+  /**
+   * The input WE sent, as `turnInput` made it for these pinned values. It holds the input bytes, h_in and the
+   * request's max_tokens as one value: there is no other input and no other max_tokens to hand in.
+   */
+  readonly turn: TurnInput;
   readonly receipt: TurnReceipt;
 }
 
@@ -121,9 +122,9 @@ const startsWith = (b: Uint8Array, p: Uint8Array): boolean => b.length >= p.leng
  * One turn (W16), checked in this order, the first failure refusing with TURN and the name of the check:
  *  1. leafVersion: V3;
  *  2. turnIndex: 0 (one turn per run, M-4);
- *  3. hIn: the blake2b 256 of our input bytes;
+ *  3. hIn: the h_in of the turn value (the blake2b 256 of our input bytes);
  *  4. decodePolicyHash: the pinned one; hIds: not all zero (V3 in `leafFieldsConsistent`; the TOPLOC hash may be anything);
- *  5. identity: each field the pinned one; finishReason: stop or length; completionTokens: at most maxTokens;
+ *  5. identity: each field the pinned one; finishReason: stop or length; completionTokens: at most the max_tokens of the turn value;
  *  6. output: UTF-8, decoded fatally, and not starting with the reserved framed prefix;
  *  7. hOut: the evidence hash rebuilt from the output, the tokens, the finish reason and the PINNED identity;
  *  8. timing: done at or after recv, and latency equal to done minus recv;
@@ -132,24 +133,23 @@ const startsWith = (b: Uint8Array, p: Uint8Array): boolean => b.length >= p.leng
  * 11. enclaveSig: verifies under the pinned key over that leaf.
  */
 export function verifyTurn(value: VerifyTurnInput): VerifiedTurn {
-  const f = fieldsOf(value, ["expected", "channelId", "input", "maxTokens", "receipt"], "verifyTurn input");
+  const f = fieldsOf(value, ["expected", "channelId", "turn", "receipt"], "verifyTurn input");
   const e = pinnedOf(f.expected);
   const channelId = bytesIn(f.channelId, 32, "verifyTurn channelId");
-  const input = bytesIn(f.input, null, "verifyTurn input");
-  const maxTokens = wholeIn(f.maxTokens, 1, LIMITS.MAX_TOKENS_MAX, "verifyTurn maxTokens");
+  const sent = heldTurn(f.turn, e);
   const r = parsedOf("turn", f.receipt);
   const fail = (check: string, msg: string): never => refuseMiner("TURN", `turn.${check}`, msg);
 
   if (r.leafVersion !== "V3") fail("leafVersion", "the leaf version must be V3");
   if (r.turnIndex !== 0) fail("turnIndex", "the turn index must be 0: one turn per run");
-  const hIn = inputHash({ input });
+  const hIn = sent.hIn;
   if (!bytesEqual(r.hIn, hIn)) fail("hIn", "h_in is not the hash of the input we sent");
   if (!bytesEqual(r.decodePolicyHash, e.identity.decodePolicyHash)) fail("decodePolicyHash", "the decode policy is not the pinned one");
   if (allZero(r.hIds)) fail("hIds", "h_ids must not be all zero in a version 3 leaf");
   const d = identityDiffers(r.identity, e.identity);
   if (d !== null) fail(`identity.${d}`, `the receipt's model identity field ${d} is not the pinned one`);
   if (!(FINISH_REASONS as readonly string[]).includes(r.finishReason)) fail("finishReason", `the finish reason must be one of ${FINISH_REASONS.join(", ")}`);
-  if (r.completionTokens > BigInt(maxTokens)) fail("completionTokens", "the completion tokens are more than max_tokens");
+  if (r.completionTokens > BigInt(sent.maxTokens)) fail("completionTokens", "the completion tokens are more than max_tokens");
   let text = "";
   try {
     text = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(r.output);
@@ -165,7 +165,7 @@ export function verifyTurn(value: VerifyTurnInput): VerifiedTurn {
   const leaf = leafV3({
     channelId,
     turnIndex: r.turnIndex,
-    hIn,
+    hIn: Uint8Array.from(hIn),
     hOut: Uint8Array.from(r.hOut),
     gN: r.gN,
     decodePolicyHash: Uint8Array.from(r.decodePolicyHash),

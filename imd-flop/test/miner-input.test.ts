@@ -9,7 +9,7 @@ import { MinerError, MINER_REFUSAL } from "../src/miner/errors.js";
 import { minerExpected } from "../src/miner/expected.js";
 import { LIMITS } from "../src/miner/forms.js";
 import { modelIdentityHash, sessionInfoMessage, turnEvidenceHash } from "../src/miner/identity.js";
-import { inputHash, turnInput } from "../src/miner/input.js";
+import { turnInput } from "../src/miner/input.js";
 import { leafV3 } from "../src/miner/leaf.js";
 import { verifyTurn } from "../src/miner/verify.js";
 import { parseTurnReceipt } from "../src/miner/wire.js";
@@ -90,7 +90,7 @@ describe("W5, W6: minerExpected", () => {
   });
 });
 
-describe("W8: turnInput and inputHash", () => {
+describe("W8: turnInput", () => {
   const exp = () => minerExpected(expectedInputOf(scenario()));
   const user = (content: string) => [{ role: "user" as const, content }];
 
@@ -99,7 +99,7 @@ describe("W8: turnInput and inputHash", () => {
     const t = turnInput({ expected: minerExpected(expectedInputOf(s)), messages: s.messages, maxTokens: s.maxTokens });
     expect(new TextDecoder().decode(t.input)).toBe('{"max_tokens":64,"messages":[{"content":"Say hello.","role":"user"}],"model":"qwen-test","version":"flop.chat-turn.v1"}');
     expect(hex(t.input)).toBe(hex(refTurnInput(s.identity.requestedSlug, s.messages, s.maxTokens)));
-    expect(hex(inputHash({ input: t.input }))).toBe(hex(t.hIn));
+    expect(t.maxTokens).toBe(s.maxTokens);
     expect(Object.isFrozen(t)).toBe(true);
   });
 
@@ -161,10 +161,12 @@ describe("W3: the layouts refuse a field of another width", () => {
 
   it("verifyTurn's own inputs", () => {
     const s = scenario();
-    const base = { expected: minerExpected(expectedInputOf(s)), channelId: s.channelId, input: s.input, maxTokens: s.maxTokens, receipt: parseTurnReceipt(JSON.stringify(turnObject(s))) };
+    const expected = minerExpected(expectedInputOf(s));
+    const base = { expected, channelId: s.channelId, turn: turnInput({ expected, messages: s.messages, maxTokens: s.maxTokens }), receipt: parseTurnReceipt(JSON.stringify(turnObject(s))) };
     expect(verifyTurn(base).gN).toBe(s.gN);
     badInput(() => verifyTurn({ ...base, channelId: filled(31, 1) }));
     for (const v of [0, LIMITS.MAX_TOKENS_MAX + 1, 1.5]) badInput(() => verifyTurn({ ...base, maxTokens: v }));
     badInput(() => verifyTurn({ ...base, input: "text" as never }));
+    badInput(() => verifyTurn({ ...base, turn: "text" as never }));
   });
 });
