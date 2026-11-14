@@ -17,7 +17,7 @@
 import { blake2b } from "@noble/hashes/blake2.js";
 import { INNER_CALLS, INNER_NAMES, isInnerName, type Bytes32, type InnerCall, type InnerName } from "./calls.js";
 import { describeExtrinsic } from "./describe.js";
-import { ChainEncodeError, refuse } from "./errors.js";
+import { refuse } from "./errors.js";
 import { lastValidBlock, mortalEra } from "./era.js";
 import { bytesOf, ownKeys, ownValue, takeFields, takeValue, writeValue, type FieldValue } from "./fields.js";
 import { signingPayload, type SignedPath } from "./payload.js";
@@ -196,30 +196,14 @@ function extensionExtra(s: SignSnapshot): Uint8Array {
 }
 
 /**
- * The name of a thrown value's class, read without running any of its code a caller could define: no
- * getter, no toString. Only a plain identifier is given; anything else is "object".
+ * Calls the signer. If it throws, the refusal says only that it threw (rule H4): nothing of the thrown value is
+ * kept, not its text, not its class and not the value as a cause, and none of its code is run.
  */
-function className(e: unknown): string {
-  if (e === null) return "null";
-  if (typeof e !== "object" && typeof e !== "function") return typeof e;
-  try {
-    const proto: unknown = Object.getPrototypeOf(e);
-    const ctor = proto === null || typeof proto !== "object" ? undefined : Object.getOwnPropertyDescriptor(proto, "constructor");
-    const fn: unknown = ctor && "value" in ctor ? ctor.value : undefined;
-    const nameD = typeof fn === "function" ? Object.getOwnPropertyDescriptor(fn, "name") : undefined;
-    const name: unknown = nameD && "value" in nameD ? nameD.value : undefined;
-    return typeof name === "string" && /^[A-Za-z_$][A-Za-z0-9_$]{0,63}$/.test(name) ? name : "object";
-  } catch {
-    return "object";
-  }
-}
-
-/** Calls the signer. If it throws, the refusal says so and names the class only; the thrown value is its cause (rule H4). */
 function callSigner(s: SignSnapshot, message: Uint8Array): unknown {
   try {
     return Reflect.apply(s.sign, s.signer, [Uint8Array.from(message)]);
-  } catch (e) {
-    throw new ChainEncodeError("SIGNER_THREW", `the signer threw (${className(e)})`, e);
+  } catch {
+    return refuse("SIGNER_THREW", "the sign function threw");
   }
 }
 
