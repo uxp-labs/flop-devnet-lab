@@ -19,6 +19,8 @@ import { appendLedger, latestAttempts, latestLineOf, LedgerLockError, reportedSp
 import { listReceipts, readSavedReceipt, receiptVerdicts, refreshReceipt, type SavedReceipt } from "./receipt-store.js";
 import { blank, classifyReceipt, receiptLine } from "./receipts.js";
 import { outsideText, outsideValue, registerSecret } from "./secrets.js";
+import type { Transport } from "./chain-read/node.js";
+import { SESSION_USAGE, sessionCommand } from "./session/command.js";
 
 export interface IO {
   out: (s: string) => void;
@@ -27,6 +29,8 @@ export interface IO {
   fetch?: Fetch;
   /** Test hook: supply the provider instance (lets tests count calls). */
   provider?: Provider;
+  /** Test hook: the chain reads' transport for the session commands (P5b, rule C5). Else the network's node. */
+  transport?: Transport;
 }
 
 const HELP = `imd-flop: reference companion CLI for "FLOP, by choice" (devnet rehearsal)
@@ -44,6 +48,10 @@ const HELP = `imd-flop: reference companion CLI for "FLOP, by choice" (devnet re
       [--check-job] [--mock-scenario ok|timeout|settled|key_expired|estimate_error]
   status [--json]
   receipt <request_id> [--refresh] [--json]
+  session grant --owner <ss58> --days <1..10>   (prints the owner's create_session call; a day is one epoch of the chain's daily cap)
+  session revoke --owner <ss58>                 (prints the owner's revoke_session call)
+  session show --owner <ss58>                   (reads the session at the finalized head and the room left)
+      The owner signs the printed call in his own wallet. These commands sign, send and write nothing.
 
 Global: --seat <tokenId>, --json. Data: $IMD_FLOP_HOME or ~/.imd-flop. Provider defaults to mock.
 Paid run --provider flop needs ETH_RPC_URL reporting chain id 1 and a live devnet genesis equal to the pinned hash.
@@ -453,6 +461,14 @@ export async function main(argv: string[], io: IO): Promise<number> {
           if (ledgerRow) io.out(`  ledger: state ${ledgerRow.state}, spend ${blank(ledgerRow.spend)}${ledgerRow.state === "timeout_unknown" ? " (unknown: timed out, not retried)" : ""}`);
         }
         return EXIT.OK;
+      }
+
+      case "session": {
+        const { values, positionals } = parse(rest.slice(1), { owner: { type: "string" }, days: { type: "string" } });
+        if (positionals.length > 0) throw new CliError(SESSION_USAGE, EXIT.USAGE);
+        const cfg = loadConfig(h);
+        const ctx = { home: h, seat: activeSeat(h, values.seat), net: network(cfg.network), caps: cfg.caps, owner: values.owner, days: values.days, transport: io.transport };
+        return await sessionCommand(rest[0], ctx, io.out, values.json === true);
       }
 
       default:
