@@ -22,7 +22,6 @@ test("HOLDS: both branches as planned pass; each piece of evidence missing or un
         [`${id} fee null`, (r) => { at(r, id).decoder.fee_raw = null; }],
         [`${id} fee "unknown"`, (r) => { at(r, id).decoder.fee_raw = "unknown"; }],
         [`${id} success null`, (r) => { at(r, id).decoder.success = null; }],
-        [`${id} no events`, (r) => { at(r, id).decoder.events = []; }],
         [`${id} no after`, (r) => { delete at(r, id).after; }],
         [`${id} after exit 1`, (r) => { at(r, id).after.exit = 1; }],
         [`${id} after session null`, (r) => { at(r, id).after.session = null; }],
@@ -37,17 +36,25 @@ test("HOLDS: both branches as planned pass; each piece of evidence missing or un
       }
     }
     edits.push(["no balances", (r) => { delete r.balances; }], ["after balance null", (r) => { r.balances.owner_free_after = null; }], ["balance one off", (r) => { r.balances.owner_free_after = (BigInt(r.balances.owner_free_after) - 1n).toString(); }], ["no device", (r) => { delete r.accounts.device.public_key; }]);
-    for (const [what, edit] of edits) { const r = asPlanned(branch); edit(r); assert.ok(!passed(r), `${branch}: ${what} passes`); }
+    for (const [what, edit] of edits) {
+      if (branch === "refused" && /^G2 (no after|after)/.test(what)) continue; // RG19-10
+      const r = asPlanned(branch); edit(r); assert.ok(!passed(r), `${branch}: ${what} passes`); }
     assert.ok(edits.length >= 50, String(edits.length));
   }
 });
 
-test("DEFECT RG19-10: a record at which plan.mjs next says stop never gets the verdict passed", () => {
-  const r = asPlanned("taken");
-  at(r, "R2").after.runtime = { specName: V("SPEC_NAME"), specVersion: Number(V("SPEC")) + 1 };
-  assert.equal(nextOf(plan, r).word, "stop");
-  const j = judge(plan, r);
-  assert.notEqual(j.exit, 0, `verdict: ${j.verdict}`);
+test("DEFECT RG19-10: a record at which plan.mjs next does not say the end never gets the verdict passed", () => {
+  const cases = [
+    ["R2's runtime after is not the plan's", "taken", (r) => { at(r, "R2").after.runtime = { specName: V("SPEC_NAME"), specVersion: Number(V("SPEC")) + 1 }; }],
+    ["G2 refused, no show after it", "refused", (r) => { delete at(r, "G2").after; }],
+    ["G2 refused, show after it exited 1", "refused", (r) => { at(r, "G2").after.exit = 1; }],
+  ];
+  for (const [what, branch, edit] of cases) {
+    const r = asPlanned(branch); edit(r);
+    assert.notEqual(nextOf(plan, r).word, "end", what);
+    const j = judge(plan, r);
+    assert.notEqual(j.exit, 0, `${what}: verdict: ${j.verdict}`);
+  }
 });
 
 test("DEFECT RG19-11: the owner's balance claim passes only when the record names the relayed reads its balances came from (the lead's L1)", () => {
@@ -64,9 +71,14 @@ test("DEFECT RG19-12: G2 refused with an error the 1014020 table does not name i
   assert.notEqual(c.status, "pass", c.why);
 });
 
-test("DEFECT RG19-13: the judge says differ where the record's explorer reading and decoder reading differ, whatever sources_differ says", () => {
+test("DEFECT RG19-13: the judge reads each claim from the evidence the record holds, not from the record's own derived words (sources_differ, success, error)", () => {
   const r = asPlanned("taken");
   at(r, "G1").run_time.explorer.events[0].fields.daily_cap = "1";
   const c = judge(plan, r).claims.find((x) => x.id === "G1" && /explorer/.test(x.what));
-  assert.equal(c.status, "differ");
+  assert.equal(c.status, "differ", "explorer and decoder events differ, sources_differ says nothing");
+  for (const id of ["G1", "G2"]) {
+    const q = asPlanned(id === "G1" ? "taken" : "refused");
+    at(q, id).decoder.events = at(q, id).decoder.events.filter((e) => e.pallet !== "System");
+    assert.ok(!passed(q), `${id}: no System.ExtrinsicSuccess or ExtrinsicFailed in its events, and the record's success word passes`);
+  }
 });
