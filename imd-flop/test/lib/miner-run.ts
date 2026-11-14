@@ -51,7 +51,7 @@ export interface Rig {
 }
 
 /** A run and its scripted miner. */
-export function rig(sw: Switches = {}, o: { now?: () => bigint } = {}): Rig {
+export function rig(sw: Switches = {}, o: { now?: () => bigint; turnTakesMs?: bigint } = {}): Rig {
   const { key, signs } = countedKey();
   const miner = scriptedMiner(key.publicKey(), sw);
   const clock = { calls: 0 };
@@ -59,7 +59,12 @@ export function rig(sw: Switches = {}, o: { now?: () => bigint } = {}): Rig {
   const run = minerRun({
     expected: minerExpected(expectedInputOf(miner.scenario)),
     endpoint: minerEndpoint("https://miner.example"),
-    transport: miner.transport as never,
+    // The turn call takes `turnTakesMs` of the run's clock, so the times around it show where they were taken.
+    transport: (async (req: { call: string }) => {
+      const a = await miner.transport(req);
+      if (req.call === "turn") t += o.turnTakesMs ?? 0n;
+      return a;
+    }) as never,
     key,
     nowMs:
       o.now ??

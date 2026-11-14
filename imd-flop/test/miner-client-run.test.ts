@@ -57,6 +57,16 @@ describe("R2: the whole honest run", () => {
     expect(BigInt(String(a.agentRecvMs)) - BigInt(String(a.agentSendMs))).toBe(700n);
   });
 
+  it("the buyer's send time is taken just before the turn call and its receive time just after the answer", async () => {
+    const r = rig({}, { turnTakesMs: 5000n });
+    await upTo(r, "turn");
+    const a = r.miner.acks[0] as Record<string, unknown>;
+    // One step of the clock (700 ms) and the 5000 ms the turn call took: no other call lies between the two times.
+    expect(BigInt(String(a.agentRecvMs)) - BigInt(String(a.agentSendMs))).toBe(5700n);
+    const turnStamp = BigInt(String(r.miner.seen.find((x) => x.call === "turn")?.signed?.["x-flop-timestamp"]));
+    expect(BigInt(String(a.agentSendMs)) - turnStamp).toBe(700n);
+  });
+
   it("the close body names the pinned measured root and a null transcript reference", async () => {
     const r = rig();
     await upTo(r, "turn");
