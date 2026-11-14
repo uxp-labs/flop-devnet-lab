@@ -15,13 +15,22 @@ Worktree /home/claude/wt-review-a1, branch claude/session-grant-devnet-test. Pus
 - owner-call.mjs (H1, H3) and T4.
 - next.mjs (H10), record-step.mjs (H13, H14), plan.mjs (H9, H12): written, smoke run only.
 
+- T5 next.test.mjs; record-flow.test.mjs (walk.mjs); record-step.test.mjs (refusals, lead stop).
+- judge.mjs, check.mjs and T6. replay.mjs (H16) over rehearsal-run/ (written by node walk.mjs).
+- README.md, plan.md (H17), plan.test.mjs (values, printed blocks, seat lines).
+- T8 by hand in /tmp/g19/copy (git archive of HEAD, node_modules and dist linked): 49 rules
+  undone, 49 killed (5 lived at first; tests added for each, then killed).
+
 ## Next
 
-- T5: plan.mjs next over made records; a whole walk of the record-step commands.
-- check.mjs (H15), test T6. Committed tapes loader (H16).
-- README.md, plan.md (H17). T8 by hand in /tmp/g19.
+- The full check once at the end; read the GitHub checks of the last commit; the report.
 
 ## Open questions
 
 - B-1 says "as its next version". The brief says one line and nothing else in that file. The
   file's head still says Version 3. Kept to one line; reported.
+- The worst case by H12 (each revoke three tries) is 8 x MAX_FEE = 84467887880000000 raw, not
+  B-10's 63350915910000000 (which counts two retries in all). Both are under the fence.
+- research-offline.yml lists its folders by name: this folder is not run on GitHub until the
+  lead adds a step (a builder does not change workflows).
+- No tool records the owner's balances, so check.mjs's balance claim is "not run" at run time.

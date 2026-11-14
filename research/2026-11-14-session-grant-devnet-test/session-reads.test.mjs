@@ -81,6 +81,8 @@ test("T3: the probe of H7 asks state_call Core_version 0x at the block PROBE_BAC
   const call = node.log.find((c) => c.method === "state_call");
   assert.deepEqual(call.params.slice(0, 2), ["Core_version", "0x"]);
   assert.equal(r.at.number, r.head.number - back);
+  assert.deepEqual(node.log.filter((c) => c.method === "chain_getBlockHash").at(-1).params, [r.head.number - back], "the hash asked is of the block PROBE_BACK below the head");
+  assert.equal(call.params[2], r.at.hash, "state_call is made at that block's hash");
   assert.equal(r.answered, false);
   assert.equal(r.length, null);
   assert.match(r.refusal.message, /no state_call/);

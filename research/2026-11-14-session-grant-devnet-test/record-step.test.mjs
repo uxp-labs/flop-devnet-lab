@@ -117,3 +117,33 @@ test("H11: case c only after a first send refused with 1010; a deadline or a 101
     refused(() => leadStop({ plan, run: w.run, results: after({ status: "already-sent" }), id: "G1", why: "x", readsText: reads.text, readsSha256: reads.sha }), /sent list held these bytes/);
   } finally { w.done(); }
 });
+
+test("H3: a grant printed without the stored record line is refused at G2 (U1 is asked only over the revoked record)", async () => {
+  const w = await at("p0");
+  try {
+    await w.use("G1", "call", await w.tape(w.node("A1", ["sessions", "nonces", "breakers"])));
+    const { copyFileSync } = await import("node:fs");
+    copyFileSync(join(w.run, "tool", "G1.call.json"), join(w.run, "tool", "G2.call.json"));
+    const { toolCall, OwnerCallError } = await import("./owner-call.mjs");
+    assert.throws(() => toolCall(plan, w.run, w.results, "G2"), (e) => e instanceof OwnerCallError && /the stored record line is null, the plan's is "A record is stored for this pair, revoked/.test(e.message));
+    assert.equal(toolCall(plan, w.run, w.results, "G1").call_hex.slice(0, 6), "0x5e00");
+  } finally { w.done(); }
+});
+
+test("H14: an after reading whose tape's head is below the step's block is refused", async () => {
+  const w = await newWalk("g19-rs-after");
+  try {
+    await w.p0();
+    await w.call("G1", w.node("A1", ["sessions", "nonces", "breakers"]));
+    w.sign("G1"); w.sent("G1", "A2");
+    await w.block("G1", rerunNode("A6"), "A2");
+    await w.use("G1", "after", await w.tape(rerunNode("A6")));
+    const { writeFileSync } = await import("node:fs");
+    const f = join(w.run, "tool", "G1.after.json");
+    const o = readJson(f);
+    o.tape_head.number = 1;
+    writeFileSync(f, JSON.stringify(o));
+    const { recordTool } = await import("./record-step.mjs");
+    refused(() => recordTool(plan, w.run, w.results, "G1", "after", ERRORS), /the after tape's head 1 is below G1's block 3552729/);
+  } finally { w.done(); }
+});

@@ -94,3 +94,15 @@ test("T2: the command line refuses with exit 2 and its words, and prints no tape
   assert.equal(p.stderr, "tool-run: the tape is not a list of { method, params, result or error }\n");
   assert.equal(p.stdout, "");
 });
+
+test("T2 H5: the tape's transport answers the metadata question with the committed bytes only when the tape's sha256 is theirs", async () => {
+  const { committedMetadata, tapeTransport } = await import("./tape.mjs");
+  const md = await committedMetadata(plan);
+  const ok = tapeTransport(A6.value, md);
+  assert.equal(await ok("state_getMetadata", [A6.value.metadata.at]), md.hex);
+  const missed = [];
+  const bad = tapeTransport({ ...A6.value, metadata: { ...A6.value.metadata, sha256: "00".repeat(32) } }, md, { missed });
+  await assert.rejects(bad("state_getMetadata", [A6.value.metadata.at]), /not the committed bytes/);
+  assert.equal(missed[0].why, "the metadata's sha256 is not the committed one");
+  await assert.rejects(ok("state_getMetadata", ["0x" + "12".repeat(32)]), /holds no answer/);
+});
