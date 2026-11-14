@@ -180,7 +180,7 @@ describe("C1 by the reviewer's own list", () => {
 });
 
 describe("C1: a host with a trailing dot (note)", () => {
-  it("HOLDS (as it is today): https on a DNS name with a trailing dot is taken as it was written; fetch goes to that same name", () => {
+  it("HOLDS: (as it is today) https on a DNS name with a trailing dot is taken as it was written; fetch goes to that same name", () => {
     // Recorded, not ruled: the parser keeps the dot, so the plain form rule does not refuse it. It names the same
     // DNS host; a TLS name check may differ. The lead may wish to refuse it.
     expect(minerEndpoint("https://miner.example.").origin).toBe("https://miner.example.");

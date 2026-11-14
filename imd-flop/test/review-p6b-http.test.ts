@@ -278,7 +278,7 @@ describe("C2, C3: bending the request handed in", () => {
 });
 
 describe("C11 at the proof: a status other than 200", () => {
-  it("DEFECT RP6B-4: a proof answer of a status other than 200 is exit 5 whatever its body (here a 500 whose body passes its limit)", async () => {
+  it("DEFECT: RP6B-4: a proof answer of a status other than 200 is exit 5 whatever its body (here a 500 whose body passes its limit)", async () => {
     const r = fetchRig({ override: { proof: () => new Response(new Uint8Array(17 * 1024), { status: 500, headers: json }) } });
     const e = await refusal(r.run.prove());
     expect(e.code).toBe(5);

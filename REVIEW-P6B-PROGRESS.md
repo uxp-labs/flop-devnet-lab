@@ -14,8 +14,15 @@ Reviewed head: d408cc8. Tests in imd-flop/test/review-p6b-*.test.ts, rig in imd-
 - attack 11 README read: matches code; 11 for proof 3xx/oversize stated (see RP6B-4)
 - attack 12 deviations read
 
+## Second reviewer (took over 2026-11-14 after the first was ended)
+- read all seven review test files and the rig
+- renamed DEFECT tests to the lead's form `DEFECT: RP6B-n:`; HOLDS (as it is today) to `HOLDS: (as it is today)`
+- ran order + http files: 8 DEFECT fail for the named reasons, 50 pass
+- mutants file /tmp/rev-p6b-tools/mutants.json present: 76 entries (progress said 77)
+
 ## Next
-- npm test whole, push, gh checks, report
+- gaps test (attack 3 per fault URL/method/headers; attack 4 lone surrogate escape through the run)
+- npm test whole, remove this file, push, gh checks, report
 
 ## Findings so far
 - RP6B-1 (L1, M-21): ack signed then delivery fails (500, 302, no answer, time limit, clock fail) -> turn throws, signed ack lost

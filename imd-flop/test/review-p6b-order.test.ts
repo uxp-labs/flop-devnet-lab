@@ -146,7 +146,7 @@ describe("L1 (M-21): once C signed the ack, the caller gets it, whatever happens
     ["a time limit", { override: { ack: () => new Promise<Response>(() => undefined) } }],
   ];
   for (const [what, o] of faults) {
-    it(`DEFECT RP6B-1: the ack's delivery fails with ${what}: turn hands back the signed ack, and close then signs no receipt`, async () => {
+    it(`DEFECT: RP6B-1: the ack's delivery fails with ${what}: turn hands back the signed ack, and close then signs no receipt`, async () => {
       const r = fetchRig(o);
       if (what === "a time limit") {
         // The ack's limit is lowered through a run of its own, so the test does not wait 30 s.
@@ -186,7 +186,7 @@ describe("L1 (M-21): once C signed the ack, the caller gets it, whatever happens
     });
   }
 
-  it("DEFECT RP6B-1: the clock fails after C signed the ack and before the ack is sent: turn hands back the signed ack", async () => {
+  it("DEFECT: RP6B-1: the clock fails after C signed the ack and before the ack is sent: turn hands back the signed ack", async () => {
     let n = 0;
     let t = 1_763_100_000_000n;
     // now() is read: info, open, turn's request, send, receive (5), then the ack's request (6): fail at 6.
@@ -204,7 +204,7 @@ describe("L1 (M-21): once C signed the ack, the caller gets it, whatever happens
 });
 
 describe("L2 (M-22): a run takes a transport and no endpoint", () => {
-  it("DEFECT RP6B-2: minerRun takes the pinned values, a transport, C, the clock, the random source and the limits, and no endpoint", () => {
+  it("DEFECT: RP6B-2: minerRun takes the pinned values, a transport, C, the clock, the random source and the limits, and no endpoint", () => {
     const rec = recordedKey();
     const miner = scriptedMiner(rec.key.publicKey());
     const make = () =>
@@ -221,7 +221,7 @@ describe("L2 (M-22): a run takes a transport and no endpoint", () => {
 });
 
 describe("C8: the receipt", () => {
-  it("DEFECT RP6B-3: the receipt's final root is the verified leaf, even when the caller changes the turn result it was handed", async () => {
+  it("DEFECT: RP6B-3: the receipt's final root is the verified leaf, even when the caller changes the turn result it was handed", async () => {
     const r = fetchRig();
     await upTo(r, "notifyOpen");
     const t = await r.run.turn(turnArgs());
