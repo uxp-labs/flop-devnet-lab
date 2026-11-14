@@ -11,13 +11,13 @@ Worktree /home/claude/wt-review-a1, branch claude/session-grant-devnet-test. Pus
   encoder sign-device.test.mjs S6 reads its text, for the keygen line, which is unchanged.
 - H2: MAX_SESSION_BLOCKS 14400 to 86400 (one line), T7 in signer-guard.test.mjs. Fails without.
 - lib.mjs, steps.json, fixtures.mjs (test keys from fixed seeds).
+- session-reads.js (H4) and T3; tape.mjs, tool-run.mjs (H5, H6), T1 (rehearsal), T2.
+- owner-call.mjs (H1, H3) and T4.
+- next.mjs (H10), record-step.mjs (H13, H14), plan.mjs (H9, H12): written, smoke run only.
 
 ## Next
 
-- session-reads.js (H4) and its test (T3).
-- tape.mjs and tool-run.mjs (H5, H6), tests T1 and T2.
-- owner-call.mjs: second encoder (H3) and the signed check (T4).
-- record-step.mjs, judge.mjs (nextOf, H10, H11), plan.mjs (H9, H12), tests T5.
+- T5: plan.mjs next over made records; a whole walk of the record-step commands.
 - check.mjs (H15), test T6. Committed tapes loader (H16).
 - README.md, plan.md (H17). T8 by hand in /tmp/g19.
 
