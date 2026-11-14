@@ -135,7 +135,7 @@ function takeSign(input: unknown): SignSnapshot {
   const field = (name: string): unknown => (keys.includes(name) ? ownValue(signer, name, "the signer") : undefined);
   const publicKey = bytesOf(field("publicKey"), 32, "the device public key");
   const sign = field("sign");
-  if (typeof sign !== "function") refuse("BAD_INPUT", "the signer has no sign function");
+  if (typeof sign !== "function") refuse("BAD_INPUT", "the signer has no own sign function: one inherited from a class or a prototype is not read");
   return { ...call, birth, accountNonce, publicKey, signer, sign: sign as SignSnapshot["sign"] };
 }
 

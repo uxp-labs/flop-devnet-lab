@@ -51,7 +51,7 @@ describe("review A1, P4: the signer", () => {
     expect(signSessionCall({ ...base(), runtime: RUNTIME_ID, signer: Object.freeze({ publicKey: device.publicKey, sign: device.sign }) }).extrinsic.length).toBeGreaterThan(0);
   });
 
-  it("HOLDS (what happens, for the lead): a class instance whose sign is on its prototype is refused BAD_INPUT, 'the signer has no sign function'; main signed it", () => {
+  it("HOLDS (what happens, for the lead): a class instance whose sign is on its prototype is refused BAD_INPUT, with the words 'the signer has no own sign function: one inherited from a class or a prototype is not read'; main signed it", () => {
     const device = testDevice();
     class Device {
       readonly publicKey = device.publicKey;
@@ -61,7 +61,7 @@ describe("review A1, P4: the signer", () => {
     }
     const e = thrown(() => signSessionCall({ ...base(), runtime: RUNTIME_ID, signer: new Device() }));
     expect(e).toBeInstanceOf(ChainEncodeError);
-    expect((e as Error).message).toBe("chain encoder refused (BAD_INPUT): the signer has no sign function");
+    expect((e as Error).message).toBe("chain encoder refused (BAD_INPUT): the signer has no own sign function: one inherited from a class or a prototype is not read");
     expect(device.calls).toHaveLength(0);
   });
 });
