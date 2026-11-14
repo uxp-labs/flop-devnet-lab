@@ -13,6 +13,19 @@ Built on 2026-11-14 from the lead's brief `2026-11-14-r2-settle-fixture-and-rece
 | A4 | held to itself | one `Settled` of the channel through the decoder's door; the settle call found once, in one extrinsic, by the pallet and call index of `ComputeChannel.settle` read from the reviewed shape, then the channel id; the record at the parent and at the block through the door the same but for its state, Open then Closed, and the escrow the event's `miner_paid`, `burned` and the block's `AuditFeeEarmarked` amount together | the same file; 21 tests in all |
 | R-6, R-7 | the receipt vector | in imd-flop, `test/channel-receipt-vector.test.ts`: the settle's arguments read by the reference decoder and by the shape's fixed width fields, agreeing; `receiptMessage` with payable the escrow at the parent verifies under the stored `agent_key` for both settles; the other payables and forms do not | imd-flop's own tests; the observatory decodes no extrinsic |
 
+Review: a reviewer who wrote none of it read the branch at `ccca328` (the reviewer's branch is `claude/review-settle-recording-receipt-vector`, commit e35c50b). A third reading of both settles, byte by byte, agrees with the vector. The fixture is byte equal to the data branch. 17 changes of the tape are each caught. Its six findings, none in the fixture or in the observatory's test, are all about what two settles with small numbers (every u128 below 2^64, both turn indices 0, both merkle paths empty) can and cannot show. What was done, in one line each:
+
+| # | Finding | Fix |
+|---|---|---|
+| RR2-1 | the two settles do not hold the upper 8 bytes of a u128: a receipt keeping only the low 64 bits verifies too | the test now states that limit (a HOLDS test); the README names what the two settles do not hold, and `receiptMessage`'s comment says every u128 in them is below 2^64 |
+| RR2-2 | the library's rules on the settle call (found twice, not at all, off a byte boundary) | held by the reviewer's `test/review-r2-library-rules.test.ts`, six refusals, passing as it came |
+| RR2-3 | the turn index's byte order and the upper half of `g_n` are not held by the verified turn vector | the test now states that limit (a HOLDS test); the turn test's header says P6 holds those by its own tests |
+| RR2-4 | the turn test's fold through `merkle_path` is never exercised, both paths being empty | the fold is removed from the turn test, and its header says it is not exercised and that P6 writes it |
+| RR2-5 | the words claimed a little more than the tests show about the chain taking the signature | the README and the comment say the chain's check of that signature, and its refusal of a settle signed over other bytes, are not shown, and that the escrow is the same at the parent block and at the settled block |
+| RR2-6 | the words did not say the two settles hold every u128 below 2^64 | the README has a bullet for what those two settles do not hold |
+
+The reviewer's tests are kept and renamed "HOLDS (was DEFECT RR2-n)". No file of the observatory but this log changed in this review round.
+
 ## Round 33: the sixth request list, two real settles, and the audit's two observatory items
 
 Built on 2026-11-14 from the lead's brief `2026-11-14-o1-list6-settles-and-audit-observatory.md` (part R1, L1 to L13; part A2, Q1 and Q2) and the lead's decisions R-1 to R-10 and A-12. The builder stopped once, at X4: the package banned a module mock in every test file (RULES.md section 4 and its scan in `test/guard.test.ts`). The lead ruled G1 to G7 at 04:11 UTC: one named, checked exception. No file under `src` or `.github/workflows` changed. This round makes `recordings/requests.json` the sixth list, so the record workflow records the two settles once the lead merges it; the fixture and the receipt vector are a later branch.
