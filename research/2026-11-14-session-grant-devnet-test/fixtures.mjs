@@ -56,3 +56,29 @@ export function runWithSeat(devicePub, name = "g19-run") {
   writeFileSync(join(run, "seat", "config.json"), JSON.stringify({ network: "devnet", seat, payer: "holder", caps: { [seat]: { daily: Number(V("A_DAILY_FLOP")), perCall: Number(V("A_PER_TX_FLOP")) } } }));
   return run;
 }
+
+const { readerOver, plain } = await import("./pane.mjs");
+const { paneKeys } = await import("./lib.mjs");
+
+/** The keys the PC prints for the pane, for the plan's owner and a device. */
+export const keysFor = (device) => paneKeys(plan, V("OWNER"), device);
+
+/** A session tape made by session-reads.js over a node, as the pane relays it: { text, sha, value }. */
+export async function sessionTapeOf(node, device) {
+  const k = await keysFor(device);
+  const r = plain(await readerOver(node).reader.sessionTape({ lru: k.lru, sessions: k.sessions, nonces: k.nonces, breakers: k.breakers, session_count: k.session_count, rotation_history: k.rotation_history }));
+  return { text: r.relay, sha: r.relay_sha256, value: r };
+}
+
+/** A block tape made by session-reads.js over a node: { text, sha, value }. */
+export async function blockTapeOf(node, device, block) {
+  const k = await keysFor(device);
+  const r = plain(await readerOver(node).reader.blockTape({ lru: k.lru, events: k.events }, block.number, block.hash));
+  return { text: r.relay, sha: r.relay_sha256, value: r };
+}
+
+/** A relay of a changed value: its text and sha256 made right, as a pane that read that would give. */
+export const relayOf = (value_) => { const { relay: _r, relay_sha256: _s, ...v } = value_; return { ...relay(v), value: v }; };
+
+/** Writes a record into a run folder. */
+export const writeRecord = (run, results) => writeFileSync(join(run, "results.json"), JSON.stringify(results, null, 1) + "\n");
