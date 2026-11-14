@@ -1,0 +1,66 @@
+[
+ {
+  "id": "ro1-plant-target-in-comment",
+  "file": "test/shape-pin-derived.test.ts",
+  "find": "vi.mock(\"../src/scale/metadata.js\", async (importOriginal) => {",
+  "replace": "// vi.mock(\"../src/scale/metadata.js\", is the one allowed form\nvi .mock(\"../src/scale/shape.js\", async (importOriginal) => {",
+  "test": "test/guard.test.ts",
+  "why": "the target check is met by a comment and the real call, written with a space, mocks another module"
+ },
+ {
+  "id": "ro1-plant-factory-without-importOriginal",
+  "file": "test/shape-pin-derived.test.ts",
+  "find": "vi.mock(\"../src/scale/metadata.js\", async (importOriginal) => {\n  const real = await importOriginal<typeof import(\"../src/scale/metadata.js\")>();",
+  "replace": "vi.mock(\"../src/scale/metadata.js\", async () => {\n  const real = (await import(\"./helpers/recorded.js\")) as any;",
+  "test": "test/guard.test.ts",
+  "why": "G2: the factory takes the real module through its own argument"
+ },
+ {
+  "id": "ro1-plant-alias-mock-guard-excepted",
+  "file": "test/shape-pin-derived.test.ts",
+  "find": "const R = recorded();\n",
+  "replace": "const R = recorded();\nconst v = vi;\nv.mock(\"../src/guard.js\", () => ({}));\n",
+  "test": "test/guard.test.ts",
+  "why": "an alias of vi mocks the guard"
+ },
+ {
+  "id": "ro1-plant-bracket-mock-excepted",
+  "file": "test/shape-pin-derived.test.ts",
+  "find": "const R = recorded();\n",
+  "replace": "const R = recorded();\nvi[\"mock\"](\"../src/scale/shape.js\", () => ({}));\n",
+  "test": "test/guard.test.ts",
+  "why": "vi[\"mock\"] mocks another module"
+ },
+ {
+  "id": "ro1-plant-concat-query-excepted",
+  "file": "test/shape-pin-derived.test.ts",
+  "find": "const R = recorded();\n",
+  "replace": "const R = recorded();\nawait import(\"../src/guard\" + \".js?again\");\n",
+  "test": "test/guard.test.ts",
+  "why": "the guard under a query string, the name built in two pieces"
+ },
+ {
+  "id": "ro1-plant-newline-mock-excepted",
+  "file": "test/shape-pin-derived.test.ts",
+  "find": "const R = recorded();\n",
+  "replace": "const R = recorded();\nvi\n  .mock(\"../src/scale/shape.js\", () => ({}));\n",
+  "test": "test/guard.test.ts",
+  "why": "a line break inside vi.mock"
+ },
+ {
+  "id": "ro1-plant-alias-mock-guard-other-file",
+  "file": "test/shape.test.ts",
+  "find": "import { recorded } from \"./helpers/recorded.js\";\n",
+  "replace": "import { recorded } from \"./helpers/recorded.js\";\nconst v = vi;\nv.mock(\"../src/guard.js\", () => ({}));\n",
+  "test": "test/guard.test.ts",
+  "why": "the alias hole in any file, so it was on main"
+ },
+ {
+  "id": "ro1-plant-second-mock-control",
+  "file": "test/shape-pin-derived.test.ts",
+  "find": "const R = recorded();\n",
+  "replace": "const R = recorded();\nvi.mock(\"../src/scale/shape.js\", () => ({}));\n",
+  "test": "test/guard.test.ts",
+  "why": "control: a plain second vi.mock must be caught"
+ }
+]

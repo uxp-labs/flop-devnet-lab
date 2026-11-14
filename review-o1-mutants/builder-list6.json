@@ -1,0 +1,106 @@
+[
+ {
+  "id": "list6-runtime-before-events",
+  "file": "test/helpers/requests/list-6.ts",
+  "find": "[EVENTS, UPGRADE, record(c)]",
+  "replace": "[UPGRADE, EVENTS, record(c)]",
+  "test": "test/settle-requests.test.ts",
+  "why": "a settled block's batch reads System.Events, then System.LastRuntimeUpgrade, then the channel's record (list 6, L5)"
+ },
+ {
+  "id": "list6-parent-record-dropped",
+  "file": "test/helpers/requests/list-6.ts",
+  "find": "[UPGRADE, record(c)]",
+  "replace": "[UPGRADE]",
+  "test": "test/settle-requests.test.ts",
+  "why": "the parent's batch reads the channel's record before the settle (list 6, L5)"
+ },
+ {
+  "id": "list6-second-read-as-gateway",
+  "file": "test/helpers/requests/list-6.ts",
+  "find": "keys: [{ channel: c }]",
+  "replace": "keys: [{ channel: \"gateway\" }]",
+  "test": "test/settle-requests.test.ts",
+  "why": "each block reads the record of its own channel, the other channel's at 3479277 (list 6, L5)"
+ },
+ {
+  "id": "list6-block-asked-at-parent",
+  "file": "test/helpers/requests/list-6.ts",
+  "find": "{ kind: \"block\", block: settledOf(c),",
+  "replace": "{ kind: \"block\", block: parentOf(c),",
+  "test": "test/settle-requests.test.ts",
+  "why": "the block read whole is the settled block, which holds the settle call (list 6, L5)"
+ },
+ {
+  "id": "list6-parent-batch-at-child",
+  "file": "test/helpers/requests/list-6.ts",
+  "find": "block: parentOf(c),\n        reads: parentReads(c),",
+  "replace": "block: settledOf(c),\n        reads: parentReads(c),",
+  "test": "test/settle-requests.test.ts",
+  "why": "the parent's batch is asked at the parent's hash (list 6, L5)"
+ },
+ {
+  "id": "list6-parent-hash-at-child",
+  "file": "test/helpers/requests/list-6.ts",
+  "find": "{ kind: \"hash\", block: parentOf(c), why:",
+  "replace": "{ kind: \"hash\", block: settledOf(c), why:",
+  "test": "test/settle-requests.test.ts",
+  "why": "the canonical hash is asked at the parent's height too (list 6, L5)"
+ },
+ {
+  "id": "list6-one-channel",
+  "file": "test/helpers/requests/list-6.ts",
+  "find": "  for (const c of CHANNELS) {\n",
+  "replace": "  for (const c of CHANNELS.slice(0, 1)) {\n",
+  "test": "test/settle-requests.test.ts",
+  "why": "both settles are read, the gateway's and then the other channel's (list 6, L5)"
+ },
+ {
+  "id": "list6-parent-why-without-before",
+  "file": "test/helpers/requests/list-6.ts",
+  "find": "read for the channel's record before the settle:",
+  "replace": "read for the channel's record:",
+  "test": "test/settle-requests.test.ts",
+  "why": "the parent's why says what the read is for (list 6, L6)"
+ },
+ {
+  "id": "list6-block-why-without-bytes",
+  "file": "test/helpers/requests/list-6.ts",
+  "find": ": its header and extrinsics, so the recording holds the settle call's bytes as the block holds them",
+  "replace": ": its header and extrinsics",
+  "test": "test/settle-requests.test.ts",
+  "why": "the block's why says what the read is for (list 6, L6)"
+ },
+ {
+  "id": "list-runtime-field-any-method",
+  "file": "test/helpers/requests-list.ts",
+  "find": "(state_getStorage) call",
+  "replace": "([a-z]+_[A-Za-z]+) call",
+  "test": "test/settle-requests.test.ts",
+  "why": "a runtime is named only by the answer to a state_getStorage call (list 6, L4)"
+ },
+ {
+  "id": "list-runtime-field-loose-seq",
+  "file": "test/helpers/requests-list.ts",
+  "find": "(0|[1-9][0-9]*)$/",
+  "replace": "([0-9]+)$/",
+  "test": "test/settle-requests.test.ts",
+  "why": "a seq is written without leading zeros, so one field names one call (list 6, L4)"
+ },
+ {
+  "id": "list-runtime-seq-method-unchecked",
+  "file": "test/helpers/requests-list.ts",
+  "find": " || entry.request?.method !== m[1]",
+  "replace": "",
+  "test": "test/settle-requests.test.ts",
+  "why": "the call at the seq a field names must be of the method it names (list 6, L4)"
+ },
+ {
+  "id": "list-runtime-not-found-accepted",
+  "file": "test/helpers/requests-list.ts",
+  "find": "  if (!r.found) throw new Error(`${source.file}, ${source.field}: ${r.refused}`);\n",
+  "replace": "",
+  "test": "test/settle-requests.test.ts",
+  "why": "bytes that name no reviewed runtime name no spec (list 6, L4)"
+ }
+]
