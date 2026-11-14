@@ -83,7 +83,7 @@ export function plan(inputs: Inputs): Spec[] {
         kind: "batch",
         block: settledOf(c),
         reads: settledReads(c),
-        why: `at block ${s.height.value}, ${where}: System.Events, the events of every extrinsic of the block, System.LastRuntimeUpgrade, the runtime that executed it, and ComputeChannel.Channels of ${channel}, its stored record at the block; asked together in one call, answered as one set for the block, ${SAID}`,
+        why: `at block ${s.height.value}, ${where}: System.Events, every event of the block, System.LastRuntimeUpgrade, the runtime that executed it, and ComputeChannel.Channels of ${channel}, its stored record at the block; asked together in one call, answered as one set for the block, ${SAID}`,
       },
       { kind: "hash", block: parentOf(c), why: `the canonical hash at height ${p.height.value}, to compare with ${p.hash.value}, the parentHash of the header the first recording's tape holds for block ${s.height.value}, ${where}` },
       {
