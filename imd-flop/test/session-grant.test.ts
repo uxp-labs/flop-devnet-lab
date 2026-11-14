@@ -176,6 +176,9 @@ describe("T9: the grant over a stored record", () => {
     const r = await grantAt(seatHome(), scriptAt("A10"), "1");
     expect(r.code).toBe(0);
     expect(r.json().stored_record).toBe("A record is stored for this pair, revoked. Whether the chain takes a new grant over a stored record for this owner and device is not shown yet.");
+    const text = await grantAt(seatHome(), scriptAt("A10"), "1", false);
+    const lines = text.out.split("\n");
+    expect(lines[lines.length - 2]).toBe(r.json().stored_record);
   });
 
   it("an expired one: A6 with expires_at set to the head prints the call with the line; one block later it refuses", async () => {

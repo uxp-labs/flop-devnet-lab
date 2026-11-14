@@ -42,6 +42,11 @@ describe("C9: raw amounts and the grant's fields", () => {
     for (const days of [1, 3, 10]) expect(grantCaps(local, days, EPOCH)).toEqual({ per_tx_limit: local.perCall, daily_cap: local.daily, spending_cap: local.daily * BigInt(days), duration_blocks: EPOCH * days });
   });
 
+  it("the duration is the epoch length handed in times the days, never a typed epoch", () => {
+    const local = localRaw({ "42": { daily: 0.025, perCall: 0.02 } }, "42");
+    for (const epoch of [1, 7, EPOCH - 1, EPOCH + 1]) expect(grantCaps(local, 3, epoch).duration_blocks).toBe(epoch * 3);
+  });
+
   it("--days: 1 to 10, whole, canonical, required", () => {
     for (let d = 1; d <= 10; d++) expect(daysOf(String(d))).toBe(d);
     for (const t of [undefined, "0", "11", "1.5", "01", "1e1", " 1", "10 ", "x", "", "-1", "+1"]) expect([t, codeOf(() => daysOf(t))]).toEqual([t, 2]);
